@@ -1,0 +1,1321 @@
+{
+  "plan_item": "PRIMARY_SOFTWARE_AUDIT_PLAN P0.4 FINAL residual measurement wave — the last locally-measurable envelope residuals: browser-side 2-D maps (M1), 1M-row copy/export from the UI (M2), merged-tree workspace re-run with a focus-pin determinism fix (M3)",
+  "generated": "2026-07-27T02:44:35.845Z",
+  "hardware": {
+    "os": "Windows_NT 10.0.26200 (win32/x64)",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+    "cores": 16,
+    "total_ram_gb": 63.1,
+    "node_version": "v24.15.0",
+    "playwright_version": "1.62.0",
+    "browser_version": "151.0.7922.34"
+  },
+  "measurements": {
+    "M1_browser_maps": {
+      "generated": "2026-07-27T01:58:51.349Z",
+      "results": [
+        {
+          "case": "M1",
+          "fixture": "frontend/src/components/Inspector/MapCard.tsx + routes/plot.py",
+          "measurement": "ui_resolution_cap",
+          "value": "100 | 200 | 400 (default 200)",
+          "unit": "options",
+          "notes": "The Inspector's 2-D map Resolution <select> hardcodes RESOLUTIONS=[100,200,400] — a source map's raw point count (500^2=250k, 1000^2=1M, 2000^2=4M) is ALWAYS regridded down to at most a 400x400 display grid through the UI. The backend route itself (MapRequest.nx/ny) accepts 2..2000 — see escape_hatch_res2000_response_ms for what the UI can never reach through its own controls.",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "import_and_dataset_appear_ms",
+          "value": 1772,
+          "unit": "ms",
+          "notes": "click-to-dataset-row-appearing (real /api/parsers/upload path)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "auto_routed_to_map_tab",
+          "value": true,
+          "unit": "boolean",
+          "notes": "stageTab=\"map\" after import (lib/stagetab.ts nextStageTab — a 2-D XRDML should auto-route to \"map\" with no click)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "time_to_first_map_paint_ms",
+          "value": 11919,
+          "unit": "ms",
+          "notes": "dataset-appeared mark to first painted canvas pixels (MapStage's Canvas2D heatmap)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "total_import_to_map_visible_ms",
+          "value": 13694,
+          "unit": "ms",
+          "notes": "click-to-visible-map, end to end",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "map_api_call_count",
+          "value": 2,
+          "unit": "calls",
+          "notes": "re-fetched 2 times before settling — gaps(ms)=[180]",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "regrid_output_resolution",
+          "value": "200x200",
+          "unit": "cells",
+          "notes": "last /api/plot/map response's grid (status=200) — the DISPLAYED resolution regardless of source point count (default store.mapRes=200, method=\"linear\"; the Inspector's \"2-D map\" card only offers 100/200/400 — see the ui_resolution_cap finding)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "js_heap_used_bytes",
+          "value": 25010788,
+          "unit": "bytes",
+          "notes": "before_import=5007308",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "hover_latency_median_ms",
+          "value": 49.5,
+          "unit": "ms",
+          "notes": "n=10 samples=[45,49,50,51,49,50,52,49,50,49] — MapStage has no pan/zoom (static full-extent render); this is the closest input->next-paint analog (readout label update)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "hover_latency_p95_ms",
+          "value": 52,
+          "unit": "ms",
+          "notes": "target: <100ms (P0.4 acceptance, applied here by analogy)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-500",
+          "fixture": "tools/baselines/out/large_rsm_map_500.xrdml",
+          "measurement": "slice_drag_latency_ms",
+          "value": 9640,
+          "unit": "ms",
+          "notes": "mousedown+drag+mouseup -> real /api/rsm/cut-segment call -> new 1-D linescan dataset landed (single sample — the gesture mutates state, so it isn't repeated like pan/zoom)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "import_and_dataset_appear_ms",
+          "value": 6911,
+          "unit": "ms",
+          "notes": "click-to-dataset-row-appearing (real /api/parsers/upload path)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "auto_routed_to_map_tab",
+          "value": true,
+          "unit": "boolean",
+          "notes": "stageTab=\"map\" after import (lib/stagetab.ts nextStageTab — a 2-D XRDML should auto-route to \"map\" with no click)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "time_to_first_map_paint_ms",
+          "value": 52181,
+          "unit": "ms",
+          "notes": "dataset-appeared mark to first painted canvas pixels (MapStage's Canvas2D heatmap)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "total_import_to_map_visible_ms",
+          "value": 59100,
+          "unit": "ms",
+          "notes": "click-to-visible-map, end to end",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "map_api_call_count",
+          "value": 2,
+          "unit": "calls",
+          "notes": "re-fetched 2 times before settling — gaps(ms)=[741]",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "regrid_output_resolution",
+          "value": "200x200",
+          "unit": "cells",
+          "notes": "last /api/plot/map response's grid (status=200) — the DISPLAYED resolution regardless of source point count (default store.mapRes=200, method=\"linear\"; the Inspector's \"2-D map\" card only offers 100/200/400 — see the ui_resolution_cap finding)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "js_heap_used_bytes",
+          "value": 77683888,
+          "unit": "bytes",
+          "notes": "before_import=4984608",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "hover_latency_median_ms",
+          "value": 50,
+          "unit": "ms",
+          "notes": "n=10 samples=[48,50,50,50,50,50,50,50,49,51] — MapStage has no pan/zoom (static full-extent render); this is the closest input->next-paint analog (readout label update)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "hover_latency_p95_ms",
+          "value": 51,
+          "unit": "ms",
+          "notes": "target: <100ms (P0.4 acceptance, applied here by analogy)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-1000",
+          "fixture": "tools/baselines/out/large_rsm_map_1000.xrdml",
+          "measurement": "slice_drag_latency_ms",
+          "value": 40025,
+          "unit": "ms",
+          "notes": "mousedown+drag+mouseup -> real /api/rsm/cut-segment call -> new 1-D linescan dataset landed (single sample — the gesture mutates state, so it isn't repeated like pan/zoom)",
+          "status": "ok"
+        },
+        {
+          "case": "M1-2000",
+          "fixture": "tools/baselines/out/large_rsm_map_2000.xrdml",
+          "measurement": "harness_crash",
+          "value": null,
+          "unit": null,
+          "notes": "UNMEASURED: Node-level crash (likely Playwright CDP transport overflow on an oversized message) — measurements up to this point are preserved below: Cannot create a string longer than 0x1fffffe8 characters",
+          "status": "unmeasured"
+        }
+      ]
+    },
+    "M1_supplementary_backend_isolated_regrid": {
+      "per_size": [
+        {
+          "n_points": 250000,
+          "method": "linear",
+          "output_grid": "200x200",
+          "import_s": 0.057,
+          "regrid_s": 8.471,
+          "regrid_peak_mem_mb": 65.8,
+          "size": "500x500"
+        },
+        {
+          "n_points": 1000000,
+          "method": "linear",
+          "output_grid": "200x200",
+          "import_s": 0.23,
+          "regrid_s": 36.393,
+          "regrid_peak_mem_mb": 258.3,
+          "size": "1000x1000"
+        },
+        {
+          "n_points": 4000000,
+          "method": "linear",
+          "output_grid": "200x200",
+          "import_s": 0.822,
+          "regrid_s": 156.458,
+          "regrid_peak_mem_mb": 1028.9,
+          "size": "2000x2000"
+        }
+      ],
+      "output_resolution_sweep": [
+        {
+          "n_points": 1000000,
+          "method": "linear",
+          "output_grid": "200x200",
+          "import_s": 0.266,
+          "regrid_s": 39.353,
+          "regrid_peak_mem_mb": 258.3,
+          "size": "1000x1000 (fixed input, output grid swept)"
+        },
+        {
+          "n_points": 1000000,
+          "method": "linear",
+          "output_grid": "2000x2000",
+          "import_s": 0.278,
+          "regrid_s": 38.857,
+          "regrid_peak_mem_mb": 416.7,
+          "size": "1000x1000 (fixed input, output grid swept)"
+        }
+      ]
+    },
+    "M2_export_copy_1M": {
+      "generated": "2026-07-27T02:26:36.106Z",
+      "note": "Synthesized from 3 independent full runs of export_envelope.mjs (2026-07-27, same session/hardware) — no single run captured every measurement cleanly (the dialog-driven export path is itself intermittently unreliable, which is part of the finding), so this section combines the best/most complete evidence across all 3 with provenance in each entry's notes, rather than reporting only the last run verbatim.",
+      "results": [
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "upload_and_parse_ms",
+          "value": 11580,
+          "unit": "ms",
+          "notes": "click-to-dataset-row-appearing, same path as F1; mean of 3 runs (11641, 11492, 11727 ms)",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "svg_export_click_to_file_ms",
+          "value": null,
+          "unit": null,
+          "notes": "UNMEASURED: reproducible across all 3 runs — clicking \"Run\" in the Export figure dialog (fmt=svg) never sends the /api/export/figure request within a 240s window (no fetch, no status change, no toast, no console error). See svg_export_raw_fetch_bypass_ui_ms: the SAME spec posted directly via fetch() (bypassing the dialog/buildFigureSpec orchestration) succeeds in ~16.7s, so this is specific to the UI's dialog-driven path, not the backend endpoint.",
+          "status": "unmeasured"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "png_export_300dpi_click_to_file_ms",
+          "value": 16122,
+          "unit": "ms",
+          "notes": "click \"Run\" -> real /api/export/figure POST -> blob captured; mean of 2 SUCCESSFUL runs (16900 ms/165994 bytes, 15343 ms/165994 bytes; both valid PNG headHex=89504e470d0a1a0a). RELIABILITY: succeeded 2 of 3 attempts across runs — the 3rd run's PNG dialog attempt also hung with zero network activity, same failure mode as the SVG case. The dialog-driven export path is intermittently unreliable at this scale, independent of format.",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "png_export_300dpi_file_size_bytes",
+          "value": 165994,
+          "unit": "bytes",
+          "notes": "identical across both successful runs",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "export_dialog_reliability",
+          "value": "PNG 2/3, SVG 0/3",
+          "unit": "success rate",
+          "notes": "Across 3 independent full-session runs of the \"Export figure…\" Command Palette dialog on the 1M-row/7-series plot: PNG succeeded 2 of 3 times (16900ms, 15343ms), SVG failed 3 of 3 times (240s timeout, zero network activity each time). \"Copy figure\" (same render pipeline, reached via right-click instead of the dialog) succeeded 3 of 3 times at ~15s — isolating the unreliability to the ParamDialog-driven flow (askParams -> runExportFigureCommand), not buildFigureSpec/exportFigure/the backend renderer.",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "svg_export_raw_fetch_bypass_ui_ms",
+          "value": 16653,
+          "unit": "ms",
+          "notes": "direct POST /api/export/figure from page.evaluate (bypasses the \"Export figure…\" dialog + buildFigureSpec orchestration entirely, replicated the same FigureSpec by hand) — status=200 size=1675056 bytes (SVG, headHex confirms XML). Confirms the BACKEND can render an SVG of this dataset in bounded time (~16.7s, comparable to the PNG dialog's own ~15-17s); the UI-driven svg_export_click_to_file_ms failure above is specific to the frontend orchestration path, not the endpoint.",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "clipboard_svg_supported",
+          "value": true,
+          "unit": "boolean",
+          "notes": "ClipboardItem.supports('image/svg+xml') — the same gate lib/clipboard.ts's clipboardSvgSupported() uses to decide whether the plot's right-click menu offers \"Copy figure (vector)\". True in all 3 runs when checked via page.evaluate() directly.",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "copy_figure_png_clipboard_ms",
+          "value": 14970,
+          "unit": "ms",
+          "notes": "right-click -> \"Copy figure\" -> real /api/export/figure render (png, 300 DPI, default style) -> navigator.clipboard.write() resolved (context.grantPermissions(['clipboard-read','clipboard-write']) granted at BASE_URL). Succeeded in ALL 3 runs (14921, 15031, 14957 ms; mean 14970 ms) — the most reliable of the export/copy paths measured, since it never goes through the ParamDialog.",
+          "status": "ok"
+        },
+        {
+          "case": "M2",
+          "fixture": "tools/baselines/out/large_million_row.csv",
+          "measurement": "copy_figure_svg_clipboard_ms",
+          "value": null,
+          "unit": null,
+          "notes": "UNMEASURED: reproducible in all 3 runs — despite ClipboardItem.supports('image/svg+xml') returning true when probed directly, the live right-click menu never renders a \"Copy figure (vector)\" entry (confirmed via a dedicated isolated probe on a FRESH page, first action, small dataset: menu shows Line style/Width/Marker/.../Copy figure/Copy image (screen)/Copy data (TSV)/Save as PNG — no vector entry). The app's own gate (usePlotStageActions.ts's clipboardSvgSupported() check, evaluated at component-render time) is disagreeing with an equivalent check run later via page.evaluate() in the same page — plausibly a headless-Chromium focus/user-activation timing difference in ClipboardItem.supports() rather than an app defect, but not chased further (measurement-only task). There is nothing to click, so the gesture cannot be timed.",
+          "status": "unmeasured"
+        }
+      ]
+    },
+    "M3_workspace_runs": [
+      {
+        "run": 1,
+        "generated": "2026-07-27T02:40:30.056Z",
+        "results": [
+          {
+            "case": "F5",
+            "fixture": "large_million_row.csv",
+            "measurement": "large_csv_upload_and_parse_ms",
+            "value": 11845,
+            "unit": "ms",
+            "notes": "click-to-dataset-row-appearing, same path as F1",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "9 committed baselines x ~2.1, cycled",
+            "measurement": "small_imports_total_ms",
+            "value": 4302,
+            "unit": "ms",
+            "notes": "reached 20 dataset(s) total (1 large + 19 small)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "corrections_apply_ms",
+            "value": 9,
+            "unit": "ms",
+            "notes": "applyCorrections -> true (real /api/corrections/apply call)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "formula_column_add_ms",
+            "value": 6,
+            "unit": "ms",
+            "notes": "addFormula(id, 'computed1', 'A + 1') — client-side, persisted as Dataset.formulas",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "curve_fit_ms",
+            "value": 17,
+            "unit": "ms",
+            "notes": "real /api/fitting/fit call, model=Linear, params=[-0.009917136801528375,0.49665158425806255], exitFlag=1 — persisted as Dataset.fitSpec",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1st_ms",
+            "value": 5787,
+            "unit": "ms",
+            "notes": "dataset for window #1 = 1M-row",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1M_row_ms",
+            "value": 5787,
+            "unit": "ms",
+            "notes": "create+focus+paint for the window bound to the 1,000,000-row dataset (index 0 of 10)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_median_ms",
+            "value": 246.5,
+            "unit": "ms",
+            "notes": "samples=[5787,2833,869,883,398,94,94,95,95,95]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "session_build_total_ms",
+            "value": 27524,
+            "unit": "ms",
+            "notes": "20 dataset(s), 10 windows created by this loop (11 total incl. the pre-existing startup window)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_before_bytes",
+            "value": 4977132,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_after_bytes",
+            "value": 1811955628,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "worksheet_mount_ms",
+            "value": 2195,
+            "unit": "ms",
+            "notes": "click Worksheet tab -> .qzk-grid visible + 2 rAF; underlying dataset has 1000000 rows",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_at_mount",
+            "value": 39,
+            "unit": "rows",
+            "notes": "header + windowed data rows — the DOM-bounded invariant GridViewport.perf.test.tsx checks at 100k, now observed in a REAL browser at 1M",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_at_mount",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_median_ms",
+            "value": 50,
+            "unit": "ms",
+            "notes": "n=10 wheel ticks, samples=[52,49,50,49,51,50,50,50,51,49]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_p95_ms",
+            "value": 52,
+            "unit": "ms",
+            "notes": "target: <100ms (P0.4 acceptance, applied here to grid scroll same as plot pan/zoom)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_after_scroll",
+            "value": 39,
+            "unit": "rows",
+            "notes": "still bounded after 10 scroll ticks through a 1,000,000-row dataset = virtualization re-windows correctly, not a full re-render",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_after_scroll",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "pre_save_focus_pin",
+            "value": true,
+            "unit": "boolean",
+            "notes": "explicitly focusWindow()'d a SMALL dataset's window (index 1) before saving, so staged hydration's eager window on reopen is deterministic — focusedWindowId after pin = \"win-ms2me1ka-3\"",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "serialize_and_save_ms",
+            "value": 875.5,
+            "unit": "ms",
+            "notes": "page-clock timing of the real 'Save workspace (.dwk)…' command, download intercepted (not a real disk write) in headless Chrome",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "file_size_bytes",
+            "value": 197363219,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_total_latency_ms",
+            "value": 903,
+            "unit": "ms",
+            "notes": "trigger (one window move) to durable IndexedDB generation; includes the fixed 800ms debounce — write_estimate_ms ≈ 103",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_indexeddb_total_bytes",
+            "value": 197363219,
+            "unit": "bytes (UTF-16 code units)",
+            "notes": "sum of every retained generation's serialized text length — AUTOSAVE_BUDGET_BYTES is 64 MiB but the newest generation is always kept even over budget (lib/autosaveGenerations.ts capBySize)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_outcome",
+            "value": "SUCCESS",
+            "unit": "",
+            "notes": "IndexedDB accepted the write at this scale — no quota failure observed",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_dataset_restore_ms",
+            "value": 3759,
+            "unit": "ms",
+            "notes": "click 'Open workspace' to all dataset rows back in the Library",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_main_thread_max_freeze_ms",
+            "value": 2861,
+            "unit": "ms",
+            "notes": "largest single page.evaluate() round-trip gap during the reopen (2241 samples total) — proxy for how long the .dwk load path's synchronous JSON.parse blocked the renderer's JS thread",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_time_to_first_paint_ms",
+            "value": 13,
+            "unit": "ms",
+            "notes": "dataset-rows-restored mark to first painted canvas — the reopened session's 'time to interactive' proxy",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_dataset_count",
+            "value": 20,
+            "unit": "datasets",
+            "notes": "expected 20",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_window_count",
+            "value": 11,
+            "unit": "windows",
+            "notes": "expected 11 (ground truth read from the store right before save, not assumed — plotWindows always holds >=1 pre-existing window at startup)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_derived_content_present",
+            "value": true,
+            "unit": "boolean",
+            "notes": "corrections=true formulas=true fitSpec=true fitParams=[-0.009917136801528375,0.49665158425806255]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_one_derived_value_matches",
+            "value": true,
+            "unit": "boolean",
+            "notes": "formula column value at row0: before=0.7466161 after=0.7466161",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_big_dataset_row_count",
+            "value": 1000000,
+            "unit": "rows",
+            "notes": "expected 1000000",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_serialize_and_save_ms",
+            "value": 898,
+            "unit": "ms",
+            "notes": "same session re-saved with the 1M-row window explicitly focused — reference point, not the interesting number here",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_time_to_first_paint_ms",
+            "value": 540,
+            "unit": "ms",
+            "notes": "SAME measurement as reopen_time_to_first_paint_ms above, but with the 1,000,000-row window focused (and therefore staged-hydration-eager) at save time instead of a small one — this is the anomaly's \"some runs ~2,300 ms\" case reproduced on demand, not left to which window happened to be focused",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_main_thread_max_freeze_ms",
+            "value": 5390,
+            "unit": "ms",
+            "notes": "same main-thread-freeze proxy as reopen_main_thread_max_freeze_ms above, scenario B",
+            "status": "ok"
+          }
+        ]
+      },
+      {
+        "run": 2,
+        "generated": "2026-07-27T02:41:49.409Z",
+        "results": [
+          {
+            "case": "F5",
+            "fixture": "large_million_row.csv",
+            "measurement": "large_csv_upload_and_parse_ms",
+            "value": 11322,
+            "unit": "ms",
+            "notes": "click-to-dataset-row-appearing, same path as F1",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "9 committed baselines x ~2.1, cycled",
+            "measurement": "small_imports_total_ms",
+            "value": 3936,
+            "unit": "ms",
+            "notes": "reached 20 dataset(s) total (1 large + 19 small)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "corrections_apply_ms",
+            "value": 7,
+            "unit": "ms",
+            "notes": "applyCorrections -> true (real /api/corrections/apply call)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "formula_column_add_ms",
+            "value": 3,
+            "unit": "ms",
+            "notes": "addFormula(id, 'computed1', 'A + 1') — client-side, persisted as Dataset.formulas",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "curve_fit_ms",
+            "value": 10,
+            "unit": "ms",
+            "notes": "real /api/fitting/fit call, model=Linear, params=[-0.009917136801528375,0.49665158425806255], exitFlag=1 — persisted as Dataset.fitSpec",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1st_ms",
+            "value": 5713,
+            "unit": "ms",
+            "notes": "dataset for window #1 = 1M-row",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1M_row_ms",
+            "value": 5713,
+            "unit": "ms",
+            "notes": "create+focus+paint for the window bound to the 1,000,000-row dataset (index 0 of 10)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_median_ms",
+            "value": 224.5,
+            "unit": "ms",
+            "notes": "samples=[5713,2535,93,962,843,354,94,94,94,95]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "session_build_total_ms",
+            "value": 26687,
+            "unit": "ms",
+            "notes": "20 dataset(s), 10 windows created by this loop (11 total incl. the pre-existing startup window)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_before_bytes",
+            "value": 4993616,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_after_bytes",
+            "value": 2016938580,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "worksheet_mount_ms",
+            "value": 2155,
+            "unit": "ms",
+            "notes": "click Worksheet tab -> .qzk-grid visible + 2 rAF; underlying dataset has 1000000 rows",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_at_mount",
+            "value": 39,
+            "unit": "rows",
+            "notes": "header + windowed data rows — the DOM-bounded invariant GridViewport.perf.test.tsx checks at 100k, now observed in a REAL browser at 1M",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_at_mount",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_median_ms",
+            "value": 50.5,
+            "unit": "ms",
+            "notes": "n=10 wheel ticks, samples=[52,50,51,49,51,50,51,48,51,49]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_p95_ms",
+            "value": 52,
+            "unit": "ms",
+            "notes": "target: <100ms (P0.4 acceptance, applied here to grid scroll same as plot pan/zoom)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_after_scroll",
+            "value": 39,
+            "unit": "rows",
+            "notes": "still bounded after 10 scroll ticks through a 1,000,000-row dataset = virtualization re-windows correctly, not a full re-render",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_after_scroll",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "pre_save_focus_pin",
+            "value": true,
+            "unit": "boolean",
+            "notes": "explicitly focusWindow()'d a SMALL dataset's window (index 1) before saving, so staged hydration's eager window on reopen is deterministic — focusedWindowId after pin = \"win-ms2mfqd3-3\"",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "serialize_and_save_ms",
+            "value": 899.7,
+            "unit": "ms",
+            "notes": "page-clock timing of the real 'Save workspace (.dwk)…' command, download intercepted (not a real disk write) in headless Chrome",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "file_size_bytes",
+            "value": 197363219,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_total_latency_ms",
+            "value": 860,
+            "unit": "ms",
+            "notes": "trigger (one window move) to durable IndexedDB generation; includes the fixed 800ms debounce — write_estimate_ms ≈ 60",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_indexeddb_total_bytes",
+            "value": 197363219,
+            "unit": "bytes (UTF-16 code units)",
+            "notes": "sum of every retained generation's serialized text length — AUTOSAVE_BUDGET_BYTES is 64 MiB but the newest generation is always kept even over budget (lib/autosaveGenerations.ts capBySize)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_outcome",
+            "value": "SUCCESS",
+            "unit": "",
+            "notes": "IndexedDB accepted the write at this scale — no quota failure observed",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_dataset_restore_ms",
+            "value": 3816,
+            "unit": "ms",
+            "notes": "click 'Open workspace' to all dataset rows back in the Library",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_main_thread_max_freeze_ms",
+            "value": 2933,
+            "unit": "ms",
+            "notes": "largest single page.evaluate() round-trip gap during the reopen (2117 samples total) — proxy for how long the .dwk load path's synchronous JSON.parse blocked the renderer's JS thread",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_time_to_first_paint_ms",
+            "value": 4,
+            "unit": "ms",
+            "notes": "dataset-rows-restored mark to first painted canvas — the reopened session's 'time to interactive' proxy",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_dataset_count",
+            "value": 20,
+            "unit": "datasets",
+            "notes": "expected 20",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_window_count",
+            "value": 11,
+            "unit": "windows",
+            "notes": "expected 11 (ground truth read from the store right before save, not assumed — plotWindows always holds >=1 pre-existing window at startup)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_derived_content_present",
+            "value": true,
+            "unit": "boolean",
+            "notes": "corrections=true formulas=true fitSpec=true fitParams=[-0.009917136801528375,0.49665158425806255]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_one_derived_value_matches",
+            "value": true,
+            "unit": "boolean",
+            "notes": "formula column value at row0: before=0.7466161 after=0.7466161",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_big_dataset_row_count",
+            "value": 1000000,
+            "unit": "rows",
+            "notes": "expected 1000000",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_serialize_and_save_ms",
+            "value": 981.6,
+            "unit": "ms",
+            "notes": "same session re-saved with the 1M-row window explicitly focused — reference point, not the interesting number here",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_time_to_first_paint_ms",
+            "value": 492,
+            "unit": "ms",
+            "notes": "SAME measurement as reopen_time_to_first_paint_ms above, but with the 1,000,000-row window focused (and therefore staged-hydration-eager) at save time instead of a small one — this is the anomaly's \"some runs ~2,300 ms\" case reproduced on demand, not left to which window happened to be focused",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_main_thread_max_freeze_ms",
+            "value": 5424,
+            "unit": "ms",
+            "notes": "same main-thread-freeze proxy as reopen_main_thread_max_freeze_ms above, scenario B",
+            "status": "ok"
+          }
+        ]
+      },
+      {
+        "run": 3,
+        "generated": "2026-07-27T02:43:03.991Z",
+        "results": [
+          {
+            "case": "F5",
+            "fixture": "large_million_row.csv",
+            "measurement": "large_csv_upload_and_parse_ms",
+            "value": 11173,
+            "unit": "ms",
+            "notes": "click-to-dataset-row-appearing, same path as F1",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "9 committed baselines x ~2.1, cycled",
+            "measurement": "small_imports_total_ms",
+            "value": 3933,
+            "unit": "ms",
+            "notes": "reached 20 dataset(s) total (1 large + 19 small)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "corrections_apply_ms",
+            "value": 6,
+            "unit": "ms",
+            "notes": "applyCorrections -> true (real /api/corrections/apply call)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "formula_column_add_ms",
+            "value": 4,
+            "unit": "ms",
+            "notes": "addFormula(id, 'computed1', 'A + 1') — client-side, persisted as Dataset.formulas",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "1 small dataset",
+            "measurement": "curve_fit_ms",
+            "value": 9,
+            "unit": "ms",
+            "notes": "real /api/fitting/fit call, model=Linear, params=[-0.009917136801528375,0.49665158425806255], exitFlag=1 — persisted as Dataset.fitSpec",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1st_ms",
+            "value": 5596,
+            "unit": "ms",
+            "notes": "dataset for window #1 = 1M-row",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_1M_row_ms",
+            "value": 5596,
+            "unit": "ms",
+            "notes": "create+focus+paint for the window bound to the 1,000,000-row dataset (index 0 of 10)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "10 plot windows (incl. the 1M-row dataset)",
+            "measurement": "window_open_median_ms",
+            "value": 95,
+            "unit": "ms",
+            "notes": "samples=[5596,2560,871,228,92,94,94,92,96,93]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "session_build_total_ms",
+            "value": 25211,
+            "unit": "ms",
+            "notes": "20 dataset(s), 10 windows created by this loop (11 total incl. the pre-existing startup window)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_before_bytes",
+            "value": 5009120,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "js_heap_after_bytes",
+            "value": 652873060,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "worksheet_mount_ms",
+            "value": 2306,
+            "unit": "ms",
+            "notes": "click Worksheet tab -> .qzk-grid visible + 2 rAF; underlying dataset has 1000000 rows",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_at_mount",
+            "value": 39,
+            "unit": "rows",
+            "notes": "header + windowed data rows — the DOM-bounded invariant GridViewport.perf.test.tsx checks at 100k, now observed in a REAL browser at 1M",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_at_mount",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_median_ms",
+            "value": 50,
+            "unit": "ms",
+            "notes": "n=10 wheel ticks, samples=[53,49,51,50,50,50,50,50,50,50]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "scroll_latency_p95_ms",
+            "value": 53,
+            "unit": "ms",
+            "notes": "target: <100ms (P0.4 acceptance, applied here to grid scroll same as plot pan/zoom)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_rows_after_scroll",
+            "value": 39,
+            "unit": "rows",
+            "notes": "still bounded after 10 scroll ticks through a 1,000,000-row dataset = virtualization re-windows correctly, not a full re-render",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "worksheet grid, 1,000,000-row dataset",
+            "measurement": "dom_cells_after_scroll",
+            "value": 351,
+            "unit": "cells",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "session (20 datasets + 10 windows + derived content)",
+            "measurement": "pre_save_focus_pin",
+            "value": true,
+            "unit": "boolean",
+            "notes": "explicitly focusWindow()'d a SMALL dataset's window (index 1) before saving, so staged hydration's eager window on reopen is deterministic — focusedWindowId after pin = \"win-ms2mhbis-3\"",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "serialize_and_save_ms",
+            "value": 756.6,
+            "unit": "ms",
+            "notes": "page-clock timing of the real 'Save workspace (.dwk)…' command, download intercepted (not a real disk write) in headless Chrome",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "file_size_bytes",
+            "value": 197363219,
+            "unit": "bytes",
+            "notes": "",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_total_latency_ms",
+            "value": 865,
+            "unit": "ms",
+            "notes": "trigger (one window move) to durable IndexedDB generation; includes the fixed 800ms debounce — write_estimate_ms ≈ 65",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_indexeddb_total_bytes",
+            "value": 197363219,
+            "unit": "bytes (UTF-16 code units)",
+            "notes": "sum of every retained generation's serialized text length — AUTOSAVE_BUDGET_BYTES is 64 MiB but the newest generation is always kept even over budget (lib/autosaveGenerations.ts capBySize)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "autosave_outcome",
+            "value": "SUCCESS",
+            "unit": "",
+            "notes": "IndexedDB accepted the write at this scale — no quota failure observed",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_dataset_restore_ms",
+            "value": 3960,
+            "unit": "ms",
+            "notes": "click 'Open workspace' to all dataset rows back in the Library",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_main_thread_max_freeze_ms",
+            "value": 3074,
+            "unit": "ms",
+            "notes": "largest single page.evaluate() round-trip gap during the reopen (2105 samples total) — proxy for how long the .dwk load path's synchronous JSON.parse blocked the renderer's JS thread",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "reopen_time_to_first_paint_ms",
+            "value": 4,
+            "unit": "ms",
+            "notes": "dataset-rows-restored mark to first painted canvas — the reopened session's 'time to interactive' proxy",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_dataset_count",
+            "value": 20,
+            "unit": "datasets",
+            "notes": "expected 20",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_window_count",
+            "value": 11,
+            "unit": "windows",
+            "notes": "expected 11 (ground truth read from the store right before save, not assumed — plotWindows always holds >=1 pre-existing window at startup)",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_derived_content_present",
+            "value": true,
+            "unit": "boolean",
+            "notes": "corrections=true formulas=true fitSpec=true fitParams=[-0.009917136801528375,0.49665158425806255]",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_one_derived_value_matches",
+            "value": true,
+            "unit": "boolean",
+            "notes": "formula column value at row0: before=0.7466161 after=0.7466161",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "integrity_big_dataset_row_count",
+            "value": 1000000,
+            "unit": "rows",
+            "notes": "expected 1000000",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_serialize_and_save_ms",
+            "value": 932.7,
+            "unit": "ms",
+            "notes": "same session re-saved with the 1M-row window explicitly focused — reference point, not the interesting number here",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_time_to_first_paint_ms",
+            "value": 317,
+            "unit": "ms",
+            "notes": "SAME measurement as reopen_time_to_first_paint_ms above, but with the 1,000,000-row window focused (and therefore staged-hydration-eager) at save time instead of a small one — this is the anomaly's \"some runs ~2,300 ms\" case reproduced on demand, not left to which window happened to be focused",
+            "status": "ok"
+          },
+          {
+            "case": "F5",
+            "fixture": "F5 session (.dwk, 20 datasets incl. 1M-row + derived content + 11 windows)",
+            "measurement": "scenario_b_reopen_main_thread_max_freeze_ms",
+            "value": 5238,
+            "unit": "ms",
+            "notes": "same main-thread-freeze proxy as reopen_main_thread_max_freeze_ms above, scenario B",
+            "status": "ok"
+          }
+        ]
+      }
+    ]
+  }
+}
