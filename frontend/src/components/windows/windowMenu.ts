@@ -21,6 +21,7 @@
 import { nextPlotBg, type PlotWindow } from "../../lib/plotview";
 import type { ContextAction } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";
+import { forceHydrate } from "../../store/windowHydration";
 
 export interface WindowActionTarget {
   win: PlotWindow;
@@ -50,7 +51,11 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
     id: "window.linkCycle",
     label: "Link Window Group (1 / 2 / 3 / Off)",
     hidden: (t) => t.win.kind !== "plot",
-    run: (t) => useApp.getState().cycleWindowLinkGroup(t.win.id),
+    // P3.4 slice 4: a window joining a cross-window sync group needs a live
+    // uPlot instance to register with (lib/windowsync's `registerSyncPlot`
+    // only runs from PlotViewport's create effect) — never leave it a
+    // placeholder.
+    run: (t) => (forceHydrate(t.win.id), useApp.getState().cycleWindowLinkGroup(t.win.id)),
   },
   // Bg applies to the plot PAGE draw colours — plot + snapshot only, the
   // same gate the physical ◐ button uses (a worksheet/map document window

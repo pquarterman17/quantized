@@ -16,10 +16,21 @@
 // 8) renders NEITHER — it's fully unmounted (no uPlot instance at all, per
 // the plan's perf risk note) and instead gets one entry in the `qzk-winstrip`
 // dock along the canvas bottom; clicking it restores + focuses the window.
+//
+// P3.4 slice 4 (docs/performance_envelope.md finding 10): a bulk workspace
+// restore stages every non-active window's real content behind
+// `store/windowHydration.ts` instead of mounting all of them — 11
+// simultaneous uPlot creates — in one commit. A staged (not yet hydrated,
+// not focused) window renders an inert placeholder body in place of its
+// normal kind dispatch below. This component owns the two reactive hooks
+// into that queue: force-hydrate the moment focus changes (nobody may ever
+// interact with a placeholder), and prune any id no longer in `plotWindows`
+// (a window closed mid-stage stops wasting a drain frame).
 
 import { useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
+import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
 import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
@@ -36,6 +47,10 @@ export default function WindowCanvas() {
   const setPlotCanvasBounds = useApp((s) => s.setPlotCanvasBounds);
   const createWindowAt = useApp((s) => s.createWindowAt);
   const focusWindow = useApp((s) => s.focusWindow);
+  // P3.4 slice 4: read the WHOLE staging set once here (not a per-window
+  // hook inside `.map()` below, which would call a hook a variable number of
+  // times per render) — a window's own gate is then a plain `.has(win.id)`.
+  const pendingHydration = useWindowHydration((s) => s.pending);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState<{ width: number; height: number } | undefined>(undefined);
@@ -77,6 +92,18 @@ export default function WindowCanvas() {
       if (ds?.pending) useApp.getState().ensureBookData(ds.id);
     }
   }, [plotWindows, datasets]);
+
+  // P3.4 slice 4, one effect covering both staging-queue reactions (each is
+  // a no-op when the OTHER dep changed, so combining costs nothing): (1)
+  // focusing a window (click, restore-from-strip, close's refocus, minimize's
+  // handoff, …) must show its real content immediately, never a placeholder
+  // — every focus path funnels through `focusedWindowId`; (2) a window
+  // closed mid-stage (before its drain turn) must stop occupying a slot —
+  // pruned against the CURRENT id set on every `plotWindows` change.
+  useEffect(() => {
+    if (focusedWindowId) forceHydrate(focusedWindowId);
+    pruneHydration(new Set(plotWindows.map((w) => w.id)));
+  }, [focusedWindowId, plotWindows]);
 
   // Decision #6 — the migration guarantee: a single maximized window is
   // PIXEL-IDENTICAL to the pre-MULTI_PLOT_PLAN Stage (no chrome at all, and
@@ -124,6 +151,11 @@ export default function WindowCanvas() {
           const datasetMeta = dataset
             ? { channels: dataset.data.labels.length, rows: dataset.data.time.length }
             : undefined;
+          // P3.4 slice 4: a staged, not-yet-hydrated background window skips
+          // the whole kind dispatch below for an inert placeholder — no
+          // canvas, no data read, nothing an export/copy path could ever
+          // mistake for real content.
+          const staged = !focused && pendingHydration.has(win.id);
           return (
             <PlotWindowFrame
               key={win.id}
@@ -133,7 +165,11 @@ export default function WindowCanvas() {
               datasetMeta={datasetMeta}
               bounds={bounds}
             >
-              {win.kind === "snapshot" && win.snapshot ? (
+              {staged ? (
+                <div className="qzk-plotwin-placeholder" aria-hidden="true">
+                  {win.title || "…"}
+                </div>
+              ) : win.kind === "snapshot" && win.snapshot ? (
                 // Item 11: a snapshot window renders its FROZEN bundle
                 // statically — never focused (the store guarantees it), so
                 // this branch is checked before the focused dispatch.

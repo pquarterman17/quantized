@@ -647,6 +647,12 @@ body {
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* P3.4 slice 4 (staged workspace-restore rendering): a bulk-restored
+   window's inert placeholder body, shown until its turn in
+   store/windowHydration.ts's drain queue. Same dim/mono empty-state
+   language as .qzk-panel-empty below — deliberately no animation: the whole
+   point is near-zero paint cost while the rest of the session hydrates. */
+.qzk-plotwin-placeholder { flex: 1; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Panel/overlay composite window content (MAIN_PLAN #19 v1) — row/column/
    grid layouts tile PanelCell in a CSS grid (panelGridShape picks rows/cols);
