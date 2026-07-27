@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchBookData, findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api";
 import type { DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { usePeaks } from "./usePeaks";
 
@@ -58,6 +59,7 @@ const OPTS = { model: "Lorentzian", bgDegree: 1, linkMode: "None", constrain: fa
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "x.dat", data: DATA }],
     activeId: "d1",
@@ -256,5 +258,76 @@ describe("usePeaks fitEach", () => {
     expect(firstCall.x_hi).toBeCloseTo(1 + 2.4);
     expect(result.current.fitResult?.peaks).toHaveLength(1); // only the success
     expect(result.current.fitResult?.R2).toBeNull(); // independent fits → no global R²
+  });
+});
+
+describe("usePeaks fitEach — per-peak progress + cancel (P0.4 feedback/cancel tail)", () => {
+  it("registers a pendingOps entry that ticks 'Fitting peak i/N…' per peak, then clears it", async () => {
+    let resolve1!: (v: SinglePeakFit) => void;
+    let resolve2!: (v: SinglePeakFit) => void;
+    vi.mocked(fitPeak)
+      .mockReturnValueOnce(new Promise((r) => (resolve1 = r)))
+      .mockReturnValueOnce(new Promise((r) => (resolve2 = r)));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.fitEach(OPTS);
+    });
+    expect(usePendingOps.getState().ops).toHaveLength(1);
+    expect(usePendingOps.getState().ops[0].label).toBe("Fitting peak 1/2…");
+
+    resolve1(single(1.0, true));
+    await waitFor(() =>
+      expect(usePendingOps.getState().ops[0].label).toBe("Fitting peak 2/2…"),
+    );
+    // Same op relabelled, not a second registration.
+    expect(usePendingOps.getState().ops).toHaveLength(1);
+
+    resolve2(single(3.0, true));
+    await act(async () => {
+      await p;
+    });
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+  });
+
+  it("the registered op carries a cancel callback", async () => {
+    vi.mocked(fitPeak).mockReturnValue(new Promise<SinglePeakFit>(() => {}));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    act(() => {
+      void result.current.fitEach(OPTS);
+    });
+    expect(typeof usePendingOps.getState().ops[0].cancel).toBe("function");
+  });
+
+  it("cancel stops the loop before the next peak, keeping already-fit results", async () => {
+    let resolve1!: (v: SinglePeakFit) => void;
+    vi.mocked(fitPeak).mockReturnValueOnce(new Promise((r) => (resolve1 = r)));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.fitEach(OPTS);
+    });
+    // Wait until the first peak's fit is actually in flight before cancelling
+    // — cancelling any earlier would race the still-pending resolveDataset()
+    // hop and stop the loop before it ever calls fitPeak.
+    await waitFor(() => expect(fitPeak).toHaveBeenCalledTimes(1));
+
+    usePendingOps.getState().ops[0].cancel!();
+    resolve1(single(1.0, true));
+    await act(async () => {
+      await p;
+    });
+
+    expect(fitPeak).toHaveBeenCalledTimes(1); // the second peak's fit never started
+    expect(result.current.fitResult?.peaks).toHaveLength(1);
+    expect(result.current.fitResult?.peaks[0].center).toBe(1.0);
+    expect(result.current.fitError).toBeNull(); // a deliberate cancel is not a failure
+    expect(usePendingOps.getState().ops).toHaveLength(0); // op cleaned up in `finally`
   });
 });

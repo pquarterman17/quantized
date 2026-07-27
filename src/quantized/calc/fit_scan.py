@@ -38,6 +38,13 @@ __all__ = ["aicc_from_aic", "default_candidates", "scan_models"]
 # One candidate's fit runner: () -> (curve_fit result, param names).
 _Runner = Callable[[], tuple[dict[str, Any], list[str]]]
 
+# Mirrors calc.fit_bumps' job-runner bridge shape (fraction, message) -> None /
+# () -> bool, so routes/fitting.py's job-queued /scan/job can pass job.report /
+# job.aborted straight through without an adapter. Kept local (not imported
+# from quantized.jobs) so calc/ stays free of any dependency on the job store.
+ProgressFn = Callable[[float, str], None]
+AbortFn = Callable[[], bool]
+
 
 def aicc_from_aic(aic: float, k: int, n: int) -> float:
     """Small-sample corrected AIC: ``AICc = AIC + 2k(k+1)/(n-k-1)``.
@@ -186,6 +193,8 @@ def scan_models(
     dy: ArrayLike | None = None,
     models: Sequence[str] | None = None,
     equations: Sequence[dict[str, Any]] | None = None,
+    progress_callback: ProgressFn | None = None,
+    abort_check: AbortFn | None = None,
 ) -> dict[str, Any]:
     """Fit every candidate model to (x, y) and rank by AICc (ascending).
 
@@ -194,6 +203,20 @@ def scan_models(
     ``equations`` — custom-equation candidates ``{"name", "equation",
     "guesses"?}`` (the saved custom fit models); guesses default to 1.0 each.
     ``dy`` — optional per-point 1-sigma errors -> weights ``1/dy**2``.
+
+    ``progress_callback(fraction, message)`` fires once BEFORE each candidate
+    runs (fraction = candidates completed so far / total, message names the
+    candidate — e.g. ``"Scanning 4/29: Voigt"``), the same (fraction, message)
+    shape as ``Job.report`` so a job route can pass it straight through with
+    no adapter. ``abort_check()`` is polled at the same point, between
+    candidates: a ``True`` stops the scan before the NEXT candidate starts
+    (the current entries list is dropped, not returned — the job runner
+    (``quantized.jobs.JobStore``) marks the whole job ``cancelled`` once its
+    abort flag is set, matching the DREAM job's cancel contract in
+    ``calc.fit_bumps``/``routes/fitting_bumps.py``: no partial scan result).
+    A ``progress_callback`` that itself raises (e.g. ``Job.report`` after a
+    cancel request) propagates out of ``scan_models`` unchanged — the same
+    cooperative-cancel path ``fit_bumps`` relies on.
 
     Returns ``{"n", "nCandidates", "results"}`` where each result entry has
     ``name/kind/k/params/paramNames/R2/RMSE/AIC/AICc/deltaAICc/weight/error``.
@@ -213,24 +236,42 @@ def scan_models(
         weights = weights_from_dy(dy, n)
 
     names = list(models) if models is not None else default_candidates(n)
+    eq_list = list(equations or [])
+    total = len(names) + len(eq_list)
+
     entries: list[dict[str, Any]] = []
+    done = 0
+    aborted = False
     for name in names:
+        if abort_check is not None and abort_check():
+            aborted = True
+            break
+        if progress_callback is not None:
+            progress_callback(done / total, f"Scanning {done + 1}/{total}: {name}")
 
         def reg_runner(model_name: str = name) -> tuple[dict[str, Any], list[str]]:
             return _registry_runner(model_name, xv, yv, weights)
 
         entries.append(_run_candidate(name, "registry", reg_runner, n))
-    for eq in equations or []:
-        eq_name = str(eq.get("name", "") or eq.get("equation", ""))
-        equation = str(eq.get("equation", ""))
-        guesses = eq.get("guesses")
+        done += 1
 
-        def eq_runner(
-            eq_str: str = equation, g: Sequence[float] | None = guesses
-        ) -> tuple[dict[str, Any], list[str]]:
-            return _equation_runner(eq_str, g, xv, yv, weights)
+    if not aborted:
+        for eq in eq_list:
+            if abort_check is not None and abort_check():
+                break
+            eq_name = str(eq.get("name", "") or eq.get("equation", ""))
+            if progress_callback is not None:
+                progress_callback(done / total, f"Scanning {done + 1}/{total}: {eq_name}")
+            equation = str(eq.get("equation", ""))
+            guesses = eq.get("guesses")
 
-        entries.append(_run_candidate(eq_name, "equation", eq_runner, n))
+            def eq_runner(
+                eq_str: str = equation, g: Sequence[float] | None = guesses
+            ) -> tuple[dict[str, Any], list[str]]:
+                return _equation_runner(eq_str, g, xv, yv, weights)
+
+            entries.append(_run_candidate(eq_name, "equation", eq_runner, n))
+            done += 1
 
     ok = [e for e in entries if e["error"] is None]
     failed = [e for e in entries if e["error"] is not None]

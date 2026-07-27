@@ -1,9 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { beforeEach, describe, expect, it , vi } from "vitest";
 
 import { askConfirm } from "../../overlays/ConfirmDialog";
+import { reportExport } from "../../../lib/api";
 
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+vi.mock("../../../lib/api", () => ({ reportExport: vi.fn() }));
 
 import ReportPanel from "./ReportPanel";
 import type { ReportEntry } from "../../../lib/report";
@@ -44,6 +47,8 @@ const ENTRY: ReportEntry = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(reportExport).mockResolvedValue(undefined);
   useApp.setState({ reports: [ENTRY], openReportId: "rep-1" });
 });
 
@@ -89,5 +94,38 @@ describe("ReportPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete report" }));
     await Promise.resolve();
     expect(useApp.getState().reports).toHaveLength(1);
+  });
+
+  // P0.4 feedback/cancel audit tail: `busy` used to disable every export
+  // button with no way to tell which one was running.
+  describe("export names the running format", () => {
+    it("shows 'Exporting Word…' on the DOCX button while its export runs, others just disabled", async () => {
+      let resolve!: () => void;
+      vi.mocked(reportExport).mockReturnValue(new Promise((r) => (resolve = () => r())));
+      render(<ReportPanel />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Word" }));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Exporting Word…" })).toBeInTheDocument(),
+      );
+      expect(screen.getByRole("button", { name: "Exporting Word…" })).toBeDisabled();
+      // every other format button stays disabled but keeps its plain label
+      expect(screen.getByRole("button", { name: "HTML" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "LaTeX" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "PPT" })).toBeDisabled();
+
+      await act(async () => {
+        resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByRole("button", { name: "Word" })).toBeEnabled();
+    });
+
+    it("reverts to the plain label and re-enables the buttons on failure", async () => {
+      vi.mocked(reportExport).mockRejectedValue(new Error("export failed"));
+      render(<ReportPanel />);
+      fireEvent.click(screen.getByRole("button", { name: "HTML" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "HTML" })).toBeEnabled());
+    });
   });
 });

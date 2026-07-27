@@ -33,8 +33,11 @@ function state(over: Partial<ModelScanState>): ModelScanState {
     hasDataset: true,
     results: null,
     busy: false,
+    progress: null,
+    progressMessage: null,
     error: null,
     scan: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn(),
     ...over,
   };
@@ -125,5 +128,37 @@ describe("ModelScanSection", () => {
       <ModelScanSection state={state({ error: "scan failed" })} onApply={vi.fn()} />,
     );
     expect(screen.getByText("scan failed")).toBeInTheDocument();
+  });
+
+  // P0.4 feedback/cancel audit tail — the scan runs through the job queue.
+  describe("job progress + cancel", () => {
+    it("shows the per-model progress message while busy", () => {
+      render(
+        <ModelScanSection
+          state={state({ busy: true, progress: 0.4, progressMessage: "Scanning 4/29: Voigt" })}
+          onApply={vi.fn()}
+        />,
+      );
+      expect(screen.getByText("Scanning 4/29: Voigt")).toBeInTheDocument();
+      expect(screen.getByLabelText("Scan progress")).toBeInTheDocument();
+    });
+
+    it("falls back to a generic message before the first progress tick", () => {
+      render(<ModelScanSection state={state({ busy: true })} onApply={vi.fn()} />);
+      expect(screen.getByText("scanning models…")).toBeInTheDocument();
+    });
+
+    it("hides progress and Cancel when idle", () => {
+      render(<ModelScanSection state={state({ busy: false })} onApply={vi.fn()} />);
+      expect(screen.queryByLabelText("Scan progress")).not.toBeInTheDocument();
+      expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+    });
+
+    it("Cancel appears while busy and calls state.cancel", () => {
+      const s = state({ busy: true });
+      render(<ModelScanSection state={s} onApply={vi.fn()} />);
+      fireEvent.click(screen.getByText("Cancel"));
+      expect(s.cancel).toHaveBeenCalledOnce();
+    });
   });
 });

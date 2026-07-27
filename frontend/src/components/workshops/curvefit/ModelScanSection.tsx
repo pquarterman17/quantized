@@ -7,6 +7,11 @@
 // saved custom equation model, ranks by AICc, and clicking a ranked row
 // applies that model to the workshop's picker. Failed candidates stay
 // visible with their error — a model that can't fit is itself a result.
+//
+// The scan runs through the job queue (P0.4 feedback/cancel audit tail):
+// while busy, a progress bar + "Scanning i/n: name" message + Cancel button
+// track it, the same shape as BumpsSection's DREAM job UI (the reference
+// pattern this generalizes).
 
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
@@ -25,7 +30,8 @@ function label(e: ScanEntry): string {
 }
 
 export default function ModelScanSection({ state, onApply }: Props) {
-  const { hasDataset, results, busy, error, scan, clear } = state;
+  const { hasDataset, results, busy, progress, progressMessage, error, scan, cancel, clear } =
+    state;
 
   return (
     <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-soft)" }}>
@@ -38,12 +44,40 @@ export default function ModelScanSection({ state, onApply }: Props) {
         >
           {busy ? "Scanning…" : "Scan models"}
         </Button>
+        {busy && (
+          <Button size="sm" onClick={() => void cancel()}>
+            Cancel
+          </Button>
+        )}
         {results && !busy && (
           <Button size="sm" onClick={clear}>
             Clear
           </Button>
         )}
       </div>
+
+      {busy && (
+        <div style={{ marginTop: 8 }}>
+          <div
+            aria-label="Scan progress"
+            style={{ height: 4, borderRadius: 2, background: "var(--surface-2)", overflow: "hidden" }}
+          >
+            <div
+              style={{
+                width: `${Math.round((progress ?? 0) * 100)}%`,
+                height: "100%",
+                background: "var(--accent)",
+              }}
+            />
+          </div>
+          <div
+            className="qzk-ds-meta"
+            style={{ marginTop: 4, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}
+          >
+            {progressMessage ?? "scanning models…"}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--danger)" }}>

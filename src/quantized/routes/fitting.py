@@ -23,6 +23,7 @@ from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit, weights_from_dy
+from quantized.jobs import AbortFn, ProgressFn, jobs
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -285,6 +286,42 @@ def scan(req: ScanRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
+
+
+@router.post("/scan/job")
+def scan_job(req: ScanRequest) -> dict[str, Any]:
+    """Queue the AICc scan through the poll-model job runner (GOTO #9).
+
+    Same candidate math and result shape as ``POST /api/fitting/scan``
+    (``calc.fit_scan.scan_models`` — the sync route stays as-is for any other
+    caller) but returns ``{"job_id": ...}`` at once. Poll
+    ``GET /api/jobs/{id}`` for progress ("Scanning i/n: name") and
+    ``GET /api/jobs/{id}/result`` for the completed
+    ``{"n", "nCandidates", "results"}`` payload once ``status == "done"``.
+    Cancellation (``POST /api/jobs/{id}/cancel``) is cooperative between
+    candidates: a cancel mid-scan ends the job ``cancelled`` with no partial
+    result, same contract as the DREAM job in ``routes/fitting_bumps.py``.
+    Invalid scan input (length mismatch, too few points, bad ``dy``) surfaces
+    as a job ``error`` on poll rather than an immediate 422 — the job queue
+    has no synchronous response to attach one to.
+    """
+    equations = (
+        [e.model_dump() for e in req.equations] if req.equations is not None else None
+    )
+
+    def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
+        result = scan_models(
+            req.x,
+            req.y,
+            dy=req.dy,
+            models=req.models,
+            equations=equations,
+            progress_callback=progress,
+            abort_check=abort_check,
+        )
+        return to_jsonable(result)
+
+    return {"job_id": jobs.submit(run_job)}
 
 
 class PosteriorRequest(BaseModel):

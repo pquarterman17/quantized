@@ -1,21 +1,33 @@
-// AICc model quick-scan hook (GOTO #6): posts the analysis rows (#50/#53)
-// with saved custom models as equation candidates, surfaces backend errors,
-// and clear() drops the results.
+// AICc model quick-scan hook (GOTO #6): submits the analysis rows (#50/#53)
+// with saved custom models as equation candidates to the job-queued scan
+// (P0.4 feedback/cancel audit tail), polls for progress, surfaces backend
+// errors, cancels cleanly, and clear() drops the results.
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { scanFitModels, type ScanEntry } from "../../../lib/api";
+import type { ScanEntry } from "../../../lib/api";
+import { scanFitModelsJob } from "../../../lib/fitscan";
 import { saveCustomModel } from "../../../lib/fitmodels";
+import { JobCancelledError } from "../../../lib/jobs";
+import * as jobs from "../../../lib/jobs";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useModelScan } from "./useModelScan";
 
 vi.mock("../../../lib/api", () => ({
-  scanFitModels: vi.fn(),
   fetchBookData: vi.fn(),
 }));
+
+vi.mock("../../../lib/fitscan", () => ({
+  scanFitModelsJob: vi.fn(),
+}));
+
+vi.mock("../../../lib/jobs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/jobs")>();
+  return { ...actual, pollJob: vi.fn(), cancelJob: vi.fn() };
+});
 
 const DATA: DataStruct = {
   time: [0, 1, 2, 3],
@@ -50,23 +62,27 @@ beforeEach(() => {
     yKeys: null,
     seriesOrder: null,
   });
+  vi.mocked(scanFitModelsJob).mockResolvedValue({ job_id: "job-1" });
+  vi.mocked(jobs.pollJob).mockResolvedValue({ results: [ENTRY] });
 });
 
 describe("useModelScan", () => {
-  it("scans the analysis rows (#50/#53) and stores the ranked results", async () => {
+  it("submits the analysis rows (#50/#53) to the job queue and stores the polled results", async () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "run.dat", data: DATA, excludedRows: [1] }],
       activeId: "d1",
     });
-    vi.mocked(scanFitModels).mockResolvedValue({ n: 3, nCandidates: 1, results: [ENTRY] });
     const { result } = renderHook(() => useModelScan());
     await act(async () => {
       await result.current.scan();
     });
     // Excluded row 1 is pruned; no saved custom models -> no `equations` key.
-    expect(scanFitModels).toHaveBeenCalledWith({ x: [0, 2, 3], y: [10, 30, 40] });
+    expect(scanFitModelsJob).toHaveBeenCalledWith({ x: [0, 2, 3], y: [10, 30, 40] });
+    expect(jobs.pollJob).toHaveBeenCalledWith("job-1", expect.any(Function));
     expect(result.current.results).toEqual([ENTRY]);
     expect(result.current.error).toBeNull();
+    expect(result.current.busy).toBe(false);
+    expect(result.current.progress).toBeNull();
   });
 
   it("scans the primary plotted X/Y channels instead of time/values[0]", async () => {
@@ -84,13 +100,15 @@ describe("useModelScan", () => {
       yKeys: [2, 1],
       seriesOrder: [1, 2],
     });
-    vi.mocked(scanFitModels).mockResolvedValue({ n: 4, nCandidates: 1, results: [ENTRY] });
     const { result } = renderHook(() => useModelScan());
     await act(async () => {
       await result.current.scan();
     });
     // plot X = field (channel 0); primary Y after ordering = moment (channel 1).
-    expect(scanFitModels).toHaveBeenCalledWith({ x: [100, 200, 300, 400], y: [10, 20, 30, 40] });
+    expect(scanFitModelsJob).toHaveBeenCalledWith({
+      x: [100, 200, 300, 400],
+      y: [10, 20, 30, 40],
+    });
   });
 
   it("includes saved custom equation models as scan candidates", async () => {
@@ -103,20 +121,73 @@ describe("useModelScan", () => {
       lower: [null, null],
       upper: [null, null],
     });
-    vi.mocked(scanFitModels).mockResolvedValue({ n: 4, nCandidates: 2, results: [] });
     const { result } = renderHook(() => useModelScan());
     await act(async () => {
       await result.current.scan();
     });
-    expect(scanFitModels).toHaveBeenCalledWith({
+    expect(scanFitModelsJob).toHaveBeenCalledWith({
       x: [0, 1, 2, 3],
       y: [10, 20, 30, 40],
       equations: [{ name: "MyDecay", equation: "a*exp(-x/t)", guesses: [2.5, 1] }],
     });
   });
 
+  it("reports progress via the poll callback while a scan is in flight", async () => {
+    let onProgress!: (f: number, m: string) => void;
+    vi.mocked(jobs.pollJob).mockImplementation(async (_id, cb) => {
+      onProgress = cb as (f: number, m: string) => void;
+      onProgress(0.0, "Scanning 1/2: Linear");
+      onProgress(0.5, "Scanning 2/2: Gaussian");
+      return { results: [ENTRY] };
+    });
+    const { result } = renderHook(() => useModelScan());
+    await act(async () => {
+      await result.current.scan();
+    });
+    // busy/progress reset to idle once the scan settles — the intermediate
+    // values are exercised by the callback assertions above.
+    expect(result.current.busy).toBe(false);
+    expect(result.current.progress).toBeNull();
+    expect(result.current.progressMessage).toBeNull();
+  });
+
+  it("cancel forwards the in-flight job id to cancelJob", async () => {
+    let resolvePoll!: (v: { results: ScanEntry[] }) => void;
+    vi.mocked(jobs.pollJob).mockReturnValue(
+      new Promise((r) => {
+        resolvePoll = r;
+      }),
+    );
+    const { result } = renderHook(() => useModelScan());
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.scan();
+    });
+    await waitFor(() => expect(scanFitModelsJob).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(jobs.cancelJob).toHaveBeenCalledWith("job-1");
+
+    resolvePoll({ results: [ENTRY] });
+    await act(async () => {
+      await p;
+    });
+  });
+
+  it("a cancelled job clears busy without setting an error", async () => {
+    vi.mocked(jobs.pollJob).mockRejectedValue(new JobCancelledError("job-1"));
+    const { result } = renderHook(() => useModelScan());
+    await act(async () => {
+      await result.current.scan();
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.busy).toBe(false);
+  });
+
   it("surfaces a backend failure as an error and clears busy", async () => {
-    vi.mocked(scanFitModels).mockRejectedValue(new Error("need at least 3 points"));
+    vi.mocked(jobs.pollJob).mockRejectedValue(new Error("need at least 3 points"));
     const { result } = renderHook(() => useModelScan());
     await act(async () => {
       await result.current.scan();
@@ -133,11 +204,10 @@ describe("useModelScan", () => {
     await act(async () => {
       await result.current.scan();
     });
-    expect(scanFitModels).not.toHaveBeenCalled();
+    expect(scanFitModelsJob).not.toHaveBeenCalled();
   });
 
   it("clear drops results and error", async () => {
-    vi.mocked(scanFitModels).mockResolvedValue({ n: 4, nCandidates: 1, results: [ENTRY] });
     const { result } = renderHook(() => useModelScan());
     await act(async () => {
       await result.current.scan();

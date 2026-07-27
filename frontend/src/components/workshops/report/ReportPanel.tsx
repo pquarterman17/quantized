@@ -128,19 +128,26 @@ export default function ReportPanel() {
   const reports = useApp((s) => s.reports);
   const setOpenReport = useApp((s) => s.setOpenReport);
   const removeReport = useApp((s) => s.removeReport);
-  const [busy, setBusy] = useState(false);
+  // Which format is currently exporting (P0.4 feedback/cancel audit tail):
+  // `busy` used to be a plain boolean, so all four buttons went "disabled"
+  // with no way to tell WHICH one was running. Naming the format is the
+  // smallest fix — the running button's own label switches to "Exporting
+  // X…", the rest stay disabled exactly as before.
+  const [runningFormat, setRunningFormat] = useState<
+    "html" | "latex" | "docx" | "pptx" | null
+  >(null);
 
   const entry = reports.find((r) => r.id === openReportId);
   if (!entry) return null;
 
   const doExport = async (format: "html" | "latex" | "docx" | "pptx") => {
-    setBusy(true);
+    setRunningFormat(format);
     try {
       await reportExport(entry.report, format, entry.name);
     } catch (e) {
       toast(e instanceof Error ? e.message : "report export failed", "danger");
     } finally {
-      setBusy(false);
+      setRunningFormat(null);
     }
   };
 
@@ -160,8 +167,12 @@ export default function ReportPanel() {
           Export
         </span>
         {EXPORTS.map((e) => (
-          <Button key={e.format} disabled={busy} onClick={() => void doExport(e.format)}>
-            {e.label}
+          <Button
+            key={e.format}
+            disabled={runningFormat !== null}
+            onClick={() => void doExport(e.format)}
+          >
+            {runningFormat === e.format ? `Exporting ${e.label}…` : e.label}
           </Button>
         ))}
         <span style={{ flex: 1 }} />

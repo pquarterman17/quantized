@@ -183,3 +183,73 @@ def test_dy_weights_change_the_fit_inputs_but_not_the_winner() -> None:
     out = scan_models(x, y, dy=dy, models=["Linear", "Gaussian"])
     assert out["results"][0]["name"] == "Gaussian"
     assert out["results"][0]["error"] is None
+
+
+# ── progress / cancel (job-queue integration, P0.4 feedback/cancel tail) ─────
+
+
+def test_progress_callback_fires_once_per_candidate_before_it_runs() -> None:
+    x, y = _gaussian_data()
+    calls: list[tuple[float, str]] = []
+    scan_models(
+        x, y, models=["Linear", "Gaussian"],
+        progress_callback=lambda f, m: calls.append((f, m)),
+    )
+    assert len(calls) == 2
+    assert calls[0] == (0.0, "Scanning 1/2: Linear")
+    assert calls[1] == (0.5, "Scanning 2/2: Gaussian")
+
+
+def test_progress_callback_covers_equation_candidates_too() -> None:
+    x, y = _gaussian_data()
+    calls: list[tuple[float, str]] = []
+    scan_models(
+        x, y, models=["Linear"],
+        equations=[{"name": "MyGauss", "equation": "a*exp(-(x-m)^2/(2*s^2))",
+                    "guesses": [1.5, 0.0, 1.0]}],
+        progress_callback=lambda f, m: calls.append((f, m)),
+    )
+    assert calls == [(0.0, "Scanning 1/2: Linear"), (0.5, "Scanning 2/2: MyGauss")]
+
+
+def test_abort_check_stops_before_the_next_candidate_runs() -> None:
+    """A True abort_check drops the run entirely — no partial result, mirroring
+    the DREAM job's cancel contract (JobStore marks the whole job cancelled
+    once its abort flag is set, regardless of what the body returned)."""
+    x, y = _gaussian_data()
+    seen: list[str] = []
+
+    def abort() -> bool:
+        return len(seen) >= 1  # stop once the first candidate has been announced
+
+    out = scan_models(
+        x, y, models=["Linear", "Gaussian", "Lorentzian"],
+        progress_callback=lambda f, m: seen.append(m),
+        abort_check=abort,
+    )
+    assert seen == ["Scanning 1/3: Linear"]  # Gaussian/Lorentzian never announced
+    assert out["nCandidates"] == 1
+    assert out["results"][0]["name"] == "Linear"
+
+
+def test_abort_check_before_any_candidate_returns_empty() -> None:
+    x, y = _gaussian_data()
+    out = scan_models(x, y, models=["Linear", "Gaussian"], abort_check=lambda: True)
+    assert out["nCandidates"] == 0
+    assert out["results"] == []
+
+
+def test_progress_callback_exception_propagates_uncaught() -> None:
+    """The job runner's cancel path (Job.report raising JobCancelled once its
+    abort flag is set) must reach the caller unchanged — scan_models must not
+    swallow or wrap it, the same contract fit_bumps relies on."""
+
+    class _Stop(Exception):
+        pass
+
+    def raiser(fraction: float, message: str) -> None:
+        raise _Stop("cancelled")
+
+    x, y = _gaussian_data()
+    with pytest.raises(_Stop):
+        scan_models(x, y, models=["Linear", "Gaussian"], progress_callback=raiser)

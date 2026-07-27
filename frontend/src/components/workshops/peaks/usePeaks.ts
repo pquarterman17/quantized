@@ -3,6 +3,18 @@
 // overlay. Also exposes two fit actions over the detected peaks: fitTogether
 // (simultaneous /api/peaks/fit-multi) and fitEach (independent /api/peaks/fit
 // per peak). Re-runs find — and clears any fit — when the active dataset changes.
+//
+// fitEach per-peak progress + cancel (P0.4 feedback/cancel audit tail,
+// 2026-07-26): a serial loop of N sequential round-trips had one static
+// "Fitting…" for the whole batch and no way to stop it. It now registers ONE
+// pendingOps entry (store/pendingOps.ts) whose label ticks "Fitting peak
+// i/N…" per iteration — StatusBar renders that label AND, because a `cancel`
+// callback is attached, a Cancel affordance next to it automatically (no new
+// UI here). Cancel semantics mirror the import batch (store/importDatasets.ts
+// `runImport`, P3.4 slice 1): it stops the loop before the NEXT peak starts,
+// peaks already fit keep their results — never a rollback, never an abort of
+// the in-flight request (each per-peak fit is a small windowed NLLS call, not
+// worth wiring an AbortSignal through `fitPeak` for).
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -11,6 +23,7 @@ import { fullPlottedX, selectedFitData } from "../../../lib/fitselection";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
+import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 export interface PeakFitOptions {
@@ -157,6 +170,12 @@ export function usePeaks(): PeaksState {
       }
       setFitting(true);
       setFitError(null);
+      const total = peaks.length;
+      const label = (i: number) => `Fitting peak ${i + 1}/${total}…`;
+      let cancelled = false;
+      const opId = beginOp(label(0), () => {
+        cancelled = true;
+      });
       try {
         // #38 deferred edge: resolve the active dataset's full data before
         // fitting (a no-op if it isn't pending).
@@ -165,7 +184,10 @@ export function usePeaks(): PeaksState {
         const st = useApp.getState();
         const { x, y, fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const fitted: FittedPeak[] = [];
-        for (const p of peaks) {
+        for (let i = 0; i < peaks.length; i++) {
+          if (cancelled) break;
+          updateOp(opId, label(i));
+          const p = peaks[i];
           const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
           const r = await fitPeak({
             x, y, x_lo: p.center - half, x_hi: p.center + half,
@@ -184,10 +206,14 @@ export function usePeaks(): PeaksState {
         };
         setFitResult(result);
         if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
-        if (fitted.length === 0) setFitError("No peaks could be fit individually.");
+        // A deliberate cancel with zero completed peaks isn't a failure to report.
+        if (fitted.length === 0 && !cancelled) {
+          setFitError("No peaks could be fit individually.");
+        }
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "per-peak fit failed");
       } finally {
+        endOp(opId);
         setFitting(false);
       }
     },
