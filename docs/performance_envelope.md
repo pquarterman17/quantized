@@ -250,12 +250,43 @@ Findings:
     restore TTFP varied 89 ms vs ~2,300 ms run-to-run, suspected
     save-time focused-window nondeterminism in the harness.
 
+## Final residual wave — 2026-07-27 (`2ea1f9a`; raw: `docs/envelope/2026-07-27-final-residuals.json`)
+
+14. **Browser 2-D maps are gated by input triangulation, not display
+    resolution.** Import→map-visible: 12–13 s at 500², **52–59 s at
+    1000²**; 2000² overflowed the measurement transport on a
+    hundreds-of-MB import response. Isolated backend timing: the default
+    linear regrid (`scipy griddata`) re-triangulates the FULL scattered
+    input every call — 8.5 / 37 / 153 s at 250k / 1M / 4M points — while
+    sweeping output resolution 200²→2000² moved cost <2 %. The UI's
+    resolution dropdown is a red herring; RSM input is typically a
+    REGULAR GRID, so a gridded-input fast path (bin/decimate, no
+    Delaunay) is the booked class fix (P2.8 evidence satisfied).
+15. **1M export: the backend is fine; a dialog path is broken.** "Copy
+    figure" (no dialog, same render pipeline) worked 3/3 (~15 s at 1M —
+    payload decimation will cut this). "Export figure…" via the dialog:
+    PNG 2/3 (one hang), **SVG 0/3 — reproducible hang with ZERO network
+    activity** (raw-fetch SVG works: 16.7 s, valid 1.67 MB file), so the
+    fault isolates to the `askParams` → `runExportFigureCommand`
+    orchestration. Also: the "Copy figure (vector)" menu item never
+    renders even though the capability probe passes. Both booked as
+    defects.
+16. **TTFP anomaly RESOLVED**: `focusedWindowId` at save time decides
+    which window staged hydration mounts eagerly; the harness now pins a
+    small window before save → TTFP 4–13 ms, deterministic across runs
+    (deliberately focusing the 1M window reproduces the slow case,
+    317–540 ms). Freeze/restore trend continued: ~2,900–3,100 ms /
+    ~3,800–4,000 ms — measured on a tree that PREDATES the memoization
+    fix (`89499cc`), so current main is likely somewhat better; the
+    <1.5 s target still waits on the payload-decimation item.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
-- Browser-side 2-D map rendering/interaction at 1000²–2000².
 - Network/offline source transitions — unmeasurable today: no offline-vs-
   deleted distinction exists until P1.1 ships. Re-measure after P1.1.
-- Copy/export timing at the 1M scale from the UI.
 - Real-GPU F1 zoom acceptance (owner hardware; headless run reads 112 ms).
-- ~~Worksheet-GRID interaction at 1M rows~~ / ~~`.dwk` with a 1M-row
-  member~~ — MEASURED 2026-07-26, see above.
+- 4M-point (2000²) browser map import — the measurement transport itself
+  overflowed; re-attempt after payload decimation shrinks responses.
+- ~~Worksheet-GRID @1M~~ / ~~big `.dwk`~~ (measured 2026-07-26);
+  ~~browser maps 500²–1000²~~ / ~~1M UI copy/export~~ (measured
+  2026-07-27, see §Final residual wave).

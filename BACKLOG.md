@@ -6,7 +6,17 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-27 (tenth pass). **The feedback/cancel tails
+**Last reconciled:** 2026-07-27 (eleventh pass). **The final measurement
+wave is DONE** (`2ea1f9a`) — every locally-measurable P0.4 case is now
+measured; the TTFP anomaly is resolved (harness pins the focused window;
+4–13 ms deterministic). It surfaced two defects (export-dialog SVG hang;
+missing vector-copy menu item) and the map-regrid mechanism (full-input
+Delaunay per regrid, 37 s @1M — P2.8's profile requirement satisfied),
+all booked as actionable rows below alongside the payload-decimation
+queue head. Earlier same pass: the window-mount "divergence" fix
+(`89499cc` — render-phase memoization; window open 6.1→3.8 s).
+
+Prior (tenth pass, same day). **The feedback/cancel tails
 SHIPPED** (`9e2e476`: job-queued model scan with progress + cooperative
 cancel — the queue's second producer; per-peak `fitEach` progress +
 cancel; ReportPanel format labels) — the P0.4 ">500 ms feedback/cancel"
@@ -232,6 +242,8 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Server-side plot-payload decimation — `/api/plot/series` ships 78 MB JSON at 1M×7; its network+encode+parse (~2–5 s) is the measured last term in window mount (~3.8 s) and restore freeze (~3.7 s vs 1.5 s target) after the render-memoization fix. Decimate at the route to the client's draw contract, full-res opt-out; audit non-plot payload consumers first | PRIMARY SOFTWARE P0.4/P3.4 (pre-authorized second half of point reduction) |
+| Export-dialog defects — "Export figure…" SVG hangs 0/3 with ZERO network (PNG 2/3) while dialog-free "Copy figure" is 3/3 on the same pipeline: fault isolates to `askParams`→`runExportFigureCommand`; plus "Copy figure (vector)" menu item never renders despite `ClipboardItem.supports()`=true | defects (found by the 2026-07-27 measurement wave) |
+| Map regrid gridded-input fast path — linear regrid Delaunay-triangulates ALL input points every call (37 s @1M; output resolution <2% effect); detect regular-grid input → bin/decimate, griddata only for genuinely scattered data | PRIMARY SOFTWARE P2.8 (defect-class, evidence delivered) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are

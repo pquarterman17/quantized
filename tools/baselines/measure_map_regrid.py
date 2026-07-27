@@ -37,10 +37,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from common import DEFAULT_LARGE_DIR  # noqa: E402
+
 from quantized.calc.map import MapState, map_from_datastruct  # noqa: E402
 from quantized.io.registry import import_auto  # noqa: E402
-
-from common import DEFAULT_LARGE_DIR  # noqa: E402
 
 SIZES = [500, 1000, 2000]
 
@@ -83,7 +83,10 @@ def main() -> None:
         r = measure_one(path, nx=200, ny=200)
         r["size"] = f"{n}x{n}"
         rows.append(r)
-        print(f"n={n}: points={r['n_points']} import={r['import_s']}s regrid(linear,200x200)={r['regrid_s']}s peak_mem={r['regrid_peak_mem_mb']}MB")
+        print(
+            f"n={n}: points={r['n_points']} import={r['import_s']}s "
+            f"regrid(linear,200x200)={r['regrid_s']}s peak_mem={r['regrid_peak_mem_mb']}MB"
+        )
 
     # Isolate output-grid-size vs input-point-count: same 1000^2 source,
     # nx/ny swept from the UI default to the max the backend route accepts
@@ -97,7 +100,10 @@ def main() -> None:
             r = measure_one(mid_path, nx=res, ny=res)
             r["size"] = "1000x1000 (fixed input, output grid swept)"
             res_sweep.append(r)
-            print(f"[res sweep] output={res}x{res}: regrid={r['regrid_s']}s (points fixed at {r['n_points']})")
+            print(
+                f"[res sweep] output={res}x{res}: regrid={r['regrid_s']}s "
+                f"(points fixed at {r['n_points']})"
+            )
 
     out = {"per_size": rows, "output_resolution_sweep": res_sweep}
     if args.out:

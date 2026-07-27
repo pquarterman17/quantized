@@ -30,7 +30,7 @@ SIZES = [500, 1000, 2000]
 def write_map_set(out_dir: Path) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for n, seed in zip(SIZES, [_SEED_MAP_500, _SEED_MAP_1000, _SEED_MAP_2000]):
+    for n, seed in zip(SIZES, [_SEED_MAP_500, _SEED_MAP_1000, _SEED_MAP_2000], strict=True):
         p = out_dir / f"large_rsm_map_{n}.xrdml"
         write_large_map(p, seed=seed, n_omega=n, n_tt=n)
         written.append(p)
@@ -39,7 +39,9 @@ def write_map_set(out_dir: Path) -> list[Path]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=None, help="output directory (default: tools/baselines/out)")
+    parser.add_argument(
+        "--out", type=Path, default=None, help="output directory (default: tools/baselines/out)"
+    )
     args = parser.parse_args()
     out_dir = args.out if args.out is not None else DEFAULT_LARGE_DIR
     written = write_map_set(out_dir)

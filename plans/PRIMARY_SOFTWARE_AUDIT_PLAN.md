@@ -279,8 +279,11 @@ copy/export, and cleanup for:
 - [x] 1 million-row numeric worksheet (import/plot/interaction/memory
   measured 2026-07-26; worksheet-GRID interaction, save/reopen and
   copy/export at 1M remain residuals);
-- [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured;
-  browser-side map interaction is a residual);
+- [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured
+  2026-07-26; browser-side measured 2026-07-27 (`2ea1f9a`): 12–13 s /
+  52–59 s to map-visible at 500²/1000², mechanism = full-input
+  re-triangulation per regrid — class fix booked under P2.8; 4M-point
+  case pending payload decimation);
 - [x] 50+ datasets and 20+ plot windows;
 - [x] a large `.dwk` with derived data, figures, and results — MEASURED
   2026-07-26 (`be40a69`, with the 1M worksheet-grid residual in the same
@@ -647,12 +650,22 @@ violin, bar, strip, or summary plots.
 
 **Goal:** measured performance plus linked slice/ROI work.
 
-**Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P0.4.
+**Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P0.4
+(SATISFIED 2026-07-27 — the profile exists; see below).
 
 - [ ] Preserve existing H/V/segment slices and link positions.
 - [ ] Add ROI statistics/export only from real need.
 - [ ] Persist color limits/scale/map/slices/annotations.
-- [ ] Fix profiled rendering/memory bottlenecks.
+- [ ] Fix profiled rendering/memory bottlenecks — **profile delivered
+  2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
+  `tools/baselines/measure_map_regrid.py`): the default linear regrid
+  runs `scipy griddata` (full Delaunay) over ALL input points on every
+  call — 8.5 / 37 / 153 s at 250k / 1M / 4M — while output resolution is
+  irrelevant (<2 % across 200²→2000²). RSM input is typically a regular
+  grid; the class fix is a gridded-input fast path (detect + bin/decimate,
+  no triangulation), falling back to griddata only for genuinely
+  scattered input. This sub-item is defect-class and actionable now; the
+  rest of P2.8 stays Gate D-sequenced.
 - [ ] Interactive 3-D remains gated by GOTO Q4; static 3-D is adequate now.
 
 ### P2.9 — Signal-processing UI
@@ -1312,6 +1325,25 @@ work (its BACKLOG row).
   spawned one commit behind (`b1b32e7`, pre-`9f12216`), so its upload
   timing predates the layout fix — caveated in the envelope doc; all
   other numbers unaffected.
+
+#### 2026-07-27 — Final measurement wave (Sonnet agent; every locally-measurable P0.4 case now settled)
+
+- `2ea1f9a` merged: map/export envelope harnesses + the workspace-harness
+  determinism fix (focused-window pin before save — TTFP anomaly RESOLVED,
+  4–13 ms deterministic). 134 measurement rows in
+  `docs/envelope/2026-07-27-final-residuals.json`.
+- THREE new evidence-backed items booked: map regrid gridded-input fast
+  path (P2.8, defect-class — 37 s for a 1M-point map, output resolution
+  irrelevant); the export-dialog SVG hang (0/3, zero network — dialog
+  orchestration, not backend); the missing "Copy figure (vector)" menu
+  item (capability probe passes, item never renders).
+- Caveat recorded: the wave's tree predates `89499cc`, so its
+  freeze/restore numbers slightly understate current main.
+- P0.4's unmeasured set is now exactly: offline transitions (P1.1),
+  real-GPU zoom (owner), and the 4M map (pending payload decimation).
+- Orchestrator note: two lint nits in the new tools were fixed at merge;
+  a third agent idle-stopped awaiting its own background run — the
+  commit-before-idle rule is now in the worktree-gotchas memory.
 
 #### 2026-07-27 — Feedback/cancel tails shipped; divergence hunt in flight
 
