@@ -463,3 +463,104 @@ describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {
     expect(body.y2_fmt).toBeUndefined();
   });
 });
+
+// P0.4 finding 15 (2026-07-27): a ParamDialog render race could resolve
+// askParams() with a PARTIAL params object — every key missing except the
+// one field a fast interaction (a real user typing quickly, or scripted
+// automation) had just edited. `runExportFigureCommand` used to do
+// `(params.x_label as string).trim()` with no guard, which threw a
+// TypeError on the missing key BEFORE exportActive's own try/catch could run
+// — the rejection then propagated out of this function and was swallowed by
+// store/commands.ts's runAction (`.catch(() => {})`), so the whole "Export
+// figure…" command vanished silently: no exportFigure() call (hence zero
+// network activity), no toast, no status change, no console error — the
+// live SVG-dialog hang traced via tools/bench/export_envelope.mjs at 1M-row
+// scale. The race itself is fixed at the source (ParamDialog.tsx now resets
+// its local `values` synchronously during render, so it can no longer hand
+// out a partial shape), but this test pins the OUTER contract directly by
+// mocking askParams to return EXACTLY the malformed shape the live race
+// produced — `{fmt: "svg"}`, nothing else — so a future regression here
+// (in ParamDialog, or in any other askParams() caller with the same
+// unguarded-access pattern) fails this test instead of silently vanishing
+// in production. On the pre-fix code this `await` rejects instead of
+// resolving (`exportFigure` is never called) — no timers or waiting needed,
+// the mock resolves synchronously either way.
+describe("runExportFigureCommand — P0.4 finding 15 (malformed/partial askParams result)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10, 100], [2, 20, 200]],
+            labels: ["A", "B", "C"],
+            units: ["u", "v", "w"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("does not throw, and still exports, when askParams resolves with only the edited key set (missing dpi/title/labels/style)", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({ fmt: "svg" });
+    await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.fmt).toBe("svg");
+    // Blank/absent labels mean "derive from the data" — must fall back to
+    // undefined on the wire, never throw trying to read/trim a missing key.
+    expect(body.x_label).toBeUndefined();
+    expect(body.y_label).toBeUndefined();
+  });
+
+  it("does not throw when askParams resolves with a completely empty object", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({});
+    await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["pdf", "svg", "png", "tiff"])(
+    "the dialog promise resolves and exportFigure is reached for fmt=%s",
+    async (fmt) => {
+      vi.mocked(askParams).mockResolvedValueOnce({
+        fmt,
+        style: "default",
+        dpi: 300,
+        title: "",
+        x_label: "",
+        y_label: "",
+      });
+      await runExportFigureCommand(useApp.getState);
+      expect(exportFigure).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(exportFigure).mock.calls[0][0].fmt).toBe(fmt);
+    },
+  );
+});

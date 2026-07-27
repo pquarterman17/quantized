@@ -219,3 +219,28 @@ describe("buildPlotMenu — checkmarks + disabled state", () => {
     expect(ctx.setXScale).toHaveBeenCalledWith("reciprocal");
   });
 });
+
+// P0.4 finding 15 (2026-07-27): "Copy figure (vector)" must appear/disappear
+// with `ctx.copyFigureSvg` (undefined where the browser's clipboard can't
+// take image/svg+xml — see lib/clipboard.ts's clipboardSvgSupported()) —
+// NEVER unconditionally absent. buildPlotMenu's own conditional
+// (`if (ctx.copyFigureSvg) items.push(...)`) was always correct; the live
+// bug was PlotStage.tsx dropping the field before it ever reached this
+// context object (see PlotStage.test.tsx). This pins buildPlotMenu's half
+// of the contract directly.
+describe("buildPlotMenu — Copy figure (vector) follows ctx.copyFigureSvg", () => {
+  it("omits the entry when copyFigureSvg is undefined (browser can't take SVG on the clipboard)", () => {
+    const items = buildPlotMenu(makeCtx());
+    expect(find(items, "Copy figure (vector)")).toBeUndefined();
+    expect(find(items, "Copy figure")).toBeTruthy(); // the PNG copy always offers
+  });
+
+  it("offers the entry, wired to ctx.copyFigureSvg, when the capability is present", () => {
+    const copyFigureSvg = vi.fn();
+    const items = buildPlotMenu(makeCtx({ copyFigureSvg }));
+    const item = find(items, "Copy figure (vector)");
+    expect(item).toBeTruthy();
+    if (item && "run" in item) item.run();
+    expect(copyFigureSvg).toHaveBeenCalledTimes(1);
+  });
+});

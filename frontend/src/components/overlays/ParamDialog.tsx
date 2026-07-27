@@ -2,7 +2,7 @@
 // Promise-based parameter dialog: askParams(title, fields) resolves with typed
 // values or null on cancel. Mount one <ParamDialog/> at the app root.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { create } from "zustand";
 
 import { coerceParams, type ParamField, type ParamValues } from "../../lib/params";
@@ -48,13 +48,34 @@ export default function ParamDialog() {
   const close = useParamDialog((s) => s.close);
   const [values, setValues] = useState<ParamValues>({});
 
-  useEffect(() => {
-    if (title !== null) {
-      const init: ParamValues = {};
-      for (const f of fields) init[f.key] = f.default;
-      setValues(init);
-    }
-  }, [title, fields]);
+  // Reset `values` to this dialog's field defaults SYNCHRONOUSLY, during
+  // render, rather than in a useEffect (react.dev "adjusting state when a
+  // prop changes"). `fields` is a fresh array literal per askParams() call,
+  // so `fields !== initializedFields` is true exactly once per open.
+  //
+  // A useEffect-based reset used to run here instead — it fires strictly
+  // AFTER the first commit/paint, leaving a window where `values` still
+  // holds the PREVIOUS dialog's leftovers (or the initial `{}`). A fast field
+  // edit (a real user typing quickly, or — reliably, at 1M-row render scale —
+  // Playwright's scripted selectOption()) can land inside that window: the
+  // edit's `setValues({...values, [key]: v})` and the effect's
+  // `setValues(init)` both close over the SAME stale `values`, and `useState`
+  // REPLACES rather than merges, so whichever call lands second wins outright.
+  // When the edit wins, every OTHER field's key is missing from `values` —
+  // exportFigureCommand.ts's `(params.x_label as string).trim()` then threw
+  // on `undefined` before exportActive's own try/catch ever ran, and that
+  // rejection was swallowed by store/commands.ts's runAction (P0.4 finding
+  // 15, 2026-07-27: the "Export figure…" SVG dialog hung with zero network
+  // activity, no toast, no console error — traced to exactly this race).
+  // Resetting during render means the FIRST commit already has full,
+  // race-free defaults, so there is no window left for an edit to land in.
+  const [initializedFields, setInitializedFields] = useState<ParamField[] | null>(null);
+  if (title !== null && fields !== initializedFields) {
+    const init: ParamValues = {};
+    for (const f of fields) init[f.key] = f.default;
+    setValues(init);
+    setInitializedFields(fields);
+  }
 
   if (title === null) return null;
 
