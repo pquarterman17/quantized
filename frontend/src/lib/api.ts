@@ -651,6 +651,33 @@ export function statsAnova(groups: number[][]): Promise<CalcResult> {
   return postJSON("/api/stats/anova", { groups });
 }
 
+/** Levene / Brown-Forsythe test for equal variances across groups (default
+ *  center="median" = Brown-Forsythe, the robust variant). Fit Y by X's
+ *  oneway leg uses this as an equal-variance warning next to plain ANOVA. */
+export function statsLevene(groups: number[][], center: string = "median"): Promise<CalcResult> {
+  return postJSON("/api/stats/levene", { groups, center });
+}
+
+/** Tukey HSD all-pairs post-hoc (JMP_GAP J3 oneway leg, >2 levels). */
+export function statsTukey(groups: number[][], alpha = 0.05): Promise<CalcResult> {
+  return postJSON("/api/stats/tukey", { groups, alpha });
+}
+
+/** Pearson chi-square test of independence on an R x C contingency table
+ *  (JMP_GAP J3 contingency leg; calc.stats_contingency.chi_square_independence). */
+export function statsChiSquareIndependence(table: number[][]): Promise<CalcResult> {
+  return postJSON("/api/stats/chi-square-independence", { table });
+}
+
+/** Fisher's exact test on a 2x2 contingency table (JMP_GAP J3 contingency leg,
+ *  the small-expected-count alternative to chi-square). */
+export function statsFisherExact(
+  table: number[][],
+  alternative: string = "two-sided",
+): Promise<CalcResult> {
+  return postJSON("/api/stats/fisher-exact", { table, alternative });
+}
+
 export function statsPCA(body: {
   data: number[][];
   center?: boolean;
