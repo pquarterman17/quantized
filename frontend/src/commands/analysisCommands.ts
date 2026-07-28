@@ -106,7 +106,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       section: "Statistics",
       label: "Distribution (histogram + normality of a column)…",
       description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict.",
-      keywords: "histogram normality shapiro wilk quantile descriptive stats",
+      keywords: "jmp histogram normality shapiro wilk quantile descriptive stats",
       run: () => s().setDistributionOpen(true),
     },
     {
@@ -115,7 +115,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       section: "Statistics",
       label: "Test chooser (which stats test? + run it)…",
       description: "Choose and run a statistical test with its assumptions and recommendation explained.",
-      keywords: "t-test anova mann whitney which test assumptions hypothesis",
+      keywords: "jmp t-test anova mann whitney which test assumptions hypothesis",
       run: () => s().setStatsChooserOpen(true),
     },
     {
@@ -124,7 +124,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Graph Builder (drag columns into X/Y/Group wells)…",
       description: "Build a plot by dragging data channels into X, Y, Group, and Facet roles.",
-      keywords: "plot spec scatter line box violin bar mark morph drop zone well facet drag wells x y group builder origin",
+      keywords: "jmp plot spec scatter line box violin bar mark morph drop zone well facet drag wells x y group builder origin",
       run: () => s().setGraphBuilderOpen(true),
     },
     {
