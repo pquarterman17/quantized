@@ -7,6 +7,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import { useFitYByXStore } from "../store/fitYByX";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -117,6 +118,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       description: "Choose and run a statistical test with its assumptions and recommendation explained.",
       keywords: "t-test anova mann whitney which test assumptions hypothesis",
       run: () => s().setStatsChooserOpen(true),
+    },
+    {
+      id: "fit-y-by-x",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Fit Y by X (oneway · bivariate · contingency)…",
+      description: "Pick an X and a Y column and get the matching analysis automatically: group comparison for a categorical factor, a line fit for two measurements, or a cross-tab test for two categories.",
+      keywords: "fit y by x oneway anova bivariate regression contingency chi-square chi square fisher exact tukey levene jmp",
+      run: () => useFitYByXStore.getState().setOpen(true),
     },
     {
       id: "graph-builder",
