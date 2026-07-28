@@ -68,6 +68,11 @@ describe("shared command help metadata", () => {
     ["digitize", "digitizer"],
     ["stepper", "peak-wizard"],
     ["transport", "calculators"],
+    ["jmp", "data-filter"],
+    ["local data filter", "data-filter"],
+    ["tabulate", "tabulate"],
+    ["by group", "split"],
+    ["jsl", "pipeline"],
   ];
 
   it.each(VOCABULARY)("finds a tool by the domain term %j", (term, id) => {
