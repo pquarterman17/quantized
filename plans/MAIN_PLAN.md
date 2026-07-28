@@ -2,15 +2,21 @@
 
 The root of the plan tree (per the global plan-consolidation rule: one
 main plan; sub-plans only where scale demands; small residues fold up
-here). Mission: **quantized replaces OriginPro as the owner's daily
-plotting & analysis tool** — MATLAB-toolbox backend parity (done,
-golden-verified) plus a ground-up GUI that wins on reproducibility,
-linked exploration, and domain depth. "Go-to" is achieved empirically
-via the switch-trigger protocol (GOTO_PLAN).
+here). Mission: **quantized replaces OriginPro AND JMP as the owner's
+daily plotting & analysis tools** (JMP added to the mission by owner
+directive 2026-07-28 — see `JMP_GAP_PLAN.md`) — MATLAB-toolbox backend
+parity (done, golden-verified) plus a ground-up GUI that wins on
+reproducibility, linked exploration, and domain depth. "Go-to" is
+achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-26 (ChatGPT-Sol reconciled the v0.12.0 readiness state:
+**Updated:** 2026-07-28 (owner directive: fully replace JMP as well as
+OriginPro. New sub-plan `JMP_GAP_PLAN.md` holds the code-grounded JMP gap
+analysis — 17 gaps J1–J17, 4 census-gated — and adds itself to the tree
+below; GOTO's stats-platform non-goal superseded and PRIMARY P2.6's
+demand clause satisfied, both annotated in place. Prior: 2026-07-26,
+ChatGPT-Sol reconciled the v0.12.0 readiness state:
 the performance sprint shipped; three P0.4 tasks remain actionable now;
 P1/P2/P3/P4 engineering is incomplete where its boxes remain open even when
 Gate A controls sequencing. Prior: the 2026-07-25 readiness audit added
@@ -35,6 +41,7 @@ Sol audit docs as items 29–30)
 | `PORT_PLAN.md` (+ appendix `PORT_CHECKLIST.md`) | MATLAB parity, packaging (W8), CI/verification (W9) | Founding doc; W0–W9 history + the exhaustive per-feature parity inventory |
 | `GOTO_PLAN.md` | The go-to capability push vs Origin (10 owner-decided items + switch-trigger protocol) | Active build campaign, own decision log |
 | `PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Evidence-led multi-session readiness campaign for making Quantized the owner's primary plotting and analysis application | Cross-cutting audit with acceptance gates, explicit actionable/sequencing/owner-gated states, dependency-ordered tasks, handoff detail, and per-task model routing |
+| `JMP_GAP_PLAN.md` | The JMP half of the daily-driver mission: code-grounded gap register (J1–J17) vs the owner's JMP surface, tiered closure work, Gate J usage census | Own gap register + owner gate; layers on PRIMARY P1.4/P1.5/P2.6 without duplicating them |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
 
