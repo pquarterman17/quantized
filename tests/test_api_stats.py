@@ -217,3 +217,75 @@ def test_tukey_and_recommend_roundtrip() -> None:
     r = client.post("/api/stats/recommend", json={"groups": g})
     assert r.status_code == 200
     assert "recommendation" in r.json() and r.json()["reasons"]
+
+
+def test_chi_square_independence_roundtrip_and_422() -> None:
+    # Fisher's tea-tasting table: expected all 2, Yates-corrected chi2=0.5.
+    resp = client.post(
+        "/api/stats/chi-square-independence", json={"table": [[3, 1], [1, 3]]}
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert abs(out["chi2"] - 0.5) < 1e-12
+    assert out["dof"] == 1
+    assert out["expected"] == [[2.0, 2.0], [2.0, 2.0]]
+    assert out["low_expected"] is True
+    assert abs(out["cramers_v"] - 0.25) < 1e-12
+
+    # ragged table -> 422, not 500
+    bad = client.post(
+        "/api/stats/chi-square-independence", json={"table": [[1, 2], [3, 4, 5]]}
+    )
+    assert bad.status_code == 422
+
+    # single row -> 422
+    single = client.post(
+        "/api/stats/chi-square-independence", json={"table": [[1, 2, 3]]}
+    )
+    assert single.status_code == 422
+
+    # non-integer counts -> 422 (pydantic type validation)
+    noninteger = client.post(
+        "/api/stats/chi-square-independence", json={"table": [[1.5, 2], [3, 4]]}
+    )
+    assert noninteger.status_code == 422
+
+
+def test_fisher_exact_roundtrip_and_422() -> None:
+    resp = client.post(
+        "/api/stats/fisher-exact", json={"table": [[3, 1], [1, 3]]}
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert abs(out["odds_ratio"] - 9.0) < 1e-12
+    assert abs(out["p_value"] - 34.0 / 70.0) < 1e-12
+
+    greater = client.post(
+        "/api/stats/fisher-exact",
+        json={"table": [[3, 1], [1, 3]], "alternative": "greater"},
+    )
+    assert greater.status_code == 200
+    assert abs(greater.json()["p_value"] - 17.0 / 70.0) < 1e-12
+
+    # not 2x2 -> 422
+    bad = client.post(
+        "/api/stats/fisher-exact", json={"table": [[1, 2, 3], [4, 5, 6]]}
+    )
+    assert bad.status_code == 422
+
+    # bad alternative -> 422
+    bad_alt = client.post(
+        "/api/stats/fisher-exact",
+        json={"table": [[3, 1], [1, 3]], "alternative": "bigger"},
+    )
+    assert bad_alt.status_code == 422
+
+
+def test_chi_square_gof_roundtrip() -> None:
+    resp = client.post(
+        "/api/stats/chi-square-gof", json={"observed": [18, 22], "expected": [20, 20]}
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert abs(out["chi2"] - 0.4) < 1e-12
+    assert out["dof"] == 1
