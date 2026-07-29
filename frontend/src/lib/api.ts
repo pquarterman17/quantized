@@ -792,14 +792,47 @@ export function statsFisherExact(
   alternative: string = "two-sided",
 ): Promise<CalcResult> {
   return postJSON("/api/stats/fisher-exact", { table, alternative });
+/** `/api/stats/pca` response — `calc.stats.pca_analysis` verbatim (coeff =
+ *  loadings p×k, score = observations×k, latent = eigenvalues,
+ *  explained/cumulative = percent variance). */
+export interface PCAResponse {
+  coeff: number[][];
+  score: number[][];
+  latent: number[];
+  explained: number[];
+  cumulative: number[];
+  mu: number[];
+  sigma: number[];
+  singular: number[];
 }
 
 export function statsPCA(body: {
   data: number[][];
   center?: boolean;
   scale?: boolean;
-}): Promise<CalcResult> {
+  num_components?: number;
+}): Promise<PCAResponse> {
   return postJSON("/api/stats/pca", body);
+}
+
+/** `/api/stats/correlation` response — `calc.stats_multivar.correlation_matrix`
+ *  verbatim: pairwise `r` and its 2-tailed p-value (n×n each), the complete-row
+ *  count `N` after listwise deletion, and the method actually used. */
+export interface CorrelationResponse {
+  r: number[][];
+  p: number[][];
+  N: number;
+  method: string;
+}
+
+/** Pairwise Pearson/Spearman correlation matrix + significance. `columns` is
+ *  column-major (one array per variable, JMP_GAP J10's multivariate
+ *  workbench). */
+export function statsCorrelation(
+  columns: number[][],
+  method: "pearson" | "spearman" = "pearson",
+): Promise<CorrelationResponse> {
+  return postJSON("/api/stats/correlation", { columns, method });
 }
 
 // ── Reference data ──────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
 import { useFitYByXStore } from "../store/fitYByX";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
+import { useMultivarStore } from "../store/multivar";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -110,6 +111,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict.",
       keywords: "jmp histogram normality shapiro wilk quantile descriptive stats",
       run: () => s().setDistributionOpen(true),
+    },
+    {
+      id: "multivar",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Multivariate (correlation · SPLOM · PCA)…",
+      description: "Explore relationships among several continuous columns: a correlation heatmap, a scatterplot matrix, and principal component analysis with scree, scores, and loadings.",
+      keywords: "jmp correlation matrix heatmap scatterplot matrix splom pca principal components scree loadings biplot scores eigenvalue",
+      run: () => useMultivarStore.getState().setOpen(true),
     },
     {
       id: "stats-chooser",
