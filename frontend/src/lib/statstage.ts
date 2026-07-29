@@ -183,6 +183,16 @@ export function groupBoxStatsClient(
   return groups.map((g) => boxStatsClient(g.values, whis, g.label));
 }
 
+/** Connect-group-means "interaction plot" line (JMP_GAP J5 residual): the
+ *  mean of each box/strip category slot, in on-screen axis order — a pure
+ *  passthrough over `BoxStat.mean` (the SAME number the mean+-CI marker
+ *  already reads, never a second/independent computation). `NaN` entries
+ *  (a group whose mean somehow isn't finite) are left in place; the
+ *  renderer breaks the polyline there rather than drawing through a gap. */
+export function connectMeansSeries(boxes: readonly BoxStat[]): number[] {
+  return boxes.map((b) => b.mean);
+}
+
 // ── Scale / layout math (Canvas2D) ──────────────────────────────────────────
 
 /** A padded finite domain spanning every value in `lists` — never degenerate

@@ -130,6 +130,12 @@ export interface StatStageState {
    *  marker per group/category. */
   showMeanCI: boolean;
   setShowMeanCI: (s: boolean) => void;
+  /** Box/Strip (JMP_GAP J5 residual): connect each group's mean with a
+   *  dashed line, in on-screen category order — the "interaction plot"
+   *  read. Only meaningful once a categorical "group by" column is picked
+   *  (`groupCol != null`); the toolbar hides the toggle otherwise. */
+  showConnectMeans: boolean;
+  setShowConnectMeans: (s: boolean) => void;
   /** Box/Violin/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). Internal picker state, not a
    *  hook param: background windows never seed or set one (see the module
@@ -198,6 +204,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // only to decide whether to resolve the indexed points groups).
   const [showPoints, setShowPoints] = useState(false);
   const [showMeanCI, setShowMeanCI] = useState(false);
+  // Connect-means line toggle (JMP_GAP J5 residual) — same display-only
+  // character as showPoints/showMeanCI above.
+  const [showConnectMeans, setShowConnectMeans] = useState(false);
   // Facet column (GUI_INTERACTION #11) — internal picker state, NOT a hook
   // param: background windows (params.seed === null) have no facet Picker
   // and never call setFacetCol, so they simply never facet.
@@ -344,9 +353,17 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       // valueCol/plotted), so both filters drop exactly the same levels —
       // index-aligned with `finiteGroups`/`r.boxes` for the renderer.
       const finiteIndexedGroups = indexedGroups.filter((g) => g.points.length > 0);
+      // Connect-means only reads as an "interaction plot" once the categories
+      // come from an actual picked categorical column, not the per-plotted-
+      // channel fallback (JMP_GAP J5 residual) — force off in that case even
+      // if the toggle was left on from a previous groupCol.
+      const effectiveConnectMeans = showConnectMeans && groupCol != null;
       setBusy(true);
       if (mode === "box") {
-        computeBoxDraw(finiteGroups, valueLabel, groupLabel, showPoints ? finiteIndexedGroups : null, showMeanCI)
+        computeBoxDraw(
+          finiteGroups, valueLabel, groupLabel,
+          showPoints ? finiteIndexedGroups : null, showMeanCI, effectiveConnectMeans,
+        )
           .then(({ draw, degraded }) => {
             if (cancelled) return;
             setDrawData(draw);
@@ -354,7 +371,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
           })
           .finally(() => !cancelled && setBusy(false));
       } else if (mode === "strip") {
-        computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI)
+        computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI, effectiveConnectMeans)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
             setDrawData(draw);
@@ -449,6 +466,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     indexedGroups,
     showPoints,
     showMeanCI,
+    showConnectMeans,
     valueCol,
     dist,
     bins,
@@ -503,7 +521,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     const spec = buildExportSpec(
       mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt,
-      showPoints, pointRowIndices, showMeanCI,
+      showPoints, pointRowIndices, showMeanCI, showConnectMeans && groupCol != null,
     );
     if (spec) await exportStatplotFigure(spec);
   }
@@ -598,6 +616,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setShowPoints,
     showMeanCI,
     setShowMeanCI,
+    showConnectMeans,
+    setShowConnectMeans,
     facetCol,
     setFacetCol: setFacetColState,
     busy,
@@ -623,6 +643,7 @@ function buildExportSpec(
   showPoints = false,
   pointRowIndices: number[][] | null = null,
   showMeanCI = false,
+  showConnectMeans = false,
 ): StatplotFigureSpec | null {
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const finiteGroups = groups.filter((g) => g.values.length > 0);
@@ -639,6 +660,7 @@ function buildExportSpec(
             show_points: mode === "strip" ? true : showPoints,
             point_row_indices: pointRowIndices,
             show_mean_ci: showMeanCI,
+            show_connect_means: showConnectMeans,
           };
     return {
       kind: mode,

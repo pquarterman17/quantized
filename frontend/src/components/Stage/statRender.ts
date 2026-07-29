@@ -62,6 +62,10 @@ export type StatDrawData =
       /** Draw a mean +/- 95% CI diamond+whisker marker per group (JMP_GAP J5
        *  #2), reading `boxes[i].mean/ciLo/ciHi`. */
       showMeanCI?: boolean;
+      /** Draw a dashed line connecting each group's mean, in on-screen
+       *  category order (JMP_GAP J5 residual, the "interaction plot" read)
+       *  — reads `boxes[i].mean` via `lib/statstage.connectMeansSeries`. */
+      connectMeans?: boolean;
     }
   | { mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string }
   | {
@@ -101,6 +105,8 @@ export type StatDrawData =
       valueLabel: string;
       groupLabel: string;
       showMeanCI: boolean;
+      /** See the `box` variant's `connectMeans` doc above. */
+      connectMeans: boolean;
     };
 
 export type Rect = { x: number; y: number; w: number; h: number };

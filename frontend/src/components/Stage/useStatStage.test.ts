@@ -212,6 +212,85 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
   });
 });
 
+describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
+  const BOX_RESPONSE = {
+    n_groups: 2,
+    boxes: [
+      { label: "grp = 0", q1: 10, median: 12, q3: 14, iqr: 4, whislo: 10, whishi: 114, mean: 62, sem: 20, ci_lo: 10, ci_hi: 114, n: 6, fliers: [], whis: 1.5 },
+      { label: "grp = 1", q1: 30, median: 32, q3: 34, iqr: 4, whislo: 30, whishi: 134, mean: 82, sem: 20, ci_lo: 30, ci_hi: 134, n: 6, fliers: [], whis: 1.5 },
+    ],
+  };
+
+  it("box mode with showConnectMeans=false: connectMeans is false on the draw (default off)", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    const d = result.current.draw;
+    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+  });
+
+  it("box mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    expect(result.current.groupCol).toBe(0); // default categorical column auto-picked
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.connectMeans).toBe(true);
+    });
+  });
+
+  it("forces connectMeans off under the per-plotted-channel fallback (groupCol null), even if toggled on", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setGroupCol(null));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    const d = result.current.draw;
+    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+  });
+
+  it("strip mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("strip"));
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "strip" && d.connectMeans).toBe(true);
+    });
+  });
+
+  it("exportFigure sends show_connect_means only when a group column is active", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.show_connect_means).toBe(true);
+  });
+
+  it("exportFigure omits show_connect_means (false) under the per-plotted-channel fallback", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setGroupCol(null));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.show_connect_means).toBe(false);
+  });
+});
+
 describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
   it("faceted box: drawFacets has one draw per finite facet level; the flat draw stays null", async () => {
     vi.mocked(statsBox).mockImplementation(async (groups, labels) => ({

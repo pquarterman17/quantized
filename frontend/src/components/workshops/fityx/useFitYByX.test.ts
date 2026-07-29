@@ -207,6 +207,9 @@ describe("useFitYByX — bivariate leg", () => {
       x: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       y: [10, 12, 14, 16, 18, 20, 30, 32, 34, 36, 38, 40],
       order: 1,
+      // JMP_GAP J3 residual: the confidence-band evaluation grid (40 points
+      // spanning [min(x), max(x)]) always rides along with the fit request.
+      band_x: expect.any(Array),
     });
     expect(result.current.bivariate!.regression).toEqual(REGRESSION);
   });
@@ -220,6 +223,28 @@ describe("useFitYByX — bivariate leg", () => {
     await waitFor(() => expect(result.current.bivariate).not.toBeNull());
     act(() => result.current.setOrder(2));
     await waitFor(() => expect(statsRegression).toHaveBeenLastCalledWith(expect.objectContaining({ order: 2 })));
+  });
+
+  it("surfaces a confidence band from the response's band field (JMP_GAP J3 residual)", async () => {
+    const BAND = { x: [1, 12], yFit: [8, 41], ciLo: [6, 39], ciHi: [10, 43], alpha: 0.05 };
+    vi.mocked(statsRegression).mockResolvedValue({ ...REGRESSION, band: BAND });
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(3);
+      result.current.setYCol(2);
+    });
+    await waitFor(() => expect(result.current.bivariate).not.toBeNull());
+    expect(result.current.bivariate!.band).toEqual(BAND);
+  });
+
+  it("band is null when the backend response has no band field", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(3);
+      result.current.setYCol(2);
+    });
+    await waitFor(() => expect(result.current.bivariate).not.toBeNull());
+    expect(result.current.bivariate!.band).toBeNull();
   });
 });
 

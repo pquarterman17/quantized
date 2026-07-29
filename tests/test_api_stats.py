@@ -31,6 +31,49 @@ def test_regression_recovers_line() -> None:
     assert out["R2"] > 0.9999
 
 
+# ── /api/stats/regression band_x (JMP_GAP_PLAN J3 residual) ────────────────
+
+
+def test_regression_omitted_band_x_is_byte_identical_to_the_pre_existing_response() -> None:
+    # An existing consumer that never sends band_x must see a BYTE-IDENTICAL
+    # response to before this opt-in field existed.
+    x = list(np.linspace(0, 10, 40))
+    y = [3.0 * v - 2.0 + 0.1 * (v % 3) for v in x]
+    body = {"x": x, "y": y, "order": 1}
+    omitted = client.post("/api/stats/regression", json=body)
+    explicit_none = client.post("/api/stats/regression", json={**body, "band_x": None})
+    explicit_empty = client.post("/api/stats/regression", json={**body, "band_x": []})
+    assert omitted.status_code == explicit_none.status_code == explicit_empty.status_code == 200
+    assert omitted.content == explicit_none.content == explicit_empty.content
+    assert "band" not in omitted.json()
+
+
+def test_regression_band_x_adds_a_band_field_without_changing_existing_fields() -> None:
+    x = list(np.linspace(0, 10, 40))
+    y = [3.0 * v - 2.0 + 0.1 * (v % 3) for v in x]
+    base = client.post("/api/stats/regression", json={"x": x, "y": y, "order": 1}).json()
+    banded = client.post(
+        "/api/stats/regression",
+        json={"x": x, "y": y, "order": 1, "band_x": [0.0, 5.0, 10.0]},
+    ).json()
+    assert "band" in banded
+    for key in base:
+        assert banded[key] == base[key]
+    band = banded["band"]
+    assert band["x"] == [0.0, 5.0, 10.0]
+    assert len(band["yFit"]) == 3
+    triples = zip(band["ciLo"], band["yFit"], band["ciHi"], strict=True)
+    assert all(lo <= fit <= hi for lo, fit, hi in triples)
+
+
+def test_regression_band_x_bad_order_is_422_not_500() -> None:
+    resp = client.post(
+        "/api/stats/regression",
+        json={"x": [1.0, 2.0], "y": [1.0, 2.0], "order": 1, "band_x": [1.0]},
+    )
+    assert resp.status_code == 422
+
+
 def test_ttest_one_sample_has_inference_fields() -> None:
     resp = client.post("/api/stats/ttest", json={"x": [1.1, 2.0, 1.9, 2.2, 1.8], "mu": 0.0})
     assert resp.status_code == 200

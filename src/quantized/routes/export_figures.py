@@ -360,6 +360,10 @@ class StatplotFigureRequest(BaseModel):
     show_points: bool = False
     point_row_indices: list[list[int]] | None = None
     show_mean_ci: bool = False
+    # JMP_GAP J5 residual: connect-group-means "interaction plot" line
+    # (box/strip only) through each group's mean, in on-screen category
+    # order. Default off -- today's behaviour, byte-identical.
+    show_connect_means: bool = False
     # GUI_INTERACTION #12 slice 4b: one box/violin mini-panel per StatStage
     # "facet by" level instead of the flat single panel — the SAME
     # ceil(sqrt(n)) grid the interactive stage uses (calc.figure_facets).
@@ -401,7 +405,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 dist=req.dist, bins=req.bins, fit=req.fit,
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
-                show_mean_ci=req.show_mean_ci,
+                show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
             )
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

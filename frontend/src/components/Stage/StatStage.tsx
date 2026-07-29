@@ -187,6 +187,14 @@ export default function StatStage() {
             mean ± CI
           </Checkbox>
         )}
+        {/* Connect-means "interaction plot" line (JMP_GAP J5 residual): only
+            meaningful once a categorical "group by" column picks the
+            categories -- hidden under the per-plotted-channel fallback. */}
+        {(st.mode === "box" || st.mode === "strip") && st.groupCol != null && (
+          <Checkbox checked={st.showConnectMeans} onChange={st.setShowConnectMeans}>
+            connect means
+          </Checkbox>
+        )}
 
         {(st.mode === "qq" || st.mode === "histogram") && (
           <Picker label="column">

@@ -125,3 +125,43 @@ def test_point_row_indices_align_after_dropping_non_finite_values() -> None:
         "box", data, fmt="png", show_points=True, point_row_indices=row_idx,
     )
     assert out[:4] == _MAGIC["png"]
+
+
+# ── JMP_GAP J5 residual: connect-group-means "interaction plot" line ───────
+
+
+def test_box_with_connect_means_renders() -> None:
+    out = render_statplot_figure(
+        "box", _GROUPS, fmt="png", labels=["A", "B", "C"], show_connect_means=True,
+    )
+    assert out[:4] == _MAGIC["png"]
+    assert len(out) > 800
+
+
+def test_strip_with_connect_means_renders() -> None:
+    out = render_statplot_figure(
+        "strip", _GROUPS, fmt="svg", labels=["A", "B", "C"], show_connect_means=True,
+    )
+    assert out[: len(_MAGIC["svg"])] == _MAGIC["svg"]
+
+
+def test_connect_means_combines_with_points_and_mean_ci() -> None:
+    out = render_statplot_figure(
+        "box", _GROUPS, fmt="png", labels=["A", "B", "C"],
+        show_points=True, point_row_indices=_ROW_INDICES,
+        show_mean_ci=True, show_connect_means=True,
+    )
+    assert out[:4] == _MAGIC["png"]
+
+
+def test_connect_means_ignored_for_violin_and_single_group() -> None:
+    # violin has neither JMP_GAP J5 mark; a single-group box has no line to
+    # draw -- both must render without error, not error, not just skip.
+    out_violin = render_statplot_figure(
+        "violin", _GROUPS, fmt="png", labels=["A", "B", "C"], show_connect_means=True,
+    )
+    assert out_violin[:4] == _MAGIC["png"]
+    out_single = render_statplot_figure(
+        "box", [_GROUPS[0]], fmt="png", labels=["A"], show_connect_means=True,
+    )
+    assert out_single[:4] == _MAGIC["png"]
