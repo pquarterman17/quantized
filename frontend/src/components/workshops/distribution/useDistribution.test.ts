@@ -161,6 +161,98 @@ describe("useDistribution — distribution-fit overlay (item 6b)", () => {
   });
 });
 
+describe("useDistribution — compare distributions (JMP_GAP J12 items 1-2)", () => {
+  it("does not fetch fits when neither a family nor compare mode is on", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    expect(statsFitDistributions).not.toHaveBeenCalled();
+    expect(result.current.rankedFits).toEqual([]);
+  });
+
+  it("opening compare mode alone fetches fit-all and ranks by AICc, winner first", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setCompareOpen(true));
+    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalledWith([10, 20, 30, 40, 50, 60]));
+    await waitFor(() => expect(result.current.rankedFits.length).toBe(2));
+    expect(result.current.rankingMetric).toBe("aicc");
+    // normal: aic=24,k=2,N=6 -> aicc=24+2*2*3/3=28; gamma: aic=26 -> aicc=30.
+    expect(result.current.rankedFits[0].dist).toBe("normal");
+    expect(result.current.rankedFits[0].aicc).toBeCloseTo(28, 6);
+    expect(result.current.rankedFits[1].dist).toBe("gamma");
+    expect(result.current.rankedFits[1].aicc).toBeCloseTo(30, 6);
+    expect(result.current.winnerDist).toBe("normal");
+  });
+
+  it("compare mode auto-selects the AICc winner as the overlay when nothing was picked", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    expect(result.current.fitDist).toBe("none");
+    act(() => result.current.setCompareOpen(true));
+    await waitFor(() => expect(result.current.fitDist).toBe("normal"));
+    expect(result.current.currentFit?.dist).toBe("normal");
+  });
+
+  it("compare mode never overrides a family the user already picked", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setFitDist("gamma"));
+    await waitFor(() => expect(result.current.currentFit?.dist).toBe("gamma"));
+    act(() => result.current.setCompareOpen(true));
+    await waitFor(() => expect(result.current.rankedFits.length).toBe(2));
+    expect(result.current.fitDist).toBe("gamma"); // untouched
+  });
+
+  it("clicking a table row (setFitDist) changes the overlay selection", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setCompareOpen(true));
+    await waitFor(() => expect(result.current.fitDist).toBe("normal"));
+    act(() => result.current.setFitDist("gamma"));
+    await waitFor(() => expect(result.current.currentFit?.dist).toBe("gamma"));
+  });
+});
+
+describe("useDistribution — percentile/quantile readout (JMP_GAP J12 item 4)", () => {
+  it("normal fit: q1/median/q3 derived from mu/sigma", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setFitDist("normal"));
+    await waitFor(() => expect(result.current.quantiles).not.toBeNull());
+    expect(result.current.quantiles!.median).toBeCloseTo(35, 6);
+    expect(result.current.quantiles!.q1).not.toBeNull();
+    expect(result.current.quantiles!.q3).not.toBeNull();
+  });
+
+  it("user-entered percentile updates percentileValue", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setFitDist("normal"));
+    await waitFor(() => expect(result.current.quantiles).not.toBeNull());
+    expect(result.current.percentileInput).toBe(90);
+    act(() => result.current.setPercentileInput(50));
+    await waitFor(() =>
+      expect(result.current.percentileValue).toBeCloseTo(result.current.quantiles!.median!, 6),
+    );
+  });
+
+  it("gamma fit: percentile/quantiles are null (residual, no closed form)", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    act(() => result.current.setFitDist("gamma"));
+    await waitFor(() => expect(result.current.currentFit?.dist).toBe("gamma"));
+    expect(result.current.quantiles!.median).toBeNull();
+    expect(result.current.percentileValue).toBeNull();
+  });
+
+  it("no current fit -> quantiles/percentileValue are null", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.hist).not.toBeNull());
+    expect(result.current.quantiles).toBeNull();
+    expect(result.current.percentileValue).toBeNull();
+  });
+});
+
 describe("useDistribution — histogram bar brushing (item 6c)", () => {
   // column "v" = [10,20,30,40,50,60]; edges = [10,30,50,70] (bins: [10,30),[30,50),[50,70]).
   it("brushing a bin writes the shared #50 selection mapped to original rows", async () => {
