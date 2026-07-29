@@ -1,18 +1,102 @@
-// Safe arithmetic formula evaluator for worksheet computed columns — a small
-// recursive-descent parser, NOT eval/Function (satisfies the no-eval rule). It
-// compiles an expression once into a closure evaluated per row against a context
-// of column values: `x` (the x-axis) and `A`, `B`, `C`, … (value channels).
+// Safe arithmetic/logical formula evaluator for worksheet computed columns —
+// a small recursive-descent parser, NOT eval/Function (satisfies the no-eval
+// rule). It compiles an expression once into a closure evaluated per row
+// against a scalar context of column values (`x`, `A`, `B`, `C`, …) plus an
+// optional row-context (current row index + full column arrays), which the
+// row-aware additions in lib/formulaRowFns.ts need.
 //
-// Grammar (precedence low→high):
-//   expr  := term (('+' | '-') term)*
-//   term  := power (('*' | '/' | '%') power)*
-//   power := unary ('^' power)?            // right-associative
-//   unary := ('-' | '+') unary | atom
-//   atom  := number | name ['(' args ')'] | '(' expr ')'
+// Grammar (precedence low -> high; JMP_GAP J11 v2 additions marked *NEW*):
+//   or     := and ('or' and)*                        // *NEW*
+//   and    := not ('and' not)*                        // *NEW*
+//   not    := 'not' not | cmp                          // *NEW*, unary, right-assoc
+//   cmp    := expr [('<'|'<='|'>'|'>='|'=='|'!=') expr]  // *NEW*, non-chaining
+//   expr   := term (('+' | '-') term)*
+//   term   := power (('*' | '/' | '%') power)*
+//   power  := unary ('^' power)?            // right-associative
+//   unary  := ('-' | '+') unary | atom
+//   atom   := number | name ['(' args ')'] | '(' or ')'
+//
+// A parenthesized group and every function argument parse the FULL `or`
+// grammar (so `if(A > 0 and B < 5, sin(x), 0)` is legal), not just `expr` —
+// the one behavioral widening beyond "new operators at the bottom of the
+// table"; it does not change how any EXISTING (arithmetic-only) formula
+// parses, since it's a strict superset there.
+//
+// Logical-operator style (a deliberate choice, not both): keyword `and` /
+// `or` / `not`, lowercase, case-sensitive — NOT `&& || !`. `!` collides
+// visually with `!=` in a one-character-lookahead tokenizer, and the
+// keyword form reads better in a formula bar next to `sin`/`sqrt`/etc.
+// `and`/`or`/`not` are keywords at their grammar position (infix for and/
+// or, prefix for not) — a formula can't call them as functions (`and(1,2)`
+// falls through to the plain FUNCS table, which doesn't define "and", so it
+// fails with "unknown function"). `if`/`row`/`lag`/`diff` and the aggregate
+// names ARE claimed as function names (calling them shadows nothing since
+// nothing else defines them). None of this is a special "reserved word"
+// rejection at the bare-variable level: `and` (or `mean`, etc) used WITHOUT
+// parens just falls through to an ordinary variable lookup and fails with
+// "unknown variable", same as any other undefined identifier — moot in
+// practice since today's columns are always `x` or a channelLetter
+// (uppercase), so no real collision is possible.
+//
+// Comparisons yield 1/0 (never boolean) so they compose with arithmetic
+// (`(A > 0) * B`); logicals take/produce that same 1/0-or-NaN encoding.
+//
+// NaN-propagation rules (documented once, here):
+//   - `<  <=  >  >=  ==  !=` : NaN if EITHER operand is NaN, else 1/0.
+//   - `and` / `or`            : NaN if EITHER evaluated operand is NaN, else
+//                                the boolean combination (1/0) — no short-
+//                                circuiting a NaN away via the other operand.
+//   - `not`                   : NaN if the operand is NaN, else 1/0.
+//   - `if(cond, a, b)`        : NaN if `cond` is NaN (a/b are NOT evaluated
+//                                in that case — the one place this evaluator
+//                                short-circuits); otherwise picks `a`
+//                                (cond != 0) or `b` (cond == 0), and that
+//                                branch's own NaN-ness passes through as-is.
+//   - `lag(A, k)` / `diff(A)` : NaN when the looked-back row is out of
+//                                bounds, OR when the source value there is
+//                                itself NaN (ordinary arithmetic propagation
+//                                — `diff` is literally `A - lag(A, 1)`).
+//   - `row()`                 : never NaN (always an in-range integer).
+//   - aggregates (`mean` etc) : see formulaAggregates.ts's header — skip NaN
+//                                entries ("omitnan"), NaN result only when
+//                                zero finite values remain (count() returns
+//                                0 instead — "how many" is well-defined even
+//                                for none).
+//
+// Aggregate / row-scope (J11 #3 — resolved, not assumed): applyFormulas /
+// recomputeData receive whatever DataStruct the CALLER hands them, and today
+// that is the dataset's FULL raw row set — store/useApp.ts's `recompute` and
+// `addFormula` call `applyFormulas`/`recomputeData` on `d.data` directly, NOT
+// through lib/rowstate's `analysisData(ds)` (the exclusion(#50)/filter(#53)
+// -pruned "analysis view"). So the existing plain per-row scalar context
+// (`ctx.A`, `ctx.x`, …) already includes excluded and filter-dropped rows
+// today — and this evaluator has no way to see otherwise: it takes a
+// DataStruct, never a Dataset, so it can't read `excludedRows`/the filter
+// itself (architecture.test.ts's row-state guard enforces that boundary —
+// only lib/rowstate + a couple of store slices may touch that field). To
+// stay CONSISTENT with the scalar context every existing formula already
+// reads, row()/lag()/diff()/the aggregates are computed over that exact same
+// row set: `base.time.length` rows, original-row order, snapshotted once per
+// formula just before its column is appended. If a future item wires
+// formula application through `analysisData()`, aggregates automatically
+// follow (they read the same columns the row evaluator does) — no change
+// needed here.
+//
+// min/max disambiguation: `min`/`max` keep their original 2-(or-more-)
+// argument ELEMENTWISE meaning (`max(A, B)` -> per-row Math.max) UNLESS
+// called with exactly ONE argument that is a bare column reference
+// (`max(A)`), which means the aggregate over that column. `max(2*A)` (a
+// single but non-bare argument) still means the old elementwise
+// `Math.max(2*A)` = that one value. Every other aggregate name (mean/sd/
+// median/sum/count) has no elementwise form and always requires a single
+// bare column argument.
 
+import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
+import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
 import type { ComputedColumn, DataStruct } from "./types";
 
-export type FormulaFn = (ctx: Record<string, number>) => number;
+export type { FormulaFn, FormulaRowContext } from "./formulaTypes";
+export { computeAggregate, AGGREGATE_NAMES, type AggregateName } from "./formulaAggregates";
 
 const FUNCS: Record<string, (...a: number[]) => number> = {
   sin: Math.sin,
@@ -29,8 +113,6 @@ const FUNCS: Record<string, (...a: number[]) => number> = {
   pow: Math.pow,
 };
 const CONSTS: Record<string, number> = { pi: Math.PI, e: Math.E };
-
-type Tok = { t: "num"; v: number } | { t: "name"; v: string } | { t: "op"; v: string };
 
 function tokenize(src: string): Tok[] {
   const toks: Tok[] = [];
@@ -55,6 +137,19 @@ function tokenize(src: string): Tok[] {
       while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
       toks.push({ t: "name", v: src.slice(i, j) });
       i = j;
+    } else if (c === "<" || c === ">" || c === "=" || c === "!") {
+      // Comparison operators: <= >= == != are two-char; < and > also stand
+      // alone. A lone "=" or "!" is not a valid token (no assignment, and
+      // "not" — not "!" — is the logical-negation spelling; see header).
+      if (src[i + 1] === "=") {
+        toks.push({ t: "op", v: c + "=" });
+        i += 2;
+      } else if (c === "<" || c === ">") {
+        toks.push({ t: "op", v: c });
+        i++;
+      } else {
+        throw new Error(`unexpected character "${c}"`);
+      }
     } else if ("+-*/%^(),".includes(c)) {
       toks.push({ t: "op", v: c });
       i++;
@@ -70,20 +165,61 @@ export function compileFormula(src: string): FormulaFn {
   const toks = tokenize(src);
   let pos = 0;
   const peek = (): Tok | undefined => toks[pos];
+  const peekAt = (offset: number): Tok | undefined => toks[pos + offset];
   const eat = (): Tok => toks[pos++];
   const expectOp = (v: string): void => {
     const t = eat();
     if (!t || t.t !== "op" || t.v !== v) throw new Error(`expected "${v}"`);
   };
+  const isKeyword = (t: Tok | undefined, kw: string): boolean => !!t && t.t === "name" && t.v === kw;
 
-  function parseExpr(): FormulaFn {
+  function parseOr(): FormulaFn {
+    let left = parseAnd();
+    while (isKeyword(peek(), "or")) {
+      eat();
+      const right = parseAnd();
+      const l = left;
+      left = (c, ex) => applyOr(l(c, ex), right(c, ex));
+    }
+    return left;
+  }
+  function parseAnd(): FormulaFn {
+    let left = parseNot();
+    while (isKeyword(peek(), "and")) {
+      eat();
+      const right = parseNot();
+      const l = left;
+      left = (c, ex) => applyAnd(l(c, ex), right(c, ex));
+    }
+    return left;
+  }
+  function parseNot(): FormulaFn {
+    if (isKeyword(peek(), "not")) {
+      eat();
+      const operand = parseNot(); // unary, right-recursive ("not not A")
+      return (c, ex) => applyNot(operand(c, ex));
+    }
+    return parseComparison();
+  }
+  function parseComparison(): FormulaFn {
+    const left = parseArith();
+    const t = peek();
+    if (t && t.t === "op" && COMPARE_OPS.has(t.v)) {
+      eat();
+      const op = t.v;
+      const right = parseArith();
+      return (c, ex) => applyCompare(op, left(c, ex), right(c, ex));
+    }
+    return left;
+  }
+  function parseArith(): FormulaFn {
     let left = parseTerm();
     for (let t = peek(); t && t.t === "op" && (t.v === "+" || t.v === "-"); t = peek()) {
       eat();
       const right = parseTerm();
       const op = t.v;
       const l = left;
-      left = (c) => (op === "+" ? l(c) + right(c) : l(c) - right(c));
+      left = (c, ex) => (op === "+" ? l(c, ex) + right(c, ex) : l(c, ex) - right(c, ex));
     }
     return left;
   }
@@ -94,7 +230,8 @@ export function compileFormula(src: string): FormulaFn {
       const right = parsePower();
       const op = t.v;
       const l = left;
-      left = (c) => (op === "*" ? l(c) * right(c) : op === "/" ? l(c) / right(c) : l(c) % right(c));
+      left = (c, ex) =>
+        op === "*" ? l(c, ex) * right(c, ex) : op === "/" ? l(c, ex) / right(c, ex) : l(c, ex) % right(c, ex);
     }
     return left;
   }
@@ -104,7 +241,7 @@ export function compileFormula(src: string): FormulaFn {
     if (t && t.t === "op" && t.v === "^") {
       eat();
       const exp = parsePower(); // right-assoc
-      return (c) => base(c) ** exp(c);
+      return (c, ex) => base(c, ex) ** exp(c, ex);
     }
     return base;
   }
@@ -113,35 +250,31 @@ export function compileFormula(src: string): FormulaFn {
     if (t && t.t === "op" && (t.v === "-" || t.v === "+")) {
       eat();
       const operand = parseUnary();
-      return t.v === "-" ? (c) => -operand(c) : operand;
+      return t.v === "-" ? (c, ex) => -operand(c, ex) : operand;
     }
     return parseAtom();
   }
+
+  // Bridges this closure's private token-stream ops to formulaRowFns.ts's
+  // ParserOps capability interface, so the row-aware special forms (if /
+  // row / lag / diff / the aggregates) parse against this SAME token stream
+  // without formulaRowFns.ts touching `toks`/`pos` directly.
+  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr() };
+
   function parseAtom(): FormulaFn {
     const t = eat();
     if (!t) throw new Error("unexpected end of expression");
     if (t.t === "num") return () => t.v;
     if (t.t === "op" && t.v === "(") {
-      const e = parseExpr();
+      const e = parseOr();
       expectOp(")");
       return e;
     }
     if (t.t === "name") {
       const nxt = peek();
       if (nxt && nxt.t === "op" && nxt.v === "(") {
-        eat();
-        const fn = FUNCS[t.v];
-        if (!fn) throw new Error(`unknown function "${t.v}"`);
-        const args: FormulaFn[] = [];
-        if (!(peek()?.t === "op" && peek()?.v === ")")) {
-          args.push(parseExpr());
-          while (peek()?.t === "op" && peek()?.v === ",") {
-            eat();
-            args.push(parseExpr());
-          }
-        }
-        expectOp(")");
-        return (c) => fn(...args.map((a) => a(c)));
+        eat(); // consume "("
+        return parseCall(t.v);
       }
       if (t.v in CONSTS) {
         const k = CONSTS[t.v];
@@ -157,7 +290,28 @@ export function compileFormula(src: string): FormulaFn {
     throw new Error(`unexpected token "${t.v}"`);
   }
 
-  const fn = parseExpr();
+  /** Parse a function call's arguments/close-paren, given the already-eaten
+   *  name and open-paren: try the row-aware special forms first, then fall
+   *  back to the plain FUNCS table. */
+  function parseCall(fname: string): FormulaFn {
+    const special = tryParseRowAwareCall(fname, rowFnOps, CONSTS);
+    if (special && "fn" in special) return special.fn;
+
+    const fn = FUNCS[fname];
+    if (!fn) throw new Error(`unknown function "${fname}"`);
+    const args: FormulaFn[] = [];
+    if (!(peek()?.t === "op" && peek()?.v === ")")) {
+      args.push(parseOr());
+      while (peek()?.t === "op" && peek()?.v === ",") {
+        eat();
+        args.push(parseOr());
+      }
+    }
+    expectOp(")");
+    return (c, ex) => fn(...args.map((a) => a(c, ex)));
+  }
+
+  const fn = parseOr();
   if (pos !== toks.length) throw new Error("trailing characters in expression");
   return fn;
 }
@@ -179,12 +333,15 @@ export function baseColumns(data: DataStruct, n: number): DataStruct {
  *  over `x` + the accumulating channels (so a later formula may reference an
  *  earlier computed column). A formula that fails to compile or evaluate yields
  *  an all-NaN column, keeping the column count stable so downstream channel
- *  indices never shift. */
+ *  indices never shift. Row-aware functions (row/lag/diff/aggregates) see the
+ *  SAME rows as the plain scalar context — see the module header's "Aggregate
+ *  / row-scope" note for what that means today. */
 export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): DataStruct {
   if (!formulas.length) return base;
   const labels = [...base.labels];
   const units = [...base.units];
   const values = base.values.map((row) => [...row]);
+  const rowCount = base.time.length;
   for (const f of formulas) {
     let fn: FormulaFn | null;
     try {
@@ -192,7 +349,14 @@ export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): Dat
     } catch {
       fn = null;
     }
-    for (let r = 0; r < base.time.length; r++) {
+    // One column-array snapshot per formula (not per row): captures `x` plus
+    // every channel as of just before THIS formula's own column is appended
+    // — exactly what the per-row scalar ctx below also reflects.
+    const colSnapshot: Record<string, number[]> = { x: base.time };
+    labels.forEach((_, c) => {
+      colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
+    });
+    for (let r = 0; r < rowCount; r++) {
       let v = Number.NaN;
       if (fn) {
         const ctx: Record<string, number> = { x: base.time[r] };
@@ -200,7 +364,7 @@ export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): Dat
           ctx[channelLetter(c)] = values[r]?.[c];
         });
         try {
-          v = fn(ctx);
+          v = fn(ctx, { row: r, rowCount, columns: colSnapshot });
         } catch {
           v = Number.NaN;
         }
