@@ -49,6 +49,9 @@ const BOX_A: BoxStat = {
   whislo: 1,
   whishi: 10,
   mean: 6.2,
+  sem: 0.9,
+  ciLo: 4.3,
+  ciHi: 8.1,
   n: 11,
   fliers: [50],
 };
@@ -78,6 +81,69 @@ const VIOLIN_A: ViolinGroup = {
     expect(paints({ mode: "box", boxes: [BOX_A, BOX_B], valueLabel: "value", groupLabel: "group" })).toBe(
       true,
     );
+  });
+
+  it("box mode with points+mean-CI overlays still paints (JMP_GAP J5 #1/#2)", () => {
+    expect(
+      paints({
+        mode: "box",
+        boxes: [BOX_A, BOX_B],
+        valueLabel: "value",
+        groupLabel: "group",
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 2 }] },
+        ],
+        showMeanCI: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("box mode does not throw when points/mean-CI are absent (default off)", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    expect(() =>
+      draw(canvas, host, { mode: "box", boxes: [BOX_A], valueLabel: "v", groupLabel: "g" }),
+    ).not.toThrow();
+  });
+
+  it("strip mode paints jittered points (JMP_GAP J5 #3)", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A, BOX_B],
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }, { value: 6, rowIndex: 2 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 3 }, { value: 5, rowIndex: 4 }] },
+        ],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode with mean-CI marker also paints", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A],
+        points: [{ label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] }],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode does not throw on an empty-points payload (defensive guard)", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    expect(() =>
+      draw(canvas, host, {
+        mode: "strip", boxes: [], points: [], valueLabel: "v", groupLabel: "g", showMeanCI: false,
+      }),
+    ).not.toThrow();
   });
 
   it("violin mode paints a filled outline", () => {

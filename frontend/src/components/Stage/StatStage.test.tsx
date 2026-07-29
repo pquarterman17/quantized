@@ -48,6 +48,10 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setFit: vi.fn(),
     barStack: false,
     setBarStack: vi.fn(),
+    showPoints: false,
+    setShowPoints: vi.fn(),
+    showMeanCI: false,
+    setShowMeanCI: vi.fn(),
     facetCol: null,
     setFacetCol: vi.fn(),
     busy: false,
@@ -148,5 +152,57 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     });
     render(<StatStage />);
     expect(screen.getByText(/backend unavailable/)).toBeInTheDocument();
+  });
+});
+
+describe("StatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
+  it("offers Strip as a mode option", () => {
+    stateRef.current = makeState({ mode: "box" });
+    render(<StatStage />);
+    expect(screen.getByRole("tab", { name: "Strip" })).toBeInTheDocument();
+  });
+
+  it("box mode shows both the points and mean±CI checkboxes", () => {
+    stateRef.current = makeState({ mode: "box" });
+    render(<StatStage />);
+    expect(screen.getByText("points")).toBeInTheDocument();
+    expect(screen.getByText("mean ± CI")).toBeInTheDocument();
+  });
+
+  it("strip mode shows only the mean±CI checkbox (points are implicit)", () => {
+    stateRef.current = makeState({
+      mode: "strip",
+      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false },
+    });
+    render(<StatStage />);
+    expect(screen.queryByText("points")).not.toBeInTheDocument();
+    expect(screen.getByText("mean ± CI")).toBeInTheDocument();
+  });
+
+  it("violin/qq/histogram/bar show neither box/strip checkbox", () => {
+    for (const mode of ["violin", "qq", "histogram", "bar"] as const) {
+      stateRef.current = makeState({ mode, draw: null });
+      const { unmount } = render(<StatStage />);
+      expect(screen.queryByText("points")).not.toBeInTheDocument();
+      expect(screen.queryByText("mean ± CI")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("toggling the points checkbox calls setShowPoints", () => {
+    const setShowPoints = vi.fn();
+    stateRef.current = makeState({ mode: "box", setShowPoints });
+    render(<StatStage />);
+    screen.getByText("points").click();
+    expect(setShowPoints).toHaveBeenCalledWith(true);
+  });
+
+  it("strip mode hides the facet-by picker (JMP_GAP J5 residual: no faceted strip yet)", () => {
+    stateRef.current = makeState({
+      mode: "strip",
+      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false },
+    });
+    render(<StatStage />);
+    expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
   });
 });

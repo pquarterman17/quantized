@@ -18,6 +18,7 @@ from scipy import stats as sps
 
 from quantized.calc.statplots import (
     box_stats,
+    deterministic_jitter,
     grouped_box_stats,
     histogram,
     qq_plot,
@@ -71,6 +72,80 @@ def test_grouped_box_stats_labels_and_count() -> None:
     assert [b["label"] for b in out["boxes"]] == ["a", "b"]
     with pytest.raises(ValueError, match="labels length"):
         grouped_box_stats([[1, 2]], labels=["a", "b"])
+
+
+# --------------------------------------------------------------------------
+# mean +/- 95% CI (JMP_GAP J5 #2) vs scipy.stats.t -- same fixture pinned in
+# frontend/src/lib/statstage.test.ts's boxStatsClient sem/CI test, so the
+# interactive stage and the offline client fallback agree on this exact data.
+# --------------------------------------------------------------------------
+def test_box_stats_mean_sem_ci95_matches_scipy_t() -> None:
+    data = [1.0, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    got = box_stats(data)
+    v = np.asarray(data, dtype=float)
+    sem = float(v.std(ddof=1) / np.sqrt(v.size))
+    t_crit = float(sps.t.ppf(0.975, v.size - 1))
+    assert math.isclose(got["sem"], sem, rel_tol=1e-12)
+    assert math.isclose(got["ci_lo"], float(v.mean()) - t_crit * sem, rel_tol=1e-12)
+    assert math.isclose(got["ci_hi"], float(v.mean()) + t_crit * sem, rel_tol=1e-12)
+    # Pinned oracle: python -c "from quantized.calc.statplots import box_stats;
+    # print(box_stats([1,2,3,4,5,6,7,8,9,10]))" ->
+    # sem=0.9574271077563381 ci_lo=3.334149410331831 ci_hi=7.665850589668169
+    assert math.isclose(got["sem"], 0.9574271077563381, rel_tol=1e-9)
+    assert math.isclose(got["ci_lo"], 3.334149410331831, rel_tol=1e-9)
+    assert math.isclose(got["ci_hi"], 7.665850589668169, rel_tol=1e-9)
+
+
+def test_box_stats_single_value_ci_degenerates_to_the_point() -> None:
+    got = box_stats([5.0])
+    assert math.isnan(got["sem"])
+    assert got["ci_lo"] == got["ci_hi"] == 5.0
+
+
+def test_grouped_box_stats_carries_mean_ci_fields_per_group() -> None:
+    out = grouped_box_stats([[1, 2, 3, 4], [10, 20, 30, 40]], labels=["a", "b"])
+    for b in out["boxes"]:
+        assert math.isfinite(b["sem"])
+        assert b["ci_lo"] < b["mean"] < b["ci_hi"]
+
+
+# --------------------------------------------------------------------------
+# deterministic_jitter (JMP_GAP J5 #1) -- NEVER np.random; pinned fixture
+# values cross-checked bit-for-bit against `frontend/src/lib/jitter.ts`'s
+# `deterministicJitter` (verified identical via `node`/`python` side by side
+# during development; both test suites pin the same (row_index, category)
+# pairs below so a future regression in either implementation shows up as a
+# mismatched oracle constant, not just a "some number changed" diff).
+# --------------------------------------------------------------------------
+def test_deterministic_jitter_pinned_fixture_matches_the_js_oracle() -> None:
+    cases = [
+        (0, "grp = 0", 0.7925511453749032),
+        (1, "grp = 0", 0.7577493716398602),
+        (2, "grp = 0", -0.6638980008810521),
+        (6, "grp = 0", -0.991754248736369),
+        (3, "grp = 1", -0.5771982412732202),
+        (4, "grp = 1", 0.9061691933093055),
+        (5, "grp = 1", 0.4618767107515309),
+        (9, "grp = 1", -0.4430490530661887),
+        (0, "A", 0.8544226311739587),
+        (100, "B", 0.6892106271556604),
+    ]
+    for row_index, category, expected in cases:
+        got = deterministic_jitter(row_index, category)
+        assert math.isclose(got, expected, rel_tol=0, abs_tol=1e-12), (row_index, category)
+
+
+def test_deterministic_jitter_is_pure_and_bounded() -> None:
+    a = deterministic_jitter(3, "x")
+    b = deterministic_jitter(3, "x")
+    assert a == b  # pure: same inputs -> byte-identical output, every call
+    assert -1.0 <= a <= 1.0
+    # Different rows (same category) generally land differently -- not a
+    # strict guarantee for any hash, but true for this fixture set.
+    values = {deterministic_jitter(i, "cat") for i in range(20)}
+    assert len(values) > 15
+    # Different categories (same row) also generally differ.
+    assert deterministic_jitter(0, "cat A") != deterministic_jitter(0, "cat B")
 
 
 # --------------------------------------------------------------------------

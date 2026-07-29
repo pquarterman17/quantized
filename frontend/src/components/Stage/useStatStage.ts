@@ -36,19 +36,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
 import {
   exportCategoricalFigure,
   exportStatplotFigure,
-  statsBox,
   statsHistogram,
   statsQQ,
-  statsViolin,
   type CategoricalFacetSpec,
   type CategoricalFigureSpec,
   type StatplotFacetSpec,
   type StatplotFigureSpec,
 } from "../../lib/api";
+import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
 import { analysisData } from "../../lib/rowstate";
@@ -56,27 +54,25 @@ import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
   firstValueChannel,
-  groupBoxStatsClient,
   resolveGroups,
+  resolveGroupsIndexed,
+  type IndexedGroupSpec,
   type StatMode,
 } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
+import {
+  computeBarData,
+  computeBoxDraw,
+  computeFacetBarDraws,
+  computeFacetGroupDraws,
+  computeStripDraw,
+  computeViolinDraw,
+  type FacetDraw,
+} from "./useStatStageCompute";
 
-/** One faceted small-multiple: a facet-column level's label + its own
- *  already-computed draw (GUI_INTERACTION #11). `rawGroups` (box/violin
- *  facets only, GUI_INTERACTION #12 slice 4b) carries the raw finite-value
- *  groups `draw` was computed from — export needs these (matplotlib's own
- *  boxplot/violinplot recompute their stats from raw values; they never
- *  reuse the interactive stage's precomputed boxes/violins), while bar
- *  facets don't need it (`draw.data` already has everything exportFigure
- *  needs, mean/SEM per category/series). */
-export interface FacetDraw {
-  label: string;
-  draw: StatDrawData;
-  rawGroups?: { label: string; values: number[] }[];
-}
+export type { FacetDraw } from "./useStatStageCompute";
 
 export interface StatColumn {
   index: number;
@@ -125,6 +121,15 @@ export interface StatStageState {
    *  stacked (true, one bar per category). */
   barStack: boolean;
   setBarStack: (s: boolean) => void;
+  /** Box mode only (JMP_GAP J5 #1): overlay each group's raw finite values,
+   *  jittered horizontally. Strip mode (#3) always shows points regardless
+   *  of this toggle -- it has no other glyph. */
+  showPoints: boolean;
+  setShowPoints: (s: boolean) => void;
+  /** Box/Strip (JMP_GAP J5 #2): overlay a mean +/- 95% CI diamond+whisker
+   *  marker per group/category. */
+  showMeanCI: boolean;
+  setShowMeanCI: (s: boolean) => void;
   /** Box/Violin/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). Internal picker state, not a
    *  hook param: background windows never seed or set one (see the module
@@ -161,138 +166,6 @@ function numArr(v: unknown): number[] {
   return Array.isArray(v) ? v.map((x) => Number(x)) : [];
 }
 
-// ── Pure per-slice compute helpers (module-level: no React/store, so each is
-// independently testable and reusable across the flat and faceted paths) ──
-
-/** Bar mode's category x series matrix for one dataset (flat OR one facet
- *  slice): a picked categorical column groups every plotted channel into its
- *  own clustered/stacked series; with no categorical column, fall back to one
- *  category per plotted channel (mirrors box/violin's own fallback). */
-function computeBarData(
-  data: DataStruct,
-  groupCol: number | null,
-  valueChannels: readonly number[],
-  valueLabels: readonly string[],
-  valueCol: number,
-  plotted: readonly number[],
-  fallbackLabel: string,
-): BarChartData {
-  if (groupCol != null) return buildBarMatrix(data, groupCol, valueChannels, valueLabels);
-  const fallbackGroups = resolveGroups(data, null, valueCol, plotted);
-  return {
-    groups: fallbackGroups.map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
-    seriesLabels: [fallbackLabel],
-  };
-}
-
-/** Box mode's draw for an already-resolved finite-groups list (flat OR one
- *  facet slice): the backend's exact box stats, degrading to the
- *  client-side fallback on failure. Takes `finiteGroups` directly (rather
- *  than re-resolving them) so the caller can share ONE `resolveGroups` call
- *  with whatever else needs the raw values (GUI_INTERACTION #12 slice 4b's
- *  faceted export, which needs the SAME raw groups this draw was computed
- *  from — matplotlib recomputes its own stats, never reusing these numbers). */
-async function computeBoxDraw(
-  finiteGroups: GroupSpec[],
-  valueLabel: string,
-  groupLabel: string,
-): Promise<StatDrawData> {
-  try {
-    const r = await statsBox(
-      finiteGroups.map((g) => g.values),
-      finiteGroups.map((g) => g.label),
-    );
-    return { mode: "box", boxes: r.boxes, valueLabel, groupLabel };
-  } catch {
-    return { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel };
-  }
-}
-
-/** Violin mode's draw for an already-resolved finite-groups list (flat OR
- *  one facet slice): a real KDE per group, degrading to the SAME box stats
- *  `computeBoxDraw` would show for these groups on failure — the "never
- *  fabricate a KDE offline" rule. See `computeBoxDraw`'s doc for why this
- *  takes `finiteGroups` directly. */
-async function computeViolinDraw(
-  finiteGroups: GroupSpec[],
-  valueLabel: string,
-  groupLabel: string,
-): Promise<StatDrawData> {
-  try {
-    const rs = await Promise.all(finiteGroups.map((g) => statsViolin(g.values)));
-    return {
-      mode: "violin",
-      violins: rs.map((r, i) => ({
-        label: finiteGroups[i].label,
-        x: r.x,
-        density: r.density,
-        quartiles: r.quartiles,
-        n: r.n,
-      })),
-      valueLabel,
-      groupLabel,
-    };
-  } catch {
-    return { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel };
-  }
-}
-
-/** Bar facet path is synchronous (no backend round-trip) — one matrix per
- *  slice via `computeBarData`, dropping any slice that groups to nothing. */
-function computeFacetBarDraws(
-  slices: readonly { label: string; data: DataStruct }[],
-  groupCol: number | null,
-  barValueChannels: readonly number[],
-  barLabels: readonly string[],
-  valueCol: number,
-  plotted: readonly number[],
-  barValueLabel: string,
-  barStack: boolean,
-  groupLabel: string,
-): FacetDraw[] {
-  const out: FacetDraw[] = [];
-  for (const s of slices) {
-    const bd = computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
-    if (bd.groups.length > 0) {
-      out.push({
-        label: s.label,
-        draw: { mode: "bar", data: bd, valueLabel: barValueLabel, groupLabel, stacked: barStack },
-      });
-    }
-  }
-  return out;
-}
-
-/** Box/Violin facet path: one async compute per slice (in parallel), each
- *  independently degrading on failure (a backend hiccup on one slice never
- *  takes down the others); slices with no finite groups drop. */
-async function computeFacetGroupDraws(
-  slices: readonly { label: string; data: DataStruct }[],
-  mode: "box" | "violin",
-  groupCol: number | null,
-  valueCol: number,
-  plotted: readonly number[],
-  valueLabel: string,
-  groupLabel: string,
-): Promise<FacetDraw[]> {
-  const compute = mode === "box" ? computeBoxDraw : computeViolinDraw;
-  const rs = await Promise.all(
-    slices.map(async (s): Promise<FacetDraw | null> => {
-      const finiteGroups = resolveGroups(s.data, groupCol, valueCol, plotted).filter(
-        (g) => g.values.length > 0,
-      );
-      if (!finiteGroups.length) return null;
-      const draw = await compute(finiteGroups, valueLabel, groupLabel);
-      // Export fidelity (GUI_INTERACTION #12 slice 4b): carry the raw groups
-      // this draw was computed from so exportFigure can rebuild a faithful
-      // per-facet request without a second resolveGroups pass.
-      const rawGroups = finiteGroups.map((g) => ({ label: g.label, values: g.values }));
-      return { label: s.label, draw, rawGroups };
-    }),
-  );
-  return rs.filter((f): f is FacetDraw => f !== null);
-}
-
 export function useStatStage(params: UseStatStageParams): StatStageState {
   const { active, yKeys, xKey, seriesOrder, seed, onSeedConsumed } = params;
 
@@ -320,6 +193,11 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [bins, setBins] = useState<string>("fd");
   const [fit, setFit] = useState<string | null>(null);
   const [barStack, setBarStack] = useState(false);
+  // Box/Strip mark toggles (JMP_GAP J5 #1/#2) — display-only, no re-fetch
+  // needed on their own (the flat box/strip effect below depends on them
+  // only to decide whether to resolve the indexed points groups).
+  const [showPoints, setShowPoints] = useState(false);
+  const [showMeanCI, setShowMeanCI] = useState(false);
   // Facet column (GUI_INTERACTION #11) — internal picker state, NOT a hook
   // param: background windows (params.seed === null) have no facet Picker
   // and never call setFacetCol, so they simply never facet.
@@ -355,9 +233,21 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [drawFacets, setDrawFacets] = useState<FacetDraw[] | null>(null);
 
   const groups = useMemo<GroupSpec[]>(() => {
-    if (!data || (mode !== "box" && mode !== "violin")) return [];
+    if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip")) return [];
     return resolveGroups(data, groupCol, valueCol, plotted);
   }, [data, mode, groupCol, valueCol, plotted]);
+
+  // Indexed groups (JMP_GAP J5 #1/#3): raw finite values + their ORIGINAL
+  // dataset row index, for the jittered points overlay -- only resolved when
+  // actually needed (box's "show points" toggle, or strip mode which always
+  // shows points) so an ordinary box/violin render skips this extra pass.
+  const indexedGroups = useMemo<IndexedGroupSpec[]>(() => {
+    if (!data) return [];
+    if (mode === "strip" || (mode === "box" && showPoints)) {
+      return resolveGroupsIndexed(data, groupCol, valueCol, plotted);
+    }
+    return [];
+  }, [data, mode, showPoints, groupCol, valueCol, plotted]);
 
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const groupLabel =
@@ -443,52 +333,43 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     setDrawFacets(null);
 
-    if (mode === "box" || mode === "violin") {
+    if (mode === "box" || mode === "violin" || mode === "strip") {
       const finiteGroups = groups.filter((g) => g.values.length > 0);
       if (!finiteGroups.length) {
         setDrawData(null);
         setError("no finite values to group");
         return;
       }
+      // Same partition as `finiteGroups` (built from the SAME groupCol/
+      // valueCol/plotted), so both filters drop exactly the same levels —
+      // index-aligned with `finiteGroups`/`r.boxes` for the renderer.
+      const finiteIndexedGroups = indexedGroups.filter((g) => g.points.length > 0);
       setBusy(true);
       if (mode === "box") {
-        statsBox(
-          finiteGroups.map((g) => g.values),
-          finiteGroups.map((g) => g.label),
-        )
-          .then((r) => {
+        computeBoxDraw(finiteGroups, valueLabel, groupLabel, showPoints ? finiteIndexedGroups : null, showMeanCI)
+          .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData({ mode: "box", boxes: r.boxes, valueLabel, groupLabel });
+            setDrawData(draw);
+            if (degraded) setNote("backend unavailable — computed locally");
           })
-          .catch(() => {
+          .finally(() => !cancelled && setBusy(false));
+      } else if (mode === "strip") {
+        computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI)
+          .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData({ mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel });
-            setNote("backend unavailable — computed locally");
+            setDrawData(draw);
+            if (degraded) setNote("backend unavailable — computed locally");
           })
           .finally(() => !cancelled && setBusy(false));
       } else {
-        Promise.all(finiteGroups.map((g) => statsViolin(g.values)))
-          .then((rs) => {
+        // Never fabricate a KDE offline — computeViolinDraw itself degrades
+        // to the exact same box stats Box mode would show for these groups
+        // (its `mode: "box"` on the returned draw IS the degrade signal).
+        computeViolinDraw(finiteGroups, valueLabel, groupLabel)
+          .then((draw) => {
             if (cancelled) return;
-            setDrawData({
-              mode: "violin",
-              violins: rs.map((r, i) => ({
-                label: finiteGroups[i].label,
-                x: r.x,
-                density: r.density,
-                quartiles: r.quartiles,
-                n: r.n,
-              })),
-              valueLabel,
-              groupLabel,
-            });
-          })
-          .catch(() => {
-            if (cancelled) return;
-            // Never fabricate a KDE offline — degrade to the exact same
-            // stats Box mode would show for these groups.
-            setDrawData({ mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel });
-            setNote("violin (KDE) unavailable — showing box plot");
+            setDrawData(draw);
+            if (draw.mode === "box") setNote("violin (KDE) unavailable — showing box plot");
           })
           .finally(() => !cancelled && setBusy(false));
       }
@@ -565,6 +446,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     data,
     mode,
     groups,
+    indexedGroups,
+    showPoints,
+    showMeanCI,
     valueCol,
     dist,
     bins,
@@ -607,7 +491,20 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       await exportCategoricalFigure(spec);
       return;
     }
-    const spec = buildExportSpec(mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt);
+    // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
+    // shows points) both need each group's ORIGINAL dataset row indices --
+    // `point_row_indices` (parallel to the values `buildExportSpec` sends)
+    // so the export scatters points in the SAME relative spot the screen
+    // does (identical deterministic-jitter hash, both sides).
+    let pointRowIndices: number[][] | null = null;
+    if (mode === "strip" || (mode === "box" && showPoints)) {
+      const finiteIndexed = indexedGroups.filter((g) => g.points.length > 0);
+      pointRowIndices = finiteIndexed.map((g) => g.points.map((p) => p.rowIndex));
+    }
+    const spec = buildExportSpec(
+      mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt,
+      showPoints, pointRowIndices, showMeanCI,
+    );
     if (spec) await exportStatplotFigure(spec);
   }
 
@@ -697,6 +594,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFit,
     barStack,
     setBarStack,
+    showPoints,
+    setShowPoints,
+    showMeanCI,
+    setShowMeanCI,
     facetCol,
     setFacetCol: setFacetColState,
     busy,
@@ -719,10 +620,26 @@ function buildExportSpec(
   bins: string,
   fit: string | null,
   fmt: string,
+  showPoints = false,
+  pointRowIndices: number[][] | null = null,
+  showMeanCI = false,
 ): StatplotFigureSpec | null {
-  if (mode === "box" || mode === "violin") {
+  if (mode === "box" || mode === "violin" || mode === "strip") {
     const finiteGroups = groups.filter((g) => g.values.length > 0);
     if (!finiteGroups.length) return null;
+    // Violin has neither mark (JMP_GAP J5 is a box/strip feature) — omit
+    // rather than send `false`/`null` no-ops on every violin export. Strip's
+    // points overlay is always on (no toggle for it -- it's the whole plot),
+    // so `show_points` is forced true there regardless of the (box-only)
+    // `showPoints` toggle state.
+    const marks =
+      mode === "violin"
+        ? {}
+        : {
+            show_points: mode === "strip" ? true : showPoints,
+            point_row_indices: pointRowIndices,
+            show_mean_ci: showMeanCI,
+          };
     return {
       kind: mode,
       data: finiteGroups.map((g) => g.values),
@@ -732,6 +649,7 @@ function buildExportSpec(
       x_label: groupLabel,
       y_label: valueLabel,
       filename: `${mode}_${valueLabel}`,
+      ...marks,
     };
   }
   const values = finiteOf(data, valueCol);

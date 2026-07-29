@@ -575,6 +575,12 @@ export interface BoxStatWire {
   whislo: number;
   whishi: number;
   mean: number;
+  /** Standard error of the mean + 95% t-based CI bounds (JMP_GAP J5 #2) --
+   *  optional for wire back-compat with older test fixtures/mocks; the live
+   *  backend always sends them (`calc.statplots.box_stats`). */
+  sem?: number;
+  ci_lo?: number;
+  ci_hi?: number;
   n: number;
   fliers: number[];
   whis: number | string;
@@ -1648,7 +1654,7 @@ export interface StatplotFacetSpec {
  *  instead of the flat single panel — `data`/`labels` above are still
  *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
-  kind: "box" | "violin" | "qq" | "probability" | "histogram";
+  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip";
   data: number[][] | number[];
   labels?: string[] | null;
   fmt?: string;
@@ -1662,6 +1668,15 @@ export interface StatplotFigureSpec {
   dpi?: number;
   filename?: string;
   facets?: StatplotFacetSpec[] | null;
+  // JMP_GAP J5: box/strip mark completion. `show_points` scatters each
+  // group's raw finite values jittered with the SAME deterministic
+  // (rowIndex, category) hash (lib/jitter.ts) the interactive canvas uses;
+  // `point_row_indices` (parallel to `data`) supplies each group's ORIGINAL
+  // dataset row indices so the export matches the screen. `show_mean_ci`
+  // overlays a mean +/- 95% CI diamond+whisker marker.
+  show_points?: boolean;
+  point_row_indices?: number[][] | null;
+  show_mean_ci?: boolean;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

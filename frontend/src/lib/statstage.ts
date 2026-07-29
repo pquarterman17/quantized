@@ -8,10 +8,23 @@
 // branch unit-tests standalone (lib/polar.ts is the precedent).
 
 import { channelModelingType, isCategorical } from "./modeling";
-import { groupsByCategory, groupsFromColumns, type GroupSpec } from "./statschooser";
+import {
+  groupsByCategory,
+  groupsByCategoryIndexed,
+  groupsFromColumns,
+  groupsFromColumnsIndexed,
+  type GroupSpec,
+  type IndexedGroupSpec,
+} from "./statschooser";
+import { tCritical95 } from "./tdist";
 import type { DataStruct, Dataset } from "./types";
 
-export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar";
+export type { IndexedGroupSpec, IndexedPoint } from "./statschooser";
+
+// "strip" (JMP_GAP J5 #3): a points-only categorical plot -- same category
+// slots as box, but no quartile/whisker glyph, just the jittered points
+// (always on) with an optional mean+-CI marker.
+export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar" | "strip";
 
 // ── Column selection ────────────────────────────────────────────────────────
 
@@ -58,6 +71,23 @@ export function resolveGroups(
   return groupsFromColumns(data, cols);
 }
 
+/** Index-preserving counterpart to `resolveGroups` -- Box's "show points"
+ *  overlay and Strip mode (JMP_GAP J5 #1/#3) both need each point's
+ *  ORIGINAL dataset row index (for the deterministic jitter hash), not just
+ *  its value. Mirrors `resolveGroups`' own branch logic exactly (same
+ *  partition, same fallback, same order), so a group's points line up 1:1
+ *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`. */
+export function resolveGroupsIndexed(
+  data: DataStruct,
+  groupCol: number | null,
+  valueCol: number,
+  plotted: readonly number[],
+): IndexedGroupSpec[] {
+  if (groupCol != null) return groupsByCategoryIndexed(data, valueCol, groupCol);
+  const cols = plotted.length ? plotted : [valueCol];
+  return groupsFromColumnsIndexed(data, cols);
+}
+
 // ── Client-side box stats (offline fallback) ────────────────────────────────
 
 export interface BoxStat {
@@ -69,6 +99,15 @@ export interface BoxStat {
   whislo: number;
   whishi: number;
   mean: number;
+  /** Standard error of the mean (ddof=1). NaN when n<2 (no defined spread) --
+   *  matches `calc.statplots.box_stats`'s same edge case. Optional only for
+   *  wire back-compat with a payload that predates JMP_GAP J5 #2; the client
+   *  fallback (`boxStatsClient`) always sets it. */
+  sem?: number;
+  /** Mean +/- 95% t-based CI bounds (JMP_GAP J5 #2): `mean -/+
+   *  t(0.975, n-1)*sem`. Equal to `mean` when n<2. */
+  ciLo?: number;
+  ciHi?: number;
   n: number;
   fliers: number[];
 }
@@ -120,7 +159,20 @@ export function boxStatsClient(
   }
   const fliers = sorted.filter((x) => x < whislo || x > whishi);
   const mean = v.reduce((a, b) => a + b, 0) / v.length;
-  return { label, q1, median, q3, iqr, whislo, whishi, mean, n: v.length, fliers };
+  // Mean +/- 95% CI (JMP_GAP J5 #2): mirrors calc.statplots.box_stats's sem/
+  // ci_lo/ci_hi exactly (ddof=1 sample std, t(0.975, n-1) critical value) so
+  // the offline fallback shows the SAME marker the backend would.
+  let sem = NaN;
+  let ciLo = mean;
+  let ciHi = mean;
+  if (v.length >= 2) {
+    const variance = v.reduce((acc, x) => acc + (x - mean) ** 2, 0) / (v.length - 1);
+    sem = Math.sqrt(variance) / Math.sqrt(v.length);
+    const tCrit = tCritical95(v.length - 1);
+    ciLo = mean - tCrit * sem;
+    ciHi = mean + tCrit * sem;
+  }
+  return { label, q1, median, q3, iqr, whislo, whishi, mean, sem, ciLo, ciHi, n: v.length, fliers };
 }
 
 /** `boxStatsClient` for each group — the Box-mode offline payload. */
