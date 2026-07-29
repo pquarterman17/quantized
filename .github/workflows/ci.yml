@@ -55,6 +55,16 @@ jobs:
       - name: Lint (eslint flat config; errors fail, warnings don't)
         run: npm run lint
       - name: Unit tests (vitest)
+        # PR #94 (runs 30497138054/30498716041/30499733804): a long-lived node
+        # process OOM'd at the DEFAULT ~4 GB heap limit minutes after all
+        # 5,043 tests passed, failing the job on the unhandled worker-exit
+        # alone. poolOptions.forks.execArgv provably reaches test forks (heap
+        # probe) but NOT whichever process died, so set the heap ceiling as an
+        # environment variable — NODE_OPTIONS is inherited by EVERY node
+        # process in the tree (coordinator and workers). Pairs with the
+        # CI-only maxForks cap in vite.config.ts to bound total RSS.
         run: npm test
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Build (includes typecheck)
         run: npm run build
