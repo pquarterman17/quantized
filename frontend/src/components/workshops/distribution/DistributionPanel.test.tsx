@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  reportEmit,
   statsDescriptive,
   statsFitDistributions,
   statsHistogram,
@@ -16,6 +17,7 @@ vi.mock("../../../lib/api", () => ({
   statsDescriptive: vi.fn(),
   statsShapiro: vi.fn(),
   statsFitDistributions: vi.fn(),
+  reportEmit: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -43,7 +45,15 @@ beforeEach(() => {
   vi.mocked(statsDescriptive).mockResolvedValue(DESC);
   vi.mocked(statsShapiro).mockResolvedValue(NORM);
   vi.mocked(statsFitDistributions).mockResolvedValue(FITS);
-  useApp.setState({ datasets: [], activeId: null, selection: null, distributionOpen: true });
+  vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+  useApp.setState({
+    datasets: [],
+    activeId: null,
+    selection: null,
+    distributionOpen: true,
+    reports: [],
+    status: "",
+  });
 });
 
 describe("DistributionPanel", () => {
@@ -104,6 +114,69 @@ describe("DistributionPanel", () => {
     fireEvent.mouseUp(window);
     await waitFor(() =>
       expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [0, 1] }),
+    );
+  });
+
+  it("emits a stats_table report for the current column", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    fireEvent.click(await screen.findByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(reportEmit).toHaveBeenCalledWith(expect.objectContaining({ kind: "stats_table" }));
+  });
+});
+
+// 12 rows: col0 "grp" (3-level nominal), col1 "v" (continuous).
+const BY_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  values: [
+    [0, 10], [0, 12], [0, 14], [0, 16],
+    [1, 20], [1, 22], [1, 24], [1, 26],
+    [2, 30], [2, 32], [2, 34], [2, 36],
+  ],
+  labels: ["grp", "v"],
+  units: ["", ""],
+  metadata: {},
+};
+
+describe("DistributionPanel — By grouping (JMP_GAP_PLAN J7)", () => {
+  it("picking a By column renders one collapsible section per level", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("collapsing a section hides its histogram but keeps the header", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    const { container } = render(<DistributionPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+    expect(container.querySelectorAll(".qzk-hist").length).toBeGreaterThan(0);
+    const header = container.querySelectorAll("button[aria-expanded]")[0];
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("emits a per-level report keyed by level label", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+    fireEvent.click(await screen.findByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(reportEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        records: expect.arrayContaining([expect.objectContaining({ level: "0" })]),
+      }),
     );
   });
 });

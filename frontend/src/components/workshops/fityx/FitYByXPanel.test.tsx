@@ -136,3 +136,52 @@ describe("FitYByXPanel", () => {
     expect(screen.getByText(/logistic/)).toBeInTheDocument();
   });
 });
+
+// 12 rows: col0 "byc" (3-level nominal By column, both level 0 and level 1
+// carry both xcat groups; level 2 is untouched here — every row's xcat is
+// still varied enough for a valid oneway leg), col1 "xcat" (2-level), col2
+// "yval" (continuous).
+const BY_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  values: [
+    [0, 0, 10], [0, 0, 11], [0, 1, 12], [0, 1, 13],
+    [1, 0, 15], [1, 0, 16], [1, 1, 18], [1, 1, 19],
+    [2, 0, 20], [2, 0, 21], [2, 1, 22], [2, 1, 23],
+  ],
+  labels: ["byc", "xcat", "yval"],
+  units: ["", "", ""],
+  metadata: {},
+};
+
+describe("FitYByXPanel — By grouping (JMP_GAP_PLAN J7)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1", reports: [], status: "" });
+  });
+
+  it("picking a By column renders one collapsible section per level", async () => {
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "1" } }); // xcat
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } }); // yval
+    await waitFor(() => expect(anovaMock).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } }); // byc
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+  });
+
+  it("emits a per-level report keyed by level label", async () => {
+    emitMock.mockResolvedValue({ report: { title: "t", sections: [] } });
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
+    await waitFor(() => expect(anovaMock).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
+    await waitFor(() => expect(screen.getAllByText(/n=4/)).toHaveLength(3));
+    fireEvent.click(await screen.findByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(emitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        records: expect.arrayContaining([expect.objectContaining({ level: "0" })]),
+      }),
+    );
+  });
+});

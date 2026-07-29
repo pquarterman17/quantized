@@ -51,8 +51,8 @@ export const JMP_TIPS: readonly JmpTip[] = [
     id: "split-by-group",
     jmp: "Rows > Split (separate data by factor levels) or Analyze > By (run a platform separately for each level)",
     quantized:
-      "Data ▸ Split by column value… creates one derived dataset for each distinct value in a selected column. To run an analysis once per group, split first then open the analysis.",
-    keywords: "split by group factor level group by separate",
+      "Distribution and Fit Y by X have a native By column (optional select) that runs the analysis once per level and sections the results, no data duplication. Other tools still need Data ▸ Split by column value… (creates one derived dataset per distinct value) to run an analysis once per group.",
+    keywords: "split by group by column factor level group by separate",
   },
   {
     id: "join",

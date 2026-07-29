@@ -75,6 +75,8 @@ describe("shared command help metadata", () => {
     ["local data filter", "data-filter"],
     ["tabulate", "tabulate"],
     ["by group", "split"],
+    ["by column", "distribution"],
+    ["by column", "fit-y-by-x"],
     ["jsl", "pipeline"],
   ];
 

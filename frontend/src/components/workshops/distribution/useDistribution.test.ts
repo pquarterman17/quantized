@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   type DistFitAllResponse,
+  reportEmit,
   statsDescriptive,
   statsFitDistributions,
   statsHistogram,
@@ -18,6 +19,7 @@ vi.mock("../../../lib/api", () => ({
   statsDescriptive: vi.fn(),
   statsShapiro: vi.fn(),
   statsFitDistributions: vi.fn(),
+  reportEmit: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -46,7 +48,14 @@ beforeEach(() => {
   vi.mocked(statsDescriptive).mockResolvedValue(DESC);
   vi.mocked(statsShapiro).mockResolvedValue(NORM);
   vi.mocked(statsFitDistributions).mockResolvedValue(FITS);
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", selection: null });
+  vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+  useApp.setState({
+    datasets: [{ id: "d1", name: "run.dat", data: DATA }],
+    activeId: "d1",
+    selection: null,
+    reports: [],
+    status: "",
+  });
 });
 
 describe("useDistribution", () => {
@@ -321,5 +330,138 @@ describe("useDistribution — histogram bar brushing (item 6c)", () => {
     expect(result.current.brushedBins).toBeNull();
     // the store selection itself is left alone for other views
     expect(useApp.getState().selection).not.toBeNull();
+  });
+});
+
+describe("useDistribution — report emission", () => {
+  it("emits a single-record stats_table report with no By column set", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.desc).not.toBeNull());
+    await act(async () => {
+      await result.current.toReport();
+    });
+    expect(reportEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        title: "v distribution",
+        records: [expect.objectContaining({ n: 6, mean: 35 })],
+      }),
+    );
+    expect(useApp.getState().reports).toHaveLength(1);
+  });
+});
+
+// 12 rows: col0 "grp" (3-level nominal — nominal inference needs >=12
+// samples, <=8 distinct levels, each level used >=3x on average), col1 "v"
+// continuous.
+const BY_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  values: [
+    [0, 10], [0, 12], [0, 14], [0, 16],
+    [1, 20], [1, 22], [1, 24], [1, 26],
+    [2, 30], [2, 32], [2, 34], [2, 36],
+  ],
+  labels: ["grp", "v"],
+  units: ["", ""],
+  metadata: {},
+};
+
+describe("useDistribution — By grouping (JMP_GAP_PLAN J7)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }],
+      activeId: "d1",
+      selection: null,
+      reports: [],
+      status: "",
+    });
+  });
+
+  it("offers only the categorical column as a By option (excluding the profiled column itself)", () => {
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setCol(1)); // "v" — leaves "grp" as the only By candidate
+    expect(result.current.byOptions).toEqual([{ index: 0, label: "grp" }]);
+  });
+
+  it("excludes the profiled column from By options when it is itself categorical", () => {
+    const { result } = renderHook(() => useDistribution());
+    // default profiled column is "grp" (index 0, the first channel) — its
+    // own levels can't By-partition themselves.
+    expect(result.current.col).toBe(0);
+    expect(result.current.byOptions).toEqual([]);
+  });
+
+  it("picking a By column runs the histogram/desc/shapiro trio once per level", async () => {
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setCol(1)); // "v"
+    act(() => result.current.setByCol(0)); // "grp"
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    expect(result.current.byLevels.map((l) => l.label)).toEqual(["0", "1", "2"]);
+    expect(result.current.byResults.every((r) => r.n === 4)).toBe(true);
+    expect(result.current.byResults.every((r) => r.hist != null)).toBe(true);
+    // one call per level, plus the un-partitioned initial fetch.
+    expect(statsHistogram).toHaveBeenCalledWith([10, 12, 14, 16]);
+    expect(statsHistogram).toHaveBeenCalledWith([20, 22, 24, 26]);
+    expect(statsHistogram).toHaveBeenCalledWith([30, 32, 34, 36]);
+  });
+
+  it("a level too small to bin reports an honest 'not enough data' line, not a crash", async () => {
+    vi.mocked(statsHistogram).mockImplementation((vals: number[]) =>
+      vals.length >= 4 ? Promise.resolve(HIST) : Promise.reject(new Error("too few values")),
+    );
+    const SMALL: DataStruct = {
+      time: [0, 1, 2, 3, 4, 5],
+      values: [[0, 10], [0, 12], [0, 14], [0, 16], [1, 20], [2, 30]],
+      labels: ["grp", "v"],
+      units: ["", ""],
+      metadata: {},
+    };
+    // Nominal inference needs >=12 samples to trust; force the type via an
+    // explicit channelTypes override so this tiny fixture still reads "grp"
+    // as categorical.
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "run.dat", data: SMALL, channelTypes: { 0: "nominal" } },
+      ],
+      activeId: "d1",
+      selection: null,
+    });
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setCol(1));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    const sparse = result.current.byResults.find((r) => r.n === 1);
+    expect(sparse?.error).toBe("not enough data (n=1)");
+  });
+
+  it("switching the dataset resets By to none", async () => {
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byLevels).toHaveLength(3));
+    useApp.setState({ datasets: [{ id: "d2", name: "other.dat", data: DATA }], activeId: "d2" });
+    await waitFor(() => expect(result.current.byCol).toBeNull());
+    expect(result.current.byLevels).toEqual([]);
+  });
+
+  it("emits a per-level report keyed by level label when By is active", async () => {
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setCol(1));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    await act(async () => {
+      await result.current.toReport();
+    });
+    expect(reportEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        title: "v distribution by grp",
+        records: [
+          expect.objectContaining({ level: "0", n: 4 }),
+          expect.objectContaining({ level: "1", n: 4 }),
+          expect.objectContaining({ level: "2", n: 4 }),
+        ],
+      }),
+    );
+    expect(useApp.getState().reports).toHaveLength(1);
   });
 });
