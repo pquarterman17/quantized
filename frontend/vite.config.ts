@@ -33,16 +33,20 @@ export default defineConfig({
     // weakens no assertion — it only changes how long a genuinely hung test
     // takes to fail.
     testTimeout: 20_000,
-    // CI (PR #94, run 30497138054): a reused fork worker hit V8's default
-    // old-space limit late in the run and died — "Worker exited unexpectedly"
-    // / "JavaScript heap out of memory" — with ALL 5,043 tests passing, so
-    // vitest exited 1 on the unhandled error alone. The 348-file jsdom suite
-    // accumulates heap in long-lived forks; give each fork explicit headroom
-    // instead of riding node's RAM-dependent default. Raises no assertion and
-    // changes nothing about scheduling — only the per-worker heap ceiling.
+    // CI (PR #94, runs 30497138054 + 30498716041): a fork worker died with
+    // V8 "heap out of memory" at the very END of the run — all 5,043 tests
+    // reported PASSED both times, so vitest exited 1 on the unhandled
+    // worker-exit alone. Raising the per-fork old-space cap to 6 GB did NOT
+    // fix it (verified applied via a heap-limit probe test), which points at
+    // PHYSICAL memory pressure on the 16 GB runner: N concurrent jsdom forks
+    // + the main process exhaust the box, and the allocation failure lands in
+    // the fork tearing down the heaviest file. So: keep the explicit heap
+    // ceiling, and on CI only, halve fork concurrency to bound peak RSS.
+    // Local runs keep full parallelism; no assertion changes either way.
     poolOptions: {
       forks: {
         execArgv: ["--max-old-space-size=6144"],
+        ...(process.env.CI ? { maxForks: 2, minForks: 1 } : {}),
       },
     },
   },
