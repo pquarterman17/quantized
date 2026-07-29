@@ -228,7 +228,7 @@ export function useFitYByX(): FitYByXState {
         try {
           const leg = await runLeg(lvl.data, kind, xCol, yCol, order);
           return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
-        } catch (e) {
+        } catch (_e) {
           return {
             label: lvl.label,
             n: lvl.data.time.length,
@@ -246,7 +246,6 @@ export function useFitYByX(): FitYByXState {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byPartition.levels, kind, xCol, yCol, order]);
 
   function pendingGuard(action: string): boolean {

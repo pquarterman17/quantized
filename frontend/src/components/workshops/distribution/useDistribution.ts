@@ -481,7 +481,6 @@ export function useDistribution(): DistributionState {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byPartition.levels, col]);
 
   async function toReport(): Promise<void> {
