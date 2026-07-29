@@ -3,10 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-29 (first implementation campaign: J3 both halves,
-J5 items 1–3, J6, J9, J11, J17 SHIPPED via parallel worktree agents —
-see Completed; J10 in flight. Prior: 2026-07-28 initial gap analysis
-against `457cdae`)
+**Updated:** 2026-07-29 (campaign complete: J3, J5, J6, J7, J9, J10,
+J11, J12, J17 and J8's backend SHIPPED — every census-independent item
+is closed or reduced to a named residual; see Completed. Open: J1/J2
+(ride P1.4), J4 (= P1.5), J8 UI half, small residuals below, Tier 3
+census-gated. Prior: 2026-07-28 initial gap analysis against `457cdae`)
 
 ## Purpose
 
@@ -184,8 +185,11 @@ replacements and its priority case is now stronger, not different.
      `calc/stats_contingency.py` + routes, pinned to Fisher's 1935
      lady-tasting-tea reference values; `low_expected` warning honest.
    - [x] Honors the row-state chokepoint (guard #11 verified).
-   - [ ] Residual: bivariate confidence/prediction bands (backend
-     `lin_regress` does not return them; small `fit_stats` reuse).
+   - [x] ~~Residual: bivariate confidence bands~~ SHIPPED 2026-07-29
+     (residual sweep): opt-in `band_x` on `/api/stats/regression`
+     (byte-identical response when omitted — pinned by test;
+     cross-checked vs statsmodels to 1e-8), SVG ribbon in the
+     bivariate view. Prediction bands + mosaic plot remain open.
    - [ ] Residual: mosaic plot proper (cross-tab table shipped).
 
 4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
@@ -193,12 +197,12 @@ replacements and its priority case is now stronger, not different.
    the Group well, editable after Send, parity across
    Stage/export/reopen.
 
-5. **[~] J5 — Grouped-plot mark completion:** items 1–3 SHIPPED
-   2026-07-29 (see Completed): deterministic-jitter raw-point overlay,
-   mean ± 95% t-CI marker (shared calc + client fallback pinned to the
-   same fixtures), and a new `strip` StatMode — all with matplotlib
-   export parity. **Residual: connect-group-means line** (interaction
-   plot) — deliberately deferred by the agent per priority order.
+5. **[x] J5 — Grouped-plot mark completion.** COMPLETE 2026-07-29:
+   items 1–3 (deterministic-jitter raw points, mean ± 95% t-CI marker,
+   `strip` StatMode) plus the connect-means line (residual sweep) —
+   all with matplotlib export parity on shared fixtures. Noted scope
+   reading: connect-means gates on the stage's one grouping axis
+   (`groupCol`), the JMP oneway reading.
 
 6. **[x] J6 — Tabulate v2.** SHIPPED 2026-07-29 (see Completed): up to
    3 nested group columns, multiple value columns, 10-stat catalog
@@ -210,35 +214,39 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 2 — Medium Impact
 
-7. **[ ] J7 — "By" grouping on analysis platforms.** Run Distribution,
-   Fit Y by X, curve fit, and Tabulate once per level of a By column;
-   results concatenate into one report sheet keyed by level (the
-   `datasetsplit` machinery already partitions rows — reuse it without
-   minting datasets).
+7. **[x] J7 — "By" grouping on analysis platforms.** SHIPPED
+   2026-07-29 (see Completed): Distribution + Fit Y by X gain a By
+   column (shared `lib/byPartition.ts` — index partitioning after the
+   guard-#11 view, no dataset minting); per-level sections, honest
+   small-n lines, per-level report concatenation. Tabulate's By is its
+   own nested grouping (J6). Residual: By on the curve-fit workshop.
 
-8. **[ ] J8 — Variability chart + variance components.** Backend:
-   nested/crossed variance-component estimation (REML or EMS for the
-   balanced case first) + nested ANOVA in a new `calc/stats_varcomp.py`;
-   frontend: the classic variability chart (nested factor axis, cell
-   points, connect cell means, group mean lines) as a Stat Stage mode or
-   workshop; the owner's lot/wafer/type case is the acceptance fixture
-   (`grouped_factors_boxplot` baseline fixture already encodes it).
+8. **[~] J8 — Variability chart + variance components.** Backend
+   SHIPPED 2026-07-29 (see Completed): `calc/stats_varcomp.py`
+   (nested ANOVA, EMS variance components with n0/Satterthwaite
+   unbalanced handling + clamping flags, `variability_summary` chart
+   contract) + `/api/stats/{nested-anova,variance-components,
+   variability-summary}`. **Residual: the variability-chart UI** (the
+   `variability_summary` payload is its data contract; the owner's
+   lot/wafer/type `grouped_factors_boxplot` fixture is the acceptance
+   case). Note: pinned to a hand-derived EMS fixture, not Montgomery's
+   table (unreachable without web access — disclosed in the module).
 
-9. **[~] J9 — Outlier screening.** Backend SHIPPED 2026-07-28 (see
-   Completed): `calc/stats_outliers.py` (Grubbs, Dixon Q n=3–30,
-   Rosner ESD pinned to the NIST n=54 example, MAD modified z-score) +
-   `/api/stats/{grubbs,rosner,dixon-q,mad-outliers}`. **Residuals:**
-   (a) the UI action that *selects* flagged rows (feeds exclude/
-   keep-only; never auto-deletes); (b) the Dixon critical table above
-   n≈20 was transcribed without web access — re-verify against
-   Rorabacher (1991) before relying on large-n Dixon decisions
-   (flagged in the module docstring).
+9. **[x] J9 — Outlier screening.** COMPLETE 2026-07-29: backend
+   (Grubbs, Dixon Q n=3–30, Rosner ESD pinned to the NIST n=54
+   example, MAD) + the Outlier screening workshop ("Select flagged
+   rows" writes the shared row selection; never auto-excludes; maps
+   flagged indices back through the analysis view's pruning).
+   Standing caveat: Dixon critical table above n≈20 transcribed
+   without web access — re-verify vs Rorabacher (1991) (docstring
+   flags it).
 
-10. **[ ] J10 — Multivariate workbench.** Correlation matrix heatmap
-    (existing `correlation_matrix`), SPLOM (small-multiples reuse of the
-    facet grid), PCA UI: scree, scores/loadings plots, biplot
-    (existing `pca_analysis`); export parity via a
-    `figure_multivar` renderer.
+10. **[~] J10 — Multivariate workbench.** SHIPPED 2026-07-29 (see
+    Completed): correlation heatmap (pearson/spearman, r+p), SPLOM
+    canvas with per-panel downsampling, PCA (scree/scores/loadings),
+    TSV copy; standalone `store/multivar.ts` after the first attempt
+    tripped the useApp store-size ratchet. **Residual: matplotlib
+    export parity (`figure_multivar` renderer).**
 
 11. **[x] J11 — Formula language v2.** SHIPPED 2026-07-29 (see
     Completed): comparisons, word-style logicals (`and`/`or`/`not`,
@@ -247,11 +255,11 @@ replacements and its priority case is now stronger, not different.
     the grid), `lag(A,k)`/`diff(A)`; parser split into sibling
     modules; v1 corpus green unchanged; help updated.
 
-12. **[ ] J12 — Distribution platform depth.** Fit-all candidate
-    distributions with AICc ranking (engines exist:
-    `fit_distributions` + `fit_compare` pattern), overlay the winner,
-    tolerance/prediction interval readout; capability indices only if
-    Gate J books J14.
+12. **[x] J12 — Distribution platform depth.** SHIPPED 2026-07-29
+    (see Completed): compare-distributions mode (fit-all + ranked
+    table, honest ranking label, winner highlighted), generalized PDF
+    overlay, percentile readout for the fitted winner. Capability
+    indices remain Gate-J-gated (J14).
 
 13. **[x] J17 — JSL → quantized mapping doc.** SHIPPED 2026-07-28 (see
     Completed): "From JMP" Help tab with 11 idiom mappings
@@ -312,6 +320,38 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**Second implementation wave — J7, J8 backend, J10, J12, and the
+  J5/J9/J3 residual sweep**~~ (2026-07-29) — same parallel-worktree
+  method as the first wave.
+  - **J8 backend** (`549a32b`): `calc/stats_varcomp.py` + routes —
+    nested ANOVA, EMS variance components (n0/Satterthwaite for
+    unbalanced, clamped-negative flags), `variability_summary` (the
+    future chart's data contract). Honest substitution: hand-derived
+    EMS fixture instead of memory-reproduced Montgomery data (web
+    unreachable), disclosed in module + tests.
+  - **Residual sweep** (`094b913`): J5 connect-means (screen + export
+    parity), J9 outlier-screening workshop (select-flagged-rows via
+    the shared selection; original-index mapping through the pruned
+    analysis view), J3 opt-in regression confidence band
+    (byte-identical default response pinned by test).
+  - **J12** (`d63e66e`): distribution compare mode + generalized PDF
+    overlay + percentile readout.
+  - **J10** (`7a32165` + repair `5266f61`): multivariate workbench
+    (correlation heatmap / SPLOM / PCA). Two lessons: (a) it tripped
+    the useApp store-size ratchet — state moved to standalone
+    `store/multivar.ts` (the fityx/help precedent); (b) the
+    orchestrator's scripted union conflict-resolution TRUNCATED
+    `lib/api.ts` at the file tail — caught by the post-merge gate,
+    repaired via a proper `git merge-file` three-way re-merge. Lesson:
+    resolve merge conflicts with git's own 3-way machinery, never a
+    regex.
+  - **J7** (`fb10514`): By-column grouped analysis for Distribution +
+    Fit Y by X over shared `lib/byPartition.ts`.
+  - Final tip gates: backend **2,783 passed** (+90 over the campaign
+    baseline), frontend full suite + build re-run on the tip after the
+    last merge (numbers in the closing session log), bundle 894.7 kB
+    eager (24.5 kB under budget).
 
 - ~~**First implementation campaign — J3 (both halves), J5 items 1–3,
   J6, J9 backend, J11, J17**~~ (2026-07-28/29) — seven parallel
