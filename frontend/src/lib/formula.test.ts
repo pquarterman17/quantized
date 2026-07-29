@@ -128,3 +128,434 @@ describe("computed columns", () => {
     expect(out.values[1][2]).toBe(70); // unchanged row
   });
 });
+
+// ---------------------------------------------------------------------------
+// JMP_GAP J11 — formula language v2: comparisons, logicals, if(), aggregate
+// references, row()/lag()/diff(). See formula.ts's module header for the
+// full grammar + NaN-propagation rules this section is testing against.
+// ---------------------------------------------------------------------------
+
+describe("compileFormula — comparison operators", () => {
+  it("evaluates every comparison to 1/0", () => {
+    expect(ev("2 < 3")).toBe(1);
+    expect(ev("3 < 2")).toBe(0);
+    expect(ev("2 <= 2")).toBe(1);
+    expect(ev("3 <= 2")).toBe(0);
+    expect(ev("3 > 2")).toBe(1);
+    expect(ev("2 > 3")).toBe(0);
+    expect(ev("2 >= 2")).toBe(1);
+    expect(ev("1 >= 2")).toBe(0);
+    expect(ev("2 == 2")).toBe(1);
+    expect(ev("2 == 3")).toBe(0);
+    expect(ev("2 != 3")).toBe(1);
+    expect(ev("2 != 2")).toBe(0);
+  });
+
+  it("binds looser than arithmetic (comparisons wrap arithmetic results)", () => {
+    expect(ev("1 + 2 < 2 * 2")).toBe(1); // 3 < 4
+    expect(ev("2 ^ 3 == 8")).toBe(1);
+    expect(ev("A + B > 45", { A: 20, B: 30 })).toBe(1); // 50 > 45
+  });
+
+  it("does not chain (a second comparison is a parse error, not a range check)", () => {
+    expect(() => compileFormula("1 < 2 < 3")).toThrow(/trailing/);
+  });
+
+  it("is NaN-safe: NaN on either side makes the comparison NaN, not 0", () => {
+    expect(ev("A < 1", { A: NaN })).toBeNaN();
+    expect(ev("1 < A", { A: NaN })).toBeNaN();
+    expect(ev("A == A", { A: NaN })).toBeNaN(); // NaN != NaN, but this is NaN, not 0
+  });
+
+  it("composes with arithmetic since it yields a plain number", () => {
+    expect(ev("(A > 0) * 5", { A: 3 })).toBe(5);
+    expect(ev("(A > 0) * 5", { A: -3 })).toBe(0);
+  });
+});
+
+describe("compileFormula — logical operators (and/or/not)", () => {
+  it("evaluates and/or/not to 1/0", () => {
+    expect(ev("1 and 1")).toBe(1);
+    expect(ev("1 and 0")).toBe(0);
+    expect(ev("0 or 0")).toBe(0);
+    expect(ev("0 or 1")).toBe(1);
+    expect(ev("not 0")).toBe(1);
+    expect(ev("not 1")).toBe(0);
+    expect(ev("not not 1")).toBe(1);
+  });
+
+  it("precedence: not > and > or, and all bind looser than comparisons", () => {
+    // "not 1 == 1" == "not (1 == 1)" == not(true) == 0 — not is a unary
+    // prefix on the comparison that follows it, not on a bare "1".
+    expect(ev("not 1 == 1")).toBe(0);
+    expect(ev("not 1 == 2")).toBe(1);
+    // "A > 0 and B > 0 or C > 0" == "(A > 0 and B > 0) or (C > 0)"
+    expect(ev("A > 0 and B > 0 or C > 0", { A: -1, B: -1, C: 1 })).toBe(1);
+    expect(ev("A > 0 and B > 0 or C > 0", { A: 1, B: 1, C: -1 })).toBe(1);
+    expect(ev("A > 0 and B > 0 or C > 0", { A: 1, B: -1, C: -1 })).toBe(0);
+    // "not A > 0 and B > 0" == "(not (A > 0)) and (B > 0)"
+    expect(ev("not A > 0 and B > 0", { A: -1, B: 1 })).toBe(1);
+    expect(ev("not A > 0 and B > 0", { A: 1, B: 1 })).toBe(0);
+  });
+
+  it("is right-associative / stacks under repeated not", () => {
+    expect(ev("not not not 0")).toBe(1);
+    expect(ev("not not not not 0")).toBe(0);
+  });
+
+  it("is NaN-safe: NaN in either operand makes the result NaN, no short-circuit", () => {
+    expect(ev("A and 0", { A: NaN })).toBeNaN(); // NOT forced to 0 by the false operand
+    expect(ev("A or 1", { A: NaN })).toBeNaN(); // NOT forced to 1 by the true operand
+    expect(ev("not A", { A: NaN })).toBeNaN();
+  });
+
+  it("rejects and/or/not used as function calls (they are keywords, not FUNCS)", () => {
+    expect(() => compileFormula("and(1, 2)")).toThrow(/unknown function "and"/);
+  });
+
+  it("a bare and/or/not (no operand) behaves like any other undefined identifier", () => {
+    expect(() => compileFormula("and")({})).toThrow(/unknown variable "and"/);
+  });
+});
+
+describe("compileFormula — if(cond, a, b)", () => {
+  it("selects the true/false branch on a plain 1/0 condition", () => {
+    expect(ev("if(1, 10, 20)")).toBe(10);
+    expect(ev("if(0, 10, 20)")).toBe(20);
+  });
+
+  it("treats any nonzero condition as true (not just 1)", () => {
+    expect(ev("if(-3, 10, 20)")).toBe(10);
+    expect(ev("if(0.001, 10, 20)")).toBe(10);
+  });
+
+  it("works with a comparison/logical condition, matching JMP-formula usage", () => {
+    expect(ev("if(A > 0, 1, -1)", { A: 5 })).toBe(1);
+    expect(ev("if(A > 0, 1, -1)", { A: -5 })).toBe(-1);
+    expect(ev("if(A > 0 and B > 0, A + B, 0)", { A: 2, B: 3 })).toBe(5);
+    expect(ev("if(A > 0 and B > 0, A + B, 0)", { A: 2, B: -3 })).toBe(0);
+  });
+
+  it("is NaN-safe: a NaN condition yields NaN (branches not evaluated)", () => {
+    expect(ev("if(A > 0, 1, 2)", { A: NaN })).toBeNaN();
+    // The untaken branch may itself be broken — proves it's never evaluated
+    // when the condition already resolves (not just when cond is NaN).
+    expect(ev("if(1, 10, Z + 1)")).toBe(10);
+    expect(ev("if(0, Z + 1, 20)")).toBe(20);
+  });
+
+  it("nests", () => {
+    const grade = "if(A >= 90, 1, if(A >= 80, 2, if(A >= 70, 3, 4)))";
+    expect(ev(grade, { A: 95 })).toBe(1);
+    expect(ev(grade, { A: 85 })).toBe(2);
+    expect(ev(grade, { A: 72 })).toBe(3);
+    expect(ev(grade, { A: 50 })).toBe(4);
+  });
+});
+
+describe("compileFormula — division/modulo edge cases", () => {
+  it("division by zero follows IEEE 754, not a thrown error", () => {
+    expect(ev("1 / 0")).toBe(Infinity);
+    expect(ev("-1 / 0")).toBe(-Infinity);
+    expect(ev("0 / 0")).toBeNaN();
+  });
+
+  it("comparisons against +/-Infinity behave sensibly", () => {
+    expect(ev("1 / 0 > 1000000")).toBe(1);
+    expect(ev("0 / 0 > 0")).toBeNaN();
+  });
+});
+
+describe("compileFormula — deep nesting", () => {
+  it("evaluates deeply parenthesized arithmetic correctly", () => {
+    expect(ev("((((((1 + 1) * 2) - 3) ^ 2) / 5))")).toBeCloseTo(0.2, 12);
+  });
+
+  it("evaluates stacked unary minus (even/odd cancellation)", () => {
+    expect(ev("----5")).toBe(5);
+    expect(ev("-----5")).toBe(-5);
+  });
+
+  it("evaluates deeply nested if()/logical expressions", () => {
+    const deep =
+      "if(A > 0, if(B > 0, if(C > 0, 1, 2), if(C > 0, 3, 4)), if(B > 0, if(C > 0, 5, 6), if(C > 0, 7, 8)))";
+    expect(ev(deep, { A: 1, B: 1, C: 1 })).toBe(1);
+    expect(ev(deep, { A: 1, B: 1, C: -1 })).toBe(2);
+    expect(ev(deep, { A: 1, B: -1, C: 1 })).toBe(3);
+    expect(ev(deep, { A: -1, B: -1, C: -1 })).toBe(8);
+  });
+
+  it("evaluates a long and/or chain", () => {
+    expect(ev("1 and 1 and 1 and 1 and 0")).toBe(0);
+    expect(ev("0 or 0 or 0 or 0 or 1")).toBe(1);
+  });
+});
+
+describe("compileFormula — aggregate references (mean/sd/min/max/median/sum/count)", () => {
+  // Hand-computed fixture: mean=3, sum=15, count=5 (of the 5 finite values),
+  // median=3, sd (sample, N-1) = sqrt(10/4) = sqrt(2.5).
+  const colWithNaN = [1, 2, 3, 4, NaN, 5];
+  const rowCtx = (columns: Record<string, number[]>) => ({ row: 0, rowCount: columns.A.length, columns });
+
+  it("computes each aggregate over a column with a NaN entry (skips it — omitnan)", () => {
+    const columns = { A: colWithNaN };
+    expect(compileFormula("mean(A)")({}, rowCtx(columns))).toBeCloseTo(3, 12);
+    expect(compileFormula("sum(A)")({}, rowCtx(columns))).toBeCloseTo(15, 12);
+    expect(compileFormula("count(A)")({}, rowCtx(columns))).toBe(5);
+    expect(compileFormula("median(A)")({}, rowCtx(columns))).toBeCloseTo(3, 12);
+    expect(compileFormula("min(A)")({}, rowCtx(columns))).toBe(1);
+    expect(compileFormula("max(A)")({}, rowCtx(columns))).toBe(5);
+    expect(compileFormula("sd(A)")({}, rowCtx(columns))).toBeCloseTo(Math.sqrt(2.5), 12);
+  });
+
+  it("median handles an even-length finite set (average of the two middle values)", () => {
+    const columns = { A: [1, 2, 3, 4] };
+    expect(compileFormula("median(A)")({}, rowCtx(columns))).toBeCloseTo(2.5, 12);
+  });
+
+  it("an all-NaN column: every aggregate is NaN except count(), which is 0", () => {
+    const columns = { A: [NaN, NaN, NaN] };
+    expect(compileFormula("mean(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("sd(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("min(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("max(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("median(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("sum(A)")({}, rowCtx(columns))).toBeNaN();
+    expect(compileFormula("count(A)")({}, rowCtx(columns))).toBe(0);
+  });
+
+  it("sd() of a single finite value is NaN (needs >= 2 for sample sd)", () => {
+    const columns = { A: [5, NaN, NaN] };
+    expect(compileFormula("sd(A)")({}, rowCtx(columns))).toBeNaN();
+  });
+
+  it("aggregates can be combined with arithmetic (a per-row deviation-from-mean)", () => {
+    const columns = { A: [1, 2, 3, 4, 5] };
+    // row 2 (0-based) has A=3, mean(A)=3 -> deviation 0.
+    const ctx = { A: 3 };
+    expect(compileFormula("A - mean(A)")(ctx, rowCtx(columns))).toBeCloseTo(0, 12);
+  });
+
+  it("aggregate of x (the axis column) is legal, same as any channel", () => {
+    const columns = { x: [10, 20, 30] };
+    expect(compileFormula("mean(x)")({}, { row: 0, rowCount: 3, columns })).toBe(20);
+  });
+
+  it("requires a row context at evaluation time", () => {
+    expect(() => compileFormula("mean(A)")({})).toThrow(/row context/);
+  });
+
+  it("requires a bare column argument — rejects expressions and wrong arity", () => {
+    expect(() => compileFormula("mean(A + 1)")).toThrow(/bare column/);
+    expect(() => compileFormula("mean(A, B)")).toThrow(/bare column/);
+    expect(() => compileFormula("sd(2 * A)")).toThrow(/bare column/);
+    expect(() => compileFormula("mean(sin(A))")).toThrow(/bare column/);
+  });
+
+  it("errors on an unknown column referenced by an aggregate", () => {
+    expect(() => compileFormula("mean(Z)")({}, rowCtx({ A: [1] }))).toThrow(/unknown variable "Z"/);
+  });
+});
+
+describe("compileFormula — min/max dual meaning (elementwise vs aggregate)", () => {
+  it("keeps the 2-arg elementwise (row-wise) meaning unchanged", () => {
+    expect(ev("max(A, B)", { A: 2, B: 7 })).toBe(7);
+    expect(ev("min(A, B)", { A: 2, B: 7 })).toBe(2);
+  });
+
+  it("a single NON-bare argument still means elementwise (old single-arg Math.max behavior)", () => {
+    expect(ev("max(2 * A)", { A: 5 })).toBe(10);
+    expect(ev("min(2 * A)", { A: 5 })).toBe(10);
+  });
+
+  it("a single BARE column argument means the aggregate over the column", () => {
+    const columns = { A: [3, 1, 4, 1, 5] };
+    const rowCtx = { row: 0, rowCount: 5, columns };
+    expect(compileFormula("max(A)")({}, rowCtx)).toBe(5);
+    expect(compileFormula("min(A)")({}, rowCtx)).toBe(1);
+  });
+
+  it("integration: applyFormulas gives max(A) the SAME value on every row (scalar-per-column)", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2],
+      values: [[3], [1], [4]],
+      labels: ["A"],
+      units: [""],
+      metadata: {},
+    };
+    const out = applyFormulas(ds, [{ name: "M", expr: "max(A)" }]);
+    expect(out.values.map((r) => r[1])).toEqual([4, 4, 4]);
+  });
+});
+
+describe("compileFormula — row()", () => {
+  it("is 1-based, matching the worksheet grid's visible row number", () => {
+    const columns = { A: [10, 20, 30] };
+    expect(compileFormula("row()")({}, { row: 0, rowCount: 3, columns })).toBe(1);
+    expect(compileFormula("row()")({}, { row: 2, rowCount: 3, columns })).toBe(3);
+  });
+
+  it("takes no arguments", () => {
+    expect(() => compileFormula("row(1)")).toThrow(/takes no arguments/);
+  });
+
+  it("requires a row context at evaluation time", () => {
+    expect(() => compileFormula("row()")({})).toThrow(/row context/);
+  });
+
+  it("integration: applyFormulas numbers every row 1..N", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[1], [1], [1], [1]],
+      labels: ["A"],
+      units: [""],
+      metadata: {},
+    };
+    const out = applyFormulas(ds, [{ name: "R", expr: "row()" }]);
+    expect(out.values.map((r) => r[1])).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("compileFormula — lag(A, k) / diff(A)", () => {
+  const columns = { A: [10, 20, 30, 40, 50] };
+  const at = (row: number) => ({ row, rowCount: columns.A.length, columns });
+
+  it("lag(A, 1) reads the previous row's value, NaN at the start", () => {
+    expect(compileFormula("lag(A, 1)")({}, at(0))).toBeNaN();
+    expect(compileFormula("lag(A, 1)")({}, at(1))).toBe(10);
+    expect(compileFormula("lag(A, 1)")({}, at(4))).toBe(40);
+  });
+
+  it("lag(A, k) generalizes to any lookback, NaN once it runs off either edge", () => {
+    expect(compileFormula("lag(A, 2)")({}, at(1))).toBeNaN(); // row 1 - 2 = -1
+    expect(compileFormula("lag(A, 2)")({}, at(2))).toBe(10);
+    expect(compileFormula("lag(A, 0)")({}, at(2))).toBe(30); // k=0 -> current row
+    // negative k looks FORWARD ("lead"); still NaN once it runs off the end.
+    expect(compileFormula("lag(A, -1)")({}, at(3))).toBe(50);
+    expect(compileFormula("lag(A, -1)")({}, at(4))).toBeNaN();
+  });
+
+  it("diff(A) is exactly A - lag(A, 1): NaN on the first row, else the step", () => {
+    expect(compileFormula("diff(A)")({}, at(0))).toBeNaN();
+    expect(compileFormula("diff(A)")({}, at(1))).toBe(10);
+    expect(compileFormula("diff(A)")({}, at(4))).toBe(10);
+  });
+
+  it("integration: applyFormulas produces the full lag/diff columns, edges included", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2, 3, 4],
+      values: [[10], [20], [30], [40], [50]],
+      labels: ["A"],
+      units: [""],
+      metadata: {},
+    };
+    const lag1 = applyFormulas(ds, [{ name: "L", expr: "lag(A, 1)" }]);
+    expect(lag1.values.map((r) => r[1])).toEqual([NaN, 10, 20, 30, 40]);
+
+    const diffed = applyFormulas(ds, [{ name: "D", expr: "diff(A)" }]);
+    expect(diffed.values.map((r) => r[1])).toEqual([NaN, 10, 10, 10, 10]);
+
+    // A later column may itself feed lag/diff (evaluated in order, same as
+    // the existing "reference an earlier computed column" behavior).
+    const chained = applyFormulas(ds, [
+      { name: "D", expr: "diff(A)" }, // -> column B: [NaN,10,10,10,10]
+      { name: "DD", expr: "diff(B)" }, // second difference
+    ]);
+    expect(chained.values.map((r) => r[2])).toEqual([NaN, NaN, 0, 0, 0]);
+  });
+
+  it("requires a bare column argument for lag/diff", () => {
+    expect(() => compileFormula("lag(A + 1, 1)")).toThrow(/bare column/);
+    expect(() => compileFormula("diff(2 * A)")).toThrow(/bare column/);
+    expect(() => compileFormula("lag(sin(A), 1)")).toThrow(/bare column/);
+  });
+
+  it("requires a row context at evaluation time", () => {
+    expect(() => compileFormula("lag(A, 1)")({})).toThrow(/row context/);
+    expect(() => compileFormula("diff(A)")({})).toThrow(/row context/);
+  });
+});
+
+describe("compileFormula — new-syntax parse errors stay precise", () => {
+  it("names the offending operator/function/token, like the existing errors do", () => {
+    expect(() => compileFormula("A <")).toThrow();
+    expect(() => compileFormula("A < < B")).toThrow();
+    expect(() => compileFormula("if(1, 2)")).toThrow(); // missing 3rd arg -> expected ","
+    expect(() => compileFormula("=")).toThrow(/unexpected character "="/);
+    expect(() => compileFormula("A ! B")).toThrow(/unexpected character "!"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fuzz / property tests — deterministic (seeded) so they're never flaky, but
+// exercise a much wider slice of the grammar than the hand-picked cases
+// above. No reflection/eval anywhere in formula.ts, so this is purely a
+// robustness + algebraic-identity check on the compiled closures.
+// ---------------------------------------------------------------------------
+
+/** Deterministic PRNG (mulberry32) — fixed seed per test so failures
+ *  reproduce exactly and CI never flakes on this file. */
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const ARITH_OPS = ["+", "-", "*"] as const;
+const CMP_OPS = ["<", "<=", ">", ">=", "==", "!="] as const;
+
+function genArith(rng: () => number, depth: number): string {
+  if (depth <= 0 || rng() < 0.35) {
+    const r = rng();
+    if (r < 0.34) return "A";
+    if (r < 0.68) return "B";
+    return String(Math.floor(rng() * 20) - 10);
+  }
+  const op = ARITH_OPS[Math.floor(rng() * ARITH_OPS.length)];
+  return `(${genArith(rng, depth - 1)} ${op} ${genArith(rng, depth - 1)})`;
+}
+function genCmp(rng: () => number, depth: number): string {
+  const op = CMP_OPS[Math.floor(rng() * CMP_OPS.length)];
+  return `${genArith(rng, depth)} ${op} ${genArith(rng, depth)}`;
+}
+
+describe("fuzz — random comparison/logical expressions (seeded, deterministic)", () => {
+  it("not(not(E)) === E for finite operands (200 random cases)", () => {
+    const rng = mulberry32(20260728);
+    for (let i = 0; i < 200; i++) {
+      const expr = genCmp(rng, 3);
+      const ctx = { A: rng() * 40 - 20, B: rng() * 40 - 20 };
+      const v = ev(expr, ctx);
+      const nn = ev(`not not (${expr})`, ctx);
+      expect(nn).toBe(v);
+    }
+  });
+
+  it("De Morgan's law holds for random comparison pairs (150 random cases)", () => {
+    const rng = mulberry32(7);
+    for (let i = 0; i < 150; i++) {
+      const e1 = genCmp(rng, 2);
+      const e2 = genCmp(rng, 2);
+      const ctx = { A: rng() * 20 - 10, B: rng() * 20 - 10 };
+      const lhs = ev(`not ((${e1}) and (${e2}))`, ctx);
+      const rhs = ev(`(not (${e1})) or (not (${e2}))`, ctx);
+      expect(lhs).toBe(rhs);
+    }
+  });
+
+  it("random arithmetic/comparison/logical expressions always compile and evaluate to a finite number (300 cases)", () => {
+    const rng = mulberry32(99);
+    for (let i = 0; i < 300; i++) {
+      const expr = rng() < 0.5 ? genCmp(rng, 3) : `not (${genCmp(rng, 2)})`;
+      const ctx = { A: rng() * 100 - 50, B: rng() * 100 - 50 };
+      const v = ev(expr, ctx);
+      expect(typeof v).toBe("number");
+      expect(Number.isNaN(v)).toBe(false); // finite operands -> never NaN here
+      expect(v === 0 || v === 1).toBe(true); // every generated expr is boolean-shaped
+    }
+  });
+});
