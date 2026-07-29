@@ -792,6 +792,8 @@ export function statsFisherExact(
   alternative: string = "two-sided",
 ): Promise<CalcResult> {
   return postJSON("/api/stats/fisher-exact", { table, alternative });
+}
+
 /** `/api/stats/pca` response — `calc.stats.pca_analysis` verbatim (coeff =
  *  loadings p×k, score = observations×k, latent = eigenvalues,
  *  explained/cumulative = percent variance). */
