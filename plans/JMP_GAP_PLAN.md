@@ -3,8 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-28 (initial gap analysis; both code inventories run
-against the working tree at `457cdae`)
+**Updated:** 2026-07-29 (first implementation campaign: J3 both halves,
+J5 items 1–3, J6, J9, J11, J17 SHIPPED via parallel worktree agents —
+see Completed; J10 in flight. Prior: 2026-07-28 initial gap analysis
+against `457cdae`)
 
 ## Purpose
 
@@ -168,36 +170,43 @@ replacements and its priority case is now stronger, not different.
    provenance recorded; mapping saveable/reapplicable. Includes plain
    find-replace over text cells.
 
-3. **[ ] J3 — Fit Y by X workbench.** One Analyze command; dispatch on
-   (X, Y) modeling types like JMP:
-   - [ ] categorical X × continuous Y → oneway: grouped points +
-     box/mean-CI display, one-way ANOVA (Welch option), post-hoc
-     (Tukey/Dunnett, reusing `stats_anova2`), nonparametric fallback
-     per `recommend_test`; results as a `#36` report sheet.
-   - [ ] continuous × continuous → bivariate: scatter + linear/poly fit
-     (existing engines) + confidence/prediction bands (`fit_stats`).
-   - [ ] categorical × categorical → contingency table + mosaic-style
-     plot; **new backend**: chi-square test of independence + Fisher
-     exact in `calc/stats_tests.py` (scipy delegation), route + tests.
-   - [ ] Honors the row-state chokepoint and the data filter (reads via
-     `rowstate.analysisData` — guard #11).
+3. **[x] J3 — Fit Y by X workbench.** SHIPPED 2026-07-28/29 (see
+   Completed). One Analyze command; dispatch on (X, Y) modeling types:
+   - [x] categorical X × continuous Y → oneway: grouped points +
+     stats, one-way ANOVA + Levene warning (no Welch endpoint exists —
+     documented fallback), Tukey when >2 levels, `recommend_test`
+     hint; report-sheet emission.
+   - [x] continuous × continuous → bivariate: scatter + linear/poly
+     fit (order 1–3), R²/F/p table. Residual: confidence/prediction
+     band (needs a new backend return — booked below).
+   - [x] categorical × categorical → contingency cross-tab +
+     chi-square independence + Fisher exact (2×2) — new backend
+     `calc/stats_contingency.py` + routes, pinned to Fisher's 1935
+     lady-tasting-tea reference values; `low_expected` warning honest.
+   - [x] Honors the row-state chokepoint (guard #11 verified).
+   - [ ] Residual: bivariate confidence/prediction bands (backend
+     `lin_regress` does not return them; small `fit_stats` reuse).
+   - [ ] Residual: mosaic plot proper (cross-tab table shipped).
 
 4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
    the Group well, editable after Send, parity across
    Stage/export/reopen.
 
-5. **[ ] J5 — Grouped-plot mark completion:** jitter/strip mark
-   (categorical family), optional raw-point overlay + mean-diamond/CI
-   marks on box plots, connect-group-means line (interaction plot for
-   two factors). Screen (uPlot/StatStage canvas) + matplotlib export
-   parity, same-calc rule.
+5. **[~] J5 — Grouped-plot mark completion:** items 1–3 SHIPPED
+   2026-07-29 (see Completed): deterministic-jitter raw-point overlay,
+   mean ± 95% t-CI marker (shared calc + client fallback pinned to the
+   same fixtures), and a new `strip` StatMode — all with matplotlib
+   export parity. **Residual: connect-group-means line** (interaction
+   plot) — deliberately deferred by the agent per priority order.
 
-6. **[ ] J6 — Tabulate v2:** ≥2 nested row grouping columns, optional
-   column grouping, multiple value columns, per-cell stat set chosen
-   from the existing `AGG_KEYS` + sum/sem/quantiles; drag wells reuse
-   `ZoneWell`; export as dataset AND report sheet; TSV copies **category
-   labels** (also clears the archived `payloadToTSV` ordinal residual).
+6. **[x] J6 — Tabulate v2.** SHIPPED 2026-07-29 (see Completed): up to
+   3 nested group columns, multiple value columns, 10-stat catalog
+   (count/mean/sd/sem/min/max/median/sum/q1/q3), grand-total toggle,
+   label-true TSV (resolves Origin text labels, never ordinal codes);
+   dataset export + report emission kept. Noted deviations recorded in
+   Completed (grand-total excluded from dataset export; q1/q3 use
+   linear interpolation, exact JMP quantile parity deferred to J12).
 
 ## Tier 2 — Medium Impact
 
@@ -215,10 +224,15 @@ replacements and its priority case is now stronger, not different.
    workshop; the owner's lot/wafer/type case is the acceptance fixture
    (`grouped_factors_boxplot` baseline fixture already encodes it).
 
-9. **[ ] J9 — Outlier screening.** `calc/stats_outliers.py`: Grubbs,
-   Dixon, Rosner (generalized ESD), robust MAD-based flagging; route;
-   UI action that *selects* flagged rows (feeding the existing
-   exclude/keep-only row actions — never auto-deletes).
+9. **[~] J9 — Outlier screening.** Backend SHIPPED 2026-07-28 (see
+   Completed): `calc/stats_outliers.py` (Grubbs, Dixon Q n=3–30,
+   Rosner ESD pinned to the NIST n=54 example, MAD modified z-score) +
+   `/api/stats/{grubbs,rosner,dixon-q,mad-outliers}`. **Residuals:**
+   (a) the UI action that *selects* flagged rows (feeds exclude/
+   keep-only; never auto-deletes); (b) the Dixon critical table above
+   n≈20 was transcribed without web access — re-verify against
+   Rorabacher (1991) before relying on large-n Dixon decisions
+   (flagged in the module docstring).
 
 10. **[ ] J10 — Multivariate workbench.** Correlation matrix heatmap
     (existing `correlation_matrix`), SPLOM (small-multiples reuse of the
@@ -226,11 +240,12 @@ replacements and its priority case is now stronger, not different.
     (existing `pca_analysis`); export parity via a
     `figure_multivar` renderer.
 
-11. **[ ] J11 — Formula language v2.** Comparison + logical operators,
-    `if(cond, a, b)`, aggregate references (`mean(A)`, `sd(A)`, …
-    computed over the analysis view), `row()`, `lag(A, k)`/`diff(A)`,
-    NaN-propagation rules documented; same no-eval parser discipline +
-    fuzz tests; help tab updated.
+11. **[x] J11 — Formula language v2.** SHIPPED 2026-07-29 (see
+    Completed): comparisons, word-style logicals (`and`/`or`/`not`,
+    1/0, NaN-safe), `if(cond,a,b)`, column aggregates (`mean(A)` etc.;
+    `min`/`max` keep 2-arg row behavior), `row()` (1-based, matches
+    the grid), `lag(A,k)`/`diff(A)`; parser split into sibling
+    modules; v1 corpus green unchanged; help updated.
 
 12. **[ ] J12 — Distribution platform depth.** Fit-all candidate
     distributions with AICc ranking (engines exist:
@@ -238,11 +253,12 @@ replacements and its priority case is now stronger, not different.
     tolerance/prediction interval readout; capability indices only if
     Gate J books J14.
 
-13. **[ ] J17 — JSL → quantized mapping doc.** One help page: each JMP
-    daily idiom (formula, recode script, By-group, saved script to
-    table) → the quantized equivalent (formula column, recode recipe,
-    By role, pipeline/recipe). Closes the "muscle memory" gap cheaply;
-    feeds P3.1 help search.
+13. **[x] J17 — JSL → quantized mapping doc.** SHIPPED 2026-07-28 (see
+    Completed): "From JMP" Help tab with 11 idiom mappings
+    (`lib/jmpTips.ts`, reuses the Origin-tips architecture — no
+    parallel catalog), JMP keywords on 10 commands, vocabulary guard
+    extended so "jmp"/"jsl"/"local data filter"/"by group"/"tabulate"
+    cannot regress; help stays in the lazy chunk.
 
 ## Tier 3 — Census-gated (do NOT build speculatively)
 
@@ -296,6 +312,57 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**First implementation campaign — J3 (both halves), J5 items 1–3,
+  J6, J9 backend, J11, J17**~~ (2026-07-28/29) — seven parallel
+  worktree agents (Sonnet for features, Haiku for J17 docs), each
+  merged only after its gate ran green on the orchestrator's side too.
+  - **J3 backend** (`15bdb92`): `calc/stats_contingency.py`
+    (chi-square independence + Cramér's V + `low_expected`, Fisher
+    exact 2×2, chi-square GoF; scipy delegation) + 3 routes in
+    `stats_design.py`; pinned to Fisher's lady-tasting-tea values and
+    a hand-verified 2×3 table (1e-12).
+  - **J9 backend** (`b647bfc`): `calc/stats_outliers.py` +
+    `routes/stats_outliers.py` (Grubbs, Rosner ESD — NIST n=54
+    example reproduced: 6.01/5.42/5.34; Dixon Q with Rorabacher
+    tables, MAD modified z-score). Known caveat: Dixon table n>20
+    transcribed without web access, re-verify (docstring flags it).
+  - **J17** (`2a8a0ef`): "From JMP" Help tab, 11 idiom mappings,
+    JMP keywords on 10 commands + vocabulary-guard extension.
+  - **J6** (`a8123ef`): Tabulate v2 — `tabulateNested` (≤3 group
+    levels), multi-value, 10-stat catalog, grand total, label-true
+    TSV; ZoneWell multi-slot UI; panel split into sub-components.
+    Deviations: grand total is TSV/report/preview-only; dataset
+    export uses ordinal index + group-code channels (not `time`);
+    q1/q3 linear interpolation ≠ JMP's method (J12 owns parity);
+    empty cells persist as count-0/NaN rows so one value column's
+    gaps can't hide another's data.
+  - **J3 frontend** (`45ef39c`): Fit Y by X workbench
+    (`workshops/fityx/`, lazy panel, own `store/fitYByX.ts` because
+    `useApp.ts` sits at its ratchet pin) — oneway (ANOVA + Levene +
+    Tukey + recommend hint), bivariate (order 1–3), contingency
+    (cross-tab + new endpoints); guard #11 respected; report emission
+    via the existing `stats_table` kind.
+  - **J5 items 1–3** (`aaa6158`): deterministic-jitter point overlay
+    (`lib/jitter.ts`, same hash mirrored in Python), mean ± 95% t-CI
+    (`lib/tdist.ts`; calc + client fallback share fixtures), `strip`
+    StatMode; export parity in `figure_statplots.py`; renderer split
+    (`statRenderBox.ts`, `useStatStageCompute.ts`). Residual:
+    connect-means.
+  - **J11** (`3510c4e`): formula v2 — comparisons, `and/or/not`,
+    `if()`, column aggregates, `row()` 1-based, `lag`/`diff`; split
+    into `formulaTypes/formulaAggregates/formulaRowFns`.
+  - Gates on the branch tip after each merge: backend ruff + mypy +
+    pytest (2,697 passed at J5's merge), frontend vitest full
+    (4,806–4,812 passed across merges), build + bundle ratchet
+    (881→891.7 kB eager, ≥27.5 kB headroom held). One recurring
+    `GridViewport.perf` timing flake under 6-way concurrent vitest
+    load never reproduced on any clean re-run.
+  - Process note for future campaigns: EVERY feature agent idle-
+    stopped at least once waiting on a backgrounded test run —
+    resume with "run the gate synchronously, commit, report", or
+    gate+commit their worktree from the orchestrator (J5/J11 were
+    finished that way).
 
 - ~~**Initial gap analysis**~~ (2026-07-28) — two very-thorough code
   inventories (backend calc/io/routes; frontend commands/Graph
