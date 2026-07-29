@@ -17,12 +17,15 @@ import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { Button, SegmentedControl, Select } from "../primitives";
+import { Button, Checkbox, SegmentedControl, Select } from "../primitives";
 import StatStageCanvas from "./StatStageCanvas";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
 
 const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "box", label: "Box" },
+  // "strip" (JMP_GAP J5 #3): a points-only categorical plot, same category
+  // slots as box but no quartile/whisker glyph.
+  { value: "strip", label: "Strip" },
   { value: "violin", label: "Violin" },
   { value: "qq", label: "Q-Q" },
   { value: "histogram", label: "Histogram" },
@@ -127,7 +130,7 @@ export default function StatStage() {
         <SegmentedControl options={MODE_OPTIONS} value={st.mode} onChange={st.setMode} />
         <span className="qzk-tool-sep" />
 
-        {(st.mode === "box" || st.mode === "violin" || st.mode === "bar") && (
+        {(st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip") && (
           <>
             <Picker label="group by">
               <Select
@@ -147,13 +150,17 @@ export default function StatStage() {
                 />
               </Picker>
             )}
-            <Picker label="facet by">
-              <Select
-                options={facetByOptions}
-                value={st.facetCol == null ? "none" : String(st.facetCol)}
-                onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
-              />
-            </Picker>
+            {/* Strip mode isn't wired into the facet grid yet (JMP_GAP J5
+                residual) -- box/violin/bar keep faceting unchanged. */}
+            {st.mode !== "strip" && (
+              <Picker label="facet by">
+                <Select
+                  options={facetByOptions}
+                  value={st.facetCol == null ? "none" : String(st.facetCol)}
+                  onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
+                />
+              </Picker>
+            )}
           </>
         )}
 
@@ -165,6 +172,20 @@ export default function StatStage() {
               onChange={(v) => st.setBarStack(v === "stacked")}
             />
           </Picker>
+        )}
+
+        {/* Box/Strip marks (JMP_GAP J5 #1/#2): raw-point jitter overlay +
+            mean +/- 95% CI marker. Strip is points-only by definition, so it
+            only gets the mean-CI toggle. */}
+        {st.mode === "box" && (
+          <Checkbox checked={st.showPoints} onChange={st.setShowPoints}>
+            points
+          </Checkbox>
+        )}
+        {(st.mode === "box" || st.mode === "strip") && (
+          <Checkbox checked={st.showMeanCI} onChange={st.setShowMeanCI}>
+            mean ± CI
+          </Checkbox>
         )}
 
         {(st.mode === "qq" || st.mode === "histogram") && (

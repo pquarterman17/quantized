@@ -334,8 +334,8 @@ class StatplotFacet(BaseModel):
 
 
 class StatplotFigureRequest(BaseModel):
-    kind: str  # box|violin|qq|probability|histogram
-    data: list[list[float]] | list[float]  # groups (box/violin) or one sample
+    kind: str  # box|violin|qq|probability|histogram|strip
+    data: list[list[float]] | list[float]  # groups (box/violin/strip) or one sample
     labels: list[str] | None = None
     fmt: str = "pdf"
     style: str = "default"
@@ -349,6 +349,17 @@ class StatplotFigureRequest(BaseModel):
     # calc.figure's resolved_dpi convention (see corner/ternary/field siblings).
     dpi: int | None = None
     filename: str = "statplot"
+    # JMP_GAP J5: box/strip mark completion. `show_points` scatters each
+    # group's raw finite values, jittered with the SAME deterministic
+    # `(row_index, category)` hash the interactive canvas uses --
+    # `point_row_indices` (parallel to `data`) supplies each group's ORIGINAL
+    # dataset row indices so a point lands in the same relative spot on
+    # screen and in the export. `show_mean_ci` overlays a mean +/- 95% CI
+    # diamond+whisker marker (`calc.statplots.box_stats`'s sem/ci_lo/ci_hi).
+    # Both default off/None -- today's behaviour, byte-identical.
+    show_points: bool = False
+    point_row_indices: list[list[int]] | None = None
+    show_mean_ci: bool = False
     # GUI_INTERACTION #12 slice 4b: one box/violin mini-panel per StatStage
     # "facet by" level instead of the flat single panel — the SAME
     # ceil(sqrt(n)) grid the interactive stage uses (calc.figure_facets).
@@ -384,11 +395,13 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             from quantized.calc.figure_statplots import render_statplot_figure  # lazy
 
             data: Any = req.data
-            data = [list(g) for g in data] if req.kind in ("box", "violin") else list(data)
+            data = [list(g) for g in data] if req.kind in ("box", "violin", "strip") else list(data)
             img = render_statplot_figure(
                 req.kind, data, labels=req.labels, fmt=req.fmt, style=req.style,
                 dist=req.dist, bins=req.bins, fit=req.fit,
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
+                show_points=req.show_points, point_row_indices=req.point_row_indices,
+                show_mean_ci=req.show_mean_ci,
             )
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

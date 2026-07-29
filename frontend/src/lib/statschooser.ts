@@ -61,6 +61,62 @@ export function groupsByCategory(
     .map(([level, values]) => ({ label: `${byLabel} = ${level}`, values }));
 }
 
+// ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
+// Same partitions as `groupsFromColumns`/`groupsByCategory` above, but each
+// value keeps its ORIGINAL dataset row index alongside it -- the jittered
+// point overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
+// position within the filtered group, so excluding a row (#50) never
+// reshuffles its still-visible neighbours.
+
+export interface IndexedPoint {
+  value: number;
+  rowIndex: number;
+}
+
+export interface IndexedGroupSpec {
+  label: string;
+  points: IndexedPoint[];
+}
+
+/** Columns mode, index-preserving counterpart to `groupsFromColumns`. */
+export function groupsFromColumnsIndexed(
+  data: DataStruct,
+  cols: readonly number[],
+): IndexedGroupSpec[] {
+  const xName = String(data.metadata?.["x_column_name"] ?? "x");
+  return cols.map((c) => {
+    const vs = colValues(data, c);
+    const points: IndexedPoint[] = [];
+    for (let i = 0; i < vs.length; i++) {
+      if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: i });
+    }
+    return { label: c < 0 ? xName : (data.labels[c] ?? `col ${c}`), points };
+  });
+}
+
+/** Group-by mode, index-preserving counterpart to `groupsByCategory`. */
+export function groupsByCategoryIndexed(
+  data: DataStruct,
+  valueCol: number,
+  byCol: number,
+): IndexedGroupSpec[] {
+  const by = colValues(data, byCol);
+  const val = colValues(data, valueCol);
+  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
+  const parts = new Map<number, IndexedPoint[]>();
+  const n = Math.min(by.length, val.length);
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(by[i]) || !Number.isFinite(val[i])) continue;
+    const point: IndexedPoint = { value: val[i], rowIndex: i };
+    const bucket = parts.get(by[i]);
+    if (bucket) bucket.push(point);
+    else parts.set(by[i], [point]);
+  }
+  return [...parts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([level, points]) => ({ label: `${byLabel} = ${level}`, points }));
+}
+
 /** Build the request for the RECOMMENDED endpoint from the same groups the
  *  chooser saw. Returns null for an endpoint this UI doesn't know how to run
  *  (the chooser's set is closed, so null means a backend/frontend drift). */

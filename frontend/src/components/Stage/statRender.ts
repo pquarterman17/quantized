@@ -5,6 +5,13 @@
 // this file only turns already-computed numbers into canvas calls, so it's
 // testable via a real jsdom/node-canvas raster (mapRender.test.ts's pattern)
 // without any React/store dependency.
+//
+// The box-family marks (raw-point jitter overlay, mean+-CI marker, and the
+// points-only "strip" mode -- JMP_GAP J5) live in `statRenderBox.ts`, split
+// out to keep this dispatcher from re-growing past the god-module ceiling
+// (same MapStage/mapRender.ts precedent this file's own split follows); the
+// shared axis helpers below are exported so that module can reuse them
+// rather than duplicating axis-drawing code.
 
 import {
   groupedBarSlots,
@@ -20,8 +27,10 @@ import {
   violinOutline,
   zeroBasedDomain,
   type BoxStat,
+  type IndexedGroupSpec,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
 
 const MARGIN = { left: 60, right: 20, top: 20, bottom: 48 };
 
@@ -34,8 +43,26 @@ export interface ViolinGroup {
   n: number;
 }
 
+/** One group's raw finite points (rowIndex-tagged) for the "show points"
+ *  jittered overlay (JMP_GAP J5 #1) — structurally the same shape
+ *  `resolveGroupsIndexed` returns (`lib/statschooser.IndexedGroupSpec`). */
+export type BoxPointsGroup = IndexedGroupSpec;
+
 export type StatDrawData =
-  | { mode: "box"; boxes: BoxStat[]; valueLabel: string; groupLabel: string }
+  | {
+      mode: "box";
+      boxes: BoxStat[];
+      valueLabel: string;
+      groupLabel: string;
+      /** Raw finite values (rowIndex-tagged) per group for the "show points"
+       *  jittered overlay (JMP_GAP J5 #1) — absent/null when the toggle is
+       *  off, so `drawBoxesWithMarks` simply skips the overlay. Index-aligned
+       *  with `boxes` (same group order). */
+      points?: BoxPointsGroup[] | null;
+      /** Draw a mean +/- 95% CI diamond+whisker marker per group (JMP_GAP J5
+       *  #2), reading `boxes[i].mean/ciLo/ciHi`. */
+      showMeanCI?: boolean;
+    }
   | { mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string }
   | {
       mode: "qq";
@@ -62,9 +89,21 @@ export type StatDrawData =
       /** false = clustered (grouped) bars side by side; true = one stacked
        *  bar per category, series drawn bottom-to-top. */
       stacked: boolean;
+    }
+  | {
+      /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
+       *  as box, but no quartile/whisker glyph — just jittered points, plus
+       *  an optional mean+-CI marker. Reuses `BoxStat` for its mean/sem/
+       *  ci95/n/label (never the quartile/whisker fields). */
+      mode: "strip";
+      boxes: BoxStat[];
+      points: BoxPointsGroup[];
+      valueLabel: string;
+      groupLabel: string;
+      showMeanCI: boolean;
     };
 
-type Rect = { x: number; y: number; w: number; h: number };
+export type Rect = { x: number; y: number; w: number; h: number };
 
 function cssVar(name: string, fallback: string): string {
   if (typeof getComputedStyle !== "function") return fallback;
@@ -83,8 +122,14 @@ function truncateLabel(s: string, max = 14): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-/** "n=<count>" caption above a box/violin (shared by both modes). */
-function drawCountLabel(ctx: CanvasRenderingContext2D, cx: number, top: number, n: number, muted: string) {
+/** "n=<count>" caption above a box/violin/strip (shared by all three). */
+export function drawCountLabel(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  top: number,
+  n: number,
+  muted: string,
+) {
   ctx.fillStyle = muted;
   ctx.font = "9px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
@@ -120,16 +165,17 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   ctx.lineWidth = 1;
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
 
-  if (data.mode === "box") drawBoxes(ctx, rect, data, ink, muted);
+  if (data.mode === "box") drawBoxesWithMarks(ctx, rect, data, ink, muted);
+  else if (data.mode === "strip") drawStrip(ctx, rect, data, ink, muted);
   else if (data.mode === "violin") drawViolins(ctx, rect, data, ink, muted);
   else if (data.mode === "qq") drawQQ(ctx, rect, data, ink, muted);
   else if (data.mode === "bar") drawBar(ctx, rect, data, ink, muted);
   else drawHistogram(ctx, rect, data, ink, muted);
 }
 
-// ── Shared axes ──────────────────────────────────────────────────────────────
+// ── Shared axes (also used by statRenderBox.ts's box/strip family) ─────────
 
-function drawValueAxis(
+export function drawValueAxis(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
   domain: [number, number],
@@ -161,7 +207,7 @@ function drawValueAxis(
   ctx.restore();
 }
 
-function drawCategoryAxis(
+export function drawCategoryAxis(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
   slots: { cx: number }[],
@@ -207,71 +253,6 @@ function drawNumericXAxis(
   ctx.fillStyle = ink;
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.fillText(caption, rect.x + rect.w / 2, rect.y + rect.h + 24);
-}
-
-// ── Box ──────────────────────────────────────────────────────────────────────
-
-function drawBoxes(
-  ctx: CanvasRenderingContext2D,
-  rect: Rect,
-  d: Extract<StatDrawData, { mode: "box" }>,
-  ink: string,
-  muted: string,
-) {
-  if (!d.boxes.length) return;
-  const domain = finiteDomain(d.boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]));
-  drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
-  const slots = categorySlots(d.boxes.length);
-  drawCategoryAxis(ctx, rect, slots, d.boxes.map((b) => b.label), d.groupLabel, ink, muted);
-
-  const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
-
-  d.boxes.forEach((b, i) => {
-    const slot = slots[i];
-    const cx = rect.x + slot.cx * rect.w;
-    const hw = slot.halfWidth * rect.w;
-    const color = seriesColor(i);
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.25;
-    ctx.beginPath();
-    ctx.moveTo(cx, vy(b.whislo));
-    ctx.lineTo(cx, vy(b.q1));
-    ctx.moveTo(cx, vy(b.q3));
-    ctx.lineTo(cx, vy(b.whishi));
-    ctx.stroke();
-    const capW = hw * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - capW, vy(b.whislo));
-    ctx.lineTo(cx + capW, vy(b.whislo));
-    ctx.moveTo(cx - capW, vy(b.whishi));
-    ctx.lineTo(cx + capW, vy(b.whishi));
-    ctx.stroke();
-
-    const yTop = vy(b.q3);
-    const yBot = vy(b.q1);
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = color;
-    ctx.fillRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = color;
-    ctx.strokeRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-
-    ctx.beginPath();
-    ctx.moveTo(cx - hw, vy(b.median));
-    ctx.lineTo(cx + hw, vy(b.median));
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = color;
-    for (const f of b.fliers) {
-      ctx.beginPath();
-      ctx.arc(cx, vy(f), 2.5, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-
-    drawCountLabel(ctx, cx, rect.y, b.n, muted);
-  });
 }
 
 // ── Bar (gap #20 categorical plots: grouped / stacked, error bars) ─────────
