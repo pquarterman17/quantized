@@ -119,6 +119,7 @@ const VIOLIN_A: ViolinGroup = {
         valueLabel: "value",
         groupLabel: "group",
         showMeanCI: false,
+        connectMeans: false,
       }),
     ).toBe(true);
   });
@@ -132,6 +133,37 @@ const VIOLIN_A: ViolinGroup = {
         valueLabel: "value",
         groupLabel: "group",
         showMeanCI: true,
+        connectMeans: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("box mode with connect-means line also paints (JMP_GAP J5 residual)", () => {
+    expect(
+      paints({
+        mode: "box",
+        boxes: [BOX_A, BOX_B],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+        connectMeans: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode with connect-means line also paints (JMP_GAP J5 residual)", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A, BOX_B],
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 1 }] },
+        ],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+        connectMeans: true,
       }),
     ).toBe(true);
   });
@@ -142,6 +174,7 @@ const VIOLIN_A: ViolinGroup = {
     expect(() =>
       draw(canvas, host, {
         mode: "strip", boxes: [], points: [], valueLabel: "v", groupLabel: "g", showMeanCI: false,
+        connectMeans: false,
       }),
     ).not.toThrow();
   });

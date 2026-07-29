@@ -17,6 +17,7 @@ from quantized.calc.stats import (
     descriptive_stats,
     lin_regress,
     pca_analysis,
+    polynomial_confidence_band,
     t_test,
 )
 from quantized.calc.stats_dist import (
@@ -57,6 +58,13 @@ class RegressionRequest(BaseModel):
     y: list[float]
     order: int = 1
     alpha: float = 0.05
+    # JMP_GAP_PLAN J3 residual (Fit Y by X's bivariate leg): an OPT-IN
+    # confidence-band evaluation grid. None/omitted (the default) -- today's
+    # response, byte-identical; a non-empty list adds a "band" field with the
+    # standard OLS mean-CI evaluated at each grid point
+    # (calc.stats.polynomial_confidence_band), never touching the existing
+    # top-level fields.
+    band_x: list[float] | None = None
 
 
 class TTestRequest(BaseModel):
@@ -142,16 +150,32 @@ def descriptive(req: DescriptiveRequest) -> dict[str, Any]:
 
 @router.post("/regression")
 def regression(req: RegressionRequest) -> dict[str, Any]:
-    """Polynomial least-squares regression with inference."""
+    """Polynomial least-squares regression with inference.
+
+    ``band_x`` (JMP_GAP_PLAN J3 residual) is opt-in: omitted/empty leaves the
+    response exactly as before; a non-empty grid adds a "band" field (the
+    standard OLS mean-CI at each grid point, ``polynomial_confidence_band``)
+    alongside the unchanged top-level fields.
+    """
     try:
-        return _wrap(
-            lin_regress(
-                np.asarray(req.x, dtype=float),
-                np.asarray(req.y, dtype=float),
-                order=req.order,
-                alpha=req.alpha,
-            )
+        result = lin_regress(
+            np.asarray(req.x, dtype=float),
+            np.asarray(req.y, dtype=float),
+            order=req.order,
+            alpha=req.alpha,
         )
+        if req.band_x:
+            result = {
+                **result,
+                "band": polynomial_confidence_band(
+                    np.asarray(req.x, dtype=float),
+                    np.asarray(req.y, dtype=float),
+                    np.asarray(req.band_x, dtype=float),
+                    order=req.order,
+                    alpha=req.alpha,
+                ),
+            }
+        return _wrap(result)
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

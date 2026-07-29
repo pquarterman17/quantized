@@ -52,6 +52,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setShowPoints: vi.fn(),
     showMeanCI: false,
     setShowMeanCI: vi.fn(),
+    showConnectMeans: false,
+    setShowConnectMeans: vi.fn(),
     facetCol: null,
     setFacetCol: vi.fn(),
     busy: false,
@@ -172,7 +174,7 @@ describe("StatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
   it("strip mode shows only the mean±CI checkbox (points are implicit)", () => {
     stateRef.current = makeState({
       mode: "strip",
-      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false },
+      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
     });
     render(<StatStage />);
     expect(screen.queryByText("points")).not.toBeInTheDocument();
@@ -200,9 +202,50 @@ describe("StatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
   it("strip mode hides the facet-by picker (JMP_GAP J5 residual: no faceted strip yet)", () => {
     stateRef.current = makeState({
       mode: "strip",
-      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false },
+      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
     });
     render(<StatStage />);
     expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
+  });
+});
+
+describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
+  it("box mode with a group column active shows the connect-means checkbox", () => {
+    stateRef.current = makeState({ mode: "box", groupCol: 0 });
+    render(<StatStage />);
+    expect(screen.getByText("connect means")).toBeInTheDocument();
+  });
+
+  it("strip mode with a group column active shows the connect-means checkbox", () => {
+    stateRef.current = makeState({
+      mode: "strip",
+      groupCol: 0,
+      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
+    });
+    render(<StatStage />);
+    expect(screen.getByText("connect means")).toBeInTheDocument();
+  });
+
+  it("hides the connect-means checkbox under the per-plotted-channel fallback (groupCol null)", () => {
+    stateRef.current = makeState({ mode: "box", groupCol: null });
+    render(<StatStage />);
+    expect(screen.queryByText("connect means")).not.toBeInTheDocument();
+  });
+
+  it("hides the connect-means checkbox for violin/qq/histogram/bar", () => {
+    for (const mode of ["violin", "qq", "histogram", "bar"] as const) {
+      stateRef.current = makeState({ mode, groupCol: 0, draw: null });
+      const { unmount } = render(<StatStage />);
+      expect(screen.queryByText("connect means")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("toggling the connect-means checkbox calls setShowConnectMeans", () => {
+    const setShowConnectMeans = vi.fn();
+    stateRef.current = makeState({ mode: "box", groupCol: 0, setShowConnectMeans });
+    render(<StatStage />);
+    screen.getByText("connect means").click();
+    expect(setShowConnectMeans).toHaveBeenCalledWith(true);
   });
 });

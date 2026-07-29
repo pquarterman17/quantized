@@ -560,6 +560,101 @@ export function statsFitDistributions(x: number[]): Promise<DistFitAllResponse> 
   return postJSON("/api/stats/fit-distribution", { x });
 }
 
+// ── Outlier screening (JMP_GAP J9) — Grubbs / Rosner / Dixon Q / MAD ───────
+// Same request/response shapes as calc.stats_outliers.*; every `flagged_indices`
+// (and `index`, for the single-outlier tests) is an index into the ARRAY SENT
+// AS `x` -- the outlier-screening workshop always sends the ANALYSIS view's
+// pruned column (rowstate.analysisData), so those indices are pruned-row
+// positions the caller maps to ORIGINAL row indices via
+// rowstate.activeRowIndices (the same technique the Distribution workshop's
+// histogram-bin brushing uses).
+
+export interface OutlierGrubbsResult {
+  G: number;
+  G_critical: number;
+  flagged: boolean;
+  flagged_indices: number[];
+  index: number;
+  value: number;
+  tail: string;
+  alpha: number;
+  N: number;
+  excluded_indices: number[];
+  method: string;
+}
+
+/** Grubbs' test for a single outlier. */
+export function statsGrubbs(
+  x: number[],
+  alpha = 0.05,
+  tail: "two-sided" | "less" | "greater" = "two-sided",
+): Promise<OutlierGrubbsResult> {
+  return postJSON("/api/stats/grubbs", { x, alpha, tail });
+}
+
+export interface OutlierRosnerRow {
+  i: number;
+  R: number;
+  lambda_critical: number;
+  index: number;
+  value: number;
+  exceeds: boolean;
+}
+
+export interface OutlierRosnerResult {
+  num_outliers: number;
+  flagged_indices: number[];
+  flagged_values: number[];
+  table: OutlierRosnerRow[];
+  k: number;
+  alpha: number;
+  N: number;
+  excluded_indices: number[];
+  method: string;
+}
+
+/** Generalized ESD test (Rosner) for up to `k` outliers. */
+export function statsRosner(x: number[], k: number, alpha = 0.05): Promise<OutlierRosnerResult> {
+  return postJSON("/api/stats/rosner", { x, k, alpha });
+}
+
+export interface OutlierDixonResult {
+  Q: number;
+  Q_critical: number;
+  ratio: string;
+  tail: string;
+  flagged: boolean;
+  flagged_indices: number[];
+  index: number;
+  value: number;
+  alpha: number;
+  N: number;
+  excluded_indices: number[];
+  method: string;
+}
+
+/** Dixon's Q test for a single outlier in a small sample (3 <= n <= 30). */
+export function statsDixonQ(x: number[], alpha = 0.05): Promise<OutlierDixonResult> {
+  return postJSON("/api/stats/dixon-q", { x, alpha });
+}
+
+export interface OutlierMadResult {
+  modified_z_scores: (number | null)[];
+  median: number;
+  mad: number;
+  scale_method: string;
+  threshold: number;
+  flagged_indices: number[];
+  N: number;
+  excluded_indices: number[];
+  method: string;
+}
+
+/** Robust modified z-score (MAD-based) outlier flagging. */
+export function statsMadOutliers(x: number[], threshold = 3.5): Promise<OutlierMadResult> {
+  return postJSON("/api/stats/mad-outliers", { x, threshold });
+}
+
 // ── Statistical plots — box / violin / Q-Q (gap #16, the StatStage) ────────
 // Same request/response shapes as calc.statplots.{grouped_box_stats,
 // violin_kde, qq_plot}; the interactive canvas (Stage/statRender.ts) and the
@@ -634,11 +729,26 @@ export function statsQQ(data: number[], dist = "norm"): Promise<QQResponse> {
   return postJSON("/api/statplots/qq", { data, dist });
 }
 
+/** Standard OLS mean-response confidence band (JMP_GAP J3 residual) — one
+ *  `calc.stats.polynomial_confidence_band` call, present on `CalcResult.band`
+ *  only when the request's `band_x` was non-empty. */
+export interface RegressionBand {
+  x: number[];
+  yFit: number[];
+  ciLo: number[];
+  ciHi: number[];
+  alpha: number;
+}
+
 export function statsRegression(body: {
   x: number[];
   y: number[];
   order?: number;
   alpha?: number;
+  // JMP_GAP J3 residual (Fit Y by X's bivariate leg): an opt-in confidence-
+  // band evaluation grid. Omitted -- today's response, byte-identical; a
+  // non-empty grid adds a "band" field (RegressionBand, above).
+  band_x?: number[];
 }): Promise<CalcResult> {
   return postJSON("/api/stats/regression", body);
 }
@@ -1704,6 +1814,9 @@ export interface StatplotFigureSpec {
   show_points?: boolean;
   point_row_indices?: number[][] | null;
   show_mean_ci?: boolean;
+  // JMP_GAP J5 residual: connect-group-means "interaction plot" line
+  // (box/strip only) through each group's mean, in on-screen category order.
+  show_connect_means?: boolean;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

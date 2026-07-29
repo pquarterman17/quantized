@@ -8,6 +8,7 @@
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
 import { useFitYByXStore } from "../store/fitYByX";
+import { useOutlierScreeningStore } from "../store/outlierScreening";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -118,6 +119,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       description: "Choose and run a statistical test with its assumptions and recommendation explained.",
       keywords: "jmp t-test anova mann whitney which test assumptions hypothesis",
       run: () => s().setStatsChooserOpen(true),
+    },
+    {
+      id: "outlier-screening",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Outlier screening…",
+      description: "Flag suspect points in a column with a chosen screening method, then select the flagged rows for review — never deletes anything automatically.",
+      keywords: "outlier grubbs rosner dixon q mad screening flag suspect point jmp",
+      run: () => useOutlierScreeningStore.getState().setOpen(true),
     },
     {
       id: "fit-y-by-x",

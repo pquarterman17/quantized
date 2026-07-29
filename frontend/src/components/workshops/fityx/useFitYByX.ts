@@ -22,6 +22,7 @@ import {
   statsRecommend,
   statsRegression,
   statsTukey,
+  type RegressionBand,
 } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
 import { fmtNum } from "../../../lib/format";
@@ -61,6 +62,11 @@ export interface BivariateResult {
   y: number[];
   order: number;
   regression: CalcResult;
+  /** Standard OLS mean-response confidence band (JMP_GAP J3 residual), over
+   *  a grid spanning [min(x), max(x)]. Null only if the band request itself
+   *  failed independently of the main regression (defensive — the same
+   *  inputs that produced `regression` should always also fit a band). */
+  band: RegressionBand | null;
 }
 
 export interface ContingencyResult {
@@ -100,6 +106,17 @@ const colValues = (data: DataStruct, index: number): number[] =>
 
 function mean(xs: number[]): number {
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
+}
+
+/** Confidence-band evaluation grid (JMP_GAP J3 residual): `n` evenly spaced
+ *  points spanning [min(xs), max(xs)] inclusive. A degenerate (single-value)
+ *  domain returns that one value repeated -- `polynomial_confidence_band`
+ *  handles a repeated grid point fine (it's independent of the fitted x). */
+function bandGrid(xs: number[], n = 40): number[] {
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  if (!(hi > lo)) return xs.length ? [lo] : [];
+  return Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1));
 }
 
 function sd(xs: number[]): number {
@@ -240,9 +257,10 @@ export function useFitYByX(): FitYByXState {
           if (xs.length < order + 2) {
             throw new Error(`need at least ${order + 2} paired points for order-${order} regression`);
           }
-          const regression = await statsRegression({ x: xs, y: ys, order });
+          const regression = await statsRegression({ x: xs, y: ys, order, band_x: bandGrid(xs) });
           if (cancelled) return;
-          setBivariate({ x: xs, y: ys, order, regression });
+          const band = (regression.band as RegressionBand | undefined) ?? null;
+          setBivariate({ x: xs, y: ys, order, regression, band });
           setOneway(null);
           setContingency(null);
         } else if (kind === "contingency") {

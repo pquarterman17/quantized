@@ -68,6 +68,8 @@ beforeEach(() => {
     coeffs: [5, 3], se: [0.5, 0.2], tStats: [10, 15], pValues: [0.0001, 0.0001],
     R2: 0.98, R2adj: 0.97, fStat: 500, fPvalue: 0.0001, RMSE: 0.5,
     residuals: [0], yFit: [8, 41], N: 12, df: 10,
+    // JMP_GAP J3 residual: a confidence band alongside the fit.
+    band: { x: [1, 12], yFit: [8, 41], ciLo: [6, 39], ciHi: [10, 43], alpha: 0.05 },
   });
   chi2Mock.mockResolvedValue({
     chi2: 0, dof: 1, p_value: 1, expected: [[3, 3], [3, 3]], n: 12,
@@ -94,6 +96,19 @@ describe("FitYByXPanel", () => {
     expect(screen.getByText(/Bivariate/)).toBeInTheDocument();
     await waitFor(() => expect(regressionMock).toHaveBeenCalled());
     expect(screen.getByLabelText("bivariate scatter with fit")).toBeInTheDocument();
+  });
+
+  it("bivariate leg draws a confidence band by default, toggleable off (JMP_GAP J3 residual)", async () => {
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
+    await waitFor(() => expect(regressionMock).toHaveBeenCalled());
+    const checkbox = await screen.findByText("confidence band");
+    const svg = screen.getByLabelText("bivariate scatter with fit");
+    expect(svg.querySelector("path[fill='var(--accent)']")).not.toBeNull();
+
+    checkbox.click();
+    expect(svg.querySelector("path[fill='var(--accent)']")).toBeNull();
   });
 
   it("switches to the contingency leg for two categorical columns", async () => {

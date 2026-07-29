@@ -69,6 +69,7 @@ def render_statplot_figure(
     show_points: bool = False,
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
+    show_connect_means: bool = False,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -92,7 +93,11 @@ def render_statplot_figure(
     t-based CI whisker (``calc.statplots.box_stats``'s ``sem``/``ci_lo``/
     ``ci_hi`` — the SAME numbers the interactive stage reads), replacing
     ``boxplot``'s own tiny mean-triangle marker for ``box`` so there's only
-    one mean glyph on screen.
+    one mean glyph on screen. ``show_connect_means`` (``box``/``strip``,
+    JMP_GAP J5 residual) draws a dashed line through each group's mean, in
+    on-screen category order — the "interaction plot" read for a grouped
+    box/strip plot (reads the SAME ``box_stats`` mean as ``show_mean_ci``,
+    never a second computation).
 
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
@@ -131,7 +136,7 @@ def render_statplot_figure(
             _draw_statplot(
                 ax, kind, data, labels, dist, bins, fit, st,
                 show_points=show_points, point_row_indices=point_row_indices,
-                show_mean_ci=show_mean_ci,
+                show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             )
             if title:
                 ax.set_title(title)
@@ -211,6 +216,16 @@ def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> Non
         )
 
 
+def _draw_connect_means_line(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> None:
+    """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
+    each group's mean, in on-screen category order -- the "interaction plot"
+    read for a box/strip plot grouped by a categorical column. Reads the
+    SAME ``box_stats`` mean ``_overlay_mean_ci`` uses, never a second/
+    independent computation."""
+    means = [_box_stats(g)["mean"] for g in groups]
+    ax.plot(ticks, means, color="black", linewidth=1.25, linestyle="--", zorder=5)
+
+
 def _draw_statplot(
     ax: Any,
     kind: str,
@@ -224,6 +239,7 @@ def _draw_statplot(
     show_points: bool = False,
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
+    show_connect_means: bool = False,
 ) -> None:
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
@@ -249,6 +265,8 @@ def _draw_statplot(
             _scatter_jittered_points(ax, groups, cat_labels, ticks, row_indices)
         if kind in ("box", "strip") and show_mean_ci:
             _overlay_mean_ci(ax, groups, ticks)
+        if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
+            _draw_connect_means_line(ax, groups, ticks)
         return
 
     sample = np.asarray(data, dtype=float).ravel()

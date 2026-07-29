@@ -58,25 +58,35 @@ export function computeBarData(
  *  `points`/`showMeanCI` (JMP_GAP J5 #1/#2) ride through to BOTH the
  *  success and the client-fallback branch identically — the marks are a
  *  screen-only overlay, independent of whether the box stats themselves
- *  came from the backend or the offline fallback. `degraded` in the return
- *  lets the caller decide whether to surface a "computed locally" note (the
- *  flat path does; the faceted path doesn't have a per-slice note affordance). */
+ *  came from the backend or the offline fallback. `connectMeans` (JMP_GAP
+ *  J5 residual) rides through the same way — it only ever reads
+ *  `boxes[i].mean`, already present in both the backend and client-fallback
+ *  box stats. `degraded` in the return lets the caller decide whether to
+ *  surface a "computed locally" note (the flat path does; the faceted path
+ *  doesn't have a per-slice note affordance). */
 export async function computeBoxDraw(
   finiteGroups: GroupSpec[],
   valueLabel: string,
   groupLabel: string,
   points: IndexedGroupSpec[] | null = null,
   showMeanCI = false,
+  connectMeans = false,
 ): Promise<{ draw: StatDrawData; degraded: boolean }> {
   try {
     const r = await statsBox(
       finiteGroups.map((g) => g.values),
       finiteGroups.map((g) => g.label),
     );
-    return { draw: { mode: "box", boxes: r.boxes, valueLabel, groupLabel, points, showMeanCI }, degraded: false };
+    return {
+      draw: { mode: "box", boxes: r.boxes, valueLabel, groupLabel, points, showMeanCI, connectMeans },
+      degraded: false,
+    };
   } catch {
     return {
-      draw: { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel, points, showMeanCI },
+      draw: {
+        mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel, points, showMeanCI,
+        connectMeans,
+      },
       degraded: true,
     };
   }
@@ -92,17 +102,22 @@ export async function computeStripDraw(
   valueLabel: string,
   groupLabel: string,
   showMeanCI: boolean,
+  connectMeans = false,
 ): Promise<{ draw: StatDrawData; degraded: boolean }> {
   try {
     const r = await statsBox(
       finiteGroups.map((g) => g.values),
       finiteGroups.map((g) => g.label),
     );
-    return { draw: { mode: "strip", boxes: r.boxes, points, valueLabel, groupLabel, showMeanCI }, degraded: false };
+    return {
+      draw: { mode: "strip", boxes: r.boxes, points, valueLabel, groupLabel, showMeanCI, connectMeans },
+      degraded: false,
+    };
   } catch {
     return {
       draw: {
         mode: "strip", boxes: groupBoxStatsClient(finiteGroups), points, valueLabel, groupLabel, showMeanCI,
+        connectMeans,
       },
       degraded: true,
     };

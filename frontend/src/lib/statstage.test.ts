@@ -6,6 +6,7 @@ import {
   boxStatsClient,
   categoricalChannels,
   categorySlots,
+  connectMeansSeries,
   finiteDomain,
   firstValueChannel,
   groupBoxStatsClient,
@@ -86,6 +87,21 @@ describe("groupBoxStatsClient", () => {
     expect(out.map((b) => b.label)).toEqual(["a", "b"]);
     expect(out[0].median).toBeCloseTo(3, 9);
     expect(out[1].median).toBeCloseTo(30, 9);
+  });
+});
+
+describe("connectMeansSeries (JMP_GAP J5 residual)", () => {
+  it("returns each group's mean, in order, straight off BoxStat.mean", () => {
+    const boxes = groupBoxStatsClient([
+      { label: "a", values: [1, 2, 3, 4, 5] },
+      { label: "b", values: [10, 20, 30, 40, 50] },
+    ]);
+    expect(connectMeansSeries(boxes)).toEqual([boxes[0].mean, boxes[1].mean]);
+    expect(connectMeansSeries(boxes)).toEqual([3, 30]);
+  });
+
+  it("returns an empty array for an empty boxes list", () => {
+    expect(connectMeansSeries([])).toEqual([]);
   });
 });
 

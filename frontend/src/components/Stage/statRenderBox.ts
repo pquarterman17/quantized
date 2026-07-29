@@ -12,7 +12,13 @@
 // spot on screen and in the exported figure.
 
 import { deterministicJitter } from "../../lib/jitter";
-import { categorySlots, finiteDomain, type BoxStat } from "../../lib/statstage";
+import {
+  categorySlots,
+  connectMeansSeries,
+  finiteDomain,
+  type BoxStat,
+  type CategorySlot,
+} from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import {
   drawCategoryAxis,
@@ -92,6 +98,43 @@ function drawMeanCIMarker(
   ctx.fill();
 }
 
+/** Connect-group-means "interaction plot" line (JMP_GAP J5 residual): a
+ *  dashed polyline through each category slot's mean, in on-screen axis
+ *  order -- reads `connectMeansSeries` (the SAME `BoxStat.mean` the mean-CI
+ *  diamond already shows, never a second computation). Breaks the line
+ *  rather than drawing through a non-finite mean (shouldn't happen for a
+ *  finite group, but matches the box glyph's own defensive finiteness
+ *  checks). Always drawn in `ink` so it reads against every series color. */
+function drawConnectMeansLine(
+  ctx: CanvasRenderingContext2D,
+  boxes: readonly BoxStat[],
+  slots: readonly CategorySlot[],
+  rect: Rect,
+  vy: (v: number) => number,
+  ink: string,
+) {
+  const means = connectMeansSeries(boxes);
+  ctx.save();
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 3]);
+  ctx.beginPath();
+  let started = false;
+  means.forEach((m, i) => {
+    if (!Number.isFinite(m)) {
+      started = false;
+      return;
+    }
+    const cx = rect.x + slots[i].cx * rect.w;
+    const cy = vy(m);
+    if (started) ctx.lineTo(cx, cy);
+    else ctx.moveTo(cx, cy);
+    started = true;
+  });
+  ctx.stroke();
+  ctx.restore();
+}
+
 // ── Box (+ optional points / mean-CI overlays) ──────────────────────────────
 
 export function drawBoxesWithMarks(
@@ -162,6 +205,10 @@ export function drawBoxesWithMarks(
 
     drawCountLabel(ctx, cx, rect.y, b.n, muted);
   });
+
+  // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
+  // every box glyph.
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink);
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -197,4 +244,8 @@ export function drawStrip(
 
     drawCountLabel(ctx, cx, rect.y, g.points.length, muted);
   });
+
+  // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
+  // jittered points.
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink);
 }
