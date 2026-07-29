@@ -71,6 +71,30 @@ describe("DistributionPanel", () => {
     expect(screen.getByText(/KS p=0.9/)).toBeInTheDocument();
   });
 
+  it("toggling Compare distributions shows a ranked table with the winner highlighted", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    fireEvent.click(screen.getByText("Compare distributions"));
+    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
+    // "normal" appears both as a <select> option and the table's row button.
+    expect(await screen.findAllByText("normal")).not.toHaveLength(0);
+    expect(screen.getByText("winner")).toBeInTheDocument();
+    // Compare mode auto-selects the winner, which also drives the overlay readout.
+    await waitFor(() => expect(screen.getByText(/AIC 24/)).toBeInTheDocument());
+  });
+
+  it("shows a percentile readout for the selected fit once it lands", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<DistributionPanel />);
+    await screen.findByLabelText("histogram");
+    fireEvent.change(screen.getByDisplayValue("None"), { target: { value: "normal" } });
+    await waitFor(() => expect(statsFitDistributions).toHaveBeenCalled());
+    expect(await screen.findByText(/Percentiles \(normal fit\)/)).toBeInTheDocument();
+    expect(screen.getAllByText("median").length).toBeGreaterThan(0);
+    expect(screen.getByText("q1")).toBeInTheDocument();
+  });
+
   it("clicking a histogram bar writes the shared row selection", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     const { container } = render(<DistributionPanel />);

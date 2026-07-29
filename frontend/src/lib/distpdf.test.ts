@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { DIST_FAMILIES, distPdf, distPdfCurve, gammaFn, pdfOverlayPoints } from "./distpdf";
+import {
+  DIST_FAMILIES,
+  distPdf,
+  distPdfCurve,
+  distQuantile,
+  gammaFn,
+  pdfOverlayPoints,
+  probit,
+} from "./distpdf";
 
 describe("gammaFn", () => {
   it("matches known Γ values", () => {
@@ -76,6 +84,61 @@ describe("distPdfCurve", () => {
 
   it("DIST_FAMILIES lists exactly the 5 curated families", () => {
     expect(DIST_FAMILIES).toEqual(["normal", "lognormal", "weibull", "gamma", "exponential"]);
+  });
+});
+
+describe("probit (JMP_GAP J12)", () => {
+  it("matches well-known standard-normal quantiles", () => {
+    expect(probit(0.5)).toBeCloseTo(0, 8);
+    expect(probit(0.975)).toBeCloseTo(1.959963985, 6); // 95% two-sided z
+    expect(probit(0.025)).toBeCloseTo(-1.959963985, 6);
+    expect(probit(0.99)).toBeCloseTo(2.326347874, 5);
+  });
+
+  it("is antisymmetric about p=0.5", () => {
+    expect(probit(0.1)).toBeCloseTo(-probit(0.9), 8);
+  });
+
+  it("returns NaN outside (0, 1)", () => {
+    expect(Number.isNaN(probit(0))).toBe(true);
+    expect(Number.isNaN(probit(1))).toBe(true);
+    expect(Number.isNaN(probit(-0.1))).toBe(true);
+  });
+});
+
+describe("distQuantile (JMP_GAP J12 item 4)", () => {
+  it("normal: median = mu, and is symmetric about mu", () => {
+    expect(distQuantile("normal", { mu: 10, sigma: 2 }, 0.5)).toBeCloseTo(10, 6);
+    const lo = distQuantile("normal", { mu: 10, sigma: 2 }, 0.25) as number;
+    const hi = distQuantile("normal", { mu: 10, sigma: 2 }, 0.75) as number;
+    expect(10 - lo).toBeCloseTo(hi - 10, 6);
+  });
+
+  it("lognormal: quantile is exp of the underlying normal's quantile", () => {
+    const q = distQuantile("lognormal", { mu: 0, sigma: 1 }, 0.5) as number;
+    expect(q).toBeCloseTo(1, 6); // exp(0)
+  });
+
+  it("exponential: closed-form -ln(1-p)/rate", () => {
+    expect(distQuantile("exponential", { rate: 2 }, 0.5)).toBeCloseTo(-Math.log(0.5) / 2, 9);
+  });
+
+  it("weibull: closed-form scale*(-ln(1-p))^(1/shape)", () => {
+    const q = distQuantile("weibull", { shape: 2, scale: 3 }, 0.5) as number;
+    expect(q).toBeCloseTo(3 * Math.sqrt(-Math.log(0.5)), 9);
+  });
+
+  it("gamma has no closed form — documented residual, returns null", () => {
+    expect(distQuantile("gamma", { shape: 2, scale: 1 }, 0.5)).toBeNull();
+  });
+
+  it("returns NaN for p outside (0, 1) on an implemented family", () => {
+    expect(Number.isNaN(distQuantile("normal", { mu: 0, sigma: 1 }, 0) as number)).toBe(true);
+    expect(Number.isNaN(distQuantile("normal", { mu: 0, sigma: 1 }, 1) as number)).toBe(true);
+  });
+
+  it("returns NaN for a bad parameter on an implemented family", () => {
+    expect(Number.isNaN(distQuantile("exponential", { rate: 0 }, 0.5) as number)).toBe(true);
   });
 });
 
