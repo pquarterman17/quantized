@@ -296,3 +296,98 @@ describe("useFitYByX — report emission", () => {
     expect(result.current.reportBusy).toBe(false);
   });
 });
+
+// 12 rows: col0 "byc" (3-level nominal By column: levels 0/1 have 5 rows
+// each with both xcat groups present; level 2 has only 2 rows, both xcat=0
+// — too few non-empty x-groups for oneway on that level), col1 "xcat"
+// (2-level nominal factor), col2 "yval" (continuous response).
+const BY_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  values: [
+    [0, 0, 10], [0, 0, 11], [0, 1, 12], [0, 1, 13], [0, 1, 14],
+    [1, 0, 15], [1, 0, 16], [1, 0, 17], [1, 1, 18], [1, 1, 19],
+    [2, 0, 20], [2, 0, 21],
+  ],
+  labels: ["byc", "xcat", "yval"],
+  units: ["", "", ""],
+  metadata: {},
+};
+
+describe("useFitYByX — By grouping (JMP_GAP_PLAN J7)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1", status: "", reports: [] });
+  });
+
+  it("offers only the OTHER categorical columns as a By option (not the chosen X)", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1); // xcat
+      result.current.setYCol(2); // yval
+    });
+    expect(result.current.byOptions).toEqual([{ index: 0, label: "byc" }]);
+  });
+
+  it("picking a By column runs the SAME dispatch once per level", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1);
+      result.current.setYCol(2);
+    });
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    expect(statsAnova).toHaveBeenCalledWith([[10, 11], [12, 13, 14]]);
+    expect(statsAnova).toHaveBeenCalledWith([[15, 16, 17], [18, 19]]);
+    const ok = result.current.byResults.filter((r) => !r.error);
+    expect(ok).toHaveLength(2);
+    expect(ok.every((r) => r.oneway)).toBe(true);
+  });
+
+  it("a level too small for the leg shows 'not enough data (n=…)' instead of erroring", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1);
+      result.current.setYCol(2);
+    });
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    const sparse = result.current.byResults.find((r) => r.label === "2");
+    expect(sparse?.error).toBe("not enough data (n=2)");
+    expect(sparse?.oneway).toBeUndefined();
+  });
+
+  it("switching the dataset resets By to none", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byLevels).toHaveLength(3));
+    useApp.setState({ datasets: [{ id: "d2", name: "other.dat", data: BY_DATA }], activeId: "d2" });
+    await waitFor(() => expect(result.current.byCol).toBeNull());
+    expect(result.current.byLevels).toEqual([]);
+  });
+
+  it("emits a per-level report keyed by level label, skipping levels with too little data", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1);
+      result.current.setYCol(2);
+    });
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    await act(async () => {
+      await result.current.toReport();
+    });
+    expect(reportEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        title: "yval by xcat — oneway — by byc",
+        records: [
+          expect.objectContaining({ level: "0", group: "0", n: 2 }),
+          expect.objectContaining({ level: "0", group: "1", n: 3 }),
+          expect.objectContaining({ level: "1", group: "0", n: 3 }),
+          expect.objectContaining({ level: "1", group: "1", n: 2 }),
+        ],
+      }),
+    );
+    expect(useApp.getState().reports).toHaveLength(1);
+  });
+});

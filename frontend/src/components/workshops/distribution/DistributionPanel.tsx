@@ -10,10 +10,11 @@
 import { fmtNum } from "../../../lib/format";
 import { DIST_FAMILIES, type DistFamily } from "../../../lib/distpdf";
 import ToolWindow from "../../overlays/ToolWindow";
-import { NumberField, Select, StatusDot, Switch } from "../../primitives";
+import { Button, NumberField, Select, StatusDot, Switch } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import BoxStrip from "./BoxStrip";
 import CompareDistributionsTable from "./CompareDistributionsTable";
+import DistributionLevelSection from "./DistributionLevelSection";
 import HistogramStrip from "./HistogramStrip";
 import { type FitPick, useDistribution } from "./useDistribution";
 
@@ -36,6 +37,7 @@ export default function DistributionPanel() {
   const d = useDistribution();
   const colOptions = d.columns.map((c) => ({ value: String(c.index), label: c.label }));
   const isNormal = d.norm ? d.norm.p >= 0.05 : null;
+  const byActive = d.byLevels.length > 0;
 
   return (
     <ToolWindow id="distribution" title="Distribution" width={380} onClose={() => setOpen(false)}>
@@ -52,7 +54,34 @@ export default function DistributionPanel() {
             onChange={(e) => d.setCol(Number(e.target.value))}
           />
 
-          {d.error ? (
+          {/* By-column partitioning (JMP_GAP_PLAN J7): run this analysis once
+              per level of an optional categorical column, render-only —
+              never writes the shared row selection. */}
+          {d.byOptions.length > 0 && (
+            <>
+              <label className="qzk-field-lbl" style={{ marginTop: 12 }}>
+                By (optional)
+              </label>
+              <Select
+                aria-label="By (optional)"
+                options={[{ value: "", label: "None" }, ...d.byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
+                value={d.byCol == null ? "" : String(d.byCol)}
+                onChange={(e) => d.setByCol(e.target.value === "" ? null : Number(e.target.value))}
+              />
+            </>
+          )}
+
+          {byActive ? (
+            <>
+              {d.byBusy && d.byResults.length === 0 ? (
+                <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+                  analyzing {d.byLevels.length} levels…
+                </div>
+              ) : (
+                d.byResults.map((r) => <DistributionLevelSection key={r.label} result={r} />)
+              )}
+            </>
+          ) : d.error ? (
             <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
               {d.error}
             </div>
@@ -229,6 +258,14 @@ export default function DistributionPanel() {
                 </div>
               )}
             </>
+          )}
+
+          {(byActive ? d.byResults.length > 0 : !!d.desc) && (
+            <div style={{ marginTop: 12 }}>
+              <Button size="sm" disabled={d.reportBusy} onClick={() => void d.toReport()}>
+                {d.reportBusy ? "Reporting…" : "→ Report"}
+              </Button>
+            </div>
           )}
         </>
       )}

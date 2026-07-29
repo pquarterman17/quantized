@@ -10,72 +10,47 @@
 // rows (#50) drop from every leg — the row-state chokepoint (architecture
 // guard #11). Category labels resolve the same way bar charts/facets do
 // (lib/barlayout.categoryLevels/resolveCategoryLabels) so they match plots.
+//
+// JMP_GAP_PLAN J7 ("By" role): an optional By column runs the SAME dispatch
+// (components/workshops/fityx/runLeg.ts) once per level of a categorical
+// column (components/workshops/useByPartition.ts, shared with Distribution),
+// on the ALREADY-analysis-view `data` partitioned into per-level DataStructs
+// — guard #11 is satisfied upstream, By only partitions rows that already
+// passed exclusions/the local filter. A level too small for its leg's own
+// minimums (runLeg's thrown "need at least …" errors) surfaces as an honest
+// "not enough data (n=…)" line instead of an error toast/crash.
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  reportEmit,
-  statsAnova,
-  statsChiSquareIndependence,
-  statsFisherExact,
-  statsLevene,
-  statsRecommend,
-  statsRegression,
-  statsTukey,
-  type RegressionBand,
-} from "../../../lib/api";
-import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
+import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";
-import type { Recommendation } from "../../../lib/statschooser";
-import type { CalcResult, DataStruct, ModelingType } from "../../../lib/types";
+import type { ModelingType } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { colValues, groupsForOneway, runLeg } from "./runLeg";
+import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
+import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
+
+export type { BivariateResult, ContingencyResult, FitYByXKind, OnewayGroup, OnewayResult } from "./runLeg";
 
 export interface FitYByXColumn {
   index: number;
   label: string;
 }
 
-/** "unsupported" = a nominal/ordinal Y against a continuous X — JMP maps
- *  that combination to logistic fitting, out of this workbench's 3 legs. */
-export type FitYByXKind = "oneway" | "bivariate" | "contingency" | "unsupported";
-
-export interface OnewayGroup {
+/** One By level's landed (or failed) leg result, keyed by that level's
+ *  label — the report/render unit for JMP_GAP_PLAN J7. */
+export interface FitYByXLevelResult {
   label: string;
-  values: number[];
-}
-
-export interface OnewayResult {
-  groups: OnewayGroup[];
-  anova: CalcResult;
-  /** null when a group has <2 observations (Levene needs variance per group). */
-  levene: CalcResult | null;
-  /** null when only 2 levels (Tukey needs >2 to be more than a t-test). */
-  tukey: CalcResult | null;
-  recommend: Recommendation | null;
-}
-
-export interface BivariateResult {
-  x: number[];
-  y: number[];
-  order: number;
-  regression: CalcResult;
-  /** Standard OLS mean-response confidence band (JMP_GAP J3 residual), over
-   *  a grid spanning [min(x), max(x)]. Null only if the band request itself
-   *  failed independently of the main regression (defensive — the same
-   *  inputs that produced `regression` should always also fit a band). */
-  band: RegressionBand | null;
-}
-
-export interface ContingencyResult {
-  rowLabels: string[];
-  colLabels: string[];
-  table: number[][];
-  chiSquare: CalcResult;
-  /** null unless the table is 2x2 (Fisher exact's only valid shape). */
-  fisher: CalcResult | null;
+  n: number;
+  oneway?: OnewayResult;
+  bivariate?: BivariateResult;
+  contingency?: ContingencyResult;
+  /** Set instead of a result when the level had too few rows/levels for
+   *  this leg — an honest line, not a thrown error. */
+  error: string | null;
 }
 
 export interface FitYByXState {
@@ -99,24 +74,17 @@ export interface FitYByXState {
   contingency: ContingencyResult | null;
   reportBusy: boolean;
   toReport: () => Promise<void>;
+  // ── "By" grouping (JMP_GAP J7) ──────────────────────────────────────────
+  byOptions: ByColumnOption[];
+  byCol: number | null;
+  setByCol: (i: number | null) => void;
+  byLevels: ByLevel[];
+  byResults: FitYByXLevelResult[];
+  byBusy: boolean;
 }
-
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
 
 function mean(xs: number[]): number {
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
-}
-
-/** Confidence-band evaluation grid (JMP_GAP J3 residual): `n` evenly spaced
- *  points spanning [min(xs), max(xs)] inclusive. A degenerate (single-value)
- *  domain returns that one value repeated -- `polynomial_confidence_band`
- *  handles a repeated grid point fine (it's independent of the fitted x). */
-function bandGrid(xs: number[], n = 40): number[] {
-  const lo = Math.min(...xs);
-  const hi = Math.max(...xs);
-  if (!(hi > lo)) return xs.length ? [lo] : [];
-  return Array.from({ length: n }, (_, i) => lo + ((hi - lo) * i) / (n - 1));
 }
 
 function sd(xs: number[]): number {
@@ -152,25 +120,6 @@ function colType(active: ReturnType<typeof useActiveDataset>, index: number): Mo
   return channelModelingType(active, index);
 }
 
-/** Partition yCol's finite values by xCol's finite levels, labeled the same
- *  way bar charts resolve category labels (an Origin text column when one
- *  consistently covers every level, else formatted numeric levels). */
-function groupsForOneway(data: DataStruct, xCol: number, yCol: number): OnewayGroup[] {
-  const levels = categoryLevels(data, xCol);
-  const labels = resolveCategoryLabels(data, xCol, levels);
-  const xv = colValues(data, xCol);
-  const yv = colValues(data, yCol);
-  const buckets = new Map<number, number[]>();
-  const n = Math.min(xv.length, yv.length);
-  for (let i = 0; i < n; i++) {
-    if (!Number.isFinite(xv[i]) || !Number.isFinite(yv[i])) continue;
-    const bucket = buckets.get(xv[i]);
-    if (bucket) bucket.push(yv[i]);
-    else buckets.set(xv[i], [yv[i]]);
-  }
-  return levels.map((lvl, i) => ({ label: labels[i], values: buckets.get(lvl) ?? [] }));
-}
-
 export function useFitYByX(): FitYByXState {
   const active = useActiveDataset();
   const addReport = useApp((s) => s.addReport);
@@ -191,6 +140,24 @@ export function useFitYByX(): FitYByXState {
 
   const [xCol, setXCol] = useState<number>(() => firstCategorical(active) ?? 0);
   const [yCol, setYCol] = useState<number>(() => firstContinuous(active, firstCategorical(active) ?? 0));
+
+  // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
+  // view (guard #11), so every level below is post-exclusion/-filter too.
+  // The By candidate list excludes whichever columns are already X/Y —
+  // grouping by the very column already driving the leg would be redundant
+  // (every level would just re-derive one X group).
+  const byColumns = useMemo(() => columns.filter((c) => c.index !== xCol && c.index !== yCol), [columns, xCol, yCol]);
+  const byPartition = useByPartition(active, data, byColumns);
+  const [byResults, setByResults] = useState<FitYByXLevelResult[]>([]);
+  const [byBusy, setByBusy] = useState(false);
+
+  // A By column picked before X/Y changed underneath it (now colliding with
+  // the new X or Y) resets to none rather than silently partitioning by a
+  // column that no longer appears in `byOptions`.
+  useEffect(() => {
+    if (byPartition.byCol === xCol || byPartition.byCol === yCol) byPartition.setByCol(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xCol, yCol]);
 
   const labelOf = (i: number) => columns.find((c) => c.index === i)?.label ?? (i < 0 ? "x" : `col ${i}`);
   const xLabel = labelOf(xCol);
@@ -223,98 +190,112 @@ export function useFitYByX(): FitYByXState {
     let cancelled = false;
     setBusy(true);
     setError(null);
-
-    async function run(): Promise<void> {
-      try {
-        if (kind === "oneway") {
-          const groups = groupsForOneway(data as DataStruct, xCol, yCol).filter((g) => g.values.length > 0);
-          if (groups.length < 2) throw new Error("need at least 2 non-empty levels for oneway");
-          const valueArrays = groups.map((g) => g.values);
-          const [anova, levene, recommend] = await Promise.all([
-            statsAnova(valueArrays),
-            valueArrays.every((g) => g.length >= 2)
-              ? statsLevene(valueArrays).catch(() => null)
-              : Promise.resolve(null),
-            statsRecommend({ groups: valueArrays }).catch(() => null),
-          ]);
-          const tukey = groups.length > 2 ? await statsTukey(valueArrays).catch(() => null) : null;
-          if (cancelled) return;
-          setOneway({ groups, anova, levene, tukey, recommend });
-          setBivariate(null);
-          setContingency(null);
-        } else if (kind === "bivariate") {
-          const xv = colValues(data as DataStruct, xCol);
-          const yv = colValues(data as DataStruct, yCol);
-          const n = Math.min(xv.length, yv.length);
-          const xs: number[] = [];
-          const ys: number[] = [];
-          for (let i = 0; i < n; i++) {
-            if (Number.isFinite(xv[i]) && Number.isFinite(yv[i])) {
-              xs.push(xv[i]);
-              ys.push(yv[i]);
-            }
-          }
-          if (xs.length < order + 2) {
-            throw new Error(`need at least ${order + 2} paired points for order-${order} regression`);
-          }
-          const regression = await statsRegression({ x: xs, y: ys, order, band_x: bandGrid(xs) });
-          if (cancelled) return;
-          const band = (regression.band as RegressionBand | undefined) ?? null;
-          setBivariate({ x: xs, y: ys, order, regression, band });
-          setOneway(null);
-          setContingency(null);
-        } else if (kind === "contingency") {
-          const xLevels = categoryLevels(data as DataStruct, xCol);
-          const yLevels = categoryLevels(data as DataStruct, yCol);
-          if (xLevels.length < 2 || yLevels.length < 2) {
-            throw new Error("need at least 2 levels in both columns for a contingency table");
-          }
-          const rowLabels = resolveCategoryLabels(data as DataStruct, xCol, xLevels);
-          const colLabels = resolveCategoryLabels(data as DataStruct, yCol, yLevels);
-          const xv = colValues(data as DataStruct, xCol);
-          const yv = colValues(data as DataStruct, yCol);
-          const rowIndex = new Map(xLevels.map((lvl, i) => [lvl, i]));
-          const colIndex = new Map(yLevels.map((lvl, i) => [lvl, i]));
-          const table: number[][] = xLevels.map(() => yLevels.map(() => 0));
-          const n = Math.min(xv.length, yv.length);
-          for (let i = 0; i < n; i++) {
-            const ri = rowIndex.get(xv[i]);
-            const ci = colIndex.get(yv[i]);
-            if (ri === undefined || ci === undefined) continue;
-            table[ri][ci] += 1;
-          }
-          const chiSquare = await statsChiSquareIndependence(table);
-          const fisher =
-            xLevels.length === 2 && yLevels.length === 2
-              ? await statsFisherExact(table).catch(() => null)
-              : null;
-          if (cancelled) return;
-          setContingency({ rowLabels, colLabels, table, chiSquare, fisher });
-          setOneway(null);
-          setBivariate(null);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "analysis failed");
-          setOneway(null);
-          setBivariate(null);
-          setContingency(null);
-        }
-      } finally {
+    runLeg(data, kind, xCol, yCol, order)
+      .then((leg) => {
+        if (cancelled) return;
+        setOneway(leg.oneway ?? null);
+        setBivariate(leg.bivariate ?? null);
+        setContingency(leg.contingency ?? null);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "analysis failed");
+        setOneway(null);
+        setBivariate(null);
+        setContingency(null);
+      })
+      .finally(() => {
         if (!cancelled) setBusy(false);
-      }
-    }
-    void run();
+      });
     return () => {
       cancelled = true;
     };
   }, [data, kind, xCol, yCol, order]);
+
+  // JMP_GAP J7 — the SAME dispatch, once per By level. A level too small
+  // for this leg (runLeg's thrown "need at least …" errors) reports an
+  // honest "not enough data" line instead of surfacing as an error.
+  useEffect(() => {
+    if (byPartition.levels.length === 0 || kind === "unsupported") {
+      setByResults([]);
+      setByBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setByBusy(true);
+    Promise.all(
+      byPartition.levels.map(async (lvl): Promise<FitYByXLevelResult> => {
+        try {
+          const leg = await runLeg(lvl.data, kind, xCol, yCol, order);
+          return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
+        } catch (e) {
+          return {
+            label: lvl.label,
+            n: lvl.data.time.length,
+            error: `not enough data (n=${lvl.data.time.length})`,
+          };
+        }
+      }),
+    )
+      .then((results) => {
+        if (!cancelled) setByResults(results);
+      })
+      .finally(() => {
+        if (!cancelled) setByBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byPartition.levels, kind, xCol, yCol, order]);
 
   function pendingGuard(action: string): boolean {
     if (!active?.pending) return false;
     useApp.getState().ensureBookData(active.id);
     setStatus(`still loading full data — try ${action} again in a moment`);
     return true;
+  }
+
+  /** One leg's result -> {title, columns?, records, caption?} for report
+   *  emission — shared by the single-view and per-level (By) paths so the
+   *  per-level records use exactly the same column shape, just with a
+   *  leading `level` key. */
+  function legRecords(
+    leg: { oneway?: OnewayResult | null; bivariate?: BivariateResult | null; contingency?: ContingencyResult | null },
+    level?: string,
+  ): Record<string, unknown>[] {
+    const withLevel = (r: Record<string, unknown>) => (level != null ? { level, ...r } : r);
+    if (kind === "oneway" && leg.oneway) {
+      return leg.oneway.groups.map((g) =>
+        withLevel({ group: g.label, n: g.values.length, mean: mean(g.values), sd: sd(g.values) }),
+      );
+    }
+    if (kind === "bivariate" && leg.bivariate) {
+      const r = leg.bivariate.regression;
+      const coeffs = (r.coeffs as number[] | undefined) ?? [];
+      return [
+        withLevel({
+          N: r.N,
+          order: leg.bivariate.order,
+          intercept: coeffs[0],
+          slope: coeffs[1],
+          R2: r.R2,
+          fStat: r.fStat,
+          fPvalue: r.fPvalue,
+        }),
+      ];
+    }
+    if (kind === "contingency" && leg.contingency) {
+      const expected = (leg.contingency.chiSquare.expected as number[][] | undefined) ?? [];
+      const out: Record<string, unknown>[] = [];
+      leg.contingency.rowLabels.forEach((rl, i) => {
+        leg.contingency!.colLabels.forEach((cl, j) => {
+          out.push(withLevel({ row: rl, col: cl, observed: leg.contingency!.table[i][j], expected: expected[i]?.[j] }));
+        });
+      });
+      return out;
+    }
+    return [];
   }
 
   async function toReport(): Promise<void> {
@@ -325,54 +306,34 @@ export function useFitYByX(): FitYByXState {
       const refs = [{ kind: "dataset", id: active.id, name: active.name }];
       let title: string;
       let records: Record<string, unknown>[];
-      let columns: string[] | undefined;
       let caption: string | undefined;
 
-      if (kind === "oneway" && oneway) {
+      if (byPartition.levels.length > 0) {
+        const byLabel = byPartition.byOptions.find((c) => c.index === byPartition.byCol)?.label ?? "level";
+        title = `${yLabel} by ${xLabel} — ${kind} — by ${byLabel}`;
+        records = byResults.flatMap((r) => (r.error ? [] : legRecords(r, r.label)));
+        if (records.length === 0) {
+          setReportBusy(false);
+          return;
+        }
+      } else if (kind === "oneway" && oneway) {
         title = `${yLabel} by ${xLabel} — oneway`;
-        columns = ["group", "n", "mean", "sd"];
-        records = oneway.groups.map((g) => ({
-          group: g.label,
-          n: g.values.length,
-          mean: mean(g.values),
-          sd: sd(g.values),
-        }));
+        records = legRecords({ oneway });
         caption = `ANOVA F=${fmtNum(oneway.anova.fStat)}, p=${fmtNum(oneway.anova.pValue)}`;
       } else if (kind === "bivariate" && bivariate) {
-        const r = bivariate.regression;
-        const coeffs = (r.coeffs as number[] | undefined) ?? [];
         title = `${yLabel} by ${xLabel} — bivariate fit`;
-        records = [
-          {
-            N: r.N,
-            order: bivariate.order,
-            intercept: coeffs[0],
-            slope: coeffs[1],
-            R2: r.R2,
-            fStat: r.fStat,
-            fPvalue: r.fPvalue,
-          },
-        ];
+        records = legRecords({ bivariate });
       } else if (kind === "contingency" && contingency) {
         title = `${xLabel} x ${yLabel} — contingency`;
-        columns = ["row", "col", "observed", "expected"];
-        const expected = (contingency.chiSquare.expected as number[][] | undefined) ?? [];
-        records = [];
-        contingency.rowLabels.forEach((rl, i) => {
-          contingency.colLabels.forEach((cl, j) => {
-            records.push({
-              row: rl,
-              col: cl,
-              observed: contingency.table[i][j],
-              expected: expected[i]?.[j],
-            });
-          });
-        });
+        records = legRecords({ contingency });
         caption = `chi2=${fmtNum(contingency.chiSquare.chi2)}, p=${fmtNum(contingency.chiSquare.p_value)}`;
       } else {
+        setReportBusy(false);
         return;
       }
 
+      const columns =
+        byPartition.levels.length > 0 && records.length > 0 ? Object.keys(records[0]) : undefined;
       const { report } = await reportEmit({ kind: "stats_table", records, title, columns, caption, source_refs: refs });
       addReport(title, report, active.id);
       setStatus(`emitted ${title} report`);
@@ -403,5 +364,16 @@ export function useFitYByX(): FitYByXState {
     contingency,
     reportBusy,
     toReport,
+    byOptions: byPartition.byOptions,
+    byCol: byPartition.byCol,
+    setByCol: byPartition.setByCol,
+    byLevels: byPartition.levels,
+    byResults,
+    byBusy,
   };
 }
+
+// `groupsForOneway`/`colValues` are re-exported for any lingering caller
+// that imported them from this module before the J7 refactor moved the
+// dispatch into runLeg.ts.
+export { colValues, groupsForOneway };

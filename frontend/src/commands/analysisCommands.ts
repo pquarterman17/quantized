@@ -108,8 +108,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "Statistics",
       label: "Distribution (histogram + normality of a column)…",
-      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict.",
-      keywords: "jmp histogram normality shapiro wilk quantile descriptive stats",
+      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict. An optional By column runs the same profile once per level.",
+      keywords: "jmp histogram normality shapiro wilk quantile descriptive stats by column by group",
       run: () => s().setDistributionOpen(true),
     },
     {
@@ -144,8 +144,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "Statistics",
       label: "Fit Y by X (oneway · bivariate · contingency)…",
-      description: "Pick an X and a Y column and get the matching analysis automatically: group comparison for a categorical factor, a line fit for two measurements, or a cross-tab test for two categories.",
-      keywords: "fit y by x oneway anova bivariate regression contingency chi-square chi square fisher exact tukey levene jmp",
+      description: "Pick an X and a Y column and get the matching analysis automatically: group comparison for a categorical factor, a line fit for two measurements, or a cross-tab test for two categories. An optional By column runs the same fit once per level.",
+      keywords: "fit y by x oneway anova bivariate regression contingency chi-square chi square fisher exact tukey levene jmp by column by group",
       run: () => useFitYByXStore.getState().setOpen(true),
     },
     {

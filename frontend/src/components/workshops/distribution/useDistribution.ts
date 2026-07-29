@@ -24,12 +24,22 @@
 // fit_distribution enforces N>=5 and every curated family has n_params<=2, so
 // the denominator is always >=2 in practice; the null/fallback path below is
 // a defensive honesty guard, not dead code masking a real gap.
+//
+// JMP_GAP J7 ("By" role): an optional By column runs the SAME
+// histogram/descriptive/Shapiro trio once per level of a categorical
+// column (components/workshops/useByPartition.ts, shared with Fit Y by X),
+// partitioning the ALREADY-analysis-view `data` (guard #11 — exclusions and
+// the local filter apply before partitioning, same as everything else). Kept
+// deliberately simple (histogram + stats per level, JMP_GAP_PLAN's own
+// acceptance bar) — the fit-distribution overlay/Compare/percentile features
+// stay single-column-only; a level too small to bin still reports its N.
 
 import { useEffect, useMemo, useState } from "react";
 
 import {
   type DistFitAllResponse,
   type DistFitResult,
+  reportEmit,
   statsDescriptive,
   statsFitDistributions,
   statsHistogram,
@@ -40,6 +50,8 @@ import { rowsInBins } from "../../../lib/distribution";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { CalcResult, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { toast } from "../../../store/toasts";
+import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 
 export interface HistBins {
   counts: number[];
@@ -135,6 +147,38 @@ export interface DistributionState {
   /** Brush bins i0..i1 (order-independent). shiftKey extends from the last
    *  anchor; brushing the exact same range again clears the selection. */
   brushBins: (i0: number, i1: number, shiftKey: boolean) => void;
+  // ── "By" grouping (JMP_GAP J7) ──────────────────────────────────────────
+  /** Categorical columns eligible as a By column. */
+  byOptions: ByColumnOption[];
+  /** null = no By column (the single un-partitioned view above is live). */
+  byCol: number | null;
+  setByCol: (i: number | null) => void;
+  /** One ByLevel per level of `byCol`, ascending; [] when `byCol` is null. */
+  byLevels: ByLevel[];
+  /** Parallel to `byLevels` once its fetches settle (histogram+stats+
+   *  normality per level, the SAME trio the un-partitioned view runs). */
+  byResults: DistributionLevelResult[];
+  /** True while any per-level fetch in `byResults` is still in flight. */
+  byBusy: boolean;
+  reportBusy: boolean;
+  /** Emit a #36 stats_table report: one record per By level when a By
+   *  column is active, else one record for the whole current column. */
+  toReport: () => Promise<void>;
+}
+
+/** One By-level's rendering — the same shape (hist/desc/norm/normNote) the
+ *  un-partitioned view keeps as separate fields, bundled per level so
+ *  DistributionLevelSection can render it with one prop. `error` is set
+ *  instead of thrown when a level has too few finite values to bin — an
+ *  honest line, not a crash (JMP_GAP J7 acceptance). */
+export interface DistributionLevelResult {
+  label: string;
+  n: number;
+  hist: HistBins | null;
+  desc: CalcResult | null;
+  norm: Normality | null;
+  normNote: string | null;
+  error: string | null;
 }
 
 const colValues = (data: DataStruct, index: number): number[] =>
@@ -148,6 +192,8 @@ export function useDistribution(): DistributionState {
   const data = useMemo(() => analysisData(active), [active]);
   const setRowSelection = useApp((s) => s.setRowSelection);
   const clearRowSelection = useApp((s) => s.clearRowSelection);
+  const addReport = useApp((s) => s.addReport);
+  const setStatus = useApp((s) => s.setStatus);
 
   const columns = useMemo<DistributionColumn[]>(() => {
     if (!active) return [];
@@ -160,6 +206,24 @@ export function useDistribution(): DistributionState {
 
   // Default to the first channel (a value column), else x.
   const [col, setCol] = useState<number>(() => (active && active.data.labels.length ? 0 : -1));
+
+  // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
+  // view (guard #11), so every level below is post-exclusion/-filter too.
+  // The By candidate list excludes the currently profiled column itself —
+  // partitioning a column by its own levels is degenerate (every level
+  // would just be that one homogeneous value).
+  const byColumns = useMemo(() => columns.filter((c) => c.index !== col), [columns, col]);
+  const byPartition = useByPartition(active, data, byColumns);
+  const [byResults, setByResults] = useState<DistributionLevelResult[]>([]);
+  const [byBusy, setByBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+
+  // A By column picked before `col` changed underneath it (now colliding
+  // with the new profiled column) resets to none.
+  useEffect(() => {
+    if (byPartition.byCol === col) byPartition.setByCol(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [col]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -359,6 +423,117 @@ export function useDistribution(): DistributionState {
     if (!useShiftExtend) setAnchorBin(i0);
   }
 
+  // JMP_GAP J7 — one histogram/descriptive/Shapiro fetch per By level, the
+  // SAME trio the un-partitioned view above runs, on that level's own
+  // sliced DataStruct (useByPartition already partitioned the analysis
+  // view — guard #11 is satisfied upstream). Render-only: never touches
+  // the shared row selection (no brushing here, unlike the single-column
+  // histogram's `brushBins`).
+  useEffect(() => {
+    if (byPartition.levels.length === 0) {
+      setByResults([]);
+      setByBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setByBusy(true);
+    Promise.all(
+      byPartition.levels.map(async (lvl): Promise<DistributionLevelResult> => {
+        const vals = colValues(lvl.data, col).filter((v) => Number.isFinite(v));
+        const [h, d, s] = await Promise.allSettled([
+          statsHistogram(vals),
+          statsDescriptive(vals),
+          statsShapiro(vals),
+        ]);
+        const levelHist =
+          h.status === "fulfilled"
+            ? { counts: numArr(h.value.counts), centers: numArr(h.value.centers), edges: numArr(h.value.edges) }
+            : null;
+        const levelDesc = d.status === "fulfilled" ? d.value : null;
+        const levelNorm =
+          s.status === "fulfilled" && Number.isFinite(Number(s.value.p))
+            ? { W: Number(s.value.W), p: Number(s.value.p), N: Number(s.value.N) }
+            : null;
+        const levelNormNote = levelNorm
+          ? null
+          : vals.length < 3
+            ? "need ≥ 3 values"
+            : vals.length > 5000
+              ? "n > 5000 (Shapiro limit)"
+              : "normality test unavailable";
+        return {
+          label: lvl.label,
+          n: vals.length,
+          hist: levelHist,
+          desc: levelDesc,
+          norm: levelNorm,
+          normNote: levelNormNote,
+          error: levelHist ? null : `not enough data (n=${vals.length})`,
+        };
+      }),
+    )
+      .then((results) => {
+        if (!cancelled) setByResults(results);
+      })
+      .finally(() => {
+        if (!cancelled) setByBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byPartition.levels, col]);
+
+  async function toReport(): Promise<void> {
+    if (!active) return;
+    setReportBusy(true);
+    try {
+      const refs = [{ kind: "dataset", id: active.id, name: active.name }];
+      const byLabel = byPartition.byOptions.find((c) => c.index === byPartition.byCol)?.label;
+      let title: string;
+      let records: Record<string, unknown>[];
+      if (byPartition.levels.length > 0) {
+        title = `${label} distribution by ${byLabel ?? "level"}`;
+        records = byResults.map((r) => ({
+          level: r.label,
+          n: r.n,
+          mean: r.desc?.mean,
+          median: r.desc?.median,
+          std: r.desc?.std,
+          min: r.desc?.min,
+          max: r.desc?.max,
+          shapiro_W: r.norm?.W,
+          shapiro_p: r.norm?.p,
+        }));
+      } else {
+        if (!desc) {
+          setReportBusy(false);
+          return;
+        }
+        title = `${label} distribution`;
+        records = [
+          {
+            n: desc.N,
+            mean: desc.mean,
+            median: desc.median,
+            std: desc.std,
+            min: desc.min,
+            max: desc.max,
+            shapiro_W: norm?.W,
+            shapiro_p: norm?.p,
+          },
+        ];
+      }
+      const { report } = await reportEmit({ kind: "stats_table", records, title, source_refs: refs });
+      addReport(title, report, active.id);
+      setStatus(`emitted ${title} report`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "report failed", "danger");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
   const label = columns.find((c) => c.index === col)?.label ?? "x";
 
   return {
@@ -393,5 +568,13 @@ export function useDistribution(): DistributionState {
     percentileValue,
     brushedBins,
     brushBins,
+    byOptions: byPartition.byOptions,
+    byCol: byPartition.byCol,
+    setByCol: byPartition.setByCol,
+    byLevels: byPartition.levels,
+    byResults,
+    byBusy,
+    reportBusy,
+    toReport,
   };
 }

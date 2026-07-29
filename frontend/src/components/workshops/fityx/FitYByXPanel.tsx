@@ -8,6 +8,7 @@ import { Button, Select } from "../../primitives";
 import { useFitYByXStore } from "../../../store/fitYByX";
 import BivariateView from "./BivariateView";
 import ContingencyView from "./ContingencyView";
+import FitYByXLevelSection from "./FitYByXLevelSection";
 import OnewayView from "./OnewayView";
 import { useFitYByX } from "./useFitYByX";
 
@@ -22,6 +23,7 @@ export default function FitYByXPanel() {
   const setOpen = useFitYByXStore((s) => s.setOpen);
   const f = useFitYByX();
   const colOptions = f.columns.map((c) => ({ value: String(c.index), label: c.label }));
+  const byActive = f.byLevels.length > 0;
 
   return (
     <ToolWindow id="fit-y-by-x" title="Fit Y by X" width={420} onClose={() => setOpen(false)}>
@@ -67,6 +69,21 @@ export default function FitYByXPanel() {
             </div>
           )}
 
+          {/* By-column partitioning (JMP_GAP_PLAN J7): run this leg once
+              per level of an optional categorical column, render-only —
+              never writes the shared row selection. */}
+          {f.byOptions.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <label className="qzk-field-lbl">By (optional)</label>
+              <Select
+                aria-label="By (optional)"
+                options={[{ value: "", label: "None" }, ...f.byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
+                value={f.byCol == null ? "" : String(f.byCol)}
+                onChange={(e) => f.setByCol(e.target.value === "" ? null : Number(e.target.value))}
+              />
+            </div>
+          )}
+
           {f.busy && (
             <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
               analyzing…
@@ -79,13 +96,27 @@ export default function FitYByXPanel() {
             </div>
           )}
 
-          {!f.busy && !f.error && f.kind === "oneway" && f.oneway && <OnewayView result={f.oneway} />}
-          {!f.busy && !f.error && f.kind === "bivariate" && f.bivariate && <BivariateView result={f.bivariate} />}
-          {!f.busy && !f.error && f.kind === "contingency" && f.contingency && (
-            <ContingencyView result={f.contingency} />
+          {byActive ? (
+            <>
+              {f.byBusy && f.byResults.length === 0 ? (
+                <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+                  analyzing {f.byLevels.length} levels…
+                </div>
+              ) : (
+                f.byResults.map((r) => <FitYByXLevelSection key={r.label} result={r} kind={f.kind} />)
+              )}
+            </>
+          ) : (
+            <>
+              {!f.busy && !f.error && f.kind === "oneway" && f.oneway && <OnewayView result={f.oneway} />}
+              {!f.busy && !f.error && f.kind === "bivariate" && f.bivariate && <BivariateView result={f.bivariate} />}
+              {!f.busy && !f.error && f.kind === "contingency" && f.contingency && (
+                <ContingencyView result={f.contingency} />
+              )}
+            </>
           )}
 
-          {(f.oneway || f.bivariate || f.contingency) && (
+          {(byActive ? f.byResults.length > 0 : !!(f.oneway || f.bivariate || f.contingency)) && (
             <div style={{ marginTop: 12 }}>
               <Button size="sm" disabled={f.reportBusy} onClick={() => void f.toReport()}>
                 {f.reportBusy ? "Reporting…" : "→ Report"}
