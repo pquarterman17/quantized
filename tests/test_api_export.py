@@ -282,6 +282,32 @@ def test_statplot_bad_kind_is_422() -> None:
     assert resp.status_code == 422
 
 
+# ── JMP_GAP J5 residual: connect-group-means "interaction plot" line ───────
+
+
+def test_statplot_box_connect_means_pdf() -> None:
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={"kind": "box", "data": [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]],
+              "labels": ["A", "B"], "fmt": "pdf", "show_connect_means": True},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_statplot_show_connect_means_omitted_is_byte_identical_to_false() -> None:
+    # New opt-in flag -- an existing consumer that never sends it must see
+    # BYTE-IDENTICAL output to explicitly sending it false.
+    base = {"kind": "box", "data": [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]],
+            "labels": ["A", "B"], "fmt": "png"}
+    omitted = client.post("/api/export/statplot-figure", json=base)
+    explicit_false = client.post(
+        "/api/export/statplot-figure", json={**base, "show_connect_means": False},
+    )
+    assert omitted.status_code == explicit_false.status_code == 200
+    assert omitted.content == explicit_false.content
+
+
 # ── /api/export/statplot-figure facets (GUI_INTERACTION #12 slice 4b) ───────
 def test_statplot_facets_box_pdf() -> None:
     resp = client.post(

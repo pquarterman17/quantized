@@ -27,11 +27,57 @@ from scipy import stats as sps
 
 __all__ = [
     "box_stats",
+    "deterministic_jitter",
     "grouped_box_stats",
     "histogram",
     "qq_plot",
     "violin_kde",
 ]
+
+# ── Deterministic point jitter (JMP_GAP J5 #1) ──────────────────────────────
+# A pure hash of (row_index, category) -> [-1, 1], NEVER np.random -- so a raw
+# point's horizontal scatter within its box/strip category slot is stable
+# across re-renders (test stability) and IDENTICAL between the interactive
+# canvas and the matplotlib export. `frontend/src/lib/jitter.ts`'s
+# `deterministicJitter` mirrors this bit-for-bit: FNV-1a hashes the UTF-8
+# category bytes, XORs in a Knuth-multiplicative row term, then a `triple32`
+# integer mix (a well-known 32-bit avalanche hash) -- verified byte-identical
+# against the JS implementation for the shared fixtures both test suites pin.
+_FNV_OFFSET_BASIS = 0x811C9DC5
+_FNV_PRIME = 0x01000193
+_MASK32 = 0xFFFFFFFF
+
+
+def _fnv1a32(data: bytes) -> int:
+    h = _FNV_OFFSET_BASIS
+    for byte in data:
+        h ^= byte
+        h = (h * _FNV_PRIME) & _MASK32
+    return h
+
+
+def _triple32(x: int) -> int:
+    x &= _MASK32
+    x ^= x >> 16
+    x = (x * 0x7FEB352D) & _MASK32
+    x ^= x >> 15
+    x = (x * 0x846CA68B) & _MASK32
+    x ^= x >> 16
+    return x
+
+
+def deterministic_jitter(row_index: int, category: str) -> float:
+    """Deterministic pseudo-random offset in ``[-1, 1]`` for one
+    ``(row_index, category)`` pair -- the box/strip "show points" jitter.
+    Row-state exclusion (#50) simply omits a row's point; it never
+    renumbers or reseeds its still-visible neighbours, because the hash
+    depends only on the ORIGINAL dataset row index, not a point's position
+    within the filtered group.
+    """
+    cat_hash = _fnv1a32(category.encode("utf-8"))
+    row_term = (int(row_index) * 0x9E3779B1) & _MASK32
+    mixed = _triple32((cat_hash ^ row_term) & _MASK32)
+    return (mixed / 4294967295.0) * 2.0 - 1.0
 
 
 def _finite(x: NDArray[np.float64] | list[float]) -> NDArray[np.float64]:
@@ -66,11 +112,29 @@ def box_stats(
         whislo = float(below.min()) if below.size else q1
         whishi = float(above.max()) if above.size else q3
     fliers = v[(v < whislo) | (v > whishi)]
+    mean = float(v.mean())
+    n = int(v.size)
+    # Mean +/- 95% CI (JMP_GAP J5 #2): a t-based CI, mean +/- t(0.975, n-1)*sem
+    # -- delegates to scipy.stats.t (a standard published algorithm, CLAUDE.md's
+    # "delegate" rule), unlike the idiosyncratic box/whisker math above which
+    # mirrors matplotlib's own local convention. n<2 has no defined spread
+    # (ddof=1 sample std needs >=2 points); the CI degenerates to the mean
+    # itself and sem is NaN, mirroring `boxStatsClient`'s same-n edge case.
+    if n >= 2:
+        sem = float(v.std(ddof=1) / np.sqrt(n))
+        t_crit = float(sps.t.ppf(0.975, n - 1))
+        ci_lo, ci_hi = mean - t_crit * sem, mean + t_crit * sem
+    else:
+        sem = float("nan")
+        ci_lo = ci_hi = mean
     return {
         "q1": q1, "median": med, "q3": q3, "iqr": iqr,
         "whislo": whislo, "whishi": whishi,
-        "mean": float(v.mean()),
-        "n": int(v.size),
+        "mean": mean,
+        "sem": sem,
+        "ci_lo": ci_lo,
+        "ci_hi": ci_hi,
+        "n": n,
         "fliers": [float(x) for x in np.sort(fliers)],
         "whis": whis,
     }

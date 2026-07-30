@@ -78,6 +78,219 @@ beforeEach(() => {
   vi.mocked(exportCategoricalFigure).mockResolvedValue(undefined);
 });
 
+describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
+  const BOX_RESPONSE = {
+    n_groups: 2,
+    boxes: [
+      { label: "grp = 0", q1: 10, median: 12, q3: 14, iqr: 4, whislo: 10, whishi: 114, mean: 62, sem: 20, ci_lo: 10, ci_hi: 114, n: 6, fliers: [], whis: 1.5 },
+      { label: "grp = 1", q1: 30, median: 32, q3: 34, iqr: 4, whislo: 30, whishi: 134, mean: 82, sem: 20, ci_lo: 30, ci_hi: 134, n: 6, fliers: [], whis: 1.5 },
+    ],
+  };
+
+  it("box mode with showPoints=false: points is null (default off)", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    expect(result.current.draw?.mode).toBe("box");
+    if (result.current.draw?.mode === "box") {
+      expect(result.current.draw.points).toBeNull();
+      expect(result.current.draw.showMeanCI).toBe(false);
+    }
+  });
+
+  it("box mode with showPoints=true: points carries each group's ORIGINAL row indices", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowPoints(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.points).toBeTruthy();
+    });
+    const d = result.current.draw;
+    if (d?.mode === "box") {
+      expect(d.points).toHaveLength(2);
+      // level 0 = rows 0,1,2 (fac=0) + 6,7,8 (fac=1); level 1 = rows 3,4,5,9,10,11.
+      expect(d.points?.[0].points.map((p) => p.rowIndex)).toEqual([0, 1, 2, 6, 7, 8]);
+      expect(d.points?.[1].points.map((p) => p.rowIndex)).toEqual([3, 4, 5, 9, 10, 11]);
+    } else {
+      throw new Error("expected a box draw");
+    }
+  });
+
+  it("box mode with showMeanCI=true carries the flag through to the draw", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowMeanCI(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.showMeanCI).toBe(true);
+    });
+  });
+
+  it("strip mode: always resolves points (no toggle needed) and reuses statsBox for mean/CI", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("strip"));
+    await waitFor(() => expect(result.current.draw?.mode).toBe("strip"));
+    const d = result.current.draw;
+    if (d?.mode === "strip") {
+      expect(d.points).toHaveLength(2);
+      expect(d.points[0].points.map((p) => p.rowIndex)).toEqual([0, 1, 2, 6, 7, 8]);
+      expect(d.boxes).toEqual(BOX_RESPONSE.boxes);
+    } else {
+      throw new Error("expected a strip draw");
+    }
+  });
+
+  it("strip mode degrades to the client-side box-stats fallback on a backend failure", async () => {
+    vi.mocked(statsBox).mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("strip"));
+    await waitFor(() => expect(result.current.draw?.mode).toBe("strip"));
+    expect(result.current.note).toBe("backend unavailable — computed locally");
+    const d = result.current.draw;
+    if (d?.mode === "strip") {
+      expect(d.boxes[0].median).toBe(62); // real client math on [10,12,14,110,112,114]
+    } else {
+      throw new Error("expected a strip draw");
+    }
+  });
+
+  it("exportFigure (box, showPoints+showMeanCI on) sends show_points/point_row_indices/show_mean_ci", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowPoints(true));
+    act(() => result.current.setShowMeanCI(true));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.kind).toBe("box");
+    expect(spec.show_points).toBe(true);
+    expect(spec.show_mean_ci).toBe(true);
+    expect(spec.point_row_indices).toEqual([
+      [0, 1, 2, 6, 7, 8],
+      [3, 4, 5, 9, 10, 11],
+    ]);
+  });
+
+  it("exportFigure (box, marks off) sends show_points=false and point_row_indices=null", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.show_points).toBe(false);
+    expect(spec.show_mean_ci).toBe(false);
+    expect(spec.point_row_indices).toBeNull();
+  });
+
+  it("exportFigure (strip) always sends show_points=true, regardless of the box-only toggle state", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("strip"));
+    await waitFor(() => expect(result.current.draw?.mode).toBe("strip"));
+
+    await act(async () => {
+      await result.current.exportFigure("svg");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.kind).toBe("strip");
+    expect(spec.show_points).toBe(true);
+    expect(spec.point_row_indices).toEqual([
+      [0, 1, 2, 6, 7, 8],
+      [3, 4, 5, 9, 10, 11],
+    ]);
+  });
+});
+
+describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
+  const BOX_RESPONSE = {
+    n_groups: 2,
+    boxes: [
+      { label: "grp = 0", q1: 10, median: 12, q3: 14, iqr: 4, whislo: 10, whishi: 114, mean: 62, sem: 20, ci_lo: 10, ci_hi: 114, n: 6, fliers: [], whis: 1.5 },
+      { label: "grp = 1", q1: 30, median: 32, q3: 34, iqr: 4, whislo: 30, whishi: 134, mean: 82, sem: 20, ci_lo: 30, ci_hi: 134, n: 6, fliers: [], whis: 1.5 },
+    ],
+  };
+
+  it("box mode with showConnectMeans=false: connectMeans is false on the draw (default off)", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    const d = result.current.draw;
+    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+  });
+
+  it("box mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    expect(result.current.groupCol).toBe(0); // default categorical column auto-picked
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.connectMeans).toBe(true);
+    });
+  });
+
+  it("forces connectMeans off under the per-plotted-channel fallback (groupCol null), even if toggled on", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setGroupCol(null));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    const d = result.current.draw;
+    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+  });
+
+  it("strip mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("strip"));
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "strip" && d.connectMeans).toBe(true);
+    });
+  });
+
+  it("exportFigure sends show_connect_means only when a group column is active", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.show_connect_means).toBe(true);
+  });
+
+  it("exportFigure omits show_connect_means (false) under the per-plotted-channel fallback", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setGroupCol(null));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.show_connect_means).toBe(false);
+  });
+});
+
 describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
   it("faceted box: drawFacets has one draw per finite facet level; the flat draw stays null", async () => {
     vi.mocked(statsBox).mockImplementation(async (groups, labels) => ({

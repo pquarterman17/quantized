@@ -6,6 +6,19 @@
 
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
+// JMP_GAP J11 formula language v2 quick reference — the hover tooltip on the
+// ƒx bar. Full grammar/NaN-propagation rules live in lib/formula.ts's module
+// header (the authoritative doc, since it can't drift from the parser);
+// this is the compact user-facing cheat sheet.
+const FORMULA_HELP = [
+  "Operators: + - * / % ^   Comparisons: < <= > >= == !=   Logic: and or not",
+  "Functions: sin cos tan exp log ln log10 sqrt abs pow min max",
+  "if(cond, a, b) — NaN cond -> NaN",
+  "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A)",
+  "Row: row() is 1-based · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1)",
+  "Variables: x and the channel letters A, B, C, …",
+].join("\n");
+
 export interface WorksheetToolbarProps {
   formula: string;
   colName: string;
@@ -81,6 +94,7 @@ export default function WorksheetToolbar({
       <input
         className="qz-input"
         placeholder="2*A + sqrt(B)"
+        title={FORMULA_HELP}
         value={formula}
         onChange={(e) => setFormula(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && formula.trim() && onAddColumn()}

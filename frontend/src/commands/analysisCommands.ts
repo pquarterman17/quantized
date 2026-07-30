@@ -7,6 +7,9 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import { useFitYByXStore } from "../store/fitYByX";
+import { useOutlierScreeningStore } from "../store/outlierScreening";
+import { useMultivarStore } from "../store/multivar";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -105,9 +108,18 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "Statistics",
       label: "Distribution (histogram + normality of a column)…",
-      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict.",
-      keywords: "histogram normality shapiro wilk quantile descriptive stats",
+      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict. An optional By column runs the same profile once per level.",
+      keywords: "jmp histogram normality shapiro wilk quantile descriptive stats by column by group",
       run: () => s().setDistributionOpen(true),
+    },
+    {
+      id: "multivar",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Multivariate (correlation · SPLOM · PCA)…",
+      description: "Explore relationships among several continuous columns: a correlation heatmap, a scatterplot matrix, and principal component analysis with scree, scores, and loadings.",
+      keywords: "jmp correlation matrix heatmap scatterplot matrix splom pca principal components scree loadings biplot scores eigenvalue",
+      run: () => useMultivarStore.getState().setOpen(true),
     },
     {
       id: "stats-chooser",
@@ -115,8 +127,26 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       section: "Statistics",
       label: "Test chooser (which stats test? + run it)…",
       description: "Choose and run a statistical test with its assumptions and recommendation explained.",
-      keywords: "t-test anova mann whitney which test assumptions hypothesis",
+      keywords: "jmp t-test anova mann whitney which test assumptions hypothesis",
       run: () => s().setStatsChooserOpen(true),
+    },
+    {
+      id: "outlier-screening",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Outlier screening…",
+      description: "Flag suspect points in a column with a chosen screening method, then select the flagged rows for review — never deletes anything automatically.",
+      keywords: "outlier grubbs rosner dixon q mad screening flag suspect point jmp",
+      run: () => useOutlierScreeningStore.getState().setOpen(true),
+    },
+    {
+      id: "fit-y-by-x",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Fit Y by X (oneway · bivariate · contingency)…",
+      description: "Pick an X and a Y column and get the matching analysis automatically: group comparison for a categorical factor, a line fit for two measurements, or a cross-tab test for two categories. An optional By column runs the same fit once per level.",
+      keywords: "fit y by x oneway anova bivariate regression contingency chi-square chi square fisher exact tukey levene jmp by column by group",
+      run: () => useFitYByXStore.getState().setOpen(true),
     },
     {
       id: "graph-builder",
@@ -124,7 +154,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Graph Builder (drag columns into X/Y/Group wells)…",
       description: "Build a plot by dragging data channels into X, Y, Group, and Facet roles.",
-      keywords: "plot spec scatter line box violin bar mark morph drop zone well facet drag wells x y group builder origin",
+      keywords: "jmp plot spec scatter line box violin bar mark morph drop zone well facet drag wells x y group builder origin",
       run: () => s().setGraphBuilderOpen(true),
     },
     {

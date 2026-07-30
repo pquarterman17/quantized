@@ -118,7 +118,10 @@ Origin Apps ecosystem; the life-science fit library (the builder covers
 rare needs); Vision/Image (→ fermiviewer by charter);
 electrophysiology/GIS/sound/legacy-import categories; LabTalk/Origin-C
 emulation (pipelines + plugins + headless API are the replacement); COM
-automation-*server* parity; stats platforms beyond the shipped W5 suite.
+automation-*server* parity; ~~stats platforms beyond the shipped W5
+suite~~ (**superseded 2026-07-28** — the owner directed a full JMP
+replacement; which platforms actually ship is now governed by
+`plans/JMP_GAP_PLAN.md` and its census gate).
 Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ---

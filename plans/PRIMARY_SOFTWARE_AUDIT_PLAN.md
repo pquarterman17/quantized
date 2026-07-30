@@ -633,7 +633,10 @@ violin, bar, strip, or summary plots.
 - [ ] Missing levels and unbalanced groups are explicit.
 - [ ] Summary table links to selected groups.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
-  lower priority until demand is shown.
+  lower priority until demand is shown. **Demand shown 2026-07-28**: the
+  owner directed a full JMP replacement; the JMP-side platform work now
+  lives in `plans/JMP_GAP_PLAN.md` (J3/J5/J8 layer on this item; its
+  Gate J census picks the platforms). P2.6's own boxes stay here.
 
 ### P2.7 — Equation/fit authoring polish
 

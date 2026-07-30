@@ -8,8 +8,8 @@ import { create } from "zustand";
 
 /** Which top-level section the dialog shows. `search` is the default landing
  *  view (the searchable topic list); the others are browse tabs added by the
- *  later Help slices (importing data, coming from Origin). */
-export type HelpSection = "search" | "shortcuts" | "importing" | "origin";
+ *  later Help slices (importing data, coming from Origin, coming from JMP). */
+export type HelpSection = "search" | "shortcuts" | "importing" | "origin" | "jmp";
 
 interface HelpState {
   open: boolean;

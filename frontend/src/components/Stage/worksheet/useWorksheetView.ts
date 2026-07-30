@@ -488,7 +488,12 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   async function promptColumn() {
     const p = await askParams("New computed column", [
       { key: "name", label: "Column name", type: "text", default: "" },
-      { key: "expr", label: "Formula (e.g. 2*A + sqrt(B))", type: "text", default: "" },
+      {
+        key: "expr",
+        label: "Formula (e.g. if(A > 0, A, mean(A)))",
+        type: "text",
+        default: "",
+      },
     ]);
     if (!p) return;
     const expr = String(p.expr).trim();

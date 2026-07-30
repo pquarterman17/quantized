@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { COLORMAPS, colormap, colormapCss, normalize, sampleColormap } from "./colormap";
+import { cellInk, COLORMAPS, colormap, colormapCss, diverging, divergingCss, normalize, sampleColormap } from "./colormap";
 
 describe("sampleColormap", () => {
   const stops = COLORMAPS.viridis;
@@ -66,5 +66,49 @@ describe("normalize", () => {
 
   it("collapses a degenerate range to 0", () => {
     expect(normalize(5, 7, 7, false)).toBe(0);
+  });
+});
+
+describe("diverging (correlation-matrix RDBU scale, JMP_GAP J10)", () => {
+  it("r=-1 and r=+1 land on the RDBU end stops", () => {
+    expect(diverging(-1)).toEqual(sampleColormap(COLORMAPS.rdbu, 0));
+    expect(diverging(1)).toEqual(sampleColormap(COLORMAPS.rdbu, 1));
+  });
+
+  it("r=0 lands on the near-white midpoint", () => {
+    const [r, g, b] = diverging(0);
+    expect(r).toBeGreaterThan(230);
+    expect(g).toBeGreaterThan(230);
+    expect(b).toBeGreaterThan(230);
+  });
+
+  it("clamps out-of-range r to the endpoints", () => {
+    expect(diverging(-5)).toEqual(diverging(-1));
+    expect(diverging(5)).toEqual(diverging(1));
+  });
+
+  it("non-finite r reads as the neutral midpoint, not an extreme", () => {
+    expect(diverging(NaN)).toEqual(diverging(0));
+  });
+
+  it("positive r reads warmer (more red, less blue) than negative r", () => {
+    const pos = diverging(0.8);
+    const neg = diverging(-0.8);
+    expect(pos[0]).toBeGreaterThan(neg[0]);
+    expect(pos[2]).toBeLessThan(neg[2]);
+  });
+
+  it("divergingCss emits an rgb() string matching diverging()", () => {
+    const [r, g, b] = diverging(0.5);
+    expect(divergingCss(0.5)).toBe(`rgb(${r}, ${g}, ${b})`);
+  });
+});
+
+describe("cellInk", () => {
+  it("picks light ink over a dark fill", () => {
+    expect(cellInk([5, 48, 97])).toBe("#f2f2f2");
+  });
+  it("picks dark ink over a light fill", () => {
+    expect(cellInk([247, 247, 247])).toBe("#1a1a1a");
   });
 });

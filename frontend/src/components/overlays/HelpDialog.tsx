@@ -21,7 +21,8 @@ import {
   formatToHelpItem,
   type ImportFormat,
 } from "../../lib/importFormats";
-import { ORIGIN_TIPS, tipToHelpItem } from "../../lib/originTips";
+import { ORIGIN_TIPS, tipToHelpItem as originTipToHelpItem } from "../../lib/originTips";
+import { JMP_TIPS, tipToHelpItem as jmpTipToHelpItem } from "../../lib/jmpTips";
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
@@ -34,17 +35,19 @@ const TABS: { id: HelpSection; label: string }[] = [
   { id: "shortcuts", label: "Keyboard & mouse" },
   { id: "importing", label: "Importing data" },
   { id: "origin", label: "From Origin" },
+  { id: "jmp", label: "From JMP" },
 ];
 
 const COMMAND_HELP_ITEMS = buildAppActions(useApp.getState)
   .filter((action) => action.description)
   .map(actionToHelpItem);
 
-// The one searchable index — every curated command, formats, and Origin tips.
+// The one searchable index — every curated command, formats, Origin tips, and JMP tips.
 const SEARCH_ITEMS = [
   ...COMMAND_HELP_ITEMS,
   ...IMPORT_FORMATS.map(formatToHelpItem),
-  ...ORIGIN_TIPS.map(tipToHelpItem),
+  ...ORIGIN_TIPS.map(originTipToHelpItem),
+  ...JMP_TIPS.map(jmpTipToHelpItem),
 ];
 
 /** Formats grouped by category, in first-appearance order (for the browse tab). */
@@ -118,6 +121,8 @@ export default function HelpDialog() {
           <ImportingTab />
         ) : section === "origin" ? (
           <OriginTab />
+        ) : section === "jmp" ? (
+          <JmpTab />
         ) : (
           <ShortcutsTab />
         )}
@@ -224,6 +229,22 @@ function OriginTab() {
       {ORIGIN_TIPS.map((t) => (
         <div key={t.id} className="qzk-help-row">
           <div className="qzk-help-title">{t.origin}</div>
+          <div className="qzk-help-detail">{t.quantized}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function JmpTab() {
+  return (
+    <div className="qzk-help-list">
+      <div className="qzk-help-detail" style={{ marginBottom: 6 }}>
+        Familiar JMP workflows and where they live here.
+      </div>
+      {JMP_TIPS.map((t) => (
+        <div key={t.id} className="qzk-help-row">
+          <div className="qzk-help-title">{t.jmp}</div>
           <div className="qzk-help-detail">{t.quantized}</div>
         </div>
       ))}

@@ -34,6 +34,9 @@ import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
 import { useHelp } from "./store/help";
+import { useFitYByXStore } from "./store/fitYByX";
+import { useOutlierScreeningStore } from "./store/outlierScreening";
+import { useMultivarStore } from "./store/multivar";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -57,6 +60,9 @@ const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculat
 const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"));
 const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"));
 const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"));
+const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"));
+const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"));
+const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"));
 const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"));
 const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"));
 const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"));
@@ -96,6 +102,9 @@ export default function AppOverlays() {
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const tabulateOpen = useApp((s) => s.tabulateOpen);
   const distributionOpen = useApp((s) => s.distributionOpen);
+  const fitYByXOpen = useFitYByXStore((s) => s.open);
+  const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
+  const multivarOpen = useMultivarStore((s) => s.open);
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
@@ -134,6 +143,9 @@ export default function AppOverlays() {
       {datasetMathOpen && <DatasetMathPanel />}
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
+      {fitYByXOpen && <FitYByXPanel />}
+      {outlierScreeningOpen && <OutlierScreeningPanel />}
+      {multivarOpen && <MultivarPanel />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
       {peakWizardOpen && <PeakWizardPanel />}
