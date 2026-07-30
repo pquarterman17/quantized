@@ -15,11 +15,18 @@ The row is removed below per the archival rule. The real finding was
 the missing guard, not the three files: non-store `.ts` had neither a
 ceiling nor pins, so a new `MODULE_PINS` ratchet in
 `architecture.test.ts` now covers it (both branches verified by
-planting violations). Also noted, not booked: the frontend vitest
-suite fails 176 tests on the owner's Mac before and after any change —
-local Node v26 leaves `localStorage` undefined without
-`--localstorage-file`; **open PR #93 (pin Node 22 via `.nvmrc`) is the
-fix** and is worth merging.
+planting violations). Same pass, a second defect found and FIXED: the
+frontend suite failed **176 tests on a clean checkout** under Homebrew's
+Node 26 — Node 20+ ships its own `localStorage` global whose accessor
+shadows jsdom's and returns undefined without `--localstorage-file`, so
+every persistence test died on a message naming neither Node nor the
+flag. CI runs Node 22 and could not see it. `src/test/setup.ts` now
+installs a real jsdom Storage when the global is missing (suite:
+**348 files / 5,055 tests green on Node 26**); PR #93's `.nvmrc` Node-22
+pin was merged alongside it as belt-and-braces, not as the fix. Open
+question for the owner, from #93's own description: `fermiviewer` pins
+Node with **Volta** — standardizing both repos on one mechanism would
+drop the second.
 
 Prior (twelfth pass, 2026-07-28). **The mission now
 includes JMP** (owner directive): `plans/JMP_GAP_PLAN.md` is a new

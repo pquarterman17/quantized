@@ -3,7 +3,12 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 latest (P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
+**Updated:** 2026-07-29 latest (header-date correction only — no status
+change: this line still read 2026-07-26 while the body had been edited
+through 2026-07-28 and cites the 2026-07-27 measurement wave in six
+places. The plan's open/closed state below is unchanged and was
+verified against the code during the 2026-07-29 reconciliation. Prior:
+2026-07-26 — P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
 `481e0ea`; slice 3 corrected the freeze attribution — render/mount, not
 parse — booked as slice 4, now the actionable queue; branding drop merged
 `8fad871`; eager-bundle headroom down to 0.8 kB → P4.1 lazy-boundary item
