@@ -157,6 +157,16 @@ def test_confidence_band_mismatched_lengths_raises_clean_error() -> None:
         )
 
 
+def test_confidence_band_alpha_out_of_range_raises() -> None:
+    # alpha=0 would otherwise silently produce t_crit=inf (an infinite-width
+    # band); validate like calc.stats_outliers does rather than degrade.
+    x = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+    y = np.array([0.1, 1.1, 1.9, 3.2, 3.9])
+    for bad in (0.0, 1.0, -0.05, 1.5):
+        with pytest.raises(ValueError, match="alpha"):
+            polynomial_confidence_band(x, y, np.array([2.0]), order=1, alpha=bad)
+
+
 def test_confidence_band_singular_raises_valueerror() -> None:
     x = np.array([3.0, 3.0, 3.0, 3.0, 3.0])
     y = np.array([1.0, 2.0, 3.0, 4.0, 5.0])

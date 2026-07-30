@@ -225,6 +225,8 @@ def polynomial_confidence_band(
     docstring for the historical MATLAB ``confBand``/``predBand`` note this
     finally implements the confidence half of.
     """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
     if xv.size != yv.size:
