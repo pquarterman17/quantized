@@ -2,7 +2,7 @@
 // downsample note (item 3's "downsample above ~5k points per panel and say
 // so in the UI" requirement) over the canvas grid.
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useApp } from "../../../store/useApp";
 import SplomView from "./SplomView";
@@ -13,6 +13,15 @@ export default function SplomTabView({ m }: { m: MultivarState }) {
   const accent = useApp((s) => s.accent);
   const [sample, setSample] = useState<[number, number]>([0, 0]);
   const [drawn, total] = sample;
+  // Stable identity + same-value bail-out. SplomView calls this from an
+  // effect keyed on the callback's identity; an inline arrow storing a fresh
+  // array each time is a render->effect->setState loop that allocates until
+  // the process dies (found as PR #94's CI OOM: the fork ran this loop for
+  // ~16 min past the last test before exhausting ANY heap it was given).
+  const onSampleInfo = useCallback(
+    (d: number, t: number) => setSample((cur) => (cur[0] === d && cur[1] === t ? cur : [d, t])),
+    [],
+  );
 
   if (m.tooFewColumns) {
     return (
@@ -35,7 +44,7 @@ export default function SplomTabView({ m }: { m: MultivarState }) {
         N = {total} complete rows
         {drawn < total && ` — downsampled to ${drawn} points per panel (>5,000)`}
       </div>
-      <SplomView labels={m.labels} rows={m.rows} theme={theme} accent={accent} onSampleInfo={(d, t) => setSample([d, t])} />
+      <SplomView labels={m.labels} rows={m.rows} theme={theme} accent={accent} onSampleInfo={onSampleInfo} />
     </div>
   );
 }
