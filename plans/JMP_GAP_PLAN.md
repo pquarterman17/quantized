@@ -3,11 +3,15 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-29 (campaign complete: J3, J5, J6, J7, J9, J10,
-J11, J12, J17 and J8's backend SHIPPED — every census-independent item
-is closed or reduced to a named residual; see Completed. Open: J1/J2
-(ride P1.4), J4 (= P1.5), J8 UI half, small residuals below, Tier 3
-census-gated. Prior: 2026-07-28 initial gap analysis against `457cdae`)
+**Updated:** 2026-07-29 (pre-merge adversarial review of PR #94: four
+defects fixed on the branch — chi-square Yates convention, By-level
+cap, box CI domain, dead vitest 3 pool config — and module-size
+follow-ups booked as #14; see Completed. Campaign complete: J3, J5,
+J6, J7, J9, J10, J11, J12, J17 and J8's backend SHIPPED — every
+census-independent item is closed or reduced to a named residual.
+Open: J1/J2 (ride P1.4), J4 (= P1.5), J8 UI half, #14 size follow-ups,
+small residuals below, Tier 3 census-gated. Prior: 2026-07-28 initial
+gap analysis against `457cdae`)
 
 ## Purpose
 
@@ -268,6 +272,19 @@ replacements and its priority case is now stronger, not different.
     extended so "jmp"/"jsl"/"local data filter"/"by group"/"tabulate"
     cannot regress; help stays in the lazy chunk.
 
+14. **[ ] Module-size follow-ups** (from the 2026-07-29 PR #94
+    adversarial review — guards advisories, none blocking):
+    - [ ] `routes/export_figures.py` at 493 lines (~6 under the
+      ceiling): split the statplot request model + endpoint into a
+      `routes/export_statplots.py` sibling before the next flag lands.
+    - [ ] `frontend/src/lib/api.ts` at 2,282 lines with no ratchet pin
+      (the fermiviewer audit pattern): extract the stats wrappers to
+      `lib/api/stats.ts` and add a shrink-only pin alongside the store
+      pins in `architecture.test.ts`.
+    - [ ] `useDistribution.ts` at 579 lines (unguarded `.ts`-hook gap):
+      the By-level/compare-distributions half is a separable
+      `useDistributionByLevels` hook.
+
 ## Tier 3 — Census-gated (do NOT build speculatively)
 
 - **[ ] J13 — Clustering** (k-means + hierarchical/dendrogram).
@@ -320,6 +337,20 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**PR #94 adversarial review + fixes**~~ (2026-07-29) — pre-merge
+  review of the whole campaign PR (guards + backend-stats + frontend
+  agents; NIST worked examples, bit-for-bit jitter parity, formula
+  semantics all independently verified). Four defects fixed on the
+  branch: chi-square 2x2 was Yates-corrected while claiming JMP's
+  default (now `correction=False`, the uncorrected JMP/SAS headline
+  convention — tea-tasting pins 0.5→2.0, V 0.25→0.5); By partitioning
+  had no level cap (now BY_MAX_LEVELS=30 + honest truncation note);
+  box-mode value domain ignored mean-CI extents (small-n CI whiskers
+  overdrew the axes); the vitest memory fix used the REMOVED vitest 3
+  `poolOptions` API and applied nothing (migrated to top-level
+  `execArgv`/`maxWorkers`, heap-probe verified). Size follow-ups booked
+  as #14.
 
 - ~~**Second implementation wave — J7, J8 backend, J10, J12, and the
   J5/J9/J3 residual sweep**~~ (2026-07-29) — same parallel-worktree
