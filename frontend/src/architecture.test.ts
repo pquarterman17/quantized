@@ -189,6 +189,61 @@ describe("store-size ratchet (MAIN_PLAN #2)", () => {
   });
 });
 
+// Module-size ratchet for non-store `.ts` (JMP_GAP #14, 2026-07-29). The two
+// guards above cover `.tsx` components and the store slices; everything else
+// under lib/ and the workshop hooks sat in a gap, and the JMP campaign found
+// it the way gaps are always found — `lib/api.ts` had reached 2,282 lines and
+// `useDistribution.ts` 583, neither of which any test could see. Same iron
+// rule as the other two: these numbers only ever go DOWN. A file that grows
+// past its pin earns an extraction, not a bigger number.
+//
+// Pinned at their post-extraction size, no slack — a buffer just defers the
+// next split (the useApp.ts note above says the same thing).
+const MODULE_PINS: Record<string, number> = {
+  // 2282 -> 1895 (2026-07-29): the transport helpers moved to lib/api/http.ts
+  // and the /api/stats/* wrappers to lib/api/stats.ts, both re-exported from
+  // api.ts so all 21 consumers (and their vi.mocks) are untouched. api.ts is
+  // the aggregator now — the appCommands.ts/commands/ shape. J8's variability
+  // wrappers are the next ones due and belong in api/stats.ts.
+  "/lib/api.ts": 1895,
+  // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
+  // its result shape, and the shared column/normality primitives) moved to
+  // distribution/useDistributionByLevels.ts. The remaining oversize half is
+  // the J12 fit/Compare/percentile block — the next extraction if this grows.
+  "/distribution/useDistribution.ts": 492,
+};
+
+describe("module-size ratchet (JMP_GAP #14)", () => {
+  const ts = sources().filter(([p]) => p.endsWith(".ts"));
+
+  it("pinned modules only shrink — extract a sibling, never raise the pin", () => {
+    const over: string[] = [];
+    for (const [key, ceiling] of Object.entries(MODULE_PINS)) {
+      const entry = ts.find(([p]) => p.endsWith(key));
+      if (!entry) {
+        over.push(`${key}: missing — update or remove its pin`);
+        continue;
+      }
+      const lines = entry[1].split("\n").length;
+      if (lines > ceiling) over.push(`${key}: ${lines} > ${ceiling}`);
+    }
+    expect(
+      over,
+      "move the next cohesive block to a sibling module (lib/api/stats.ts is the template); do NOT raise the pin",
+    ).toEqual([]);
+  });
+
+  it("pins stay honest — a file that dropped under the .tsx ceiling must lose its pin", () => {
+    const stale = Object.keys(MODULE_PINS).filter((key) => {
+      const entry = ts.find(([p]) => p.endsWith(key));
+      return entry != null && entry[1].split("\n").length <= TSX_CEILING;
+    });
+    expect(stale, `graduated: now <=${TSX_CEILING} lines — delete the pin (ratchet down)`).toEqual(
+      [],
+    );
+  });
+});
+
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
