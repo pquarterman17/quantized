@@ -347,10 +347,22 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
   convention — tea-tasting pins 0.5→2.0, V 0.25→0.5); By partitioning
   had no level cap (now BY_MAX_LEVELS=30 + honest truncation note);
   box-mode value domain ignored mean-CI extents (small-n CI whiskers
-  overdrew the axes); the vitest memory fix used the REMOVED vitest 3
-  `poolOptions` API and applied nothing (migrated to top-level
-  `execArgv`/`maxWorkers`, heap-probe verified). Size follow-ups booked
-  as #14.
+  overdrew the axes). Fifth, root-caused the "worker OOM with all tests
+  passing" that had dogged the PR's CI: NOT memory pressure but a
+  render↔effect loop — `SplomTabView` stored a fresh `[drawn, total]`
+  array per report and passed a fresh `onSampleInfo` arrow per render
+  while `SplomView` keyed its report effect on the callback identity;
+  the loop allocated to ANY heap ceiling (4→6→12 GB reproduced) while
+  never yielding to timers, so no test timeout could fire, and it would
+  burn CPU in production browsers too. The review localized it via
+  vitest 4's removal of `poolOptions` (the PR's memory knobs were dead
+  config) + `--logHeapUsage` (fork dies mid-MultivarPanel; real
+  heaviest file ~1.1 GB, GridViewport.perf); the cloud session
+  independently converged on the same root cause and shipped the fix
+  (`2ea1abb`: stable `useCallback` + same-value bail) plus the
+  principled revert of ALL memory band-aids (vite.config knobs, ci.yml
+  NODE_OPTIONS) — default limits were never the problem. Size
+  follow-ups booked as #14.
 
 - ~~**Second implementation wave — J7, J8 backend, J10, J12, and the
   J5/J9/J3 residual sweep**~~ (2026-07-29) — same parallel-worktree
