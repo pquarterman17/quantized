@@ -6,10 +6,12 @@ import {
   boxStatsClient,
   categoricalChannels,
   categorySlots,
+  connectMeansSeries,
   finiteDomain,
   firstValueChannel,
   groupBoxStatsClient,
   resolveGroups,
+  resolveGroupsIndexed,
   violinOutline,
   zeroBasedDomain,
 } from "./statstage";
@@ -52,6 +54,27 @@ describe("boxStatsClient", () => {
   it("carries the group label through", () => {
     expect(boxStatsClient([1, 2, 3], 1.5, "sample A").label).toBe("sample A");
   });
+
+  // ── mean +/- 95% CI (JMP_GAP J5 #2) -- SAME fixture pinned in
+  // tests/test_calc_statplots.py::test_box_stats_mean_sem_ci95_matches_scipy_t
+  // so the offline client fallback agrees with the backend to high precision.
+  it("mean/sem/ci95 match the backend's box_stats oracle (1..10 sample)", () => {
+    // Oracle: python -c "from quantized.calc.statplots import box_stats;
+    // print(box_stats([1,2,3,4,5,6,7,8,9,10]))" ->
+    // sem=0.9574271077563381 ci_lo=3.334149410331831 ci_hi=7.665850589668169
+    const b = boxStatsClient([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(b.mean).toBeCloseTo(5.5, 9);
+    expect(b.sem).toBeCloseTo(0.9574271077563381, 6);
+    expect(b.ciLo).toBeCloseTo(3.334149410331831, 5);
+    expect(b.ciHi).toBeCloseTo(7.665850589668169, 5);
+  });
+
+  it("degenerates sem to NaN and ci to the mean itself for a single value", () => {
+    const b = boxStatsClient([5]);
+    expect(Number.isNaN(b.sem)).toBe(true);
+    expect(b.ciLo).toBe(5);
+    expect(b.ciHi).toBe(5);
+  });
 });
 
 describe("groupBoxStatsClient", () => {
@@ -64,6 +87,21 @@ describe("groupBoxStatsClient", () => {
     expect(out.map((b) => b.label)).toEqual(["a", "b"]);
     expect(out[0].median).toBeCloseTo(3, 9);
     expect(out[1].median).toBeCloseTo(30, 9);
+  });
+});
+
+describe("connectMeansSeries (JMP_GAP J5 residual)", () => {
+  it("returns each group's mean, in order, straight off BoxStat.mean", () => {
+    const boxes = groupBoxStatsClient([
+      { label: "a", values: [1, 2, 3, 4, 5] },
+      { label: "b", values: [10, 20, 30, 40, 50] },
+    ]);
+    expect(connectMeansSeries(boxes)).toEqual([boxes[0].mean, boxes[1].mean]);
+    expect(connectMeansSeries(boxes)).toEqual([3, 30]);
+  });
+
+  it("returns an empty array for an empty boxes list", () => {
+    expect(connectMeansSeries([])).toEqual([]);
   });
 });
 
@@ -119,6 +157,33 @@ describe("resolveGroups", () => {
     const groups = resolveGroups(ds.data, null, 1, []);
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe("valA");
+  });
+});
+
+describe("resolveGroupsIndexed (JMP_GAP J5 #1/#3 — points overlay / strip mode)", () => {
+  const rows = Array.from({ length: 15 }, (_, i) => [i % 3, i * 1.1, i * 2.2]);
+  const ds = makeDataset(["group", "valA", "valB"], rows);
+
+  it("mirrors resolveGroups' partition (same labels, same order, same counts)", () => {
+    const plain = resolveGroups(ds.data, 0, 1, [1, 2]);
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
+    expect(indexed.map((g) => g.points.length)).toEqual(plain.map((g) => g.values.length));
+  });
+
+  it("carries each point's ORIGINAL dataset row index alongside its value", () => {
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    // level 0 = rows 0,3,6,9,12 (i%3===0); values are i*1.1.
+    expect(indexed[0].points.map((p) => p.rowIndex)).toEqual([0, 3, 6, 9, 12]);
+    const values = indexed[0].points.map((p) => p.value);
+    [0, 3.3, 6.6, 9.9, 13.2].forEach((expected, i) => expect(values[i]).toBeCloseTo(expected, 9));
+  });
+
+  it("falls back to one indexed group per plotted channel when groupCol is null", () => {
+    const indexed = resolveGroupsIndexed(ds.data, null, 1, [1, 2]);
+    expect(indexed.map((g) => g.label)).toEqual(["valA", "valB"]);
+    expect(indexed[0].points).toHaveLength(15);
+    expect(indexed[0].points[0]).toEqual({ value: 0, rowIndex: 0 });
   });
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BoxStat } from "../../lib/statstage";
 import { seriesStat, type BarChartData } from "../../lib/barlayout";
 import { draw, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
+import { boxValueDomain } from "./statRenderBox";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -49,6 +50,9 @@ const BOX_A: BoxStat = {
   whislo: 1,
   whishi: 10,
   mean: 6.2,
+  sem: 0.9,
+  ciLo: 4.3,
+  ciHi: 8.1,
   n: 11,
   fliers: [50],
 };
@@ -61,6 +65,35 @@ const VIOLIN_A: ViolinGroup = {
   quartiles: [6, 8, 10],
   n: 40,
 };
+
+describe("boxValueDomain", () => {
+  // Small-n CI extends far beyond the whiskers: values {0, 1} give mean 0.5
+  // and a t(0.975,1)=12.7-wide CI of roughly [-5.85, 6.85].
+  const smallN: BoxStat = {
+    label: "A", q1: 0.25, median: 0.5, q3: 0.75, iqr: 0.5,
+    whislo: 0, whishi: 1, mean: 0.5, sem: 0.5,
+    ciLo: -5.85, ciHi: 6.85, n: 2, fliers: [],
+  };
+
+  it("spans the mean-CI extents when the marker is shown", () => {
+    const [lo, hi] = boxValueDomain([smallN], true);
+    expect(lo).toBeLessThanOrEqual(-5.85);
+    expect(hi).toBeGreaterThanOrEqual(6.85);
+  });
+
+  it("ignores CI extents when the marker is off (whiskers + fliers only)", () => {
+    const [lo, hi] = boxValueDomain([smallN], false);
+    expect(lo).toBeGreaterThan(-1);
+    expect(hi).toBeLessThan(2);
+  });
+
+  it("stays finite when CI bounds are undefined (n<2 backend payload)", () => {
+    const noCI: BoxStat = { ...smallN, ciLo: undefined, ciHi: undefined, n: 1 };
+    const [lo, hi] = boxValueDomain([noCI], true);
+    expect(Number.isFinite(lo)).toBe(true);
+    expect(Number.isFinite(hi)).toBe(true);
+  });
+});
 
 (CANVAS_OK ? describe : describe.skip)("draw (real raster)", () => {
   // 600x400 host fallback (clientWidth is 0 in jsdom).
@@ -78,6 +111,102 @@ const VIOLIN_A: ViolinGroup = {
     expect(paints({ mode: "box", boxes: [BOX_A, BOX_B], valueLabel: "value", groupLabel: "group" })).toBe(
       true,
     );
+  });
+
+  it("box mode with points+mean-CI overlays still paints (JMP_GAP J5 #1/#2)", () => {
+    expect(
+      paints({
+        mode: "box",
+        boxes: [BOX_A, BOX_B],
+        valueLabel: "value",
+        groupLabel: "group",
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 2 }] },
+        ],
+        showMeanCI: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("box mode does not throw when points/mean-CI are absent (default off)", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    expect(() =>
+      draw(canvas, host, { mode: "box", boxes: [BOX_A], valueLabel: "v", groupLabel: "g" }),
+    ).not.toThrow();
+  });
+
+  it("strip mode paints jittered points (JMP_GAP J5 #3)", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A, BOX_B],
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }, { value: 6, rowIndex: 2 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 3 }, { value: 5, rowIndex: 4 }] },
+        ],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+        connectMeans: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode with mean-CI marker also paints", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A],
+        points: [{ label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] }],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: true,
+        connectMeans: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("box mode with connect-means line also paints (JMP_GAP J5 residual)", () => {
+    expect(
+      paints({
+        mode: "box",
+        boxes: [BOX_A, BOX_B],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+        connectMeans: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode with connect-means line also paints (JMP_GAP J5 residual)", () => {
+    expect(
+      paints({
+        mode: "strip",
+        boxes: [BOX_A, BOX_B],
+        points: [
+          { label: "A", points: [{ value: 4, rowIndex: 0 }] },
+          { label: "B", points: [{ value: 3, rowIndex: 1 }] },
+        ],
+        valueLabel: "value",
+        groupLabel: "group",
+        showMeanCI: false,
+        connectMeans: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("strip mode does not throw on an empty-points payload (defensive guard)", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    expect(() =>
+      draw(canvas, host, {
+        mode: "strip", boxes: [], points: [], valueLabel: "v", groupLabel: "g", showMeanCI: false,
+        connectMeans: false,
+      }),
+    ).not.toThrow();
   });
 
   it("violin mode paints a filled outline", () => {

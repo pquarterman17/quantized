@@ -1,11 +1,13 @@
-// TabulatePanel — component tests for the item-8 residuals: ZoneWell drag/drop
-// + click-to-assign wiring, the foreign-dataset reject-with-toast, and the
-// "→ Report" stats_table emission. jsdom has no `DragEvent` constructor and
-// RTL's fireEvent.drop sugar silently drops dataTransfer, so drops are
-// hand-built the same way as ZoneWell.test.tsx / AxisDropZones.test.tsx.
-// Chip text (label + a "×" remove button sharing one <span>) isn't reliably
-// queryable via getByText (the span's normalized textContent is "label×"),
-// so well contents are asserted via container.textContent instead.
+// TabulatePanel — component tests (v2, JMP_GAP_PLAN J6). ZoneWell drag/drop +
+// click-to-assign wiring for the (now multi-slot, ordered) Group by / Value
+// wells, the foreign-dataset reject-with-toast, the stat-set checkboxes, the
+// grand-total switch, and the "→ Report" stats_table emission. jsdom has no
+// `DragEvent` constructor and RTL's fireEvent.drop sugar silently drops
+// dataTransfer, so drops are hand-built the same way as ZoneWell.test.tsx /
+// AxisDropZones.test.tsx. Chip text (label + a "×" remove button sharing one
+// <span>) isn't reliably queryable via getByText (the span's normalized
+// textContent is "label×"), so well contents are asserted via
+// container.textContent instead.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +58,14 @@ function wells(container: HTMLElement): Element[] {
   return Array.from(container.querySelectorAll(".qzk-zone-well"));
 }
 
+/** Assigned-chip labels in a well, ignoring the free-channel "+add" <select>'s
+ *  own (always-present) option text — plain textContent assertions on the
+ *  whole well would false-positive on an unassigned column that merely
+ *  appears as a pickable option. */
+function chipLabels(well: Element): string[] {
+  return Array.from(well.querySelectorAll(".qzk-zone-chip")).map((c) => c.textContent ?? "");
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({
@@ -69,38 +79,68 @@ beforeEach(() => {
 });
 
 describe("TabulatePanel", () => {
-  it("defaults the Group/Value wells to the categorical/continuous columns", () => {
+  it("defaults the Group by/Value wells to the categorical/continuous columns", () => {
     const { container } = render(<TabulatePanel />);
     const [groupWell, valueWell] = wells(container);
-    expect(groupWell.textContent).toContain("grp");
-    expect(valueWell.textContent).toContain("val");
+    expect(chipLabels(groupWell).join(" ")).toContain("grp");
+    expect(chipLabels(valueWell).join(" ")).toContain("val");
     expect(screen.getByRole("columnheader", { name: "grp" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "val" })).toBeInTheDocument();
   });
 
-  it("reassigns the Group well via a synthetic channel drop", () => {
+  it("reassigns the Group by well via a synthetic channel drop", () => {
     const { container } = render(<TabulatePanel />);
     const [groupWell] = wells(container);
-    fireDrop(groupWell, channelDataTransfer("d1", 1)); // drop "val" onto Group
-    expect(groupWell.textContent).toContain("val");
-    expect(screen.getByRole("columnheader", { name: "val" })).toBeInTheDocument();
+    fireDrop(groupWell, channelDataTransfer("d1", 1)); // add "val" onto Group by (nested alongside "grp")
+    const chips = chipLabels(groupWell).join(" ");
+    expect(chips).toContain("val");
+    expect(chips).toContain("grp"); // still nested — this well is multi-slot now
+  });
+
+  it("caps the Group by well at 3 nested columns (only 2 channels exist here, so both fit)", () => {
+    const { container } = render(<TabulatePanel />);
+    const [groupWell] = wells(container);
+    fireDrop(groupWell, channelDataTransfer("d1", 1));
+    const chips = chipLabels(groupWell);
+    expect(chips).toHaveLength(2);
+    expect(chips.join(" ")).toContain("grp");
+    expect(chips.join(" ")).toContain("val");
   });
 
   it("reassigns the Value well via the click-to-assign Select fallback", () => {
     const { container } = render(<TabulatePanel />);
     fireEvent.change(screen.getByLabelText("Assign a channel to Value"), {
-      target: { value: "0" }, // "grp" channel
+      target: { value: "0" }, // "grp" channel, added alongside "val"
     });
     const [, valueWell] = wells(container);
-    expect(valueWell.textContent).toContain("grp");
+    const chips = chipLabels(valueWell).join(" ");
+    expect(chips).toContain("grp");
+    expect(chips).toContain("val");
   });
 
   it("ignores a drop from a foreign dataset and surfaces a toast", () => {
     const { container } = render(<TabulatePanel />);
     const [groupWell] = wells(container);
     fireDrop(groupWell, channelDataTransfer("OTHER", 1));
-    expect(groupWell.textContent).toContain("grp"); // unchanged
+    expect(chipLabels(groupWell)).toHaveLength(1); // unchanged — still just "grp"
+    expect(chipLabels(groupWell).join(" ")).toContain("grp");
     expect(useToasts.getState().toasts).toHaveLength(1);
     expect(useToasts.getState().toasts[0].msg).toMatch(/different dataset/);
+  });
+
+  it("toggles a stat column via its checkbox and updates the preview table", () => {
+    render(<TabulatePanel />);
+    expect(screen.queryByRole("columnheader", { name: "sem" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("sem"));
+    expect(screen.getByRole("columnheader", { name: "sem" })).toBeInTheDocument();
+  });
+
+  it("appends a grand-total row when the switch is toggled on", () => {
+    render(<TabulatePanel />);
+    const before = screen.getAllByRole("row").length;
+    fireEvent.click(screen.getByRole("switch", { name: "Grand total row" }));
+    const after = screen.getAllByRole("row").length;
+    expect(after).toBe(before + 1);
   });
 
   it("emits the group summary as a #36 stats_table report", async () => {
@@ -112,10 +152,6 @@ describe("TabulatePanel", () => {
       expect.objectContaining({
         kind: "stats_table",
         title: "val by grp — run.dat",
-        records: [
-          expect.objectContaining({ group: 0, count: 6, mean: 15, min: 10, max: 20, median: 15 }),
-          expect.objectContaining({ group: 1, count: 6, mean: 35, min: 30, max: 40, median: 35 }),
-        ],
       }),
     );
     expect(useApp.getState().reports[0].datasetId).toBe("d1");

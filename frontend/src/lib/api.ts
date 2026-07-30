@@ -1,8 +1,16 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
+//
+// Two pieces live in the `lib/api/` sibling directory (JMP_GAP #14, the size
+// ratchet): `api/http.ts` owns the shared transport, and `api/stats.ts` owns
+// the `/api/stats/*` wrappers. Both are re-exported below, so every consumer
+// keeps importing from `./lib/api` — `./lib/api` resolves to THIS file, not
+// the directory (file beats directory in tsc and Vite alike). Add a new
+// stats wrapper to `api/stats.ts`; this file is pinned shrink-only in
+// `architecture.test.ts`, so the next domain to grow earns its own sibling.
 
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
-import { filenameFromDisposition, saveBlob } from "./download";
+import { deleteJSON, getJSON, postBlob, postDownload, postForm, postJSON } from "./api/http";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type { FigureOverrides } from "./figureOverrides";
 import type { FigureHitmap } from "./previewmap";
@@ -33,26 +41,11 @@ import type {
   WilliamsonHallResult,
 } from "./types";
 
-/** `signal` is optional and threads through to `fetch` unchanged (undefined
- *  is a normal, no-op `RequestInit.signal`) — added for the import-cancel
- *  path (P3.4 slice 1); every other caller is unaffected. */
-async function postJSON<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  return unwrap<T>(res);
-}
-
-async function getJSON<T>(path: string): Promise<T> {
-  return unwrap<T>(await fetch(path));
-}
-
-async function deleteJSON<T>(path: string): Promise<T> {
-  return unwrap<T>(await fetch(path, { method: "DELETE" }));
-}
+// The transport helpers the standalone clients already import from "./api"
+// (lib/jobs, lib/fitbumps, lib/originTemplate) — re-exported so that stays true.
+export { postForm, unwrap } from "./api/http";
+// The /api/stats/* wrappers, extracted 2026-07-29. New ones go THERE, not here.
+export * from "./api/stats";
 
 export interface SqliteQueryRequest {
   path: string;
@@ -64,62 +57,6 @@ export interface SqliteQueryRequest {
 /** Execute one read-only SELECT/CTE against a local SQLite database. */
 export async function querySqlite(req: SqliteQueryRequest): Promise<DataStruct> {
   return postJSON<DataStruct>("/api/database/sqlite/query", req);
-}
-
-/** Pass an ok response through; throw the backend's error detail (or the
- *  status line) otherwise. The SINGLE error-extraction path — every backend
- *  fetch funnels through here (via `unwrap`/`postForm`/`postBlob`/
- *  `postDownload`), so error-message behaviour can't drift between endpoints
- *  (review 2026-07-11, MAIN #8b — four copies of this block had drifted). */
-async function ensureOk(res: Response): Promise<Response> {
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return res;
-}
-
-/** ok response -> parsed JSON; !ok -> throws the backend's error detail.
- *  Exported for the deliberately-standalone client modules (lib/jobs,
- *  lib/fitbumps) so they share the one extraction path above. */
-export async function unwrap<T>(res: Response): Promise<T> {
-  return (await (await ensureOk(res)).json()) as T;
-}
-
-/** POST a FormData body (browser file uploads) -> JSON. Exported for the
- *  standalone upload clients (lib/originTemplate). `signal` — see postJSON. */
-export async function postForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
-  return unwrap<T>(await fetch(path, { method: "POST", body: form, signal }));
-}
-
-/** POST JSON -> raw response bytes (the server-rendered preview images). */
-async function postBlob(path: string, body: unknown): Promise<Blob> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return (await ensureOk(res)).blob();
-}
-
-/** POST JSON, then download the response body as a file (Content-Disposition
- *  attachment) — the export routes. Lives here rather than lib/download so
- *  its error handling rides `ensureOk`; the DOM save helpers stay in
- *  lib/download (which does no fetching). */
-async function postDownload(path: string, body: unknown, fallbackName: string): Promise<void> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const blob = await (await ensureOk(res)).blob();
-  saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
 }
 
 export async function health(): Promise<{ status: string }> {
@@ -511,153 +448,6 @@ export function baselineRegion(body: {
   return postJSON("/api/baseline/region", body);
 }
 
-// ── Stats ───────────────────────────────────────────────────────────────────
-export function statsDescriptive(x: number[]): Promise<CalcResult> {
-  return postJSON("/api/stats/descriptive", { x });
-}
-
-/** Histogram with a data-driven bin rule (`fd`/`sturges`/`scott`/…/int) and an
- *  optional distribution-fit overlay (scipy dist name). */
-export function statsHistogram(
-  data: number[],
-  bins: string | number = "fd",
-  fit?: string | null,
-): Promise<CalcResult> {
-  return postJSON("/api/statplots/histogram", { data, bins, ...(fit ? { fit } : {}) });
-}
-
-/** Shapiro-Wilk normality test (valid 3 ≤ n ≤ 5000). Returns W, p, N. */
-export function statsShapiro(x: number[]): Promise<CalcResult> {
-  return postJSON("/api/stats/shapiro", { x });
-}
-
-/** One family's MLE fit from /api/stats/fit-distribution — params, log-
- *  likelihood, AIC, and a KS goodness-of-fit test against the fitted curve. */
-export interface DistFitResult {
-  dist: string;
-  params: Record<string, number>;
-  loglike: number;
-  aic: number;
-  n_params: number;
-  ks_d: number;
-  ks_p: number;
-  ks_p_approximate: boolean;
-  N: number;
-}
-
-export interface DistFitAllResponse {
-  fits: DistFitResult[];
-  best: string;
-  skipped: { dist: string; reason: string }[];
-}
-
-/** MLE-fit every curated family (ORIGIN_GAP #28: normal/lognormal/weibull/
- *  gamma/exponential), ranked by AIC ascending (`fits[0]` = `best`).
- *  Families whose support the data violates come back in `skipped`, not
- *  silently dropped. The Distribution workshop's fit-overlay picker (#52
- *  item 6b) — its first frontend consumer. */
-export function statsFitDistributions(x: number[]): Promise<DistFitAllResponse> {
-  return postJSON("/api/stats/fit-distribution", { x });
-}
-
-// ── Statistical plots — box / violin / Q-Q (gap #16, the StatStage) ────────
-// Same request/response shapes as calc.statplots.{grouped_box_stats,
-// violin_kde, qq_plot}; the interactive canvas (Stage/statRender.ts) and the
-// matplotlib export (exportStatplotFigure below) both read these numbers, so
-// on-screen and exported statistics always agree.
-
-/** One group's box-and-whisker stats (matplotlib.cbook.boxplot_stats-compatible). */
-export interface BoxStatWire {
-  q1: number;
-  median: number;
-  q3: number;
-  iqr: number;
-  whislo: number;
-  whishi: number;
-  mean: number;
-  n: number;
-  fliers: number[];
-  whis: number | string;
-  label: string;
-}
-
-export interface BoxStatsResponse {
-  boxes: BoxStatWire[];
-  n_groups: number;
-}
-
-/** Box/whisker stats for one or more groups. */
-export function statsBox(
-  groups: number[][],
-  labels?: string[] | null,
-  whis: number | string = 1.5,
-): Promise<BoxStatsResponse> {
-  return postJSON("/api/statplots/box", { groups, labels, whis });
-}
-
-export interface ViolinResponse {
-  x: number[];
-  density: number[];
-  bandwidth: number;
-  quartiles: [number, number, number];
-  n: number;
-}
-
-/** Gaussian-KDE density for a violin plot. */
-export function statsViolin(
-  data: number[],
-  bwMethod: string | number = "scott",
-  nPoints = 128,
-  cut = 2.0,
-): Promise<ViolinResponse> {
-  return postJSON("/api/statplots/violin", { data, bw_method: bwMethod, n_points: nPoints, cut });
-}
-
-export interface QQResponse {
-  theoretical_quantiles: number[];
-  sample_quantiles: number[];
-  slope: number;
-  intercept: number;
-  r_squared: number;
-  dist: string;
-  n: number;
-}
-
-/** Quantile-quantile / probability-plot coordinates against a distribution. */
-export function statsQQ(data: number[], dist = "norm"): Promise<QQResponse> {
-  return postJSON("/api/statplots/qq", { data, dist });
-}
-
-export function statsRegression(body: {
-  x: number[];
-  y: number[];
-  order?: number;
-  alpha?: number;
-}): Promise<CalcResult> {
-  return postJSON("/api/stats/regression", body);
-}
-
-export function statsTTest(body: {
-  x: number[];
-  y?: number[];
-  mu?: number;
-  paired?: boolean;
-  tail?: string;
-}): Promise<CalcResult> {
-  return postJSON("/api/stats/ttest", body);
-}
-
-export function statsAnova(groups: number[][]): Promise<CalcResult> {
-  return postJSON("/api/stats/anova", { groups });
-}
-
-export function statsPCA(body: {
-  data: number[][];
-  center?: boolean;
-  scale?: boolean;
-}): Promise<CalcResult> {
-  return postJSON("/api/stats/pca", body);
-}
 
 // ── Reference data ──────────────────────────────────────────────────────────
 export function getConstants(): Promise<{ constants: Record<string, number> }> {
@@ -1648,7 +1438,7 @@ export interface StatplotFacetSpec {
  *  instead of the flat single panel — `data`/`labels` above are still
  *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
-  kind: "box" | "violin" | "qq" | "probability" | "histogram";
+  kind: "box" | "violin" | "qq" | "probability" | "histogram" | "strip";
   data: number[][] | number[];
   labels?: string[] | null;
   fmt?: string;
@@ -1662,6 +1452,18 @@ export interface StatplotFigureSpec {
   dpi?: number;
   filename?: string;
   facets?: StatplotFacetSpec[] | null;
+  // JMP_GAP J5: box/strip mark completion. `show_points` scatters each
+  // group's raw finite values jittered with the SAME deterministic
+  // (rowIndex, category) hash (lib/jitter.ts) the interactive canvas uses;
+  // `point_row_indices` (parallel to `data`) supplies each group's ORIGINAL
+  // dataset row indices so the export matches the screen. `show_mean_ci`
+  // overlays a mean +/- 95% CI diamond+whisker marker.
+  show_points?: boolean;
+  point_row_indices?: number[][] | null;
+  show_mean_ci?: boolean;
+  // JMP_GAP J5 residual: connect-group-means "interaction plot" line
+  // (box/strip only) through each group's mean, in on-screen category order.
+  show_connect_means?: boolean;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

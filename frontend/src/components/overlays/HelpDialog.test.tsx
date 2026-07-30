@@ -162,6 +162,23 @@ describe("HelpDialog", () => {
     fireEvent.change(screen.getByLabelText("Search help"), { target: { value: "fitting" } });
     expect(titleShown("Analysis ▸ Fitting (linear / nonlinear)")).toBe(true);
   });
+
+  it("search covers JMP migration tips too", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), { target: { value: "jsl script" } });
+    expect(titleShown("File > Save / Run Script (JSL scripts save and replay an analysis sequence)")).toBe(true);
+  });
+
+  it("the From JMP tab maps JMP workflows to quantized", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp("jmp"));
+    expect(screen.getByRole("tab", { name: "From JMP" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("Data > New column from formula (computed column)")).toBeInTheDocument();
+  });
 });
 
 describe("HelpDialog startup boundary", () => {

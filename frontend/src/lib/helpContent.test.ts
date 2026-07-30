@@ -62,12 +62,22 @@ describe("shared command help metadata", () => {
     ["kiessig", "reductions-fft"],
     ["superlattice", "reductions-reflfft"],
     ["shapiro", "distribution"],
+    ["grubbs", "outlier-screening"],
+    ["rosner", "outlier-screening"],
+    ["dixon", "outlier-screening"],
     ["t-test", "stats-chooser"],
     ["anova", "stats-chooser"],
     ["mann whitney", "stats-chooser"],
     ["digitize", "digitizer"],
     ["stepper", "peak-wizard"],
     ["transport", "calculators"],
+    ["jmp", "data-filter"],
+    ["local data filter", "data-filter"],
+    ["tabulate", "tabulate"],
+    ["by group", "split"],
+    ["by column", "distribution"],
+    ["by column", "fit-y-by-x"],
+    ["jsl", "pipeline"],
   ];
 
   it.each(VOCABULARY)("finds a tool by the domain term %j", (term, id) => {

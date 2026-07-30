@@ -14,7 +14,14 @@ from numpy.typing import NDArray
 from scipy.special import beta as _beta
 from scipy.special import betainc
 
-__all__ = ["anova1", "descriptive_stats", "lin_regress", "pca_analysis", "t_test"]
+__all__ = [
+    "anova1",
+    "descriptive_stats",
+    "lin_regress",
+    "pca_analysis",
+    "polynomial_confidence_band",
+    "t_test",
+]
 
 _EPS = float(np.finfo(float).eps)
 
@@ -113,8 +120,12 @@ def lin_regress(
 
     Returns coefficients (low→high power), standard errors, t-stats and p-values,
     R^2 / adjusted R^2, the F-statistic and its p-value, RMSE, residuals and the
-    fitted curve. The MATLAB ``confBand``/``predBand`` function handles are not
-    ported (call sites recompute bands directly when needed).
+    fitted curve. The MATLAB ``confBand``/``predBand`` function handles
+    themselves are not ported here (this function's own contract is
+    unchanged, so existing callers keep a byte-identical response) --
+    ``polynomial_confidence_band`` below implements the confidence-band half
+    as a standalone opt-in helper (JMP_GAP_PLAN J3 residual) for callers that
+    want one.
 
     p-values use the regularized incomplete beta (``scipy.special.betainc``), which
     matches the MATLAB local ``tcdf``/``fcdf`` implementations exactly.
@@ -179,6 +190,79 @@ def lin_regress(
         "yFit": y_fit,
         "N": n,
         "df": df,
+    }
+
+
+def polynomial_confidence_band(
+    x: NDArray[np.float64],
+    y: NDArray[np.float64],
+    x_grid: NDArray[np.float64],
+    *,
+    order: int = 1,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """Standard OLS mean-response confidence band for a polynomial fit
+    (JMP_GAP_PLAN J3 residual -- Fit Y by X's bivariate leg).
+
+    Refits the SAME order-``order`` least-squares polynomial ``lin_regress``
+    computes (the normal-equations solve is duplicated here rather than
+    exported from ``lin_regress``, so ``/api/stats/regression``'s existing
+    response stays byte-identical for callers that don't ask for a band) and
+    evaluates the textbook mean-CI at each ``x_grid`` point::
+
+        yFit(x0) +/- t(1 - alpha/2, df) * sqrt(mse * x0 @ inv(X'X) @ x0')
+
+    Not ``calc.fit_stats.fit_bands``: that module's numerical-Jacobian
+    machinery (+ its heuristic prediction-band variance, ``s2 =
+    sum(var_ci)/trace(J'J)``) is built for a NONLINEAR curve fit that hands
+    over only a fitted covariance matrix, no raw (x, y) or residuals. A
+    polynomial's design matrix is exact and already recomputable here, so
+    the closed-form band below is both simpler and exact (the mean-CI
+    variance ``fit_bands`` would derive via its numerical Jacobian is
+    identical in the polynomial case -- the model is linear in its
+    parameters -- but its prediction-band ``s2`` is a different, non-exact
+    quantity this function doesn't need). See ``lin_regress``'s own
+    docstring for the historical MATLAB ``confBand``/``predBand`` note this
+    finally implements the confidence half of.
+    """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    xv = np.asarray(x, dtype=float).ravel()
+    yv = np.asarray(y, dtype=float).ravel()
+    if xv.size != yv.size:
+        raise ValueError(f"x and y must have the same length (got {xv.size} vs {yv.size})")
+    n = xv.size
+    k = order + 1
+    if n < k + 1:
+        raise ValueError(f"need at least {k + 1} points for order-{order} regression")
+
+    xmat = np.vander(xv, k, increasing=True)
+    xtx = xmat.T @ xmat
+    try:
+        coeffs = np.linalg.solve(xtx, xmat.T @ yv)
+        xtx_inv = np.linalg.inv(xtx)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError(
+            f"order-{order} regression is singular — x has too few distinct values "
+            f"or is collinear; use a lower order or more varied x"
+        ) from exc
+    residuals = yv - xmat @ coeffs
+    df = n - k
+    mse = float(np.sum(residuals**2)) / df
+
+    xg = np.asarray(x_grid, dtype=float).ravel()
+    grid_mat = np.vander(xg, k, increasing=True)
+    y_fit = grid_mat @ coeffs
+    var_mean = mse * np.maximum(np.einsum("ij,jk,ik->i", grid_mat, xtx_inv, grid_mat), 0.0)
+    t_crit = _t_inv(1.0 - alpha / 2.0, df)
+    half_width = t_crit * np.sqrt(var_mean)
+
+    return {
+        "x": xg,
+        "yFit": y_fit,
+        "ciLo": y_fit - half_width,
+        "ciHi": y_fit + half_width,
+        "alpha": alpha,
     }
 
 

@@ -14,6 +14,11 @@ from pydantic import BaseModel
 
 from quantized.calc.stats_anova2 import adjust_pvalues, anova2, dunnett_test, tukey_hsd
 from quantized.calc.stats_anova_ext import anova2_unbalanced, repeated_measures_anova
+from quantized.calc.stats_contingency import (
+    chi_square_gof,
+    chi_square_independence,
+    fisher_exact_test,
+)
 from quantized.calc.stats_glm import logistic_regression, poisson_regression
 from quantized.calc.stats_roc import auc, roc_curve, youden_optimal_threshold
 from quantized.calc.stats_survival import cox_proportional_hazards, kaplan_meier, logrank_test
@@ -138,6 +143,58 @@ def adjust_p_route(req: AdjustPRequest) -> dict[str, Any]:
     """Bonferroni / Holm / Benjamini-Hochberg p-value adjustment."""
     try:
         return _wrap(adjust_pvalues(req.p_values, method=req.method))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── Categorical association (contingency tables) ───────────────────────────
+
+
+class ContingencyRequest(BaseModel):
+    """Request for a chi-square test of independence on an R x C table.
+
+    ``table`` is row-major counts, e.g. ``[[a, b], [c, d]]`` for 2x2; must be
+    rectangular with >=2 rows and >=2 columns of non-negative counts.
+    """
+    table: list[list[int]]
+
+
+@router.post("/chi-square-independence")
+def chi_square_independence_route(req: ContingencyRequest) -> dict[str, Any]:
+    """Pearson chi-square test of independence + Cramer's V effect size."""
+    try:
+        return _wrap(chi_square_independence(req.table))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class FisherExactRequest(BaseModel):
+    """Request for Fisher's exact test on a 2x2 contingency table."""
+    table: list[list[int]]
+    alternative: str = "two-sided"
+
+
+@router.post("/fisher-exact")
+def fisher_exact_route(req: FisherExactRequest) -> dict[str, Any]:
+    """Fisher's exact test (2x2 table): odds ratio + exact p-value."""
+    try:
+        return _wrap(fisher_exact_test(req.table, alternative=req.alternative))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class ChiSquareGofRequest(BaseModel):
+    """Request for a one-way chi-square goodness-of-fit test."""
+    observed: list[float]
+    expected: list[float] | None = None
+
+
+@router.post("/chi-square-gof")
+def chi_square_gof_route(req: ChiSquareGofRequest) -> dict[str, Any]:
+    """Chi-square goodness-of-fit vs a uniform or given expected distribution."""
+    try:
+        expected = np.asarray(req.expected, dtype=float) if req.expected is not None else None
+        return _wrap(chi_square_gof(np.asarray(req.observed, dtype=float), expected))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
