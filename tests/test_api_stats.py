@@ -263,17 +263,18 @@ def test_tukey_and_recommend_roundtrip() -> None:
 
 
 def test_chi_square_independence_roundtrip_and_422() -> None:
-    # Fisher's tea-tasting table: expected all 2, Yates-corrected chi2=0.5.
+    # Fisher's tea-tasting table: expected all 2, uncorrected Pearson chi2=2.0
+    # (correction=False — the JMP/SAS headline convention).
     resp = client.post(
         "/api/stats/chi-square-independence", json={"table": [[3, 1], [1, 3]]}
     )
     assert resp.status_code == 200
     out = resp.json()
-    assert abs(out["chi2"] - 0.5) < 1e-12
+    assert abs(out["chi2"] - 2.0) < 1e-12
     assert out["dof"] == 1
     assert out["expected"] == [[2.0, 2.0], [2.0, 2.0]]
     assert out["low_expected"] is True
-    assert abs(out["cramers_v"] - 0.25) < 1e-12
+    assert abs(out["cramers_v"] - 0.5) < 1e-12
 
     # ragged table -> 422, not 500
     bad = client.post(

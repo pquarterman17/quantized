@@ -49,9 +49,13 @@ def _check_table(table: Any) -> NDArray[np.float64]:
 def chi_square_independence(table: Any) -> dict[str, Any]:
     """Pearson chi-square test of independence on an R x C contingency table.
 
-    Delegates to ``scipy.stats.chi2_contingency`` (Yates' continuity
-    correction applied automatically for 2x2 tables, matching scipy's and
-    JMP's default). Effect size is Cramer's V:
+    Delegates to ``scipy.stats.chi2_contingency`` with ``correction=False``
+    — a deliberate departure from scipy's own 2x2 default (Yates' continuity
+    correction), because JMP's Fit Y by X contingency platform and SAS PROC
+    FREQ both report the *uncorrected* Pearson chi-square as the headline
+    statistic (SAS lists "Continuity Adj. Chi-Square" separately). Matching
+    the uncorrected convention keeps a 2x2 result comparable side-by-side
+    with a real JMP session. Effect size is Cramer's V:
     ``V = sqrt(chi2 / (n * (min(R, C) - 1)))``. Flags ``low_expected`` (any
     expected cell < 5) per the standard chi-square validity rule of thumb
     (Cochran 1954) — consider Fisher's exact test on 2x2 tables instead when
@@ -59,7 +63,7 @@ def chi_square_independence(table: Any) -> dict[str, Any]:
     ch. 3; Fisher's 1935 tea-tasting table is the pinned worked example.
     """
     arr = _check_table(table)
-    chi2, p, dof, expected = sps.chi2_contingency(arr)
+    chi2, p, dof, expected = sps.chi2_contingency(arr, correction=False)
     n = float(arr.sum())
     r, c = arr.shape
     cramers_v = float(np.sqrt(chi2 / (n * (min(r, c) - 1)))) if n > 0 else float("nan")

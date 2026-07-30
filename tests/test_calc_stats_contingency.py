@@ -10,8 +10,10 @@ Reference values:
 
   - Expected counts under independence: row_total*col_total/n = 4*4/8 = 2
     for all four cells (so every cell is < 5 -> ``low_expected`` fires).
-  - Yates-corrected Pearson chi-square (scipy's 2x2 default):
-    chi2 = sum((|O-E|-0.5)^2/E) = 4 * (0.5^2/2) = 0.5, dof=1.
+  - Uncorrected Pearson chi-square (``correction=False`` — the JMP / SAS
+    PROC FREQ headline convention, a deliberate departure from scipy's
+    Yates-corrected 2x2 default):
+    chi2 = sum((O-E)^2/E) = 4 * (1^2/2) = 2.0, dof=1.
   - Fisher exact hypergeometric distribution over a in {0..4} given margins
     (4,4,4,4), n=8: P(a) = C(4,a)*C(4,4-a)/C(8,4), C(8,4)=70:
     P(0)=1/70, P(1)=16/70, P(2)=36/70, P(3)=16/70, P(4)=1/70 (sums to 1).
@@ -46,17 +48,17 @@ _TEA_TABLE = [[3, 1], [1, 3]]
 def test_chi_square_independence_tea_tasting_hand_value() -> None:
     out = chi_square_independence(_TEA_TABLE)
     assert out["expected"] == [[2.0, 2.0], [2.0, 2.0]]
-    assert math.isclose(out["chi2"], 0.5, rel_tol=1e-12)
+    assert math.isclose(out["chi2"], 2.0, rel_tol=1e-12)
     assert out["dof"] == 1
-    # p for chi2=0.5, df=1: 2*(1-Phi(sqrt(0.5))) via erfc identity
-    expected_p = math.erfc(math.sqrt(0.5 / 2.0))
+    # p for chi2=2.0, df=1: 2*(1-Phi(sqrt(2))) via erfc identity
+    expected_p = math.erfc(math.sqrt(2.0 / 2.0))
     assert math.isclose(out["p_value"], expected_p, rel_tol=1e-9)
     assert out["n"] == 8.0
     assert out["low_expected"] is True
     assert out["low_expected_count"] == 4
     assert out["shape"] == [2, 2]
-    # Cramer's V = sqrt(chi2 / (n * (min(r,c)-1))) = sqrt(0.5/8) = 0.25
-    assert math.isclose(out["cramers_v"], 0.25, rel_tol=1e-12)
+    # Cramer's V = sqrt(chi2 / (n * (min(r,c)-1))) = sqrt(2/8) = 0.5
+    assert math.isclose(out["cramers_v"], 0.5, rel_tol=1e-12)
 
 
 def test_chi_square_independence_rxc_hand_value() -> None:
