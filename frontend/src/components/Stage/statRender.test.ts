@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BoxStat } from "../../lib/statstage";
 import { seriesStat, type BarChartData } from "../../lib/barlayout";
 import { draw, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
+import { boxValueDomain } from "./statRenderBox";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -64,6 +65,35 @@ const VIOLIN_A: ViolinGroup = {
   quartiles: [6, 8, 10],
   n: 40,
 };
+
+describe("boxValueDomain", () => {
+  // Small-n CI extends far beyond the whiskers: values {0, 1} give mean 0.5
+  // and a t(0.975,1)=12.7-wide CI of roughly [-5.85, 6.85].
+  const smallN: BoxStat = {
+    label: "A", q1: 0.25, median: 0.5, q3: 0.75, iqr: 0.5,
+    whislo: 0, whishi: 1, mean: 0.5, sem: 0.5,
+    ciLo: -5.85, ciHi: 6.85, n: 2, fliers: [],
+  };
+
+  it("spans the mean-CI extents when the marker is shown", () => {
+    const [lo, hi] = boxValueDomain([smallN], true);
+    expect(lo).toBeLessThanOrEqual(-5.85);
+    expect(hi).toBeGreaterThanOrEqual(6.85);
+  });
+
+  it("ignores CI extents when the marker is off (whiskers + fliers only)", () => {
+    const [lo, hi] = boxValueDomain([smallN], false);
+    expect(lo).toBeGreaterThan(-1);
+    expect(hi).toBeLessThan(2);
+  });
+
+  it("stays finite when CI bounds are undefined (n<2 backend payload)", () => {
+    const noCI: BoxStat = { ...smallN, ciLo: undefined, ciHi: undefined, n: 1 };
+    const [lo, hi] = boxValueDomain([noCI], true);
+    expect(Number.isFinite(lo)).toBe(true);
+    expect(Number.isFinite(hi)).toBe(true);
+  });
+});
 
 (CANVAS_OK ? describe : describe.skip)("draw (real raster)", () => {
   // 600x400 host fallback (clientWidth is 0 in jsdom).

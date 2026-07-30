@@ -137,6 +137,23 @@ function drawConnectMeansLine(
 
 // ── Box (+ optional points / mean-CI overlays) ──────────────────────────────
 
+/** Value domain for box mode: whiskers union fliers spans every raw data
+ *  point (Tukey's own definition), so the points overlay never needs its own
+ *  domain contribution. The mean-CI marker is NOT a data point, though: at
+ *  small n the t-based interval extends far past the whiskers
+ *  (t(0.975,1)=12.7) and nothing clips the canvas to the plot rect -- so
+ *  fold the CI extents in when the marker is shown, exactly as drawStrip
+ *  does. Exported pure so the jsdom suite can pin it (raster tests can't). */
+export function boxValueDomain(
+  boxes: readonly BoxStat[],
+  showMeanCI: boolean | undefined,
+): [number, number] {
+  const ciExtents = showMeanCI
+    ? boxes.flatMap((b) => [b.ciLo, b.ciHi]).filter((v): v is number => Number.isFinite(v))
+    : [];
+  return finiteDomain([...boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]), ciExtents]);
+}
+
 export function drawBoxesWithMarks(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
@@ -145,10 +162,7 @@ export function drawBoxesWithMarks(
   muted: string,
 ) {
   if (!d.boxes.length) return;
-  // Every finite value already sits within [whislo, whishi] union fliers
-  // (Tukey's own definition), so the points overlay never needs its own
-  // domain contribution -- the box's domain already spans every raw point.
-  const domain = finiteDomain(d.boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]));
+  const domain = boxValueDomain(d.boxes, d.showMeanCI);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const slots = categorySlots(d.boxes.length);
   drawCategoryAxis(ctx, rect, slots, d.boxes.map((b) => b.label), d.groupLabel, ink, muted);
