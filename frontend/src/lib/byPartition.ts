@@ -45,6 +45,22 @@ export interface ByLevel {
   data: DataStruct;
 }
 
+/** Cap on partition levels. Auto-inference bounds nominal columns to 8
+ *  levels (lib/modeling.NOMINAL_MAX_LEVELS), but a manual per-channel
+ *  override (ChannelsCard) can mark ANY column nominal — including a
+ *  near-unique run-ID column — and every level fans out 2-4 HTTP requests
+ *  plus a rendered section in the consuming workshops. Cap here (the one
+ *  chokepoint both workshops partition through) and report `totalLevels`
+ *  so the UI can say what was dropped rather than truncating silently. */
+export const BY_MAX_LEVELS = 30;
+
+/** `levels` is capped at `maxLevels` (ascending order, so the FIRST N
+ *  levels); `totalLevels` is the uncapped count for honest truncation UI. */
+export interface ByPartitionResult {
+  levels: ByLevel[];
+  totalLevels: number;
+}
+
 /** Candidate By columns from a caller-supplied column list (typically the
  *  same `{index, label}[]` a workshop already builds for its own pickers):
  *  categorical (nominal/ordinal) value channels only, mirroring every other
@@ -63,14 +79,24 @@ export function byColumnOptions(
  *  Tabulate/the bar chart use), exact-value grouping, no tolerance, no
  *  dataset minting. Non-finite `col` values drop out of every level (they
  *  already drop out of `categoryLevels`), the same convention the stat
- *  stage and Tabulate use for a categorical grouping column. */
-export function partitionByColumn(data: DataStruct, col: number): ByLevel[] {
-  const levels = categoryLevels(data, col);
+ *  stage and Tabulate use for a categorical grouping column. At most
+ *  `maxLevels` levels are materialized (see BY_MAX_LEVELS). */
+export function partitionByColumn(
+  data: DataStruct,
+  col: number,
+  maxLevels: number = BY_MAX_LEVELS,
+): ByPartitionResult {
+  const allLevels = categoryLevels(data, col);
+  const totalLevels = allLevels.length;
+  const levels = allLevels.slice(0, maxLevels);
   const labels = resolveCategoryLabels(data, col, levels);
   const by = columnValues(data, col);
-  return levels.map((lvl, i) => {
-    const rowIndexes: number[] = [];
-    for (let r = 0; r < by.length; r++) if (by[r] === lvl) rowIndexes.push(r);
-    return { label: labels[i], value: lvl, rowIndexes, data: sliceDataStruct(data, rowIndexes) };
-  });
+  return {
+    totalLevels,
+    levels: levels.map((lvl, i) => {
+      const rowIndexes: number[] = [];
+      for (let r = 0; r < by.length; r++) if (by[r] === lvl) rowIndexes.push(r);
+      return { label: labels[i], value: lvl, rowIndexes, data: sliceDataStruct(data, rowIndexes) };
+    }),
+  };
 }

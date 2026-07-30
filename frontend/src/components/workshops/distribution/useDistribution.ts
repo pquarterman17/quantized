@@ -155,6 +155,9 @@ export interface DistributionState {
   setByCol: (i: number | null) => void;
   /** One ByLevel per level of `byCol`, ascending; [] when `byCol` is null. */
   byLevels: ByLevel[];
+  /** Uncapped level count — > byLevels.length means the partition was
+   *  truncated at BY_MAX_LEVELS and the panel must say so. */
+  byTotalLevels: number;
   /** Parallel to `byLevels` once its fetches settle (histogram+stats+
    *  normality per level, the SAME trio the un-partitioned view runs). */
   byResults: DistributionLevelResult[];
@@ -571,6 +574,7 @@ export function useDistribution(): DistributionState {
     byCol: byPartition.byCol,
     setByCol: byPartition.setByCol,
     byLevels: byPartition.levels,
+    byTotalLevels: byPartition.totalLevels,
     byResults,
     byBusy,
     reportBusy,

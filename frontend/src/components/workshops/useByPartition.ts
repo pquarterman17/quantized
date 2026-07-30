@@ -30,8 +30,12 @@ export interface ByPartitionState {
   /** null = no By column selected (single, un-partitioned analysis). */
   byCol: number | null;
   setByCol: (i: number | null) => void;
-  /** One entry per level of `byCol`, ascending; [] when `byCol` is null. */
+  /** One entry per level of `byCol`, ascending, capped at
+   *  lib/byPartition.BY_MAX_LEVELS; [] when `byCol` is null. */
   levels: ByLevel[];
+  /** Uncapped level count of `byCol` — when it exceeds `levels.length`,
+   *  the UI must say the partition was truncated (no silent caps). */
+  totalLevels: number;
 }
 
 /** `columns` is the same `{index, label}[]` list the calling workshop
@@ -55,10 +59,10 @@ export function useByPartition(
 
   const byOptions = useMemo(() => byColumnOptions(active, columns), [active, columns]);
 
-  const levels = useMemo(() => {
-    if (!data || byCol == null) return [];
+  const partition = useMemo(() => {
+    if (!data || byCol == null) return { levels: [], totalLevels: 0 };
     return partitionByColumn(data, byCol);
   }, [data, byCol]);
 
-  return { byOptions, byCol, setByCol, levels };
+  return { byOptions, byCol, setByCol, levels: partition.levels, totalLevels: partition.totalLevels };
 }

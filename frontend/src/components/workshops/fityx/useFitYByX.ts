@@ -79,6 +79,9 @@ export interface FitYByXState {
   byCol: number | null;
   setByCol: (i: number | null) => void;
   byLevels: ByLevel[];
+  /** Uncapped level count — > byLevels.length means the partition was
+   *  truncated at BY_MAX_LEVELS and the panel must say so. */
+  byTotalLevels: number;
   byResults: FitYByXLevelResult[];
   byBusy: boolean;
 }
@@ -367,6 +370,7 @@ export function useFitYByX(): FitYByXState {
     byCol: byPartition.byCol,
     setByCol: byPartition.setByCol,
     byLevels: byPartition.levels,
+    byTotalLevels: byPartition.totalLevels,
     byResults,
     byBusy,
   };

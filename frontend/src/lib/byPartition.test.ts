@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { byColumnOptions, partitionByColumn } from "./byPartition";
+import { BY_MAX_LEVELS, byColumnOptions, partitionByColumn } from "./byPartition";
 import type { Dataset, DataStruct } from "./types";
 
 // 3-level nominal "grp" (12 rows, 4 per level — nominal inference needs
@@ -39,7 +39,8 @@ describe("byColumnOptions", () => {
 
 describe("partitionByColumn", () => {
   it("partitions rows into one level per distinct value, ascending, labels via text-column resolution", () => {
-    const levels = partitionByColumn(DATA, 0);
+    const { levels, totalLevels } = partitionByColumn(DATA, 0);
+    expect(totalLevels).toBe(3);
     expect(levels.map((l) => l.label)).toEqual(["lo", "mid", "hi"]);
     expect(levels.map((l) => l.value)).toEqual([0, 1, 2]);
     expect(levels.map((l) => l.rowIndexes)).toEqual([
@@ -50,7 +51,7 @@ describe("partitionByColumn", () => {
   });
 
   it("every level's sliced DataStruct carries only that level's rows, with labels/units/metadata intact", () => {
-    const levels = partitionByColumn(DATA, 0);
+    const { levels } = partitionByColumn(DATA, 0);
     expect(levels[0].data.time).toEqual([0, 1, 2, 3]);
     expect(levels[0].data.values).toEqual([[0, 10], [0, 12], [0, 14], [0, 16]]);
     expect(levels[0].data.labels).toEqual(DATA.labels);
@@ -58,7 +59,7 @@ describe("partitionByColumn", () => {
   });
 
   it("accounts for every source row exactly once across all levels (no drops, no dupes)", () => {
-    const levels = partitionByColumn(DATA, 0);
+    const { levels } = partitionByColumn(DATA, 0);
     const total = levels.reduce((n, l) => n + l.rowIndexes.length, 0);
     expect(total).toBe(DATA.time.length);
     const all = levels.flatMap((l) => l.rowIndexes).sort((a, b) => a - b);
@@ -70,7 +71,32 @@ describe("partitionByColumn", () => {
       ...DATA,
       values: DATA.values.map((row, i) => (i === 0 ? [NaN, row[1]] : row)),
     };
-    const levels = partitionByColumn(withNan, 0);
+    const { levels } = partitionByColumn(withNan, 0);
     expect(levels.flatMap((l) => l.rowIndexes)).not.toContain(0);
+  });
+
+  it("caps a high-cardinality by-column at BY_MAX_LEVELS but reports the true total", () => {
+    // A near-unique column (one level per row) — the manual nominal-override
+    // scenario the cap exists for: without it every level fans out its own
+    // per-level analysis requests.
+    const n = BY_MAX_LEVELS + 20;
+    const wide: DataStruct = {
+      time: [...Array(n).keys()],
+      values: [...Array(n).keys()].map((i) => [i, i * 2]),
+      labels: ["runId", "val"],
+      units: ["", "K"],
+      metadata: {},
+    };
+    const { levels, totalLevels } = partitionByColumn(wide, 0);
+    expect(totalLevels).toBe(n);
+    expect(levels).toHaveLength(BY_MAX_LEVELS);
+    // First N ascending levels, so the cap is deterministic, not arbitrary.
+    expect(levels.map((l) => l.value)).toEqual([...Array(BY_MAX_LEVELS).keys()]);
+  });
+
+  it("honors an explicit maxLevels override", () => {
+    const { levels, totalLevels } = partitionByColumn(DATA, 0, 2);
+    expect(totalLevels).toBe(3);
+    expect(levels.map((l) => l.label)).toEqual(["lo", "mid"]);
   });
 });

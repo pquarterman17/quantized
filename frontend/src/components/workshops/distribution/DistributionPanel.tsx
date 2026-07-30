@@ -73,6 +73,11 @@ export default function DistributionPanel() {
 
           {byActive ? (
             <>
+              {d.byTotalLevels > d.byLevels.length && (
+                <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
+                  By column has {d.byTotalLevels} levels — showing the first {d.byLevels.length}
+                </div>
+              )}
               {d.byBusy && d.byResults.length === 0 ? (
                 <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
                   analyzing {d.byLevels.length} levels…

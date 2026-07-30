@@ -98,6 +98,11 @@ export default function FitYByXPanel() {
 
           {byActive ? (
             <>
+              {f.byTotalLevels > f.byLevels.length && (
+                <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+                  By column has {f.byTotalLevels} levels — showing the first {f.byLevels.length}
+                </div>
+              )}
               {f.byBusy && f.byResults.length === 0 ? (
                 <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
                   analyzing {f.byLevels.length} levels…
