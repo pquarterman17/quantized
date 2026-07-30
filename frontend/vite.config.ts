@@ -43,11 +43,12 @@ export default defineConfig({
     // the fork tearing down the heaviest file. So: keep the explicit heap
     // ceiling, and on CI only, halve fork concurrency to bound peak RSS.
     // Local runs keep full parallelism; no assertion changes either way.
-    poolOptions: {
-      forks: {
-        execArgv: ["--max-old-space-size=6144"],
-        ...(process.env.CI ? { maxForks: 2, minForks: 1 } : {}),
-      },
-    },
+    //
+    // NOTE (PR #94 review): originally written as `poolOptions.forks.{...}`,
+    // which vitest 4 REMOVED — it printed a deprecation and applied nothing.
+    // These are the vitest 4 top-level equivalents (migration guide
+    // "pool rework": execArgv and maxWorkers are now direct `test` options).
+    execArgv: ["--max-old-space-size=6144"],
+    ...(process.env.CI ? { maxWorkers: 2 } : {}),
   },
 });
