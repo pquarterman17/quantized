@@ -39,6 +39,7 @@ const doc = (over: Partial<FigureDoc> = {}): FigureDoc => ({
 });
 
 beforeEach(() => {
+  vi.mocked(askConfirm).mockReset();
   useApp.setState({
     datasets: [d1],
     activeId: null,
@@ -83,11 +84,13 @@ describe("SavedFiguresSection", () => {
     expect(useApp.getState().figureDocSeed?.id).toBe("b");
   });
 
-  it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", () => {
+  it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", async () => {
     useApp.setState({ figureDocs: [doc({ config: { ...doc().config, yScale: "log", title: "Doc Title" } })] });
+    vi.mocked(askConfirm).mockResolvedValue(true);
     const before = useApp.getState().plotWindows.length;
     render(<SavedFiguresSection />);
-    fireEvent.click(screen.getByTitle("open in a new graph window"));
+    fireEvent.click(screen.getByTitle(/open in a new graph window with confirmation/));
+    await Promise.resolve();
     const s = useApp.getState();
     expect(s.plotWindows).toHaveLength(before + 1);
     const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
@@ -96,12 +99,25 @@ describe("SavedFiguresSection", () => {
     expect(s.plotTitle).toBe("Doc Title");
   });
 
+  it("keeps the saved figure and window list unchanged when a lossy open is cancelled", async () => {
+    useApp.setState({ figureDocs: [doc()] });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    const before = useApp.getState().plotWindows.length;
+    render(<SavedFiguresSection />);
+
+    fireEvent.click(screen.getByTitle(/open in a new graph window with confirmation/));
+    await Promise.resolve();
+
+    expect(useApp.getState().plotWindows).toHaveLength(before);
+    expect(useApp.getState().figureDocs).toHaveLength(1);
+  });
+
   it("disables 'open in a new graph window' for a frozen doc (no live dataset binding)", () => {
     useApp.setState({
       figureDocs: [doc({ id: "frozen", name: "frozen", datasetId: null, live: false, dataSnapshot: d1.data })],
     });
     render(<SavedFiguresSection />);
-    expect(screen.getByTitle(/only a live figure/)).toBeDisabled();
+    expect(screen.getByTitle(/Only a live saved figure/)).toBeDisabled();
   });
 
   it("duplicate and delete edit the doc list; dataset removal nulls refs", async () => {

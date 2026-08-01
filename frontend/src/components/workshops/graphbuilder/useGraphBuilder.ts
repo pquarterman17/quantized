@@ -14,6 +14,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
+import {
+  figureTransitionWarning,
+  plotSpecPublicationCompatibility,
+} from "../../../lib/figureCompatibility";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
@@ -42,6 +46,7 @@ import {
 import { buildAxesBlock, buildDecorBlock, buildDisplayBlock, buildPageBlock } from "../../../lib/plotspec2";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import type { WellChip, WellOption } from "./ZoneWell";
 
 export interface GraphBuilderState {
@@ -68,7 +73,8 @@ export interface GraphBuilderState {
   applyToCurrent: () => void;
   canOpenFigureBuilder: boolean;
   figureBuilderReason: string | null;
-  openInFigureBuilder: () => void;
+  figureBuilderLosses: string[];
+  openInFigureBuilder: () => Promise<void>;
 
   // ── Saved PlotSpecs (#11) ──────────────────────────────────────────────
   /** Every saved graph, most-recently-modified first. */
@@ -109,6 +115,7 @@ export function useGraphBuilder(): GraphBuilderState {
   const setStageTab = useApp((s) => s.setStageTab);
   const savedSpecs = useApp((s) => s.savedPlotSpecs);
   const activeSpecId = useApp((s) => s.activePlotSpecId);
+  const liveSeriesStyles = useApp((s) => s.seriesStyles);
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
 
@@ -223,7 +230,9 @@ export function useGraphBuilder(): GraphBuilderState {
     (s) => s.plotWindows.find((window) => window.id === s.focusedWindowId)?.kind ?? null,
   );
   const canApplyToCurrent = canPlot && focusedWindowId !== null && focusedWindowKind === "plot";
-  const figureBuilderReason = plotSpecFigureReason(spec);
+  const figureCompatibility = plotSpecPublicationCompatibility(spec, liveSeriesStyles);
+  const figureBuilderReason = figureCompatibility.blocker;
+  const figureBuilderLosses = figureCompatibility.losses;
   const canOpenFigureBuilder = ds !== null && figureBuilderReason === null;
 
   function commitToPlot(destination: "new" | "current"): void {
@@ -325,8 +334,16 @@ export function useGraphBuilder(): GraphBuilderState {
   const createNewPlot = (): void => commitToPlot("new");
   const applyToCurrent = (): void => commitToPlot("current");
 
-  function openInFigureBuilder(): void {
+  async function openInFigureBuilder(): Promise<void> {
     if (!ds) return;
+    if (figureBuilderLosses.length > 0) {
+      const proceed = await askConfirm(
+        "Open Publication Preview with limited settings?",
+        figureTransitionWarning(figureBuilderLosses),
+        "Open Preview",
+      );
+      if (!proceed) return;
+    }
     const doc = plotSpecToFigureDoc(
       spec,
       activeSpec?.name ?? "Graph Builder plot",
@@ -533,6 +550,7 @@ export function useGraphBuilder(): GraphBuilderState {
     applyToCurrent,
     canOpenFigureBuilder,
     figureBuilderReason,
+    figureBuilderLosses,
     openInFigureBuilder,
     savedSpecs,
     activeSpec,

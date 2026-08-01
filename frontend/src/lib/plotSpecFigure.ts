@@ -26,39 +26,14 @@
 // sound semantic for the combination (see `specUsesY2` below).
 
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
+import { plotSpecPublicationCompatibility } from "./figureCompatibility";
 import { compactOverrides, type FigureOverrides } from "./figureOverrides";
 import type { FigureDoc } from "./figuredoc";
 import { specDatasetId, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
 import type { AxisScale, SeriesStyle } from "./types";
 
-/** Does the spec put any of its own series on the secondary (Y2) axis, via
- *  either the per-series `display.series[ch].axis === 1` flag or an explicit
- *  `axes.y2` config? `FigureConfig` (figuredoc.ts) has NO y2 field at all
- *  (documented limitation) — publishing one would silently lose the
- *  secondary axis, so a spec that uses one fails closed instead of quietly
- *  flattening it onto the primary axis. */
-function specUsesY2(spec: PlotSpec): boolean {
-  const series = spec.display?.series;
-  if (series && Object.values(series).some((sd) => sd.axis === 1)) return true;
-  return spec.axes?.y2 !== undefined;
-}
-
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
-  if (spec.mark !== "line" && spec.mark !== "scatter") return "Only line and scatter plots can open in Publication Preview.";
-  if (spec.zones.y.length === 0) return "Assign at least one Y channel first.";
-  if (spec.zones.facet) return "Faceted plots need a multi-panel Publication Preview contract first.";
-  const datasetIds = new Set(
-    [spec.zones.x, ...spec.zones.y].filter((ref) => ref !== null).map((ref) => ref.datasetId),
-  );
-  if (datasetIds.size !== 1) return "Every plotted channel must belong to one dataset.";
-  if (specDatasetId(spec) === null) return "Every plotted channel must belong to one dataset.";
-  if (specUsesY2(spec)) {
-    if (spec.zones.group) {
-      return "A group split puts every synthetic per-level series on the primary axis (buildXY never assigns axis: 1) — remove the secondary (Y2) axis assignment before opening in Publication Preview.";
-    }
-    return "Publication Preview has no secondary (Y2) axis yet — move this series to the primary axis first.";
-  }
-  return null;
+  return plotSpecPublicationCompatibility(spec).blocker;
 }
 
 function stylesForMark(

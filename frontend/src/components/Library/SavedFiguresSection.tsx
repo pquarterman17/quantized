@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 
+import { figureDocPlotCompatibility, figureTransitionWarning } from "../../lib/figureCompatibility";
 import { docRenderable } from "../../lib/figuredoc";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
@@ -35,7 +36,8 @@ export default function SavedFiguresSection() {
       {!collapsed &&
         docs.map((d) => {
           const ok = docRenderable(d);
-          const canOpenWindow = d.live && d.datasetId != null;
+          const plotCompatibility = figureDocPlotCompatibility(d);
+          const canOpenWindow = plotCompatibility.blocker === null;
           return (
             <div key={d.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
               <button
@@ -55,9 +57,26 @@ export default function SavedFiguresSection() {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
-                title={canOpenWindow ? "open in a new graph window" : "only a live figure with a resolved dataset can open a window"}
+                title={
+                  plotCompatibility.blocker ??
+                  (plotCompatibility.losses.length > 0
+                    ? `open in a new graph window with confirmation; omitted: ${plotCompatibility.losses.join(", ")}`
+                    : "open in a new graph window")
+                }
                 disabled={!canOpenWindow}
-                onClick={() => openFigureDocInWindow(d.id)}
+                onClick={() => {
+                  if (plotCompatibility.losses.length === 0) {
+                    openFigureDocInWindow(d.id);
+                    return;
+                  }
+                  void askConfirm(
+                    `Open "${d.name}" with limited settings?`,
+                    figureTransitionWarning(plotCompatibility.losses),
+                    "Open Plot",
+                  ).then((proceed) => {
+                    if (proceed) openFigureDocInWindow(d.id);
+                  });
+                }}
               >
                 ⊞
               </button>

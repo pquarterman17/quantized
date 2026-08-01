@@ -48,6 +48,7 @@ const builderState = {
   applyToCurrent,
   canOpenFigureBuilder: true,
   figureBuilderReason: null,
+  figureBuilderLosses: [],
   openInFigureBuilder: vi.fn(),
   savedSpecs: [],
   activeSpec: null,
@@ -90,5 +91,19 @@ describe("Graph Builder plot destinations", () => {
     render(<GraphBuilderPanel />);
 
     expect(screen.getByRole("button", { name: "Apply to Current Plot" })).toBeDisabled();
+  });
+
+  it("previews the compatibility warning in the Publication Preview tooltip", () => {
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      figureBuilderLosses: ["axis tick spacing", "annotations"],
+    });
+
+    render(<GraphBuilderPanel />);
+
+    expect(screen.getByRole("button", { name: "Publication Preview" })).toHaveAttribute(
+      "title",
+      "Preview requires confirmation: axis tick spacing, annotations",
+    );
   });
 });

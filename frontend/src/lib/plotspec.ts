@@ -183,7 +183,7 @@ export interface PlotSpec {
    *  deliberately not serialized here — see `./plotspec2`'s `PageBlock`. */
   page?: PageBlock;
   /** Annotations/shapes/legend placement (the item's "part C" finish; wired
-   *  by `lib/plotspecApply.ts` on Send). Same omit-when-empty rule as
+   *  by `lib/plotspecApply.ts` on an explicit plot action). Same omit-when-empty rule as
    *  `display`/`axes` — see `./plotspec2`'s doc. */
   decor?: DecorBlock;
 }

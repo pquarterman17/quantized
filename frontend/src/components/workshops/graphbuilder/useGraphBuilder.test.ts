@@ -5,6 +5,7 @@ import { exportFigure } from "../../../lib/api";
 import { facetPanelsOf, spatialPanelsOf } from "../../../lib/composition";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import { useGraphBuilder } from "./useGraphBuilder";
 
 vi.mock("../../../lib/api", async (importOriginal) => {
@@ -22,6 +23,8 @@ vi.mock("../../overlays/ParamDialog", () => ({
     y_label: "",
   }),
 }));
+
+vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 // channel 0 monotonic continuous x, channel 1 continuous y, channel 2 a 2-level
 // nominal grouping column (needs ≥12 rows for nominal inference), channel 3 a
@@ -52,6 +55,7 @@ const INITIAL_WINDOWS = useApp.getState().plotWindows;
 const INITIAL_FOCUSED_WINDOW_ID = useApp.getState().focusedWindowId;
 
 beforeEach(() => {
+  vi.mocked(askConfirm).mockReset();
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -70,6 +74,7 @@ beforeEach(() => {
     figureBuilderOpen: false,
     figureDocSeed: null,
     figureDocs: [],
+    seriesStyles: {},
     // Owner-routing item 1: starts parked on Worksheet so "applyToCurrent
     // surfaces the Plot tab" assertions below don't need a separate fixture.
     stageTab: "worksheet",
@@ -414,14 +419,14 @@ describe("useGraphBuilder — explicit plot destinations", () => {
 });
 
 describe("useGraphBuilder — open in Figure Builder", () => {
-  it("opens an ordinary scatter as an ephemeral point-only FigureDoc", () => {
+  it("opens an ordinary scatter as an ephemeral point-only FigureDoc", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     expect(result.current.mark).toBe("scatter");
     expect(result.current.canOpenFigureBuilder).toBe(true);
 
-    act(() => result.current.openInFigureBuilder());
+    await act(async () => result.current.openInFigureBuilder());
 
     const state = useApp.getState();
     expect(state.figureBuilderOpen).toBe(true);
@@ -433,37 +438,65 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     });
   });
 
-  it("fails closed when a facet zone would be lost", () => {
+  it("fails closed when a facet zone would be lost", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("facet", 2));
     expect(result.current.canOpenFigureBuilder).toBe(false);
     expect(result.current.figureBuilderReason).toContain("Faceted");
-    act(() => result.current.openInFigureBuilder());
+    await act(async () => result.current.openInFigureBuilder());
     expect(useApp.getState().figureBuilderOpen).toBe(false);
     expect(useApp.getState().figureDocSeed).toBeNull();
+  });
+
+  it("requires confirmation before opening a PlotSpec with settings the preview omits", async () => {
+    act(() => useApp.getState().openGraphBuilderSeeded({
+      version: 2,
+      zones: {
+        x: { datasetId: "d1", channel: 0 },
+        y: [{ datasetId: "d1", channel: 1 }],
+        group: null,
+        facet: null,
+      },
+      mark: "line",
+      axes: { x: { step: 2, fmt: { mode: "fixed", digits: 1 } } },
+    }));
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.canOpenFigureBuilder).toBe(true);
+    expect(result.current.figureBuilderLosses).toEqual([
+      "axis tick spacing",
+      "axis number formats",
+    ]);
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    await act(async () => result.current.openInFigureBuilder());
+    expect(useApp.getState().figureBuilderOpen).toBe(false);
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(true);
+    await act(async () => result.current.openInFigureBuilder());
+    expect(useApp.getState().figureBuilderOpen).toBe(true);
   });
 
   // GUI_INTERACTION #12 Slice 5: a group zone no longer fails closed --
   // Slice 3 investigated this and left it fail-closed for lack of a
   // group-split wire field; Slice 5 added FigureConfig.groupCol /
   // FigureSpec.group_col, so the doc now opens carrying the split.
-  it("opens a grouped scatter as an ephemeral FigureDoc carrying groupCol", () => {
+  it("opens a grouped scatter as an ephemeral FigureDoc carrying groupCol", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("group", 2));
     expect(result.current.canOpenFigureBuilder).toBe(true);
 
-    act(() => result.current.openInFigureBuilder());
+    await act(async () => result.current.openInFigureBuilder());
 
     const state = useApp.getState();
     expect(state.figureBuilderOpen).toBe(true);
     expect(state.figureDocSeed?.config).toMatchObject({ xKey: 0, yKeys: [1], groupCol: 2 });
   });
 
-  it("preserves an explicit Y reorder through save, Stage, and Figure Builder", () => {
+  it("preserves an explicit Y reorder through save, Stage, and Figure Builder", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
@@ -475,7 +508,7 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     expect(result.current.activeSpec?.spec.zones.y.map((ref) => ref.channel)).toEqual([2, 1]);
     act(() => result.current.applyToCurrent());
     expect(useApp.getState().yKeys).toEqual([2, 1]);
-    act(() => result.current.openInFigureBuilder());
+    await act(async () => result.current.openInFigureBuilder());
     expect(useApp.getState().figureDocSeed?.config.yKeys).toEqual([2, 1]);
   });
 });

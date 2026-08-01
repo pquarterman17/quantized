@@ -141,7 +141,7 @@ the compatibility inventory exposes an unexpected state-ownership problem.
 - [x] **F0.2 Make Graph Builder intent explicit.** Replace ambiguous “Send to
       Stage” behavior with “Create New Plot” and “Apply to Current Plot.”
       Default to Create New; require a compatible focused plot to apply.
-- [ ] **F0.3 Add compatibility reporting.** Before Graph Builder → publication
+- [x] **F0.3 Add compatibility reporting.** Before Graph Builder → publication
       preview, saved FigureDoc → graph, or any partial adapter, show which
       features cannot transfer. Do not silently drop secondary axes, errors,
       grouping/facets, annotations, shapes, formats, or series styles.
@@ -327,6 +327,19 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F0.3 figure-transition compatibility reports (ChatGPT-Sol)
+
+- Added one pure compatibility inventory for the current partial figure
+  adapters instead of duplicating loss rules in buttons and store actions.
+- Graph Builder now confirms before Publication Preview omits supported state
+  such as order/visibility, tick formatting, decor, or page settings.
+- Saved Figure → editable plot now confirms with a specific omitted-settings
+  list; frozen or missing-source figures remain blocked.
+- Source PlotSpecs and FigureDocs remain unchanged when a user cancels or
+  continues a lossy transition.
+- Added pure-report and interaction regression coverage; implementation PR is
+  stacked on the F0.2 Graph Builder destination PR.
 
 ### 2026-08-01 — F0.2 explicit Graph Builder destinations (ChatGPT-Sol)
 

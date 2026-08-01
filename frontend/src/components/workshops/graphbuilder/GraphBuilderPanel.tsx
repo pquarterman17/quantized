@@ -136,8 +136,13 @@ export default function GraphBuilderPanel() {
             <Button
               size="sm"
               disabled={!g.canOpenFigureBuilder}
-              onClick={g.openInFigureBuilder}
-              title={g.figureBuilderReason ?? "Preview publication output; changes will not update the Stage plot"}
+              onClick={() => void g.openInFigureBuilder()}
+              title={
+                g.figureBuilderReason ??
+                (g.figureBuilderLosses.length > 0
+                  ? `Preview requires confirmation: ${g.figureBuilderLosses.join(", ")}`
+                  : "Preview publication output; changes will not update the Stage plot")
+              }
             >
               Publication Preview
             </Button>
