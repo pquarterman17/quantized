@@ -9,7 +9,8 @@ Owner-set design, 2026-07-31.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-31
-**Updated:** 2026-07-31
+**Updated:** 2026-07-31 (Tier 1 COMPLETE the same day — #1/#2/#3 all
+shipped and gated; Tier 2 agents launched)
 
 ---
 
@@ -78,27 +79,30 @@ parser (io/) ──> DataStruct.metadata.technique  (closed vocabulary + parser 
 
 ## Tier 1 — High Impact
 
-1. **[ ] Technique tag contract** — every parser stamps
-   `metadata.technique` from a closed vocabulary (`magnetometry.mvsh`,
-   `magnetometry.mvst`, `xrd.powder`, `xrd.rsm`, `reflectometry`, `sims`,
-   `transport`, `spectroscopy`, `generic`, …) plus the parser name.
-   - [ ] Vocabulary defined in ONE module (io side), documented in the
-         DataStruct contract; frontend mirrors the type
-   - [ ] Sweep all parsers in `io/`; content-ambiguous ones (generic CSV)
-         stamp `generic` — never guess
-   - [ ] QD parsers pick mvsh/mvst from the sweep column they already
-         detect (`_X_SWEEP_FALLBACKS`, `io/qd.py:99`)
+1. **[x] ~~Technique tag contract~~** SHIPPED 2026-07-31 (`ba73a1f`) —
+   `io/technique.py`: the plan's exact 9-term vocabulary, ONE mapping
+   table, stamped solely at the `import_auto` chokepoint (direct
+   `resolve_parser` callers unaffected). Refiners: QD family classifies
+   mvsh/mvst from the resolved x-column AND checks y-labels for
+   resistance/voltage first → `transport` (the agent caught that
+   `import_ppms` accepts plain R-vs-T files — an x-only check would
+   have mislabeled transport as magnetometry); XRDML reads `is2D` for
+   rsm-vs-powder. CSV/Excel/netcdf/Origin/preview stamp `generic`,
+   never guess. `parser_name` preserved additively; zero golden
+   interactions (verified, nothing re-frozen). 29 tests.
 
-2. **[ ] Standard-plot defaults table** — technique → default view (y
-   channels, log/linear axes, error bars on/off), applied silently inside
-   `datasetViewDefaults`; density heuristic stays as the `generic`
-   fallback. The auto-plot BECOMES the standard plot; everything remains
-   editable after.
-   - [ ] Table is data, not switch statements (the Boson
-         `applyParserAnalysisConfig` lesson)
-   - [ ] XRD/SIMS/RSM default log intensity (the MATLAB defaults,
-         `updateControlsForActiveDataset.m:197-228`); reflectometry log R
-         (subsumes ncnr's `default_value_channels` special case)
+2. **[x] ~~Standard-plot defaults table~~** SHIPPED 2026-07-31
+   (`709dab4`) — `lib/techniqueDefaults.ts` (data table, not switches):
+   XRD/SIMS/RSM/reflectometry → log-y, magnetometry/transport →
+   explicit linear, spectroscopy/generic → no opinion. Applied in
+   `datasetViewDefaults` ONLY on a technique change (`isTechniqueChange`
+   with prev-dataset threading at the two windows.ts call sites; the
+   import/split/reimport sites correctly always count as changed).
+   Deliberately yScale-only: channel + error-bar seeding were already
+   technique-aware via `default_value_channels`/`error_channels` — the
+   table subsumes rather than fights them. windows.ts was AT its 751
+   pin: offset by consolidating relayout + focus-handoff duplication,
+   pin lowered 751→749. 26 tests.
 
 3. **[x] ~~"Plot selected together" command~~** SHIPPED 2026-07-31
    (`d32254b`) — Library multi-select → ONE merged overlay dataset
@@ -138,4 +142,11 @@ parser (io/) ──> DataStruct.metadata.technique  (closed vocabulary + parser 
 
 ## Completed
 
-*(nothing yet — plan created 2026-07-31 from the owner design session)*
+- ~~**Tier 1 COMPLETE — #1 technique tags, #2 standard defaults, #3 plot
+  selected together**~~ (2026-07-31, three parallel Sonnet agents,
+  merged same day as the plan was written) — struck inline above.
+  Combined-tree gate: backend 3,470 / ruff / mypy clean; frontend 5,172
+  across 360 files / build 901.0 kB (18.2 kB headroom) / lint 0 errors.
+  The "auto plot when easy and repetitive" half of the owner's design
+  is now live end-to-end: import an XRD file → log-intensity standard
+  plot, silently, fully editable.
