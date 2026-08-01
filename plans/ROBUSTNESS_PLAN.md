@@ -12,9 +12,11 @@ checklist.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
-**Updated:** 2026-07-31 (Tier 1 COMPLETE — #1/#2/#3 shipped in one agent
-branch, merged `cc02e65`; #1 deliberately deviates from the literal "Node
-matrix" wording, see the item)
+**Updated:** 2026-07-31 latest (Tier 2 #4/#5 SHIPPED — admission bound →
+429 + executor lifespan shutdown; #6 swept clean one-off, stays open for
+the recurring mechanism. Earlier same day: Tier 1 COMPLETE — #1/#2/#3
+shipped `cc02e65`, live-CI confirmed; #1 deliberately deviates from the
+literal "Node matrix" wording, see the item)
 
 ---
 
@@ -121,20 +123,27 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 
 ## Tier 2 — Medium Impact
 
-4. **Job admission is unbounded** — `JobStore.submit` never refuses.
-   `jobs.py:101` evicts at >100 jobs, but that is *retention* trimming, not
-   admission control: nothing returns 429, so a stuck producer or an
-   impatient double-click accumulates work in the executor queue.
-   - [ ] Reject past N pending with a domain exception (`JobQueueFullError`)
-   - [ ] Translate it to 429 in the route, keeping `jobs.py` framework-free
+4. **~~Job admission is unbounded~~** SHIPPED 2026-07-31 (`af6b605`,
+   Haiku agent + orchestrator test hardening) — `JobStore.submit` never
+   refused; eviction at >100 was retention trimming, not admission control.
+   - [x] `submit` refuses at ≥32 pending with `JobQueueFullError`
+         (framework-free, bound read at call time, checked inside the lock)
+   - [x] Both producers (`/api/fitting/scan/job`, `/api/fitting/bumps`
+         DREAM) translate to 429. Agent's route test was import-only;
+         orchestrator added the real end-to-end 429 TestClient test
+         (bound monkeypatched to 0)
    - The four-state machine itself is already correct
      (`pending|running|done|error|cancelled`) — this is the one missing piece.
 
-5. **The executor is never shut down** — no lifespan hook, no `atexit`, no
-   `pool.shutdown(...)` anywhere.
-   - [ ] Wire `shutdown(wait=False, cancel_futures=True)` to the FastAPI
-         lifespan shutdown (per the rule: `atexit` is too late — Python joins
-         executor threads and drains the pending queue before it runs)
+5. **~~The executor is never shut down~~** SHIPPED 2026-07-31 (`af6b605`) —
+   no lifespan hook, no `atexit`, no `pool.shutdown(...)` existed.
+   - [x] `_app_lifespan` wired into `create_app` calls
+         `shutdown(wait=False, cancel_futures=True)` on lifespan shutdown.
+         Verified safe before merge: the app registers NO `on_event`
+         handlers (passing `lifespan=` silently disables those — the trap
+         checked for and absent); the websocket auto-shutdown path
+         (`_grace_check` → `os._exit`) bypasses lifespan by design and
+         kills the pool with the process anyway
    - **Symptom to expect if left:** `qz` exits late, or appears to hang, after
      submitting a long fit.
 
@@ -143,6 +152,8 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
    watches for CVEs in packages it never declared.
    - [ ] Add a periodic sweep (`gh api .../dependabot/alerts` + `npm audit`) or
          make it a scheduled workflow
+   - Swept 2026-07-31 (one-off, not the standing mechanism this item wants):
+     **0 open alerts**. The item stays open until the check is recurring.
    - **Evidence:** already named in BACKLOG after the 2026-07-24 round, where
      **13 of 14 alerts** arrived through `pillow` — a package this repo never
      declares, reached transitively via `matplotlib`, which `routes/export`
@@ -191,6 +202,15 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 ---
 
 ## Completed
+
+- ~~**Tier 2 #4 + #5 (job admission bound, executor shutdown)**~~
+  (2026-07-31, Haiku agent `af6b605` + orchestrator hardening) — details
+  struck inline above. First Haiku-routed implementation in this repo:
+  the mechanism code was correct and clean; the gaps were process
+  (ran only `tests/test_jobs.py`, not the full gate — orchestrator ran
+  the full gate at merge: **3,426 passed** / ruff / mypy clean) and test
+  depth (429 route test was import-only — orchestrator added the real
+  TestClient test). Also swept #6 one-off: 0 open Dependabot alerts.
 
 - ~~**Tier 1 (#1 CI second Node lane, #2 Node source of truth, #3 bounded
   streaming uploads)**~~ (2026-07-31, one agent branch, merged `cc02e65`) —
