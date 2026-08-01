@@ -67,6 +67,10 @@ export interface FitYByXState {
   /** Polynomial order for the bivariate leg (1 = linear). Ignored elsewhere. */
   order: number;
   setOrder: (order: number) => void;
+  /** Bivariate leg's band kind (JMP_GAP J3 residual: confidence = mean-
+   *  response, prediction = new-observation). Ignored elsewhere. */
+  bandInterval: "confidence" | "prediction";
+  setBandInterval: (interval: "confidence" | "prediction") => void;
   busy: boolean;
   error: string | null;
   oneway: OnewayResult | null;
@@ -129,6 +133,7 @@ export function useFitYByX(): FitYByXState {
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
   const [order, setOrder] = useState(1);
+  const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
 
   const data = useMemo(() => analysisData(active), [active]);
 
@@ -193,7 +198,7 @@ export function useFitYByX(): FitYByXState {
     let cancelled = false;
     setBusy(true);
     setError(null);
-    runLeg(data, kind, xCol, yCol, order)
+    runLeg(data, kind, xCol, yCol, order, bandInterval)
       .then((leg) => {
         if (cancelled) return;
         setOneway(leg.oneway ?? null);
@@ -213,7 +218,7 @@ export function useFitYByX(): FitYByXState {
     return () => {
       cancelled = true;
     };
-  }, [data, kind, xCol, yCol, order]);
+  }, [data, kind, xCol, yCol, order, bandInterval]);
 
   // JMP_GAP J7 — the SAME dispatch, once per By level. A level too small
   // for this leg (runLeg's thrown "need at least …" errors) reports an
@@ -229,7 +234,7 @@ export function useFitYByX(): FitYByXState {
     Promise.all(
       byPartition.levels.map(async (lvl): Promise<FitYByXLevelResult> => {
         try {
-          const leg = await runLeg(lvl.data, kind, xCol, yCol, order);
+          const leg = await runLeg(lvl.data, kind, xCol, yCol, order, bandInterval);
           return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
         } catch (_e) {
           return {
@@ -249,7 +254,7 @@ export function useFitYByX(): FitYByXState {
     return () => {
       cancelled = true;
     };
-  }, [byPartition.levels, kind, xCol, yCol, order]);
+  }, [byPartition.levels, kind, xCol, yCol, order, bandInterval]);
 
   function pendingGuard(action: string): boolean {
     if (!active?.pending) return false;
@@ -359,6 +364,8 @@ export function useFitYByX(): FitYByXState {
     kind,
     order,
     setOrder,
+    bandInterval,
+    setBandInterval,
     busy,
     error,
     oneway,

@@ -113,6 +113,7 @@ export async function runLeg(
   xCol: number,
   yCol: number,
   order: number,
+  bandInterval: "confidence" | "prediction" = "confidence",
 ): Promise<LegResult> {
   if (kind === "oneway") {
     const groups = groupsForOneway(data, xCol, yCol).filter((g) => g.values.length > 0);
@@ -142,7 +143,9 @@ export async function runLeg(
     if (xs.length < order + 2) {
       throw new Error(`need at least ${order + 2} paired points for order-${order} regression`);
     }
-    const regression = await statsRegression({ x: xs, y: ys, order, band_x: bandGrid(xs) });
+    const regression = await statsRegression({
+      x: xs, y: ys, order, band_x: bandGrid(xs), band_interval: bandInterval,
+    });
     const band = (regression.band as RegressionBand | undefined) ?? null;
     return { bivariate: { x: xs, y: ys, order, regression, band } };
   }

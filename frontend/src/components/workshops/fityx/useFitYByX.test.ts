@@ -208,8 +208,10 @@ describe("useFitYByX — bivariate leg", () => {
       y: [10, 12, 14, 16, 18, 20, 30, 32, 34, 36, 38, 40],
       order: 1,
       // JMP_GAP J3 residual: the confidence-band evaluation grid (40 points
-      // spanning [min(x), max(x)]) always rides along with the fit request.
+      // spanning [min(x), max(x)]) always rides along with the fit request,
+      // defaulting to a confidence (not prediction) interval.
       band_x: expect.any(Array),
+      band_interval: "confidence",
     });
     expect(result.current.bivariate!.regression).toEqual(REGRESSION);
   });
@@ -223,6 +225,21 @@ describe("useFitYByX — bivariate leg", () => {
     await waitFor(() => expect(result.current.bivariate).not.toBeNull());
     act(() => result.current.setOrder(2));
     await waitFor(() => expect(statsRegression).toHaveBeenLastCalledWith(expect.objectContaining({ order: 2 })));
+  });
+
+  it("re-fits with band_interval=prediction when bandInterval is switched (JMP_GAP J3 residual)", async () => {
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(3);
+      result.current.setYCol(2);
+    });
+    await waitFor(() => expect(result.current.bivariate).not.toBeNull());
+    expect(result.current.bandInterval).toBe("confidence");
+    act(() => result.current.setBandInterval("prediction"));
+    await waitFor(() =>
+      expect(statsRegression).toHaveBeenLastCalledWith(expect.objectContaining({ band_interval: "prediction" })),
+    );
+    expect(result.current.bandInterval).toBe("prediction");
   });
 
   it("surfaces a confidence band from the response's band field (JMP_GAP J3 residual)", async () => {

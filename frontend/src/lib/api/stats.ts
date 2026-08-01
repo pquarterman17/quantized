@@ -232,15 +232,17 @@ export function statsQQ(data: number[], dist = "norm"): Promise<QQResponse> {
   return postJSON("/api/statplots/qq", { data, dist });
 }
 
-/** Standard OLS mean-response confidence band (JMP_GAP J3 residual) — one
- *  `calc.stats.polynomial_confidence_band` call, present on `CalcResult.band`
- *  only when the request's `band_x` was non-empty. */
+/** Standard OLS mean-response confidence band, or (`interval:"prediction"`)
+ *  a new-observation prediction band (JMP_GAP J3 residual) — one
+ *  `calc.stats_band.polynomial_confidence_band` call, present on
+ *  `CalcResult.band` only when the request's `band_x` was non-empty. */
 export interface RegressionBand {
   x: number[];
   yFit: number[];
   ciLo: number[];
   ciHi: number[];
   alpha: number;
+  interval: "confidence" | "prediction";
 }
 
 export function statsRegression(body: {
@@ -252,6 +254,10 @@ export function statsRegression(body: {
   // band evaluation grid. Omitted -- today's response, byte-identical; a
   // non-empty grid adds a "band" field (RegressionBand, above).
   band_x?: number[];
+  // JMP_GAP J3 residual: switches the SAME band field from the mean-
+  // response confidence band (default, omitted) to a new-observation
+  // prediction band.
+  band_interval?: "confidence" | "prediction";
 }): Promise<CalcResult> {
   return postJSON("/api/stats/regression", body);
 }

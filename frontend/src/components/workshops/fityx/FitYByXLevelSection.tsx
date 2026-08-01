@@ -15,9 +15,15 @@ import OnewayView from "./OnewayView";
 export default function FitYByXLevelSection({
   result,
   kind,
+  bandInterval,
+  onBandIntervalChange,
 }: {
   result: FitYByXLevelResult;
   kind: FitYByXKind;
+  /** Bivariate leg's band kind (JMP_GAP J3 residual) — passed through to
+   *  BivariateView; changing it refetches every level via useFitYByX. */
+  bandInterval: "confidence" | "prediction";
+  onBandIntervalChange: (interval: "confidence" | "prediction") => void;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -54,7 +60,13 @@ export default function FitYByXLevelSection({
         ) : (
           <>
             {kind === "oneway" && result.oneway && <OnewayView result={result.oneway} />}
-            {kind === "bivariate" && result.bivariate && <BivariateView result={result.bivariate} />}
+            {kind === "bivariate" && result.bivariate && (
+              <BivariateView
+                result={result.bivariate}
+                bandInterval={bandInterval}
+                onBandIntervalChange={onBandIntervalChange}
+              />
+            )}
             {kind === "contingency" && result.contingency && <ContingencyView result={result.contingency} />}
           </>
         ))}

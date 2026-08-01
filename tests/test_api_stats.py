@@ -74,6 +74,47 @@ def test_regression_band_x_bad_order_is_422_not_500() -> None:
     assert resp.status_code == 422
 
 
+def test_regression_band_interval_defaults_to_confidence() -> None:
+    x = list(np.linspace(0, 10, 40))
+    y = [3.0 * v - 2.0 + 0.1 * (v % 3) for v in x]
+    omitted = client.post(
+        "/api/stats/regression", json={"x": x, "y": y, "order": 1, "band_x": [5.0]},
+    ).json()
+    explicit = client.post(
+        "/api/stats/regression",
+        json={"x": x, "y": y, "order": 1, "band_x": [5.0], "band_interval": "confidence"},
+    ).json()
+    assert omitted["band"] == explicit["band"]
+    assert omitted["band"]["interval"] == "confidence"
+
+
+def test_regression_band_interval_prediction_is_wider_than_confidence() -> None:
+    x = list(np.linspace(0, 10, 40))
+    y = [3.0 * v - 2.0 + 0.1 * (v % 3) for v in x]
+    conf = client.post(
+        "/api/stats/regression",
+        json={"x": x, "y": y, "order": 1, "band_x": [5.0], "band_interval": "confidence"},
+    ).json()["band"]
+    pred = client.post(
+        "/api/stats/regression",
+        json={"x": x, "y": y, "order": 1, "band_x": [5.0], "band_interval": "prediction"},
+    ).json()["band"]
+    assert pred["interval"] == "prediction"
+    assert (pred["ciHi"][0] - pred["ciLo"][0]) > (conf["ciHi"][0] - conf["ciLo"][0])
+
+
+def test_regression_band_interval_bad_value_is_422_not_500() -> None:
+    body = {
+        "x": [1.0, 2.0, 3.0, 4.0],
+        "y": [1.0, 2.0, 3.0, 4.0],
+        "order": 1,
+        "band_x": [2.0],
+        "band_interval": "bogus",
+    }
+    resp = client.post("/api/stats/regression", json=body)
+    assert resp.status_code == 422
+
+
 def test_ttest_one_sample_has_inference_fields() -> None:
     resp = client.post("/api/stats/ttest", json={"x": [1.1, 2.0, 1.9, 2.2, 1.8], "mu": 0.0})
     assert resp.status_code == 200

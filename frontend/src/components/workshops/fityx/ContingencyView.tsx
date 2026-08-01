@@ -1,11 +1,13 @@
 // Fit Y by X — contingency leg's view: categorical X x categorical Y. A
-// counts cross-tab (with row/col totals) built client-side from the two
-// columns' resolved levels, the expected-count table, chi-square
-// independence, and Fisher's exact test on a 2x2 table. Honest about small
-// expected counts (low_expected) rather than hiding the chi-square caveat.
+// mosaic plot (JMP_GAP J3 residual), a counts cross-tab (with row/col
+// totals) built client-side from the two columns' resolved levels, the
+// expected-count table, chi-square independence, and Fisher's exact test on
+// a 2x2 table. Honest about small expected counts (low_expected) rather
+// than hiding the chi-square caveat.
 
 import { fmtNum } from "../../../lib/format";
 import { DataTable, StatusDot } from "../../primitives";
+import MosaicPlot from "./MosaicPlot";
 import type { ContingencyResult } from "./useFitYByX";
 
 export default function ContingencyView({ result }: { result: ContingencyResult }) {
@@ -17,6 +19,8 @@ export default function ContingencyView({ result }: { result: ContingencyResult 
 
   return (
     <>
+      <MosaicPlot rowLabels={rowLabels} colLabels={colLabels} table={table} />
+
       <div className="qzk-field-lbl" style={{ marginTop: 8 }}>
         Counts
       </div>
