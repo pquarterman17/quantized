@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import GraphBuilderPanel from "./GraphBuilderPanel";
@@ -105,5 +106,37 @@ describe("Graph Builder plot destinations", () => {
       "title",
       "Preview requires confirmation: axis tick spacing, annotations",
     );
+  });
+
+  it("activates both explicit destinations from the keyboard", async () => {
+    const user = userEvent.setup();
+    render(<GraphBuilderPanel />);
+    const create = screen.getByRole("button", { name: "Create New Plot" });
+    const apply = screen.getByRole("button", { name: "Apply to Current Plot" });
+
+    create.focus();
+    await user.keyboard("{Enter}");
+    apply.focus();
+    await user.keyboard(" ");
+
+    expect(createNewPlot).toHaveBeenCalledOnce();
+    expect(applyToCurrent).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a hard-incompatible Publication Preview transition disabled", () => {
+    const openInFigureBuilder = vi.fn();
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      canOpenFigureBuilder: false,
+      figureBuilderReason: "Faceted plots need a multi-panel contract first.",
+      openInFigureBuilder,
+    });
+    render(<GraphBuilderPanel />);
+
+    const preview = screen.getByRole("button", { name: "Publication Preview" });
+    expect(preview).toBeDisabled();
+    expect(preview).toHaveAttribute("title", "Faceted plots need a multi-panel contract first.");
+    fireEvent.click(preview);
+    expect(openInFigureBuilder).not.toHaveBeenCalled();
   });
 });

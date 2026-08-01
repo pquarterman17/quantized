@@ -148,7 +148,7 @@ the compatibility inventory exposes an unexpected state-ownership problem.
 - [x] **F0.4 Separate Library terminology.** Distinguish Saved Plot Recipes,
       Saved Figures, and multi-panel pages. Tooltips should state whether an
       item reuses data rules, preserves an editable result, or stores output.
-- [ ] **F0.5 Add transition regression tests.** Pin user-facing labels,
+- [x] **F0.5 Add transition regression tests.** Pin user-facing labels,
       create/apply behavior, warnings, keyboard paths, and fail-closed rules.
 
 **F0 exit:** A user cannot reasonably mistake a detached publication preview
@@ -327,6 +327,17 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F0.5 transition regression gate (ChatGPT-Sol)
+
+- Completed the F0 regression matrix across role labels, Create versus Apply
+  behavior, compatibility confirmations, cancellation, and hard blockers.
+- Added keyboard activation coverage for both Graph Builder destinations and
+  a view-level pin proving incompatible Publication Preview actions stay
+  disabled and inert.
+- F0 now meets its exit criterion: current transitions state their role,
+  require explicit destinations, and cannot silently discard known state.
+- Test-only gate PR is stacked on the F0.4 artifact-terminology PR.
 
 ### 2026-08-01 — F0.4 artifact terminology (ChatGPT-Sol)
 
