@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 latest (P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
+**Updated:** 2026-07-31 (both 2026-07-27-wave export-dialog defects CLOSED —
+the fix had been sitting COMPLETE but UNMERGED on an orphaned worktree branch
+since 2026-07-26 (`29ad044`); found by a `git branch --no-merged main` check
+during a dashboard verification, adversarially reviewed, gated, merged.
+Prior: 2026-07-26 latest (P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
 `481e0ea`; slice 3 corrected the freeze attribution — render/mount, not
 parse — booked as slice 4, now the actionable queue; branding drop merged
 `8fad871`; eager-bundle headroom down to 0.8 kB → P4.1 lazy-boundary item
@@ -1078,6 +1082,24 @@ At the end of each session:
   zoom p95 259 ms vs the 100 ms target (pan fine everywhere), 16× import
   memory expansion, persistence cheap at 50-dataset scale. Two
   evidence-backed follow-ups booked; P0.4 stays open for the residuals.
+- ~~**Export-dialog defects (booked by the 2026-07-27 measurement wave)**~~
+  (2026-07-31, merge of `29ad044`) — BOTH closed by one three-layer fix:
+  (1) root cause of the SVG hang: ParamDialog's `useEffect`-based value
+  reset ran post-paint, leaving a window where a fast field edit and the
+  reset both closed over stale state; whichever `setValues` landed second
+  wiped the other's keys, and `runExportFigureCommand`'s unguarded
+  `(params.x_label as string).trim()` then threw OUTSIDE `exportActive`'s
+  try/catch — swallowed by `runAction`'s deliberate rejection sink (zero
+  network, no toast: exactly the measured 0/3 signature). Reset now runs
+  synchronously during render (react.dev "adjusting state when a prop
+  changes"). (2) `coerceParams` now guarantees every field key (default
+  fallback) — defense in depth for every other `askParams` caller.
+  (3) The missing "Copy figure (vector)" item was pure wiring:
+  `PlotStage.tsx` destructured `copyFigureSvg` but omitted it from both
+  `actions` literals, so `plotMenu`'s presence-check never saw it.
+  +428 test lines (dialog race, coercion, command guards, menu render).
+  NOTE the fix was authored 2026-07-26 by a worktree agent and sat
+  UNMERGED for five days — found only by `git branch --no-merged main`.
 
 **P3.1 stays OPEN.** The four slices above cover curated commands and the first
 five Inspector cards; workshop-level coverage is the remaining evidence-led
@@ -1421,6 +1443,26 @@ work (its BACKLOG row).
   are not part of the immediate queue, but must not be described as completed.
 - No completion checkbox changed: this pass clarified state and reconciled
   the derived dashboard only.
+
+#### 2026-07-31 — Orphaned export-dialog fix recovered and merged (Fable review/gate/merge)
+
+- A routine dashboard verification ran `git branch --no-merged main` and
+  found `29ad044` (2026-07-26, worktree agent) — a COMPLETE, tested fix
+  for both 2026-07-27-wave export defects that never got merged; the
+  spawning session apparently ended between commit and merge. Five days
+  invisible: no PR, no BACKLOG note, green CI throughout.
+- Adversarially reviewed before merge per the external-contribution
+  discipline: the `runAction` rejection-swallow, the `exportActive`
+  try/catch boundary, and the `PlotStage`→`PlotContextMenu`→`plotMenu`
+  `copyFigureSvg` wiring gap were each re-verified against CURRENT main,
+  not taken from the commit message. Base was 41 commits stale but had
+  ZERO overlap with the JMP campaign — clean ort merge, no drift in any
+  touched file.
+- Merged-tree gates: lint 0 errors / **5,076 vitest across 351 files** /
+  build + bundle ratchet 894.9 kB eager (24.3 kB headroom).
+- Process lesson: worktree-agent merges are the orchestrator's job and a
+  session can die before doing it. `git branch --no-merged main` belongs
+  in every reconciliation pass (booked in the worktree-gotchas memory).
 
 ## Reference baseline
 
