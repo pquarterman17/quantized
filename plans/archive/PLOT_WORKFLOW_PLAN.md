@@ -6,11 +6,12 @@ auto-plot technique-smart, fixing the repetitive/batch case, and leaving
 recipes (PRIMARY P1.3) as the opt-in layer for custom-but-recurring plots.
 Owner-set design, 2026-07-31.
 
-**Status:** Active
+**Status:** Complete
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-31
-**Updated:** 2026-07-31 (Tier 1 COMPLETE the same day — #1/#2/#3 all
-shipped and gated; Tier 2 agents launched)
+**Updated:** 2026-08-01 (COMPLETE — every implementation item #1–#5
+shipped within ~24 h of the owner design session; #6's interface note
+folded up into PRIMARY P1.3 per the fold-up rule; archived)
 
 ---
 
@@ -127,27 +128,38 @@ parser (io/) ──> DataStruct.metadata.technique  (closed vocabulary + parser 
    `generic`, so it can never pass the gate; `importFilesAppended`
    never enters `runImport` — both pinned by dedicated tests.
 
-5. **[ ] Per-technique view memory** — remember the last-used view
-   (channels, scales, styles) per technique tag; on dataset switch, a
-   same-technique dataset gets the remembered view (shape permitting),
-   a different technique gets its own memory or the item-2 defaults.
-   Replaces the blanket `datasetViewDefaults` reset for same-technique
-   switches; shape mismatch still resets.
-   - [ ] Persists in `.dwk` alongside other view state
-   - [ ] Interacts with the WORKSHEET #14 owner gate (view-state
-         persistence) — this is PLOT view state, not worksheet state;
-         keep the boundary explicit
+5. **[x] ~~Per-technique view memory~~** SHIPPED 2026-08-01 (`97e3a3b`)
+   — pure `lib/techniqueViewMemory.ts`: capture on switch-away keyed by
+   technique + channel LABELS; apply via label re-key (the DisplayBlock
+   precedent — label-resolution failure IS the shape-mismatch reset;
+   `yKeys` resolving to nothing falls back to the #2 defaults);
+   `generic` never remembered. Precedence: memory > technique defaults
+   > density heuristic. Persists additively in `.dwk` through a
+   sanitizing untrusted-boundary parser; both save paths freshen the
+   map at save time. Remembered set = exactly the channel-keyed fields
+   `datasetViewDefaults` resets; axis LIMITS deliberately excluded
+   (navigation state — replaying a stale zoom lands off-data). Engages
+   at the two dataset-SWITCH chokepoints only; fresh imports keep
+   getting clean technique defaults (import-time carry was the batch
+   option the owner did NOT pick — the offer, #4, covers that case).
+   windows.ts held at its 749 pin by extracting title-dedupe
+   duplication; useApp pin 2875→2868.
 
 ## Tier 3 — Nice-to-Have
 
-6. **[ ] P1.3 recipe interface note** — when P1.3 lands, recipes key on
-   the SAME technique tag (its "technique scope" field), suggestions use
-   the confidence framing above, and the item-2 built-in table becomes
-   the zero-recipe fallback tier. No standalone work now; this item
-   exists so P1.3's implementer finds the contract.
+6. **[x] ~~P1.3 recipe interface note~~** FOLDED UP 2026-08-01 into
+   PRIMARY_SOFTWARE_AUDIT_PLAN §P1.3 (a quoted contract block at the
+   item head), where P1.3's implementer will actually find it. No
+   standalone work was ever scheduled here.
 
 ## Completed
 
+- ~~**Tier 2 COMPLETE — #4 batch overlay offer, #5 per-technique view
+  memory; #6 folded up**~~ (2026-08-01, two parallel Sonnet agents) —
+  struck inline above. Final-tree gate: backend 3,471 / ruff / mypy
+  clean; frontend 5,209 across 361 files / build 904.2 kB (15.0 kB
+  headroom) / lint 0 errors. THE PLAN IS COMPLETE: the owner's four
+  2026-07-31 design decisions all shipped within ~24 hours.
 - ~~**Tier 1 COMPLETE — #1 technique tags, #2 standard defaults, #3 plot
   selected together**~~ (2026-07-31, three parallel Sonnet agents,
   merged same day as the plan was written) — struck inline above.

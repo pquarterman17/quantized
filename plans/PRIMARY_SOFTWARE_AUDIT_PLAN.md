@@ -444,6 +444,18 @@ weigh chunked/binary arrays for large members with that number in hand.
 
 ### P1.3 — Complete reusable plot-recipe templates
 
+> **Interface contract from the archived PLOT_WORKFLOW plan** (was
+> PLOT_WORKFLOW #6, folded up 2026-08-01 when that plan completed):
+> recipes key their "technique scope" on the SHIPPED `metadata.technique`
+> tag (`io/technique.py` vocabulary, mirrored as `Technique` in
+> `lib/types.ts`); suggestions follow the confidence framing (parser-
+> identified technique = silent built-in defaults, recipe match = subtle
+> opt-in prompt, never auto-apply cross-technique); and the built-in
+> `lib/techniqueDefaults.ts` table + `lib/techniqueViewMemory.ts` become
+> the zero-recipe fallback tiers below recipes. Precedence when P1.3
+> lands: explicit recipe > per-technique memory > technique defaults >
+> density heuristic.
+
 **Goal:** explicitly save a successful figure as an opt-in recipe for related
 future data without rebuilding it or writing code.
 

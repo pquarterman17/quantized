@@ -6,7 +6,23 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-31 (fifteenth pass). **The four-agent queue
+**Last reconciled:** 2026-08-01 (sixteenth pass). **PLOT_WORKFLOW is
+COMPLETE and ARCHIVED** — #4 batch overlay offer (`f367eb6`, first
+generic toast action button) and #5 per-technique view memory
+(`97e3a3b`, label-rekeyed, `.dwk`-persisted) shipped; #6's interface
+contract folded up into PRIMARY P1.3. All four of the owner's
+2026-07-31 import→plot design decisions are live within ~24 h of the
+design session. Also this pass: ROBUSTNESS #4/#5 shipped (Haiku agent +
+orchestrator hardening), #7 census done (one real gap → `tools/` size
+guard `c70b895`; seven recorded LEAVEs), P3.4 zoom-refetch shipped
+(decimation ship complete). Final-tree gate: backend 3,471 / frontend
+5,209 across 361 files / build 904.2 kB (15.0 kB headroom) / lint 0
+errors. Remaining actionable dev work: ROBUSTNESS #6 recurring-sweep
+mechanism (left for a session that can live-verify a scheduled
+workflow) and the ROBUSTNESS Tier 3 tail; everything else is owner-,
+sequencing-, or evidence-gated.
+
+Prior (fifteenth pass, 2026-07-31). **The four-agent queue
 sweep SHIPPED and the plot-workflow design is SET.** Four parallel worktree
 agents, zero merge conflicts, one merged-tree gate (backend 3,422 / frontend
 suite + build + lint green, eager 898.4 kB): P3.4 server-side payload
@@ -297,7 +313,6 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Per-technique view memory — last-used view remembered per technique tag; same-technique dataset switches keep the view, shape mismatch still resets; persists in `.dwk` | PLOT_WORKFLOW #5 (unblocked 2026-07-31; agent launched) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -501,7 +516,6 @@ the root; every active plan below is its declared sub-plan.
 | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **Actionable now:** the P3.4 zoom-refetch residual (row above). SHIPPED 2026-07-31: P3.4 server-side payload decimation (147.5→3.49 MB @1M×7) + P2.8's regrid defect-class (37→1.24 s @1M) + both export-dialog defects. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on PLOT_WORKFLOW #1's technique tag), followed by evidence-ranked P2/P3/P4 work. |
 | `plans/JMP_GAP_PLAN.md` | Active | **Every census-independent register item is SHIPPED** — campaign 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend) + the 2026-07-31 residual wave (J8 UI, J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon table verified) + #14 module splits w/ `MODULE_PINS` ratchet (2026-07-29). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5) — all Gate-A-sequenced; Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
 | `plans/ROBUSTNESS_PLAN.md` | Active | **Tier 1 COMPLETE 2026-07-31** (#1 second Node CI lane — non-required job, NOT a matrix, to protect the pinned `"frontend"` required-check context; #2 `node-version-file:.nvmrc` in all four workflows, 22, engines ≥22; #3 streamed uploads + 512 MiB cap → 413). Live-CI CONFIRMED same day (`frontend-node-current` green, `.nvmrc` resolved). **Tier 2 #4/#5 SHIPPED 2026-07-31** (admission bound ≥32 pending → 429 both producers; executor lifespan shutdown — Haiku agent + orchestrator-added route test and full gate, 3,426 backend). **#7 census DONE 2026-08-01** (1 real gap → `tools/` size guard `c70b895`; 7 recorded LEAVEs). Tier 2 open: recurring transitive-vuln sweep only (#6 — one-off sweep 2026-07-31 found 0 open alerts). Tier 3: Node version-manager standardization (#8, owner-parked), automate the backend exception sweep (#9), pre-commit hooks (#10) |
-| `plans/PLOT_WORKFLOW_PLAN.md` | Active | **Tier 1 COMPLETE 2026-07-31, same day the plan was written** (#1 technique tags at the `import_auto` chokepoint w/ QD transport-vs-magnetometry refiner; #2 silent yScale defaults on technique change, windows.ts pin 751→749; #3 plot-selected-together merged overlay). Open: #4 batch overlay offer + #5 per-technique view memory (Tier 2, rows above); #6 P1.3 recipe interface note (rides P1.3). Explicitly NOT Gate-A-sequenced |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
-| `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
+| `plans/archive/` | Complete | 13 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) and PLOT_WORKFLOW (Complete 2026-08-01 — all 4 owner design decisions shipped in ~24 h; #6 interface note folded into PRIMARY P1.3) |

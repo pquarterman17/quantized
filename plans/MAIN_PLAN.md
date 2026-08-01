@@ -45,7 +45,6 @@ Sol audit docs as items 29–30)
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
 | `ROBUSTNESS_PLAN.md` | Enforcement/environment/runtime hardening: what guards do NOT cover, which Node the artifact is built on, and the unbounded upload/job paths | Independent lifecycle — gated by neither Gate A nor Gate J, and orthogonal to every feature plan; its items are defects in the scaffolding around the code rather than in the code |
-| `PLOT_WORKFLOW_PLAN.md` | Import→plot balance (owner design 2026-07-31): technique tag contract, silent standard-plot defaults, batch overlay, per-technique view memory — the pre-P1.3 "auto plot" layer | Owner-decided design with its own item lifecycle; explicitly NOT Gate-A-sequenced (owner scope call), feeds P1.3's recipe layer the technique tag |
 
 Six residue plans were folded up into this doc and archived on
 2026-07-10 (fold-up rule): MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION,
