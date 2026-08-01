@@ -31,7 +31,7 @@ from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
-from quantized.io.spc import import_spc
+from quantized.io.spc import import_spc, is_spc
 from quantized.io.technique import stamp_technique
 from quantized.io.xrdml import import_xrdml
 
@@ -69,7 +69,6 @@ _EXT_MAP: dict[str, Parser] = {
     # the published formats, not MATLAB ports (see each module's docstring).
     # importOxford stays unported: "format varies by software version" with
     # no spec and no example file — nothing to implement against honestly.
-    ".spc": import_spc,  # GRAMS/Thermo spectral binary
     ".opus": import_opus,  # Bruker OPUS FTIR/NIR/Raman binary
 }
 
@@ -98,6 +97,16 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     # .raw is either Rigaku SmartLab (magic "FI") or Bruker Diffrac-AT RAW1.01
     # (magic "RAW1.01"); the magic bytes disambiguate with no collision.
     ".raw": [(is_rigaku_raw, import_rigaku_raw), (is_bruker_raw, import_bruker_raw)],
+    # .spc is ambiguous in the wild (2026-08-01 corpus addition): GRAMS/Thermo
+    # spectral binaries carry an fversn marker byte (0x4B/0x4C/0x4D/0xCF) at
+    # offset 1, while EDAX EDS spectra share the extension with a different
+    # layout (byte 1 is 0x33 for the common versions). EDAX is electron-
+    # microscopy scope and is deliberately NOT parsed here — fermiviewer's
+    # io/spc_edax.py owns it (its sniffer is the exact mirror: it rejects the
+    # GRAMS marker and points users back). No catch-all: a .spc that is
+    # neither format gets the registry's clear "no parser" error instead of a
+    # confusing GRAMS header-parse failure.
+    ".spc": [(is_spc, import_spc)],
     # SIMS depth profiles share .csv/.tsv/.xlsx with generic tables: sniff for the
     # SIMS layout first, else fall back to the generic delimited / Excel parser.
     # Lake Shore VSM self-identifies in its preamble (MAIN_PLAN #7 — the

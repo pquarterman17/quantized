@@ -23,6 +23,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from quantized.io import import_auto
+from quantized.io.registry import resolve_parser
 from quantized.io.spc import import_spc, is_spc
 
 # Hand-typed, independent of quantized/io/spc.py's _HEAD_FMT.
@@ -469,3 +470,32 @@ def test_real_old_format_ftir_multifile(corpus_dir: Path) -> None:
         y = ds.values[:, k]
         assert np.abs(y).max() < 20
         assert np.abs(np.diff(y)).sum() / (np.ptp(y) + 1e-12) < 10
+
+
+# ── .spc is ambiguous in the wild: GRAMS/Thermo vs EDAX EDS (2026-08-01) ────
+# The registry routes .spc through the is_spc sniffer, so an EDAX EDS
+# spectrum (a different vendor format sharing the extension; fermiviewer's
+# io/spc_edax.py owns it) is DECLINED at resolve time with the registry's
+# clear no-parser error, never crashed into as a malformed GRAMS header.
+
+
+def test_edax_shaped_spc_is_declined_not_crashed(tmp_path: Path) -> None:
+    """Byte 1 = 0x33 (the common EDAX fVersion pattern) must not route."""
+    path = _write(tmp_path, "edax_like.spc", bytes([0x00, 0x33]) + b"\x00" * 64)
+    assert is_spc(path) is False
+    with pytest.raises(ValueError, match="no parser registered"):
+        resolve_parser(path)
+
+
+@pytest.mark.realdata
+def test_real_edax_spc_corpus_is_declined(corpus_dir: Path) -> None:
+    """Every EDAX .spc in the shared corpus is declined by the registry —
+    the realdata anchor for the synthetic shape above. These files are
+    fermiviewer's parser territory (EM scope); quantized must neither crash
+    on them nor misparse them as GRAMS."""
+    edax_spc = sorted((corpus_dir / "edax").rglob("*.spc"))
+    assert edax_spc, "corpus moved: no EDAX .spc files under test-data/edax"
+    for path in edax_spc:
+        assert is_spc(path) is False, f"{path.name}: EDAX file passed the GRAMS sniffer"
+        with pytest.raises(ValueError, match="no parser registered"):
+            resolve_parser(path)

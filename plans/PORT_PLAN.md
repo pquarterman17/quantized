@@ -441,6 +441,15 @@ MATLAB."**
 > Note: W1–W3 backend parity (parsers, corrections, baselines, processing,
 > stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
+
+- ~~**`.spc` extension disambiguation**~~ (2026-08-01) — the shared corpus
+  gained EDAX EDS `.spc` files (a different vendor format on the same
+  extension; fermiviewer's `io/spc_edax.py` owns it — its sniffer is the
+  exact mirror), which the W9 #52 matrix failed as unparseable GRAMS.
+  `.spc` moved from the unambiguous `_EXT_MAP` to the sniffer chain using
+  the already-written-but-unwired `is_spc` (fversn ∈ 0x4B/4C/4D/CF at
+  byte 1); EDAX files now decline cleanly at resolve time (matrix: skip
+  with reason, was 4 hard failures). Synthetic + realdata-anchored tests.
 > This log is being backfilled starting with the W6 plotting work.
 
 - ~~**#54 SPC/JCAMP corpus gaps**~~ (2026-07-25, same day booked) — all four
