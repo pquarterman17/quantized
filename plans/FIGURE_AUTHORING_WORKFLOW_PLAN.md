@@ -162,7 +162,7 @@ specific warning.
 **Recommended models:** GPT-5.6 Sol high / Claude Opus 4.8 for schema and
 migration design; GPT-5.6 Terra high / Claude Sonnet 5 for bounded UI slices.
 
-- [ ] **F1.1 Inventory and freeze the contract.** Produce a typed mapping table
+- [x] **F1.1 Inventory and freeze the contract.** Produce a typed mapping table
       for every field in `PlotView`, `PlotSpec`, `FigureConfig`, `FigureDoc`,
       and `FigureSpec`; classify canonical, recipe-only, export-only, derived,
       or unsupported fields.
@@ -327,6 +327,18 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F1.1 typed figure-contract census (ChatGPT-Sol)
+
+- Added a compile-time-exhaustive ownership table for every top-level field in
+  `PlotView`, `PlotSpec`, `FigureConfig`, `FigureDoc`, and `FigureSpec`.
+- Classified each field as canonical, recipe-only, export-only, derived, or
+  unsupported, with its intended FigureDocument path and ownership rationale.
+- Confirmed `PlotView` as the richest canonical starting point, `PlotSpec` as a
+  reusable recipe, `FigureConfig` as a legacy projection, and `FigureSpec` as a
+  generated transport object.
+- Kept this slice characterization-only: it changes no persistence schema,
+  conversion behavior, or UI and prepares the F1.2 schema decision.
 
 ### 2026-08-01 — F0.5 transition regression gate (ChatGPT-Sol)
 
