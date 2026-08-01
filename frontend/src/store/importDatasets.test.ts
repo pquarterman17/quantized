@@ -4,8 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
+import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import type { Technique } from "../lib/types";
 import { usePendingOps } from "./pendingOps";
 import { isImportRunning, pathBasename, useImportBatch } from "./importDatasets";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", async (orig) => ({
@@ -14,19 +17,28 @@ vi.mock("../lib/api", async (orig) => ({
   uploadFile: vi.fn(),
 }));
 
-const payload = () => ({
+vi.mock("../lib/plotSelectedTogether", () => ({
+  plotSelectedTogether: vi.fn(),
+}));
+
+const payload = (technique?: Technique) => ({
   time: [0, 1, 2],
   values: [[10], [20], [30]],
   labels: ["M"],
   units: ["emu"],
-  metadata: {},
+  metadata: technique ? { technique } : {},
 });
+
+function toastMsgs(): string[] {
+  return useToasts.getState().toasts.map((t) => t.msg);
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ datasets: [], folders: [], activeId: null, selectedIds: [] });
   useImportBatch.setState({ running: false });
   usePendingOps.setState({ ops: [] });
+  useToasts.setState({ toasts: [] });
   vi.mocked(importFile).mockResolvedValue(payload());
   vi.mocked(uploadFile).mockResolvedValue(payload());
 });
@@ -343,5 +355,86 @@ describe("double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1)", () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(payload());
     await useApp.getState().importFiles([new File(["y"], "two.csv")]);
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["two.csv"]);
+  });
+});
+
+describe("batch-import overlay offer (PLOT_WORKFLOW_PLAN #4)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  it("offers an overlay for >=2 same-technique files, instead of the plain success toast", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFiles(files("a.xye", "b.xye"));
+
+    const withAction = useToasts.getState().toasts.find((t) => t.action);
+    expect(withAction).toBeDefined();
+    expect(withAction!.msg).toBe("2 xrd.powder files imported — overlay in one plot?");
+    expect(withAction!.action!.label).toBe("Overlay");
+    // Replaces, not supplements, the generic "imported N files" toast.
+    expect(toastMsgs().some((m) => /^imported \d/.test(m))).toBe(false);
+  });
+
+  it("clicking the offer's action calls plotSelectedTogether with the batch's dataset ids", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFiles(files("a.xye", "b.xye"));
+
+    const ids = useApp.getState().datasets.map((d) => d.id);
+    const offerToast = useToasts.getState().toasts.find((t) => t.action)!;
+    offerToast.action!.onClick();
+
+    expect(plotSelectedTogether).toHaveBeenCalledTimes(1);
+    expect(plotSelectedTogether).toHaveBeenCalledWith(expect.arrayContaining(ids));
+    expect((plotSelectedTogether as ReturnType<typeof vi.fn>).mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it("declining (not clicking) leaves the batch datasets exactly as imported", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFiles(files("a.xye", "b.xye"));
+
+    expect(useApp.getState().datasets).toHaveLength(2); // no overlay dataset added
+    expect(plotSelectedTogether).not.toHaveBeenCalled();
+  });
+
+  it("no offer for a single file, even with a non-generic technique", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFiles(files("a.xye"));
+
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 1 file");
+  });
+
+  it("no offer for a mixed-technique batch", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("transport"));
+    await useApp.getState().importFiles(files("a.xye", "b.dat"));
+
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 2 files");
+  });
+
+  it("no offer for an all-generic batch (two unknowns aren't knowably similar)", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload())
+      .mockResolvedValueOnce(payload());
+    await useApp.getState().importFiles(files("a.csv", "b.csv"));
+
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 2 files");
+  });
+
+  it("the append-as-one command does not trigger the offer", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFilesAppended(files("a.xye", "b.xye"));
+
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(plotSelectedTogether).not.toHaveBeenCalled();
   });
 });

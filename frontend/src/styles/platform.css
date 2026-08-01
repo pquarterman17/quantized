@@ -305,6 +305,21 @@
   border-color: color-mix(in srgb, var(--danger) 55%, var(--glass-border));
   color: var(--danger);
 }
+.qzk-toast-action {
+  margin-left: 10px;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.qzk-toast-action:hover {
+  background: var(--accent-soft);
+}
 @keyframes qzk-toast-in {
   from {
     opacity: 0;

@@ -20,6 +20,10 @@
 // and edited through the slice below. Keeping the seed and the edit in one
 // module is what stops the two drifting into different ideas of what a
 // binding means.
+//
+// PLOT_WORKFLOW_PLAN item 4: `runImport` is also the batch's one finish
+// line, so it's the chokepoint for the batch-overlay offer — see
+// `batchOverlayOffer` below.
 
 import { create } from "zustand";
 
@@ -27,9 +31,11 @@ import { importFile, uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginFolders } from "../lib/originFolders";
-import { isLazyBookEntry, isPrimaryBookMarker, type DataStruct } from "../lib/types";
+import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { techniqueOf } from "../lib/techniqueDefaults";
+import { isLazyBookEntry, isPrimaryBookMarker, type DataStruct, type Technique } from "../lib/types";
 import { beginOp, endOp, updateOp } from "./pendingOps";
-import { toast } from "./toasts";
+import { TOAST_ACTION_TTL, toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
 
 // Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
@@ -127,13 +133,15 @@ export function pathBasename(path: string): string {
 /** Expand ONE parsed payload into datasets. Extracted verbatim from the old
  *  `importFiles` body so the Origin branch keeps behaving exactly as before;
  *  the only addition is threading `origin.source` onto every dataset it
- *  creates. Throws on failure — callers own the per-file error summary. */
+ *  creates. Throws on failure — callers own the per-file error summary.
+ *  Returns the created dataset id(s) (item 4's batch-overlay offer needs
+ *  them to know what a batch actually landed). */
 function addFromPayload(
   set: SliceSet,
   get: SliceGet,
   data: DataStruct,
   origin: ImportOrigin,
-): void {
+): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
   // MAIN #33 provenance: what this import DECIDED, recorded on the dataset
@@ -234,6 +242,36 @@ function addFromPayload(
     params: { name: origin.name },
   });
   get().pushRecent(origin.name, origin.size, origin.source?.path);
+  return newIds;
+}
+
+/** PLOT_WORKFLOW_PLAN item 4: when a batch import's successfully-created
+ *  datasets all resolve to the SAME non-generic technique, offer ONE overlay
+ *  plot instead of leaving N separate ones — offer, never force (declining
+ *  or letting the toast time out is exactly today's per-file behavior, the
+ *  batch datasets stay in the Library regardless). Two files that both
+ *  happen to be "generic" are not knowably similar (the plan's mixed-batch
+ *  rule), so `generic` never qualifies even when it's the only tag present.
+ *
+ *  Counts by DATASET id rather than by file, but that's equivalent for
+ *  every batch that can actually pass this gate: the only import that turns
+ *  one file into several datasets is an Origin multi-book project, and item
+ *  1 stamps Origin imports `generic` unconditionally — so a book-expansion
+ *  batch always fails the non-generic check before the file/dataset count
+ *  distinction would matter. */
+function batchOverlayOffer(
+  get: SliceGet,
+  createdIds: readonly string[],
+): { technique: Technique; ids: string[] } | null {
+  if (createdIds.length < 2) return null;
+  const idSet = new Set(createdIds);
+  const datasets = get().datasets.filter((d) => idSet.has(d.id));
+  if (datasets.length < 2) return null;
+  const techniques = new Set(datasets.map((d) => techniqueOf(d)));
+  if (techniques.size !== 1) return null;
+  const [technique] = techniques;
+  if (technique === "generic") return null;
+  return { technique, ids: datasets.map((d) => d.id) };
 }
 
 /** Shared per-batch loop + status/toast summary.
@@ -277,6 +315,7 @@ async function runImport<T>(
   let added = 0;
   let lastError = "";
   let cancelled = false;
+  const createdIds: string[] = [];
   try {
     for (let i = 0; i < items.length; i++) {
       if (controller.signal.aborted) {
@@ -288,7 +327,7 @@ async function runImport<T>(
       get().setStatus(`importing ${describe(item)}…`);
       try {
         const { data, origin } = await load(item, controller.signal);
-        addFromPayload(set, get, data, origin);
+        createdIds.push(...addFromPayload(set, get, data, origin));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -322,7 +361,24 @@ async function runImport<T>(
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
     : `imported ${added} file${added === 1 ? "" : "s"}`;
   get().setStatus(summary);
-  if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
+  if (added > 0) {
+    const offer = batchOverlayOffer(get, createdIds);
+    if (offer) {
+      // The offer toast states "imported" itself, so it replaces (not
+      // supplements) the plain success toast below — two toasts saying the
+      // same thing back to back is noise, not confirmation.
+      toast(
+        `${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`,
+        "ok",
+        {
+          action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
+          ttlMs: TOAST_ACTION_TTL,
+        },
+      );
+    } else {
+      toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
+    }
+  }
   if (lastError) toast(`${lastError}${hint}`, "danger");
 }
 
