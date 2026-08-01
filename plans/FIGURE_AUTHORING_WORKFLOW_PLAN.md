@@ -328,6 +328,30 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-01 — Claude adversarial review of the F0/F1.1/F1.2 stack (PRs #95–#102)
+
+- Verified the audit's two load-bearing claims against the code before
+  accepting the thesis: `PlotView` does carry far more state than
+  `FigureConfig` (y2 axes, error keys, order/visibility, shapes,
+  annotations, waterfall, page setup), and `useFigureBuilder` does snapshot
+  store values into detached local `useState` with no write-back.
+- One blocking defect found and FIXED in-stack: the F0.1/F0.4 command
+  renames carried no legacy `keywords`, so palette/Help searches for
+  "figure builder" and "figure page" returned zero results (the exact
+  #78–#81 keyword-migration regression class — fuzzy match is an in-order
+  subsequence and "Publication preview…" contains no "f"). Both commands
+  now carry legacy keywords, a stale `originTips.ts` "Figure page" tip was
+  updated, and a findability regression test pins the legacy queries.
+- Follow-up booked, deliberately NOT restructured during review:
+  `useGraphBuilder.ts` grew 517 → 566 lines (over the 500-line habit,
+  unpinned by `MODULE_PINS`). F1.3 reworks this hook anyway — split
+  `commitToPlot` (or pin the file) as part of that slice, not before.
+- Everything else held: store APIs verified real (`createWindow`,
+  `focusWindow`, `rebindWindow`, window kinds), loss-inventory field names
+  verified against `FigureOverrides`, the dropped `specDatasetId` blocker
+  check proven unreachable, schema module proven isolated (no non-test
+  consumers), zero new lint warnings, row-state/no-eval/token guards green.
+
 ### 2026-08-01 — F1.2 versioned FigureDocument schema (ChatGPT-Sol)
 
 - Defined the version-1 `quantized.figure` persistence boundary with stable

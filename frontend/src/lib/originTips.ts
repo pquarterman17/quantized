@@ -87,8 +87,8 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "export",
     origin: "Export Graph (EMF / PDF)",
     quantized:
-      "Export figure… renders a publication figure — vector PDF/SVG by default (raster only on request). Figure page composes several plots into one labelled page.",
-    keywords: "export graph pdf svg vector emf publication figure page",
+      "Export figure… renders a publication figure — vector PDF/SVG by default (raster only on request). Multi-panel export composes several plots into one labelled page.",
+    keywords: "export graph pdf svg vector emf publication figure page multi panel",
   },
   {
     id: "send-to-origin",

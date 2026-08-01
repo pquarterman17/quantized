@@ -292,6 +292,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Publication preview…",
       description: "Preview and save or export a publication-sized copy; changes do not update the editable Stage plot.",
+      // Legacy names stay searchable — the F0.1 rename must not orphan
+      // "figure builder" muscle memory in the palette or Help.
+      keywords: "figure builder live preview publication",
       run: () => s().setFigureBuilderOpen(true),
     },
     {
@@ -300,6 +303,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
       section: "Build & export",
       label: "Multi-panel export…",
       description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
+      // Legacy names stay searchable — the F0.4 rename must not orphan
+      // "figure page" muscle memory in the palette or Help.
+      keywords: "figure page multi panel composite",
       run: () => s().setFigurePageOpen(true),
     },
     {
