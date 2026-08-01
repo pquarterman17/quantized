@@ -128,12 +128,27 @@ flow — the project doesn't exist until the first publish):
 
 ## Cutting a release
 
-1. **Bump the version in all four files** (they must match):
+1. **Bump the version everywhere — a correct release commit touches
+   EIGHT files** (verified against the v0.13.0 release commit; the three
+   lockfiles record the project version too, and a stale one fails the
+   `--locked` CI builds):
+
+   Five declarations (`tests/test_version_consistency.py` enforces they
+   agree):
    - `pyproject.toml` → `version`
    - `src/quantized/__init__.py` → `__version__`
    - `src-tauri/Cargo.toml` → `version`
    - `src-tauri/tauri.conf.json` → `version`
-   - (`frontend/package.json` → `version` — cosmetic, but keep it in sync)
+   - `frontend/package.json` → `version`
+
+   Three lockfiles, regenerated with their own tools (each diff is just
+   the project's own version line):
+
+   ```bash
+   uv lock                                            # uv.lock
+   cd frontend && npm install --package-lock-only     # package-lock.json
+   cd src-tauri && cargo update -w --offline          # Cargo.lock
+   ```
 
 2. **Commit + tag + push:**
 
