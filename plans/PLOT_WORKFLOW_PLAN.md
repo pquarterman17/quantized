@@ -100,9 +100,15 @@ parser (io/) ──> DataStruct.metadata.technique  (closed vocabulary + parser 
          `updateControlsForActiveDataset.m:197-228`); reflectometry log R
          (subsumes ncnr's `default_value_channels` special case)
 
-3. **[ ] "Plot selected together" command** — Library multi-select →
-   one overlay plot; generalizes `buildOverlayDataset` beyond Origin
-   figure apply. Menu + palette + Library context menu.
+3. **[x] ~~"Plot selected together" command~~** SHIPPED 2026-07-31
+   (`d32254b`) — Library multi-select → ONE merged overlay dataset
+   (curve per dataset, labelled by dataset name, y = `primaryChannel`),
+   via `buildSelectionOverlay` extracted from the Origin-only
+   `buildOverlayDataset` core. Menu + palette + Library context menu
+   (hidden unless multi-select). 2-D maps skipped by name in the toast;
+   refuses when <2 plottable remain. Deliberately distinct from the
+   pre-existing "Overlay in one plot" panel window (which keeps
+   datasets separate) — documented at the command registration.
 
 ## Tier 2 — Medium Impact
 

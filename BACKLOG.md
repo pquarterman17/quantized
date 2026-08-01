@@ -299,7 +299,6 @@ still make the owner switch back to Origin.
 |------|-------------|
 | Technique tag contract — every parser stamps `metadata.technique` from a closed vocabulary + parser name (today only `qd.py`/`ncnr.py` stamp anything and the frontend reads none of it). Foundation for the whole plot-workflow plan AND P1.3's recipe technique scope | PLOT_WORKFLOW #1 |
 | Standard-plot defaults table — technique → default view (channels, log/linear, error bars) applied silently in `datasetViewDefaults`; the auto-plot becomes the standard plot (XRD/SIMS/RSM log intensity, reflectometry log R); density heuristic stays the `generic` fallback | PLOT_WORKFLOW #2 (needs #1) |
-| "Plot selected together" command — Library multi-select → one overlay plot; generalizes `buildOverlayDataset` (`useApp.ts:1289`) beyond Origin figure apply. Independent — can ship first | PLOT_WORKFLOW #3 |
 | Zoom re-fetch on server-decimated payloads — zooming into a decimated plot shows the kept envelope only (client re-bucketing inert below its min-points threshold); viewport-driven re-fetch of the zoomed x-range is the finishing touch on the decimation ship | PRIMARY SOFTWARE P3.4 residual (booked at the 2026-07-31 merge) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
