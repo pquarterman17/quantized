@@ -2,6 +2,11 @@
 
 One place to register a parser (no MATLAB-style dual registration). Ambiguous
 extensions (``.dat``) resolve by sniffing file content.
+
+This is also the sole dispatch chokepoint for the technique tag contract
+(PLOT_WORKFLOW_PLAN item 1): :func:`import_auto` is the only caller of
+:func:`quantized.io.technique.stamp_technique`, because this module is the
+only place that knows *which* parser actually ran for a given path.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
 from quantized.io.spc import import_spc
+from quantized.io.technique import stamp_technique
 from quantized.io.xrdml import import_xrdml
 
 __all__ = [
@@ -205,6 +211,12 @@ def resolve_parser(path: Path) -> Parser:
 
 
 def import_auto(path: str | Path) -> DataStruct:
-    """Auto-detect format and import ``path`` into a DataStruct."""
+    """Auto-detect format and import ``path`` into a DataStruct.
+
+    Stamps ``metadata['technique']`` (closed vocabulary, see
+    :mod:`quantized.io.technique`) and normalizes ``metadata['parser_name']``
+    here -- the single dispatch chokepoint that knows which parser ran.
+    """
     resolved = Path(path)
-    return resolve_parser(resolved)(resolved)
+    parser = resolve_parser(resolved)
+    return stamp_technique(parser(resolved), parser)
