@@ -832,6 +832,26 @@ export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
  *  persisted `true`/`false` -> `"log"`/`"linear"`). */
 export type AxisScale = "linear" | "log" | "reciprocal";
 
+/** The technique tag every parser stamps into `DataStruct.metadata.technique`
+ *  (backend closed vocabulary, `quantized.io.technique` -- PLOT_WORKFLOW_PLAN
+ *  item 1). Drives the silent standard-plot defaults (`lib/techniqueDefaults.
+ *  ts`, item 2) and, later, per-technique view memory (item 5) and P1.3
+ *  recipe scoping (item 6). `"generic"` is the honest "ambiguous /
+ *  unclassified" tag -- parsers that can't tell (plain CSV/Excel, Origin
+ *  projects, the saved-import-filter path) stamp it rather than guess; the
+ *  same value is also the safe fallback for a missing/unrecognized tag on
+ *  the frontend (see `lib/techniqueDefaults.ts`'s `techniqueOf`). */
+export type Technique =
+  | "magnetometry.mvsh"
+  | "magnetometry.mvst"
+  | "xrd.powder"
+  | "xrd.rsm"
+  | "reflectometry"
+  | "sims"
+  | "transport"
+  | "spectroscopy"
+  | "generic";
+
 /** A per-channel styling override for the plot. Keyed in the store by the
  *  dataset *channel index* (stable across show/hide). Any field left unset
  *  falls back to the default (palette color by display position, 1.5 px,
