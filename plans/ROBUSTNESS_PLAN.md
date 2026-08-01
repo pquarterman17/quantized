@@ -12,11 +12,12 @@ checklist.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
-**Updated:** 2026-07-31 latest (Tier 2 #4/#5 SHIPPED — admission bound →
-429 + executor lifespan shutdown; #6 swept clean one-off, stays open for
-the recurring mechanism. Earlier same day: Tier 1 COMPLETE — #1/#2/#3
-shipped `cc02e65`, live-CI confirmed; #1 deliberately deviates from the
-literal "Node matrix" wording, see the item)
+**Updated:** 2026-08-01 (#7 census DONE — 1 real gap found and guarded
+same session (`tools/` ceiling, `c70b895`), 7 recorded LEAVEs. Only #6's
+recurring-sweep mechanism remains in Tier 2. Prior 2026-07-31: Tier 2
+#4/#5 SHIPPED — admission bound → 429 + executor lifespan shutdown; #6
+swept clean one-off. Earlier same day: Tier 1 COMPLETE — #1/#2/#3
+shipped `cc02e65`, live-CI confirmed)
 
 ---
 
@@ -160,12 +161,20 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
      renders user data through. The exposure was real and the class was
      invisible.
 
-7. **Guard-coverage census** — one pass asking, of every guard, *what does it
-   NOT see?*
-   - [ ] Enumerate file classes (`.py`, `.ts`, `.tsx`, `.mjs`, workflows,
-         config) against the guards that actually match them
-   - [ ] Book the uncovered intersections; add guards only where a real defect
-         class lives, not for symmetry
+7. **~~Guard-coverage census~~** DONE 2026-08-01 (Haiku agent, read-only;
+   guard landed `c70b895`) — one pass asking, of every guard, *what does
+   it NOT see?*
+   - [x] Censused 8 guards vs 8 uncovered file classes, largest-file
+         evidence per class
+   - [x] ONE real defect found: `tools/` Python walked by no guard, with
+         `export_origin_graphs.py` already at 506 lines (the `lib/api.ts`
+         class one directory over). `test_no_god_tools` added to
+         `test_repo_integrity.py` — 500 ceiling, shrink-only pin for the
+         one legacy file, both branches plant-verified. Seven deliberate
+         LEAVEs recorded (test files: intentional exemption; e2e specs,
+         CSS, TS config, Tauri `main.rs` 399, golden fixtures, workflow
+         YAML: no god-module debt signal — per the rule, no guards for
+         symmetry).
    - **Evidence:** `MODULE_PINS` (2026-07-29) closed a gap where `.tsx` had a
      ceiling and store `.ts` had pins but every other `.ts` had neither — which
      is exactly how `lib/api.ts` reached 2,282 lines unseen. That gap was found
