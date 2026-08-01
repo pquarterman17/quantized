@@ -12,12 +12,13 @@ checklist.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
-**Updated:** 2026-08-01 (#7 census DONE — 1 real gap found and guarded
-same session (`tools/` ceiling, `c70b895`), 7 recorded LEAVEs. Only #6's
-recurring-sweep mechanism remains in Tier 2. Prior 2026-07-31: Tier 2
-#4/#5 SHIPPED — admission bound → 429 + executor lifespan shutdown; #6
-swept clean one-off. Earlier same day: Tier 1 COMPLETE — #1/#2/#3
-shipped `cc02e65`, live-CI confirmed)
+**Updated:** 2026-08-01 (#6 SHIPPED — weekly OSV vuln-sweep workflow
+`9b7e91d`, both branches live-verified in Actions; **Tier 1 + Tier 2 are
+now COMPLETE**, only Tier 3 remains. Earlier same day: #7 census DONE —
+1 real gap found and guarded same session (`tools/` ceiling, `c70b895`),
+7 recorded LEAVEs. Prior 2026-07-31: Tier 2 #4/#5 SHIPPED — admission
+bound → 429 + executor lifespan shutdown. Earlier same day: Tier 1
+COMPLETE — #1/#2/#3 shipped `cc02e65`, live-CI confirmed)
 
 ---
 
@@ -148,13 +149,29 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
    - **Symptom to expect if left:** `qz` exits late, or appears to hang, after
      submitting a long fit.
 
-6. **No standing check on transitive vulnerability surface** — the repo
-   enforces a dependency *policy* (Apache-2.0, no GPL, tested) but nothing
-   watches for CVEs in packages it never declared.
-   - [ ] Add a periodic sweep (`gh api .../dependabot/alerts` + `npm audit`) or
-         make it a scheduled workflow
+6. **~~No standing check on transitive vulnerability surface~~** SHIPPED
+   2026-08-01 (`9b7e91d`) — weekly scheduled workflow
+   `.github/workflows/vuln-sweep.yml` (Mon 14:00 UTC + `workflow_dispatch`)
+   scans all three lockfiles (`uv.lock`, `frontend/package-lock.json`,
+   `src-tauri/Cargo.lock`) against OSV with a sha256-pinned osv-scanner.
+   - [x] NOT the sketched `gh api .../dependabot/alerts`: the Actions
+         GITHUB_TOKEN cannot read that API (403 even with
+         `security-events: read` — GitHub community #60612), and a PAT
+         secret would be a credential to rotate. A direct OSV scan needs no
+         token, covers the same advisory sources (GHSA + PyPA + RUSTSEC),
+         and adds the unmaintained-crate class Dependabot never surfaces
+         (16 found on first run, all in Tauri's gtk3/unic tree).
+   - [x] `osv-scanner.toml` is the triaged-advisory register: 17 dated
+         ID-level ignores (glib RUSTSEC-2024-0429 mirrors the 2026-07-25
+         Dependabot dismissal verbatim; package-level ignores were rejected
+         so a future REAL glib CVE still fires). Red run = new untriaged
+         advisory → fix, book, or add a dated entry; never leave it red.
+   - [x] Live-verified BOTH branches in Actions: planted red (glib entry
+         removed → run 30701400137 failed on exactly that finding, binary
+         checksum OK) then green (30701421829), plus a `workflow_dispatch`
+         from main post-merge (30701450548).
    - Swept 2026-07-31 (one-off, not the standing mechanism this item wants):
-     **0 open alerts**. The item stays open until the check is recurring.
+     **0 open alerts**.
    - **Evidence:** already named in BACKLOG after the 2026-07-24 round, where
      **13 of 14 alerts** arrived through `pillow` — a package this repo never
      declares, reached transitively via `matplotlib`, which `routes/export`
@@ -211,6 +228,13 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 ---
 
 ## Completed
+
+- ~~**Tier 2 #6 (recurring transitive-vuln sweep)**~~ (2026-08-01,
+  `9b7e91d`) — weekly `vuln-sweep.yml` + `osv-scanner.toml` triaged
+  register; details struck inline above. Design pivoted from the sketched
+  Dependabot-API query (GITHUB_TOKEN cannot read it) to a tokenless OSV
+  scan of all three lockfiles; red/green both plant-verified in live
+  Actions runs before merge.
 
 - ~~**Tier 2 #4 + #5 (job admission bound, executor shutdown)**~~
   (2026-07-31, Haiku agent `af6b605` + orchestrator hardening) — details
