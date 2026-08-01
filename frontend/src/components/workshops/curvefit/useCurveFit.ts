@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
-import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
+import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import {
@@ -23,6 +23,8 @@ import {
   type FitParamRow,
 } from "../../../lib/fitParams";
 import { dyForFit } from "../../../lib/fitweights";
+import type { ByColumnOption } from "../useByPartition";
+import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -60,6 +62,19 @@ export interface CurveFitState {
   /** Non-fatal weighting note (e.g. missing/invalid error column → fit ran
    *  unweighted); null when weighting resolved cleanly. */
   weightNote: string | null;
+  // ── "By" grouping (JMP_GAP J7 residual) ─────────────────────────────────
+  // Display-only: none of it touches the plot overlay, the recorded macro/
+  // pipeline step, or the durable FitSpec, and every level fits UNWEIGHTED
+  // regardless of weightMode (see useCurveFitByLevel's header doc).
+  byOptions: ByColumnOption[];
+  byCol: number | null;
+  setByCol: (i: number | null) => void;
+  byLevels: { label: string }[];
+  /** Uncapped level count — > byLevels.length means the partition was
+   *  truncated at BY_MAX_LEVELS and the panel must say so. */
+  byTotalLevels: number;
+  byResults: CurveFitLevelResult[];
+  byBusy: boolean;
 }
 
 export function useCurveFit(): CurveFitState {
@@ -126,12 +141,41 @@ export function useCurveFit(): CurveFitState {
   // has a designated error column (from Origin designations or manual pairing).
   const hasYErr = xy != null && errKeys[xy.yKey] != null;
 
+  // JMP_GAP J7 residual — "By" grouping. `data` is the analysis view (guard
+  // #11); the candidate By list excludes whichever columns are already
+  // driving the plotted fit (grouping by the very column being fit against
+  // would be redundant). useCurveFitByLevel resets to none if xKey/the
+  // plotted yKey change underneath a picked By column.
+  const data = useMemo(() => analysisData(active), [active]);
+  const plottedYKeyNow = xy?.yKey ?? null;
+  const byColumns = useMemo<ByColumnOption[]>(() => {
+    if (!active) return [];
+    return active.data.labels
+      .map((lab, i) => ({ index: i, label: lab }))
+      .filter((c) => c.index !== xKey && c.index !== plottedYKeyNow);
+  }, [active, xKey, plottedYKeyNow]);
+
   const model = models.find((m) => m.name === modelName);
   useEffect(() => {
     setParamRows((prev) => rowsForModel(model, prev));
     // Keyed on the model identity, not the object, so a models[] refetch
     // does not wipe the user's edits.
   }, [modelName, models.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // JMP_GAP J7 residual: the SAME custom start/bounds/fixed decision the
+  // un-partitioned "Fit" button makes (rowsAreDefault/parseFitParams),
+  // memoized so every By level's fetch effect doesn't refire every render.
+  // An invalid table (parsed.error) degrades to "no override" for the By
+  // fetch rather than duplicating the main Fit button's own error surface.
+  const paramsCustom = !rowsAreDefault(paramRows, model);
+  const customStart = useMemo<CurveFitByLevelStart | undefined>(() => {
+    if (!paramsCustom) return undefined;
+    const parsed = parseFitParams(paramRows, model);
+    if (parsed.error) return undefined;
+    return { p0: parsed.p0, lower: parsed.lower, upper: parsed.upper, fixed: parsed.fixed };
+  }, [paramsCustom, paramRows, model]);
+
+  const byLevel = useCurveFitByLevel(active, data, byColumns, modelName, xKey, plottedYKeyNow, customStart);
 
   async function run(kind: "guess" | "fit"): Promise<void> {
     if (!active) return;
@@ -301,5 +345,12 @@ export function useCurveFit(): CurveFitState {
     setManualKey,
     hasYErr,
     weightNote,
+    byOptions: byLevel.byOptions,
+    byCol: byLevel.byCol,
+    setByCol: byLevel.setByCol,
+    byLevels: byLevel.levels,
+    byTotalLevels: byLevel.totalLevels,
+    byResults: byLevel.results,
+    byBusy: byLevel.busy,
   };
 }

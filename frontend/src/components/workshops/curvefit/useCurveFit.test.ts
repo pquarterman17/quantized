@@ -348,3 +348,98 @@ describe("useCurveFit corner plot (gap #29 UI leg)", () => {
     expect(result.current.cornerBusy).toBe(false);
   });
 });
+
+// 12 rows: col0 "grp" (2-level nominal By column), col1 "y" (continuous,
+// plotted). Nominal inference needs >=12 samples, <=8 distinct levels, each
+// level used >=3x on average — grp (2 distinct / 12 rows) qualifies; y (12
+// distinct values) does not, so it reads continuous and is what's plotted.
+const BY_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  values: [
+    [0, 10], [0, 20], [0, 30], [0, 40], [0, 50], [0, 60],
+    [1, 15], [1, 25], [1, 35], [1, 45], [1, 55], [1, 65],
+  ],
+  labels: ["grp", "y"],
+  units: ["", ""],
+  metadata: {},
+};
+
+describe("useCurveFit — By grouping (JMP_GAP_PLAN J7 residual)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: [1],
+      seriesOrder: null,
+      errKeys: {},
+      fitOverlay: null,
+    });
+  });
+
+  it("offers the categorical column as By, excluding the plotted y channel", async () => {
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.byOptions.length).toBeGreaterThan(0));
+    expect(result.current.byOptions).toEqual([{ index: 0, label: "grp" }]);
+  });
+
+  it("fits each level independently on its own x/y slice, never touching the plot overlay", async () => {
+    vi.mocked(fitModel).mockImplementation((body: { x: number[] }) =>
+      Promise.resolve({ params: [body.x[0]], yFit: body.x.map(() => 0) }),
+    );
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.byOptions.length).toBeGreaterThan(0));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(2));
+
+    expect(fitModel).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "Linear", x: [0, 1, 2, 3, 4, 5], y: [10, 20, 30, 40, 50, 60] }),
+    );
+    expect(fitModel).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "Linear", x: [6, 7, 8, 9, 10, 11], y: [15, 25, 35, 45, 55, 65] }),
+    );
+    // Display-only: the singleton overlay/spec are untouched by By fetches.
+    expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().datasets[0].fitSpec).toBeUndefined();
+  });
+
+  it("a level too small/invalid for the model surfaces an honest per-level error, not a crash", async () => {
+    vi.mocked(fitModel).mockImplementation((body: { x: number[] }) =>
+      body.x[0] === 0
+        ? Promise.reject(new Error("singular"))
+        : Promise.resolve({ params: [1], yFit: body.x.map(() => 0) }),
+    );
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.byOptions.length).toBeGreaterThan(0));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(2));
+    const [lvl0, lvl1] = result.current.byResults;
+    expect(lvl0.error).toBe("singular");
+    expect(lvl0.result).toBeNull();
+    expect(lvl1.error).toBeNull();
+    expect(lvl1.result).not.toBeNull();
+  });
+
+  it("re-fits every level when the model changes", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [0] });
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.byOptions.length).toBeGreaterThan(0));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(2));
+    vi.mocked(fitModel).mockClear();
+    act(() => result.current.setModelName("Quadratic"));
+    await waitFor(() =>
+      expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ model: "Quadratic" })),
+    );
+  });
+
+  it("clears byResults when By is set back to none", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [0] });
+    const { result } = renderHook(() => useCurveFit());
+    await waitFor(() => expect(result.current.byOptions.length).toBeGreaterThan(0));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(2));
+    act(() => result.current.setByCol(null));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(0));
+  });
+});

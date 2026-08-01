@@ -32,6 +32,7 @@ export default function WeightingSection(p: Props) {
     <div style={{ marginTop: 10 }}>
       <label className="qzk-field-lbl">Weighting</label>
       <Select
+        aria-label="Weighting"
         options={modeOptions.map((o) => ({ value: o.value, label: o.label }))}
         value={p.weightMode}
         disabled={!p.active}

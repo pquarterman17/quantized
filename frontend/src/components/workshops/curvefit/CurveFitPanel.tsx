@@ -14,6 +14,7 @@ import { fmtNum as fmt } from "../../../lib/format";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
+import CurveFitByLevelSection from "./CurveFitByLevelSection";
 import EquationModelPanel from "./EquationModelPanel";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import FindXYSection from "./FindXYSection";
@@ -56,7 +57,17 @@ export default function CurveFitPanel() {
     paramRows: paramInputs,
     setParamRow,
     resetParamRows,
+    // JMP_GAP J7 residual — "By" grouping (display-only, unweighted; see
+    // useCurveFitByLevel's header doc).
+    byOptions,
+    byCol,
+    setByCol,
+    byLevels,
+    byTotalLevels,
+    byResults,
+    byBusy,
   } = useCurveFit();
+  const byActive = byLevels.length > 0;
 
   const fitParams = (
     <FitParamsSection rows={paramInputs} setRow={setParamRow} reset={resetParamRows} />
@@ -175,6 +186,26 @@ export default function CurveFitPanel() {
       {weighting}
       {fitParams}
 
+      {/* "By" grouping (JMP_GAP_PLAN J7 residual): re-runs this SAME model
+          fit once per level of an optional categorical column, display-only
+          (never touches the plot overlay/macro/FitSpec) and unweighted. */}
+      {byOptions.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <label className="qzk-field-lbl">By (optional)</label>
+          <Select
+            aria-label="By (optional)"
+            options={[{ value: "", label: "None" }, ...byOptions.map((c) => ({ value: String(c.index), label: c.label }))]}
+            value={byCol == null ? "" : String(byCol)}
+            onChange={(e) => setByCol(e.target.value === "" ? null : Number(e.target.value))}
+          />
+          {byActive && weightMode !== "none" && (
+            <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+              By levels fit unweighted (weighting is not yet supported per level)
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <Button size="sm" disabled={!active || busy} onClick={() => run("guess")}>
           Auto-guess
@@ -194,37 +225,58 @@ export default function CurveFitPanel() {
           {error}
         </div>
       )}
-      <FitConvergenceWarning result={guessOnly ? null : result} />
+      {!byActive && <FitConvergenceWarning result={guessOnly ? null : result} />}
 
-      {paramRows.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <DataTable columns={["param", "value", "± err"]} rows={paramRows} />
-        </div>
-      )}
-      {statRows.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <DataTable columns={["stat", "value"]} rows={statRows} />
-        </div>
-      )}
-      {result && !guessOnly && (
-        <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-          <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
-            {reporting ? "Reporting…" : "→ Report"}
-          </Button>
-          <Button
-            size="sm"
-            disabled={cornerBusy}
-            title="Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"
-            onClick={() => void runCornerPlot()}
-          >
-            {cornerBusy ? "Bootstrapping…" : "Corner plot…"}
-          </Button>
-        </div>
-      )}
+      {byActive ? (
+        <>
+          {byTotalLevels > byLevels.length && (
+            <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+              By column has {byTotalLevels} levels — showing the first {byLevels.length}
+            </div>
+          )}
+          {byBusy && byResults.length === 0 ? (
+            <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
+              fitting {byLevels.length} levels…
+            </div>
+          ) : (
+            byResults.map((r) => (
+              <CurveFitByLevelSection key={r.label} result={r} paramNames={paramNames} />
+            ))
+          )}
+        </>
+      ) : (
+        <>
+          {paramRows.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <DataTable columns={["param", "value", "± err"]} rows={paramRows} />
+            </div>
+          )}
+          {statRows.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <DataTable columns={["stat", "value"]} rows={statRows} />
+            </div>
+          )}
+          {result && !guessOnly && (
+            <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+              <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
+                {reporting ? "Reporting…" : "→ Report"}
+              </Button>
+              <Button
+                size="sm"
+                disabled={cornerBusy}
+                title="Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"
+                onClick={() => void runCornerPlot()}
+              >
+                {cornerBusy ? "Bootstrapping…" : "Corner plot…"}
+              </Button>
+            </div>
+          )}
 
-      {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
-      {result && !guessOnly && xRange && (
-        <FindXYSection target={{ model: modelName, params, xMin: xRange.min, xMax: xRange.max }} />
+          {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
+          {result && !guessOnly && xRange && (
+            <FindXYSection target={{ model: modelName, params, xMin: xRange.min, xMax: xRange.max }} />
+          )}
+        </>
       )}
 
       {/* AICc quick-scan (GOTO #6) — rank all plausible models; click applies. */}
