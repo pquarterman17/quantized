@@ -21,14 +21,17 @@ import { useEffect, useRef, useState } from "react";
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 import { forceHydrate } from "../../store/windowHydration";
+import { editableFigureDirty } from "../../store/figureLifecycle";
 import { buildMenuItems } from "../../lib/contextActions";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { windowCloseAction, windowCoreActions, type WindowActionTarget } from "./windowMenu";
+import { closeFigureWindow } from "./figureLifecycleUi";
 
 const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
 
 export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
-  const closeWindow = useApp((s) => s.closeWindow);
+  const saveFigure = useApp((s) => s.saveFigure);
+  const figureDirty = useApp((s) => editableFigureDirty(s, win));
   const setWindowBg = useApp((s) => s.setWindowBg);
   const cycleWindowLinkGroup = useApp((s) => s.cycleWindowLinkGroup);
   const toggleWindowPin = useApp((s) => s.toggleWindowPin);
@@ -100,6 +103,18 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           }}
         >
           ⇄
+        </button>
+      )}
+      {win.kind === "plot" && (
+        <button
+          type="button"
+          className="qzk-plotwin-save"
+          title={figureDirty ? "Save editable figure (unsaved changes)" : "Editable figure is saved"}
+          aria-label="Save editable figure"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => saveFigure(win.id)}
+        >
+          {figureDirty ? "●" : "✓"}
         </button>
       )}
       {rebindMenu && (
@@ -177,7 +192,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
         className="qzk-plotwin-close"
         aria-label="Close window"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => closeWindow(win.id)}
+        onClick={() => { void closeFigureWindow(win.id); }}
       />
     </>
   );

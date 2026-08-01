@@ -9,6 +9,12 @@ import { pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
+import {
+  FIGURE_DOCUMENT_VERSION,
+  figureDocumentVersion,
+  sanitizeFigureDocument,
+  type FigureDocument,
+} from "./figureDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import type { PlotWindow } from "./plotview";
@@ -63,6 +69,7 @@ export interface WorkspaceState {
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
+  editableFigures?: FigureDocument[];
   plotWindows?: PlotWindow[];
   focusedWindowId?: string | null;
   /** GUI_INTERACTION_PLAN #10 item 3 — every floating ToolWindow's persisted
@@ -90,6 +97,7 @@ export interface LoadedWorkspace {
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
+  editableFigures: FigureDocument[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
@@ -113,6 +121,7 @@ interface WorkspaceDoc {
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
+  editableFigures: FigureDocument[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
@@ -137,6 +146,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
     figureDocs: ws.figureDocs ?? [],
+    editableFigures: ws.editableFigures ?? [],
     // MULTI_PLOT_PLAN item 7: passed through VERBATIM — the caller (the
     // store's `windowsForSave()`, per the interface doc above) is
     // responsible for the focused window's live-view snapshot; this module
@@ -222,6 +232,30 @@ function parseFolders(v: unknown): FolderNode[] {
   }
   const ids = new Set(out.map((f) => f.id));
   return out.map((f) => (f.parentId && !ids.has(f.parentId) ? { ...f, parentId: null } : f));
+}
+
+/** Canonical editable figures are strict at the version boundary: silently
+ * accepting a future schema could discard settings when the workspace is
+ * saved again. Malformed v1 entries are dropped; duplicate ids keep first. */
+function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>): FigureDocument[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const documents: FigureDocument[] = [];
+  for (const candidate of value) {
+    const version = figureDocumentVersion(candidate);
+    if (version !== null && version !== FIGURE_DOCUMENT_VERSION) {
+      throw new Error(`unsupported editable figure version ${version}`);
+    }
+    const document = sanitizeFigureDocument(candidate);
+    if (!document || seen.has(document.id)) continue;
+    seen.add(document.id);
+    documents.push(
+      document.bindings.datasetId && !datasetIds.has(document.bindings.datasetId)
+        ? { ...document, bindings: { ...document.bindings, datasetId: null } }
+        : document,
+    );
+  }
+  return documents;
 }
 
 function stringsIn(v: unknown, valid: Set<string>): string[] {
@@ -525,6 +559,7 @@ export function parseWorkspace(
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
+  const editableFigures = parseEditableFigures(o.editableFigures, dsIds);
   // Plot window layout (MULTI_PLOT_PLAN item 7) — additive-optional, so a
   // pre-item-7 doc (absent field) sanitizes to [] via the same
   // undefined-input path every other sanitizer here already handles.
@@ -564,6 +599,7 @@ export function parseWorkspace(
     macroSteps,
     recalcMode,
     figureDocs,
+    editableFigures,
     plotWindows,
     focusedWindowId,
     toolWindowLayout,

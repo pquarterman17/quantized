@@ -95,6 +95,7 @@ import { recomputeStaleFits } from "./recalcFits";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
+import { createFigureLifecycleSlice, pruneEditableFigureRefs, type FigureLifecycleSlice } from "./figureLifecycle";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
@@ -312,7 +313,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -332,8 +333,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   reports: ReportEntry[];
   // The report currently open in the viewer ToolWindow (null = closed).
   openReportId: string | null;
-  // Figure documents (#12): named figures that re-open/re-edit/re-export at
-  // any time. `figureDocSeed` hands an opened doc to the figure builder.
+  // Legacy publication-preview documents; canonical editable figures live in FigureLifecycleSlice.
   figureDocs: FigureDoc[];
   figureDocSeed: FigureDoc | null;
   // Recalc engine (#1): auto re-runs downstream corrections/fits when data
@@ -926,6 +926,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
+  ...createFigureLifecycleSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1602,6 +1603,7 @@ export const useApp = create<AppState>((set, get) => ({
         macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
         recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
         figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
+        editableFigures: ws.editableFigures ?? [],
         figureDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
@@ -1758,11 +1760,12 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
+      const editableFigures = pruneEditableFigureRefs(s.editableFigures, removed);
       // A removed dataset nulls any window bound to it (MULTI_PLOT_PLAN
       // decision #4) / drops out of any panel window's list (item 19) — the
       // window shows an empty state, never force-closed.
       const plotWindows = pruneWindowDatasetRefs(s.plotWindows, removed);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
     });
   },
   // Delete key: remove every selected dataset (falling back to the active one
@@ -1799,8 +1802,9 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
+      const editableFigures = pruneEditableFigureRefs(s.editableFigures, drop);
       const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
     });
   },
 
@@ -1820,6 +1824,7 @@ export const useApp = create<AppState>((set, get) => ({
       originFidelity: [],
       reports: [],
       figureDocs: [],
+      editableFigures: [],
     });
     set({ status: "removed all datasets, folders, figures, and reports" });
   },
@@ -2676,17 +2681,13 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   setOpenReport: (openReportId) => set({ openReportId }),
   // ── Figure documents (#12) ──────────────────────────────────────────────
-  addFigureDoc: (doc) =>
-    set((s) => ({
-      figureDocs: [...s.figureDocs, doc],
-      status: `figure "${doc.name}" saved`,
-    })),
-  removeFigureDoc: (id) =>
-    set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) })),
-  renameFigureDoc: (id, name) =>
-    set((s) => ({
+  addFigureDoc: (doc) => set((s) => ({
+    figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
+  })),
+  removeFigureDoc: (id) => set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) })),
+  renameFigureDoc: (id, name) => set((s) => ({
       figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
-    })),
+  })),
   duplicateFigureDoc: (id) =>
     set((s) => {
       const src = s.figureDocs.find((f) => f.id === id);
@@ -2703,7 +2704,6 @@ export const useApp = create<AppState>((set, get) => ({
     if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
     set({ figureDocSeed: doc, figureBuilderOpen: true });
   },
-  // Open = activate the doc's dataset and hand the config to the builder.
   openFigureDoc: (id) => {
     const doc = get().figureDocs.find((f) => f.id === id);
     if (doc) get().openFigureDraft(doc);

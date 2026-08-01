@@ -61,10 +61,12 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 13 Window-group commands (item 17 adds the worksheet/map document-window pair) with the documented shortcuts", () => {
+  it("publishes the editable-figure File commands plus the 13 Window commands with documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
+      "figure-save",
+      "figure-save-as",
       "window-new",
       "window-duplicate",
       "window-close",
@@ -79,7 +81,9 @@ describe("useWindowCommands — published registry entries", () => {
       "window-focus-next",
       "window-focus-prev",
     ]);
-    expect(useCommands.getState().menuCommands.every((c) => c.group === "Window")).toBe(true);
+    expect(action("figure-save").group).toBe("File");
+    expect(action("figure-save-as").group).toBe("File");
+    expect(useCommands.getState().menuCommands.filter((c) => c.id.startsWith("window-")).every((c) => c.group === "Window")).toBe(true);
     expect(action("window-new").shortcut).toBe("⌘⇧N");
     expect(action("window-close").shortcut).toBe("⌘⇧W");
   });

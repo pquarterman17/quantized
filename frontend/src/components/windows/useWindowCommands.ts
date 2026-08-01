@@ -21,6 +21,7 @@ import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
+import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
 
 function isEditing(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
@@ -52,7 +53,17 @@ function duplicateFocusedWindow(): void {
  *  the ≥1-window invariant). */
 function closeFocusedWindow(): void {
   const s = useApp.getState();
-  if (s.focusedWindowId) s.closeWindow(s.focusedWindowId);
+  if (s.focusedWindowId) void closeFigureWindow(s.focusedWindowId);
+}
+
+function saveFocusedFigure(): void {
+  const s = useApp.getState();
+  if (s.focusedWindowId) s.saveFigure(s.focusedWindowId);
+}
+
+function saveFocusedFigureAs(): void {
+  const id = useApp.getState().focusedWindowId;
+  if (id) void saveFigureAs(id);
 }
 
 /** Snapshot to New Window (item 11): freeze the focused window's CURRENT
@@ -150,6 +161,8 @@ function togglePinFocusedWindow(): void {
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
+      { id: "figure-save", group: "File", label: "Save Editable Figure", run: saveFocusedFigure },
+      { id: "figure-save-as", group: "File", label: "Save Editable Figure As…", run: saveFocusedFigureAs },
       { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
       {
         id: "window-duplicate",

@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-01 — initial read-only workflow audit and implementation plan
+**Updated:** 2026-08-01 — F1.4 editable-figure lifecycle implementation
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -170,10 +170,10 @@ migration design; GPT-5.6 Terra high / Claude Sonnet 5 for bounded UI slices.
       dataset bindings, plot type, channels/errors/groups/facets, axes and
       breaks, series state, legend, annotations/shapes, page/output settings,
       and migration behavior.
-- [ ] **F1.3 Adapt existing plot windows.** A Stage/window plot should open and
+- [x] **F1.3 Adapt existing plot windows.** A Stage/window plot should open and
       edit the FigureDocument rather than maintain a parallel authoritative
       copy. Preserve current interaction performance and view-history behavior.
-- [ ] **F1.4 Add document lifecycle.** Implement Save, Save As, dirty state,
+- [x] **F1.4 Add document lifecycle.** Implement Save, Save As, dirty state,
       close confirmation, update-in-place, duplicate, rename, and delete using
       normal workspace undo/recovery conventions.
 - [ ] **F1.5 Make conversions reversible.** Provide one tested path among
@@ -327,6 +327,24 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F1.4 editable FigureDocument lifecycle (ChatGPT-Sol)
+
+- Added a workspace-persisted **Editable figures** collection distinct from
+  legacy **Publication figures**, with Save, Save As, update-in-place, reopen,
+  rename, duplicate, and undoable delete actions.
+- Added dirty-state feedback to plot-window chrome plus close-without-saving
+  confirmation on the title button, right-click menu, command palette, and
+  Window menu paths. The sole maximized plot remains operable through commands.
+- Reopening focuses an already-open document or creates a document-backed plot
+  window without reducing its canonical state to the legacy export model.
+- Saved documents round-trip `.dwk`, repair dangling dataset bindings without
+  being dropped, reject unsupported future schema versions, and participate in
+  normal workspace undo/redo. The Library section is lazy-loaded to preserve
+  the startup bundle budget.
+- F1.3 is now complete: both live/resting plot windows and workspace restore use
+  FigureDocument as the authority, with PlotView retained only as the focused
+  compatibility/rendering facade.
 
 ### 2026-08-01 — F1.3b FigureDocument workspace migration (ChatGPT-Sol)
 

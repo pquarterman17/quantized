@@ -22,12 +22,25 @@ import { nextPlotBg, type PlotWindow } from "../../lib/plotview";
 import type { ContextAction } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";
 import { forceHydrate } from "../../store/windowHydration";
+import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
 
 export interface WindowActionTarget {
   win: PlotWindow;
 }
 
 export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
+  {
+    id: "window.saveFigure",
+    label: "Save Editable Figure",
+    hidden: (t) => t.win.kind !== "plot",
+    run: (t) => useApp.getState().saveFigure(t.win.id),
+  },
+  {
+    id: "window.saveFigureAs",
+    label: "Save Editable Figure As…",
+    hidden: (t) => t.win.kind !== "plot",
+    run: (t) => { void saveFigureAs(t.win.id); },
+  },
   {
     id: "window.duplicate",
     label: "Duplicate Window",
@@ -75,7 +88,7 @@ export const windowCoreActions: ContextAction<WindowActionTarget>[] = [
 export const windowCloseAction: ContextAction<WindowActionTarget> = {
   id: "window.close",
   label: "Close Window",
-  run: (t) => useApp.getState().closeWindow(t.win.id),
+  run: (t) => { void closeFigureWindow(t.win.id); },
 };
 
 /** Every window action, flat — for callers that don't care about layout. */

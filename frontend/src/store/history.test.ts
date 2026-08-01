@@ -281,6 +281,7 @@ describe("per-action-class undo/redo coverage", () => {
       macroSteps: [],
       recalcMode: "auto",
       figureDocs: [],
+      editableFigures: [],
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},

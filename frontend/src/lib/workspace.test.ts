@@ -771,6 +771,28 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     });
   });
 
+  it("round-trips saved editable figures separately from publication figures", () => {
+    const datasets = [makeDataset("a", "first")];
+    const editable = createFigureDocument({
+      id: "saved-editable",
+      name: "Reopen me",
+      datasetId: "a",
+      view: { ...defaultPlotView(), plotTitle: "Persistent" },
+    });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, editableFigures: [editable] }));
+    expect(loaded.editableFigures).toEqual([editable]);
+    expect(loaded.figureDocs).toEqual([]);
+  });
+
+  it("fails closed on an unsupported saved editable-figure version", () => {
+    const raw = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<string, unknown>;
+    raw.editableFigures = [{
+      ...createFigureDocument({ id: "future", name: "Future", datasetId: "a", view: defaultPlotView() }),
+      version: 2,
+    }];
+    expect(() => parseWorkspace(JSON.stringify(raw))).toThrow("unsupported editable figure version 2");
+  });
+
   it("clamps a window's dangling dataset ref to null (never drops the window itself)", () => {
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(
@@ -1143,7 +1165,8 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       reports: [],
       macroSteps: [],
       recalcMode: "auto",
-      figureDocs: [],
+    figureDocs: [],
+    editableFigures: [],
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},

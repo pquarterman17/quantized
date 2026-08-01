@@ -11,7 +11,7 @@
 // here: clear the filter, expand the dataset's ancestor folders, select it,
 // scroll it into view).
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
@@ -32,6 +32,8 @@ import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
 import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
+
+const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -235,6 +237,7 @@ export default function Library() {
 
       {!inTree && <FiguresSection />}
       <OriginFidelitySection />
+      <Suspense fallback={null}><EditableFiguresSection /></Suspense>
       <SavedFiguresSection />
       <ReportsSection />
       <BookFamiliesSection />
