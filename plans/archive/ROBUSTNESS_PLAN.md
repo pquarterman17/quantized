@@ -9,7 +9,10 @@ below was found by evidence on 2026-07-29 — a defect that had already shipped,
 or a guard that provably could not see one — not by a general robustness
 checklist.
 
-**Status:** Active
+**Status:** Complete (2026-08-01 — every item closed or folded up: Tiers
+1+2 shipped; #9 shipped; #10 decided NO with a reopen condition; #8, the
+one owner-parked residue, folded up to `MAIN_PLAN.md` Owner gates per the
+fold-up rule. Archived to `plans/archive/`.)
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
 **Updated:** 2026-08-01 (#9 SHIPPED — the malformed-dataset sweep now
@@ -203,7 +206,11 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 
 ## Tier 3 — Nice-to-Have
 
-8. **Node version-manager standardization** — `fermiviewer` pins with Volta
+8. **Node version-manager standardization** — FOLDED UP to `MAIN_PLAN.md`
+   Owner gates 2026-08-01 (fold-up rule: the last open item when this plan
+   completed; owner-parked since 2026-07-29, so it lives with the other
+   owner gates). Original content kept below for the archive:
+   `fermiviewer` pins with Volta
    (`frontend/package.json`, 22.22.3); quantized now has a root `.nvmrc` (22).
    Two repos, two mechanisms.
    - [ ] Standardize on one (recommendation: Volta — PATH shims apply to
@@ -232,13 +239,34 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
    - [x] Both guard directions plant-verified (removed entry → "missing";
          invented entry → "stale"). Gate: 3,500 backend + ruff + mypy.
 
-10. **Pre-commit hooks** — none configured; CI is the only gate.
-    - [ ] Judge whether local hooks earn their friction here, given CI already
-          runs the full gate and the owner works across two machines
+10. **~~Pre-commit hooks~~** DECIDED NO 2026-08-01 (deliberate LEAVE, not
+    a deferral) — local hooks do not earn their friction in this repo:
+    - [x] CI already runs the full gate on every push/PR and `main` is
+          branch-protected (5 required checks); red-on-main from unhooked
+          commits has not been a recurring failure mode — this plan's own
+          evidence items were coverage/environment gaps, not missed local
+          checks.
+    - [x] The owner runs parallel Claude sessions in one working tree
+          with a many-small-commits workflow (plan-hygiene: one commit
+          per item closure); per-commit hook latency taxes every session,
+          and the only checks fast enough for a hook (ruff/eslint,
+          seconds) are the least likely to catch what the sessions' own
+          gates miss — the load-bearing suites (pytest ~2.7 min, vitest
+          ~5k tests) are far too slow for per-commit.
+    - [x] Hooks are per-machine wiring on a two-machine setup where
+          `settings.json`/git hooks do not sync — a hook present on one
+          machine and absent on the other manufactures false confidence.
+    - **Reopen condition:** if breakage from direct pushes to `main`
+      becomes recurring, revisit with a fast-subset hook (ruff + eslint
+      only) shipped via a committed `core.hooksPath` so both machines
+      get it from the repo, not from local setup.
 
 ---
 
 ## Completed
+
+- ~~**Tier 3 #10 (pre-commit hooks)**~~ (2026-08-01) — DECIDED NO;
+  rationale + reopen condition struck inline above.
 
 - ~~**Tier 3 #9 (enumerated malformed-route sweep)**~~ (2026-08-01,
   `a56a726`) — the sweep's route list is now derived from the OpenAPI
