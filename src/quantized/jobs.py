@@ -23,16 +23,21 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["AbortFn", "Job", "JobCancelled", "JobStore", "ProgressFn", "jobs"]
+__all__ = ["AbortFn", "Job", "JobCancelled", "JobQueueFullError", "JobStore", "ProgressFn", "jobs"]
 
 ProgressFn = Callable[[float, str], None]
 AbortFn = Callable[[], bool]
 
 _TERMINAL = ("done", "error", "cancelled")
+_PENDING_ADMISSION_BOUND = 32  # Reject new jobs if this many are already pending
 
 
 class JobCancelled(Exception):
     """Raised inside a job body when cancellation was requested."""
+
+
+class JobQueueFullError(Exception):
+    """Raised when job admission is refused due to queue saturation."""
 
 
 @dataclass
@@ -94,9 +99,19 @@ class JobStore:
         :class:`JobCancelled` after a cancel request); ``abort_check()`` returns
         True once cancellation was requested, for bodies that poll the flag
         between iterations instead.
+
+        Raises :class:`JobQueueFullError` if the number of pending jobs is
+        already >= ``_PENDING_ADMISSION_BOUND`` (admission control).
         """
         job = Job(id=uuid.uuid4().hex[:12])
         with self._lock:
+            # Admission control: reject if too many jobs are pending.
+            pending_count = sum(1 for j in self._jobs.values() if j.status == "pending")
+            if pending_count >= _PENDING_ADMISSION_BOUND:
+                raise JobQueueFullError(
+                    f"job queue full ({pending_count} pending >= {_PENDING_ADMISSION_BOUND})"
+                )
+
             # Bound the registry: drop the oldest finished jobs past 100.
             if len(self._jobs) > 100:
                 # Grace window (review 2026-07-11): the poll protocol is two
