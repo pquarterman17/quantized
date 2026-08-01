@@ -27,10 +27,33 @@ export function liveWindowDocument(state: AppState, window: PlotWindow): FigureD
 }
 
 export function editableFigureDirty(state: AppState, window: PlotWindow): boolean {
+  if (window.kind !== "plot" || !window.document) return false;
+  // Cheap path first: this runs inside a per-window Zustand selector on EVERY
+  // store notification (including pointermove-rate window drags), and the
+  // common case — a window never saved as a figure — needs no document
+  // rebuild or stringify to answer. The id never changes with the live
+  // facade, so the lookup is equivalent to resolving the live document.
+  const saved = state.editableFigures.find((document) => document.id === window.document?.id);
+  if (!saved) return true;
   const current = liveWindowDocument(state, window);
-  if (!current) return false;
-  const saved = state.editableFigures.find((document) => document.id === current.id);
-  return !saved || JSON.stringify(saved) !== JSON.stringify(current);
+  return current !== null && JSON.stringify(saved) !== JSON.stringify(current);
+}
+
+/** True only when a SAVED editable figure has drifted from the window's live
+ *  state. Distinct from `editableFigureDirty` (which is also true for a
+ *  window never saved as a figure — the titlebar ● indicator's meaning):
+ *  destructive-action confirms are reserved for the opted-in saved-figure
+ *  case. Closing a never-saved window is fully undoable (closeWindow records
+ *  history and plotWindows is in the history snapshot) and the window
+ *  persists in the workspace regardless, so per the confirm-exemption
+ *  convention (GUI_INTERACTION #17: undoable actions don't confirm) it must
+ *  not gate a routine MDI close. */
+export function editableFigureHasUnsavedEdits(state: AppState, window: PlotWindow): boolean {
+  if (window.kind !== "plot" || !window.document) return false;
+  const saved = state.editableFigures.find((document) => document.id === window.document?.id);
+  if (!saved) return false;
+  const current = liveWindowDocument(state, window);
+  return current !== null && JSON.stringify(saved) !== JSON.stringify(current);
 }
 
 export function pruneEditableFigureRefs(

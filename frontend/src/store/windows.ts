@@ -598,6 +598,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const sourceDocument = src.document;
         dup.document = createPlotWindowDocument(newId, title, plotWindowDatasetId(src), view, {
           previous: sourceDocument,
+          freshIdentity: true, // else Save on the copy overwrites the ORIGINAL saved figure
         });
       }
       set({ plotWindows: [...s.plotWindows, dup] });

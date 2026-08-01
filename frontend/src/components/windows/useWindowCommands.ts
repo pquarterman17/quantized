@@ -161,8 +161,22 @@ function togglePinFocusedWindow(): void {
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
-      { id: "figure-save", group: "File", label: "Save Editable Figure", run: saveFocusedFigure },
-      { id: "figure-save-as", group: "File", label: "Save Editable Figure As…", run: saveFocusedFigureAs },
+      {
+        id: "figure-save",
+        group: "File",
+        label: "Save Editable Figure",
+        description: "Save the focused plot window as a reopenable editable figure document.",
+        keywords: "figure document save plot window editable",
+        run: saveFocusedFigure,
+      },
+      {
+        id: "figure-save-as",
+        group: "File",
+        label: "Save Editable Figure As…",
+        description: "Save the focused plot window as a new named editable figure document.",
+        keywords: "figure document save as copy plot window editable",
+        run: saveFocusedFigureAs,
+      },
       { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
       {
         id: "window-duplicate",

@@ -28,6 +28,7 @@ export type AutosaveState = Pick<
   | "macroSteps"
   | "recalcMode"
   | "figureDocs"
+  | "editableFigures"
   | "plotWindows"
   | "focusedWindowId"
   | "savedPlotSpecs"
@@ -46,6 +47,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.macroSteps === prev.macroSteps &&
     state.recalcMode === prev.recalcMode &&
     state.figureDocs === prev.figureDocs &&
+    state.editableFigures === prev.editableFigures &&
     state.plotWindows === prev.plotWindows &&
     state.focusedWindowId === prev.focusedWindowId &&
     state.savedPlotSpecs === prev.savedPlotSpecs

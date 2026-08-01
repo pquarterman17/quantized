@@ -14,6 +14,7 @@ const base: AutosaveState = {
   macroSteps: [],
   recalcMode: "auto",
   figureDocs: [],
+  editableFigures: [],
   plotWindows: [],
   focusedWindowId: null,
   savedPlotSpecs: [],
@@ -24,12 +25,14 @@ describe("shouldAutosave", () => {
     expect(shouldAutosave(base, base)).toBe(false);
   });
 
-  it.each(["originFigures", "reports", "macroSteps", "figureDocs", "savedPlotSpecs"] as const)(
-    "saves when %s changes",
-    (field) => {
-      expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
-    },
-  );
+  // `editableFigures` is here as the F1.4-review regression pin: the field
+  // was omitted from the trigger list when the collection first shipped, so
+  // deleting/duplicating a saved figure never scheduled an autosave.
+  it.each(
+    ["originFigures", "reports", "macroSteps", "figureDocs", "editableFigures", "savedPlotSpecs"] as const,
+  )("saves when %s changes", (field) => {
+    expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
+  });
 
   it("saves when recalculation mode changes", () => {
     expect(shouldAutosave({ ...base, recalcMode: "manual" }, base)).toBe(true);

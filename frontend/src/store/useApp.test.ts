@@ -16,6 +16,7 @@ import {
   spatialPanelsOf,
 } from "../lib/composition";
 import { defaultErrKeys } from "../lib/errorbars";
+import { createFigureDocument } from "../lib/figureDocument";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
@@ -4238,8 +4239,18 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
   });
 
   it("duplicateWindow clones a window at a new id, snapshotting the LIVE view if it's focused", () => {
+    // The source window MUST carry a document here: with a document-less
+    // fixture the `previous` path is never taken and the identity assertion
+    // below is vacuous (which is exactly how the shared-identity bug hid).
+    const source = win({ id: "w1", datasetId: "d1" });
+    const sourceDocument = createFigureDocument({
+      id: "figure-w1",
+      name: "w1",
+      datasetId: "d1",
+      view: source.view,
+    });
     useApp.setState({
-      plotWindows: [win({ id: "w1", datasetId: "d1" })],
+      plotWindows: [{ ...source, document: sourceDocument }],
       focusedWindowId: "w1",
       plotTitle: "live title",
     });
@@ -4251,7 +4262,8 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(dup?.datasetId).toBe("d1");
     expect(dup?.view.plotTitle).toBe("live title");
     expect(dup?.document?.plot.view.plotTitle).toBe("live title");
-    expect(dup?.document?.id).not.toBe(`figure-w1`);
+    // Save on the duplicate must never overwrite the ORIGINAL saved figure.
+    expect(dup?.document?.id).not.toBe("figure-w1");
   });
 
   it("duplicateWindow returns null for an unknown id", () => {

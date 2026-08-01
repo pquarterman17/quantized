@@ -328,6 +328,69 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-01 — Claude adversarial review of the F1 stack (PRs #103–#106)
+
+- Four defects found and FIXED in-stack (two by direct review, two by the
+  guards-reviewer sweep), plus two smaller cleanups:
+  1. **Stale error-binding resurrection** (`store/windowDocuments.ts`) — a
+     `resetErrors` sync with no explicit list (the reimport path) fell
+     through `createPlotWindowDocument`'s `?? previous.bindings.errors`
+     fallback, resurrecting the old document's bindings whose channel
+     indices a shape change had just invalidated, and re-deriving them into
+     the freshly-reset view errKeys — instance #5 of the 2026-07-19/21
+     index-staleness class, proven by a failing probe before the fix. An
+     `errors: null` sentinel now means "derive fresh from the view";
+     regression pinned in `windowDocuments.test.ts`.
+  2. **Close-confirm over-firing** (`figureLifecycleUi.ts`) — the F1.4
+     discard gate keyed on `editableFigureDirty`, which is true for EVERY
+     window never saved as a figure, so every routine MDI close popped a
+     confirm. Close is undoable (`closeWindow` records history;
+     `plotWindows` is history-snapshotted) and windows persist in the
+     workspace, so per the GUI #17 confirm-exemption convention the gate
+     now keys on `editableFigureHasUnsavedEdits` (a SAVED figure drifted);
+     never-saved windows close plainly. The window-arrange e2e reverted to
+     the no-confirm journey; both gate branches unit-pinned.
+  3. **Duplicate windows shared the source's document identity**
+     (`store/windows.ts` duplicateWindow) — `createPlotWindowDocument`
+     inherits `previous.id`, so Save on a duplicate overwrote the ORIGINAL
+     saved figure and the open-figure lookup was ambiguous. The stack's own
+     test asserted the opposite but on a document-less fixture, so it never
+     exercised the real path. Fixed with a `freshIdentity` option
+     (plant-verified: reverting it fails the now-document-bearing test).
+  4. **Autosave never fired on figure-only changes**
+     (`useWorkspaceAutosave.ts`) — the trigger's field list omitted
+     `editableFigures`, so a figure delete/duplicate alone was lost (or
+     resurrected) on restart. Field added to the Pick + comparison.
+  5. The new `figure-save`/`figure-save-as` commands shipped without
+     `description`/`keywords` (the #78–#81 Help-search class) — added.
+  6. Perf: `editableFigureDirty` ran a document rebuild + two stringifies
+     inside a per-window Zustand selector on every store notification; the
+     common never-saved case now answers from an id lookup alone.
+- Follow-ups booked for a later slice, not this stack: an
+  `architecture.test.ts` guard for the document-write chokepoint (the
+  stack added a new invariant — documents written only through
+  `store/windowDocuments.ts` — without adding its guard; B1/B2 above are
+  exactly the desync class it would catch), and `MODULE_PINS` entries for
+  the unpinned oversize `lib/workspace.ts` (753) and `lib/plotview.ts`
+  (997), which grew invisibly to every guard. `useApp.ts` sits at exactly
+  its 2868 pin — zero headroom for the next feature. Most urgent: the
+  stack's eager store additions took the bundle to **919.1 of 919.2 kB
+  (0.1 kB headroom)** — the next eager byte fails the build; F1.5/F2 must
+  open with an eager-weight diet (or a deliberate, justified budget bump).
+- Booked, not changed: (a) the future-version `throw` in both persistence
+  boundaries makes a whole workspace unopenable if ONE entry carries a
+  newer schema — when v2 ships, prefer degrading that entry to its
+  synchronized view projection; (b) `sanitizeFigureDocument` rejects frozen
+  snapshots containing non-finite cells, but NaN→null survives every JSON
+  round trip of real instrument data — F1.6's saved-figure migration must
+  relax the finite-cell requirement before frozen documents ride it.
+- Verified sound: legacy `.dwk` promotion (windows without documents build
+  them from their own sanitized view; malformed documents degrade to the
+  view projection; duplicate ids re-key), every focus/close/minimize/
+  restore/duplicate/rename/save handoff routes through the sync bridge,
+  history covers `editableFigures`, and the pinned store modules stayed
+  lean via the extracted `windowDefaults`/`windowDocuments` bridges.
+
 ### 2026-08-01 — F1.4 editable FigureDocument lifecycle (ChatGPT-Sol, PR #106)
 
 - Added a workspace-persisted **Editable figures** collection distinct from
