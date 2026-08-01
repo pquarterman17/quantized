@@ -1,8 +1,13 @@
 // Multivariate workbench (JMP_GAP J10) — correlation tab: pearson/spearman
-// toggle, the CorrelationMatrix heatmap, a copy-TSV export (item 6's floor —
-// matplotlib export parity for this platform is an explicit residual, see
-// JMP_GAP_PLAN #10), and the busy/error/too-few-rows states.
+// toggle, the CorrelationMatrix heatmap, a copy-TSV export (item 6's floor)
+// and a server-side (matplotlib) heatmap figure export (JMP_GAP_PLAN #10
+// residual, calc.figure_multivar.render_correlation_heatmap_figure — the
+// SAME `r` matrix the on-screen heatmap colors), and the busy/error/too-
+// few-rows states.
 
+import { useState } from "react";
+
+import { exportCorrelationHeatmapFigure } from "../../../lib/api";
 import { copyText } from "../../../lib/clipboard";
 import { Button, SegmentedControl } from "../../primitives";
 import { useApp } from "../../../store/useApp";
@@ -16,19 +21,38 @@ const METHOD_OPTIONS: { value: CorrMethod; label: string }[] = [
 
 export default function CorrelationView({ m }: { m: MultivarState }) {
   const setStatus = useApp((s) => s.setStatus);
+  const [exporting, setExporting] = useState(false);
 
   async function copy(): Promise<void> {
     const ok = await copyText(m.toTSV());
     setStatus(ok ? `copied ${m.labels.length}×${m.labels.length} correlation matrix to clipboard` : "clipboard unavailable");
   }
 
+  async function exportFigure(): Promise<void> {
+    if (!m.corr) return;
+    setExporting(true);
+    try {
+      await exportCorrelationHeatmapFigure({ labels: m.labels, r: m.corr.r, filename: "correlation" });
+      setStatus("exported correlation heatmap figure");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <SegmentedControl options={METHOD_OPTIONS} value={m.method} onChange={m.setMethod} />
-        <Button size="sm" disabled={!m.corr} onClick={() => void copy()}>
-          Copy TSV
-        </Button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <Button size="sm" disabled={!m.corr} onClick={() => void copy()}>
+            Copy TSV
+          </Button>
+          <Button size="sm" disabled={!m.corr || exporting} onClick={() => void exportFigure()}>
+            {exporting ? "Exporting…" : "Export figure"}
+          </Button>
+        </div>
       </div>
 
       {m.corrBusy ? (

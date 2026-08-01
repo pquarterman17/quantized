@@ -1,13 +1,12 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 //
-// Two pieces live in the `lib/api/` sibling directory (JMP_GAP #14, the size
-// ratchet): `api/http.ts` owns the shared transport, and `api/stats.ts` owns
-// the `/api/stats/*` wrappers. Both are re-exported below, so every consumer
-// keeps importing from `./lib/api` — `./lib/api` resolves to THIS file, not
-// the directory (file beats directory in tsc and Vite alike). Add a new
-// stats wrapper to `api/stats.ts`; this file is pinned shrink-only in
-// `architecture.test.ts`, so the next domain to grow earns its own sibling.
+// Three pieces live in the `lib/api/` sibling directory (JMP_GAP #14 ratchet):
+// `api/http.ts` (transport), `api/stats.ts` (`/api/stats/*`), and
+// `api/exportMultivar.ts` (JMP_GAP #10, multivar `/api/export/*` figures) —
+// all re-exported below, so every consumer keeps importing from `./lib/api`,
+// which resolves to THIS file, not the directory. Add a new stats wrapper to
+// `api/stats.ts`; this file is pinned shrink-only in `architecture.test.ts`.
 
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { deleteJSON, getJSON, postBlob, postDownload, postForm, postJSON } from "./api/http";
@@ -46,6 +45,7 @@ import type {
 export { postForm, unwrap } from "./api/http";
 // The /api/stats/* wrappers, extracted 2026-07-29. New ones go THERE, not here.
 export * from "./api/stats";
+export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers (JMP_GAP #10)
 
 export interface SqliteQueryRequest {
   path: string;

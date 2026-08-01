@@ -2,12 +2,17 @@
 // cumulative variance), a scores scatter over any two selectable PCs, and a
 // loadings/biplot toggle. Thin — the fetch + standardize option live in
 // useMultivar; this composes PcaScree (DOM bars) + PcaScoresCanvas (pure
-// canvas render) over the already-fetched `/api/stats/pca` response.
+// canvas render) over the already-fetched `/api/stats/pca` response. Both
+// the scree and the scores/loadings/biplot panel export server-side
+// (matplotlib) figures (JMP_GAP_PLAN #10 residual,
+// calc.figure_multivar.render_pca_figure/render_pca_scree_figure) reading
+// the SAME `drawData`/`pca` numbers the canvas draws.
 
 import { useMemo, useState } from "react";
 
+import { exportPcaFigure, exportPcaScreeFigure } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
-import { SegmentedControl, Select, Switch } from "../../primitives";
+import { Button, SegmentedControl, Select, Switch } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import type { PcaDrawData } from "./pcaScoresRender";
 import PcaScoresCanvas from "./PcaScoresCanvas";
@@ -24,7 +29,9 @@ const MODE_OPTIONS: { value: Mode; label: string }[] = [
 export default function PcaView({ m }: { m: MultivarState }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  const setStatus = useApp((s) => s.setStatus);
   const [mode, setMode] = useState<Mode>("scores");
+  const [exporting, setExporting] = useState<"scree" | "panel" | null>(null);
 
   const pca = m.pca;
   const k = pca?.explained.length ?? 0;
@@ -42,6 +49,39 @@ export default function PcaView({ m }: { m: MultivarState }) {
       yLabel: `PC${m.pcY + 1} (${fmtNum(pca.explained[m.pcY])}%)`,
     };
   }, [pca, k, mode, m.pcX, m.pcY, m.labels]);
+
+  async function exportScree(): Promise<void> {
+    if (!pca) return;
+    setExporting("scree");
+    try {
+      await exportPcaScreeFigure({ explained: pca.explained, cumulative: pca.cumulative });
+      setStatus("exported PCA scree figure");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function exportPanel(): Promise<void> {
+    if (!drawData) return;
+    setExporting("panel");
+    try {
+      await exportPcaFigure({
+        mode,
+        points: drawData.points,
+        vectors: drawData.vectors,
+        x_label: drawData.xLabel,
+        y_label: drawData.yLabel,
+        filename: `pca-${mode}`,
+      });
+      setStatus(`exported PCA ${mode} figure`);
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -62,8 +102,13 @@ export default function PcaView({ m }: { m: MultivarState }) {
         </div>
       ) : pca ? (
         <>
-          <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
-            scree — explained variance (click = X axis, shift-click = Y axis)
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
+            <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+              scree — explained variance (click = X axis, shift-click = Y axis)
+            </div>
+            <Button size="sm" disabled={exporting !== null} onClick={() => void exportScree()}>
+              {exporting === "scree" ? "Exporting…" : "Export scree"}
+            </Button>
           </div>
           <PcaScree
             explained={pca.explained}
@@ -88,8 +133,11 @@ export default function PcaView({ m }: { m: MultivarState }) {
             />
           </div>
 
-          <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 8 }}>
             <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
+            <Button size="sm" disabled={!drawData || exporting !== null} onClick={() => void exportPanel()}>
+              {exporting === "panel" ? "Exporting…" : "Export figure"}
+            </Button>
           </div>
 
           <PcaScoresCanvas data={drawData} theme={theme} accent={accent} />
