@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   createFigureDocument,
+  deserializeFigureDocument,
   FIGURE_DOCUMENT_SCHEMA,
   FIGURE_DOCUMENT_VERSION,
   figureDocumentVersion,
+  figureDocumentToPlotView,
+  sanitizeFigureDocument,
+  serializeFigureDocument,
 } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct } from "./types";
@@ -77,6 +81,19 @@ describe("FigureDocument v1", () => {
     ]);
   });
 
+  it("preserves null automatic-channel selection instead of turning it into no channels", () => {
+    const document = createFigureDocument({
+      id: "figure-auto",
+      name: "Automatic channels",
+      datasetId: "dataset-1",
+      view: defaultPlotView(),
+    });
+
+    expect(document.bindings.yKeys).toBeNull();
+    expect(document.bindings.y2Keys).toBeNull();
+    expect(figureDocumentToPlotView(document).yKeys).toBeNull();
+  });
+
   it("round-trips as plain versioned JSON", () => {
     const document = createFigureDocument({
       id: "figure-3",
@@ -92,6 +109,59 @@ describe("FigureDocument v1", () => {
     expect(figureDocumentVersion(restored)).toBe(1);
     expect(figureDocumentVersion({ ...document, version: 2 })).toBe(2);
     expect(figureDocumentVersion({ version: 1 })).toBeNull();
+    expect(deserializeFigureDocument(serializeFigureDocument(document))).toEqual(document);
+  });
+
+  it("round-trips a customized view without sharing mutable state", () => {
+    const source = {
+      ...defaultPlotView(),
+      xKey: 0,
+      yKeys: [1, 2],
+      y2Keys: [2],
+      errKeys: { 1: 3 },
+      annotations: [{ id: "a1", x: 1, y: 2, text: "peak", frame: { pad: 4 } }],
+      shapes: [{ id: "s1", kind: "rect" as const, x1: 0, y1: 0, x2: 1, y2: 2 }],
+      seriesStyles: { 1: { color: "#123456", width: 3 } },
+      seriesOrder: [2, 1],
+    };
+    const document = createFigureDocument({
+      id: "figure-rich",
+      name: "Rich",
+      datasetId: "dataset-1",
+      view: source,
+      axisBreaks: { x: [[3, 4]] },
+    });
+    const restored = figureDocumentToPlotView(document);
+
+    expect(restored).toEqual(source);
+    source.annotations[0].text = "mutated source";
+    restored.seriesStyles[1].color = "#ffffff";
+    expect(document.plot.view.annotations[0].text).toBe("peak");
+    expect(document.plot.view.seriesStyles[1].color).toBe("#123456");
+  });
+
+  it("sanitizes optional fields and rejects unsafe envelopes", () => {
+    const document = createFigureDocument({
+      id: "figure-safe",
+      name: "Safe",
+      datasetId: "dataset-1",
+      view: defaultPlotView(),
+    });
+    const dirty = {
+      ...document,
+      bindings: { ...document.bindings, yKeys: [1, "bad", -2], errors: [{ nope: true }] },
+      plot: { ...document.plot, mark: "unknown", axisBreaks: { x: [[5, 1], [1, 2]] } },
+      output: { ...document.output, dpi: -10 },
+    };
+
+    expect(sanitizeFigureDocument(dirty)).toMatchObject({
+      bindings: { yKeys: [1], errors: [] },
+      plot: { mark: "line", axisBreaks: { x: [[1, 2]], y: [], y2: [] } },
+      output: { dpi: 300 },
+    });
+    expect(sanitizeFigureDocument({ ...document, version: 2 })).toBeNull();
+    expect(sanitizeFigureDocument({ ...document, id: "" })).toBeNull();
+    expect(deserializeFigureDocument("not json")).toBeNull();
   });
 
   it("rejects contradictory live/frozen data ownership", () => {

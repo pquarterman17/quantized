@@ -664,7 +664,7 @@ function y2ScaleOrDefault(scale: unknown, log: unknown): AxisScale | null {
 /** Validate a persisted view (or drop back to `defaultPlotView()` field by
  *  field) — the same per-field-fallback discipline as `loadPrefs`/
  *  `sanitizeFigureDocs`. Never throws on malformed input. */
-function sanitizeView(v: unknown): PlotView {
+export function sanitizePlotView(v: unknown): PlotView {
   const fb = defaultPlotView();
   if (typeof v !== "object" || v === null) return fb;
   const o = v as Record<string, unknown>;
@@ -864,7 +864,7 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       },
       z: num(o.z, 0),
       winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
-      view: sanitizeView(o.view),
+      view: sanitizePlotView(o.view),
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
       // Only plot windows can sync, and only groups 1..MAX_LINK_GROUP exist —
       // a hand-edited .dwk can't smuggle in a ⧟7 badge or a "linked" snapshot.

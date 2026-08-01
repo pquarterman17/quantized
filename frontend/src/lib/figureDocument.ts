@@ -6,9 +6,9 @@
  * separate campaign slices. Keeping this pure lets those migrations land
  * behind characterization tests instead of changing every surface at once.
  */
-import type { ErrorBinding } from "./errorRoles";
-import type { PlotMark } from "./plotspec";
-import { snapshotView, type PlotView } from "./plotview";
+import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
+import { PLOT_MARKS, type PlotMark } from "./plotspec";
+import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
 
 export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
@@ -20,8 +20,9 @@ export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errK
 export interface FigureBindings {
   datasetId: string | null;
   xKey: number | null;
-  yKeys: number[];
-  y2Keys: number[];
+  /** null preserves PlotView's “automatic/all channels” selection sentinel. */
+  yKeys: number[] | null;
+  y2Keys: number[] | null;
   groupKey: number | null;
   facetKey: number | null;
   /** Canonical rich error roles: X/Y, symmetric, and asymmetric are representable. */
@@ -89,6 +90,10 @@ const DEFAULT_OUTPUT: FigureOutputSettings = {
   filename: null,
 };
 
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}
+
 function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBinding[] {
   return Object.entries(errKeys).flatMap(([target, channel]) => {
     const targetKey = Number(target);
@@ -103,7 +108,7 @@ function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBi
  * visual state so later editors cannot accidentally create two authorities.
  */
 export function createFigureDocument(input: CreateFigureDocumentInput): FigureDocumentV1 {
-  const { xKey, yKeys, y2Keys, errKeys, ...view } = snapshotView(input.view);
+  const { xKey, yKeys, y2Keys, errKeys, ...view } = clone(snapshotView(input.view));
   const data = input.data ?? { mode: "live" as const };
   if (data.mode === "frozen" && data.snapshot === undefined) {
     throw new Error("a frozen figure document requires a data snapshot");
@@ -120,13 +125,13 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
     bindings: {
       datasetId: input.datasetId,
       xKey,
-      yKeys: yKeys ?? [],
-      y2Keys: y2Keys ?? [],
+      yKeys,
+      y2Keys,
       groupKey: input.groupKey ?? null,
       facetKey: input.facetKey ?? null,
-      errors: input.errors ? input.errors.map((binding) => ({ ...binding })) : legacyErrorBindings(errKeys),
+      errors: input.errors ? clone([...input.errors]) : legacyErrorBindings(errKeys),
     },
-    data: data.snapshot === undefined ? { mode: data.mode } : { mode: data.mode, snapshot: data.snapshot },
+    data: data.snapshot === undefined ? { mode: data.mode } : { mode: data.mode, snapshot: clone(data.snapshot) },
     plot: {
       mark: input.mark ?? "line",
       view,
@@ -144,6 +149,158 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
       filename: input.output?.filename ?? DEFAULT_OUTPUT.filename,
     },
   };
+}
+
+/** Project a document into today's focused-window facade without mutating it. */
+export function figureDocumentToPlotView(document: FigureDocument): PlotView {
+  return {
+    ...clone(document.plot.view),
+    xKey: document.bindings.xKey,
+    yKeys: clone(document.bindings.yKeys),
+    y2Keys: clone(document.bindings.y2Keys),
+    errKeys: errKeysFromBindings(document.bindings.errors),
+  };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function integerOrNull(value: unknown): number | null {
+  return Number.isInteger(value) && (value as number) >= 0 ? value as number : null;
+}
+
+function integerList(value: unknown): number[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is number => Number.isInteger(item) && item >= 0)
+    : [];
+}
+
+function integerListOrNull(value: unknown): number[] | null {
+  return value === null ? null : integerList(value);
+}
+
+function errorBindings(value: unknown): ErrorBinding[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate): ErrorBinding[] => {
+    if (!isObject(candidate)) return [];
+    const { channel, target, axis, side } = candidate;
+    if (!Number.isInteger(channel) || (channel as number) < 0) return [];
+    if (!Number.isInteger(target) || (target as number) < -1) return [];
+    if (axis !== "x" && axis !== "y") return [];
+    if (side !== "both" && side !== "+" && side !== "-") return [];
+    return [{ channel: channel as number, target: target as number, axis, side }];
+  });
+}
+
+function axisBreaks(value: unknown): FigurePlotState["axisBreaks"] {
+  const object = isObject(value) ? value : {};
+  const ranges = (candidate: unknown): [number, number][] =>
+    Array.isArray(candidate)
+      ? candidate.flatMap((range): [number, number][] =>
+          Array.isArray(range) && range.length === 2 &&
+          Number.isFinite(range[0]) && Number.isFinite(range[1]) && range[0] < range[1]
+            ? [[range[0], range[1]]]
+            : [])
+      : [];
+  return { x: ranges(object.x), y: ranges(object.y), y2: ranges(object.y2) };
+}
+
+function isDataStruct(value: unknown): value is DataStruct {
+  if (!isObject(value) || !isObject(value.metadata)) return false;
+  return (
+    Array.isArray(value.time) && value.time.every(Number.isFinite) &&
+    Array.isArray(value.values) && value.values.every(
+      (row) => Array.isArray(row) && row.every(Number.isFinite),
+    ) &&
+    Array.isArray(value.labels) && value.labels.every((item) => typeof item === "string") &&
+    Array.isArray(value.units) && value.units.every((item) => typeof item === "string")
+  );
+}
+
+function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
+  const sanitized = sanitizePlotView({
+    ...(isObject(value) ? value : {}),
+    xKey: bindings.xKey,
+    yKeys: bindings.yKeys,
+    y2Keys: bindings.y2Keys,
+    errKeys: errKeysFromBindings(bindings.errors),
+  });
+  const { xKey: _xKey, yKeys: _yKeys, y2Keys: _y2Keys, errKeys: _errKeys, ...view } = sanitized;
+  return clone(view);
+}
+
+/**
+ * Validate an untrusted persisted document. Malformed optional fields degrade
+ * to safe defaults; a bad envelope, identity, data mode, or frozen snapshot
+ * rejects the whole document.
+ */
+export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null {
+  if (!isObject(value) || value.schema !== FIGURE_DOCUMENT_SCHEMA || value.version !== 1) return null;
+  if (typeof value.id !== "string" || !value.id || typeof value.name !== "string") return null;
+  if (!isObject(value.bindings) || !isObject(value.data) || !isObject(value.plot)) return null;
+
+  const rawBindings = value.bindings;
+  const datasetId = typeof rawBindings.datasetId === "string" || rawBindings.datasetId === null
+    ? rawBindings.datasetId
+    : null;
+  const bindings: FigureBindings = {
+    datasetId,
+    xKey: integerOrNull(rawBindings.xKey),
+    yKeys: integerListOrNull(rawBindings.yKeys),
+    y2Keys: integerListOrNull(rawBindings.y2Keys),
+    groupKey: integerOrNull(rawBindings.groupKey),
+    facetKey: integerOrNull(rawBindings.facetKey),
+    errors: errorBindings(rawBindings.errors),
+  };
+
+  const mode = value.data.mode;
+  if (mode !== "live" && mode !== "frozen") return null;
+  if (mode === "live" && value.data.snapshot !== undefined) return null;
+  if (mode === "frozen" && !isDataStruct(value.data.snapshot)) return null;
+
+  const mark = PLOT_MARKS.includes(value.plot.mark as PlotMark) ? value.plot.mark as PlotMark : "line";
+  const rawOutput = isObject(value.output) ? value.output : {};
+  const dpi = typeof rawOutput.dpi === "number" && Number.isFinite(rawOutput.dpi) && rawOutput.dpi > 0
+    ? rawOutput.dpi
+    : DEFAULT_OUTPUT.dpi;
+
+  return {
+    schema: FIGURE_DOCUMENT_SCHEMA,
+    version: FIGURE_DOCUMENT_VERSION,
+    id: value.id,
+    name: value.name,
+    bindings,
+    data: mode === "frozen"
+      ? { mode, snapshot: clone(value.data.snapshot as DataStruct) }
+      : { mode },
+    plot: {
+      mark,
+      view: figureView(value.plot.view, bindings),
+      axisBreaks: axisBreaks(value.plot.axisBreaks),
+    },
+    output: {
+      format: typeof rawOutput.format === "string" ? rawOutput.format : DEFAULT_OUTPUT.format,
+      stylePreset: typeof rawOutput.stylePreset === "string" ? rawOutput.stylePreset : DEFAULT_OUTPUT.stylePreset,
+      dpi,
+      transparent: typeof rawOutput.transparent === "boolean" ? rawOutput.transparent : DEFAULT_OUTPUT.transparent,
+      filename: typeof rawOutput.filename === "string" || rawOutput.filename === null
+        ? rawOutput.filename
+        : DEFAULT_OUTPUT.filename,
+    },
+  };
+}
+
+export function serializeFigureDocument(document: FigureDocument): string {
+  return JSON.stringify(document);
+}
+
+export function deserializeFigureDocument(raw: string): FigureDocumentV1 | null {
+  try {
+    return sanitizeFigureDocument(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 /** Envelope check used to route future migrations without accepting versions we do not understand. */

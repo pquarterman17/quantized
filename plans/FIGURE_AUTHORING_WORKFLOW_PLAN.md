@@ -328,6 +328,19 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-01 — F1.5a hardened document boundary (ChatGPT-Sol)
+
+- Added full untrusted-input sanitization and serialization for the versioned
+  FigureDocument envelope; malformed identities/data modes and unknown future
+  versions fail closed while optional display fields degrade safely.
+- Added the reverse FigureDocument → PlotView projection and regression tests
+  for a customized plot, including styles, order, annotations, shapes, errors,
+  and axis breaks.
+- Made document creation, hydration, and frozen snapshots mutation-isolated so
+  Apply/Cancel, history, and later persistence cannot share nested references.
+- This completes the safety prerequisite for F1.3; the full reversible
+  FigureDocument/FigureSpec path in F1.5 remains open.
+
 ### 2026-08-01 — Claude adversarial review of the F0/F1.1/F1.2 stack (PRs #95–#102)
 
 - Verified the audit's two load-bearing claims against the code before
