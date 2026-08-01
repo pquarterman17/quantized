@@ -166,7 +166,7 @@ migration design; GPT-5.6 Terra high / Claude Sonnet 5 for bounded UI slices.
       for every field in `PlotView`, `PlotSpec`, `FigureConfig`, `FigureDoc`,
       and `FigureSpec`; classify canonical, recipe-only, export-only, derived,
       or unsupported fields.
-- [ ] **F1.2 Define a versioned FigureDocument.** Include stable ID/name,
+- [x] **F1.2 Define a versioned FigureDocument.** Include stable ID/name,
       dataset bindings, plot type, channels/errors/groups/facets, axes and
       breaks, series state, legend, annotations/shapes, page/output settings,
       and migration behavior.
@@ -327,6 +327,19 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F1.2 versioned FigureDocument schema (ChatGPT-Sol)
+
+- Defined the version-1 `quantized.figure` persistence boundary with stable
+  identity, live/frozen data ownership, data bindings, plot mark and complete
+  visual state, rich error roles, grouping/faceting, and output preferences.
+- Removed channel/error bindings from the nested visual state so the new model
+  cannot develop two competing authorities for the same editable decision.
+- Added a pure seed adapter from today's `PlotView`, including a lossless rich
+  error-role path and a legacy symmetric-Y fallback.
+- Pinned JSON round-trip behavior, schema-version routing, and live/frozen
+  invariants. Store integration and legacy workspace migration remain F1.3 and
+  F1.6, respectively; this PR does not change application behavior.
 
 ### 2026-08-01 — F1.1 typed figure-contract census (ChatGPT-Sol)
 
