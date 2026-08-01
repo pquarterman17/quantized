@@ -1,6 +1,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
@@ -745,7 +746,29 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.plotWindows[0].title).toBe("My Graph");
     expect(loaded.plotWindows[0].view.yScale).toBe("log");
     expect(loaded.plotWindows[0].view.plotTitle).toBe("restored view");
+    expect(loaded.plotWindows[0].document?.id).toBe("figure-w1");
     expect(loaded.focusedWindowId).toBe("w2");
+  });
+
+  it("round-trips a canonical document and restores its projections", () => {
+    const datasets = [makeDataset("a", "first")];
+    const document = createFigureDocument({
+      id: "figure-stable",
+      name: "Canonical graph",
+      datasetId: "a",
+      view: { ...defaultPlotView(), plotTitle: "Canonical title", yScale: "log" },
+    });
+    const loaded = parseWorkspace(serializeWorkspace({
+      datasets,
+      plotWindows: [win({ title: "stale", view: defaultPlotView(), document })],
+    }));
+
+    expect(loaded.plotWindows[0].document).toEqual(document);
+    expect(loaded.plotWindows[0]).toMatchObject({
+      title: "Canonical graph",
+      datasetId: "a",
+      view: { plotTitle: "Canonical title", yScale: "log" },
+    });
   });
 
   it("clamps a window's dangling dataset ref to null (never drops the window itself)", () => {

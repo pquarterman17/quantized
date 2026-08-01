@@ -328,6 +328,18 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-01 — F1.3b FigureDocument workspace migration (ChatGPT-Sol)
+
+- Persisted canonical FigureDocuments through the existing additive `.dwk`
+  window payload and made the document authoritative during restore.
+- Added deterministic promotion for older PlotView-only windows, including
+  stable document IDs and legacy symmetric error bindings.
+- Added safe missing-dataset handling and duplicate-ID repair without dropping
+  an editable plot. Unknown future FigureDocument versions fail closed so an
+  older Quantized build cannot overwrite newer figure state.
+- Full legacy FigureDoc/frozen-publication migration remains under F1.6; this
+  slice covers editable PlotWindow persistence only.
+
 ### 2026-08-01 — F1.3a document-backed plot windows (ChatGPT-Sol)
 
 - Added a canonical FigureDocument to each editable plot window while keeping

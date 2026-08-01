@@ -59,8 +59,9 @@ import {
   displayedWindowTitle,
   hydrateView,
   pruneWindowDatasetRefs,
-  sanitizePlotWindows, scaleFromLog, snapshotView,
+  scaleFromLog, snapshotView,
 } from "../lib/plotview";
+import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
 import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
@@ -1551,16 +1552,15 @@ export const useApp = create<AppState>((set, get) => ({
           : (datasets[0]?.id ?? null);
       const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
       const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
-      // Plot windows (item 7): restore a persisted layout when the doc has
-      // one (validated at the untrusted-boundary via `sanitizePlotWindows` —
-      // clamps dead dataset refs/geometry, never throws); otherwise (a v1-v6
+      // Plot windows (item 7): restore a persisted layout when the doc has one;
+      // the document-aware boundary validates it and clamps dead refs. Otherwise (a v1-v6
       // doc with no `plotWindows`, or a genuinely fresh workspace) collapse
       // back to the ≥1-window invariant's single maximized window, bound to
       // the newly-restored active dataset, with a fresh view — unchanged
       // from before item 7.
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
-      const restored = sanitizePlotWindows(ws.plotWindows, dsIds);
+      const restored = sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds);
       // Items 11/17: the ≥1-window invariant is specifically ≥1 PLOT window —
       // non-plot kinds (snapshot / worksheet / map) can't hold focus, so a
       // doc whose surviving windows are all non-plot still gets the fresh

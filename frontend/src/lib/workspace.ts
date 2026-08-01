@@ -11,7 +11,8 @@ import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
-import { sanitizePlotWindows, type PlotWindow } from "./plotview";
+import type { PlotWindow } from "./plotview";
+import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -527,7 +528,7 @@ export function parseWorkspace(
   // Plot window layout (MULTI_PLOT_PLAN item 7) — additive-optional, so a
   // pre-item-7 doc (absent field) sanitizes to [] via the same
   // undefined-input path every other sanitizer here already handles.
-  const plotWindows = sanitizePlotWindows(o.plotWindows, dsIds);
+  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds);
   // The focus id must land on a kind:"plot" window — a snapshot window
   // (MULTI_PLOT_PLAN item 11) can never hold focus, so a doc pointing at one
   // clamps to null (the store's load path then falls back to the first plot
