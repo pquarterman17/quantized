@@ -297,7 +297,6 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Batch-import overlay offer — importing ≥2 same-technique files raises a toast offering one overlay plot (reuses #3's `buildSelectionOverlay`); decline keeps today's behavior; mixed-technique batches don't offer | PLOT_WORKFLOW #4 (unblocked 2026-07-31; agent launched) |
 | Per-technique view memory — last-used view remembered per technique tag; same-technique dataset switches keep the view, shape mismatch still resets; persists in `.dwk` | PLOT_WORKFLOW #5 (unblocked 2026-07-31; agent launched) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)

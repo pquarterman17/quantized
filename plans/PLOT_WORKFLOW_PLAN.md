@@ -116,10 +116,16 @@ parser (io/) ──> DataStruct.metadata.technique  (closed vocabulary + parser 
 
 ## Tier 2 — Medium Impact
 
-4. **[ ] Batch-import overlay offer** — importing ≥2 same-technique
-   files raises a toast: "N similar files — overlay in one plot?";
-   accept builds the item-3 overlay, decline keeps N datasets with the
-   last active. Mixed-technique batches don't offer.
+4. **[x] ~~Batch-import overlay offer~~** SHIPPED 2026-08-01
+   (`f367eb6`) — ≥2 created datasets, same non-`generic` technique →
+   the success toast becomes the offer (replaces, never stacks); accept
+   calls `plotSelectedTogether`; decline = let it expire (6 s TTL vs
+   the normal 1.9 s — no decline code path). Built the toast store's
+   first generic action-button support (`ToastAction`) rather than
+   anything single-purpose. Edge case proven, not assumed: the only
+   one-file→many-datasets import (Origin multi-book) always stamps
+   `generic`, so it can never pass the gate; `importFilesAppended`
+   never enters `runImport` — both pinned by dedicated tests.
 
 5. **[ ] Per-technique view memory** — remember the last-used view
    (channels, scales, styles) per technique tag; on dataset switch, a
