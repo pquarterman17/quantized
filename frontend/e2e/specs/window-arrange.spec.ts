@@ -113,11 +113,11 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
       .poll(async () => (await readWindows(page)).find((w) => w.id === focusedWinId)?.winState)
       .toBe("normal");
 
-    // ── Close one window via the title bar's own right-click menu (GUI_-
-    //    INTERACTION #8's window menu — windowMenu.ts's "Close Window",
-    //    plain no-confirm entry). ─────────────────────────────────────────
+    // ── Close one dirty window via the title bar's own right-click menu,
+    //    explicitly accepting the editable-figure discard safeguard. ─────
     await focusedTitlebar.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+    await page.getByRole("button", { name: "Close without saving", exact: true }).click();
     await expect.poll(async () => (await readWindows(page)).length).toBe(2);
   });
 });
