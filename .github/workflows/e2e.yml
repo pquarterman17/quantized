@@ -29,7 +29,9 @@ jobs:
         run: uv sync --group dev
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Repo root .nvmrc is the single Node-version source of truth
+          # (ROBUSTNESS_PLAN #2).
+          node-version-file: .nvmrc
       - name: Install frontend deps
         # npm ci, not npm install — see ci.yml; the floating install here is
         # exactly what let CI's Playwright drift off the lockfile.
