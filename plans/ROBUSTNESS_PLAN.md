@@ -195,10 +195,11 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 - ~~**Tier 1 (#1 CI second Node lane, #2 Node source of truth, #3 bounded
   streaming uploads)**~~ (2026-07-31, one agent branch, merged `cc02e65`) —
   details struck inline on the items above. Merged-tree gate: backend
-  3,422 / ruff / mypy clean; frontend suite + build + lint green. Two
-  residual live-CI confirmations: the `frontend-node-current` job actually
-  runs, and `node-version-file` resolves in all four workflows — check on
-  the next push's Actions run.
+  3,422 / ruff / mypy clean; frontend suite + build + lint green. ~~Two
+  residual live-CI confirmations~~ CONFIRMED 2026-07-31 same day: the
+  `060c11c`/`3f69035` Actions runs show `frontend-node-current: success`
+  and CI + E2E green end-to-end, proving `node-version-file` resolved
+  (setup-node would have failed the job otherwise).
 
 The two fixes that *produced* this plan are booked in their own plans, not
 here: the `MODULE_PINS` ratchet under `JMP_GAP_PLAN.md` #14, and the Node 26
