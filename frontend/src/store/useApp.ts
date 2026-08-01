@@ -59,7 +59,7 @@ import {
   displayedWindowTitle,
   hydrateView,
   pruneWindowDatasetRefs,
-  sanitizePlotWindows, scaleFromLog,
+  sanitizePlotWindows, scaleFromLog, snapshotView,
 } from "../lib/plotview";
 import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
@@ -74,6 +74,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
+import { rebindFocusedPlotWindow, syncDatasetWindowDocuments } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -1077,19 +1078,15 @@ export const useApp = create<AppState>((set, get) => ({
     // `ds.name` seeds the title when a fresh window must be created, since
     // the dataset isn't in the store yet for createWindow to look up).
     retargetPassiveRebind(get(), ds.id, ds.name);
+    const defaults = datasetViewDefaults(ds);
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
-      // MULTI_PLOT_PLAN item 4: activeId IS the focused window's dataset
-      // binding — keep plotWindows in sync so a later focus-away/back (or a
-      // .dwk save) sees the newly-imported dataset, not whatever was bound
-      // before this import.
-      plotWindows: s.plotWindows.map((w) =>
-        w.id === s.focusedWindowId ? { ...w, datasetId: ds.id } : w,
-      ),
+      // Keep the focused document binding aligned with the newly imported data.
+      plotWindows: rebindFocusedPlotWindow(s.plotWindows, s.focusedWindowId, { ...snapshotView(s), ...defaults }, ds),
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
-      ...datasetViewDefaults(ds), // the shared rebind view reset (item 14 hoist)
+      ...defaults, // the shared rebind view reset (item 14 hoist)
       integral: null, // on-plot analysis results are tied to the old data → clear
       fwhmResult: null,
       qfitRoi: null,
@@ -1987,8 +1984,8 @@ export const useApp = create<AppState>((set, get) => ({
     const target = get().datasets.find((d) => d.id === id);
     if (!target?.formulas) return;
     const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
+    set((s) => {
+      const datasets = s.datasets.map((d) => {
         if (d.id !== id || !d.formulas) return d;
         const base = baseColumns(d.data, d.formulas.length);
         const formulas = d.formulas.filter((_, i) => i !== index);
@@ -1998,11 +1995,14 @@ export const useApp = create<AppState>((set, get) => ({
           data: applyFormulas(base, formulas),
           ...remapDatasetChannels(d, removedCol),
         };
-      }),
-      // Remap the live view (if active) + every background window (5ac2674 f/u).
+      });
+      const remappedWindows = remapWindowViews(s.plotWindows, id, removedCol);
+      const remappedDataset = datasets.find((dataset) => dataset.id === id);
+      return { datasets,
       ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
-      plotWindows: remapWindowViews(s.plotWindows, id, removedCol),
-    }));
+      plotWindows: syncDatasetWindowDocuments(remappedWindows, id, remappedDataset?.errorRoles),
+      };
+    });
     get().touchDataset(id); // recalc graph (#1): data changed
   },
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives

@@ -43,6 +43,7 @@ import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { datasetViewDefaults } from "./windows";
+import { plotWindowView, syncPlotWindow } from "./windowDocuments";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -113,7 +114,9 @@ async function commitReimport(
     ...(viewReset
       ? {
           plotWindows: s.plotWindows.map((w) =>
-            w.datasetId === ds.id ? { ...w, view: { ...w.view, ...viewReset } } : w,
+            w.datasetId === ds.id
+              ? syncPlotWindow(w, { ...plotWindowView(w), ...viewReset }, { resetErrors: true })
+              : w,
           ),
         }
       : {}),

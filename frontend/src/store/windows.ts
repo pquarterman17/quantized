@@ -17,9 +17,7 @@
 // `addDataset`/`loadWorkspace` paths. Only TYPE imports cross back into
 // useApp (no runtime cycle).
 
-import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
-import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
-import { applyTechniqueMemory, captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
+import { captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -41,11 +39,14 @@ import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
+import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
+import { datasetViewDefaults, mainWindow as createMainWindow } from "./windowDefaults";
 import { dropWorksheetSelection } from "./worksheetSelection";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
 let _winSeq = 0;
 export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_winSeq}`;
+
 /** The highest z among a window list (0 if empty) — z-order helper shared by
  *  every action that raises a window (focus/raise/create/duplicate). */
 export const maxZ = (windows: readonly PlotWindow[]): number =>
@@ -85,21 +86,8 @@ function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string |
  *  decision #6 — pixel-identical to today's single-plot Stage). Used at store
  *  init and whenever `loadWorkspace` resets the whole view (a fresh workspace
  *  has no windows to restore yet — item 7 wires `.dwk` persistence). */
-export function mainWindow(datasetId: string | null): PlotWindow {
-  return {
-    id: nextWindowId(),
-    kind: "plot",
-    title: "",
-    datasetId,
-    geometry: cascadeGeometry(0),
-    z: 0,
-    winState: "maximized",
-    view: defaultPlotView(),
-    bg: "theme",
-    linkGroup: null,
-    pinned: false,
-  };
-}
+export const mainWindow = (datasetId: string | null): PlotWindow =>
+  createMainWindow(datasetId, nextWindowId());
 
 /** Transient tool/gadget/overlay singleton state cleared on any FOCUS switch
  *  (an explicit `focusWindow`, or the refocus `closeWindow` does when it
@@ -144,29 +132,7 @@ export function focusTransientReset(): Partial<AppState> {
  *  (`lib/techniqueDefaults.isTechniqueChange`), so log axes still survive a
  *  same-technique switch; an omitted `prevDs` (import/split/reimport) always
  *  counts as a change — there's no prior view worth preserving. */
-export function datasetViewDefaults(ds: Dataset | undefined, prevDs?: Dataset, memory: TechniqueViewMemoryMap = {}): Partial<PlotView> {
-  const remembered = applyTechniqueMemory(ds, memory);
-  return {
-    xKey: null, // new dataset → x-axis back to .time
-    yKeys: null, // new dataset → plot all its channels
-    y2Keys: null,
-    y2Lim: null,
-    y2Scale: null, // and reset the secondary-axis assignment
-    y2Step: null,
-    y2AxisLabel: "",
-    seriesStyles: {}, // styles are keyed by channel index → reset per dataset
-    seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
-    errKeys: ds ? defaultErrKeys(ds.data) : {}, // Origin Y-error + parser hints
-    seriesOrder: null, // draw order is channel-keyed → reset per dataset
-    hiddenChannels: ds ? originHiddenChannels(ds.data) : [], // hide Origin error + secondary-X columns
-    xLim: null, // and autoscale both axes
-    yLim: null,
-    xStep: null,
-    yStep: null,
-    // Item 5: memory > technique defaults > density heuristic (lib/techniqueViewMemory.ts).
-    ...(remembered ?? (isTechniqueChange(ds, prevDs) ? techniqueViewDefaults(ds) : {})),
-  };
-}
+export { datasetViewDefaults } from "./windowDefaults";
 
 /** `datasetViewDefaults`'s `prevDs` lookup (a window's prior dataset). */
 const prevDataset = (s: AppState, id: string | null): Dataset | undefined =>
@@ -183,6 +149,8 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   // before computing the incoming patch (unused on the no-op path below).
   const prevDs = prevDataset(s, s.activeId);
   const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
+  const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory);
+  const nextView = { ...snapshotView(s), ...viewPatch };
   return {
     activeId: id,
     // A full plot-intent activation always drops any worksheet-only override
@@ -195,7 +163,9 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // window's dataset (unfocused windows keep whatever they're pinned to,
     // decision #4).
     plotWindows: s.plotWindows.map((w) =>
-      w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
+      w.id === s.focusedWindowId
+        ? syncPlotWindow(w, nextView, { datasetId: id, errors: ds?.errorRoles, resetErrors: true })
+        : w,
     ),
     // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
     // (make active)", every applyOriginFigure branch, a plain Library click
@@ -203,7 +173,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // it always means "show me the plot", so it uses `plotIntentStageTab`
     // (never sticks on a stale Worksheet tab; owner-routing item 1).
     stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
-    ...(s.activeId === id ? {} : { ...datasetViewDefaults(ds, prevDs, memory), techniqueViewMemory: memory }), // #12 slice 4b + item 5: a GENUINE dataset switch resets channel-keyed defaults (or applies technique memory) AND commits the capture above; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
+    ...(s.activeId === id ? {} : { ...viewPatch, techniqueViewMemory: memory }), // #12 slice 4b + item 5: a GENUINE dataset switch resets channel-keyed defaults (or applies technique memory) AND commits the capture above; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
     // A plain click on a different dataset always drops a prior spatial
     // multi-panel arrangement (decode-plan #36) — it was built for a specific
     // figure's layers, not whatever is now active. Same for facet/x-break
@@ -388,6 +358,8 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
             s,
             boundId ? (s.datasets.find((d) => d.id === boundId)?.name ?? "Untitled graph") : "Untitled graph",
           );
+        const seedView = view ?? defaultPlotView();
+        const dataset = boundId ? s.datasets.find((d) => d.id === boundId) : undefined;
         const win: PlotWindow = {
           id,
           kind: "plot",
@@ -396,7 +368,10 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           geometry: cascadeGeometry(s.plotWindows.length),
           z: maxZ(s.plotWindows) + 1,
           winState: "normal",
-          view: view ?? defaultPlotView(),
+          view: seedView,
+          document: createPlotWindowDocument(id, resolvedTitle, boundId, seedView, {
+            errors: dataset?.errorRoles,
+          }),
           bg: "theme",
           linkGroup: null,
           pinned: false,
@@ -512,11 +487,13 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // it to the same/memory-derived defaults, leaving focus untouched.
         const ds = s.datasets.find((d) => d.id === datasetId);
         const priorDs = prevDataset(s, win.datasetId);
-        const memory = captureTechniqueView(priorDs, win.view, s.techniqueViewMemory); // item 5
+        const currentView = plotWindowView(win);
+        const memory = captureTechniqueView(priorDs, currentView, s.techniqueViewMemory); // item 5
+        const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory) };
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId
-              ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds, priorDs, memory) } }
+              ? syncPlotWindow(w, reboundView, { datasetId, errors: ds?.errorRoles, resetErrors: true })
               : w,
           ),
           techniqueViewMemory: memory,
@@ -548,8 +525,8 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         return _focusHandoff(
           { plotWindows: remaining, worksheetSelections },
           next.id,
-          next.datasetId,
-          next.view,
+          plotWindowDatasetId(next),
+          plotWindowView(next),
         );
       })),
     // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
@@ -576,11 +553,11 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         }
         const raised = maxZ(s.plotWindows) + 1;
         const plotWindows = s.plotWindows.map((w) => {
-          if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
+          if (w.id === s.focusedWindowId) return syncPlotWindow(w, snapshotView(s));
           if (w.id === id) return { ...w, z: raised };
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, target.datasetId, target.view);
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
       }),
     duplicateWindow: (id) => {
       const s = get();
@@ -590,7 +567,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const newId = nextWindowId();
       // Duplicating the FOCUSED window: its record is stale (the live view
       // lives in the singleton fields), so snapshot those instead of `src.view`.
-      const view = src.id === s.focusedWindowId ? snapshotView(s) : src.view;
+      const view = src.id === s.focusedWindowId ? snapshotView(s) : plotWindowView(src);
       // Item 10: try the source's OWN displayed title first, deduped against
       // every window's current display — "Comparison" duplicated once becomes
       // "Comparison (2)", not an indistinguishable second "Comparison".
@@ -602,7 +579,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // conjured from frozen data.
         kind: src.kind,
         title,
-        datasetId: src.datasetId,
+        datasetId: plotWindowDatasetId(src),
         geometry: cascadeGeometry(s.plotWindows.length),
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
@@ -617,6 +594,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         pinned: false,
         ...(src.snapshot ? { snapshot: src.snapshot } : src.panel ? { panel: src.panel } : {}),
       };
+      if (dup.kind === "plot") {
+        const sourceDocument = src.document;
+        dup.document = createPlotWindowDocument(newId, title, plotWindowDatasetId(src), view, {
+          previous: sourceDocument,
+        });
+      }
       set({ plotWindows: [...s.plotWindows, dup] });
       return newId;
     },
@@ -669,7 +652,10 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         if (!target || target.winState === "minimized") return {};
         const plotWindows = s.plotWindows.map((w) =>
           w.id === id
-            ? { ...w, winState: "minimized" as WinState, view: id === s.focusedWindowId ? snapshotView(s) : w.view }
+            ? {
+                ...(id === s.focusedWindowId ? syncPlotWindow(w, snapshotView(s)) : w),
+                winState: "minimized" as WinState,
+              }
             : w,
         );
         if (s.focusedWindowId !== id) return { plotWindows };
@@ -680,7 +666,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         );
         if (candidates.length === 0) return { plotWindows };
         const next = candidates.reduce((a, b) => (b.z > a.z ? b : a));
-        return _focusHandoff({ plotWindows }, next.id, next.datasetId, next.view);
+        return _focusHandoff(
+          { plotWindows },
+          next.id,
+          plotWindowDatasetId(next),
+          plotWindowView(next),
+        );
       })),
     // Restore + focus a minimized window in one step — clicking a strip entry
     // is "bring this back and make it live" (a taskbar button, not just an
@@ -705,10 +696,10 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const raised = maxZ(s.plotWindows) + 1;
         const plotWindows = s.plotWindows.map((w) => {
           if (w.id === id) return { ...w, winState: "normal" as WinState, z: raised };
-          if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
+          if (w.id === s.focusedWindowId) return syncPlotWindow(w, snapshotView(s));
           return w;
         });
-        return _focusHandoff({ plotWindows }, id, target.datasetId, target.view);
+        return _focusHandoff({ plotWindows }, id, plotWindowDatasetId(target), plotWindowView(target));
       })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->
@@ -723,7 +714,13 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       })),
     renameWindow: (id, title) => (get().recordHistory("rename window"),
       set((s) => ({
-        plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, title } : w)),
+        plotWindows: s.plotWindows.map((w) =>
+          w.id === id
+            ? w.kind === "plot"
+              ? syncPlotWindow(w, w.id === s.focusedWindowId ? snapshotView(s) : plotWindowView(w), { title })
+              : { ...w, title }
+            : w,
+        ),
       }))),
     setWindowBg: (id, bg) => (get().recordHistory("change window background"),
       set((s) => ({
@@ -742,7 +739,9 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     windowsForSave: () => {
       const s = get();
       if (s.focusedWindowId === null) return s.plotWindows;
-      return s.plotWindows.map((w) => (w.id === s.focusedWindowId ? { ...w, view: snapshotView(s) } : w));
+      return s.plotWindows.map((w) =>
+        w.id === s.focusedWindowId ? syncPlotWindow(w, snapshotView(s)) : w,
+      );
     },
   };
 }

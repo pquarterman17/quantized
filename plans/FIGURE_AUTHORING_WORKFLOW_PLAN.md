@@ -328,6 +328,19 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-01 — F1.3a document-backed plot windows (ChatGPT-Sol)
+
+- Added a canonical FigureDocument to each editable plot window while keeping
+  the singleton PlotView as the focused rendering/performance facade.
+- New, duplicated, rebound, renamed, minimized, focused, and save-snapshotted
+  windows now synchronize through one document bridge; background rendering
+  resolves from the document rather than trusting a stale compatibility copy.
+- Preserved the existing view-history split: focus commits editable state, but
+  zoom/pan remains in its dedicated navigation history.
+- Kept the legacy `view`/`title`/`datasetId` fields temporarily as synchronized
+  projections so this architectural change does not require a repository-wide
+  UI rewrite. Workspace sanitization/migration is the next stacked slice.
+
 ### 2026-08-01 — F1.5a hardened document boundary (ChatGPT-Sol)
 
 - Added full untrusted-input sanitization and serialization for the versioned

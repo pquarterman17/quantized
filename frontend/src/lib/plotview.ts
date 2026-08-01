@@ -24,6 +24,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
+import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
@@ -352,6 +353,8 @@ export interface PlotWindow {
   z: number;
   winState: WinState;
   view: PlotView;
+  /** Canonical editable state for plot windows; absent on non-plot kinds. */
+  document?: FigureDocument;
   bg: PlotBg;
   /** Cross-window link group (item 13, opt-in per the owner decision — never
    *  automatic same-dataset coupling): windows sharing the same non-null
@@ -902,6 +905,12 @@ export function pruneWindowDatasetRefs(
   return windows.map((w) => {
     const patch: Partial<PlotWindow> = {};
     if (w.datasetId && removed.has(w.datasetId)) patch.datasetId = null;
+    if (w.document?.bindings.datasetId && removed.has(w.document.bindings.datasetId)) {
+      patch.document = {
+        ...w.document,
+        bindings: { ...w.document.bindings, datasetId: null },
+      };
+    }
     if (w.panel && w.panel.datasetIds.some((id) => removed.has(id))) {
       patch.panel = { ...w.panel, datasetIds: w.panel.datasetIds.filter((id) => !removed.has(id)) };
     }

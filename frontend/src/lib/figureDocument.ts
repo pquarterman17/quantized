@@ -162,6 +162,37 @@ export function figureDocumentToPlotView(document: FigureDocument): PlotView {
   };
 }
 
+export interface UpdateFigureDocumentInput {
+  view: PlotView;
+  name?: string;
+  datasetId?: string | null;
+}
+
+/** Commit the focused PlotView facade back into its canonical document. */
+export function updateFigureDocumentFromPlotView(
+  document: FigureDocument,
+  input: UpdateFigureDocumentInput,
+): FigureDocumentV1 {
+  // The legacy facade can edit only symmetric Y errors. Preserve richer X and
+  // asymmetric roles while replacing the projection it can actually control.
+  const richErrors = document.bindings.errors.filter(
+    (binding) => binding.axis !== "y" || binding.side !== "both",
+  );
+  return createFigureDocument({
+    id: document.id,
+    name: input.name ?? document.name,
+    datasetId: input.datasetId === undefined ? document.bindings.datasetId : input.datasetId,
+    view: input.view,
+    mark: document.plot.mark,
+    groupKey: document.bindings.groupKey,
+    facetKey: document.bindings.facetKey,
+    errors: [...richErrors, ...legacyErrorBindings(input.view.errKeys)],
+    data: document.data,
+    axisBreaks: document.plot.axisBreaks,
+    output: document.output,
+  });
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

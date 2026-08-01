@@ -31,6 +31,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
 import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
+import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
 import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
@@ -87,8 +88,9 @@ export default function WindowCanvas() {
   // ensureBookData is single-flight, so covering it again here is harmless.
   useEffect(() => {
     for (const win of plotWindows) {
-      if (win.winState === "minimized" || !win.datasetId) continue;
-      const ds = datasets.find((d) => d.id === win.datasetId);
+      const datasetId = plotWindowDatasetId(win);
+      if (win.winState === "minimized" || !datasetId) continue;
+      const ds = datasets.find((d) => d.id === datasetId);
       if (ds?.pending) useApp.getState().ensureBookData(ds.id);
     }
   }, [plotWindows, datasets]);
@@ -147,7 +149,8 @@ export default function WindowCanvas() {
       >
         {visible.map((win) => {
           const focused = win.id === focusedWindowId;
-          const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
+          const datasetId = plotWindowDatasetId(win);
+          const dataset = datasetId ? (datasets.find((d) => d.id === datasetId) ?? null) : null;
           const datasetMeta = dataset
             ? { channels: dataset.data.labels.length, rows: dataset.data.time.length }
             : undefined;
@@ -192,7 +195,7 @@ export default function WindowCanvas() {
               ) : (
                 <BackgroundPlotWindow
                   dataset={dataset}
-                  view={win.view}
+                  view={plotWindowView(win)}
                   bg={win.bg}
                   linkGroup={win.linkGroup}
                 />
@@ -204,7 +207,8 @@ export default function WindowCanvas() {
       {minimized.length > 0 && (
         <div className="qzk-winstrip">
           {minimized.map((win) => {
-            const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
+            const datasetId = plotWindowDatasetId(win);
+            const dataset = datasetId ? (datasets.find((d) => d.id === datasetId) ?? null) : null;
             const title = win.title || dataset?.name || "Untitled graph";
             return (
               <button

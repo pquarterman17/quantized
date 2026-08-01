@@ -9,6 +9,7 @@ import {
   figureDocumentToPlotView,
   sanitizeFigureDocument,
   serializeFigureDocument,
+  updateFigureDocumentFromPlotView,
 } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct } from "./types";
@@ -162,6 +163,34 @@ describe("FigureDocument v1", () => {
     expect(sanitizeFigureDocument({ ...document, version: 2 })).toBeNull();
     expect(sanitizeFigureDocument({ ...document, id: "" })).toBeNull();
     expect(deserializeFigureDocument("not json")).toBeNull();
+  });
+
+  it("commits facade edits while retaining errors the legacy view cannot express", () => {
+    const document = createFigureDocument({
+      id: "figure-edit",
+      name: "Before",
+      datasetId: "dataset-1",
+      view: { ...defaultPlotView(), errKeys: { 1: 3 } },
+      errors: [
+        { channel: 3, target: 1, axis: "y", side: "both" },
+        { channel: 4, target: 1, axis: "y", side: "+" },
+        { channel: 5, target: 1, axis: "y", side: "-" },
+        { channel: 6, target: -1, axis: "x", side: "both" },
+      ],
+    });
+    const updated = updateFigureDocumentFromPlotView(document, {
+      name: "After",
+      view: { ...figureDocumentToPlotView(document), plotTitle: "Edited", errKeys: { 2: 7 } },
+    });
+
+    expect(updated.name).toBe("After");
+    expect(updated.plot.view.plotTitle).toBe("Edited");
+    expect(updated.bindings.errors).toEqual([
+      { channel: 4, target: 1, axis: "y", side: "+" },
+      { channel: 5, target: 1, axis: "y", side: "-" },
+      { channel: 6, target: -1, axis: "x", side: "both" },
+      { channel: 7, target: 2, axis: "y", side: "both" },
+    ]);
   });
 
   it("rejects contradictory live/frozen data ownership", () => {

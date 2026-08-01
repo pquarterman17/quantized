@@ -4110,6 +4110,30 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     const created = useApp.getState().plotWindows.find((w) => w.id === newId);
     expect(created?.datasetId).toBe("d2");
     expect(created?.view.plotTitle).toBe("seeded");
+    expect(created?.document).toMatchObject({
+      name: created?.title,
+      bindings: { datasetId: "d2" },
+      plot: { view: { plotTitle: "seeded" } },
+    });
+  });
+
+  it("commits the focused facade into its canonical document before handing off focus", () => {
+    const w1 = win({ id: "w1", view: { ...defaultPlotView(), plotTitle: "stale" } });
+    const w2 = win({ id: "w2", datasetId: "d2", view: { ...defaultPlotView(), plotTitle: "target" } });
+    useApp.setState({
+      plotWindows: [w1, w2],
+      focusedWindowId: "w1",
+      plotTitle: "live edit",
+      annotations: [{ id: "a1", x: 1, y: 2, text: "kept" }],
+    });
+
+    useApp.getState().focusWindow("w2");
+    const committed = useApp.getState().plotWindows.find((w) => w.id === "w1");
+    expect(committed?.document?.plot.view.plotTitle).toBe("live edit");
+    expect(committed?.document?.plot.view.annotations).toEqual([
+      { id: "a1", x: 1, y: 2, text: "kept" },
+    ]);
+    expect(committed?.view).toEqual(expect.objectContaining({ plotTitle: "live edit" }));
   });
 
   it("focusWindow snapshots the outgoing window's LIVE view and hydrates the incoming one", () => {
@@ -4225,6 +4249,8 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     const dup = s.plotWindows.find((w) => w.id === newId);
     expect(dup?.datasetId).toBe("d1");
     expect(dup?.view.plotTitle).toBe("live title");
+    expect(dup?.document?.plot.view.plotTitle).toBe("live title");
+    expect(dup?.document?.id).not.toBe(`figure-w1`);
   });
 
   it("duplicateWindow returns null for an unknown id", () => {
