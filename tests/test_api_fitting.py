@@ -160,3 +160,19 @@ def test_bootstrap_return_samples_flag() -> None:
     assert "boot_samples" in out
     assert len(out["boot_samples"]) == out["n_boot"]
     assert len(out["boot_samples"][0]) == 2  # Linear has 2 params
+
+
+def test_scan_job_returns_429_when_queue_full(monkeypatch) -> None:
+    """ROBUSTNESS #4 end-to-end: admission refusal maps to HTTP 429, not 500/422.
+
+    Bound monkeypatched to 0 so the very first submit is refused -- proves the
+    route-layer JobQueueFullError translation, not just the store unit behavior.
+    """
+    import quantized.jobs as jobs_mod
+
+    monkeypatch.setattr(jobs_mod, "_PENDING_ADMISSION_BOUND", 0)
+    x = [float(v) for v in range(12)]
+    y = [2.0 * v + 1.0 for v in x]
+    resp = client.post("/api/fitting/scan/job", json={"x": x, "y": y})
+    assert resp.status_code == 429
+    assert "full" in resp.json()["detail"]
