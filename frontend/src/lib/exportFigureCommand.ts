@@ -53,15 +53,27 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   ]);
   if (!params) return;
   // Blank label fields mean "derive from the data" → send undefined, not "".
-  const xl = (params.x_label as string).trim();
-  const yl = (params.y_label as string).trim();
+  // Guarded (not a bare `as string`): coerceParams now guarantees every field
+  // key is present, but this stays defensive — a `.trim()` on a genuinely
+  // missing/non-string value must never throw. A throw HERE (building the
+  // buildFigureSpec argument) is still inside exportActive's try/catch, but
+  // it would abort the export having ALREADY closed the dialog, with no
+  // visible feedback beyond a status/toast — never a silent hang, but still
+  // worth never triggering (P0.4 finding 15, 2026-07-27 — see
+  // ParamDialog.tsx's header comment for the render race that used to make
+  // an EARLIER version of this exact pattern throw OUTSIDE exportActive
+  // entirely, silently, before exportActive ever ran).
+  const asStr = (v: unknown): string => (typeof v === "string" ? v : "");
+  const xl = asStr(params.x_label).trim();
+  const yl = asStr(params.y_label).trim();
+  const titleStr = asStr(params.title).trim();
   await exportActive(s, (stem, ds) =>
     exportFigure(
       buildFigureSpec(s, ds, stem, {
         fmt: params.fmt as string,
         style: params.style as string,
         dpi: params.dpi as number,
-        title: (params.title as string).trim(),
+        title: titleStr,
         xLabel: xl,
         yLabel: yl,
       }),

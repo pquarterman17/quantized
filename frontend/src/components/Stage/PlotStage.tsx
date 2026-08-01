@@ -208,6 +208,7 @@ export default function PlotStage() {
     savePng,
     copyData,
     copyFigure,
+    copyFigureSvg,
     snapshot,
     onRegionSelect,
     onRangeSelect,
@@ -341,7 +342,7 @@ export default function PlotStage() {
         plotRef={plotRef}
         plotted={plotted}
         hidden={hidden}
-        actions={{ resetView, smartScale, savePng, copyData, copyFigure, snapshot }}
+        actions={{ resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot }}
         annotationMenu={annotationMenu}
         onCloseAnnotationMenu={closeAnnotationMenu}
         axisLabelMenu={axisLabelMenu}
@@ -363,7 +364,7 @@ export default function PlotStage() {
         isDarkBg={isDarkBg}
         inkColor={inkColor}
         defaultTrace={defaultTrace}
-        actions={{ resetView, smartScale, savePng, copyData, copyFigure, snapshot }}
+        actions={{ resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot }}
         readout={readout}
         measurement={measurement}
         stats={statsSel}
