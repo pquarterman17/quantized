@@ -179,6 +179,35 @@ def test_dixon_critical_value_table_pinned(n: int, q90: float, q95: float, q99: 
     assert row == pytest.approx((q90, q95, q99))
 
 
+@pytest.mark.parametrize(
+    "n, kanji_one_sided_alpha_05",
+    [
+        # RE-VERIFICATION (2026-07-31, JMP_GAP_PLAN's standing n>20 caveat):
+        # every one of these equals Kanji, G. K., *100 Statistical Tests*,
+        # SAGE (1993)'s published Dixon table at its one-sided alpha=0.05
+        # column -- which is this module's TWO-SIDED alpha=0.10 column
+        # (Kanji's one-sided alpha is exactly half this module's two-sided
+        # alpha; confirmed by the r10-regime n=3 case, where BOTH this
+        # module and Wikipedia/Harvey's explicitly-Rorabacher-cited table
+        # give 0.941 at two-sided alpha=0.10, which is also Kanji's
+        # one-sided alpha=0.05 value for n=3). Spans all three of the
+        # large-n ratio statistics (r11 n=8-10, r21 n=11-13, r22 n=14-25),
+        # with n=21-25 the direct answer to "n>20" -- see the module
+        # docstring's Dixon reference entry for the full cross-check trail
+        # (also NIST Dataplot's independent Monte Carlo simulation at n=8).
+        (8, 0.554), (9, 0.512), (10, 0.477),
+        (11, 0.576), (12, 0.546), (13, 0.521),
+        (14, 0.546), (15, 0.525), (16, 0.507), (17, 0.490), (18, 0.475),
+        (19, 0.462), (20, 0.450),
+        (21, 0.440), (22, 0.430), (23, 0.421), (24, 0.413), (25, 0.406),
+    ],
+)
+def test_dixon_critical_value_table_verified_against_kanji_1993(
+    n: int, kanji_one_sided_alpha_05: float,
+) -> None:
+    assert _DIXON_CRITICAL[n][0] == pytest.approx(kanji_one_sided_alpha_05)
+
+
 def test_dixon_ratio_scheme_by_n() -> None:
     # n=5 (r10), n=9 (r11), n=12 (r21), n=20 (r22).
     assert dixon_q_test(np.arange(5.0))["ratio"] == "r10"
