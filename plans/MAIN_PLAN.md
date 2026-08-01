@@ -44,6 +44,7 @@ Sol audit docs as items 29–30)
 | `JMP_GAP_PLAN.md` | The JMP half of the daily-driver mission: code-grounded gap register (J1–J17) vs the owner's JMP surface, tiered closure work, Gate J usage census | Own gap register + owner gate; layers on PRIMARY P1.4/P1.5/P2.6 without duplicating them |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
+| `ROBUSTNESS_PLAN.md` | Enforcement/environment/runtime hardening: what guards do NOT cover, which Node the artifact is built on, and the unbounded upload/job paths | Independent lifecycle — gated by neither Gate A nor Gate J, and orthogonal to every feature plan; its items are defects in the scaffolding around the code rather than in the code |
 
 Six residue plans were folded up into this doc and archived on
 2026-07-10 (fold-up rule): MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION,

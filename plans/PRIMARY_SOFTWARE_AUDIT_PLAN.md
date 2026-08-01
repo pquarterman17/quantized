@@ -7,6 +7,7 @@
 the fix had been sitting COMPLETE but UNMERGED on an orphaned worktree branch
 since 2026-07-26 (`29ad044`); found by a `git branch --no-merged main` check
 during a dashboard verification, adversarially reviewed, gated, merged.
+Prior: 2026-07-29, header-date correction only.
 Prior: 2026-07-26 latest (P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
 `481e0ea`; slice 3 corrected the freeze attribution — render/mount, not
 parse — booked as slice 4, now the actionable queue; branding drop merged

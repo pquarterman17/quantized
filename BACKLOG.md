@@ -6,7 +6,7 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-31 (thirteenth pass). **Both export-dialog
+**Last reconciled:** 2026-07-31 (fourteenth pass). **Both export-dialog
 defects CLOSED** — a `git branch --no-merged main` check found their fix
 COMPLETE but UNMERGED on an orphaned worktree branch (`29ad044`, authored
 2026-07-26, the night the defects were booked; the spawning session ended
@@ -14,6 +14,28 @@ before merging). Adversarially re-verified against current main, gated
 (lint / 5,076 vitest / build + ratchet), merged. Row removed below;
 outcome in the PRIMARY plan's Completed section. The no-merged check is
 now part of every reconcile pass.
+
+Prior (thirteenth pass, 2026-07-29). **JMP #14's
+module-size follow-ups SHIPPED** — `routes/export_figures.py` 493→323
+(new `export_statplots.py` sibling), `lib/api.ts` 2,282→1,895
+(`lib/api/http.ts` + `lib/api/stats.ts`, re-exported so no consumer
+moved), `useDistribution.ts` 583→492 (`useDistributionByLevels.ts`).
+The row is removed below per the archival rule. The real finding was
+the missing guard, not the three files: non-store `.ts` had neither a
+ceiling nor pins, so a new `MODULE_PINS` ratchet in
+`architecture.test.ts` now covers it (both branches verified by
+planting violations). Same pass, a second defect found and FIXED: the
+frontend suite failed **176 tests on a clean checkout** under Homebrew's
+Node 26 — Node 20+ ships its own `localStorage` global whose accessor
+shadows jsdom's and returns undefined without `--localstorage-file`, so
+every persistence test died on a message naming neither Node nor the
+flag. CI runs Node 22 and could not see it. `src/test/setup.ts` now
+installs a real jsdom Storage when the global is missing (suite:
+**348 files / 5,055 tests green on Node 26**); PR #93's `.nvmrc` Node-22
+pin was merged alongside it as belt-and-braces, not as the fix. Open
+question for the owner, from #93's own description: `fermiviewer` pins
+Node with **Volta** — standardizing both repos on one mechanism would
+drop the second.
 
 Prior (twelfth pass, 2026-07-28). **The mission now
 includes JMP** (owner directive): `plans/JMP_GAP_PLAN.md` is a new
@@ -260,8 +282,8 @@ still make the owner switch back to Origin.
 |------|-------------|
 | Server-side plot-payload decimation — `/api/plot/series` ships 78 MB JSON at 1M×7; its network+encode+parse (~2–5 s) is the measured last term in window mount (~3.8 s) and restore freeze (~3.7 s vs 1.5 s target) after the render-memoization fix. Decimate at the route to the client's draw contract, full-res opt-out; audit non-plot payload consumers first | PRIMARY SOFTWARE P0.4/P3.4 (pre-authorized second half of point reduction) |
 | Map regrid gridded-input fast path — linear regrid Delaunay-triangulates ALL input points every call (37 s @1M; output resolution <2% effect); detect regular-grid input → bin/decimate, griddata only for genuinely scattered data | PRIMARY SOFTWARE P2.8 (defect-class, evidence delivered) |
+| Robustness Tier 1 — (a) frontend CI is `ubuntu`+Node 22 only, so the 176-test Node 26 break was invisible to it; (b) Node is hardcoded in FOUR workflows and they disagree (ci/e2e 22, pypi/release **20**), so the shipped artifact is built on a Node version nothing tests; (c) uploads `await file.read()` whole files with no cap (`parsers.py:305`, `import_template.py:90`) | ROBUSTNESS #1–#3 |
 | JMP campaign residuals — J8 variability-chart UI (backend + `variability_summary` contract shipped); J10 `figure_multivar` export parity; J3 mosaic plot + prediction band; J7 By on curve fit; Dixon n>20 table re-verify (needs web/Rorabacher 1991). CAMPAIGN SHIPPED 2026-07-28/29: J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend. J1/J2 ride the P1.4 contract; J4 = P1.5 (both Gate-A-sequenced) | JMP_GAP plan |
-| JMP #14 module-size follow-ups (from the PR #94 pre-merge review, guards advisories) — split `routes/export_figures.py` (493 lines, ~6 under ceiling) into an `export_statplots.py` sibling; extract `lib/api.ts` stats wrappers to `lib/api/stats.ts` + add a shrink-only pin (2,282 lines, unpinned — the fermiviewer audit pattern); split `useDistribution.ts` By-half (579 lines, unguarded `.ts`-hook gap) | JMP_GAP #14 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -463,7 +485,8 @@ the root; every active plan below is its declared sub-plan.
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
 | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **Actionable now:** plot-payload decimation (P0.4/P3.4) and the map-regrid gridded-input fast path (P2.8) — the 07-26 trio (`_detect_layout`, large derived `.dwk`, progress/cancel audit) ALL SHIPPED; export-dialog defects CLOSED 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes, followed by evidence-ranked P2/P3/P4 work. Shipped 2026-07-26: P0.3 fixtures/protocol, P0.4 core envelope, point reduction, import efficiency, and viewport fix. |
-| `plans/JMP_GAP_PLAN.md` | Active | Gap register J1–J17 booked 2026-07-28; the census-independent campaign SHIPPED 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend — 12 merges, +90 backend / +~500 frontend tests). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5), J8 variability-chart UI, small residuals (J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon n>20 verify); Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
+| `plans/JMP_GAP_PLAN.md` | Active | Gap register J1–J17 booked 2026-07-28; the census-independent campaign SHIPPED 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend — 12 merges, +90 backend / +~500 frontend tests). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5), J8 variability-chart UI, small residuals (J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon n>20 verify); Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. **#14 module-size follow-ups CLOSED 2026-07-29** (three splits + the `MODULE_PINS` ratchet now guarding non-store `.ts`). Owner gate: Gate J census + switch trial |
+| `plans/ROBUSTNESS_PLAN.md` | Active (NEW 2026-07-29) | Enforcement/environment/runtime hardening, all evidence-found not checklist-derived. Tier 1: frontend-CI single point (#1), Node declared four times and disagreeing (#2), unbounded/uncapped uploads (#3). Tier 2: unbounded job admission (#4), executor never shut down (#5), no transitive-vuln sweep (#6), guard-coverage census (#7). Tier 3: Node version-manager standardization (#8, owner-parked), automate the recurring backend exception sweep (#9), pre-commit hooks (#10). Excludes P1.2/P3.4/P4.2 by design |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

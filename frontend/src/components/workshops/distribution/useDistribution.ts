@@ -26,13 +26,14 @@
 // a defensive honesty guard, not dead code masking a real gap.
 //
 // JMP_GAP J7 ("By" role): an optional By column runs the SAME
-// histogram/descriptive/Shapiro trio once per level of a categorical
-// column (components/workshops/useByPartition.ts, shared with Fit Y by X),
-// partitioning the ALREADY-analysis-view `data` (guard #11 — exclusions and
-// the local filter apply before partitioning, same as everything else). Kept
-// deliberately simple (histogram + stats per level, JMP_GAP_PLAN's own
-// acceptance bar) — the fit-distribution overlay/Compare/percentile features
-// stay single-column-only; a level too small to bin still reports its N.
+// histogram/descriptive/Shapiro trio once per level of a categorical column.
+// That half lives in ./useDistributionByLevels (extracted 2026-07-29,
+// JMP_GAP #14 size ratchet), which also owns the per-level analysis
+// primitives this file re-exports below — the un-partitioned view here is
+// the n=1 case of the same computation. Kept deliberately simple (histogram
+// + stats per level, JMP_GAP_PLAN's own acceptance bar) — the
+// fit-distribution overlay/Compare/percentile features stay
+// single-column-only; a level too small to bin still reports its N.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -48,21 +49,24 @@ import {
 import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpdf";
 import { rowsInBins } from "../../../lib/distribution";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
-import type { CalcResult, DataStruct } from "../../../lib/types";
+import type { CalcResult } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
-import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
+import type { ByColumnOption, ByLevel } from "../useByPartition";
+import {
+  type DistributionLevelResult,
+  type HistBins,
+  type Normality,
+  colValues,
+  normalityNote,
+  numArr,
+  useDistributionByLevels,
+} from "./useDistributionByLevels";
 
-export interface HistBins {
-  counts: number[];
-  centers: number[];
-  edges: number[];
-}
-export interface Normality {
-  W: number;
-  p: number;
-  N: number;
-}
+// Re-exported so the panel components (HistogramStrip, DistributionLevelSection)
+// and their tests keep one import site for the hook and its result shapes.
+export type { DistributionLevelResult, HistBins, Normality };
+
 export interface DistributionColumn {
   index: number;
   label: string;
@@ -169,27 +173,6 @@ export interface DistributionState {
   toReport: () => Promise<void>;
 }
 
-/** One By-level's rendering — the same shape (hist/desc/norm/normNote) the
- *  un-partitioned view keeps as separate fields, bundled per level so
- *  DistributionLevelSection can render it with one prop. `error` is set
- *  instead of thrown when a level has too few finite values to bin — an
- *  honest line, not a crash (JMP_GAP J7 acceptance). */
-export interface DistributionLevelResult {
-  label: string;
-  n: number;
-  hist: HistBins | null;
-  desc: CalcResult | null;
-  norm: Normality | null;
-  normNote: string | null;
-  error: string | null;
-}
-
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
-
-const numArr = (v: unknown): number[] =>
-  Array.isArray(v) ? v.map((x) => Number(x)) : [];
-
 export function useDistribution(): DistributionState {
   const active = useActiveDataset();
   const data = useMemo(() => analysisData(active), [active]);
@@ -210,23 +193,14 @@ export function useDistribution(): DistributionState {
   // Default to the first channel (a value column), else x.
   const [col, setCol] = useState<number>(() => (active && active.data.labels.length ? 0 : -1));
 
-  // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
-  // view (guard #11), so every level below is post-exclusion/-filter too.
-  // The By candidate list excludes the currently profiled column itself —
-  // partitioning a column by its own levels is degenerate (every level
-  // would just be that one homogeneous value).
+  // JMP_GAP J7 — By-column partitioning (./useDistributionByLevels). `data`
+  // is already the analysis view (guard #11), so every level is
+  // post-exclusion/-filter too. The By candidate list excludes the currently
+  // profiled column itself — partitioning a column by its own levels is
+  // degenerate (every level would just be that one homogeneous value).
   const byColumns = useMemo(() => columns.filter((c) => c.index !== col), [columns, col]);
-  const byPartition = useByPartition(active, data, byColumns);
-  const [byResults, setByResults] = useState<DistributionLevelResult[]>([]);
-  const [byBusy, setByBusy] = useState(false);
+  const by = useDistributionByLevels(active, data, byColumns, col);
   const [reportBusy, setReportBusy] = useState(false);
-
-  // A By column picked before `col` changed underneath it (now colliding
-  // with the new profiled column) resets to none.
-  useEffect(() => {
-    if (byPartition.byCol === col) byPartition.setByCol(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [col]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,13 +260,7 @@ export function useDistribution(): DistributionState {
         setNorm({ W: Number(s.value.W), p: Number(s.value.p), N: Number(s.value.N) });
       } else {
         setNorm(null);
-        setNormNote(
-          finite.length < 3
-            ? "need ≥ 3 values"
-            : finite.length > 5000
-              ? "n > 5000 (Shapiro limit)"
-              : "normality test unavailable",
-        );
+        setNormNote(normalityNote(finite.length));
       }
     });
     return () => {
@@ -426,77 +394,17 @@ export function useDistribution(): DistributionState {
     if (!useShiftExtend) setAnchorBin(i0);
   }
 
-  // JMP_GAP J7 — one histogram/descriptive/Shapiro fetch per By level, the
-  // SAME trio the un-partitioned view above runs, on that level's own
-  // sliced DataStruct (useByPartition already partitioned the analysis
-  // view — guard #11 is satisfied upstream). Render-only: never touches
-  // the shared row selection (no brushing here, unlike the single-column
-  // histogram's `brushBins`).
-  useEffect(() => {
-    if (byPartition.levels.length === 0) {
-      setByResults([]);
-      setByBusy(false);
-      return;
-    }
-    let cancelled = false;
-    setByBusy(true);
-    Promise.all(
-      byPartition.levels.map(async (lvl): Promise<DistributionLevelResult> => {
-        const vals = colValues(lvl.data, col).filter((v) => Number.isFinite(v));
-        const [h, d, s] = await Promise.allSettled([
-          statsHistogram(vals),
-          statsDescriptive(vals),
-          statsShapiro(vals),
-        ]);
-        const levelHist =
-          h.status === "fulfilled"
-            ? { counts: numArr(h.value.counts), centers: numArr(h.value.centers), edges: numArr(h.value.edges) }
-            : null;
-        const levelDesc = d.status === "fulfilled" ? d.value : null;
-        const levelNorm =
-          s.status === "fulfilled" && Number.isFinite(Number(s.value.p))
-            ? { W: Number(s.value.W), p: Number(s.value.p), N: Number(s.value.N) }
-            : null;
-        const levelNormNote = levelNorm
-          ? null
-          : vals.length < 3
-            ? "need ≥ 3 values"
-            : vals.length > 5000
-              ? "n > 5000 (Shapiro limit)"
-              : "normality test unavailable";
-        return {
-          label: lvl.label,
-          n: vals.length,
-          hist: levelHist,
-          desc: levelDesc,
-          norm: levelNorm,
-          normNote: levelNormNote,
-          error: levelHist ? null : `not enough data (n=${vals.length})`,
-        };
-      }),
-    )
-      .then((results) => {
-        if (!cancelled) setByResults(results);
-      })
-      .finally(() => {
-        if (!cancelled) setByBusy(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [byPartition.levels, col]);
-
   async function toReport(): Promise<void> {
     if (!active) return;
     setReportBusy(true);
     try {
       const refs = [{ kind: "dataset", id: active.id, name: active.name }];
-      const byLabel = byPartition.byOptions.find((c) => c.index === byPartition.byCol)?.label;
+      const byLabel = by.byOptions.find((c) => c.index === by.byCol)?.label;
       let title: string;
       let records: Record<string, unknown>[];
-      if (byPartition.levels.length > 0) {
+      if (by.levels.length > 0) {
         title = `${label} distribution by ${byLabel ?? "level"}`;
-        records = byResults.map((r) => ({
+        records = by.results.map((r) => ({
           level: r.label,
           n: r.n,
           mean: r.desc?.mean,
@@ -570,13 +478,13 @@ export function useDistribution(): DistributionState {
     percentileValue,
     brushedBins,
     brushBins,
-    byOptions: byPartition.byOptions,
-    byCol: byPartition.byCol,
-    setByCol: byPartition.setByCol,
-    byLevels: byPartition.levels,
-    byTotalLevels: byPartition.totalLevels,
-    byResults,
-    byBusy,
+    byOptions: by.byOptions,
+    byCol: by.byCol,
+    setByCol: by.setByCol,
+    byLevels: by.levels,
+    byTotalLevels: by.totalLevels,
+    byResults: by.results,
+    byBusy: by.busy,
     reportBusy,
     toReport,
   };

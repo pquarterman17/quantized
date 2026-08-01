@@ -34,6 +34,7 @@ from quantized.routes import (
     export_figures,
     export_figures_aux,
     export_page,
+    export_statplots,
     fitting,
     fitting_bumps,
     import_template,
@@ -164,6 +165,7 @@ def create_app() -> FastAPI:
     application.include_router(export.router)
     application.include_router(export_figures.router)
     application.include_router(export_figures_aux.router)
+    application.include_router(export_statplots.router)
     application.include_router(export_facets.router)
     application.include_router(export_page.router)
     application.include_router(report_export.router)

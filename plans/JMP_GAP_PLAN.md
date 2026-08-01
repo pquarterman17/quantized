@@ -3,13 +3,15 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-29 (pre-merge adversarial review of PR #94: four
-defects fixed on the branch — chi-square Yates convention, By-level
-cap, box CI domain, dead vitest 3 pool config — and module-size
-follow-ups booked as #14; see Completed. Campaign complete: J3, J5,
-J6, J7, J9, J10, J11, J12, J17 and J8's backend SHIPPED — every
-census-independent item is closed or reduced to a named residual.
-Open: J1/J2 (ride P1.4), J4 (= P1.5), J8 UI half, #14 size follow-ups,
+**Updated:** 2026-07-29 latest (#14 module-size follow-ups SHIPPED —
+three splits plus the `MODULE_PINS` ratchet that now guards non-store
+`.ts`, the gap that let `lib/api.ts` reach 2,282 lines unseen; see
+Completed. Prior same day: pre-merge adversarial review of PR #94,
+four defects fixed on the branch — chi-square Yates convention,
+By-level cap, box CI domain, dead vitest 3 pool config. Campaign
+complete: J3, J5, J6, J7, J9, J10, J11, J12, J17 and J8's backend
+SHIPPED — every census-independent item is closed or reduced to a
+named residual. Open: J1/J2 (ride P1.4), J4 (= P1.5), J8 UI half,
 small residuals below, Tier 3 census-gated. Prior: 2026-07-28 initial
 gap analysis against `457cdae`)
 
@@ -272,18 +274,10 @@ replacements and its priority case is now stronger, not different.
     extended so "jmp"/"jsl"/"local data filter"/"by group"/"tabulate"
     cannot regress; help stays in the lazy chunk.
 
-14. **[ ] Module-size follow-ups** (from the 2026-07-29 PR #94
-    adversarial review — guards advisories, none blocking):
-    - [ ] `routes/export_figures.py` at 493 lines (~6 under the
-      ceiling): split the statplot request model + endpoint into a
-      `routes/export_statplots.py` sibling before the next flag lands.
-    - [ ] `frontend/src/lib/api.ts` at 2,282 lines with no ratchet pin
-      (the fermiviewer audit pattern): extract the stats wrappers to
-      `lib/api/stats.ts` and add a shrink-only pin alongside the store
-      pins in `architecture.test.ts`.
-    - [ ] `useDistribution.ts` at 579 lines (unguarded `.ts`-hook gap):
-      the By-level/compare-distributions half is a separable
-      `useDistributionByLevels` hook.
+14. **[x] Module-size follow-ups** — SHIPPED 2026-07-29 (see Completed).
+    All three splits landed plus the guard that was missing under them:
+    a new `MODULE_PINS` ratchet in `architecture.test.ts` now covers
+    non-store `.ts`, closing the gap that let both files grow unseen.
 
 ## Tier 3 — Census-gated (do NOT build speculatively)
 
@@ -337,6 +331,36 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**#14 Module-size follow-ups**~~ (2026-07-29) — all three splits,
+  plus the guard whose absence was the actual defect. `routes/
+  export_figures.py` 493→323: the statplot + categorical models and
+  endpoints moved to `routes/export_statplots.py` (214), cut along the
+  same `_figure_series` seam `export_figures_aux.py` used — a route
+  stays only if it takes a `dataset` + channel picks, and these take
+  pre-aggregated arrays. `frontend/src/lib/api.ts` 2,282→1,895: shared
+  transport to `lib/api/http.ts` (90, so a domain module can reach the
+  helpers without a cycle back through `api.ts`) and the `/api/stats/*`
+  wrappers to `lib/api/stats.ts` (342), both re-exported so all 21
+  consumers and their `vi.mock`s are untouched; api.ts is the
+  aggregator now, the `appCommands.ts`/`commands/` shape. J8's
+  variability-chart wrappers are the next ones due and belong in
+  `api/stats.ts`, not `api.ts`. `useDistribution.ts` 583→492: the J7
+  By-level half to `distribution/useDistributionByLevels.ts` (165),
+  which also owns the per-level analysis primitives (`colValues`/
+  `numArr`/`HistBins`/`Normality`) — the un-partitioned view is the
+  n=1 case of the same computation, so a shared `normalityNote()` also
+  removed a duplicated wording branch. **The guard was the real
+  finding:** `.tsx` had a ceiling and the store slices had pins, but
+  non-store `.ts` had neither, which is exactly how both files reached
+  those sizes unseen — a `MODULE_PINS` ratchet (shrink-only, with a
+  graduation check at the 400 `.tsx` ceiling) now covers them, and
+  BOTH its branches were verified by planting violations. Gate green:
+  backend 3,104 passed / ruff / mypy; frontend tsc + eslint clean,
+  eager bundle byte-identical at 894.8 kB (`export *` tree-shakes
+  fine). Frontend vitest is 176-failing on this machine BEFORE and
+  AFTER, identically — local Node v26 leaves `localStorage` undefined
+  without `--localstorage-file`; open PR #93 (pin Node 22) is the fix.
 
 - ~~**PR #94 adversarial review + fixes**~~ (2026-07-29) — pre-merge
   review of the whole campaign PR (guards + backend-stats + frontend
