@@ -290,8 +290,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "figure-builder",
       group: "Plot",
       section: "Build & export",
-      label: "Figure builder (live preview)…",
-      description: "Refine the active plot in a publication-sized live preview with precise figure settings.",
+      label: "Publication preview…",
+      description: "Preview and save or export a publication-sized copy; changes do not update the editable Stage plot.",
       run: () => s().setFigureBuilderOpen(true),
     },
     {

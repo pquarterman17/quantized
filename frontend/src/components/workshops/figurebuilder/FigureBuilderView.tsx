@@ -20,14 +20,22 @@ export default function FigureBuilderView() {
   const [tplName, setTplName] = useState("");
 
   return (
-    <ToolWindow id="figurebuilder" title={f.frozen ? "Figure builder (frozen data)" : "Figure builder"} width={560} onClose={() => setOpen(false)}>
+    <ToolWindow id="figurebuilder" title={f.frozen ? "Publication preview (frozen data)" : "Publication preview"} width={560} onClose={() => setOpen(false)}>
       {!f.data ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-          Select a dataset to build a figure.
+          Select a dataset to preview a figure.
         </div>
       ) : (
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ width: 200, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div
+              role="note"
+              aria-label="Publication preview behavior"
+              className="qzk-ds-meta"
+              style={{ color: "var(--text-dim)", marginBottom: 2 }}
+            >
+              Settings here affect saved and exported output; they do not change the editable Stage plot.
+            </div>
             <label className="qzk-field-lbl">Format</label>
             <Select
               options={FIGURE_FORMATS.map((v) => ({ value: v, label: v.toUpperCase() }))}

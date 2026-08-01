@@ -220,7 +220,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
       title="Series style"
       count={styled || undefined}
       defaultOpen={false}
-      helpTopic="Figure builder"
+      helpTopic="Publication preview"
     >
       {active.data.labels.map((lab, i) => (
         <StyleRow

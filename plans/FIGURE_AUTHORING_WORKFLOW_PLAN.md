@@ -134,7 +134,7 @@ underlying architecture.
 **Recommended models:** GPT-5.6 Terra medium / Claude Sonnet 5. Escalate only if
 the compatibility inventory exposes an unexpected state-ownership problem.
 
-- [ ] **F0.1 Clarify Figure Builder's role.** Rename user-facing entry points
+- [x] **F0.1 Clarify Figure Builder's role.** Rename user-facing entry points
       to “Publication Preview” or “Publication Setup” until the surface edits
       the canonical document. Add a short, non-distracting explanation that
       changes are local until applied/saved.
@@ -327,6 +327,17 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F0.1 publication-preview role cues (ChatGPT-Sol)
+
+- Renamed user-facing Figure Builder entry points to Publication Preview while
+  retaining internal IDs and module names for compatibility.
+- Added an always-visible note that preview settings affect saved/exported
+  output and do not change the editable Stage plot.
+- Updated Graph Builder tooltips/status, compatibility messages, and Inspector
+  contextual-help routing to use the same terminology.
+- Added view and command regression coverage; implementation PR is stacked on
+  the initial plan PR.
 
 ### 2026-08-01 — ChatGPT-Sol initial audit
 

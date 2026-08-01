@@ -44,9 +44,9 @@ function specUsesY2(spec: PlotSpec): boolean {
 }
 
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
-  if (spec.mark !== "line" && spec.mark !== "scatter") return "Only line and scatter plots can open in Figure Builder.";
+  if (spec.mark !== "line" && spec.mark !== "scatter") return "Only line and scatter plots can open in Publication Preview.";
   if (spec.zones.y.length === 0) return "Assign at least one Y channel first.";
-  if (spec.zones.facet) return "Faceted plots need a multi-panel Figure Builder contract first.";
+  if (spec.zones.facet) return "Faceted plots need a multi-panel Publication Preview contract first.";
   const datasetIds = new Set(
     [spec.zones.x, ...spec.zones.y].filter((ref) => ref !== null).map((ref) => ref.datasetId),
   );
@@ -54,9 +54,9 @@ export function plotSpecFigureReason(spec: PlotSpec): string | null {
   if (specDatasetId(spec) === null) return "Every plotted channel must belong to one dataset.";
   if (specUsesY2(spec)) {
     if (spec.zones.group) {
-      return "A group split puts every synthetic per-level series on the primary axis (buildXY never assigns axis: 1) — remove the secondary (Y2) axis assignment before opening in Figure Builder.";
+      return "A group split puts every synthetic per-level series on the primary axis (buildXY never assigns axis: 1) — remove the secondary (Y2) axis assignment before opening in Publication Preview.";
     }
-    return "Figure Builder has no secondary (Y2) axis yet — move this series to the primary axis first.";
+    return "Publication Preview has no secondary (Y2) axis yet — move this series to the primary axis first.";
   }
   return null;
 }

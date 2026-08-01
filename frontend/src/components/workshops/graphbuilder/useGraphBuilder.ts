@@ -304,11 +304,11 @@ export function useGraphBuilder(): GraphBuilderState {
       useApp.getState().seriesStyles,
     );
     if (!doc) {
-      toast(plotSpecFigureReason(spec) ?? "This graph cannot open in Figure Builder.", "info");
+      toast(plotSpecFigureReason(spec) ?? "This graph cannot open in Publication Preview.", "info");
       return;
     }
     useApp.getState().openFigureDraft(doc);
-    setStatus("opened XY plot in Figure Builder");
+    setStatus("opened XY plot in Publication Preview");
   }
 
   // ── Saved PlotSpecs (#11 / #12 Slice 3) ────────────────────────────────────

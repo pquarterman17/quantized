@@ -118,9 +118,9 @@ export default function GraphBuilderPanel() {
               size="sm"
               disabled={!g.canOpenFigureBuilder}
               onClick={g.openInFigureBuilder}
-              title={g.figureBuilderReason ?? "Continue this XY plot in Figure Builder"}
+              title={g.figureBuilderReason ?? "Preview publication output; changes will not update the Stage plot"}
             >
-              Figure Builder
+              Publication Preview
             </Button>
             <Button
               size="sm"
