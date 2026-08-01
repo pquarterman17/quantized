@@ -32,6 +32,11 @@ import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
+  DECIMATE_MIN_POINTS,
+  decimationRequestEligible,
+  defaultDecimateWidthHint,
+} from "../../lib/plotDecimate";
+import {
   breakPanelWidths,
   cellSize,
   facetGridSize,
@@ -273,13 +278,29 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     // from whatever `active.data` currently is (preview now, full once the
     // fetch lands and this effect re-runs off the `active` dependency).
     if (active.pending) ensureBookData(active.id);
-    fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey).then((p) => {
-      if (!cancelled) setPayload(p);
-    });
+    // P3.4: same server-side decimation hint usePlotPayload.ts requests for
+    // the single-plot path — multi-panel never composes an overlay onto
+    // `payload` (no composeDisplayPayload call in this file), so only the
+    // error-bar/scatter guards apply, not the overlay-companion one.
+    const decimateWidth =
+      active.data.time.length > DECIMATE_MIN_POINTS &&
+      decimationRequestEligible({
+        defaultTrace,
+        hasErrorBars: Object.keys(errKeys).length > 0,
+        hasErrorSpans: !!active.errorRoles?.length,
+        hasColorByColumns: false,
+      })
+        ? defaultDecimateWidthHint()
+        : null;
+    fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey, decimateWidth).then(
+      (p) => {
+        if (!cancelled) setPayload(p);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey]);
+  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey, defaultTrace, errKeys]);
 
   useEffect(() => {
     let cancelled = false;
@@ -324,7 +345,20 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
         // fetched payload tags those series `axis: 1`, same as the single-
         // plot double-Y apply.
-        return fetchPlot(ds.data, p.yLog, p.xLog, plottedChannels, y2, p.xKey).then(
+        // P3.4: same size/error-bar/scatter gate as the plain-stack fetch
+        // above, evaluated per-panel (each panel owns its own dataset + err
+        // bindings). No overlay-companion concept here either.
+        const panelDecimateWidth =
+          ds.data.time.length > DECIMATE_MIN_POINTS &&
+          decimationRequestEligible({
+            defaultTrace,
+            hasErrorBars: Object.keys(p.errKeys ?? {}).length > 0,
+            hasErrorSpans: !!ds.errorRoles?.length,
+            hasColorByColumns: false,
+          })
+            ? defaultDecimateWidthHint()
+            : null;
+        return fetchPlot(ds.data, p.yLog, p.xLog, plottedChannels, y2, p.xKey, panelDecimateWidth).then(
           (fetched): SpatialFetch => ({
             payload: fetched,
             // Error-bar magnitudes for THIS panel's own dataset/designations
@@ -341,7 +375,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     return () => {
       cancelled = true;
     };
-  }, [spatial, panels, datasets]);
+  }, [spatial, panels, datasets, defaultTrace]);
 
   useEffect(() => {
     const host = hostRef.current;

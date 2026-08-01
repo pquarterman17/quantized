@@ -208,8 +208,19 @@ export default function PlotViewport(props: PlotViewportProps) {
     // caller wiring. `lib/plotDecimate.ts` is the single chokepoint — see its
     // header for the full mechanism and `decimationEligible`'s doc for every
     // guard (overlays/companions, non-ascending x, error bars, scatter mode).
+    // P3.4: `displayPayload.decimated` means the SERVER already bucketed this
+    // payload to (approximately) the draw contract before it crossed the wire
+    // (usePlotPayload.ts's fetch effect requested it) — re-bucketing an
+    // already-bucketed row set client-side would only discard picked extrema
+    // for no size/latency gain, so that path is skipped entirely here. Client
+    // decimation stays live for the offline fallback (`buildColumns` never
+    // sets `decimated`) and for any payload the server declined to decimate
+    // (non-ascending x, error bars, etc. — `fromResponse` sets `decimated:
+    // false` in every such case, so this gate still lets the client's OWN
+    // (differently-scoped) eligibility checks run normally).
     const fullX = displayPayload.data[0] as (number | null)[];
     const decimate =
+      !displayPayload.decimated &&
       loadPlotPerfPrefs().decimateDensePlots &&
       shouldDecimate(fullX.length, w) &&
       decimationEligible({

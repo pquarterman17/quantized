@@ -46,6 +46,17 @@ export interface PlotPayload {
    *  category-chart payloads; absent (undefined) for every ordinary
    *  numeric plot. */
   xCategories?: string[];
+  /** P3.4: true when this payload was already min/max-bucket decimated by
+   *  the server (its row set is a REDUCED, non-prefix subset of the dataset's
+   *  full rows — see routes/plot.py + calc/decimate.py). Never set by the
+   *  offline fallback (`buildColumns`), which always returns every row.
+   *  Two consumers key off it: PlotViewport skips its own client-side
+   *  re-decimation when true (the server already met the draw contract, and
+   *  re-bucketing an already-bucketed set would just discard picked extrema
+   *  for no gain); `alignOverlayY` below refuses to append a full-length
+   *  overlay column onto a decimated base rather than silently mis-slicing
+   *  it as if it were a simple prefix trim. */
+  decimated?: boolean;
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -241,6 +252,7 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
+    decimated: r.decimated ?? false,
   };
 }
 
@@ -379,9 +391,21 @@ export function composeDisplayPayload(payload: PlotPayload, o: DisplayCompose): 
  *  NOTE: this can only handle a TAIL trim (the prefix survives). A FRONT trim
  *  (corrections' `x_min` mask) leaves a different set of rows, which lengths
  *  alone can't detect — so those overlays are invalidated at the source, when
- *  the row count changes, by store/corrections.ts's clearOverlaysFor. */
-function alignOverlayY(y: (number | null)[], target: number): (number | null)[] | null {
+ *  the row count changes, by store/corrections.ts's clearOverlaysFor.
+ *  P3.4: `decimated` payloads are a SPARSE, reduced row set (server-side
+ *  min/max bucketing), not a prefix — so the `y.length > target` truncation
+ *  above would silently mis-slice a full-length overlay onto the wrong rows.
+ *  `usePlotPayload.ts`'s fetch effect is the primary guard (it keeps
+ *  requesting full resolution while any overlay/selection/exclusion
+ *  companion is active for the fetched dataset); this is the last-resort
+ *  guard in case that ever drifts — refuse to align rather than mis-render. */
+function alignOverlayY(
+  y: (number | null)[],
+  target: number,
+  decimated = false,
+): (number | null)[] | null {
   if (y.length === target) return y;
+  if (decimated) return null;
   if (y.length > target) return y.slice(0, target);
   return null;
 }
@@ -395,7 +419,7 @@ export function withFitOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
   if (y === null) return payload;
   return {
     ...payload,
@@ -414,7 +438,7 @@ export function withDerivOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
   if (y === null) return payload;
   return {
     ...payload,
@@ -454,7 +478,7 @@ export function withBaselineOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
   if (y === null) return payload;
   return {
     ...payload,
@@ -470,7 +494,7 @@ export function withPeakOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  const y = alignOverlayY(overlay.y, payload.data[0].length, payload.decimated);
   if (y === null) return payload;
   return {
     ...payload,
@@ -562,6 +586,15 @@ export function dropTrailingEmptyRows(payload: PlotPayload): PlotPayload {
   return { ...payload, data: data as uPlot.AlignedData };
 }
 
+/** `decimateWidth`: a target-pixel-width hint (P3.4) — when non-null, asks the
+ *  server to min/max-bucket-decimate the response to that draw contract
+ *  BEFORE it crosses the wire (see routes/plot.py + calc/decimate.py), instead
+ *  of shipping every row and discarding most of it client-side. Callers gate
+ *  this via `plotDecimate.ts`'s `decimationRequestEligible` PLUS their own
+ *  overlay-activity check (see usePlotPayload.ts's `hasOverlayCompanions`) —
+ *  fetchPlot itself does no eligibility filtering, it only forwards the hint.
+ *  Ignored entirely by the offline fallback (`buildColumns` always returns
+ *  every row — client-side decimation, not this route, is its speed path). */
 export async function fetchPlot(
   ds: DataStruct,
   yLog: boolean,
@@ -569,6 +602,7 @@ export async function fetchPlot(
   yKeys: number[] | null = null,
   y2Keys: number[] | null = null,
   xKey: number | null = null,
+  decimateWidth: number | null = null,
 ): Promise<PlotPayload> {
   try {
     const r = await plotSeries({
@@ -578,6 +612,7 @@ export async function fetchPlot(
       x_key: xKey ?? undefined,
       y_keys: yKeys ?? undefined,
       y2_keys: y2Keys ?? undefined,
+      decimate_width: decimateWidth ?? undefined,
     });
     return dropTrailingEmptyRows(fromResponse(r));
   } catch {

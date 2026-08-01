@@ -253,6 +253,54 @@ export function buildDecimatedData(
  *  fire before the plugin's `ready` hook) so mounting never immediately
  *  re-triggers a redundant rebucket of the same window the caller already
  *  built the initial data for. */
+/** Upper-bound width hint (px) for a SERVER-SIDE decimation request, made
+ *  before the actual plot host is measured/mounted (the fetch effects in
+ *  usePlotPayload/useMultiPanelStage run before PlotViewport's own
+ *  ResizeObserver exists, so there is no real element to read `clientWidth`
+ *  from yet). `window.innerWidth` is always >= any single plot's real
+ *  rendered width, so bucketing against it never under-resolves a smaller
+ *  panel/window -- it can only ask the server for MORE points than a given
+ *  panel strictly needs, never fewer. Mirrors `lib/toolwindow.ts`'s
+ *  SSR-safe `window.innerWidth` fallback. */
+export function defaultDecimateWidthHint(): number {
+  return typeof window !== "undefined" ? window.innerWidth : 1280;
+}
+
+/** Pre-fetch-safe subset of `decimationEligible` (P3.4 server-side payload
+ *  decimation) -- the checks answerable BEFORE the network round trip. Two
+ *  of `decimationEligible`'s five checks need the fetched payload itself
+ *  (`xAscending`) or are trivially true for a base (pre-overlay) fetch
+ *  (`seriesColumnCount === plottedCount` -- overlays are only ever appended
+ *  AFTER fetch, by `composeDisplayPayload`) and so are NOT repeated here:
+ *  the route independently refuses to decimate a non-ascending series (see
+ *  `routes/plot.py`'s `is_ascending` guard), and the caller must separately
+ *  keep requesting full resolution while any overlay/selection/exclusion
+ *  companion is active for the dataset being fetched (see
+ *  `usePlotPayload.ts`'s `hasOverlayCompanions` -- those append full-length
+ *  columns onto the fetched payload, which a reduced row set cannot safely
+ *  carry; `lib/plotdata.ts`'s `alignOverlayY` is the last-resort guard if a
+ *  caller forgets).
+ *
+ *  The three checks left are exactly the ones a caller CAN answer from local
+ *  component/store state before fetching: error bars/spans read their
+ *  magnitude arrays keyed by ROW POSITION off the FULL dataset, so a reduced
+ *  row set would misalign them; colour-mapped scatter reads its colour array
+ *  the same way; Scatter mode's drawn point DENSITY is itself the signal, so
+ *  thinning it server-side would be visually wrong the same way client-side
+ *  decimation already avoids it (see `decimationEligible`'s doc for all
+ *  three in full). */
+export function decimationRequestEligible(args: {
+  defaultTrace?: string;
+  hasErrorBars: boolean;
+  hasErrorSpans: boolean;
+  hasColorByColumns: boolean;
+}): boolean {
+  if (args.hasErrorBars || args.hasErrorSpans) return false;
+  if ((args.defaultTrace ?? "Line") === "Scatter") return false;
+  if (args.hasColorByColumns) return false;
+  return true;
+}
+
 export function decimatePlugin(
   getFullData: () => readonly ArrayLike<number | null>[],
   settleMs: number = DECIMATE_SETTLE_MS,

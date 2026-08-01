@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyWaterfall,
@@ -9,6 +9,7 @@ import {
   defaultDenseChannels,
   dropTrailingEmptyRows,
   effectiveChannels,
+  fetchPlot,
   highlightSelectedPayload,
   maskExcludedPayload,
   peakOverlayArray,
@@ -22,6 +23,9 @@ import {
 } from "./plotdata";
 import { makeDemoDataset } from "./demo";
 import type { DataStruct } from "./types";
+
+const plotSeriesMock = vi.fn();
+vi.mock("./api", () => ({ plotSeries: (req: unknown) => plotSeriesMock(req) }));
 
 describe("buildColumns", () => {
   it("packs x + each channel as aligned columns", () => {
@@ -496,6 +500,49 @@ describe("overlay alignment to a trailing-trimmed payload (Hc2 sparse worksheet)
   });
 });
 
+describe("overlay alignment refuses a decimated (server-reduced) base (P3.4)", () => {
+  // A server-decimated payload's row set is a SPARSE subset, not a prefix —
+  // the trailing-trim truncation above would silently mis-slice a full-length
+  // overlay onto the wrong rows, so `decimated: true` must disable it.
+  const decimated: PlotPayload = {
+    data: [
+      [0, 5, 9],
+      [1.3, 1.9, 7.8],
+    ],
+    series: [{ label: "y", unit: "" }],
+    xLabel: "x",
+    xUnit: "",
+    decimated: true,
+  };
+
+  it("drops (rather than mis-slices) a full-length fit overlay onto a decimated base", () => {
+    const full = { datasetId: "d1", y: Array.from({ length: 10 }, (_, i) => i) };
+    expect(withFitOverlay(decimated, full, "d1")).toBe(decimated);
+  });
+
+  it("drops a full-length baseline/peak/deriv overlay the same way", () => {
+    const full = { datasetId: "d1", y: Array.from({ length: 10 }, (_, i) => i) };
+    expect(withBaselineOverlay(decimated, full, "d1")).toBe(decimated);
+    expect(withPeakOverlay(decimated, full, "d1")).toBe(decimated);
+    expect(withDerivOverlay(decimated, full, "d1")).toBe(decimated);
+  });
+
+  it("still appends when the overlay already matches the decimated length exactly", () => {
+    const p = withFitOverlay(decimated, { datasetId: "d1", y: [1.2, 2, 7.5] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.data[2]).toEqual([1.2, 2, 7.5]);
+  });
+
+  it("a non-decimated payload keeps the existing prefix-truncation behavior", () => {
+    // Sanity check that the new `decimated` param defaults to false/undefined
+    // and doesn't change any pre-existing (non-decimated) call site.
+    const notDecimated: PlotPayload = { ...decimated, decimated: undefined };
+    expect(notDecimated.decimated).toBeUndefined();
+    const p = withFitOverlay(notDecimated, { datasetId: "d1", y: [1.2, 2, 7.5, 0, 0, 0] }, "d1");
+    expect(p.data[2]).toEqual([1.2, 2, 7.5]);
+  });
+});
+
 describe("peakOverlayArray", () => {
   it("marks the nearest data point to each peak center with its height", () => {
     const time = [0, 1, 2, 3, 4];
@@ -920,5 +967,47 @@ describe("dropTrailingEmptyRows", () => {
     const p: PlotPayload = { data: [[1, 2, 0]] as PlotPayload["data"], series: [], xLabel: "x", xUnit: "" };
     const out = dropTrailingEmptyRows(p);
     expect(out.data[0]).toEqual([1, 2, 0]);
+  });
+});
+
+describe("fetchPlot — decimation hint threading (P3.4)", () => {
+  const ds: DataStruct = {
+    time: [0, 1, 2],
+    values: [[10], [20], [30]],
+    labels: ["A"],
+    units: ["V"],
+    metadata: {},
+  };
+
+  it("forwards decimate_width on the request when provided", async () => {
+    plotSeriesMock.mockResolvedValueOnce({
+      data: [[0, 2], [10, 30]],
+      series: [{ label: "A", unit: "V", axis: 0 }],
+      x: { label: "x", unit: "s", log: false },
+      y: { log: false },
+      decimated: true,
+    });
+    const p = await fetchPlot(ds, false, false, null, null, null, 800);
+    expect(plotSeriesMock).toHaveBeenCalledWith(expect.objectContaining({ decimate_width: 800 }));
+    expect(p.decimated).toBe(true);
+  });
+
+  it("omits decimate_width (sends undefined) when null/absent", async () => {
+    plotSeriesMock.mockResolvedValueOnce({
+      data: [[0, 1, 2], [10, 20, 30]],
+      series: [{ label: "A", unit: "V", axis: 0 }],
+      x: { label: "x", unit: "s", log: false },
+      y: { log: false },
+    });
+    const p = await fetchPlot(ds, false, false, null, null, null);
+    expect(plotSeriesMock).toHaveBeenCalledWith(expect.objectContaining({ decimate_width: undefined }));
+    expect(p.decimated).toBe(false); // response omitted `decimated` -> defaults false
+  });
+
+  it("the offline fallback (network failure) never marks the payload decimated", async () => {
+    plotSeriesMock.mockRejectedValueOnce(new Error("offline"));
+    const p = await fetchPlot(ds, false, false, null, null, null, 800);
+    expect(p.decimated).toBeUndefined();
+    expect(p.data[0]).toEqual([0, 1, 2]); // full client-packed columns, not decimated
   });
 });

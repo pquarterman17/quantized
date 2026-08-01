@@ -93,6 +93,7 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
     peakOverlay: null,
     derivOverlay: null,
     selection: null,
+    defaultTrace,
   });
 
   return (

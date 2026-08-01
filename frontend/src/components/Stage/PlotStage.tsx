@@ -171,6 +171,7 @@ export default function PlotStage() {
     peakOverlay,
     derivOverlay,
     selection,
+    defaultTrace,
   });
 
   // Right-click state (menu position + the gesture-cancel-then-open handler)
