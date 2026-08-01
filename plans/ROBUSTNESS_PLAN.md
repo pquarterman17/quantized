@@ -12,7 +12,9 @@ checklist.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
-**Updated:** 2026-08-01 (#6 SHIPPED — weekly OSV vuln-sweep workflow
+**Updated:** 2026-08-01 (#9 SHIPPED — the malformed-dataset sweep now
+enumerates routes from the OpenAPI schema, 3→18 swept, `a56a726`.
+Earlier same day: #6 SHIPPED — weekly OSV vuln-sweep workflow
 `9b7e91d`, both branches live-verified in Actions; **Tier 1 + Tier 2 are
 now COMPLETE**, only Tier 3 remains. Earlier same day: #7 census DONE —
 1 real gap found and guarded same session (`tools/` ceiling, `c70b895`),
@@ -214,12 +216,21 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
      shell config on top of two repos. Item 2 makes CI authoritative regardless
      of which manager wins, so this is comfort, not correctness.
 
-9. **Automate the recurring backend exception-class sweep** — BACKLOG records
-   that the "route catches a narrow exception tuple, callee raises something
-   else" class "recurs as new routes land — re-sweep periodically". A recurring
-   manual sweep is a guard that has not been written yet.
-   - [ ] Decide whether `tests/test_routes_malformed_dataset.py` can be
-         generalized to enumerate routes rather than list them
+9. **~~Automate the recurring backend exception-class sweep~~** SHIPPED
+   2026-08-01 (`a56a726`) — decided YES and implemented same session.
+   - [x] `tests/test_routes_malformed_dataset.py` now enumerates every
+         dataset-bearing POST route from the OpenAPI schema (public
+         contract, no FastAPI internals) and fails BOTH directions: a new
+         route missing from the sweep, or a stale CASES/EXEMPT entry. The
+         hand list covered **3 of 18** such routes when first enumerated.
+   - [x] All 15 newly-swept routes got bad+good pairs (synthetic RSM and
+         map good payloads — no fixture files); `origin-com` is EXEMPT
+         with a documented reason (its 409 COM gate precedes parsing).
+         Bodies stay hand-written deliberately: the good half is what
+         keeps a BAD 422 attributable to the dataset field rather than a
+         sibling field's validation.
+   - [x] Both guard directions plant-verified (removed entry → "missing";
+         invented entry → "stale"). Gate: 3,500 backend + ruff + mypy.
 
 10. **Pre-commit hooks** — none configured; CI is the only gate.
     - [ ] Judge whether local hooks earn their friction here, given CI already
@@ -228,6 +239,11 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 ---
 
 ## Completed
+
+- ~~**Tier 3 #9 (enumerated malformed-route sweep)**~~ (2026-08-01,
+  `a56a726`) — the sweep's route list is now derived from the OpenAPI
+  schema instead of maintained by hand; 3→18 swept routes; details
+  struck inline above.
 
 - ~~**Tier 2 #6 (recurring transitive-vuln sweep)**~~ (2026-08-01,
   `9b7e91d`) — weekly `vuln-sweep.yml` + `osv-scanner.toml` triaged
