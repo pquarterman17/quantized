@@ -1,12 +1,14 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 //
-// Three pieces live in the `lib/api/` sibling directory (JMP_GAP #14 ratchet):
-// `api/http.ts` (transport), `api/stats.ts` (`/api/stats/*`), and
-// `api/exportMultivar.ts` (JMP_GAP #10, multivar `/api/export/*` figures) —
-// all re-exported below, so every consumer keeps importing from `./lib/api`,
-// which resolves to THIS file, not the directory. Add a new stats wrapper to
-// `api/stats.ts`; this file is pinned shrink-only in `architecture.test.ts`.
+// Four pieces live in the `lib/api/` sibling directory (JMP_GAP #14 ratchet):
+// `api/http.ts` (transport), `api/stats.ts` (`/api/stats/*`),
+// `api/exportMultivar.ts` (JMP_GAP #10, multivar `/api/export/*` figures),
+// and `api/plot.ts` (P3.4, `/api/plot/*`) — all re-exported below, so every
+// consumer keeps importing from `./lib/api`, which resolves to THIS file,
+// not the directory. Add a new stats wrapper to `api/stats.ts`, a new plot
+// wrapper to `api/plot.ts`; this file is pinned shrink-only in
+// `architecture.test.ts`.
 
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { deleteJSON, getJSON, postBlob, postDownload, postForm, postJSON } from "./api/http";
@@ -28,10 +30,8 @@ import type {
   ImportFilterWire,
   ImportPreviewResponse,
   ImportSettingsWire,
-  MapResponse,
   MultiFitResult,
   Peak,
-  PlotSeriesResponse,
   ReflectivityFftResult,
   RsmAnalysisResponse,
   RsmStrainResponse,
@@ -46,6 +46,7 @@ export { postForm, unwrap } from "./api/http";
 // The /api/stats/* wrappers, extracted 2026-07-29. New ones go THERE, not here.
 export * from "./api/stats";
 export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers (JMP_GAP #10)
+export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, not here.
 
 export interface SqliteQueryRequest {
   path: string;
@@ -120,36 +121,6 @@ export function parseImportText(
   settings: Record<string, unknown>,
 ): Promise<DataStruct> {
   return postJSON<DataStruct>("/api/import/parse", { text, settings });
-}
-
-export interface PlotRequest {
-  dataset: DataStruct;
-  x_key?: number | string | null;
-  y_keys?: (number | string)[] | null;
-  y2_keys?: (number | string)[] | null;
-  x_log?: boolean;
-  y_log?: boolean;
-  decimate_width?: number | null; // P3.4 decimation hint (target px width) -- see lib/plotdata.ts's fetchPlot
-}
-
-/** Build uPlot-ready series from a DataStruct + selection. */
-export function plotSeries(req: PlotRequest): Promise<PlotSeriesResponse> {
-  return postJSON<PlotSeriesResponse>("/api/plot/series", req);
-}
-
-export interface MapRequest {
-  dataset: DataStruct;
-  x_key: number | string;
-  y_key: number | string;
-  z_key: number | string;
-  method?: string;
-  nx?: number;
-  ny?: number;
-}
-
-/** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid. */
-export function mapSeries(req: MapRequest): Promise<MapResponse> {
-  return postJSON<MapResponse>("/api/plot/map", req);
 }
 
 // ── RSM (reciprocal-space maps) ───────────────────────────────────────────────

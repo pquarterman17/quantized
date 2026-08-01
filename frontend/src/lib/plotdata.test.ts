@@ -25,7 +25,9 @@ import { makeDemoDataset } from "./demo";
 import type { DataStruct } from "./types";
 
 const plotSeriesMock = vi.fn();
-vi.mock("./api", () => ({ plotSeries: (req: unknown) => plotSeriesMock(req) }));
+vi.mock("./api", () => ({
+  plotSeries: (req: unknown, signal?: AbortSignal) => plotSeriesMock(req, signal),
+}));
 
 describe("buildColumns", () => {
   it("packs x + each channel as aligned columns", () => {
@@ -988,7 +990,10 @@ describe("fetchPlot — decimation hint threading (P3.4)", () => {
       decimated: true,
     });
     const p = await fetchPlot(ds, false, false, null, null, null, 800);
-    expect(plotSeriesMock).toHaveBeenCalledWith(expect.objectContaining({ decimate_width: 800 }));
+    expect(plotSeriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ decimate_width: 800 }),
+      undefined,
+    );
     expect(p.decimated).toBe(true);
   });
 
@@ -1000,7 +1005,10 @@ describe("fetchPlot — decimation hint threading (P3.4)", () => {
       y: { log: false },
     });
     const p = await fetchPlot(ds, false, false, null, null, null);
-    expect(plotSeriesMock).toHaveBeenCalledWith(expect.objectContaining({ decimate_width: undefined }));
+    expect(plotSeriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ decimate_width: undefined }),
+      undefined,
+    );
     expect(p.decimated).toBe(false); // response omitted `decimated` -> defaults false
   });
 
@@ -1009,5 +1017,77 @@ describe("fetchPlot — decimation hint threading (P3.4)", () => {
     const p = await fetchPlot(ds, false, false, null, null, null, 800);
     expect(p.decimated).toBeUndefined();
     expect(p.data[0]).toEqual([0, 1, 2]); // full client-packed columns, not decimated
+  });
+});
+
+describe("fetchPlot — windowed re-fetch threading (P3.4 zoom-refetch residual)", () => {
+  const ds: DataStruct = {
+    time: [0, 1, 2],
+    values: [[10], [20], [30]],
+    labels: ["A"],
+    units: ["V"],
+    metadata: {},
+  };
+
+  it("forwards x_min/x_max and the signal on the request", async () => {
+    plotSeriesMock.mockResolvedValueOnce({
+      data: [[1, 2], [20, 30]],
+      series: [{ label: "A", unit: "V", axis: 0 }],
+      x: { label: "x", unit: "s", log: false },
+      y: { log: false },
+      decimated: true,
+      window: { x_min: 1, x_max: 2 },
+    });
+    const controller = new AbortController();
+    const p = await fetchPlot(ds, false, false, null, null, null, 800, 1, 2, controller.signal);
+    expect(plotSeriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ x_min: 1, x_max: 2 }),
+      controller.signal,
+    );
+    expect(p.window).toEqual([1, 2]);
+  });
+
+  it("omits x_min/x_max (sends undefined) when null/absent", async () => {
+    plotSeriesMock.mockResolvedValueOnce({
+      data: [[0, 1, 2], [10, 20, 30]],
+      series: [{ label: "A", unit: "V", axis: 0 }],
+      x: { label: "x", unit: "s", log: false },
+      y: { log: false },
+    });
+    const p = await fetchPlot(ds, false, false, null, null, null, 800);
+    expect(plotSeriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ x_min: undefined, x_max: undefined }),
+      undefined,
+    );
+    expect(p.window).toBeNull();
+  });
+
+  it("a NaN window bound (server echoes null) round-trips to a null window, not a crash", async () => {
+    plotSeriesMock.mockResolvedValueOnce({
+      data: [[], []],
+      series: [{ label: "A", unit: "V", axis: 0 }],
+      x: { label: "x", unit: "s", log: false },
+      y: { log: false },
+      decimated: false,
+      window: { x_min: null, x_max: 2 },
+    });
+    const p = await fetchPlot(ds, false, false, null, null, null, 800, NaN, 2);
+    expect(p.window).toBeNull(); // one side null -> not a usable [number, number] window
+  });
+
+  it("propagates an abort rather than silently falling back to the full offline dataset", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortError = new DOMException("aborted", "AbortError");
+    plotSeriesMock.mockRejectedValueOnce(abortError);
+    await expect(
+      fetchPlot(ds, false, false, null, null, null, 800, 1, 2, controller.signal),
+    ).rejects.toBe(abortError);
+  });
+
+  it("a genuine (non-abort) network error while windowing still falls back to the full offline dataset", async () => {
+    plotSeriesMock.mockRejectedValueOnce(new Error("network down"));
+    const p = await fetchPlot(ds, false, false, null, null, null, 800, 1, 2);
+    expect(p.data[0]).toEqual([0, 1, 2]); // offline fallback: full, un-windowed columns
   });
 });

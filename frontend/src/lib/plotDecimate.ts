@@ -301,6 +301,23 @@ export function decimationRequestEligible(args: {
   return true;
 }
 
+/** P3.4 zoom-refetch residual: should a committed X view-limit change trigger
+ *  a windowed re-fetch of the visible window at full local detail? Only when
+ *  BOTH a window is actually committed (`xLim` non-null — `null` means
+ *  autoscale/reset, which restores the cached full-range payload with no
+ *  fetch at all) AND the payload currently on screen came from a
+ *  server-decimated BASE fetch (`baseDecimated` — an echo of the response's
+ *  own `decimated` flag, not a re-derivation of the client-side eligibility
+ *  heuristic: whatever the server actually did is the single source of
+ *  truth for "is there more local detail to recover here"). A small or
+ *  overlay-companion-bearing dataset is never decimated in the first place
+ *  (see `usePlotPayload.ts`'s `hasOverlayCompanions`), so `baseDecimated`
+ *  is already false for it — this function needs no separate companion
+ *  check to inherit that gating. */
+export function shouldRefetchWindow(xLim: [number, number] | null, baseDecimated: boolean): boolean {
+  return xLim != null && baseDecimated;
+}
+
 export function decimatePlugin(
   getFullData: () => readonly ArrayLike<number | null>[],
   settleMs: number = DECIMATE_SETTLE_MS,

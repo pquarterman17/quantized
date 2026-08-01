@@ -172,6 +172,12 @@ export default function PlotStage() {
     derivOverlay,
     selection,
     defaultTrace,
+    // P3.4 zoom-refetch residual: the committed X view window — a committed
+    // zoom/pan on a server-decimated payload triggers a windowed re-fetch
+    // (see usePlotPayload's own doc). PlotStage already reads `xLim` for
+    // PlotViewport's own prop below; threading the same value through here
+    // is what makes that re-fetch reachable at all.
+    xLim,
   });
 
   // Right-click state (menu position + the gesture-cancel-then-open handler)

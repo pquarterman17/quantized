@@ -35,7 +35,7 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["decimate_columns", "decimate_row_indices", "is_ascending"]
+__all__ = ["decimate_columns", "decimate_row_indices", "is_ascending", "window_columns"]
 
 
 def _series_bucket_indices(y: NDArray[np.float64], bucket_count: int) -> list[int]:
@@ -108,6 +108,36 @@ def decimate_columns(
         return x, []
     rows = decimate_row_indices(series, buckets)
     return x[rows], [s[rows] for s in series]
+
+
+def window_columns(
+    x: NDArray[np.float64],
+    series: Sequence[NDArray[np.float64]],
+    x_min: float,
+    x_max: float,
+) -> tuple[NDArray[np.float64], list[NDArray[np.float64]]]:
+    """Filter ``x`` and every column of ``series`` to the rows whose ``x``
+    falls within ``[x_min, x_max]`` (inclusive; the two bounds are taken
+    low-to-high regardless of argument order, mirroring the frontend's
+    ``plotdata.ts`` ``clampPlottedRange``).
+
+    P3.4 zoom-refetch residual: ``routes/plot.py`` calls this BEFORE
+    :func:`decimate_columns` when a request carries a committed view window,
+    so the bucketing below re-derives extrema over only the visible rows
+    instead of the whole series -- that is what lets a zoomed-in re-fetch
+    recover full local detail rather than reshowing the full-range envelope.
+
+    A non-finite ``x`` can never satisfy a real-valued bound comparison, so
+    those rows are dropped from a windowed response -- the same choice
+    ``is_ascending`` already makes (skip non-finite gaps rather than invent a
+    membership answer for them). A window wider than the data's own extent is
+    a no-op (every row with a finite x survives); a window that matches no
+    rows returns empty arrays -- a legitimate "nothing here" answer, not an
+    error, left to the caller to interpret.
+    """
+    lo, hi = (x_min, x_max) if x_min <= x_max else (x_max, x_min)
+    mask = np.isfinite(x) & (x >= lo) & (x <= hi)
+    return x[mask], [s[mask] for s in series]
 
 
 def is_ascending(x: NDArray[np.float64]) -> bool:

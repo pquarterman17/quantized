@@ -11,6 +11,7 @@ import {
   decimationRequestEligible,
   defaultDecimateWidthHint,
   shouldDecimate,
+  shouldRefetchWindow,
   visibleRowRange,
   xExtent,
 } from "./plotDecimate";
@@ -124,6 +125,21 @@ describe("decimationRequestEligible", () => {
 
   it("disengages when any series uses colour-mapped scatter", () => {
     expect(decimationRequestEligible({ ...base, hasColorByColumns: true })).toBe(false);
+  });
+});
+
+describe("shouldRefetchWindow (P3.4 zoom-refetch residual)", () => {
+  it("fires only when a window is committed AND the base was server-decimated", () => {
+    expect(shouldRefetchWindow([1, 2], true)).toBe(true);
+  });
+
+  it("never fires on autoscale/reset (xLim null), regardless of base state", () => {
+    expect(shouldRefetchWindow(null, true)).toBe(false);
+    expect(shouldRefetchWindow(null, false)).toBe(false);
+  });
+
+  it("never fires when the base payload was not server-decimated (nothing to recover)", () => {
+    expect(shouldRefetchWindow([1, 2], false)).toBe(false);
   });
 });
 

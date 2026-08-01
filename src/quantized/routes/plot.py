@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from quantized.calc.decimate import decimate_columns, is_ascending
+from quantized.calc.decimate import decimate_columns, is_ascending, window_columns
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.datastruct import DataStruct
@@ -33,6 +33,28 @@ class PlotRequest(BaseModel):
     # No current caller needs both at once, but the contract stays honest for
     # any future one (e.g. an analysis consumer that reuses this route).
     full_resolution: bool = False
+    # P3.4 zoom-refetch residual: the committed X view window of a follow-up
+    # request re-fetching an already-decimated payload at full local detail
+    # (calc/decimate.py's window_columns runs BEFORE decimate_columns, so the
+    # bucketing re-derives extrema over only the visible rows). None (the
+    # default) applies no window -- every pre-existing caller is unaffected.
+    x_min: float | None = None
+    x_max: float | None = None
+
+    # NOTE: a non-finite x_min/x_max is deliberately NOT rejected here (no
+    # `math.isfinite` check) -- raising from a validator embeds the raw
+    # invalid value in the pydantic error detail, and Starlette's default
+    # JSONResponse encoder disallows NaN, which turns a would-be 422 into an
+    # unrelated 500 while rendering the error body. window_columns's own NaN
+    # comparisons already resolve a non-finite bound to "no rows match" (see
+    # its doc), and the `window` echo below goes through `to_jsonable` (NaN ->
+    # null on the wire) -- so a non-finite bound degrades to a well-defined
+    # empty result instead of crashing either path.
+    @model_validator(mode="after")
+    def _window_bounds_paired(self) -> PlotRequest:
+        if (self.x_min is None) != (self.x_max is None):
+            raise ValueError("x_min and x_max must be provided together")
+        return self
 
 
 @router.post("/series")
@@ -53,6 +75,19 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
 
     x = plot.x
     values = [s.values for s in plot.series]
+
+    # P3.4 zoom-refetch residual: filter to the requested view window BEFORE
+    # decimation, so a follow-up windowed request re-buckets only the visible
+    # rows instead of the whole series (see calc/decimate.py's window_columns
+    # doc). `window` echoes back what was actually applied so the client can
+    # verify a (possibly late-arriving) response still matches the window it
+    # currently has committed, rather than trusting request/response pairing
+    # alone.
+    window: dict[str, float | None] | None = None
+    if req.x_min is not None and req.x_max is not None:
+        x, values = window_columns(x, values, req.x_min, req.x_max)
+        window = to_jsonable({"x_min": req.x_min, "x_max": req.x_max})
+
     # A non-ascending x (e.g. a hysteresis-loop sweep) renders via the
     # acquisition-order path, which index-bucketing does not preserve (see
     # calc/decimate.py's is_ascending doc) -- refuse to decimate regardless
@@ -70,6 +105,7 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
         "decimated": decimated,
+        "window": window,
     }
 
 
