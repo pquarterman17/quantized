@@ -1117,10 +1117,17 @@ At the end of each session:
   companion is active (error bars, colour-mapped scatter, overlays,
   selection, grey-exclusion — toggling one triggers a full-res refetch);
   `alignOverlayY` now refuses rather than mis-slices a full-length
-  overlay onto a decimated base. KNOWN RESIDUAL booked as a BACKLOG row:
-  zoom into a server-decimated payload shows the kept envelope only
-  (client re-bucketing is inert below its min-points threshold) — a
-  viewport-driven re-fetch on zoom is the finishing touch.
+  overlay onto a decimated base. ~~KNOWN RESIDUAL: zoom shows the kept
+  envelope only~~ CLOSED 2026-07-31 (`232cf4f`): `PlotRequest` gains
+  `x_min`/`x_max` (both-or-neither, rows windowed before decimation in
+  pure `window_columns`); committed zoom/pan re-fetches the window
+  latest-wins via AbortController; reset restores the CACHED full-range
+  payload with no fetch; stale responses compared against the current
+  window before applying; overlay-companion datasets never enter the
+  path (their base is never decimated). Pushed `lib/api.ts` over its pin
+  → `api/plot.ts` extracted, pin lowered 1895→1866. Documented boundary:
+  background/panel windows don't wire `xLim` (non-interactive preview
+  scope; cross-window sync is a separate question).
 - ~~**P2.8 defect-class: map-regrid gridded-input fast path**~~
   (2026-07-31, `231a1b8` merged after review) — `method="linear"` regrid
   Delaunay-triangulated the full input cloud every call; new
