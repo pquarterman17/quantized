@@ -71,6 +71,36 @@ def test_no_god_modules() -> None:
     )
 
 
+# tools/ scripts rot exactly like source modules but were walked by no guard
+# (ROBUSTNESS #7 census, 2026-08-01: export_origin_graphs.py had already
+# drifted to 506 — the lib/api.ts failure class, one directory over). Same
+# ceiling; files already over it are pinned at their found size and may only
+# shrink. Never add a pin — split instead.
+TOOLS_PINS = {
+    "tools/origin_compare/export_origin_graphs.py": 506,
+}
+
+
+def test_no_god_tools() -> None:
+    """No tools/ script exceeds the ceiling; pinned legacy files only shrink."""
+    offenders = []
+    for path in (ROOT / "tools").rglob("*.py"):
+        rel = path.relative_to(ROOT).as_posix()
+        n_lines = len(path.read_text(encoding="utf-8").splitlines())
+        limit = TOOLS_PINS.get(rel, MAX_MODULE_LINES)
+        if n_lines > limit:
+            offenders.append(f"{rel}: {n_lines} lines (limit {limit})")
+        elif rel in TOOLS_PINS and n_lines <= MAX_MODULE_LINES:
+            offenders.append(
+                f"{rel}: {n_lines} lines — under the general ceiling; "
+                "delete its TOOLS_PINS entry (graduation)"
+            )
+    assert not offenders, (
+        "tools/ size guard failures (split the script, or lower its pin "
+        "after an extraction):\n  " + "\n  ".join(offenders)
+    )
+
+
 def test_pure_layers_do_not_import_server_stack() -> None:
     """datastruct/io/calc/plugins must not import fastapi/pydantic/starlette/routes."""
     pure_files: list[Path] = [p for p in [SRC / "datastruct.py"] if p.exists()]
