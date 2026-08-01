@@ -37,6 +37,7 @@ import { useHelp } from "./store/help";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
+import { useVariabilityStore } from "./store/variability";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -63,6 +64,7 @@ const DistributionPanel = lazyPanel(() => import("./components/workshops/distrib
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"));
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"));
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"));
+const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"));
 const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"));
 const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"));
 const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"));
@@ -105,6 +107,7 @@ export default function AppOverlays() {
   const fitYByXOpen = useFitYByXStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
+  const variabilityOpen = useVariabilityStore((s) => s.open);
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
@@ -146,6 +149,7 @@ export default function AppOverlays() {
       {fitYByXOpen && <FitYByXPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
+      {variabilityOpen && <VariabilityChartPanel />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
       {peakWizardOpen && <PeakWizardPanel />}

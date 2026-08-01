@@ -1,20 +1,37 @@
 // Fit Y by X — bivariate leg's view: continuous X x continuous Y. A scatter
 // + fit-line SVG (modest — Graph Builder is the publication-plot path), a
-// standard OLS mean-CI confidence band (JMP_GAP J3 residual, toggleable,
-// default on) from /api/stats/regression's opt-in `band_x`, and the
+// standard OLS mean-CI confidence band OR a new-observation prediction band
+// (JMP_GAP J3 residual, toggleable, default on/confidence) from
+// /api/stats/regression's opt-in `band_x`/`band_interval`, and the
 // coefficient/R2/F table.
 
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { Checkbox, DataTable } from "../../primitives";
+import { Checkbox, DataTable, SegmentedControl } from "../../primitives";
 import type { BivariateResult } from "./useFitYByX";
 
 const W = 320;
 const H = 160;
 const PAD = 8;
 
-export default function BivariateView({ result }: { result: BivariateResult }) {
+const BAND_INTERVAL_OPTIONS: { value: "confidence" | "prediction"; label: string }[] = [
+  { value: "confidence", label: "Confidence" },
+  { value: "prediction", label: "Prediction" },
+];
+
+export default function BivariateView({
+  result,
+  bandInterval,
+  onBandIntervalChange,
+}: {
+  result: BivariateResult;
+  /** Which band `result.band` was fetched as (JMP_GAP J3 residual) —
+   *  changing it triggers a hook-level refetch, so this view only reads it
+   *  and calls back up rather than owning the choice itself. */
+  bandInterval: "confidence" | "prediction";
+  onBandIntervalChange: (interval: "confidence" | "prediction") => void;
+}) {
   const { x, y, order, regression, band } = result;
   const [showBand, setShowBand] = useState(true);
   const coeffs = (regression.coeffs as number[] | undefined) ?? [];
@@ -60,9 +77,16 @@ export default function BivariateView({ result }: { result: BivariateResult }) {
   return (
     <>
       {band && (
-        <Checkbox checked={showBand} onChange={setShowBand}>
-          confidence band
-        </Checkbox>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Checkbox checked={showBand} onChange={setShowBand}>
+            band
+          </Checkbox>
+          <SegmentedControl
+            options={BAND_INTERVAL_OPTIONS}
+            value={bandInterval}
+            onChange={onBandIntervalChange}
+          />
+        </div>
       )}
       <svg
         role="img"
@@ -77,6 +101,13 @@ export default function BivariateView({ result }: { result: BivariateResult }) {
         ))}
         {linePath && <path d={linePath} stroke="var(--accent)" strokeWidth={1.5} fill="none" />}
       </svg>
+      {drawBand && band && (
+        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          {band.interval === "prediction"
+            ? `${(1 - band.alpha) * 100}% prediction band — range for a single new observation`
+            : `${(1 - band.alpha) * 100}% confidence band — range for the mean response`}
+        </div>
+      )}
 
       <div style={{ marginTop: 10, overflowX: "auto" }}>
         <DataTable

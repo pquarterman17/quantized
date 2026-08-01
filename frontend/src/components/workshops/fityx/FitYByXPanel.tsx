@@ -108,13 +108,27 @@ export default function FitYByXPanel() {
                   analyzing {f.byLevels.length} levels…
                 </div>
               ) : (
-                f.byResults.map((r) => <FitYByXLevelSection key={r.label} result={r} kind={f.kind} />)
+                f.byResults.map((r) => (
+                  <FitYByXLevelSection
+                    key={r.label}
+                    result={r}
+                    kind={f.kind}
+                    bandInterval={f.bandInterval}
+                    onBandIntervalChange={f.setBandInterval}
+                  />
+                ))
               )}
             </>
           ) : (
             <>
               {!f.busy && !f.error && f.kind === "oneway" && f.oneway && <OnewayView result={f.oneway} />}
-              {!f.busy && !f.error && f.kind === "bivariate" && f.bivariate && <BivariateView result={f.bivariate} />}
+              {!f.busy && !f.error && f.kind === "bivariate" && f.bivariate && (
+                <BivariateView
+                  result={f.bivariate}
+                  bandInterval={f.bandInterval}
+                  onBandIntervalChange={f.setBandInterval}
+                />
+              )}
               {!f.busy && !f.error && f.kind === "contingency" && f.contingency && (
                 <ContingencyView result={f.contingency} />
               )}

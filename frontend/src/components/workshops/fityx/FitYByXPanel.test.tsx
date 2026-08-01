@@ -64,12 +64,21 @@ beforeEach(() => {
     checks: { alpha: 0.05, shapiro_p: [0.5, 0.6] },
     reasons: ["both groups pass normality"],
   });
-  regressionMock.mockResolvedValue({
-    coeffs: [5, 3], se: [0.5, 0.2], tStats: [10, 15], pValues: [0.0001, 0.0001],
-    R2: 0.98, R2adj: 0.97, fStat: 500, fPvalue: 0.0001, RMSE: 0.5,
-    residuals: [0], yFit: [8, 41], N: 12, df: 10,
-    // JMP_GAP J3 residual: a confidence band alongside the fit.
-    band: { x: [1, 12], yFit: [8, 41], ciLo: [6, 39], ciHi: [10, 43], alpha: 0.05 },
+  regressionMock.mockImplementation((body: { band_interval?: string }) => {
+    const interval = body?.band_interval ?? "confidence";
+    return Promise.resolve({
+      coeffs: [5, 3], se: [0.5, 0.2], tStats: [10, 15], pValues: [0.0001, 0.0001],
+      R2: 0.98, R2adj: 0.97, fStat: 500, fPvalue: 0.0001, RMSE: 0.5,
+      residuals: [0], yFit: [8, 41], N: 12, df: 10,
+      // JMP_GAP J3 residual: a confidence (default) or prediction band
+      // alongside the fit, echoing back whichever interval was requested.
+      band: {
+        x: [1, 12], yFit: [8, 41],
+        ciLo: interval === "prediction" ? [3, 36] : [6, 39],
+        ciHi: interval === "prediction" ? [13, 46] : [10, 43],
+        alpha: 0.05, interval,
+      },
+    });
   });
   chi2Mock.mockResolvedValue({
     chi2: 0, dof: 1, p_value: 1, expected: [[3, 3], [3, 3]], n: 12,
@@ -98,12 +107,12 @@ describe("FitYByXPanel", () => {
     expect(screen.getByLabelText("bivariate scatter with fit")).toBeInTheDocument();
   });
 
-  it("bivariate leg draws a confidence band by default, toggleable off (JMP_GAP J3 residual)", async () => {
+  it("bivariate leg draws a band by default, toggleable off (JMP_GAP J3 residual)", async () => {
     render(<FitYByXPanel />);
     fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "3" } });
     fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
     await waitFor(() => expect(regressionMock).toHaveBeenCalled());
-    const checkbox = await screen.findByText("confidence band");
+    const checkbox = await screen.findByText("band");
     const svg = screen.getByLabelText("bivariate scatter with fit");
     expect(svg.querySelector("path[fill='var(--accent)']")).not.toBeNull();
 
@@ -111,13 +120,28 @@ describe("FitYByXPanel", () => {
     expect(svg.querySelector("path[fill='var(--accent)']")).toBeNull();
   });
 
-  it("switches to the contingency leg for two categorical columns", async () => {
+  it("bivariate leg's band toggle switches confidence <-> prediction and refetches (JMP_GAP J3 residual)", async () => {
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
+    await waitFor(() => expect(regressionMock).toHaveBeenCalled());
+    expect(await screen.findByText(/confidence band/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Prediction" }));
+    await waitFor(() =>
+      expect(regressionMock).toHaveBeenLastCalledWith(expect.objectContaining({ band_interval: "prediction" })),
+    );
+    expect(await screen.findByText(/prediction band/)).toBeInTheDocument();
+  });
+
+  it("switches to the contingency leg for two categorical columns and draws a mosaic plot", async () => {
     render(<FitYByXPanel />);
     fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "0" } });
     fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "1" } });
     expect(screen.getByText(/Contingency/)).toBeInTheDocument();
     await waitFor(() => expect(chi2Mock).toHaveBeenCalled());
     expect(await screen.findByText("Fisher's exact (2x2)")).toBeInTheDocument();
+    expect(screen.getByLabelText("mosaic plot")).toBeInTheDocument();
   });
 
   it("emits a stats_table report for the active leg", async () => {

@@ -10,6 +10,7 @@ import type { Action } from "../store/commands";
 import { useFitYByXStore } from "../store/fitYByX";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
 import { useMultivarStore } from "../store/multivar";
+import { useVariabilityStore } from "../store/variability";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -120,6 +121,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       description: "Explore relationships among several continuous columns: a correlation heatmap, a scatterplot matrix, and principal component analysis with scree, scores, and loadings.",
       keywords: "jmp correlation matrix heatmap scatterplot matrix splom pca principal components scree loadings biplot scores eigenvalue",
       run: () => useMultivarStore.getState().setOpen(true),
+    },
+    {
+      id: "variability-chart",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Variability chart (nested ANOVA · variance components)…",
+      description: "Chart a response nested under two grouping factors (e.g. lot/wafer) with connected cell means and group means, plus the nested ANOVA and ANOVA/EMS variance-component breakdown.",
+      keywords: "jmp variability gauge chart nested anova variance components lot wafer site emp gauge r&r",
+      run: () => useVariabilityStore.getState().setOpen(true),
     },
     {
       id: "stats-chooser",

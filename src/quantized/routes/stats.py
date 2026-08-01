@@ -17,9 +17,9 @@ from quantized.calc.stats import (
     descriptive_stats,
     lin_regress,
     pca_analysis,
-    polynomial_confidence_band,
     t_test,
 )
+from quantized.calc.stats_band import polynomial_confidence_band
 from quantized.calc.stats_dist import (
     fit_distribution,
     fit_distributions,
@@ -62,9 +62,12 @@ class RegressionRequest(BaseModel):
     # confidence-band evaluation grid. None/omitted (the default) -- today's
     # response, byte-identical; a non-empty list adds a "band" field with the
     # standard OLS mean-CI evaluated at each grid point
-    # (calc.stats.polynomial_confidence_band), never touching the existing
-    # top-level fields.
+    # (calc.stats_band.polynomial_confidence_band), never touching the
+    # existing top-level fields. `band_interval="prediction"` (also opt-in,
+    # default "confidence" = today's behavior) switches the SAME band field
+    # to a new-observation prediction band instead of the mean-response CI.
     band_x: list[float] | None = None
+    band_interval: str = "confidence"
 
 
 class TTestRequest(BaseModel):
@@ -155,7 +158,8 @@ def regression(req: RegressionRequest) -> dict[str, Any]:
     ``band_x`` (JMP_GAP_PLAN J3 residual) is opt-in: omitted/empty leaves the
     response exactly as before; a non-empty grid adds a "band" field (the
     standard OLS mean-CI at each grid point, ``polynomial_confidence_band``)
-    alongside the unchanged top-level fields.
+    alongside the unchanged top-level fields. ``band_interval="prediction"``
+    switches that band to a new-observation prediction band instead.
     """
     try:
         result = lin_regress(
@@ -173,6 +177,7 @@ def regression(req: RegressionRequest) -> dict[str, Any]:
                     np.asarray(req.band_x, dtype=float),
                     order=req.order,
                     alpha=req.alpha,
+                    interval=req.band_interval,
                 ),
             }
         return _wrap(result)

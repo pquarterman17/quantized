@@ -232,15 +232,17 @@ export function statsQQ(data: number[], dist = "norm"): Promise<QQResponse> {
   return postJSON("/api/statplots/qq", { data, dist });
 }
 
-/** Standard OLS mean-response confidence band (JMP_GAP J3 residual) — one
- *  `calc.stats.polynomial_confidence_band` call, present on `CalcResult.band`
- *  only when the request's `band_x` was non-empty. */
+/** Standard OLS mean-response confidence band, or (`interval:"prediction"`)
+ *  a new-observation prediction band (JMP_GAP J3 residual) — one
+ *  `calc.stats_band.polynomial_confidence_band` call, present on
+ *  `CalcResult.band` only when the request's `band_x` was non-empty. */
 export interface RegressionBand {
   x: number[];
   yFit: number[];
   ciLo: number[];
   ciHi: number[];
   alpha: number;
+  interval: "confidence" | "prediction";
 }
 
 export function statsRegression(body: {
@@ -252,6 +254,10 @@ export function statsRegression(body: {
   // band evaluation grid. Omitted -- today's response, byte-identical; a
   // non-empty grid adds a "band" field (RegressionBand, above).
   band_x?: number[];
+  // JMP_GAP J3 residual: switches the SAME band field from the mean-
+  // response confidence band (default, omitted) to a new-observation
+  // prediction band.
+  band_interval?: "confidence" | "prediction";
 }): Promise<CalcResult> {
   return postJSON("/api/stats/regression", body);
 }
@@ -338,4 +344,97 @@ export function statsCorrelation(
   method: "pearson" | "spearman" = "pearson",
 ): Promise<CorrelationResponse> {
   return postJSON("/api/stats/correlation", { columns, method });
+}
+
+// ── Variability chart + variance components (JMP_GAP J8) ──────────────────
+// calc.stats_varcomp's two-level nested (hierarchical) ANOVA. Every wrapper
+// takes the SAME `groups[i][j]` shape: factor-A level i's factor-B (nested
+// in A) level j's array of response observations — built client-side by
+// lib/variability.buildNestedLevels/toWireGroups from two picked categorical
+// columns. See calc/stats_varcomp.py for the full data contract.
+
+export interface NestedAnovaRow {
+  source: string;
+  SS: number;
+  df: number;
+  MS: number | null;
+  F: number | null;
+  p: number | null;
+}
+
+export interface NestedAnovaResponse {
+  table: NestedAnovaRow[];
+  a_levels: number;
+  b_per_a: number[];
+  n_per_cell: number[][];
+  n_total: number;
+  grand_mean: number;
+  alpha: number;
+  a_tested_against: string;
+  b_within_a_estimable: boolean;
+  error_estimable: boolean;
+  balanced: boolean;
+}
+
+/** Fully nested two-level ANOVA: A tested against B(A) (or against Error
+ *  directly when B(A) isn't estimable — `a_tested_against` says which). */
+export function statsNestedAnova(groups: number[][][], alpha = 0.05): Promise<NestedAnovaResponse> {
+  return postJSON("/api/stats/nested-anova", { groups, alpha });
+}
+
+export interface VarianceComponentsResponse {
+  sigma2_A: number;
+  sigma2_B_within_A: number;
+  sigma2_error: number;
+  sigma2_A_raw: number;
+  sigma2_B_within_A_raw: number;
+  sigma2_error_raw: number;
+  pct_A: number;
+  pct_B_within_A: number;
+  pct_error: number;
+  clamped: { A: boolean; B_within_A: boolean; error: boolean };
+  n1_coefficient: number;
+  n2_coefficient: number;
+  ms_a: number;
+  ms_b: number;
+  ms_e: number;
+  balanced: boolean;
+  method: string;
+}
+
+/** ANOVA/EMS-method variance-component estimates. Requires B(A) AND Error
+ *  both estimable (422 otherwise) — callers should gate this call on a
+ *  landed `NestedAnovaResponse`'s `b_within_a_estimable && error_estimable`
+ *  rather than let the request round-trip to fail. */
+export function statsVarianceComponents(groups: number[][][]): Promise<VarianceComponentsResponse> {
+  return postJSON("/api/stats/variance-components", { groups });
+}
+
+export interface VariabilityCellSummary {
+  a_index: number;
+  b_index: number;
+  n: number;
+  mean: number;
+  sd: number | null;
+}
+
+export interface VariabilityGroupSummary {
+  a_index: number;
+  n: number;
+  mean: number;
+}
+
+export interface VariabilitySummaryResponse {
+  cells: VariabilityCellSummary[];
+  a_groups: VariabilityGroupSummary[];
+  grand_mean: number;
+  grand_n: number;
+  a_levels: number;
+  balanced: boolean;
+}
+
+/** Per-cell / per-A-group / grand summary stats — the variability chart's
+ *  data contract (JMP_GAP_PLAN #8). */
+export function statsVariabilitySummary(groups: number[][][]): Promise<VariabilitySummaryResponse> {
+  return postJSON("/api/stats/variability-summary", { groups });
 }

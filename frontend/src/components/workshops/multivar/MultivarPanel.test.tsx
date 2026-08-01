@@ -1,7 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type CorrelationResponse, type PCAResponse, statsCorrelation, statsPCA } from "../../../lib/api";
+import {
+  type CorrelationResponse,
+  type PCAResponse,
+  exportCorrelationHeatmapFigure,
+  exportPcaFigure,
+  exportPcaScreeFigure,
+  exportSplomFigure,
+  statsCorrelation,
+  statsPCA,
+} from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import MultivarPanel from "./MultivarPanel";
@@ -9,6 +18,10 @@ import MultivarPanel from "./MultivarPanel";
 vi.mock("../../../lib/api", () => ({
   statsCorrelation: vi.fn(),
   statsPCA: vi.fn(),
+  exportCorrelationHeatmapFigure: vi.fn(),
+  exportSplomFigure: vi.fn(),
+  exportPcaFigure: vi.fn(),
+  exportPcaScreeFigure: vi.fn(),
 }));
 
 class MockResizeObserver {
@@ -70,6 +83,10 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", MockResizeObserver);
   vi.mocked(statsCorrelation).mockResolvedValue(CORR);
   vi.mocked(statsPCA).mockResolvedValue(PCA);
+  vi.mocked(exportCorrelationHeatmapFigure).mockResolvedValue(undefined);
+  vi.mocked(exportSplomFigure).mockResolvedValue(undefined);
+  vi.mocked(exportPcaFigure).mockResolvedValue(undefined);
+  vi.mocked(exportPcaScreeFigure).mockResolvedValue(undefined);
   useApp.setState({ datasets: [], activeId: null, selection: null });
 });
 
@@ -135,5 +152,56 @@ describe("MultivarPanel", () => {
     useApp.setState({ datasets: [{ id: "d2", name: "other.dat", data: OTHER }], activeId: "d2" });
     rerender(<MultivarPanel />);
     expect(await screen.findByText("Columns (3 selected)")).toBeInTheDocument();
+  });
+});
+
+// JMP_GAP_PLAN #10 residual — server-side (matplotlib) figure export parity.
+describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
+  it("correlation tab's Export figure button sends the SAME r matrix the heatmap colors", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<MultivarPanel />);
+    await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Export figure" }));
+    await waitFor(() =>
+      expect(exportCorrelationHeatmapFigure).toHaveBeenCalledWith({
+        labels: ["a", "b"],
+        r: CORR.r,
+        filename: "correlation",
+      }),
+    );
+  });
+
+  it("SPLOM tab's Export figure button sends the full listwise-complete column set", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<MultivarPanel />);
+    await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("tab", { name: "SPLOM" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Export figure" }));
+    await waitFor(() =>
+      expect(exportSplomFigure).toHaveBeenCalledWith({
+        labels: ["a", "b"],
+        columns: [DATA.values.map((r) => r[0]), DATA.values.map((r) => r[1])],
+        filename: "splom",
+      }),
+    );
+  });
+
+  it("PCA tab's Export scree / Export figure buttons send the fetched PCA numbers", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
+    render(<MultivarPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "PCA" }));
+    await waitFor(() => expect(statsPCA).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Export scree" }));
+    await waitFor(() =>
+      expect(exportPcaScreeFigure).toHaveBeenCalledWith({ explained: PCA.explained, cumulative: PCA.cumulative }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Export figure" }));
+    await waitFor(() =>
+      expect(exportPcaFigure).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: "scores", filename: "pca-scores" }),
+      ),
+    );
   });
 });

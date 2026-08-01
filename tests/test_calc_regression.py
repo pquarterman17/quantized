@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.stats import lin_regress, polynomial_confidence_band
+from quantized.calc.stats import lin_regress
+from quantized.calc.stats_band import polynomial_confidence_band
 
 
 @pytest.mark.golden
@@ -181,3 +182,72 @@ def test_confidence_band_grid_need_not_match_input_x() -> None:
     y = 3.0 * x - 2.0
     band = polynomial_confidence_band(x, y, np.array([0.0, 100.0]), order=1)
     assert_allclose(band["yFit"], [-2.0, 298.0], atol=1e-7)
+
+
+def test_confidence_band_reports_its_own_interval_kind() -> None:
+    x = np.arange(1.0, 11.0)
+    y = 3.0 * x - 2.0 + np.array([0.1, -0.2, 0.15, -0.1, 0.05, -0.05, 0.2, -0.15, 0.1, -0.1])
+    band = polynomial_confidence_band(x, y, np.array([5.0]), order=1)
+    assert band["interval"] == "confidence"
+
+
+# ── prediction band (JMP_GAP_PLAN J3 residual, mosaic + prediction band) ───
+
+
+def test_prediction_band_matches_statsmodels_ols_linear() -> None:
+    """Cross-check against statsmodels' own OLS prediction interval
+    (obs_ci_lower/upper) -- the same oracle convention as the confidence-
+    band tests above."""
+    import statsmodels.api as sm
+
+    rng = np.random.default_rng(21)
+    x = np.linspace(0.0, 10.0, 30)
+    y = 2.0 * x + 1.0 + rng.normal(0.0, 1.5, x.size)
+
+    grid = np.linspace(0.0, 10.0, 21)
+    band = polynomial_confidence_band(x, y, grid, order=1, alpha=0.05, interval="prediction")
+
+    X = sm.add_constant(x)
+    ols = sm.OLS(y, X).fit()
+    pred = ols.get_prediction(sm.add_constant(grid)).summary_frame(alpha=0.05)
+
+    np.testing.assert_allclose(band["yFit"], pred["mean"].to_numpy(), atol=1e-9)
+    np.testing.assert_allclose(band["ciLo"], pred["obs_ci_lower"].to_numpy(), atol=1e-9)
+    np.testing.assert_allclose(band["ciHi"], pred["obs_ci_upper"].to_numpy(), atol=1e-9)
+    assert band["interval"] == "prediction"
+
+
+def test_prediction_band_is_always_wider_than_confidence_band() -> None:
+    # The textbook relationship: a prediction band accounts for a new
+    # observation's own residual variance ON TOP OF the mean's uncertainty,
+    # so it must be strictly wider at every grid point, including at the
+    # centroid of x where the confidence band is narrowest.
+    rng = np.random.default_rng(22)
+    x = np.linspace(0.0, 10.0, 25)
+    y = 3.0 * x + rng.normal(0.0, 1.0, x.size)
+    grid = np.array([0.0, 5.0, 10.0])
+    conf = polynomial_confidence_band(x, y, grid, order=1, interval="confidence")
+    pred = polynomial_confidence_band(x, y, grid, order=1, interval="prediction")
+    conf_width = np.asarray(conf["ciHi"]) - np.asarray(conf["ciLo"])
+    pred_width = np.asarray(pred["ciHi"]) - np.asarray(pred["ciLo"])
+    assert np.all(pred_width > conf_width)
+
+
+def test_prediction_band_zero_noise_still_has_positive_width() -> None:
+    # Unlike the confidence band (which collapses to the fit line at zero
+    # noise), the prediction band's "+1" term means it never collapses --
+    # a single new observation is never perfectly predictable even from a
+    # perfect fit, mse>0 aside (mse IS 0 here, so this only holds when the
+    # fit isn't exact; use a near-exact fit with a tiny residual instead).
+    x = np.arange(1.0, 11.0)
+    y = 3.0 * x - 2.0 + np.array([1e-3, -1e-3, 0.0, 0.0, 1e-3, 0.0, -1e-3, 0.0, 0.0, 1e-3])
+    grid = np.array([5.0])
+    band = polynomial_confidence_band(x, y, grid, order=1, interval="prediction")
+    assert band["ciHi"][0] - band["ciLo"][0] > 0.0
+
+
+def test_band_bad_interval_raises() -> None:
+    x = np.arange(1.0, 6.0)
+    y = 2.0 * x
+    with pytest.raises(ValueError, match="interval must be one of"):
+        polynomial_confidence_band(x, y, np.array([2.0]), order=1, interval="bogus")
