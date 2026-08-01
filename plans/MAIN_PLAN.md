@@ -11,7 +11,10 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-28 (owner directive: fully replace JMP as well as
+**Updated:** 2026-08-01 (ROBUSTNESS_PLAN completed and archived — Tiers
+1+2 and #7/#9 shipped, #10 decided NO; its owner-parked #8 folded into
+Owner gates below with provenance. Prior: 2026-07-28, owner directive:
+fully replace JMP as well as
 OriginPro. New sub-plan `JMP_GAP_PLAN.md` holds the code-grounded JMP gap
 analysis — 17 gaps J1–J17, 4 census-gated — and adds itself to the tree
 below; GOTO's stats-platform non-goal superseded and PRIMARY P2.6's
@@ -44,13 +47,14 @@ Sol audit docs as items 29–30)
 | `JMP_GAP_PLAN.md` | The JMP half of the daily-driver mission: code-grounded gap register (J1–J17) vs the owner's JMP surface, tiered closure work, Gate J usage census | Own gap register + owner gate; layers on PRIMARY P1.4/P1.5/P2.6 without duplicating them |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
-| `ROBUSTNESS_PLAN.md` | Enforcement/environment/runtime hardening: what guards do NOT cover, which Node the artifact is built on, and the unbounded upload/job paths | Independent lifecycle — gated by neither Gate A nor Gate J, and orthogonal to every feature plan; its items are defects in the scaffolding around the code rather than in the code |
-
 Six residue plans were folded up into this doc and archived on
 2026-07-10 (fold-up rule): MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION,
 GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP — each was ≤3 open items. Their
 `## Completed` histories live in `plans/archive/`. Provenance is kept on
-every folded item below.
+every folded item below. `ROBUSTNESS_PLAN.md` (enforcement/environment/
+runtime hardening) followed on 2026-08-01: every item shipped or decided
+in three days of campaigning; its one owner-parked residue (#8 Node
+version-manager standardization) folded into the Owner gates below.
 
 Two orphan audit docs were absorbed and **deleted** on 2026-07-25:
 `SOL_FEATURE_GUI_INTERACTION_AUDIT.md` (924 lines) and
@@ -573,6 +577,15 @@ in git history @ `e4f6590`.)*
 - **Code-signing certificate + auto-update E2E** (PORT_PLAN #47/#49
   residue, reconciled 2026-07-11): obtain a cert, sign a release, then
   verify updater end-to-end across two consecutive signed releases.
+- **Node version-manager standardization** (was ROBUSTNESS #8, folded up
+  2026-08-01; owner-parked 2026-07-29 because it touches personal shell
+  config on top of two repos) — `fermiviewer` pins Node with Volta,
+  `quantized` with `.nvmrc`; standardize on one (recommendation: Volta —
+  PATH shims apply to subprocesses with no shell hook) and delete the
+  other. Resolve the machine-level cause first: both managers are
+  installed and fnm precedes `~/.volta/bin` in PATH, so NEITHER pin
+  currently takes effect (verified 2026-07-29). Comfort, not correctness:
+  ROBUSTNESS #2 already made CI authoritative via `node-version-file`.
 
 ## Deferrals (decision gates — revisit on demand)
 
