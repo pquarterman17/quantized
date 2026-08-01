@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bumps import BUMPS_ENGINES, bumps_available, fit_bumps
 from quantized.calc.fit_models import FIT_MODELS
-from quantized.jobs import AbortFn, ProgressFn, jobs
+from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
@@ -88,7 +88,10 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
             )
             return to_jsonable(result)
 
-        return {"job_id": jobs.submit(run_job)}
+        try:
+            return {"job_id": jobs.submit(run_job)}
+        except JobQueueFullError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
 
     try:
         result = fit_bumps(req.x, req.y, req.dy, **kwargs)

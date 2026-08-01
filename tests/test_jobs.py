@@ -8,13 +8,23 @@ poll routes (404 on unknown id, 409 on a not-finished result).
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
+from unittest import mock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
-from quantized.jobs import AbortFn, Job, JobStore, ProgressFn
+from quantized.jobs import (
+    _PENDING_ADMISSION_BOUND,
+    AbortFn,
+    Job,
+    JobQueueFullError,
+    JobStore,
+    ProgressFn,
+)
 from quantized.jobs import jobs as global_jobs
 
 client = TestClient(app)
@@ -233,3 +243,71 @@ def test_api_error_job_result_is_422() -> None:
     r = client.get(f"/api/jobs/{job_id}/result")
     assert r.status_code == 422
     assert "bad input" in r.json()["detail"]
+
+
+# ── Item #4: Admission control ──────────────────────────────────────────────
+
+
+def test_submit_rejects_when_pending_full() -> None:
+    """Admission control: submit raises JobQueueFullError when pending >= bound."""
+    store = JobStore(max_workers=1)
+    release = threading.Event()
+
+    def blocking_job(progress: ProgressFn, abort: AbortFn) -> None:
+        """This job holds the executor busy."""
+        release.wait(timeout=10)
+
+    # Submit one blocking job to hold the executor
+    store.submit(blocking_job)
+
+    # Fill pending to the admission bound: the blocking job is running,
+    # so all further submissions go to pending
+    def pending_job(progress: ProgressFn, abort: AbortFn) -> None:
+        pass
+
+    # Submit jobs until we reach the bound
+    for _ in range(_PENDING_ADMISSION_BOUND):
+        store.submit(pending_job)
+
+    # Next submit should be rejected
+    try:
+        store.submit(pending_job)
+        pytest.fail("Expected JobQueueFullError")
+    except JobQueueFullError as exc:
+        assert str(_PENDING_ADMISSION_BOUND) in str(exc)
+    finally:
+        release.set()
+
+
+def test_routes_import_job_queue_full_error() -> None:
+    """Verify that routes import JobQueueFullError for exception handling.
+
+    This confirms that the routes layer has access to JobQueueFullError
+    to catch and translate it to 429. The actual integration test would
+    require creating the full queue saturation scenario.
+    """
+    # Verify that fitting_bumps imports JobQueueFullError
+    import quantized.routes.fitting_bumps
+    assert hasattr(quantized.routes.fitting_bumps, "JobQueueFullError")
+
+    # Verify that fitting imports JobQueueFullError
+    import quantized.routes.fitting
+    assert hasattr(quantized.routes.fitting, "JobQueueFullError")
+
+
+# ── Item #5: Executor shutdown ──────────────────────────────────────────────
+
+
+def test_app_lifespan_shuts_down_executor() -> None:
+    """The app's lifespan context calls executor.shutdown on teardown."""
+    from quantized.app import _app_lifespan
+
+    # Mock the global jobs store to verify shutdown is called
+    with mock.patch("quantized.app.jobs") as mock_jobs:
+        async def run_test() -> None:
+            async with _app_lifespan(mock.MagicMock()):
+                pass  # lifespan yields on startup, continues on shutdown
+            # After the context, shutdown should have been called on the pool
+            mock_jobs._pool.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+
+        asyncio.run(run_test())

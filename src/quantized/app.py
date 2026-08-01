@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
+from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
     aggregate,
@@ -131,9 +133,18 @@ async def _grace_check() -> None:
 _DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
+@asynccontextmanager
+async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    """App lifespan: clean up the executor pool on shutdown."""
+    # Startup: no-op
+    yield
+    # Shutdown: terminate the job executor with pending cancellation
+    jobs._pool.shutdown(wait=False, cancel_futures=True)
+
+
 def create_app() -> FastAPI:
     """Build the FastAPI app and wire the domain routers."""
-    application = FastAPI(title="quantized", version=__version__)
+    application = FastAPI(title="quantized", version=__version__, lifespan=_app_lifespan)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=_DEV_ORIGINS,

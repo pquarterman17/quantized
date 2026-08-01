@@ -23,7 +23,7 @@ from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit, weights_from_dy
-from quantized.jobs import AbortFn, ProgressFn, jobs
+from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -321,7 +321,10 @@ def scan_job(req: ScanRequest) -> dict[str, Any]:
         )
         return to_jsonable(result)
 
-    return {"job_id": jobs.submit(run_job)}
+    try:
+        return {"job_id": jobs.submit(run_job)}
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
 
 
 class PosteriorRequest(BaseModel):
