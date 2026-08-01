@@ -10,8 +10,15 @@
 // scramble non-monotonic x (hysteresis loops); segments keep every curve's
 // point order intact and render correctly through the existing loop-safe
 // plot machinery (sorted=0 + full-range path builders).
+//
+// PLOT_WORKFLOW_PLAN #3: the segment-concatenation core (`assembleOverlay`)
+// is shared with `buildSelectionOverlay` below, which generalizes this
+// mechanism beyond Origin figure apply to an arbitrary Library multi-select
+// — same NaN-filled-block geometry, one curve per source dataset instead of
+// per decoded Origin curve.
 
 import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originFigures";
+import { primaryChannel } from "./plotdata";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Derived-overlay schema. Increment when construction or binding semantics
@@ -105,6 +112,22 @@ export function overlayCurveLabels(data: DataStruct | null | undefined): Record<
   return out;
 }
 
+/** One resolved overlay curve: which dataset it comes from, its (x, y)
+ *  channel binding, and the display/style metadata `assembleOverlay` stamps
+ *  into the merged DataStruct. Shared shape for both overlay builders below
+ *  — `buildOverlayDataset` resolves these from an Origin figure's curves;
+ *  `buildSelectionOverlay` resolves one per selected dataset. */
+export interface OverlayBound {
+  ds: Dataset;
+  xCh: number; // -2 = time column
+  yCh: number;
+  label: string;
+  unit: string;
+  style: SeriesStyle | null; // decoded line/scatter, per curve (null = default)
+  designation: string; // the source column's Origin designation (Y / Y-error / …)
+  legendLabel: string | undefined; // decoded legend caption (fix #4), if any
+}
+
 export function buildOverlayDataset(
   figure: OriginFigure,
   datasets: Dataset[],
@@ -113,16 +136,6 @@ export function buildOverlayDataset(
   if (books.length === 0) return null;
 
   // Resolve each curve to (dataset, x-channel, y-channel) up front.
-  interface Bound {
-    ds: Dataset;
-    xCh: number; // -2 = time column
-    yCh: number;
-    label: string;
-    unit: string;
-    style: SeriesStyle | null; // decoded line/scatter, per curve
-    designation: string; // the source column's Origin designation (Y / Y-error / …)
-    legendLabel: string | undefined; // decoded legend caption (fix #4), if any
-  }
   const legend = figure.legend_labels ?? [];
   // The nth entry of figure.curves' own display name (undefined where the
   // book/channel never resolved) — a pre-pass so resolveLegendTemplate's
@@ -139,7 +152,7 @@ export function buildOverlayDataset(
     // cross-book layer ("700 mT"/"1.5 mT from 700mT" are Comments).
     return yCh >= 0 ? curveDisplayName(ds, c.y, yCh) : undefined;
   });
-  const bound: Bound[] = [];
+  const bound: OverlayBound[] = [];
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
   // numbering Origin's legend uses across the whole layer, not per-book.
@@ -175,20 +188,30 @@ export function buildOverlayDataset(
           : undefined,
     });
   });
+  return assembleOverlay(bound, figure.name || "");
+}
+
+/** Segment-concatenate resolved overlay curves into one DataStruct — the
+ *  shared core of `buildOverlayDataset` (Origin figure apply) and
+ *  `buildSelectionOverlay` (PLOT_WORKFLOW #3 arbitrary Library selection).
+ *  One x-block per distinct (dataset, x-channel), in first-curve order: a
+ *  cross-book Origin figure gets one block per book; a MULTI-X worksheet --
+ *  curves in ONE book plotted against DIFFERENT x columns (e.g. Moke's
+ *  Graph3, three field sweeps A/E/I) -- gets one block per x column; a
+ *  Library multi-select gets one block per selected dataset. Either way a
+ *  curve's values live only inside its own block (NaN elsewhere); segment
+ *  concatenation (never a sorted union) keeps each loop's point order intact
+ *  so a non-monotonic hysteresis sweep renders correctly. Returns null for
+ *  fewer than 2 bound curves, or fewer than 2 distinct x-blocks (not a real
+ *  overlay — the plain channel-selection path handles those). */
+function assembleOverlay(bound: OverlayBound[], figureName = ""): DataStruct | null {
   if (bound.length < 2) return null;
 
-  // One x-block per distinct (dataset, x-channel), in first-curve order. A
-  // cross-book figure gets one block per book; a MULTI-X worksheet -- curves
-  // in ONE book plotted against DIFFERENT x columns (e.g. Moke's Graph3, three
-  // field sweeps A/E/I) -- gets one block per x column. Either way a curve's
-  // values live only inside its own block (NaN elsewhere); segment
-  // concatenation (never a sorted union) keeps each loop's point order intact
-  // so a non-monotonic hysteresis sweep renders correctly.
   interface Block {
     ds: Dataset;
     xCh: number; // -2 = the dataset's time column
   }
-  const blockKey = (b: Bound): string => `${b.ds.id}#${b.xCh}`;
+  const blockKey = (b: OverlayBound): string => `${b.ds.id}#${b.xCh}`;
   const blocks: Block[] = [];
   const blockIndex = new Map<string, number>();
   for (const b of bound) {
@@ -198,8 +221,6 @@ export function buildOverlayDataset(
       blocks.push({ ds: b.ds, xCh: b.xCh });
     }
   }
-  // Fewer than two distinct x-blocks is not an overlay (a single-book,
-  // single-x figure) -- fall through to the plain channel-selection path.
   if (blocks.length < 2) return null;
   const starts: number[] = [];
   let total = 0;
@@ -238,9 +259,9 @@ export function buildOverlayDataset(
     labels: bound.map((b) => b.label),
     units: bound.map((b) => b.unit),
     metadata: {
-      source_format: String((first as Record<string, unknown>).source_format ?? "origin"),
+      source_format: String((first as Record<string, unknown>).source_format ?? "overlay"),
       origin_overlay: true,
-      origin_overlay_figure: figure.name || "",
+      origin_overlay_figure: figureName,
       // Per-column line/scatter styles in column order (null where undecoded),
       // so applyOriginFigure can restore the figure's look — carried in metadata
       // so it survives the overlay-reuse path too.
@@ -264,4 +285,35 @@ export function buildOverlayDataset(
       x_column_unit: String((first as Record<string, unknown>).x_column_unit ?? ""),
     },
   };
+}
+
+/** PLOT_WORKFLOW_PLAN #3 "Plot selected together": build an overlay
+ *  DataStruct from an arbitrary Library multi-selection, generalizing
+ *  `buildOverlayDataset` beyond Origin figure apply. Each dataset
+ *  contributes exactly ONE curve — its own designated x/time column against
+ *  its default plotted channel ({@link primaryChannel}, the same "what does
+ *  this dataset show by default" rule the Library thumbnail and plot use) —
+ *  labelled by dataset name (not "book: column", since there's no book).
+ *  A dataset with no plottable channel is skipped honestly, same as an
+ *  undecoded Origin column; callers are expected to have already filtered
+ *  out 2-D maps ({@link "./mapdata".is2DMap}) before calling this, since a
+ *  map has no single "curve" to contribute. Returns null when fewer than 2
+ *  curves resolve. */
+export function buildSelectionOverlay(datasets: Dataset[]): DataStruct | null {
+  const bound: OverlayBound[] = [];
+  for (const ds of datasets) {
+    const yCh = primaryChannel(ds.data);
+    if (yCh == null) continue; // no plottable channel — skip honestly
+    bound.push({
+      ds,
+      xCh: -2,
+      yCh,
+      label: ds.name,
+      unit: ds.data.units[yCh] ?? "",
+      style: null,
+      designation: "Y",
+      legendLabel: undefined,
+    });
+  }
+  return assembleOverlay(bound);
 }

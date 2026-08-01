@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlay";
+import {
+  buildOverlayDataset,
+  buildSelectionOverlay,
+  overlayBooks,
+  overlayCurveLabels,
+  overlayCurveStyles,
+} from "./originOverlay";
 import type { Dataset, OriginFigure } from "./types";
 
 const figure = (curves: OriginFigure["curves"]): OriginFigure => ({
@@ -348,5 +354,75 @@ describe("buildOverlayDataset: unresolved x-letter (partial X decode)", () => {
       { book: "Book1", x: "C", y: "F" }, // sole survivor -> not an overlay
     ]);
     expect(buildOverlayDataset(fig, [partialX()])).toBeNull();
+  });
+});
+
+// PLOT_WORKFLOW_PLAN #3: "Plot selected together" generalizes the same
+// segment-concatenation core (assembleOverlay) to an arbitrary Library
+// multi-selection instead of an Origin figure's decoded curves.
+describe("buildSelectionOverlay", () => {
+  const plain = (id: string, name: string, time: number[], y: number[]): Dataset => ({
+    id,
+    name,
+    data: {
+      time,
+      values: time.map((_, i) => [y[i]]),
+      labels: ["Y"],
+      units: ["V"],
+      metadata: {},
+    },
+  });
+
+  it("returns null for fewer than 2 datasets", () => {
+    expect(buildSelectionOverlay([plain("a", "Sample A", [1, 2], [10, 20])])).toBeNull();
+  });
+
+  it("segment-concatenates mixed-length, mixed-x datasets, one curve per dataset, labelled by name", () => {
+    const a = plain("a", "Sample A", [1, 2, 3], [10, 20, 30]);
+    const b = plain("b", "Sample B", [5, 6], [50, 60]);
+    const out = buildSelectionOverlay([a, b]);
+    expect(out).not.toBeNull();
+    expect(out!.labels).toEqual(["Sample A", "Sample B"]);
+    expect(out!.time).toEqual([1, 2, 3, 5, 6]);
+    expect(out!.values.map((r) => r[0])).toEqual([10, 20, 30, NaN, NaN]);
+    expect(out!.values.map((r) => r[1])).toEqual([NaN, NaN, NaN, 50, 60]);
+    // no "book", so the books list falls back to the source dataset names.
+    expect(out!.metadata.origin_overlay_books).toEqual(["Sample A", "Sample B"]);
+  });
+
+  it("picks each dataset's own default (primaryChannel) y-channel, not always column 0", () => {
+    const wide: Dataset = {
+      id: "w",
+      name: "Wide",
+      data: {
+        time: [1, 2],
+        // column 0 is NaN-sparse (density heuristic excludes it), column 1 dense.
+        values: [
+          [NaN, 10],
+          [NaN, 20],
+        ],
+        labels: ["Sparse", "Dense"],
+        units: ["", "V"],
+        metadata: {},
+      },
+    };
+    const b = plain("b", "Sample B", [5, 6], [50, 60]);
+    const out = buildSelectionOverlay([wide, b]);
+    expect(out).not.toBeNull();
+    expect(out!.labels).toEqual(["Wide", "Sample B"]);
+    expect(out!.values.map((r) => r[0])).toEqual([10, 20, NaN, NaN]);
+  });
+
+  it("skips a dataset with no plottable channel honestly (never invents data)", () => {
+    const empty: Dataset = {
+      id: "e",
+      name: "Empty",
+      data: { time: [1, 2], values: [[], []], labels: [], units: [], metadata: {} },
+    };
+    const a = plain("a", "Sample A", [1, 2], [10, 20]);
+    const b = plain("b", "Sample B", [5, 6], [50, 60]);
+    const out = buildSelectionOverlay([empty, a, b]);
+    expect(out).not.toBeNull();
+    expect(out!.labels).toEqual(["Sample A", "Sample B"]);
   });
 });
