@@ -9,7 +9,7 @@
 // ONLY (architecture guard #50/#53 — `droppedRows` folds manual exclusion and
 // the local filter into one dropped-row set).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
@@ -25,6 +25,7 @@ import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
   defaultDecimateWidthHint,
+  shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
@@ -53,6 +54,15 @@ export interface PlotPayloadParams {
    *  same way it disqualifies the client-side path (see plotDecimate.ts's
    *  decimationRequestEligible). Undefined defaults to "Line" (eligible). */
   defaultTrace?: string;
+  /** Committed X view limits — the store's `xLim` (P3.4 zoom-refetch
+   *  residual). When the currently loaded BASE payload came back
+   *  server-decimated, a committed zoom/pan (this changing to a non-null
+   *  window) triggers a follow-up windowed re-fetch so the visible range
+   *  recovers full local detail instead of showing only the envelope the
+   *  full-range decimation kept. `null` (autoscale/reset — also every
+   *  pre-existing caller that omits this prop) shows the cached full-range
+   *  payload with NO extra fetch. */
+  xLim?: [number, number] | null;
 }
 
 /** Would ANY overlay/selection/exclusion companion be appended onto the base
@@ -115,6 +125,27 @@ export interface PlotPayloadResult {
 export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const { active } = p;
   const [payload, setPayload] = useState<PlotPayload | null>(null);
+
+  // P3.4 zoom-refetch residual: the full-range payload the BASE fetch effect
+  // below last resolved, cached so a reset-to-full-view (xLim -> null) can
+  // restore it with NO extra network round trip, and so the windowed-refetch
+  // effect further below can rebuild the SAME decimate-width hint the base
+  // fetch used ("the same width hint" — not a fresh `window.innerWidth`
+  // read, in case the window resized in between). A plain ref, not state: it
+  // must be readable inside the windowed effect WITHOUT being one of that
+  // effect's own dependencies — see that effect's own comment for why (a
+  // fetch feedback loop).
+  const basePayloadRef = useRef<PlotPayload | null>(null);
+  const decimateWidthRef = useRef<number | null>(null);
+  // Whether the CURRENT base payload was server-decimated — a plain boolean
+  // derived from the base fetch's own response (never re-derived from the
+  // client-side eligibility heuristic; see shouldRefetchWindow's doc). Kept
+  // as STATE (not folded into the ref above) specifically so it can be a
+  // dependency of the windowed effect: a committed zoom that arrives BEFORE
+  // the base fetch resolves must still fire its windowed fetch the moment
+  // the base does resolve, and only a reactive dependency guarantees that
+  // re-run (a ref write alone triggers nothing).
+  const [baseDecimated, setBaseDecimated] = useState(false);
 
   // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
   const dropped = useMemo(() => droppedRows(active), [active]);
@@ -209,8 +240,17 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     let cancelled = false;
     if (!active) {
       setPayload(null);
+      basePayloadRef.current = null;
+      decimateWidthRef.current = null;
+      setBaseDecimated(false);
       return;
     }
+    // Invalidate the cached base SYNCHRONOUSLY (before the async fetch below
+    // settles) so the windowed-refetch effect never mistakes the PREVIOUS
+    // base (a different dataset/channel-set/overlay state) for this one
+    // during the gap — it sees `baseDecimated: false` and simply waits.
+    basePayloadRef.current = null;
+    setBaseDecimated(false);
     const eligible =
       active.data.time.length > DECIMATE_MIN_POINTS &&
       !hasOverlayCompanions({
@@ -247,7 +287,11 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       // instead of the raw channel numbers. No-op for a continuous x/time axis
       // (xKey === null, the time column, is never modeled/categorical).
       const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
-      setPayload(categoricalXPayload(raw, active.data, p.xKey, xType));
+      const composed = categoricalXPayload(raw, active.data, p.xKey, xType);
+      basePayloadRef.current = composed;
+      decimateWidthRef.current = decimateWidth;
+      setPayload(composed);
+      setBaseDecimated(!!composed.decimated);
     });
     return () => {
       cancelled = true;
@@ -270,6 +314,69 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.selection,
     p.excludedDisplay,
   ]);
+
+  // P3.4 zoom-refetch residual: when the BASE payload above came back
+  // server-decimated, a committed zoom/pan re-fetches just the visible
+  // x-window at the same width hint so it draws at full local detail instead
+  // of the kept min/max envelope. Deliberately does NOT depend on
+  // `payload`/`displayPayload` — only on the inputs needed to describe WHAT
+  // to fetch (`p.xLim` + the same dataset/channel/scale identity the base
+  // effect uses, plus `baseDecimated`). This effect's own `setPayload` call
+  // must never be one of its own triggers, or every windowed fetch would
+  // immediately re-arm itself (a fetch feedback loop).
+  //
+  // Latest-wins via AbortController: a newer commit (a further zoom, a pan,
+  // or a reset to `xLim = null`) runs this effect's cleanup — which aborts
+  // whatever windowed fetch was still in flight for the PREVIOUS commit —
+  // before starting its own. Rapid successive zooms/pans therefore coalesce
+  // onto whichever commit is current rather than queuing up. The `cancelled`
+  // flag is a second, synchronous guard on top of the network-level abort
+  // (belt & suspenders, the same idiom the base effect above already uses):
+  // even in the unlikely event a response still resolves after this effect
+  // instance was superseded, its `.then` is a no-op — so a slow response for
+  // a window the user has since zoomed/panned/reset away from can never
+  // clobber whatever IS currently committed.
+  useEffect(() => {
+    if (!p.xLim) {
+      // Reset/autoscale: restore the cached full-range payload with no fetch
+      // at all — it's already in memory from the base effect above.
+      const base = basePayloadRef.current;
+      if (base && base !== payload) setPayload(base);
+      return;
+    }
+    if (!active || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
+    const [xMin, xMax] = p.xLim;
+    let cancelled = false;
+    const controller = new AbortController();
+    fetchPlot(
+      active.data,
+      p.yScale === "log",
+      p.xScale === "log",
+      plotted,
+      p.y2Keys,
+      p.xKey,
+      decimateWidthRef.current ?? defaultDecimateWidthHint(),
+      xMin,
+      xMax,
+      controller.signal,
+    )
+      .then((raw) => {
+        if (cancelled) return;
+        const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
+        setPayload(categoricalXPayload(raw, active.data, p.xKey, xType));
+      })
+      .catch(() => {
+        // Aborted (superseded by a newer commit) or a genuine network error
+        // while windowing — either way, leave whatever is currently
+        // displayed as-is rather than clearing the plot.
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // `payload` is read but NOT listed — see this effect's header comment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.xLim, active, plotted, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
 
   // #36: built from Dataset.errorRoles (the canonical contract) — absent for
   // a dataset with no roles, in which case the legacy symmetric bars stand.

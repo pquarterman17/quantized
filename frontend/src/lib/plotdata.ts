@@ -57,6 +57,12 @@ export interface PlotPayload {
    *  overlay column onto a decimated base rather than silently mis-slicing
    *  it as if it were a simple prefix trim. */
   decimated?: boolean;
+  /** P3.4 zoom-refetch residual: the X window this payload was filtered to
+   *  (echoed back from routes/plot.py), or null/absent when it covers the
+   *  whole dataset. Set by `fromResponse` when the backend echoes one back;
+   *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
+   *  a request that sets this. */
+  window?: [number, number] | null;
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.
@@ -253,6 +259,10 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     xLabel: r.x.label,
     xUnit: r.x.unit,
     decimated: r.decimated ?? false,
+    window:
+      r.window && r.window.x_min != null && r.window.x_max != null
+        ? [r.window.x_min, r.window.x_max]
+        : null,
   };
 }
 
@@ -594,7 +604,18 @@ export function dropTrailingEmptyRows(payload: PlotPayload): PlotPayload {
  *  overlay-activity check (see usePlotPayload.ts's `hasOverlayCompanions`) —
  *  fetchPlot itself does no eligibility filtering, it only forwards the hint.
  *  Ignored entirely by the offline fallback (`buildColumns` always returns
- *  every row — client-side decimation, not this route, is its speed path). */
+ *  every row — client-side decimation, not this route, is its speed path).
+ *
+ *  `xMin`/`xMax` (P3.4 zoom-refetch residual): the committed X view window of
+ *  a follow-up request re-fetching an already-decimated payload at full local
+ *  detail — see `usePlotPayload.ts`'s windowed re-fetch effect, the sole
+ *  caller that passes them. Both or neither (matches `routes/plot.py`'s own
+ *  pairing rule); `null` (the default, every pre-existing caller) requests no
+ *  window. `signal` lets that effect abort a superseded windowed fetch
+ *  (latest-wins coalescing for rapid successive zooms/pans) — an abort
+ *  propagates as a rejection rather than silently falling back to the offline
+ *  path, which would otherwise hand back the FULL unwindowed dataset in place
+ *  of a cancelled request. */
 export async function fetchPlot(
   ds: DataStruct,
   yLog: boolean,
@@ -603,19 +624,34 @@ export async function fetchPlot(
   y2Keys: number[] | null = null,
   xKey: number | null = null,
   decimateWidth: number | null = null,
+  xMin: number | null = null,
+  xMax: number | null = null,
+  signal?: AbortSignal,
 ): Promise<PlotPayload> {
   try {
-    const r = await plotSeries({
-      dataset: ds,
-      y_log: yLog,
-      x_log: xLog,
-      x_key: xKey ?? undefined,
-      y_keys: yKeys ?? undefined,
-      y2_keys: y2Keys ?? undefined,
-      decimate_width: decimateWidth ?? undefined,
-    });
+    const r = await plotSeries(
+      {
+        dataset: ds,
+        y_log: yLog,
+        x_log: xLog,
+        x_key: xKey ?? undefined,
+        y_keys: yKeys ?? undefined,
+        y2_keys: y2Keys ?? undefined,
+        decimate_width: decimateWidth ?? undefined,
+        x_min: xMin ?? undefined,
+        x_max: xMax ?? undefined,
+      },
+      signal,
+    );
     return dropTrailingEmptyRows(fromResponse(r));
-  } catch {
+  } catch (err) {
+    // An intentional cancellation (a newer commit superseded this fetch)
+    // must never be treated as "we're offline" -- the offline fallback below
+    // returns the FULL, un-windowed dataset, which would silently clobber a
+    // still-valid windowed view with the wrong data. Propagate instead and
+    // let the caller's own cancellation handling (a `cancelled` flag closure)
+    // discard it.
+    if (signal?.aborted) throw err;
     return dropTrailingEmptyRows(buildColumns(ds, y2Keys, xKey, yKeys));
   }
 }

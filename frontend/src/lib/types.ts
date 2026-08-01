@@ -268,6 +268,11 @@ export interface PlotSeriesResponse {
    *  carried `decimate_width` and the route honored it — ascending x, no
    *  `full_resolution` override). Absent/false means every row came back. */
   decimated?: boolean;
+  /** P3.4 zoom-refetch residual: the X window the server actually filtered to
+   *  before decimating, echoing the request's `x_min`/`x_max` back (a bound
+   *  that was NaN comes back `null` — see routes/plot.py). null/absent means
+   *  no window was requested — the response covers the whole dataset. */
+  window?: { x_min: number | null; x_max: number | null } | null;
 }
 
 /** Response of POST /api/plot/map — a regular grid for the 2-D heatmap.

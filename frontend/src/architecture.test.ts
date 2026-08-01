@@ -205,7 +205,11 @@ const MODULE_PINS: Record<string, number> = {
   // api.ts so all 21 consumers (and their vi.mocks) are untouched. api.ts is
   // the aggregator now — the appCommands.ts/commands/ shape. J8's variability
   // wrappers are the next ones due and belong in api/stats.ts.
-  "/lib/api.ts": 1895,
+  // 1895 -> 1866 (P3.4 zoom-refetch residual): PlotRequest/plotSeries/
+  // MapRequest/mapSeries moved to lib/api/plot.ts (the plotSeries `signal` +
+  // x_min/x_max params would otherwise have pushed this back over its pin).
+  // New /api/plot/* wrappers belong there, not here.
+  "/lib/api.ts": 1866,
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

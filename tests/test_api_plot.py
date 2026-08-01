@@ -205,6 +205,97 @@ def test_plot_series_non_ascending_x_refuses_decimation() -> None:
     assert len(body["data"][0]) == n
 
 
+# ── x_min/x_max windowed re-fetch (P3.4 zoom-refetch residual) ────────────
+# The frontend re-fetches a committed zoom window at full local detail when
+# the base payload came back server-decimated -- see components/Stage/
+# usePlotPayload.ts. window_columns (calc/decimate.py) runs BEFORE
+# decimate_columns; these exercise that composition through the route.
+
+
+def test_plot_series_window_narrows_before_decimating() -> None:
+    dataset = _dense_dataset(20_000)
+    full = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100}).json()
+    windowed = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "decimate_width": 100, "x_min": 5_000, "x_max": 6_000},
+    ).json()
+    assert windowed["decimated"] is True
+    assert windowed["window"] == {"x_min": 5000.0, "x_max": 6000.0}
+    assert max(windowed["data"][0]) <= 6_000
+    assert min(windowed["data"][0]) >= 5_000
+    # The windowed request resolves MORE detail per unit x than the full-range
+    # decimation did -- the whole point of the residual fix.
+    full_in_window = [v for v in full["data"][0] if 5_000 <= v <= 6_000]
+    assert len(windowed["data"][0]) > len(full_in_window)
+
+
+def test_plot_series_window_reports_null_when_not_requested() -> None:
+    dataset = _dense_dataset(5_000)
+    body = client.post("/api/plot/series", json={"dataset": dataset}).json()
+    assert body["window"] is None
+
+
+def test_plot_series_window_wider_than_data_returns_everything() -> None:
+    dataset = _dense_dataset(5_000)
+    body = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "x_min": -1_000_000, "x_max": 1_000_000},
+    ).json()
+    assert len(body["data"][0]) == 5_000
+    assert body["window"] == {"x_min": -1_000_000.0, "x_max": 1_000_000.0}
+
+
+def test_plot_series_empty_window_returns_empty_arrays() -> None:
+    dataset = _dense_dataset(5_000)
+    body = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "x_min": 1_000_000, "x_max": 2_000_000},
+    ).json()
+    assert body["data"][0] == []
+    assert body["data"][1] == []
+    assert body["window"] == {"x_min": 1_000_000.0, "x_max": 2_000_000.0}
+
+
+def test_plot_series_window_requires_both_bounds() -> None:
+    dataset = _dense_dataset(5)
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "x_min": 1.0})
+    assert resp.status_code == 422
+
+
+def test_plot_series_window_nan_bound_degrades_to_empty_rather_than_crash() -> None:
+    import json as _json
+
+    dataset = _dense_dataset(5)
+    # httpx's own `json=` encoder refuses to serialize NaN at all (raises
+    # client-side before the request is even sent), so build the body by hand
+    # with the stdlib encoder's default allow_nan=True -- exactly what a
+    # non-Python client could still send over the wire. A NaN bound can't
+    # satisfy window_columns's real-valued comparisons (see its doc), so it
+    # resolves to "no rows match" rather than a 500 (a raising pydantic
+    # validator would have embedded the raw NaN in the error body, which
+    # Starlette's JSONResponse -- allow_nan=False -- can't serialize either).
+    body = _json.dumps({"dataset": dataset, "x_min": float("nan"), "x_max": 1.0})
+    resp = client.post(
+        "/api/plot/series",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 200
+    result = resp.json()
+    assert result["data"][0] == []
+    assert result["window"] == {"x_min": None, "x_max": 1.0}  # NaN -> null on the wire
+
+
+def test_plot_series_window_reversed_bounds_normalize() -> None:
+    dataset = _dense_dataset(5_000)
+    body = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "x_min": 3_000, "x_max": 1_000},  # hi given first
+    ).json()
+    assert min(body["data"][0]) >= 1_000
+    assert max(body["data"][0]) <= 3_000
+
+
 # ── /api/plot/map (2-D heatmap grid) ──────────────────────────────────────
 # Scattered (x, y, z) packed as three channels; z = 2x + 3y + 1 (a plane).
 _MAP_DS = {

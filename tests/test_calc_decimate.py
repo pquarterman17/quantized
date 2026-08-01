@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from quantized.calc.decimate import decimate_columns, decimate_row_indices, is_ascending
+from quantized.calc.decimate import (
+    decimate_columns,
+    decimate_row_indices,
+    is_ascending,
+    window_columns,
+)
 
 
 def test_short_series_returns_every_index_unchanged() -> None:
@@ -130,3 +135,77 @@ def test_is_ascending_skips_non_finite_gaps() -> None:
 def test_is_ascending_true_for_short_or_empty_input() -> None:
     assert is_ascending(np.array([]))
     assert is_ascending(np.array([1.0]))
+
+
+# ── window_columns (P3.4 zoom-refetch residual) ────────────────────────────
+
+
+def test_window_columns_keeps_only_rows_inside_the_bounds() -> None:
+    x = np.arange(10, dtype=float)
+    y = x * 2
+    wx, [wy] = window_columns(x, [y], 3.0, 6.0)
+    assert wx.tolist() == [3.0, 4.0, 5.0, 6.0]
+    assert wy.tolist() == [6.0, 8.0, 10.0, 12.0]
+
+
+def test_window_columns_bounds_are_inclusive() -> None:
+    x = np.array([0.0, 1.0, 2.0, 3.0])
+    wx, _ = window_columns(x, [x], 1.0, 2.0)
+    assert wx.tolist() == [1.0, 2.0]
+
+
+def test_window_columns_normalizes_reversed_bounds() -> None:
+    x = np.arange(10, dtype=float)
+    wx, _ = window_columns(x, [x], 6.0, 3.0)  # hi given before lo
+    assert wx.tolist() == [3.0, 4.0, 5.0, 6.0]
+
+
+def test_window_columns_empty_window_returns_empty_arrays() -> None:
+    x = np.arange(10, dtype=float)
+    y = x * 2
+    wx, [wy] = window_columns(x, [y], 100.0, 200.0)  # entirely outside the data
+    assert wx.tolist() == []
+    assert wy.tolist() == []
+
+
+def test_window_columns_wider_than_data_is_a_no_op() -> None:
+    x = np.arange(10, dtype=float)
+    y = x * 2
+    wx, [wy] = window_columns(x, [y], -1000.0, 1000.0)
+    assert wx.tolist() == x.tolist()
+    assert wy.tolist() == y.tolist()
+
+
+def test_window_columns_drops_nan_x_rows_even_inside_the_bounds() -> None:
+    x = np.array([0.0, np.nan, 2.0, np.nan, 4.0])
+    y = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+    wx, [wy] = window_columns(x, [y], 0.0, 4.0)
+    assert wx.tolist() == [0.0, 2.0, 4.0]
+    assert wy.tolist() == [10.0, 30.0, 50.0]
+
+
+def test_window_columns_no_series_returns_windowed_x_and_empty_series_list() -> None:
+    x = np.arange(10, dtype=float)
+    wx, series = window_columns(x, [], 2.0, 5.0)
+    assert wx.tolist() == [2.0, 3.0, 4.0, 5.0]
+    assert series == []
+
+
+def test_window_then_decimate_composes_over_the_narrowed_row_set() -> None:
+    # 10,000-row series; window down to a 1,000-row slice, then decimate that
+    # slice to 10 buckets -- the decimation must operate on the WINDOWED row
+    # count (1,000), not the original 10,000, so a spike outside the window
+    # can never resurface and a spike inside it always does.
+    n = 10_000
+    x = np.arange(n, dtype=float)
+    y = np.zeros(n)
+    in_window_spike = 5_500
+    out_of_window_spike = 8_000
+    y[in_window_spike] = 999.0
+    y[out_of_window_spike] = -999.0
+    wx, [wy] = window_columns(x, [y], 5_000.0, 6_000.0)
+    assert len(wx) == 1_001  # [5000, 6000] inclusive
+    dx, [dy] = decimate_columns(wx, [wy], buckets=10)
+    assert len(dx) < len(wx)  # a real reduction happened
+    assert 999.0 in dy.tolist()  # the in-window spike survives
+    assert -999.0 not in dy.tolist()  # the out-of-window spike was never in the input
