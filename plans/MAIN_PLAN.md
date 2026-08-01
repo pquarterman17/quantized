@@ -11,7 +11,10 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-01 (ROBUSTNESS_PLAN completed and archived — Tiers
+**Updated:** 2026-08-01 (ChatGPT-Sol figure-authoring workflow audit added
+`FIGURE_AUTHORING_WORKFLOW_PLAN.md`; this makes the Stage/Graph Builder/Figure
+Builder/reopen/page/export contract an explicit multi-session campaign. Prior:
+ROBUSTNESS_PLAN completed and archived — Tiers
 1+2 and #7/#9 shipped, #10 decided NO; its owner-parked #8 folded into
 Owner gates below with provenance. Prior: 2026-07-28, owner directive:
 fully replace JMP as well as
@@ -44,6 +47,7 @@ Sol audit docs as items 29–30)
 | `PORT_PLAN.md` (+ appendix `PORT_CHECKLIST.md`) | MATLAB parity, packaging (W8), CI/verification (W9) | Founding doc; W0–W9 history + the exhaustive per-feature parity inventory |
 | `GOTO_PLAN.md` | The go-to capability push vs Origin (10 owner-decided items + switch-trigger protocol) | Active build campaign, own decision log |
 | `PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Evidence-led multi-session readiness campaign for making Quantized the owner's primary plotting and analysis application | Cross-cutting audit with acceptance gates, explicit actionable/sequencing/owner-gated states, dependency-ordered tasks, handoff detail, and per-task model routing |
+| `FIGURE_AUTHORING_WORKFLOW_PLAN.md` | One canonical editable figure workflow across Stage, Graph Builder, publication preview, reopen, pages, clipboard, and export | Dedicated contract/migration campaign found by the 2026-08-01 ChatGPT-Sol audit; layers on PRIMARY P1.3/P1.5 without duplicating general readiness work |
 | `JMP_GAP_PLAN.md` | The JMP half of the daily-driver mission: code-grounded gap register (J1–J17) vs the owner's JMP surface, tiered closure work, Gate J usage census | Own gap register + owner gate; layers on PRIMARY P1.4/P1.5/P2.6 without duplicating them |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |

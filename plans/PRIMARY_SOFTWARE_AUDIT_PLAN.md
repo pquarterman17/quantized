@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-31 latest (queue sweep: P3.4 payload decimation
+**Updated:** 2026-08-01 latest (ChatGPT-Sol's v0.14.0 figure-authoring
+round-trip audit is now the child plan `FIGURE_AUTHORING_WORKFLOW_PLAN.md`;
+it expands operating rule #3 and P1.3/P1.5 into a lossless document campaign.
+Prior: 2026-07-31 queue sweep: P3.4 payload decimation
 SHIPPED — 147.5→3.5 MB @1M×7 — and P2.8's regrid defect-class SHIPPED —
 37→1.24 s @1M; zoom-refetch residual booked. Earlier same day: both
 2026-07-27-wave export-dialog defects CLOSED —
@@ -44,6 +47,13 @@ records the audited status, realistic switch-back risks, dependency order,
 acceptance criteria, and enough context for an agent to resume each task weeks
 later. The target is not every Origin menu: it is faster, trustworthy,
 reproducible scientific work with figures that remain editable without code.
+
+The focused Stage → Graph Builder → Figure Builder → saved figure → Figure
+Page → clipboard/export contract is tracked in
+`plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md`. That child plan was authored by
+ChatGPT-Sol on 2026-08-01; do not attribute it to Claude. Its checkboxes are
+authoritative for figure-document round-trip work, while P1.3/P1.5 retain the
+broader recipe and grouping dependencies here.
 
 ## Executive verdict
 
