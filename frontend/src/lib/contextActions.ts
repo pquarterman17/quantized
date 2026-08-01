@@ -32,6 +32,7 @@ import {
 } from "../components/Library/folderOps";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { plotSelectedTogether } from "./plotSelectedTogether";
 import type { PlotMenuContext, MenuSeries } from "./plotMenu";
 import { loadTemplates } from "./template";
 import type { Dataset, FolderNode } from "./types";
@@ -255,6 +256,17 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       },
     }),
   ),
+  // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above (a
+  // composite panel window keeping each dataset separate) — this MERGES the
+  // selection into one real Library dataset via the same gate+build+land
+  // sequence the Plot-menu/palette command uses (lib/plotSelectedTogether),
+  // so the row menu and the menu bar can never drift apart.
+  {
+    id: "dataset.plotSelectedTogether",
+    label: "Plot selected together",
+    hidden: (t) => !multiSelected(t),
+    run: (t) => void plotSelectedTogether(t.selectedIds),
+  },
 ];
 
 export const datasetMoveActions: ContextAction<DatasetActionTarget>[] = [

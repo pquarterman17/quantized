@@ -10,6 +10,7 @@
 import { askParams } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "../lib/exportActive";
 import { runPageSetupDialog } from "../lib/pageSetupCommand";
+import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { toast } from "../store/toasts";
@@ -226,6 +227,22 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         s().focusWindow(s().createPanelWindow(ids, layout));
       },
     })),
+    {
+      // PLOT_WORKFLOW_PLAN #3: distinct from "Overlay in one plot" above —
+      // that opens a composite panel window keeping each dataset separate;
+      // this MERGES the selection into one real Library dataset (one curve
+      // per dataset, segment-concatenated — see lib/originOverlay's
+      // buildSelectionOverlay) so it plots, exports, and fits like any
+      // ordinary single dataset.
+      id: "plot-selected-together",
+      group: "Plot",
+      section: "Layout",
+      label: "Plot selected together",
+      description:
+        "Merge two or more selected Library datasets into one overlay plot, one curve per dataset.",
+      keywords: "combine merge overlay library selection",
+      run: () => void plotSelectedTogether(s().selectedIds),
+    },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──
     {

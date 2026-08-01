@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../overlays/ConfirmDialog";
@@ -415,7 +415,7 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     expect(screen.queryByText("Overlay in one plot")).not.toBeInTheDocument();
   });
 
-  it("offers all 4 quick picks for a >=2 multi-selection", () => {
+  it("offers all 4 panel/overlay quick picks + Plot selected together for a >=2 multi-selection", () => {
     useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
     const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
     fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
@@ -423,6 +423,10 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     expect(screen.getByText("Panel: stacked")).toBeInTheDocument();
     expect(screen.getByText("Panel: grid")).toBeInTheDocument();
     expect(screen.getByText("Overlay in one plot")).toBeInTheDocument();
+    // PLOT_WORKFLOW_PLAN #3 — distinct from "Overlay in one plot" above (a
+    // composite panel window): this merges the selection into ONE real
+    // Library dataset.
+    expect(screen.getByText("Plot selected together")).toBeInTheDocument();
   });
 
   it("'Overlay in one plot' opens a new kind:'panel' overlay window over the selection, raised on top", () => {
@@ -448,6 +452,19 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     fireEvent.click(screen.getByText("Panel: grid"));
     const win = useApp.getState().plotWindows.find((w) => w.kind === "panel")!;
     expect(win.panel?.layout).toBe("grid");
+  });
+
+  it("'Plot selected together' merges the selection into one new overlay dataset and makes it active", async () => {
+    useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
+    const before = useApp.getState().datasets.length;
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Plot selected together"));
+    await waitFor(() => expect(useApp.getState().datasets.length).toBe(before + 1));
+    const s = useApp.getState();
+    const created = s.datasets.find((d) => d.id !== "a" && d.id !== "b")!;
+    expect(created.data.labels).toEqual(["A", "B"]); // one curve per dataset, labelled by name
+    expect(s.activeId).toBe(created.id); // lands as the active plot, same as Origin apply's overlay
   });
 });
 
