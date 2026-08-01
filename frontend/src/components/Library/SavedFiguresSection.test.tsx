@@ -58,6 +58,7 @@ describe("SavedFiguresSection", () => {
   it("opening a live doc activates its dataset and seeds the builder", () => {
     useApp.setState({ figureDocs: [doc()] });
     render(<SavedFiguresSection />);
+    expect(screen.getByText("Publication figures")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /MH loop/ }));
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");

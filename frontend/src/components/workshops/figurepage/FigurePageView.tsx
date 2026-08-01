@@ -68,10 +68,13 @@ export default function FigurePageView() {
   const sel = selIdx !== null ? p.slots[selIdx] : null;
 
   return (
-    <ToolWindow id="figurepage" title="Figure page (multi-panel)" width={840} onClose={() => setOpen(false)}>
+    <ToolWindow id="figurepage" title="Multi-panel export" width={840} onClose={() => setOpen(false)}>
       <div style={{ display: "flex", gap: 12 }}>
         {/* Page options */}
         <div style={{ width: 170, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div role="note" className="qzk-ds-meta" style={{ color: "var(--text-dim)" }}>
+            This composition is temporary; closing it discards the page layout.
+          </div>
           <label className="qzk-field-lbl">Grid (rows × cols)</label>
           <div style={{ display: "flex", gap: 6 }}>
             <NumberField value={p.rows} onChange={(v) => p.setGrid(Number(v) || 1, p.cols)} width={60} />
@@ -137,7 +140,7 @@ export default function FigurePageView() {
         <div style={{ width: 190, display: "flex", flexDirection: "column", gap: 4 }}>
           <SourceList heading="Plot windows" sources={p.windowSources} onPick={p.assignToNext} />
           <div style={{ height: 4 }} />
-          <SourceList heading="Saved figures" sources={p.docSources} onPick={p.assignToNext} />
+          <SourceList heading="Publication figures" sources={p.docSources} onPick={p.assignToNext} />
         </div>
 
         {/* Slot grid + preview */}

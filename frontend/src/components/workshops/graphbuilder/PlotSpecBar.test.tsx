@@ -55,9 +55,9 @@ function baseProps() {
 }
 
 describe("PlotSpecBar — name + dirty display", () => {
-  it("shows 'Unsaved graph' with no dirty dot when nothing is active", () => {
+  it("shows 'Unsaved plot recipe' with no dirty dot when nothing is active", () => {
     const { getByText, container } = render(<PlotSpecBar {...baseProps()} />);
-    expect(getByText("Unsaved graph")).toBeInTheDocument();
+    expect(getByText("Unsaved plot recipe")).toBeInTheDocument();
     expect(container.querySelector(".qz-dot")).toBeNull();
   });
 
@@ -117,9 +117,9 @@ describe("PlotSpecBar — Save / Save As", () => {
 });
 
 describe("PlotSpecBar — saved list", () => {
-  it("shows an empty-state hint when there are no saved graphs", () => {
+  it("shows an empty-state hint when there are no saved plot recipes", () => {
     const { getByText } = render(<PlotSpecBar {...baseProps()} />);
-    expect(getByText(/No saved graphs yet/)).toBeInTheDocument();
+    expect(getByText(/No saved plot recipes yet/)).toBeInTheDocument();
   });
 
   it("lists every saved spec, most-recently-modified first", () => {

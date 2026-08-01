@@ -1,6 +1,6 @@
 // The Graph Builder's saved-PlotSpec toolbar (GUI_INTERACTION_PLAN #11 —
 // "durable artifact"): the active spec's name + unsaved-changes dot, Save /
-// Save As, and a collapsible "Saved graphs" list with per-row Open/Duplicate/
+// Save As, and a collapsible "Saved plot recipes" list with per-row Open/Duplicate/
 // Rename/Delete. Sits ABOVE the wells in GraphBuilderPanel and stays visible
 // even with no dataset selected, so a user can still manage saved graphs.
 //
@@ -52,23 +52,23 @@ export default function PlotSpecBar({
       onSaveActive();
       return;
     }
-    const name = await promptName("Save graph as", "Untitled graph");
+    const name = await promptName("Save plot recipe as", "Untitled recipe");
     if (name !== null) onSaveAs(name);
   }
 
   async function handleSaveAs(): Promise<void> {
-    const name = await promptName("Save graph as", activeSpec?.name ?? "Untitled graph");
+    const name = await promptName("Save plot recipe as", activeSpec?.name ?? "Untitled recipe");
     if (name !== null) onSaveAs(name);
   }
 
   async function handleRename(p: SavedPlotSpec): Promise<void> {
-    const name = await promptName("Rename graph", p.name);
+    const name = await promptName("Rename plot recipe", p.name);
     if (name !== null) onRename(p.id, name);
   }
 
   async function handleDelete(p: SavedPlotSpec): Promise<void> {
     const ok = await askConfirm(
-      "Delete saved graph?",
+      "Delete saved plot recipe?",
       `"${p.name}" will be removed. This can't be undone.`,
       "Delete",
       true,
@@ -81,8 +81,8 @@ export default function PlotSpecBar({
   return (
     <div className="qzk-plotspec-bar">
       <div className="qzk-plotspec-bar-row">
-        <span className="qzk-plotspec-name" title={activeSpec ? activeSpec.name : "Not saved yet"}>
-          {activeSpec ? activeSpec.name : "Unsaved graph"}
+        <span className="qzk-plotspec-name" title={activeSpec ? activeSpec.name : "Recipe not saved yet"}>
+          {activeSpec ? activeSpec.name : "Unsaved plot recipe"}
           {dirty && <StatusDot tone="accent" label="modified" />}
         </span>
         <Button size="sm" disabled={!canSave} onClick={() => void handleSave()}>
@@ -93,10 +93,10 @@ export default function PlotSpecBar({
         </Button>
       </div>
 
-      <Card title="Saved graphs" count={specs.length || undefined} defaultOpen={false}>
+      <Card title="Saved plot recipes" count={specs.length || undefined} defaultOpen={false}>
         {sorted.length === 0 ? (
           <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-            No saved graphs yet — build one below, then Save.
+            No saved plot recipes yet — map columns below, then Save.
           </div>
         ) : (
           sorted.map((p) => (
@@ -105,7 +105,7 @@ export default function PlotSpecBar({
                 type="button"
                 className="qzk-plotspec-open"
                 onClick={() => onOpen(p.id)}
-                title={`Open "${p.name}"`}
+                title={`Open plot recipe "${p.name}"`}
               >
                 {p.name}
               </button>

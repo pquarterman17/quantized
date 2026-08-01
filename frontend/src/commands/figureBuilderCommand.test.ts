@@ -17,4 +17,18 @@ describe("Publication Preview command", () => {
     command?.run();
     expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
   });
+
+  it("identifies the multi-panel surface as a temporary export composition", () => {
+    const setFigurePageOpen = vi.fn();
+    useApp.setState({ setFigurePageOpen });
+    const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-page");
+
+    expect(command).toMatchObject({
+      label: "Multi-panel export…",
+      description: expect.stringContaining("Temporarily compose"),
+    });
+
+    command?.run();
+    expect(setFigurePageOpen).toHaveBeenCalledWith(true);
+  });
 });

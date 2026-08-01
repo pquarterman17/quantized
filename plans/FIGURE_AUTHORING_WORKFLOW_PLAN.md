@@ -145,7 +145,7 @@ the compatibility inventory exposes an unexpected state-ownership problem.
       preview, saved FigureDoc → graph, or any partial adapter, show which
       features cannot transfer. Do not silently drop secondary axes, errors,
       grouping/facets, annotations, shapes, formats, or series styles.
-- [ ] **F0.4 Separate Library terminology.** Distinguish Saved Plot Recipes,
+- [x] **F0.4 Separate Library terminology.** Distinguish Saved Plot Recipes,
       Saved Figures, and multi-panel pages. Tooltips should state whether an
       item reuses data rules, preserves an editable result, or stores output.
 - [ ] **F0.5 Add transition regression tests.** Pin user-facing labels,
@@ -327,6 +327,18 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F0.4 artifact terminology (ChatGPT-Sol)
+
+- Renamed Graph Builder's saved artifacts to Saved Plot Recipes throughout
+  its toolbar and dialogs.
+- Renamed Saved Figures to Publication Figures in the Library and multi-panel
+  source list, with tooltips routing them back to Publication Preview.
+- Renamed the unsaved Figure Page surface to Multi-panel Export and added a
+  visible warning that closing it discards the temporary composition.
+- Kept internal IDs and persisted schema names unchanged for compatibility.
+- Added terminology regression coverage; implementation PR is stacked on the
+  F0.3 transition-warning PR.
 
 ### 2026-08-01 — F0.3 figure-transition compatibility reports (ChatGPT-Sol)
 

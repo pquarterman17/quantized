@@ -30,7 +30,7 @@ export default function SavedFiguresSection() {
     <div className="qzk-lib-group">
       <button className="qzk-group-head" onClick={() => setCollapsed((c) => !c)}>
         <span className="qzk-group-caret">{collapsed ? "▸" : "▾"}</span>
-        <span className="qzk-group-name">Saved figures</span>
+        <span className="qzk-group-name">Publication figures</span>
         <span className="qzk-group-count">{docs.length}</span>
       </button>
       {!collapsed &&
@@ -45,7 +45,7 @@ export default function SavedFiguresSection() {
                 disabled={!ok}
                 title={
                   ok
-                    ? `open figure "${d.name}"${d.live ? "" : " (frozen data)"}`
+                    ? `open publication figure "${d.name}"${d.live ? "" : " (frozen data)"} in Publication Preview`
                     : "source dataset was removed"
                 }
                 onClick={() => openFigureDoc(d.id)}

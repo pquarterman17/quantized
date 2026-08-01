@@ -298,8 +298,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "figure-page",
       group: "Plot",
       section: "Build & export",
-      label: "Figure page (multi-panel)…",
-      description: "Compose multiple plots into an aligned publication page with shared or independent axes.",
+      label: "Multi-panel export…",
+      description: "Temporarily compose multiple plots into an aligned publication page, then export it.",
       run: () => s().setFigurePageOpen(true),
     },
     {
