@@ -12,7 +12,9 @@ checklist.
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-29
-**Updated:** 2026-07-29
+**Updated:** 2026-07-31 (Tier 1 COMPLETE — #1/#2/#3 shipped in one agent
+branch, merged `cc02e65`; #1 deliberately deviates from the literal "Node
+matrix" wording, see the item)
 
 ---
 
@@ -65,34 +67,52 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 
 ## Tier 1 — High Impact
 
-1. **Frontend CI is a single point of failure** — the `frontend` job runs
+1. **~~Frontend CI is a single point of failure~~** SHIPPED 2026-07-31
+   (`ea30cf7`, merged `cc02e65`) — the `frontend` job ran
    `ubuntu-latest` + Node 22 only, while `backend` matrices 3 OS × 2 Python.
-   - [ ] Add a Node matrix (the pinned version + current stable) so a
-         runtime-version break is visible before a fresh checkout finds it
-   - [ ] Decide whether frontend needs OS breadth too, or whether Node breadth
-         is the whole risk (evidence: today's failure was version, not OS)
+   - [x] Second Node lane added — as a separate, NON-required
+         `frontend-node-current` job (`ci.yml:64-102`), NOT a
+         `strategy.matrix`: matrixing renames the check context to
+         `frontend (22)` while branch protection pins the literal string
+         `"frontend"` (verified via the protection API), so a matrix would
+         have silently desynced required checks and blocked every PR merge.
+         Non-required mirrors the repo's macos-lane precedent (a brand-new
+         Node can lag native-binary availability for non-repo reasons).
+         Needs one live CI run to confirm the job executes.
+   - [x] OS breadth decided NOT needed (the evidence failure was
+         version-, not OS-shaped) — documented inline in the workflow
    - **Evidence:** on 2026-07-29 a clean checkout failed **176 frontend tests
      across 22 files** under Node 26 while CI stayed green throughout, because
      CI only ever runs the one version where the bug does not exist. Fixed in
      `67a448f`, but the blind spot that hid it is untouched.
 
-2. **Node version has four declarations and no source of truth** —
+2. **~~Node version has four declarations and no source of truth~~**
+   SHIPPED 2026-07-31 (`9553d6e`, merged `cc02e65`) —
    `ci.yml` 22, `e2e.yml` 22, `pypi.yml` **20**, `release.yml` **20**, all
-   hardcoded; the new root `.nvmrc` (22) is read by none of them.
-   - [ ] Point all four workflows at `node-version-file:` so the repo's pin is
-         the single declaration (verify the action reads the chosen file format
-         before editing four workflows)
-   - [ ] Resolve 20-vs-22 deliberately, not by accident
+   hardcoded; the new root `.nvmrc` (22) was read by none of them.
+   - [x] All four workflows now use `node-version-file: .nvmrc` (setup-node
+         docs confirm resolution from repo root regardless of a job's
+         `working-directory`; needs one live run per workflow to confirm)
+   - [x] 20-vs-22 resolved deliberately on 22; the fifth, looser declaration
+         (`package.json` `engines.node >=20`) bumped to `>=22` to agree.
+         The release artifact is now built on the same Node CI tests.
    - **Why Tier 1:** `pypi.yml` and `release.yml` both run `npm ci && npm run
      build`, so **the artifact users install is built on a Node version nothing
      tests.** It works today; nothing makes it keep working.
 
-3. **Uploads read the whole file into RAM, with no size cap** —
+3. **~~Uploads read the whole file into RAM, with no size cap~~**
+   SHIPPED 2026-07-31 (`034fcdf`, merged `cc02e65`) —
    `routes/parsers.py:305` and `routes/import_template.py:90` both
    `await file.read()`.
-   - [ ] Stream to disk in ~1 MB chunks (the rule's pattern); Starlette already
-         spools large uploads, so the single `.read()` is the whole spike
-   - [ ] Add a generous cap matched to this app's real data, not a web default
+   - [x] Both routes stream to disk in 1 MiB chunks via new pure
+         `routes/_uploadstream.py` (a `Protocol` reader, no
+         fastapi/starlette import — unit-testable with a fake reader);
+         `_uploadcache.py` gained `stage_upload_stream()`
+   - [x] Cap = 512 MiB, evidence-based: largest real corpus file is
+         PNR.opj at ~127.5 MB, 1M-row CSVs run ~70–100 MB → ~4× headroom.
+         `UploadTooLargeError` → HTTP 413 (caught before the generic
+         ValueError→422 handler); cap read at call time so tests
+         monkeypatch it. 6 unit + 3 end-to-end 413 tests.
    - **Evidence:** direct violation of `local-server-hardening.md` §2, in the
      one path that receives the corpus this app is *for* — and it stacks on the
      already-measured 16× file-size peak of the CSV import path (P0.4).
@@ -172,7 +192,13 @@ written from, in a repo whose real corpus is multi-hundred-MB (a 188 MB `.dwk`,
 
 ## Completed
 
-*(nothing yet — this plan was created 2026-07-29)*
+- ~~**Tier 1 (#1 CI second Node lane, #2 Node source of truth, #3 bounded
+  streaming uploads)**~~ (2026-07-31, one agent branch, merged `cc02e65`) —
+  details struck inline on the items above. Merged-tree gate: backend
+  3,422 / ruff / mypy clean; frontend suite + build + lint green. Two
+  residual live-CI confirmations: the `frontend-node-current` job actually
+  runs, and `node-version-file` resolves in all four workflows — check on
+  the next push's Actions run.
 
 The two fixes that *produced* this plan are booked in their own plans, not
 here: the `MODULE_PINS` ratchet under `JMP_GAP_PLAN.md` #14, and the Node 26

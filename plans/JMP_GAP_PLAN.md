@@ -3,7 +3,14 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-29 latest (#14 module-size follow-ups SHIPPED —
+**Updated:** 2026-07-31 (residual wave SHIPPED, one agent, 5 commits merged
+`060c11c`: J8 variability-chart UI → J8 COMPLETE; J10 `figure_multivar`
+export parity → J10 COMPLETE; J3 mosaic plot + prediction-band toggle →
+J3 fully closed; J7 curve-fit By → J7 fully closed; J9's Dixon n>20
+caveat resolved — table verified correct against three independent
+sources, unchanged. Every census-independent register item is now
+shipped; what remains is J1/J2/J4 (P1.4/P1.5-sequenced), Tier 3
+census-gated, and Gate J. Prior: 2026-07-29 latest (#14 module-size follow-ups SHIPPED —
 three splits plus the `MODULE_PINS` ratchet that now guards non-store
 `.ts`, the gap that let `lib/api.ts` reach 2,282 lines unseen; see
 Completed. Prior same day: pre-merge adversarial review of PR #94,
@@ -195,8 +202,13 @@ replacements and its priority case is now stronger, not different.
      (residual sweep): opt-in `band_x` on `/api/stats/regression`
      (byte-identical response when omitted — pinned by test;
      cross-checked vs statsmodels to 1e-8), SVG ribbon in the
-     bivariate view. Prediction bands + mosaic plot remain open.
-   - [ ] Residual: mosaic plot proper (cross-tab table shipped).
+     bivariate view.
+   - [x] ~~Residual: mosaic plot + prediction band~~ SHIPPED 2026-07-31
+     (`20a13de`): client-side `MosaicPlot.tsx` in ContingencyView (no
+     backend call needed); `polynomial_confidence_band` gained an
+     `interval` param (extraction to `calc/stats_band.py` kept
+     `stats.py` under the 500-line ceiling, 409/112) + a
+     Confidence/Prediction toggle in BivariateView. J3 fully closed.
 
 4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
@@ -225,34 +237,49 @@ replacements and its priority case is now stronger, not different.
    column (shared `lib/byPartition.ts` — index partitioning after the
    guard-#11 view, no dataset minting); per-level sections, honest
    small-n lines, per-level report concatenation. Tabulate's By is its
-   own nested grouping (J6). Residual: By on the curve-fit workshop.
+   own nested grouping (J6). ~~Residual: By on the curve-fit
+   workshop~~ SHIPPED 2026-07-31 (`0f242ea`): `useCurveFitByLevel.ts`
+   mirrors `useDistributionByLevels.ts`; display-only by design (never
+   touches the plot overlay, macro step, or FitSpec; every level fits
+   unweighted, disclosed in the UI). J7 fully closed.
 
-8. **[~] J8 — Variability chart + variance components.** Backend
-   SHIPPED 2026-07-29 (see Completed): `calc/stats_varcomp.py`
-   (nested ANOVA, EMS variance components with n0/Satterthwaite
-   unbalanced handling + clamping flags, `variability_summary` chart
-   contract) + `/api/stats/{nested-anova,variance-components,
-   variability-summary}`. **Residual: the variability-chart UI** (the
-   `variability_summary` payload is its data contract; the owner's
-   lot/wafer/type `grouped_factors_boxplot` fixture is the acceptance
-   case). Note: pinned to a hand-derived EMS fixture, not Montgomery's
-   table (unreachable without web access — disclosed in the module).
+8. **[x] J8 — Variability chart + variance components.** COMPLETE
+   2026-07-31. Backend SHIPPED 2026-07-29 (see Completed):
+   `calc/stats_varcomp.py` (nested ANOVA, EMS variance components with
+   n0/Satterthwaite unbalanced handling + clamping flags,
+   `variability_summary` chart contract) + `/api/stats/{nested-anova,
+   variance-components,variability-summary}`. ~~Residual: the
+   variability-chart UI~~ SHIPPED 2026-07-31 (`08d6fec`): lazy-loaded
+   `workshops/variability/` (panel + chart + variance-components view +
+   `useVariability` hook, own Suspense chunk, wrappers in
+   `lib/api/stats.ts` as #14 prescribed), Analyze command wired.
+   Note: EMS pinned to a hand-derived fixture, not Montgomery's table
+   (unreachable without web access — disclosed in the module).
 
 9. **[x] J9 — Outlier screening.** COMPLETE 2026-07-29: backend
    (Grubbs, Dixon Q n=3–30, Rosner ESD pinned to the NIST n=54
    example, MAD) + the Outlier screening workshop ("Select flagged
    rows" writes the shared row selection; never auto-excludes; maps
    flagged indices back through the analysis view's pruning).
-   Standing caveat: Dixon critical table above n≈20 transcribed
-   without web access — re-verify vs Rorabacher (1991) (docstring
-   flags it).
+   ~~Standing caveat: Dixon critical table above n≈20 transcribed
+   without web access~~ VERIFIED 2026-07-31 (`8fa0413`): cross-checked
+   against three independent sources (Kanji *100 Statistical Tests*
+   1993 exact match n=8–25 after one-sided/two-sided alpha
+   reconciliation; NIST Dataplot Monte Carlo n=8; Harvey n=3–7) —
+   table was already correct, zero numeric changes; citation trail +
+   18 regression tests added.
 
-10. **[~] J10 — Multivariate workbench.** SHIPPED 2026-07-29 (see
-    Completed): correlation heatmap (pearson/spearman, r+p), SPLOM
-    canvas with per-panel downsampling, PCA (scree/scores/loadings),
-    TSV copy; standalone `store/multivar.ts` after the first attempt
-    tripped the useApp store-size ratchet. **Residual: matplotlib
-    export parity (`figure_multivar` renderer).**
+10. **[x] J10 — Multivariate workbench.** COMPLETE 2026-07-31.
+    SHIPPED 2026-07-29 (see Completed): correlation heatmap
+    (pearson/spearman, r+p), SPLOM canvas with per-panel downsampling,
+    PCA (scree/scores/loadings), TSV copy; standalone
+    `store/multivar.ts` after the first attempt tripped the useApp
+    store-size ratchet. ~~Residual: matplotlib export parity~~ SHIPPED
+    2026-07-31 (`f1c7c98`): `calc/figure_multivar.py` (heatmap, full
+    n×n SPLOM, PCA scores/loadings/biplot, scree — matches the
+    interactive canvases' layout math) + 4 thin routes in
+    `routes/export_multivar.py`, export buttons in all three views;
+    34 backend + 3 frontend tests.
 
 11. **[x] J11 — Formula language v2.** SHIPPED 2026-07-29 (see
     Completed): comparisons, word-style logicals (`and`/`or`/`not`,
@@ -331,6 +358,20 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**Residual wave: J8 UI, J10 export, J3 mosaic+band, J7 curve-fit By,
+  Dixon verify**~~ (2026-07-31, merged `060c11c`) — one Sonnet agent, 5
+  sequential commits, every remaining census-independent register item.
+  J8: lazy `workshops/variability/` consuming the `variability_summary`
+  contract (14 tests). J10: `calc/figure_multivar.py` + 4 thin export
+  routes (34+3 tests). J3: client-side mosaic + prediction-band toggle;
+  the `interval` extension pushed `stats.py` to 503 so the band code was
+  extracted to `calc/stats_band.py` (409/112 — the ceiling doing its
+  job). J7: display-only per-level curve fits, scope narrowing disclosed
+  in-UI. Dixon: table verified correct against Kanji 1993 / NIST / Harvey,
+  zero changes, 18 regression tests pin it. Merged-tree gate: backend
+  3,422 / ruff / mypy clean; frontend suite + build + lint green,
+  eager 898.4 kB (20.8 kB headroom).
 
 - ~~**#14 Module-size follow-ups**~~ (2026-07-29) — all three splits,
   plus the guard whose absence was the actual defect. `routes/

@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-31 (both 2026-07-27-wave export-dialog defects CLOSED —
+**Updated:** 2026-07-31 latest (queue sweep: P3.4 payload decimation
+SHIPPED — 147.5→3.5 MB @1M×7 — and P2.8's regrid defect-class SHIPPED —
+37→1.24 s @1M; zoom-refetch residual booked. Earlier same day: both
+2026-07-27-wave export-dialog defects CLOSED —
 the fix had been sitting COMPLETE but UNMERGED on an orphaned worktree branch
 since 2026-07-26 (`29ad044`); found by a `git branch --no-merged main` check
 during a dashboard verification, adversarially reviewed, gated, merged.
@@ -1101,6 +1104,34 @@ At the end of each session:
   +428 test lines (dialog race, coercion, command guards, menu render).
   NOTE the fix was authored 2026-07-26 by a worktree agent and sat
   UNMERGED for five days — found only by `git branch --no-merged main`.
+- ~~**P3.4 second half: server-side plot-payload decimation**~~
+  (2026-07-31, `ca80a4c` merged `d775100`) — `/api/plot/series` now
+  min/max-bucket decimates to the client draw contract (pure
+  `calc/decimate.py` mirroring `lib/plotDecimate.ts` semantics; route
+  takes `decimate_width` + `full_resolution` opt-out, refuses
+  non-ascending x so hysteresis loops stay full-res). Measured at 1M×7:
+  147.5 MB → 3.49 MB JSON (~93×), serialize 2,605 → 64 ms. Consumer
+  audit found exactly one call path (`fetchPlot` ← usePlotPayload +
+  useMultiPanelStage); worksheet/stats/export never touch the route.
+  Client requests decimation only when dense AND no row-position-keyed
+  companion is active (error bars, colour-mapped scatter, overlays,
+  selection, grey-exclusion — toggling one triggers a full-res refetch);
+  `alignOverlayY` now refuses rather than mis-slices a full-length
+  overlay onto a decimated base. KNOWN RESIDUAL booked as a BACKLOG row:
+  zoom into a server-decimated payload shows the kept envelope only
+  (client re-bucketing is inert below its min-points threshold) — a
+  viewport-driven re-fetch on zoom is the finishing touch.
+- ~~**P2.8 defect-class: map-regrid gridded-input fast path**~~
+  (2026-07-31, `231a1b8` merged after review) — `method="linear"` regrid
+  Delaunay-triangulated the full input cloud every call; new
+  `calc/_grid_detect.py` (vectorized jitter-vs-pitch axis clustering,
+  uniform-spacing check, ≥0.9 cell coverage) routes detected grids
+  through `RegularGridInterpolator` instead. 1M-point grid: 37.0 → 1.24 s
+  (30×); scattered input byte-identical to the old path (differential
+  tests); documented divergence: NaN holes block interpolation instead
+  of Delaunay-bridging. `natural`/`cubic` share the Delaunay cost class
+  but had no measured evidence — deliberately untouched (Graph25
+  discipline). P2.8's other profiled bottlenecks remain open.
 
 **P3.1 stays OPEN.** The four slices above cover curated commands and the first
 five Inspector cards; workshop-level coverage is the remaining evidence-led
@@ -1464,6 +1495,25 @@ work (its BACKLOG row).
 - Process lesson: worktree-agent merges are the orchestrator's job and a
   session can die before doing it. `git branch --no-merged main` belongs
   in every reconciliation pass (booked in the worktree-gotchas memory).
+
+#### 2026-07-31 — Four-agent queue sweep (Sonnet agents, Fable spec/review/gate/merge)
+
+- Four parallel worktree agents, fenced territories, zero merge
+  conflicts: P3.4 payload decimation (`d775100`), P2.8 regrid fast path,
+  ROBUSTNESS Tier 1 (`cc02e65`), JMP residual wave (`060c11c`) — details
+  in each plan's Completed section.
+- Merged-tree gate: backend **3,422 passed** / ruff / mypy clean (241
+  files); frontend suite + build + lint green, eager **898.4 kB**
+  (20.8 kB headroom).
+- Review notes: decimation's overlay-alignment gating verified against
+  the real `usePlotPayload` diff (not the report); the zoom-envelope
+  residual booked rather than blocking; regrid's NaN-hole divergence
+  accepted as documented + tested.
+- Same session, before the sweep: the owner answered the four import→
+  plot workflow design questions — booked as `plans/PLOT_WORKFLOW_PLAN.md`
+  (silent technique defaults, batch overlay offer, Layer 1 pre-P1.3,
+  per-technique view memory). P1.3 recipes will build on its technique
+  tag.
 
 ## Reference baseline
 
