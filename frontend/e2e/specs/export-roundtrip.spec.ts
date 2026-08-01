@@ -1,5 +1,5 @@
 // Real-browser publication-export round trip (GUI_INTERACTION #15): Graph
-// Builder intent -> Figure Builder preview -> real FastAPI/matplotlib download
+// Builder intent -> Publication Preview -> real FastAPI/matplotlib download
 // -> saved FigureDoc reopen -> identical request. No mocked fetch/downloads.
 
 import { readFile } from "node:fs/promises";
@@ -86,7 +86,7 @@ function expectSignature(fmt: keyof typeof MIME, bytes: Buffer): void {
   else expect(bytes.subarray(0, 500).toString("utf8")).toContain("<svg");
 }
 
-test("ordered scatter survives Figure Builder save/reopen and real PDF/SVG/PNG downloads", async ({ page }) => {
+test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/PNG downloads", async ({ page }) => {
   test.setTimeout(90_000);
   await gotoApp(page);
   const graphBuilder = await buildOrderedXY(page);
@@ -104,14 +104,14 @@ test("ordered scatter survives Figure Builder save/reopen and real PDF/SVG/PNG d
   });
 
   const initialPreview = figureRequest(page, "figure-hitmap");
-  await graphBuilder.getByRole("button", { name: "Figure Builder" }).click();
+  await graphBuilder.getByRole("button", { name: "Publication Preview" }).click();
   const initialBody = (await initialPreview).postDataJSON() as FigureBody;
   expect(initialBody.x_key).toBe(0);
   expect(initialBody.y_keys).toEqual([0, 1]);
   expect(initialBody.series_styles?.[0]).toMatchObject({ color: "#3366cc", width: 3, line: "none", marker: true });
   expect(initialBody.series_styles?.[1]).toMatchObject({ color: "#cc6633", line: "none", marker: true, marker_size: 7 });
 
-  const figureBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Figure builder", { exact: true }) });
+  const figureBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Publication preview", { exact: true }) });
   await expect(figureBuilder).toBeVisible();
   await figureBuilder.getByPlaceholder("(none)").fill("Round-trip figure");
   const autoLabels = figureBuilder.getByPlaceholder("auto");
@@ -141,9 +141,9 @@ test("ordered scatter survives Figure Builder save/reopen and real PDF/SVG/PNG d
   await figureBuilder.getByTitle("Close").click();
 
   const reopenedPreview = figureRequest(page, "figure-hitmap");
-  await page.getByTitle('open figure "Saved round trip"').click();
+  await page.getByTitle('open publication figure "Saved round trip"').click();
   await reopenedPreview;
-  const reopenedBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Figure builder", { exact: true }) });
+  const reopenedBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Publication preview", { exact: true }) });
   const reopenedPdf = await exportFormat(page, reopenedBuilder, "pdf");
   expectSignature("pdf", reopenedPdf.bytes);
   expect(reopenedPdf.body).toEqual(firstPdf.body);
@@ -165,7 +165,7 @@ test("connected line and line-plus-marker styles remain connected", async ({ pag
   });
   await graphBuilder.getByRole("button", { name: /cycle/ }).click(); // scatter -> line
   const preview = figureRequest(page, "figure-hitmap");
-  await graphBuilder.getByRole("button", { name: "Figure Builder" }).click();
+  await graphBuilder.getByRole("button", { name: "Publication Preview" }).click();
   const body = (await preview).postDataJSON() as FigureBody;
   expect(body.y_keys).toEqual([0, 1]);
   expect(body.series_styles?.[0]).toMatchObject({ line: "dashed", marker: true, marker_size: 6 });

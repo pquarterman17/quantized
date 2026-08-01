@@ -52,7 +52,7 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   await page.getByRole("button", { name: "Run" }).click();
 
   // Two matches once saved: the PlotSpecBar header's active-spec name span
-  // AND the (still-collapsed) "Saved graphs" list row — `.first()` is the
+  // AND the (still-collapsed) "Saved plot recipes" list row — `.first()` is the
   // visible header.
   await expect(page.getByText("E2E test graph", { exact: true }).first()).toBeVisible();
 
@@ -69,7 +69,7 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   expect((saved[0].spec as { zones: { y: { channel: number }[] } }).zones.y.map((r) => r.channel)).toEqual([0, 1]);
 
   // ── Reset the builder (clears the wells), then reopen the saved graph via
-  //    PlotSpecBar's "Saved graphs" list and verify the wells restore ──────
+  //    PlotSpecBar's "Saved plot recipes" list and verify the wells restore ──────
   // exact: true — a plain "Reset" substring also matches the plot toolbar's
   // unrelated "Reset View" button (aria-label).
   await page.getByRole("button", { name: "Reset", exact: true }).click();
@@ -77,9 +77,9 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
 
   // Scoped to the `<summary>` tag: an unscoped text search for "Saved
   // graphs" also false-matches the PlotSpecBar header row, whose
-  // concatenated text ("Unsaved graph" + "Save" + "Save As…") happens to
+  // concatenated text ("Unsaved plot recipe" + "Save" + "Save As…") happens to
   // contain "graphSave" — case-insensitively indistinguishable from "graphs".
-  await page.locator("summary", { hasText: "Saved graphs" }).click(); // expand the collapsed Card
+  await page.locator("summary", { hasText: "Saved plot recipes" }).click(); // expand the collapsed Card
   // exact — Duplicate/Rename/Delete icon buttons all carry
   // `aria-label="<Action> E2E test graph"`, a superset substring match.
   await page.getByRole("button", { name: "E2E test graph", exact: true }).click(); // the Open row
