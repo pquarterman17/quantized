@@ -58,3 +58,42 @@ jobs:
         run: npm test
       - name: Build (includes typecheck)
         run: npm run build
+
+  # ROBUSTNESS_PLAN #1: on 2026-07-29 a clean checkout failed 176 frontend
+  # tests across 22 files under Node 26 while this workflow stayed green the
+  # whole time, because `frontend` above only ever runs the one pinned Node
+  # version. This job re-runs the same steps against the latest Node release
+  # so a future runtime-version break is visible on every PR instead of only
+  # on a fresh checkout. Deliberately a SEPARATE job (not folded into
+  # `frontend` above) and deliberately NOT added to required status checks:
+  # renaming/matrixing `frontend` would change its check-context name and
+  # silently desync branch protection's required-checks list (which pins the
+  # literal string "frontend"); a second job with a new name has no such
+  # effect. Not required for the same reason `e2e.yml` and the backend
+  # matrix's macos-latest legs aren't: bleeding-edge Node can lag upstream
+  # native-binary availability (e.g. the `canvas` optional dependency) for
+  # reasons that have nothing to do with this repo's code, so a red X here
+  # should be investigated, not treated as an automatic merge blocker.
+  #
+  # Node breadth only, not OS breadth: the 2026-07-29 failure was a Node
+  # runtime issue (a `localStorage` global Node 20+ ships), not OS-specific,
+  # so widening the OS axis too would add CI cost without covering a failure
+  # class this repo has actually seen.
+  frontend-node-current:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: current
+      - name: Install
+        run: npm ci
+      - name: Lint (eslint flat config; errors fail, warnings don't)
+        run: npm run lint
+      - name: Unit tests (vitest)
+        run: npm test
+      - name: Build (includes typecheck)
+        run: npm run build
