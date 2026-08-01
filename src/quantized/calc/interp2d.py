@@ -13,6 +13,16 @@ Parity notes:
     ``_natural_neighbor`` from the Delaunay triangulation. Sibson coordinates
     are geometrically unique, so this matches MATLAB's 'natural' to ~1e-9 at
     interior points and reproduces affine fields exactly (linear precision).
+
+Gridded-input fast path (PRIMARY_SOFTWARE_AUDIT_PLAN P2.8): ``method="linear"``
+Delaunay-triangulated the FULL input cloud on every call regardless of output
+resolution -- 8.5/37/153s at 250k/1M/4M points. Real 2-D maps (XRD/RSM
+meshes) are usually already a regular grid under the hood, so
+``_grid_detect.detect_regular_grid`` checks for that first; when it matches,
+``_query_grid_linear`` resamples via a direct grid lookup
+(``RegularGridInterpolator``, no triangulation) instead. Genuinely scattered
+input is unaffected -- detection returns ``None`` and the original
+``griddata`` call runs unchanged.
 """
 
 from __future__ import annotations
@@ -21,10 +31,11 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.interpolate import griddata
+from scipy.interpolate import RegularGridInterpolator, griddata
 from scipy.spatial import Delaunay
 from scipy.spatial._qhull import QhullError
 
+from quantized.calc._grid_detect import GridLayout, detect_regular_grid, grid_to_zarray
 from quantized.calc._natural_neighbor import sibson_interpolate
 
 __all__ = ["interpolate2d", "regrid2d"]
@@ -66,6 +77,35 @@ def _hull_mask(
     return out
 
 
+def _query_grid_linear(
+    grid: GridLayout,
+    zv: NDArray[np.float64],
+    xqv: NDArray[np.float64],
+    yqv: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Bilinear query against a detected regular grid -- no triangulation.
+
+    Builds the dense ``(ny, nx)`` z-array (NaN where a cell has no input
+    point, see ``grid_to_zarray``) and interpolates via
+    ``RegularGridInterpolator``: an O(log n) axis-bisection lookup per query
+    instead of ``griddata``'s O(n log n) Delaunay build over the full cloud.
+    NaN outside the grid's bounding box matches the old path's
+    ``extrapolation='none'`` convention (a regular grid's convex hull IS its
+    bounding rectangle, so these agree exactly). A missing/NaN cell blocks
+    interpolation across it -- the surrounding output cells go NaN -- rather
+    than the old path's Delaunay bridging over the gap using neighbouring
+    points; that is an intentional, documented divergence for sparse
+    real-world dropout (dead pixels), see the module docstring and
+    ``test_calc_interp2d.py``'s grid-with-holes case.
+    """
+    zgrid = grid_to_zarray(grid, zv)
+    rgi = RegularGridInterpolator(
+        (grid.uy, grid.ux), zgrid, method="linear", bounds_error=False, fill_value=np.nan
+    )
+    pts = np.column_stack([yqv, xqv])
+    return np.asarray(rgi(pts), dtype=float)
+
+
 def _interp_scattered(
     xv: NDArray[np.float64],
     yv: NDArray[np.float64],
@@ -87,14 +127,19 @@ def _interp_scattered(
             zqv = _hull_mask(xv, yv, qpts, zqv)
         return zqv
     else:  # linear
-        try:
-            zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
-        except QhullError:
-            # Degenerate (collinear / coincident) cloud — Qhull can't triangulate,
-            # so linear interpolation is undefined. Degrade to NaN (as for points
-            # outside the convex hull) rather than let QhullError escape as a 500;
-            # mirrors the QhullError guards already used by _hull_mask and natural.
-            zqv = np.full(qpts.shape[0], np.nan)
+        grid = detect_regular_grid(xv, yv)
+        if grid is not None:
+            # Gridded input (P2.8): skip the Delaunay triangulation entirely.
+            zqv = _query_grid_linear(grid, zv, xqv, yqv)
+        else:
+            try:
+                zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
+            except QhullError:
+                # Degenerate (collinear / coincident) cloud — Qhull can't triangulate,
+                # so linear interpolation is undefined. Degrade to NaN (as for points
+                # outside the convex hull) rather than let QhullError escape as a 500;
+                # mirrors the QhullError guards already used by _hull_mask and natural.
+                zqv = np.full(qpts.shape[0], np.nan)
     if extrapolation == "nearest":
         nan_mask = np.isnan(zqv)
         if nan_mask.any():
