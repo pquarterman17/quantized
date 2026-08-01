@@ -131,6 +131,7 @@ function BackgroundXYWindow({
     peakOverlay: null,
     derivOverlay: null,
     selection: null,
+    defaultTrace,
   });
 
   return (

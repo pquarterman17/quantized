@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from quantized.calc.decimate import decimate_columns, is_ascending
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.datastruct import DataStruct
@@ -22,6 +23,16 @@ class PlotRequest(BaseModel):
     y2_keys: list[int | str] | None = None
     x_log: bool = False
     y_log: bool = False
+    # P3.4 server-side payload decimation: a target pixel-width / bucket-count
+    # hint reflecting the client's actual draw contract (calc/decimate.py
+    # mirrors the semantics of the frontend's lib/plotDecimate.ts exactly, so
+    # a decimated series draws IDENTICALLY to full data in uPlot). None (the
+    # default -- every pre-existing caller) returns full resolution, unchanged.
+    decimate_width: int | None = Field(default=None, ge=1, le=20_000)
+    # Explicit opt-out: force full resolution even when decimate_width is set.
+    # No current caller needs both at once, but the contract stays honest for
+    # any future one (e.g. an analysis consumer that reuses this route).
+    full_resolution: bool = False
 
 
 @router.post("/series")
@@ -40,13 +51,25 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    x = plot.x
+    values = [s.values for s in plot.series]
+    # A non-ascending x (e.g. a hysteresis-loop sweep) renders via the
+    # acquisition-order path, which index-bucketing does not preserve (see
+    # calc/decimate.py's is_ascending doc) -- refuse to decimate regardless
+    # of what the client asked for, rather than ship a misleading envelope.
+    decimate_width = req.decimate_width
+    decimated = decimate_width is not None and not req.full_resolution and is_ascending(x)
+    if decimated and decimate_width is not None:
+        x, values = decimate_columns(x, values, decimate_width)
+
     # uPlot wants column-oriented data: [xValues, series1Values, series2Values, ...]
-    data = [jsonify(plot.x)] + [jsonify(s.values) for s in plot.series]
+    data = [jsonify(x)] + [jsonify(v) for v in values]
     return {
         "data": data,
         "series": [{"label": s.label, "unit": s.unit, "axis": s.axis} for s in plot.series],
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
+        "decimated": decimated,
     }
 
 

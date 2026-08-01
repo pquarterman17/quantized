@@ -8,6 +8,8 @@ import {
   decimatePlugin,
   decimateRowIndices,
   decimationEligible,
+  decimationRequestEligible,
+  defaultDecimateWidthHint,
   shouldDecimate,
   visibleRowRange,
   xExtent,
@@ -85,6 +87,43 @@ describe("decimationEligible", () => {
 
   it("disengages when any series uses colour-mapped scatter", () => {
     expect(decimationEligible({ ...base, hasColorByColumns: true })).toBe(false);
+  });
+});
+
+describe("defaultDecimateWidthHint", () => {
+  it("reads window.innerWidth in a DOM environment", () => {
+    expect(defaultDecimateWidthHint()).toBe(window.innerWidth);
+  });
+});
+
+describe("decimationRequestEligible", () => {
+  const base = {
+    defaultTrace: "Line",
+    hasErrorBars: false,
+    hasErrorSpans: false,
+    hasColorByColumns: false,
+  };
+
+  it("is eligible for the plain dense-line case", () => {
+    expect(decimationRequestEligible(base)).toBe(true);
+  });
+
+  it("is eligible with no defaultTrace given (defaults to Line)", () => {
+    expect(decimationRequestEligible({ ...base, defaultTrace: undefined })).toBe(true);
+  });
+
+  it("disengages when error bars or spans are bound", () => {
+    expect(decimationRequestEligible({ ...base, hasErrorBars: true })).toBe(false);
+    expect(decimationRequestEligible({ ...base, hasErrorSpans: true })).toBe(false);
+  });
+
+  it("disengages in Scatter trace mode only", () => {
+    expect(decimationRequestEligible({ ...base, defaultTrace: "Scatter" })).toBe(false);
+    expect(decimationRequestEligible({ ...base, defaultTrace: "Step" })).toBe(true);
+  });
+
+  it("disengages when any series uses colour-mapped scatter", () => {
+    expect(decimationRequestEligible({ ...base, hasColorByColumns: true })).toBe(false);
   });
 });
 

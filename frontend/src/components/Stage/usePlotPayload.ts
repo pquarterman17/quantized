@@ -21,6 +21,11 @@ import {
   fetchPlot,
   type PlotPayload,
 } from "../../lib/plotdata";
+import {
+  DECIMATE_MIN_POINTS,
+  decimationRequestEligible,
+  defaultDecimateWidthHint,
+} from "../../lib/plotDecimate";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 
@@ -43,6 +48,40 @@ export interface PlotPayloadParams {
   peakOverlay: PeakOverlay | null;
   derivOverlay: FitOverlay | null;
   selection: { datasetId: string; rows: number[] } | null;
+  /** Current line/scatter/step trace mode (PlotViewport's own prop, threaded
+   *  here too — P3.4) — Scatter disqualifies a server-decimation request the
+   *  same way it disqualifies the client-side path (see plotDecimate.ts's
+   *  decimationRequestEligible). Undefined defaults to "Line" (eligible). */
+  defaultTrace?: string;
+}
+
+/** Would ANY overlay/selection/exclusion companion be appended onto the base
+ *  fetch by `composeDisplayPayload`? Those are always built at the dataset's
+ *  FULL row count, so a server-decimated (reduced) base cannot safely carry
+ *  one — `lib/plotdata.ts`'s `alignOverlayY` would otherwise be asked to
+ *  align a full-length column onto a sparse row set (see its P3.4 doc). Takes
+ *  each input explicitly (rather than the whole params object) so the fetch
+ *  effect's dependency array below can list exactly what this reads — every
+ *  one of them IS a listed dependency, so toggling an overlay ON while a
+ *  decimated payload is showing triggers a fresh, full-resolution fetch
+ *  instead of leaving the overlay silently unaligned. */
+function hasOverlayCompanions(args: {
+  fitOverlay: FitOverlay | null;
+  baselineOverlay: BaselineOverlay | null;
+  peakOverlay: PeakOverlay | null;
+  derivOverlay: FitOverlay | null;
+  selection: { datasetId: string; rows: number[] } | null;
+  excludedDisplay: "hide" | "grey";
+  activeId: string;
+  dropped: Set<number>;
+}): boolean {
+  if (args.fitOverlay?.datasetId === args.activeId) return true;
+  if (args.baselineOverlay?.datasetId === args.activeId) return true;
+  if (args.peakOverlay?.datasetId === args.activeId) return true;
+  if (args.derivOverlay?.datasetId === args.activeId) return true;
+  if (args.selection?.datasetId === args.activeId) return true;
+  if (args.excludedDisplay === "grey" && args.dropped.size > 0) return true;
+  return false;
 }
 
 export interface PlotPayloadResult {
@@ -157,14 +196,49 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [displayPayload, plotted, p.hiddenChannels],
   );
 
-  // Fetch series whenever the active dataset, scale, or channel roles change.
+  // Fetch series whenever the active dataset, scale, channel roles, or
+  // decimation eligibility change. P3.4: request server-side decimation
+  // (`decimateWidth`) when the dataset is dense enough to matter AND nothing
+  // downstream needs full-resolution row alignment — error bars/spans and
+  // colour-mapped scatter read their arrays keyed by row position off the
+  // FULL dataset, Scatter mode's density IS the signal, and any active
+  // overlay/selection/grey-exclusion companion gets appended at full length
+  // by composeDisplayPayload (see hasOverlayCompanions above). Everything
+  // else (the common "just look at a big dataset" path) gets decimated.
   useEffect(() => {
     let cancelled = false;
     if (!active) {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, p.yScale === "log", p.xScale === "log", plotted, p.y2Keys, p.xKey).then((raw) => {
+    const eligible =
+      active.data.time.length > DECIMATE_MIN_POINTS &&
+      !hasOverlayCompanions({
+        fitOverlay: p.fitOverlay,
+        baselineOverlay: p.baselineOverlay,
+        peakOverlay: p.peakOverlay,
+        derivOverlay: p.derivOverlay,
+        selection: p.selection,
+        excludedDisplay: p.excludedDisplay,
+        activeId: active.id,
+        dropped,
+      }) &&
+      decimationRequestEligible({
+        defaultTrace: p.defaultTrace,
+        hasErrorBars: errorBars.size > 0,
+        hasErrorSpans: !!active.errorRoles?.length,
+        hasColorByColumns: colorByColumns.size > 0,
+      });
+    const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
+    fetchPlot(
+      active.data,
+      p.yScale === "log",
+      p.xScale === "log",
+      plotted,
+      p.y2Keys,
+      p.xKey,
+      decimateWidth,
+    ).then((raw) => {
       if (cancelled) return;
       // xCategories producer (gap #20 residual): a categorical-typed x
       // channel (nominal/ordinal — user override or inferred, see
@@ -178,7 +252,24 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     return () => {
       cancelled = true;
     };
-  }, [active, p.yScale, p.xScale, plotted, p.y2Keys, p.xKey]);
+  }, [
+    active,
+    p.yScale,
+    p.xScale,
+    plotted,
+    p.y2Keys,
+    p.xKey,
+    p.defaultTrace,
+    errorBars,
+    colorByColumns,
+    dropped,
+    p.fitOverlay,
+    p.baselineOverlay,
+    p.peakOverlay,
+    p.derivOverlay,
+    p.selection,
+    p.excludedDisplay,
+  ]);
 
   // #36: built from Dataset.errorRoles (the canonical contract) — absent for
   // a dataset with no roles, in which case the legacy symmetric bars stand.

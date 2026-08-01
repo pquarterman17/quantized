@@ -129,6 +129,7 @@ export interface PlotRequest {
   y2_keys?: (number | string)[] | null;
   x_log?: boolean;
   y_log?: boolean;
+  decimate_width?: number | null; // P3.4 decimation hint (target px width) -- see lib/plotdata.ts's fetchPlot
 }
 
 /** Build uPlot-ready series from a DataStruct + selection. */
@@ -447,7 +448,6 @@ export function baselineRegion(body: {
 }> {
   return postJSON("/api/baseline/region", body);
 }
-
 
 // ── Reference data ──────────────────────────────────────────────────────────
 export function getConstants(): Promise<{ constants: Record<string, number> }> {

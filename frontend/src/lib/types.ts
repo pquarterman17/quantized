@@ -264,6 +264,10 @@ export interface PlotSeriesResponse {
   series: { label: string; unit: string; axis?: number }[];
   x: { label: string; unit: string; log: boolean };
   y: { log: boolean };
+  /** P3.4: true when the server applied min/max-bucket decimation (the request
+   *  carried `decimate_width` and the route honored it — ascending x, no
+   *  `full_resolution` override). Absent/false means every row came back. */
+  decimated?: boolean;
 }
 
 /** Response of POST /api/plot/map — a regular grid for the 2-D heatmap.

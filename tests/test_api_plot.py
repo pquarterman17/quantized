@@ -108,6 +108,103 @@ def test_plot_series_x_key_by_label() -> None:
     assert [s["label"] for s in body["series"]] == ["Moment"]
 
 
+# ── server-side decimation (P3.4 second half of point reduction) ──────────
+# decimate_width mirrors the frontend's window-aware min/max bucketing
+# (lib/plotDecimate.ts) so a decimated response draws IDENTICALLY to full
+# data at the requested resolution. See tests/test_calc_decimate.py for the
+# pure-function coverage; these exercise the route contract (defaults,
+# opt-out, response shape) end-to-end.
+
+
+def _dense_dataset(n: int = 20_000, spike_at: int | None = None) -> dict[str, Any]:
+    import math
+
+    time = list(range(n))
+    values = [[math.sin(i / 37.0)] for i in range(n)]
+    if spike_at is not None:
+        values[spike_at][0] = 999.0
+    return {
+        "time": time,
+        "values": values,
+        "labels": ["Moment"],
+        "units": ["emu"],
+        "metadata": {},
+    }
+
+
+def test_plot_series_no_decimate_width_returns_full_resolution() -> None:
+    dataset = _dense_dataset(5_000)
+    resp = client.post("/api/plot/series", json={"dataset": dataset})
+    body = resp.json()
+    assert len(body["data"][0]) == 5_000
+    assert body["decimated"] is False
+
+
+def test_plot_series_decimate_width_shrinks_a_dense_series() -> None:
+    dataset = _dense_dataset(20_000)
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["decimated"] is True
+    assert len(body["data"][0]) < 20_000
+    assert len(body["data"][0]) == len(body["data"][1])  # x and y stay aligned
+
+
+def test_plot_series_decimate_width_preserves_a_narrow_spike() -> None:
+    dataset = _dense_dataset(20_000, spike_at=12_345)
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100})
+    body = resp.json()
+    assert 999.0 in body["data"][1]
+
+
+def test_plot_series_decimate_width_is_identity_for_a_small_dataset() -> None:
+    dataset = _dense_dataset(5)
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 1000})
+    body = resp.json()
+    # Still reports decimated=True (the contract ran) even though nothing
+    # was dropped -- 5 rows can't exceed a 1000-bucket target.
+    assert body["decimated"] is True
+    assert len(body["data"][0]) == 5
+
+
+def test_plot_series_full_resolution_overrides_decimate_width() -> None:
+    dataset = _dense_dataset(20_000)
+    resp = client.post(
+        "/api/plot/series",
+        json={"dataset": dataset, "decimate_width": 100, "full_resolution": True},
+    )
+    body = resp.json()
+    assert body["decimated"] is False
+    assert len(body["data"][0]) == 20_000
+
+
+def test_plot_series_decimate_width_rejects_out_of_range() -> None:
+    dataset = _dense_dataset(5)
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 0})
+    assert resp.status_code == 422
+
+
+def test_plot_series_non_ascending_x_refuses_decimation() -> None:
+    # A hysteresis-loop-style sweep (x goes up then back down) -- decimation
+    # must silently fall back to full resolution rather than ship a
+    # misleading envelope (see calc/decimate.py's is_ascending doc).
+    n = 20_000
+    half = n // 2
+    time = list(range(half)) + list(range(half, 0, -1))
+    values = [[float(i % 7)] for i in range(n)]
+    dataset = {
+        "time": time,
+        "values": values,
+        "labels": ["Moment"],
+        "units": ["emu"],
+        "metadata": {},
+    }
+    resp = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100})
+    body = resp.json()
+    assert body["decimated"] is False
+    assert len(body["data"][0]) == n
+
+
 # ── /api/plot/map (2-D heatmap grid) ──────────────────────────────────────
 # Scattered (x, y, z) packed as three channels; z = 2x + 3y + 1 (a plane).
 _MAP_DS = {
