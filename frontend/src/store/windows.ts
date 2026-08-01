@@ -18,6 +18,7 @@
 // useApp (no runtime cycle).
 
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
+import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -33,6 +34,7 @@ import {
   type PlotView,
   type PlotWindow,
   type WinState,
+  type WindowGeometry,
 } from "../lib/plotview";
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { plotIntentStageTab } from "../lib/stagetab";
@@ -47,6 +49,32 @@ export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_w
  *  every action that raises a window (focus/raise/create/duplicate). */
 export const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
+/** Tile/Cascade's shared body (item 6): place every VISIBLE window into
+ *  `geoms` in z-order, un-maximizing it; minimized windows pass through. */
+function _relayoutVisible(s: AppState, geoms: readonly WindowGeometry[]): Partial<AppState> {
+  let i = 0;
+  return {
+    plotWindows: s.plotWindows.map((w) => {
+      if (w.winState === "minimized") return w;
+      const placed = { ...w, winState: "normal" as WinState, geometry: geoms[i], z: i + 1 };
+      i++;
+      return placed;
+    }),
+  };
+}
+/** Shared "make `id` the live focus" tail for closeWindow/focusWindow/
+ *  minimizeWindow/restoreWindow: hydrate `view` onto the singleton fields
+ *  and clear transient tool state (item 4), over the caller's `extra`. */
+function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string | null, view: PlotView): Partial<AppState> {
+  return {
+    ...extra,
+    focusedWindowId: id,
+    activeId: datasetId,
+    selectedIds: datasetId ? [datasetId] : [],
+    ...hydrateView(view),
+    ...focusTransientReset(),
+  };
+}
 /** A brand-new sole main window — the ≥1-window invariant's default: one
  *  MAXIMIZED window bound to `datasetId`, with a fresh view (MULTI_PLOT_PLAN
  *  decision #6 — pixel-identical to today's single-plot Stage). Used at store
@@ -105,9 +133,13 @@ export function focusTransientReset(): Partial<AppState> {
  *  indexes the OLD dataset's columns; axis limits reset to autoscale; errKeys/
  *  hiddenChannels seed from the dataset (Origin Y-error designations + parser
  *  hints — see lib/errorbars). Display config that survives a dataset switch
- *  (log axes, grid, legend, template, title, annotations, …) is deliberately
- *  absent — same as `setActive` has always behaved. */
-export function datasetViewDefaults(ds: Dataset | undefined): Partial<PlotView> {
+ *  (grid, legend, template, title, annotations, …) is deliberately absent —
+ *  same as `setActive` has always behaved, EXCEPT axis scale (item 2):
+ *  `prevDs` gates the technique-defaults table to a genuine technique change
+ *  (`lib/techniqueDefaults.isTechniqueChange`), so log axes still survive a
+ *  same-technique switch; an omitted `prevDs` (import/split/reimport) always
+ *  counts as a change — there's no prior view worth preserving. */
+export function datasetViewDefaults(ds: Dataset | undefined, prevDs?: Dataset): Partial<PlotView> {
   return {
     xKey: null, // new dataset → x-axis back to .time
     yKeys: null, // new dataset → plot all its channels
@@ -125,8 +157,13 @@ export function datasetViewDefaults(ds: Dataset | undefined): Partial<PlotView> 
     yLim: null,
     xStep: null,
     yStep: null,
+    ...(isTechniqueChange(ds, prevDs) ? techniqueViewDefaults(ds) : {}),
   };
 }
+
+/** `datasetViewDefaults`'s `prevDs` lookup (a window's prior dataset). */
+const prevDataset = (s: AppState, id: string | null): Dataset | undefined =>
+  s.datasets.find((d) => d.id === id);
 
 /** The full state patch for rebinding the FOCUSED window to dataset `id` —
  *  `setActive`'s entire body, hoisted so `rebindWindow`'s focused-target path
@@ -155,7 +192,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // it always means "show me the plot", so it uses `plotIntentStageTab`
     // (never sticks on a stale Worksheet tab; owner-routing item 1).
     stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
-    ...(s.activeId === id ? {} : datasetViewDefaults(ds)), // #12 slice 4b: a GENUINE dataset switch resets channel-keyed defaults; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
+    ...(s.activeId === id ? {} : datasetViewDefaults(ds, prevDataset(s, s.activeId))), // #12 slice 4b: a GENUINE dataset switch resets channel-keyed defaults; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
     // A plain click on a different dataset always drops a prior spatial
     // multi-panel arrangement (decode-plan #36) — it was built for a specific
     // figure's layers, not whatever is now active. Same for facet/x-break
@@ -473,9 +510,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // it to the same dataset-derived defaults, leaving focus, activeId,
         // and the live singleton fields untouched.
         const ds = s.datasets.find((d) => d.id === datasetId);
+        const priorDs = prevDataset(s, win.datasetId);
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
-            w.id === windowId ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds) } } : w,
+            w.id === windowId
+              ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds, priorDs) } }
+              : w,
           ),
         }));
       }
@@ -502,15 +542,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const worksheetSelections = dropWorksheetSelection(s.worksheetSelections, id); // #14: no leak
         if (s.focusedWindowId !== id) return { plotWindows: remaining, worksheetSelections };
         const next = remaining.filter((w) => w.kind === "plot").reduce((a, b) => (b.z > a.z ? b : a));
-        return {
-          plotWindows: remaining,
-          worksheetSelections,
-          focusedWindowId: next.id,
-          activeId: next.datasetId,
-          selectedIds: next.datasetId ? [next.datasetId] : [],
-          ...hydrateView(next.view),
-          ...focusTransientReset(),
-        };
+        return _focusHandoff(
+          { plotWindows: remaining, worksheetSelections },
+          next.id,
+          next.datasetId,
+          next.view,
+        );
       })),
     // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
     // currently-focused window's LIVE view into its record, then hydrate the
@@ -540,14 +577,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === id) return { ...w, z: raised };
           return w;
         });
-        return {
-          plotWindows,
-          focusedWindowId: id,
-          activeId: target.datasetId,
-          selectedIds: target.datasetId ? [target.datasetId] : [],
-          ...hydrateView(target.view),
-          ...focusTransientReset(),
-        };
+        return _focusHandoff({ plotWindows }, id, target.datasetId, target.view);
       }),
     duplicateWindow: (id) => {
       const s = get();
@@ -619,31 +649,13 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
         if (visible.length < 2) return {};
         const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
-        const geoms = tileLayout(visible.length, bounds);
-        let i = 0;
-        return {
-          plotWindows: s.plotWindows.map((w) => {
-            if (w.winState === "minimized") return w;
-            const placed = { ...w, winState: "normal" as WinState, geometry: geoms[i], z: i + 1 };
-            i++;
-            return placed;
-          }),
-        };
+        return _relayoutVisible(s, tileLayout(visible.length, bounds));
       })),
     cascadeWindows: () => (get().recordHistory("cascade windows"),
       set((s) => {
         const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
         if (visible.length < 2) return {};
-        const geoms = cascadeLayout(visible.length);
-        let i = 0;
-        return {
-          plotWindows: s.plotWindows.map((w) => {
-            if (w.winState === "minimized") return w;
-            const placed = { ...w, winState: "normal" as WinState, geometry: geoms[i], z: i + 1 };
-            i++;
-            return placed;
-          }),
-        };
+        return _relayoutVisible(s, cascadeLayout(visible.length));
       })),
     // Minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE
     // window — `closeWindow`'s exact refocus formula, but the window stays IN
@@ -668,14 +680,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         );
         if (candidates.length === 0) return { plotWindows };
         const next = candidates.reduce((a, b) => (b.z > a.z ? b : a));
-        return {
-          plotWindows,
-          focusedWindowId: next.id,
-          activeId: next.datasetId,
-          selectedIds: next.datasetId ? [next.datasetId] : [],
-          ...hydrateView(next.view),
-          ...focusTransientReset(),
-        };
+        return _focusHandoff({ plotWindows }, next.id, next.datasetId, next.view);
       })),
     // Restore + focus a minimized window in one step — clicking a strip entry
     // is "bring this back and make it live" (a taskbar button, not just an
@@ -703,14 +708,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
           return w;
         });
-        return {
-          plotWindows,
-          focusedWindowId: id,
-          activeId: target.datasetId,
-          selectedIds: target.datasetId ? [target.datasetId] : [],
-          ...hydrateView(target.view),
-          ...focusTransientReset(),
-        };
+        return _focusHandoff({ plotWindows }, id, target.datasetId, target.view);
       })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->

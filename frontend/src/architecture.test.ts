@@ -167,7 +167,15 @@ const STORE_PINS: Record<string, number> = {
   // aggregator (36 lines + slack). Add a new command to its owning
   // commands/*.ts module, not here.
   "/appCommands.ts": 56,
-  "/store/windows.ts": 751,
+  // 751 -> 749 (2026-07-31, PLOT_WORKFLOW_PLAN item 2): datasetViewDefaults
+  // gained a `prevDs` param + the technique-defaults spread (item 1's
+  // `metadata.technique` -> lib/techniqueDefaults.ts's axis-scale table),
+  // paid for by consolidating tileWindows/cascadeWindows' identical relayout
+  // body into `_relayoutVisible` and closeWindow/focusWindow/minimizeWindow/
+  // restoreWindow's identical "hydrate + clear transient state" tail into
+  // `_focusHandoff` — four call sites sharing one focus-patch shape instead
+  // of repeating it.
+  "/store/windows.ts": 749,
 };
 
 describe("store-size ratchet (MAIN_PLAN #2)", () => {
