@@ -36,7 +36,8 @@ from quantized.io.origin_project.graph_preview import (
 from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._payload import datastruct_payload, jsonify
-from quantized.routes._uploadcache import stage_upload
+from quantized.routes._uploadcache import stage_upload_stream
+from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
 
@@ -290,27 +291,31 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
 async def upload_file(file: UploadFile, full_books: bool = False) -> dict[str, Any]:
     """Import an uploaded data file (browser file-picker / drag-drop).
 
-    The bytes are staged under the original *basename* (so the extension
-    still drives format dispatch, and ``..`` path parts can't escape). An
-    Origin project (``.opj``/``.opju``) is staged PERSISTENTLY (bounded LRU,
-    see ``_uploadcache``) instead of in an ephemeral temp dir, because a lazy
-    multi-book import (#38, the default — pass ``?full_books=true`` for the
-    old inline-everything behaviour) needs the bytes to still be around when
-    the browser later activates a non-primary book and fetches its full data
+    The bytes are streamed to disk in bounded chunks (``_uploadstream``,
+    ROBUSTNESS_PLAN #3) rather than read whole into memory, under the
+    original *basename* (so the extension still drives format dispatch, and
+    ``..`` path parts can't escape). An Origin project (``.opj``/``.opju``)
+    is staged PERSISTENTLY (bounded LRU, see ``_uploadcache``) instead of in
+    an ephemeral temp dir, because a lazy multi-book import (#38, the
+    default — pass ``?full_books=true`` for the old inline-everything
+    behaviour) needs the bytes to still be around when the browser later
+    activates a non-primary book and fetches its full data
     (``/api/parsers/books/data``). Every other upload keeps the ephemeral
     temp dir: it's deleted before this handler returns, since nothing needs
-    it afterwards.
+    it afterwards. An upload past ``_uploadstream.MAX_UPLOAD_BYTES`` is
+    rejected with HTTP 413 before it fully lands on disk.
     """
     name = Path(file.filename or "upload.dat").name or "upload.dat"
-    content = await file.read()
     suffix = Path(name).suffix.lower()
     try:
         if suffix in (".opj", ".opju"):
-            dest, token = stage_upload(name, content)
+            dest, token = await stage_upload_stream(name, file)
             return _import_with_books(dest, full_books=full_books, upload_token=token)
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
-            dest.write_bytes(content)
+            await stream_to_path(file, dest, filename=name)
             return _import_with_books(dest, full_books=full_books)
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except (ValueError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
