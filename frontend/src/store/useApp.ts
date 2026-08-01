@@ -41,6 +41,7 @@ import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
 import { mergeWorkspace, type LoadedWorkspace, type WorkspaceState } from "../lib/workspace";
+import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import {
   doubleYPartner,
   figureChannelSelection,
@@ -68,6 +69,7 @@ import {
   createWindowsSlice,
   datasetViewDefaults,
   focusedRebindPatch,
+  focusTransientReset,
   mainWindow,
   retargetPassiveRebind,
   type WindowsSlice,
@@ -1629,7 +1631,6 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: restoredView ? restoredView.yLim : null,
         xStep: restoredView ? restoredView.xStep : null,
         yStep: restoredView ? restoredView.yStep : null,
-        composition: null, // #54 — ephemeral; never restored from a stale apply
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
@@ -1637,21 +1638,13 @@ export const useApp = create<AppState>((set, get) => ({
         // NOT baselineAnchorEdit: the useBaseline hook owns it and re-pushes
         // (with a cleared anchor list) on dataset change — nulling it here
         // would fight that effect's cleanup ordering.
-        rsmPeaks: null,
-        integral: null,
-        fwhmResult: null,
-        qfitRoi: null,
-        qfitResult: null,
-        qfitBusy: false,
-        qfitError: null,
-        gadgetBusy: false,
-        gadgetError: null,
-        gadgetIntegrateResult: null,
-        gadgetStatsResult: null,
-        gadgetDerivResult: null,
-        gadgetFftPreview: null,
-        gadgetCursors: null,
-        gadgetCursorResult: null,
+        // `composition` (#54, ephemeral) + rsmPeaks..gadgetCursorResult — the
+        // SAME transient-tool clear a dataset/focus switch applies elsewhere
+        // (windows.ts's `focusTransientReset`); one field list to maintain.
+        ...focusTransientReset(),
+        // PLOT_WORKFLOW_PLAN item 5: additive — absent on a pre-item-5 .dwk
+        // sanitizes to {} (lib/workspace.ts's own undefined-input path).
+        techniqueViewMemory: sanitizeTechniqueViewMemory(ws.techniqueViewMemory),
         plotWindows,
         focusedWindowId,
         // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by

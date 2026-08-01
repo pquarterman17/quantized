@@ -6,18 +6,19 @@
 
 import { describe, expect, it } from "vitest";
 
+import { captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import type { Dataset } from "../lib/types";
 import { datasetViewDefaults } from "./windows";
 
-function ds(technique: string, metadataExtra: Record<string, unknown> = {}): Dataset {
+function ds(technique: string, metadataExtra: Record<string, unknown> = {}, labels: string[] = ["Y"]): Dataset {
   return {
     id: "d1",
     name: "test",
     data: {
       time: [0, 1, 2],
-      values: [[1], [2], [3]],
-      labels: ["Y"],
-      units: [""],
+      values: labels.map(() => [1, 2, 3]),
+      labels,
+      units: labels.map(() => ""),
       metadata: { technique, ...metadataExtra },
     },
   };
@@ -76,5 +77,62 @@ describe("datasetViewDefaults — technique-change gating (log axes survive a sa
 
   it("an omitted prevDs (fresh import/split/reimport) always counts as a change", () => {
     expect(datasetViewDefaults(ds("xrd.powder"), undefined).yScale).toBe("log");
+  });
+});
+
+// PLOT_WORKFLOW_PLAN item 5: memory > technique defaults > density heuristic.
+// datasetViewDefaults's 3rd `memory` param is the store-facing precedence
+// point; lib/techniqueViewMemory.test.ts covers the capture/apply/re-key
+// logic itself in isolation.
+describe("datasetViewDefaults — per-technique view memory (item 5)", () => {
+  it("a resolved memory entry wins over the blank reset AND item 2's technique defaults", () => {
+    const first = ds("xrd.powder", {}, ["2theta", "Intensity"]);
+    const memory = captureTechniqueView(
+      first,
+      { xKey: 0, yKeys: [1], yScale: "log", xScale: "linear", seriesStyles: { 1: { color: "red" } }, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [] },
+      {},
+    );
+    const second = ds("xrd.powder", {}, ["2theta", "Intensity"]);
+    const patch = datasetViewDefaults(second, first, memory);
+    expect(patch.xKey).toBe(0);
+    expect(patch.yKeys).toEqual([1]);
+    expect(patch.seriesStyles).toEqual({ 1: { color: "red" } });
+  });
+
+  it("no memory yet for the technique falls through to today's blank reset + technique defaults", () => {
+    const patch = datasetViewDefaults(ds("xrd.powder"), undefined, {});
+    expect(patch.yKeys).toBeNull();
+    expect(patch.yScale).toBe("log"); // item 2's table, unaffected by an empty memory map
+  });
+
+  it("a shape-mismatched memory entry (yKeys resolve to nothing) resets exactly like no memory at all", () => {
+    const first = ds("xrd.powder", {}, ["2theta", "Intensity"]);
+    const memory: TechniqueViewMemoryMap = captureTechniqueView(
+      first,
+      { xKey: 0, yKeys: [1], yScale: "log", xScale: "linear", seriesStyles: {}, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [] },
+      {},
+    );
+    // A same-technique dataset with completely different columns: the shape
+    // mismatch falls through to item 2's isTechniqueChange gate — SAME
+    // technique means yScale is left alone (undefined), exactly like the
+    // pre-item-5 "log axes survive a same-technique switch" contract.
+    const mismatched = ds("xrd.powder", {}, ["Time", "Counts"]);
+    const patch = datasetViewDefaults(mismatched, first, memory);
+    expect(patch.yKeys).toBeNull(); // the blank reset, not a bogus empty-array yKeys
+    expect(patch.yScale).toBeUndefined();
+
+    // A shape mismatch INTO a genuinely different technique still reapplies
+    // that technique's own defaults (isTechniqueChange is true either way).
+    const vsm = ds("magnetometry.mvsh", {}, ["Field", "Moment"]);
+    const vsmPatch = datasetViewDefaults(vsm, first, memory);
+    expect(vsmPatch.yKeys).toBeNull();
+    expect(vsmPatch.yScale).toBe("linear");
+  });
+
+  it("generic never consults memory even if a caller hand-crafts a 'generic' entry", () => {
+    const memory = { generic: { xKey: 0, yKeys: [0], yScale: "log" as const, xScale: "linear" as const, seriesStyles: {}, seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [], labels: { 0: "Y" } } };
+    const patch = datasetViewDefaults(ds("generic"), undefined, memory);
+    expect(patch.yKeys).toBeNull(); // untouched by the hand-crafted entry
+    expect(patch.yScale).toBeUndefined();
   });
 });

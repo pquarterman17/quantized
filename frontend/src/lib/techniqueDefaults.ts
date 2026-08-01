@@ -29,6 +29,14 @@ const TECHNIQUES = new Set<Technique>([
   "generic",
 ]);
 
+/** Whether `v` is one of the closed technique-tag strings -- exported so
+ *  `lib/techniqueViewMemory.ts`'s `.dwk` sanitizer can validate a persisted
+ *  memory map's keys against the SAME vocabulary `techniqueOf` narrows to,
+ *  never a second, drifting list. */
+export function isValidTechnique(v: string): v is Technique {
+  return TECHNIQUES.has(v as Technique);
+}
+
 /** Narrow `ds.data.metadata.technique` (`unknown` off the wire) to the closed
  *  vocabulary, defaulting to `"generic"` for a missing/unrecognized tag (an
  *  import predating item 1, a plugin parser, or the manual import-wizard

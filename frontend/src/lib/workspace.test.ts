@@ -1050,6 +1050,60 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
   });
 });
 
+describe("workspace per-technique view memory (PLOT_WORKFLOW_PLAN item 5)", () => {
+  const memory = {
+    "xrd.powder": {
+      xKey: 0,
+      yKeys: [1],
+      yScale: "log" as const,
+      xScale: "linear" as const,
+      seriesStyles: { 1: { color: "red" } },
+      seriesLabels: {},
+      seriesOrder: null,
+      errKeys: {},
+      hiddenChannels: [],
+      labels: { 0: "2theta", 1: "Intensity" },
+    },
+  };
+
+  it("round-trips a populated memory map unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, techniqueViewMemory: memory }));
+    expect(loaded.techniqueViewMemory).toEqual(memory);
+  });
+
+  it("a legacy workspace with no techniqueViewMemory field loads unchanged, defaulting to {}", () => {
+    // Serialize an OLD-shaped doc by stripping the field after the fact —
+    // simulates a .dwk written before item 5 ever existed.
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")] }),
+    ) as Record<string, unknown>;
+    delete doc.techniqueViewMemory;
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.techniqueViewMemory).toEqual({});
+    expect(loaded.datasets).toHaveLength(1); // the rest of the doc is unaffected
+  });
+
+  it("never throws on a hand-edited non-object techniqueViewMemory", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.techniqueViewMemory = "not an object";
+    expect(parseWorkspace(JSON.stringify(doc)).techniqueViewMemory).toEqual({});
+  });
+
+  it("drops a 'generic' entry and an unrecognized technique key on load", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], techniqueViewMemory: memory }),
+    ) as Record<string, unknown>;
+    (doc.techniqueViewMemory as Record<string, unknown>).generic = memory["xrd.powder"];
+    (doc.techniqueViewMemory as Record<string, unknown>)["some.future.tag"] = memory["xrd.powder"];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(Object.keys(loaded.techniqueViewMemory)).toEqual(["xrd.powder"]);
+  });
+});
+
 describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
   // A minimal LoadedWorkspace wrapper — mergeWorkspace only ever reads
   // `.datasets` (see its doc for why every other field is ignored).
@@ -1071,6 +1125,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       focusedWindowId: null,
       toolWindowLayout: {},
       savedPlotSpecs: [],
+      techniqueViewMemory: {},
     };
   }
 

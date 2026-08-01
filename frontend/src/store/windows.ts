@@ -19,6 +19,7 @@
 
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
+import { applyTechniqueMemory, captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -49,6 +50,10 @@ export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_w
  *  every action that raises a window (focus/raise/create/duplicate). */
 export const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
+/** `dedupeWindowTitle(base, ...)` against every window's CURRENTLY DISPLAYED title (item 10). */
+function dedupeAgainstDisplayed(s: AppState, base: string): string {
+  return dedupeWindowTitle(base, s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)));
+}
 /** Tile/Cascade's shared body (item 6): place every VISIBLE window into
  *  `geoms` in z-order, un-maximizing it; minimized windows pass through. */
 function _relayoutVisible(s: AppState, geoms: readonly WindowGeometry[]): Partial<AppState> {
@@ -139,7 +144,8 @@ export function focusTransientReset(): Partial<AppState> {
  *  (`lib/techniqueDefaults.isTechniqueChange`), so log axes still survive a
  *  same-technique switch; an omitted `prevDs` (import/split/reimport) always
  *  counts as a change — there's no prior view worth preserving. */
-export function datasetViewDefaults(ds: Dataset | undefined, prevDs?: Dataset): Partial<PlotView> {
+export function datasetViewDefaults(ds: Dataset | undefined, prevDs?: Dataset, memory: TechniqueViewMemoryMap = {}): Partial<PlotView> {
+  const remembered = applyTechniqueMemory(ds, memory);
   return {
     xKey: null, // new dataset → x-axis back to .time
     yKeys: null, // new dataset → plot all its channels
@@ -157,7 +163,8 @@ export function datasetViewDefaults(ds: Dataset | undefined, prevDs?: Dataset): 
     yLim: null,
     xStep: null,
     yStep: null,
-    ...(isTechniqueChange(ds, prevDs) ? techniqueViewDefaults(ds) : {}),
+    // Item 5: memory > technique defaults > density heuristic (lib/techniqueViewMemory.ts).
+    ...(remembered ?? (isTechniqueChange(ds, prevDs) ? techniqueViewDefaults(ds) : {})),
   };
 }
 
@@ -172,6 +179,10 @@ const prevDataset = (s: AppState, id: string | null): Dataset | undefined =>
  *  per-field reasoning that used to live inline here. */
 export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   const ds = s.datasets.find((d) => d.id === id);
+  // Item 5: capture the OUTGOING view into its technique's memory slot
+  // before computing the incoming patch (unused on the no-op path below).
+  const prevDs = prevDataset(s, s.activeId);
+  const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
   return {
     activeId: id,
     // A full plot-intent activation always drops any worksheet-only override
@@ -192,7 +203,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // it always means "show me the plot", so it uses `plotIntentStageTab`
     // (never sticks on a stale Worksheet tab; owner-routing item 1).
     stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
-    ...(s.activeId === id ? {} : datasetViewDefaults(ds, prevDataset(s, s.activeId))), // #12 slice 4b: a GENUINE dataset switch resets channel-keyed defaults; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
+    ...(s.activeId === id ? {} : { ...datasetViewDefaults(ds, prevDs, memory), techniqueViewMemory: memory }), // #12 slice 4b + item 5: a GENUINE dataset switch resets channel-keyed defaults (or applies technique memory) AND commits the capture above; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
     // A plain click on a different dataset always drops a prior spatial
     // multi-panel arrangement (decode-plan #36) — it was built for a specific
     // figure's layers, not whatever is now active. Same for facet/x-break
@@ -224,13 +235,7 @@ export function retargetPassiveRebind(s: AppState, datasetId: string, titleBase?
     s.focusWindow(candidates.reduce((a, b) => (b.z > a.z ? b : a)).id);
     return;
   }
-  const title =
-    titleBase !== undefined
-      ? dedupeWindowTitle(
-          titleBase,
-          s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-        )
-      : undefined;
+  const title = titleBase !== undefined ? dedupeAgainstDisplayed(s, titleBase) : undefined;
   s.focusWindow(s.createWindow(datasetId, undefined, title));
 }
 
@@ -247,6 +252,8 @@ export interface WindowsSlice {
   // null while any window exists.
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
+  // Item 5: per-technique last-used view (lib/techniqueViewMemory.ts); `.dwk`-persisted, additive.
+  techniqueViewMemory: TechniqueViewMemoryMap;
   // The Plot tab's current on-screen canvas size (item 6 — Tile/Cascade need
   // real pixel bounds to compute a layout; the WindowCanvas ResizeObserver is
   // the sole writer, via `setPlotCanvasBounds`). Null while the Plot tab
@@ -362,6 +369,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
   return {
     plotWindows: [_mainWindow],
     focusedWindowId: _mainWindow.id,
+    techniqueViewMemory: {},
     plotCanvasBounds: null,
     createWindow: (datasetId, view, title) => {
       const id = nextWindowId();
@@ -376,9 +384,9 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // figure's own label) skips this computation entirely.
         const resolvedTitle =
           title ??
-          dedupeWindowTitle(
+          dedupeAgainstDisplayed(
+            s,
             boundId ? (s.datasets.find((d) => d.id === boundId)?.name ?? "Untitled graph") : "Untitled graph",
-            s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
           );
         const win: PlotWindow = {
           id,
@@ -409,10 +417,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       if (!src) return null;
       get().recordHistory("create snapshot window");
       const id = nextWindowId();
-      const title = dedupeWindowTitle(
-        `Snapshot — ${displayedWindowTitle(src, s.datasets)}`,
-        s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-      );
+      const title = dedupeAgainstDisplayed(s, `Snapshot — ${displayedWindowTitle(src, s.datasets)}`);
       const win: PlotWindow = {
         id,
         kind: "snapshot",
@@ -444,10 +449,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const ds = s.datasets.find((d) => d.id === datasetId) ?? null;
       const id = nextWindowId();
       get().recordHistory(`create ${kind} window`);
-      const title = dedupeWindowTitle(
-        ds?.name ?? "Untitled",
-        s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-      );
+      const title = dedupeAgainstDisplayed(s, ds?.name ?? "Untitled");
       const win: PlotWindow = {
         id,
         kind,
@@ -507,16 +509,17 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         set((st) => focusedRebindPatch(st, datasetId));
       } else {
         // A background window's view is at rest in its record: rebind + reset
-        // it to the same dataset-derived defaults, leaving focus, activeId,
-        // and the live singleton fields untouched.
+        // it to the same/memory-derived defaults, leaving focus untouched.
         const ds = s.datasets.find((d) => d.id === datasetId);
         const priorDs = prevDataset(s, win.datasetId);
+        const memory = captureTechniqueView(priorDs, win.view, s.techniqueViewMemory); // item 5
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId
-              ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds, priorDs) } }
+              ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds, priorDs, memory) } }
               : w,
           ),
+          techniqueViewMemory: memory,
         }));
       }
       // #38: a drop is an activation-shaped gesture — cover the lazy-book
@@ -591,10 +594,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       // Item 10: try the source's OWN displayed title first, deduped against
       // every window's current display — "Comparison" duplicated once becomes
       // "Comparison (2)", not an indistinguishable second "Comparison".
-      const title = dedupeWindowTitle(
-        displayedWindowTitle(src, s.datasets),
-        s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-      );
+      const title = dedupeAgainstDisplayed(s, displayedWindowTitle(src, s.datasets));
       const dup: PlotWindow = {
         id: newId,
         // Item 11: duplicating a snapshot window yields another snapshot
