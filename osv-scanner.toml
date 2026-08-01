@@ -1,0 +1,87 @@
+# Triaged-advisory register for the weekly vuln sweep
+# (.github/workflows/vuln-sweep.yml, ROBUSTNESS #6).
+#
+# Every entry is a dated, deliberate decision. A red sweep run means a NEW
+# advisory appeared that no entry covers — triage it (fix / book a plan row /
+# add an entry here with a dated rationale), never leave the sweep red.
+# All current entries clear automatically when Tauri's Linux stack moves off
+# the gtk3 / glib 0.18 line (gtk-rs 0.20+): the ordinary lockfile bump drops
+# the affected crates.
+
+# glib unsoundness (VariantStrIter Iterator/DoubleEndedIterator impls).
+# Mirrors the 2026-07-25 Dependabot dismissal as tolerable_risk: patched in
+# glib 0.20.0 but the chain is glib 0.18.5 <- gtk 0.18.2 <- tauri 2 (current
+# latest; its Linux backend has not moved to glib 0.20). Linux-only (.deb
+# artifact), never called directly by quantized. Alias GHSA-wrw7-89jp-8q8g.
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+reason = "2026-08-01: mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
+
+# gtk3-rs bindings are unmaintained upstream (announced 2024) — advisory
+# notices, not vulnerabilities. They are Tauri v2's Linux backend, reached
+# only through tauri = "2" (current latest), shipped only in the .deb.
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0411"
+reason = "2026-08-01: gdkwayland-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0412"
+reason = "2026-08-01: gdk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0413"
+reason = "2026-08-01: atk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0414"
+reason = "2026-08-01: gdkx11-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0415"
+reason = "2026-08-01: gtk — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0416"
+reason = "2026-08-01: atk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0417"
+reason = "2026-08-01: gdkx11 — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0418"
+reason = "2026-08-01: gdk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0419"
+reason = "2026-08-01: gtk3-macros — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0420"
+reason = "2026-08-01: gtk-sys — unmaintained gtk3 bindings via Tauri v2 Linux backend; no vulnerability, no compatible alternative"
+
+# Unmaintained-crate notices deeper in Tauri's tree — build-time or
+# pattern-matching helpers, no known vulnerability, no fix released.
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+reason = "2026-08-01: proc-macro-error — unmaintained build-time proc-macro crate in Tauri's tree; no vulnerability"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0075"
+reason = "2026-08-01: unic-char-range — unmaintained unic project crate in Tauri's tree; no vulnerability"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0080"
+reason = "2026-08-01: unic-common — unmaintained unic project crate in Tauri's tree; no vulnerability"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0081"
+reason = "2026-08-01: unic-char-property — unmaintained unic project crate in Tauri's tree; no vulnerability"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0098"
+reason = "2026-08-01: unic-ucd-version — unmaintained unic project crate in Tauri's tree; no vulnerability"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0100"
+reason = "2026-08-01: unic-ucd-ident — unmaintained unic project crate in Tauri's tree; no vulnerability"

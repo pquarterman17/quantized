@@ -1,0 +1,50 @@
+# ROBUSTNESS #6: standing check on transitive vulnerability surface.
+#
+# Why this exists: the repo enforces a dependency POLICY (Apache-2.0, no GPL)
+# but nothing watched for CVEs in packages it never declared — 13 of the 14
+# alerts closed on 2026-07-24 arrived through pillow, a transitive dep of
+# matplotlib that routes/export renders user data through.
+#
+# Why not `gh api .../dependabot/alerts`: the Actions GITHUB_TOKEN cannot read
+# the Dependabot alerts API — it 403s even with `security-events: read`
+# (https://github.com/orgs/community/discussions/60612); only a PAT/GitHub App
+# with the Dependabot-alerts permission can. Instead of minting a credential to
+# rotate, this scans the three lockfiles directly against the OSV database
+# (osv.dev aggregates GHSA + PyPA + RUSTSEC — the same sources Dependabot
+# reads), which needs no token at all.
+#
+# Failure semantics: a red run means an advisory appeared that osv-scanner.toml
+# does not cover. Triage it: fix (bump the lockfile), book (a plan row), or
+# ignore with a dated rationale in osv-scanner.toml — never leave it red.
+name: vuln-sweep
+
+on:
+  schedule:
+    # Weekly, Monday 14:00 UTC. A failed run emails the workflow author.
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+# Least privilege: the sweep only reads the lockfiles.
+permissions:
+  contents: read
+
+jobs:
+  osv-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install osv-scanner v2.4.0 (pinned by sha256)
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/osv-scanner" \
+            https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64
+          echo "15314940c10d26af9c6649f150b8a47c1262e8fc7e17b1d1029b0e479e8ed8a0  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+      - name: Scan lockfiles against OSV
+        # Explicit -L list, not --recursive: the scanned surface is the three
+        # lockfiles that ship code (Python runtime, frontend bundle, Tauri
+        # shell). Exit 1 on any finding not ignored in osv-scanner.toml.
+        run: |
+          "$RUNNER_TEMP/osv-scanner" scan source --config=osv-scanner.toml \
+            -L uv.lock \
+            -L frontend/package-lock.json \
+            -L src-tauri/Cargo.lock
