@@ -7,6 +7,7 @@ import { useEffect } from "react";
 
 import { autosaveHealth, loadAutosave, saveAutosave } from "./lib/autosave";
 import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
+import { captureTechniqueView } from "./lib/techniqueViewMemory";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
@@ -112,8 +113,15 @@ export function useWorkspaceAutosave(): void {
         const s = useApp.getState();
         // `windowsForSave()` freezes the FOCUSED window's live view into its
         // record first (the plan's "save is one of the three sanctioned
-        // snapshot points") — never persist `s.plotWindows` raw.
-        void saveAutosave({ ...s, plotWindows: s.windowsForSave() }).then((ok) => {
+        // snapshot points") — never persist `s.plotWindows` raw. Item 5's
+        // `captureTechniqueView` does the same freshening for the technique
+        // memory map (workspaceIO.ts's explicit Save uses the identical call).
+        const techniqueViewMemory = captureTechniqueView(
+          s.datasets.find((d) => d.id === s.activeId),
+          s,
+          s.techniqueViewMemory,
+        );
+        void saveAutosave({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory }).then((ok) => {
           // #32: report through the store so the warning PERSISTS until the
           // next successful save, instead of a status line that scrolls away.
           reportAutosaveHealth(autosaveHealth());

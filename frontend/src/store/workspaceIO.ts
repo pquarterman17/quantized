@@ -11,6 +11,7 @@
 // not exist on another machine or after a server restart.
 
 import { saveBlob } from "../lib/download";
+import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { serializeWorkspace } from "../lib/workspace";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -35,8 +36,17 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       return;
     }
   }
+  const s = get();
+  // PLOT_WORKFLOW_PLAN item 5: fold the FOCUSED window's still-live view into
+  // its technique's memory slot before saving — mirrors `windowsForSave()`'s
+  // "save is a sanctioned snapshot point" so unswitched-away edits aren't lost.
+  const techniqueViewMemory = captureTechniqueView(
+    s.datasets.find((d) => d.id === s.activeId),
+    s,
+    s.techniqueViewMemory,
+  );
   saveBlob(
-    new Blob([serializeWorkspace({ ...get(), plotWindows: get().windowsForSave() })], {
+    new Blob([serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory })], {
       type: "application/json",
     }),
     "workspace.dwk",

@@ -12,6 +12,7 @@ import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import { sanitizePlotWindows, type PlotWindow } from "./plotview";
+import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
@@ -68,6 +69,9 @@ export interface WorkspaceState {
   toolWindowLayout?: Record<string, ToolWindowLayout>;
   /** GUI_INTERACTION_PLAN #11 — every named saved Graph Builder spec. */
   savedPlotSpecs?: SavedPlotSpec[];
+  /** PLOT_WORKFLOW_PLAN item 5 — per-technique last-used view. Additive; a
+   *  caller (or a pre-item-5 .dwk) with no field loads as `{}`. */
+  techniqueViewMemory?: TechniqueViewMemoryMap;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -89,6 +93,7 @@ export interface LoadedWorkspace {
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
   savedPlotSpecs: SavedPlotSpec[];
+  techniqueViewMemory: TechniqueViewMemoryMap;
 }
 
 interface WorkspaceDoc {
@@ -111,6 +116,7 @@ interface WorkspaceDoc {
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
   savedPlotSpecs: SavedPlotSpec[];
+  techniqueViewMemory: TechniqueViewMemoryMap;
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -138,6 +144,10 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     focusedWindowId: ws.focusedWindowId ?? null,
     toolWindowLayout: ws.toolWindowLayout ?? {},
     savedPlotSpecs: ws.savedPlotSpecs ?? [],
+    // PLOT_WORKFLOW_PLAN item 5: passed through verbatim, same convention as
+    // `plotWindows` above — the caller (windowsForSave()'s save-time-freshen
+    // sibling, `captureTechniqueView` applied to the live view) owns the fold.
+    techniqueViewMemory: ws.techniqueViewMemory ?? {},
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -536,6 +546,10 @@ export function parseWorkspace(
   // field) sanitizes to [] via the same undefined-input path every other
   // sanitizer here already handles — a legacy .dwk loads unchanged.
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
+  // PLOT_WORKFLOW_PLAN item 5: additive-optional like savedPlotSpecs above —
+  // a pre-item-5 doc (absent field) sanitizes to {} via the same
+  // undefined-input path every other sanitizer here already handles.
+  const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   return {
     datasets,
     folders,
@@ -553,6 +567,7 @@ export function parseWorkspace(
     focusedWindowId,
     toolWindowLayout,
     savedPlotSpecs,
+    techniqueViewMemory,
   };
 }
 

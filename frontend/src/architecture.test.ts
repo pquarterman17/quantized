@@ -155,7 +155,12 @@ const STORE_PINS: Record<string, number> = {
   // expansion, folder planning and figures/fidelity handling rather than
   // duplicating ~90 lines of it — two copies of that branch would drift, and
   // it is exactly where drift would be expensive and hard to notice.
-  "/store/useApp.ts": 2875,
+  // 2875 -> 2868 (2026-08-01, PLOT_WORKFLOW_PLAN item 5): `loadWorkspace`'s
+  // hand-repeated transient-tool-clear block (composition/rsmPeaks..
+  // gadgetCursorResult) — a field-for-field duplicate of windows.ts's
+  // `focusTransientReset()` — replaced with `...focusTransientReset()`,
+  // funding the new `techniqueViewMemory` restore line at a net loss.
+  "/store/useApp.ts": 2868,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -175,6 +180,12 @@ const STORE_PINS: Record<string, number> = {
   // restoreWindow's identical "hydrate + clear transient state" tail into
   // `_focusHandoff` — four call sites sharing one focus-patch shape instead
   // of repeating it.
+  // 749 -> 749 (2026-08-01, PLOT_WORKFLOW_PLAN item 5, per-technique view
+  // memory): `datasetViewDefaults` gained a `memory` param + the
+  // capture/apply wiring at both rebind call sites (lib/techniqueViewMemory.ts
+  // owns the actual logic), paid for by extracting the FIVE repeated
+  // `dedupeWindowTitle(x, s.plotWindows.map(...))` call sites into one
+  // `dedupeAgainstDisplayed` helper — net zero, ceiling unchanged.
   "/store/windows.ts": 749,
 };
 

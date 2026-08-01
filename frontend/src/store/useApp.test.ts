@@ -788,6 +788,74 @@ describe("useApp x-axis channel", () => {
   });
 });
 
+// PLOT_WORKFLOW_PLAN item 5, end-to-end through the real store (setActive ->
+// windows.ts's focusedRebindPatch, the actual capture/apply call site).
+// lib/techniqueViewMemory.test.ts covers the pure logic; store/windows.test.ts
+// covers datasetViewDefaults's precedence directly — this proves the wiring.
+describe("useApp per-technique view memory (PLOT_WORKFLOW_PLAN item 5)", () => {
+  const xrdData = (labels: string[]): DataStruct => ({
+    time: [0, 1, 2],
+    values: labels.map(() => [0, 1, 2]),
+    labels,
+    units: labels.map(() => ""),
+    metadata: { technique: "xrd.powder" },
+  });
+  const vsmData: DataStruct = {
+    time: [0, 1, 2],
+    values: [[0, 1, 2]],
+    labels: ["Moment"],
+    units: [""],
+    metadata: { technique: "magnetometry.mvsh" },
+  };
+
+  beforeEach(() => {
+    useApp.setState({ techniqueViewMemory: {} }); // no leakage from another test's capture
+  });
+
+  it("switching between two same-technique datasets carries the view over", () => {
+    useApp.setState({
+      datasets: [
+        { id: "x1", name: "scan1", data: xrdData(["2theta", "Intensity"]) },
+        { id: "x2", name: "scan2", data: xrdData(["2theta", "Intensity"]) },
+      ],
+      activeId: "x1",
+    });
+    useApp.getState().setXKey(0);
+    useApp.getState().setYKeys([1]);
+    useApp.getState().setYScale("log");
+    useApp.getState().setSeriesStyle(1, { color: "red" });
+
+    useApp.getState().setActive("x2");
+    expect(useApp.getState().xKey).toBe(0);
+    expect(useApp.getState().yKeys).toEqual([1]);
+    expect(useApp.getState().yScale).toBe("log");
+    expect(useApp.getState().seriesStyles).toEqual({ 1: { color: "red" } });
+  });
+
+  it("each technique keeps its OWN memory — a round trip through a different technique doesn't leak", () => {
+    useApp.setState({
+      datasets: [
+        { id: "x1", name: "scan1", data: xrdData(["2theta", "Intensity"]) },
+        { id: "v1", name: "loop1", data: vsmData },
+      ],
+      activeId: "x1",
+    });
+    useApp.getState().setXKey(0);
+    useApp.getState().setYKeys([1]);
+    useApp.getState().setYScale("log");
+
+    useApp.getState().setActive("v1"); // technique change -> item 2's linear default, no memory yet
+    expect(useApp.getState().yScale).toBe("linear");
+    expect(useApp.getState().yKeys).toBeNull();
+    useApp.getState().setYKeys([0]); // VSM's own customization
+
+    useApp.getState().setActive("x1"); // back to XRD -> ITS OWN memory returns, untouched by VSM
+    expect(useApp.getState().xKey).toBe(0);
+    expect(useApp.getState().yKeys).toEqual([1]);
+    expect(useApp.getState().yScale).toBe("log");
+  });
+});
+
 describe("useApp error-bar pairings", () => {
   it("sets and clears a channel's error pairing", () => {
     useApp.setState({ errKeys: {} });
@@ -3212,6 +3280,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       focusedWindowId: null,
       toolWindowLayout: {},
       savedPlotSpecs: [],
+      techniqueViewMemory: {},
     };
   }
 
