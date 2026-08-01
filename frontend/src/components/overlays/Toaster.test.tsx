@@ -30,4 +30,26 @@ describe("Toaster", () => {
     fireEvent.click(screen.getByText("tap me"));
     expect(useToasts.getState().toasts).toHaveLength(0);
   });
+
+  it("renders an action button when the toast carries one", () => {
+    const onClick = vi.fn();
+    useToasts.getState().push("overlay?", "ok", { action: { label: "Overlay", onClick } });
+    render(<Toaster />);
+    expect(screen.getByRole("button", { name: "Overlay" })).toBeInTheDocument();
+  });
+
+  it("clicking the action fires its callback and dismisses the toast", () => {
+    const onClick = vi.fn();
+    useToasts.getState().push("overlay?", "ok", { action: { label: "Overlay", onClick } });
+    render(<Toaster />);
+    fireEvent.click(screen.getByRole("button", { name: "Overlay" }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+
+  it("a toast with no action renders no button", () => {
+    useToasts.getState().push("plain");
+    render(<Toaster />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
 });
