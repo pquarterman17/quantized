@@ -59,6 +59,32 @@ def test_upload_unknown_format_422() -> None:
     assert resp.status_code == 422
 
 
+def test_upload_over_cap_returns_413(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ROBUSTNESS_PLAN #3: an upload past the byte cap is rejected with 413
+    before it's fully written to disk, on the ordinary (non-Origin) branch."""
+    from quantized.routes import _uploadstream
+
+    monkeypatch.setattr(_uploadstream, "MAX_UPLOAD_BYTES", 10)
+    resp = client.post(
+        "/api/parsers/upload",
+        files={"file": ("big.csv", b"x" * 100, "text/csv")},
+    )
+    assert resp.status_code == 413
+    assert "big.csv" in resp.json()["detail"]
+
+
+def test_upload_opj_over_cap_returns_413(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same cap applies on the Origin project (persistent-stage) branch."""
+    from quantized.routes import _uploadstream
+
+    monkeypatch.setattr(_uploadstream, "MAX_UPLOAD_BYTES", 10)
+    resp = client.post(
+        "/api/parsers/upload",
+        files={"file": ("big.opj", b"x" * 100, "application/octet-stream")},
+    )
+    assert resp.status_code == 413
+
+
 def test_upload_strips_path_components() -> None:
     # A malicious filename with .. must be reduced to its basename.
     content = FIXTURE.read_bytes()

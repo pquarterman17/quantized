@@ -21,23 +21,28 @@ import tempfile
 from collections import OrderedDict
 from pathlib import Path
 
-__all__ = ["stage_upload", "resolve_upload_token"]
+from quantized.routes._uploadstream import AsyncChunkReader, UploadTooLargeError, stream_to_path
+
+__all__ = ["stage_upload", "stage_upload_stream", "resolve_upload_token"]
 
 _MAX_STAGED = 8
 _root = Path(tempfile.gettempdir()) / "qz_origin_uploads"
 _tokens: OrderedDict[str, Path] = OrderedDict()
 
 
-def stage_upload(name: str, content: bytes) -> tuple[Path, str]:
-    """Persist ``content`` under a fresh token's own subdirectory (so same-name
-    re-uploads never collide) and return ``(path, token)``. Evicts the oldest
-    staged upload once more than ``_MAX_STAGED`` are held."""
+def _reserve(name: str) -> tuple[Path, str]:
+    """A fresh token's own subdirectory (so same-name re-uploads never
+    collide) and the destination path within it, not yet registered."""
     _root.mkdir(parents=True, exist_ok=True)
     token = secrets.token_hex(8)
     staged_dir = _root / token
     staged_dir.mkdir(parents=True, exist_ok=True)
-    dest = staged_dir / name
-    dest.write_bytes(content)
+    return staged_dir / name, token
+
+
+def _commit(token: str, dest: Path) -> None:
+    """Register a successfully-staged upload and evict the oldest once more
+    than ``_MAX_STAGED`` are held."""
     _tokens[token] = dest
     _tokens.move_to_end(token)
     while len(_tokens) > _MAX_STAGED:
@@ -47,6 +52,42 @@ def stage_upload(name: str, content: bytes) -> tuple[Path, str]:
             old_path.parent.rmdir()
         except OSError:
             pass  # not empty / already gone -- best-effort cleanup only
+
+
+def stage_upload(name: str, content: bytes) -> tuple[Path, str]:
+    """Persist an already-in-memory ``content`` and return ``(path, token)``.
+
+    For callers that already have the whole upload as ``bytes`` (tests, and
+    any future non-streaming caller). New HTTP upload paths should prefer
+    :func:`stage_upload_stream`, which never holds the whole file in memory.
+    """
+    dest, token = _reserve(name)
+    dest.write_bytes(content)
+    _commit(token, dest)
+    return dest, token
+
+
+async def stage_upload_stream(
+    name: str, source: AsyncChunkReader, *, max_bytes: int | None = None
+) -> tuple[Path, str]:
+    """Streaming counterpart of :func:`stage_upload`.
+
+    Writes ``source`` to disk in bounded chunks (``_uploadstream.stream_to_path``)
+    instead of holding the whole upload in memory first, then registers the
+    staged path the same way. On an oversize upload the partial file and its
+    token directory are cleaned up and :class:`UploadTooLargeError` propagates
+    for the route to translate to HTTP 413.
+    """
+    dest, token = _reserve(name)
+    try:
+        await stream_to_path(source, dest, filename=name, max_bytes=max_bytes)
+    except UploadTooLargeError:
+        try:
+            dest.parent.rmdir()
+        except OSError:
+            pass  # not empty / already gone -- best-effort cleanup only
+        raise
+    _commit(token, dest)
     return dest, token
 
 

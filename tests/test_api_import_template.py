@@ -85,6 +85,19 @@ def test_upload_template_returns_graph_template() -> None:
     assert body["overrides"] == {"x_lim": [0.0, 1.0], "y_lim": [0.0, 2.0]}
 
 
+def test_upload_template_over_cap_returns_413(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ROBUSTNESS_PLAN #3: an upload past the byte cap is rejected with 413."""
+    from quantized.routes import _uploadstream
+
+    monkeypatch.setattr(_uploadstream, "MAX_UPLOAD_BYTES", 10)
+    resp = client.post(
+        "/api/import/template/upload",
+        files={"file": ("big.otp", b"x" * 100, "application/octet-stream")},
+    )
+    assert resp.status_code == 413
+    assert "big.otp" in resp.json()["detail"]
+
+
 def test_upload_template_unrecognized_format_422() -> None:
     resp = client.post(
         "/api/import/template/upload",

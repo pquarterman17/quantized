@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.templates import read_origin_template
+from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
 router = APIRouter(prefix="/api/import/template", tags=["import"])
 
@@ -85,13 +86,19 @@ def import_template(path: str) -> dict[str, Any]:
 @router.post("/upload")
 async def upload_template(file: UploadFile) -> dict[str, Any]:
     """Import an uploaded Origin graph template (browser file-picker /
-    drag-drop) into a ``GraphTemplate``-shaped dict."""
+    drag-drop) into a ``GraphTemplate``-shaped dict.
+
+    Streamed to disk in bounded chunks rather than read whole into memory
+    (ROBUSTNESS_PLAN #3); an upload past
+    ``_uploadstream.MAX_UPLOAD_BYTES`` is rejected with HTTP 413.
+    """
     name = Path(file.filename or "template.otp").name or "template.otp"
-    content = await file.read()
     try:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
-            dest.write_bytes(content)
+            await stream_to_path(file, dest, filename=name)
             return read_origin_template(dest)
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except OriginProjectError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
