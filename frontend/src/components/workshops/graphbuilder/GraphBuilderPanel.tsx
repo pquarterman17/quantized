@@ -2,8 +2,9 @@
 // #11) — view. A draggable ToolWindow: drop channels from the Channels card /
 // legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells (or
 // click-to-assign for keyboard/AT); the mark morphs as columns land (scatter
-// ⇄ line ⇄ box ⇄ violin ⇄ bar); a live preview updates; "Send to Stage"
-// applies the spec to the main plot; "Export" sends it, then exports via the
+// ⇄ line ⇄ box ⇄ violin ⇄ bar); a live preview updates; explicit Create New
+// Plot / Apply to Current Plot actions commit the spec; Export applies it to
+// the current plot, then exports through the
 // existing figure-export path. PlotSpecBar (the Save/Open/Duplicate/Rename/
 // Delete toolbar) sits ABOVE the wells and stays visible even with no dataset
 // selected, so saved graphs are always reachable. Thin — all state and the
@@ -36,7 +37,7 @@ export default function GraphBuilderPanel() {
         specs={g.savedSpecs}
         activeSpec={g.activeSpec}
         dirty={g.dirty}
-        canSave={g.canSend}
+        canSave={g.canPlot}
         onSaveActive={g.saveActive}
         onSaveAs={g.saveAs}
         onOpen={g.openSpec}
@@ -87,7 +88,7 @@ export default function GraphBuilderPanel() {
               assigned={g.chips("facet")}
               note={
                 <span style={faint}>
-                  scatter/line: previews as small multiples below and "Send to Stage" carries it to
+                  scatter/line: previews as small multiples below and either plot action carries it to
                   the main plot as a facet grid. Box/violin/bar don't facet yet.
                 </span>
               }
@@ -111,9 +112,27 @@ export default function GraphBuilderPanel() {
           <GraphPreview render={g.render} />
 
           <div className="qzk-graph-actions">
-            <Button variant="primary" size="sm" disabled={!g.canSend} onClick={g.sendToStage} style={{ flex: 1 }}>
-              Send to Stage
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!g.canPlot}
+              onClick={g.createNewPlot}
+              title="Create and focus a new editable plot"
+              style={{ flex: 1 }}
+            >
+              Create New Plot
             </Button>
+            <Button
+              size="sm"
+              disabled={!g.canApplyToCurrent}
+              onClick={g.applyToCurrent}
+              title={g.canApplyToCurrent ? "Apply this data mapping to the focused editable plot" : "Focus an editable plot first"}
+              style={{ flex: 1 }}
+            >
+              Apply to Current Plot
+            </Button>
+          </div>
+          <div className="qzk-graph-actions">
             <Button
               size="sm"
               disabled={!g.canOpenFigureBuilder}
@@ -124,9 +143,9 @@ export default function GraphBuilderPanel() {
             </Button>
             <Button
               size="sm"
-              disabled={!g.canSend}
+              disabled={!g.canApplyToCurrent}
               onClick={() => void g.exportPlot()}
-              title="Send to Stage, then export via the Export figure dialog"
+              title="Apply to the current plot, then open the Export figure dialog"
             >
               Export
             </Button>

@@ -19,7 +19,7 @@ export function nextStageTab(d: Dataset, current: StageTab): StageTab {
 
 /** Stage tab for a PLOT-INTENT action — applying an Origin figure or figure
  *  doc, "Plot (make active)", worksheet "Plot selection"/"Add to plot",
- *  GraphBuilder "Send to Stage" (owner 2026-07-09: "it's a bit confusing when
+ *  Graph Builder's explicit plot actions (owner 2026-07-09: "it's a bit confusing when
  *  I'm opening a plot... and have to remember to toggle up"). The complement
  *  of `nextStageTab`'s "stay on Worksheet" guard, which exists for passive/
  *  ambiguous activation (a fresh import, restoring a workspace) — these

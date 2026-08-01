@@ -138,7 +138,7 @@ the compatibility inventory exposes an unexpected state-ownership problem.
       to “Publication Preview” or “Publication Setup” until the surface edits
       the canonical document. Add a short, non-distracting explanation that
       changes are local until applied/saved.
-- [ ] **F0.2 Make Graph Builder intent explicit.** Replace ambiguous “Send to
+- [x] **F0.2 Make Graph Builder intent explicit.** Replace ambiguous “Send to
       Stage” behavior with “Create New Plot” and “Apply to Current Plot.”
       Default to Create New; require a compatible focused plot to apply.
 - [ ] **F0.3 Add compatibility reporting.** Before Graph Builder → publication
@@ -327,6 +327,18 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-01 — F0.2 explicit Graph Builder destinations (ChatGPT-Sol)
+
+- Replaced “Send to Stage” with separate Create New Plot and Apply to Current
+  Plot actions; creation is the primary/default action.
+- Create opens and focuses a fresh editable plot. Apply targets only the
+  focused editable plot and deliberately rebinds it when the recipe uses a
+  different dataset.
+- Export now states its existing behavior explicitly: apply to the current
+  plot, then use the ordinary export path.
+- Added hook and view regression coverage; implementation PR is stacked on
+  the F0.1 Publication Preview PR.
 
 ### 2026-08-01 — F0.1 publication-preview role cues (ChatGPT-Sol)
 

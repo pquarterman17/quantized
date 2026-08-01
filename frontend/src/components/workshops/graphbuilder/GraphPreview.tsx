@@ -291,7 +291,7 @@ export default function GraphPreview({ render }: { render: SpecRender }) {
         </div>
       )}
       {render.kind === "box" && render.violin && (
-        <div className="qzk-graph-preview-approx">violin preview shows box · KDE renders on Send to Stage</div>
+        <div className="qzk-graph-preview-approx">violin preview shows box · KDE renders in the editable plot</div>
       )}
     </div>
   );

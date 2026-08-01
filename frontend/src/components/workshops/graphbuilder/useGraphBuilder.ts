@@ -62,8 +62,10 @@ export interface GraphBuilderState {
   cycle: () => void;
   /** Clears the wells AND unbinds from any saved spec — a fresh graph. */
   reset: () => void;
-  canSend: boolean;
-  sendToStage: () => void;
+  canPlot: boolean;
+  createNewPlot: () => void;
+  canApplyToCurrent: boolean;
+  applyToCurrent: () => void;
   canOpenFigureBuilder: boolean;
   figureBuilderReason: string | null;
   openInFigureBuilder: () => void;
@@ -89,7 +91,7 @@ export interface GraphBuilderState {
   duplicateSpec: (id: string) => void;
   renameSpec: (id: string, name: string) => void;
   deleteSpec: (id: string) => void;
-  /** Send the current spec to the Stage, then export via the SAME path the
+  /** Apply the current spec to the focused plot, then export via the SAME path the
    *  File menu's "Export figure…" command uses (xy family only — see the
    *  module doc). */
   exportPlot: () => Promise<void>;
@@ -115,7 +117,7 @@ export function useGraphBuilder(): GraphBuilderState {
   // refs is BOUND to their dataset — which lets the worksheet handoff seed a
   // non-active dataset's columns without `setActive`'s plot-intent side
   // effects (window rebind, view reset, worksheet-tab flip) firing at
-  // overlay-OPEN time. The plot intent lands in sendToStage instead, where
+  // overlay-OPEN time. The plot intent lands in an explicit plot action, where
   // the user actually commits to plotting.
   const boundId = specDatasetId(spec);
   const ds = useMemo(
@@ -126,7 +128,7 @@ export function useGraphBuilder(): GraphBuilderState {
   // A channel ref into a vanished dataset would reference the wrong columns —
   // wipe the spec when its dataset no longer resolves. An active-dataset
   // change alone no longer wipes a BOUND session (#8i): the builder holds a
-  // spec for ITS dataset; Send brings that dataset back active. Reads `spec`
+  // spec for ITS dataset; a plot action brings that dataset back active. Reads `spec`
   // from the closure (not a functional setSpec updater) so the #11
   // activePlotSpecId clear below is computed from the SAME snapshot, not a
   // React-internals-timing-dependent updater invocation.
@@ -215,19 +217,39 @@ export function useGraphBuilder(): GraphBuilderState {
     useApp.getState().setActivePlotSpecId(null);
   };
 
-  const canSend = family !== null; // there's a value to plot
+  const canPlot = family !== null; // there's a value to plot
+  const focusedWindowId = useApp((s) => s.focusedWindowId);
+  const focusedWindowKind = useApp(
+    (s) => s.plotWindows.find((window) => window.id === s.focusedWindowId)?.kind ?? null,
+  );
+  const canApplyToCurrent = canPlot && focusedWindowId !== null && focusedWindowKind === "plot";
   const figureBuilderReason = plotSpecFigureReason(spec);
   const canOpenFigureBuilder = ds !== null && figureBuilderReason === null;
 
-  function sendToStage(): void {
+  function commitToPlot(destination: "new" | "current"): void {
     if (!ds) return;
+    const app = useApp.getState();
+    if (destination === "new") {
+      const id = app.createWindow(ds.id);
+      app.focusWindow(id);
+    } else {
+      const focused = app.plotWindows.find((window) => window.id === app.focusedWindowId);
+      if (!focused || focused.kind !== "plot") {
+        toast("Focus an editable plot before applying this graph.", "info");
+        return;
+      }
+      // Applying is an explicit rebind gesture, so it may deliberately
+      // retarget a pinned plot. `rebindWindow` owns the focused-window facade
+      // reset and lazy-dataset fetch for that case.
+      if (focused.datasetId !== ds.id) app.rebindWindow(focused.id, ds.id);
+    }
     // MAIN #8i: the plot intent lands HERE — the moment the user commits to
     // plotting — not at overlay-open. A builder bound to a non-active dataset
     // (the worksheet handoff) rebinds now; every store action below then acts
     // on the freshly-active dataset. setActive is the deliberate plot-intent
     // primitive (window rebind / view reset / worksheet-override clear).
     if (useApp.getState().activeId !== ds.id) useApp.getState().setActive(ds.id);
-    // Owner-routing item 1: "Send to Stage" always means look at the plot
+    // Owner-routing item 1: committing a graph always means look at the plot
     // (every branch below renders inside the Plot tab — scatter/line/facet
     // on the main canvas, box/violin/bar via StatStage), so surface it
     // regardless of which tab the user is currently on.
@@ -239,7 +261,7 @@ export function useGraphBuilder(): GraphBuilderState {
       setStatMode(false);
       // #12 Slice 5 / "part C": apply the spec's own captured
       // display/axes/decor blocks (if any) onto the now-live dataset —
-      // closes the save/reopen/send loop. A v1 spec (no blocks) makes zero
+      // closes the save/reopen/apply loop. A v1 spec (no blocks) makes zero
       // calls here — see plotspecApply.ts's regression-pin note.
       applySpecBlocks(spec, useApp.getState);
       if (spec.zones.group) {
@@ -252,10 +274,14 @@ export function useGraphBuilder(): GraphBuilderState {
       // channels just assigned.
       if (spec.zones.facet) {
         facetByColumn(ds.id, spec.zones.facet.channel);
-        setStatus(`sent ${spec.mark} to the plot, faceted by ${labelOf(spec.zones.facet.channel)}`);
+        setStatus(
+          destination === "new"
+            ? `created ${spec.mark} plot, faceted by ${labelOf(spec.zones.facet.channel)}`
+            : `applied ${spec.mark} to the current plot, faceted by ${labelOf(spec.zones.facet.channel)}`,
+        );
         return;
       }
-      setStatus(`sent ${spec.mark} to the plot`);
+      setStatus(destination === "new" ? `created ${spec.mark} plot` : `applied ${spec.mark} to the current plot`);
       return;
     }
     // box/violin/bar (below): #12 Slice 5 investigated applying the spec's
@@ -272,8 +298,8 @@ export function useGraphBuilder(): GraphBuilderState {
       seedStatStage({ mode: spec.mark, groupCol, valueCol: spec.zones.y[0].channel, facetCol });
       setStatus(
         facetCol !== null
-          ? `sent ${spec.mark} plot to the stat stage, faceted by ${labelOf(facetCol)}`
-          : `sent ${spec.mark} plot to the stat stage`,
+          ? `${destination === "new" ? "created" : "applied"} ${spec.mark} plot in the stat stage, faceted by ${labelOf(facetCol)}`
+          : `${destination === "new" ? "created" : "applied"} ${spec.mark} plot in the stat stage`,
       );
       return;
     }
@@ -291,10 +317,13 @@ export function useGraphBuilder(): GraphBuilderState {
     seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0, facetCol });
     setStatus(
       facetCol !== null
-        ? `sent bar chart to the stat stage, faceted by ${labelOf(facetCol)}`
-        : "sent bar chart to the stat stage",
+        ? `${destination === "new" ? "created" : "applied"} bar chart in the stat stage, faceted by ${labelOf(facetCol)}`
+        : `${destination === "new" ? "created" : "applied"} bar chart in the stat stage`,
     );
   }
+
+  const createNewPlot = (): void => commitToPlot("new");
+  const applyToCurrent = (): void => commitToPlot("current");
 
   function openInFigureBuilder(): void {
     if (!ds) return;
@@ -427,10 +456,10 @@ export function useGraphBuilder(): GraphBuilderState {
     useApp.getState().setActivePlotSpecId(id);
     // #12 Slice 5 / "part C": opening never applies the spec's
     // display/axes/decor blocks itself (that would silently mutate the live
-    // plot on a mere open) — only Send does (applySpecBlocks, above). This
+    // plot on a mere open) — only an explicit plot action does (applySpecBlocks, above). This
     // is the one affordance that tells the user those blocks exist at all.
     const hint = saved.spec.display || saved.spec.axes || saved.spec.decor
-      ? " (includes saved styles — Send to Stage applies them)"
+      ? " (includes saved styles — a plot action applies them)"
       : "";
     setStatus(`opened "${saved.name}"${hint}`);
   };
@@ -453,8 +482,8 @@ export function useGraphBuilder(): GraphBuilderState {
   };
 
   // Item 6: reuse the EXISTING export path — never a bespoke pipeline.
-  // sendToStage() first, so Export works even if the user never clicked
-  // "Send to Stage" themselves; the xy family (scatter/line) then renders
+  // applyToCurrent() first, so Export works even if the user never applied
+  // the graph themselves; the xy family (scatter/line) then renders
   // through the exact command the File menu's "Export figure…" runs
   // (lib/exportFigureCommand), reading the live xKey/yKeys it just set.
   // box/violin/bar render through the Stat Stage's OWN hook-local exporter
@@ -474,8 +503,8 @@ export function useGraphBuilder(): GraphBuilderState {
   // now only resets channel-keyed defaults on a genuine dataset switch), so
   // the export below reflects whatever channels the facet grid is showing.
   const exportPlot = async (): Promise<void> => {
-    if (!ds || !canSend) return;
-    sendToStage();
+    if (!ds || !canApplyToCurrent) return;
+    applyToCurrent();
     if (spec.mark === "scatter" || spec.mark === "line") {
       await runExportFigureCommand(useApp.getState);
       return;
@@ -498,8 +527,10 @@ export function useGraphBuilder(): GraphBuilderState {
     moveY,
     cycle,
     reset,
-    canSend,
-    sendToStage,
+    canPlot,
+    createNewPlot,
+    canApplyToCurrent,
+    applyToCurrent,
     canOpenFigureBuilder,
     figureBuilderReason,
     openInFigureBuilder,

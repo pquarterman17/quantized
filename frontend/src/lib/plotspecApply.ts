@@ -41,7 +41,7 @@
 //
 // ── SCOPE (blocks absent → zero effect) ─────────────────────────────────────
 // A v1 spec (no `display`/`axes`/`decor` content) makes zero store calls —
-// the GUI_INTERACTION #12 Slice 5 regression pin (sendToStage's store-effect
+// the GUI_INTERACTION #12 Slice 5 regression pin (Graph Builder's apply store-effect
 // sequence for a v1 spec stays byte-identical to before this slice) extends
 // to `decor` unchanged.
 //
@@ -199,7 +199,7 @@ function applyPageBlock(page: PageBlock | undefined, s: StoreGet): void {
   const state = s();
   // `setStackMode` CLEARS the composition (see store/useApp.ts) — harmless
   // here because a caller that wants a facet arrangement calls
-  // `facetByColumn` AFTER `applySpecBlocks` (useGraphBuilder's send path),
+  // `facetByColumn` AFTER `applySpecBlocks` (useGraphBuilder's plot-action path),
   // and that rebuilds the composition and re-sets stackMode itself.
   if (page.stack !== undefined) state.setStackMode(page.stack);
   if (page.fit !== undefined) state.setPanelFit(page.fit);

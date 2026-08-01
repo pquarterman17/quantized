@@ -110,7 +110,7 @@ describe("useWorksheetView — Open in Graph Builder (MAIN_PLAN #4)", () => {
     act(() => result.current.openInGraphBuilder([1]));
     const s = useApp.getState();
     // Opening an overlay is not a plot intent: the plot/windows/view stay
-    // put; the builder BINDS to the seed's dataset and its sendToStage lands
+    // put; the builder BINDS to the seed's dataset and its plot action lands
     // setActive when the user commits (see useGraphBuilder's #8i note).
     expect(s.activeId).toBe("other");
     expect(s.graphBuilderOpen).toBe(true);

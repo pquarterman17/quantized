@@ -559,7 +559,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   // NO `setActive` here (MAIN #8i): opening an overlay must not fire the
   // plot-intent side effects (window rebind, view reset, worksheet-override
   // clear) before the user commits — the builder BINDS to the seed's
-  // dataset and its sendToStage lands the plot intent instead. (Contrast
+  // dataset and its explicit Graph Builder plot action lands the intent instead. (Contrast
   // plotCols above, where "Plot selection" IS the explicit plot intent.)
   function openInGraphBuilder(cols: number[]) {
     const spec = selectionToSpec(ds.data, ds.id, cols);

@@ -26,7 +26,7 @@ vi.mock("../../overlays/ParamDialog", () => ({
 // channel 0 monotonic continuous x, channel 1 continuous y, channel 2 a 2-level
 // nominal grouping column (needs ≥12 rows for nominal inference), channel 3 a
 // 2-level nominal FACET column (gap #21 residual — same 6/6 split as channel 2
-// so a facet send has 2 finite levels to build panels from).
+// so a facet application has 2 finite levels to build panels from).
 const DATA: DataStruct = {
   time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   values: [
@@ -48,6 +48,9 @@ const DATA: DataStruct = {
   metadata: { x_column_name: "T" },
 };
 
+const INITIAL_WINDOWS = useApp.getState().plotWindows;
+const INITIAL_FOCUSED_WINDOW_ID = useApp.getState().focusedWindowId;
+
 beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
@@ -67,9 +70,11 @@ beforeEach(() => {
     figureBuilderOpen: false,
     figureDocSeed: null,
     figureDocs: [],
-    // Owner-routing item 1: starts parked on Worksheet so "sendToStage
+    // Owner-routing item 1: starts parked on Worksheet so "applyToCurrent
     // surfaces the Plot tab" assertions below don't need a separate fixture.
     stageTab: "worksheet",
+    plotWindows: INITIAL_WINDOWS,
+    focusedWindowId: INITIAL_FOCUSED_WINDOW_ID,
   });
 });
 
@@ -77,7 +82,7 @@ describe("useGraphBuilder — morphing", () => {
   it("starts empty with an incomplete hint", () => {
     const { result } = renderHook(() => useGraphBuilder());
     expect(result.current.render.kind).toBe("message");
-    expect(result.current.canSend).toBe(false);
+    expect(result.current.canPlot).toBe(false);
   });
 
   it("two continuous columns yield a scatter", () => {
@@ -104,7 +109,7 @@ describe("useGraphBuilder — morphing", () => {
     expect(result.current.mark).toBe("box");
   });
 
-  it("#8i: a BOUND session survives an active-dataset change (Send restores its dataset)", () => {
+  it("#8i: a BOUND session survives an active-dataset change (a plot action restores its dataset)", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     expect(result.current.chips("y")).toHaveLength(1);
@@ -208,24 +213,76 @@ describe("useGraphBuilder — worksheet seed (MAIN_PLAN #4)", () => {
   });
 });
 
-describe("useGraphBuilder — send to stage", () => {
+describe("useGraphBuilder — explicit plot destinations", () => {
+  it("creates and focuses a fresh editable plot by default", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    const before = useApp.getState();
+
+    act(() => result.current.createNewPlot());
+
+    const after = useApp.getState();
+    expect(after.plotWindows).toHaveLength(before.plotWindows.length + 1);
+    expect(after.focusedWindowId).not.toBe(before.focusedWindowId);
+    expect(after.plotWindows.find((window) => window.id === after.focusedWindowId)).toMatchObject({
+      kind: "plot",
+      datasetId: "d1",
+    });
+    expect(after.xKey).toBe(0);
+    expect(after.yKeys).toEqual([1]);
+    expect(after.status).toBe("created scatter plot");
+  });
+
+  it("applies to the focused editable plot without creating another window", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    const before = useApp.getState();
+
+    act(() => result.current.applyToCurrent());
+
+    const after = useApp.getState();
+    expect(result.current.canApplyToCurrent).toBe(true);
+    expect(after.plotWindows).toHaveLength(before.plotWindows.length);
+    expect(after.focusedWindowId).toBe(before.focusedWindowId);
+    expect(after.xKey).toBe(0);
+    expect(after.yKeys).toEqual([1]);
+    expect(after.status).toBe("applied scatter to the current plot");
+  });
+
+  it("disables Apply to Current Plot when no editable plot is focused", () => {
+    useApp.setState({ focusedWindowId: null });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+
+    expect(result.current.canPlot).toBe(true);
+    expect(result.current.canApplyToCurrent).toBe(false);
+  });
+
   it("scatter/line applies X/Y through the axis store actions and leaves stat mode", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().xKey).toBe(0);
     expect(useApp.getState().yKeys).toEqual([1]);
     expect(useApp.getState().statMode).toBe(false);
   });
 
-  it("#8i: a builder bound to a NON-active dataset rebinds active at SEND time, not before", () => {
+  it("#8i: Apply explicitly rebinds the focused plot at commit time, even when pinned", () => {
     useApp.setState({
       datasets: [
         { id: "d1", name: "run.dat", data: DATA },
         { id: "d2", name: "other.dat", data: DATA },
       ],
       activeId: "d1",
+      plotWindows: INITIAL_WINDOWS.map((window) => ({
+        ...window,
+        datasetId: "d1",
+        pinned: true,
+      })),
     });
     act(() =>
       useApp.getState().openGraphBuilderSeeded({
@@ -240,10 +297,18 @@ describe("useGraphBuilder — send to stage", () => {
       }),
     );
     const { result } = renderHook(() => useGraphBuilder());
+    const focusedBefore = useApp.getState().focusedWindowId;
+    const countBefore = useApp.getState().plotWindows.length;
     expect(useApp.getState().activeId).toBe("d1"); // open moved nothing
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     const s = useApp.getState();
     expect(s.activeId).toBe("d2"); // the plot intent landed with the commit
+    expect(s.focusedWindowId).toBe(focusedBefore);
+    expect(s.plotWindows).toHaveLength(countBefore);
+    expect(s.plotWindows.find((window) => window.id === focusedBefore)).toMatchObject({
+      datasetId: "d2",
+      pinned: true,
+    });
     expect(s.xKey).toBe(0);
     expect(s.yKeys).toEqual([1]);
   });
@@ -252,19 +317,19 @@ describe("useGraphBuilder — send to stage", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("x", 2)); // nominal → box
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1, facetCol: null });
     expect(useApp.getState().statMode).toBe(true);
   });
 
   // GUI_INTERACTION #11 residual: box/violin/bar now facet too (mirrors the
-  // xy family's own facet send above).
+  // xy family's own facet application above).
   it("box WITH a facet zone seeds facetCol and mentions it in the status", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("x", 2)); // nominal → box
     act(() => result.current.assign("facet", 3)); // 2-level nominal facet column
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1, facetCol: 3 });
     expect(useApp.getState().status).toContain("faceted by fct");
   });
@@ -276,7 +341,7 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.cycle()); // box -> violin
     act(() => result.current.cycle()); // violin -> bar
     act(() => result.current.assign("facet", 3));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().statStageSeed).toEqual({ mode: "bar", groupCol: 2, valueCol: 1, facetCol: 3 });
     expect(useApp.getState().status).toContain("faceted by fct");
   });
@@ -286,21 +351,21 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("facet", 3));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     // The xy family never touches statStageSeed at all.
     expect(useApp.getState().statStageSeed).toBeNull();
     expect(useApp.getState().status).toContain("faceted by fct");
   });
 
   // Owner-routing item 1 ("have to remember to toggle up"): every branch of
-  // sendToStage renders inside the Plot tab (scatter/line on the canvas,
+  // applying renders inside the Plot tab (scatter/line on the canvas,
   // box/violin/bar via StatStage), so it must surface that tab regardless of
   // where the user currently is.
   it("forces the Plot tab even when starting on Worksheet — scatter/line", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
@@ -308,7 +373,7 @@ describe("useGraphBuilder — send to stage", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("x", 2));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().stageTab).toBe("plot");
   });
 
@@ -317,7 +382,7 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("facet", 3)); // 2-level nominal facet column
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
     expect(facetPanelsOf(s.composition)).toHaveLength(2);
@@ -341,7 +406,7 @@ describe("useGraphBuilder — send to stage", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     const s = useApp.getState();
     expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
@@ -408,7 +473,7 @@ describe("useGraphBuilder — open in Figure Builder", () => {
 
     act(() => result.current.saveAs("Ordered"));
     expect(result.current.activeSpec?.spec.zones.y.map((ref) => ref.channel)).toEqual([2, 1]);
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     expect(useApp.getState().yKeys).toEqual([2, 1]);
     act(() => result.current.openInFigureBuilder());
     expect(useApp.getState().figureDocSeed?.config.yKeys).toEqual([2, 1]);
@@ -736,7 +801,7 @@ describe("useGraphBuilder — exportPlot (item 6)", () => {
     vi.mocked(exportFigure).mockResolvedValue(undefined);
   });
 
-  it("scatter/line: sends to stage, then exports via the existing Export-figure path", async () => {
+  it("scatter/line: applies to the current plot, then uses the existing Export-figure path", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
@@ -746,7 +811,7 @@ describe("useGraphBuilder — exportPlot (item 6)", () => {
     expect(exportFigure).toHaveBeenCalledTimes(1);
   });
 
-  it("box/violin: sends to stage but does NOT call the xy export path", async () => {
+  it("box/violin: applies to the stat stage but does NOT call the xy export path", async () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("x", 2)); // nominal → box
@@ -762,7 +827,7 @@ describe("useGraphBuilder — exportPlot (item 6)", () => {
   });
 });
 
-describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #12 Slice 5)", () => {
+describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTION_PLAN #12 Slice 5)", () => {
   // Same isolation rationale as the "capture on save" describe block above —
   // these fields aren't touched by the outer beforeEach.
   beforeEach(() => {
@@ -793,7 +858,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     });
   });
 
-  it("regression pin: a v1 spec's sendToStage leaves every style/axis/decor field byte-identical", () => {
+  it("regression pin: applying a v1 spec leaves every style/axis/decor field byte-identical", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
@@ -823,7 +888,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
       legendPos: before.legendPos,
     };
     expect(result.current.activeSpec?.spec.version).not.toBe(2); // sanity: nothing saved, this is a plain v1 spec
-    act(() => result.current.sendToStage());
+    act(() => result.current.applyToCurrent());
     const s = useApp.getState();
     expect(s.seriesStyles).toEqual(snapshot.seriesStyles);
     expect(s.hiddenChannels).toEqual(snapshot.hiddenChannels);
@@ -838,9 +903,9 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
 
   // THE acceptance test of the #12 campaign so far: save captures the live
   // display/axes/decor state (Slice 3 + "part C"), reopening restores the
-  // BUILDER's wells (item 3, pre-#12), and now Send restores the STORE's
-  // style/axis/decor state too — the full save → reopen → send loop.
-  it("FULL LOOP: save styled → reset → reopen → send → styles/limits/y2/decor restored", () => {
+  // BUILDER's wells (item 3, pre-#12), and now applying restores the STORE's
+  // style/axis/decor state too — the full save → reopen → apply loop.
+  it("FULL LOOP: save styled → reset → reopen → apply → styles/limits/y2/decor restored", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
@@ -904,11 +969,11 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     act(() => result.current.openSpec(id));
     expect(result.current.activeSpec?.id).toBe(id);
     expect(result.current.chips("y").map((c) => c.channel)).toEqual([1, 2]);
-    expect(useApp.getState().seriesStyles).toEqual({}); // NOT yet applied — Send does that
+    expect(useApp.getState().seriesStyles).toEqual({}); // NOT yet applied — a plot action does that
     expect(useApp.getState().annotations).toMatchObject([{ text: "stale" }]); // still the wandered-off state
 
-    // Send: NOW the blocks apply.
-    act(() => result.current.sendToStage());
+    // Apply: NOW the blocks land.
+    act(() => result.current.applyToCurrent());
     const s = useApp.getState();
     expect(s.yKeys).toEqual([1, 2]);
     expect(s.seriesStyles[1]).toMatchObject({ color: "#ff0000", width: 2 });
@@ -938,7 +1003,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
 
     act(() => result.current.openSpec(styledId));
     expect(useApp.getState().status).toBe(
-      'opened "Styled" (includes saved styles — Send to Stage applies them)',
+      'opened "Styled" (includes saved styles — a plot action applies them)',
     );
   });
 

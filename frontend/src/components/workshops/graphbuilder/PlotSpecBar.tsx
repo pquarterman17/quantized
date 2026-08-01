@@ -19,7 +19,7 @@ export interface PlotSpecBarProps {
   specs: SavedPlotSpec[];
   activeSpec: SavedPlotSpec | null;
   dirty: boolean;
-  /** Gates Save/Save As — nothing worth saving yet (mirrors `canSend`). */
+  /** Gates Save/Save As — nothing worth saving yet (mirrors `canPlot`). */
   canSave: boolean;
   onSaveActive: () => void;
   onSaveAs: (name: string) => void;
