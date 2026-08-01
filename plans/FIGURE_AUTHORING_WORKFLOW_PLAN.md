@@ -328,7 +328,7 @@ Before starting a slice:
 
 ## Completed / decision log
 
-### 2026-08-01 — F1.4 editable FigureDocument lifecycle (ChatGPT-Sol)
+### 2026-08-01 — F1.4 editable FigureDocument lifecycle (ChatGPT-Sol, PR #106)
 
 - Added a workspace-persisted **Editable figures** collection distinct from
   legacy **Publication figures**, with Save, Save As, update-in-place, reopen,
