@@ -9,16 +9,28 @@
 // Window menu/⌘K entries and their keyboard shortcuts always work.
 // `useHistoryCommands` (MAIN_PLAN #9, undo/redo) is mounted here for the
 // identical reason — Ctrl+Z must work no matter which stage tab is showing.
+//
+// CODE SPLITTING: the Map and Worksheet tabs are dynamic imports — only one
+// tab is ever visible at a time, and "plot" is every fresh workspace's
+// default (item 6), so a first-paint user pays only for `WindowCanvas`. Map
+// additionally pulls in `d3-contour` (mapRender.ts -> lib/contour.ts), a real
+// external dependency with no business in the eager bundle for a plot-only
+// session. `DocumentWindow.tsx` lazy-imports the SAME two chunks for its
+// worksheet/map MDI document windows (MULTI_PLOT_PLAN item 17); Vite dedups
+// the two dynamic-import sites into one chunk each, so opening a document
+// window after already visiting the matching tab (or vice versa) is a cache
+// hit, not a second fetch.
 
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
-import MapStage from "./MapStage";
 import { canRenderMap } from "../../lib/mapdata";
-import Worksheet from "./Worksheet";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
+
+const MapStage = lazy(() => import("./MapStage"));
+const Worksheet = lazy(() => import("./Worksheet"));
 
 const TABS = [
   { id: "plot", label: "Plot" },
@@ -63,9 +75,13 @@ export default function Stage() {
       {stageTab === "plot" ? (
         <WindowCanvas />
       ) : stageTab === "map" && mappable ? (
-        <MapStage />
+        <Suspense fallback={null}>
+          <MapStage />
+        </Suspense>
       ) : stageTab === "worksheet" ? (
-        <Worksheet />
+        <Suspense fallback={null}>
+          <Worksheet />
+        </Suspense>
       ) : (
         <WindowCanvas />
       )}

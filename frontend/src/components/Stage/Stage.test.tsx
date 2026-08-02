@@ -60,21 +60,25 @@ describe("Map tab visibility", () => {
 });
 
 describe("stranded-tab fallback", () => {
-  it("falls back to Plot when the Map tab is open and the data stops qualifying", () => {
+  // Map/Worksheet are dynamic imports (bundle-size headroom recovery) — even
+  // with the module mocked, the first mount of either resolves through a
+  // microtask, so these use findBy* (retries until resolved) rather than
+  // getBy* for the panel content specifically.
+  it("falls back to Plot when the Map tab is open and the data stops qualifying", async () => {
     // Without this, switching to a 1-D dataset strands the user on a tab that no
     // longer has a strip entry, with no visible way back.
     useApp.setState({ datasets: [ds(3)], activeId: "d1", stageTab: "map" });
     const { rerender } = render(<Stage />);
-    expect(screen.getByText("map-canvas")).toBeInTheDocument();
+    expect(await screen.findByText("map-canvas")).toBeInTheDocument();
     useApp.setState({ datasets: [ds(2)], activeId: "d1" });
     rerender(<Stage />);
     expect(useApp.getState().stageTab).toBe("plot");
     expect(screen.getByText("plot-canvas")).toBeInTheDocument();
   });
 
-  it("renders the map when the tab is open and the data does qualify", () => {
+  it("renders the map when the tab is open and the data does qualify", async () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1", stageTab: "map" });
     render(<Stage />);
-    expect(screen.getByText("map-canvas")).toBeInTheDocument();
+    expect(await screen.findByText("map-canvas")).toBeInTheDocument();
   });
 });
