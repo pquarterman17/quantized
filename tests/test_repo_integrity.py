@@ -10,6 +10,14 @@ construction:
    ceiling ONLY with a written justification in the commit message.
 3. LAYERING GUARD   — datastruct/io/calc/plugins never import the web stack, so
    their tests run server-free and business logic can't leak into transport.
+4. DATA FILE GUARD  — every non-.py file under src/quantized/ (excluding the
+   built web/ SPA and __pycache__) is pinned to a loader that actually reads
+   it. tools/bundle/qz-server.spec's collect_data_files("quantized") ships
+   every such file into the PyInstaller sidecar automatically (see its
+   comment for the bug this fixed: only src/quantized/web ever shipped, so
+   the installed app 500'd on the Elements calculator, SLD presets, and the
+   demo dataset); this is the matching Python-side pin so a new data file
+   with no working loader fails a test instead of shipping broken.
 
 See .claude/rules/architecture-guards.md for the full rationale.
 """
@@ -118,4 +126,71 @@ def test_pure_layers_do_not_import_server_stack() -> None:
     assert not offenders, (
         "datastruct/io/calc are pure libraries — no web-stack imports:\n  "
         + "\n  ".join(offenders)
+    )
+
+
+# Every non-.py package data file, mapped to a callable proving its consumer's
+# public loader can actually read it. A new data file added anywhere under
+# src/quantized/ must be added here (with a working loader) or
+# test_every_data_file_has_a_pinned_loader fails — the Python-side half of
+# the collect_data_files("quantized") fix in tools/bundle/qz-server.spec.
+def _element_data_loads() -> None:
+    from quantized.calc.element_data import element_data
+
+    assert len(element_data()) == 118
+
+
+def _refl_sld_presets_loads() -> None:
+    from quantized.calc.sld import refl_sld_presets
+
+    assert len(refl_sld_presets()) > 0
+
+
+def _demo_sample_exists() -> None:
+    from quantized.routes.samples import _DEMO_FILE
+
+    assert _DEMO_FILE.is_file()
+
+
+DATA_FILE_LOADERS = {
+    SRC / "calc" / "element_data.json": _element_data_loads,
+    SRC / "calc" / "refl_sld_presets.json": _refl_sld_presets_loads,
+    SRC / "samples" / "demo_vsm.csv": _demo_sample_exists,
+}
+
+
+def test_data_file_loaders_pinned_contracts() -> None:
+    """Each pinned data file's consumer loads it and returns the expected shape."""
+    for loader in DATA_FILE_LOADERS.values():
+        loader()
+
+
+def test_every_data_file_has_a_pinned_loader() -> None:
+    """Census: no package data file may ship without a loader test pinning it.
+
+    This is what makes the guard future-proof — collect_data_files("quantized")
+    will happily ship a brand-new JSON/CSV into the sidecar, but if nothing
+    ever proves the file loads, a broken or missing file only surfaces as a
+    500 in the installed app. Excludes the built web/ SPA (not a
+    Python-loaded data file; the smoke-test in release.yml covers it) and
+    __pycache__.
+    """
+    found = set()
+    for path in SRC.rglob("*"):
+        if path.is_dir() or path.suffix == ".py":
+            continue
+        if "__pycache__" in path.parts or "web" in path.parts:
+            continue
+        found.add(path)
+
+    unknown = found - set(DATA_FILE_LOADERS)
+    missing = set(DATA_FILE_LOADERS) - found
+    assert not unknown, (
+        "new package data file(s) with no pinned loader test — add one to "
+        "DATA_FILE_LOADERS in this file:\n  "
+        + "\n  ".join(str(p.relative_to(ROOT)) for p in sorted(unknown))
+    )
+    assert not missing, (
+        "pinned data file(s) missing from disk (stale DATA_FILE_LOADERS "
+        "entry?):\n  " + "\n  ".join(str(p.relative_to(ROOT)) for p in sorted(missing))
     )

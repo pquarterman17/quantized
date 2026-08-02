@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules  # noqa: F401
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules  # noqa: F401
 
 ROOT = Path(SPECPATH).resolve().parents[1]  # noqa: F821 — SPECPATH is injected
 
@@ -33,11 +33,22 @@ hidden += collect_submodules("quantized")
 a = Analysis(  # noqa: F821
     [str(ROOT / "tools" / "bundle" / "qz_entry.py")],
     pathex=[str(ROOT / "src")],
-    datas=[
-        # the built SPA, served by the sidecar at / (app.py looks for it at
-        # Path(__file__).parent / "web", i.e. <bundle>/quantized/web)
-        (str(ROOT / "src" / "quantized" / "web"), "quantized/web"),
-    ],
+    # collect_data_files sweeps EVERY non-.py file under the installed
+    # "quantized" package tree (recursively, preserving the package-relative
+    # directory layout) — the built SPA (quantized/web/**, served by the
+    # sidecar at / — app.py looks for it at Path(__file__).parent / "web",
+    # i.e. <bundle>/quantized/web), calc/element_data.json,
+    # calc/refl_sld_presets.json, samples/demo_vsm.csv, and any future data
+    # file added anywhere in the package. A single file listing here
+    # (the previous approach) silently drops every OTHER package data file:
+    # only src/quantized/web ever shipped, so the installed app 500'd on
+    # /api/reference/elements, /api/reflectivity/presets, and
+    # /api/samples/demo the moment those routes tried to read their JSON/CSV
+    # from disk. Preserving the package-relative layout also matters for
+    # Path(__file__).parent-based loaders (e.g. calc/element_data.py): the
+    # frozen module's __file__ resolves under the same <bundle>/quantized/...
+    # tree, so the sibling data file is still right next to it.
+    datas=collect_data_files("quantized"),
     hiddenimports=hidden,
     excludes=[
         # dev/test-only heavyweights that must never ride along.
