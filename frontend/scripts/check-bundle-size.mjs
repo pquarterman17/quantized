@@ -22,6 +22,27 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-08-02 — pinned at 924,977 after moving the Stage cell's Map/
+ *  Worksheet tabs and the MDI `MapWindow`/`WorksheetWindow` document-window
+ *  content (`components/windows/DocumentWindow.tsx`) to dynamic imports, plus
+ *  flag-gating `WhatIsThis` the same way MAIN #29 already gated the workshop
+ *  panels. `Stage.tsx` and `DocumentWindow.tsx` each held their own static
+ *  `import MapStage ...` / `import WorksheetPane ...`, so both were in the
+ *  eager graph even though `stageTab` defaults to `"plot"` and most
+ *  workspaces have zero map/worksheet document windows — `MapStage` alone
+ *  pulls in `d3-contour` (mapRender.ts -> lib/contour.ts), a real external
+ *  dependency with no business loading before first paint. Both call sites
+ *  now lazy-import the identical specifiers, so Vite serves them from ONE
+ *  shared chunk regardless of which path (tab or document window) is hit
+ *  first. `AnnotationTextDialog` and `InteractionHints` were evaluated for
+ *  the same treatment and stay eager — see AppOverlays.tsx's header comment
+ *  for why. Measured 884,977 B eager (543,714 entry + 244,592 shared store
+ *  chunk + ~96,671 B across smaller shared/preload chunks: primitives,
+ *  uplotOpts, the split-out `help` store chunk, ParamDialog, ToolWindow,
+ *  etc.), down from 917,401 B before this pass — recovers ~53 kB of
+ *  headroom for future feature slices. Slack is 40 kB. NEVER raise this —
+ *  split a panel out or defer a module instead.
+ *
  *  2026-07-26 — pinned at 941,260 after P4.1 made `CalcOnlyApp` (the
  *  `?view=calc` standalone DiraCulator launcher) a dynamic import in
  *  `main.tsx`. It was the last static importer of `CalculatorsContent`'s
@@ -38,7 +59,7 @@ import { fileURLToPath } from "node:url";
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
  *  before first paint. */
-const EAGER_JS_BUDGET = 941_260;
+const EAGER_JS_BUDGET = 924_977;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

@@ -410,9 +410,11 @@ describe("WindowCanvas — item 17 (worksheet/map document windows)", () => {
       ],
       focusedWindowId: "w1",
     });
-    const { container, getByTestId } = render(<WindowCanvas />);
+    const { container, findByTestId } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(1)); // only the plot window builds a uPlot
-    expect(getByTestId("worksheet-pane").textContent).toBe("sheet:d1");
+    // WorksheetPane is a dynamic import (bundle-size headroom recovery), so its
+    // mock resolves through a microtask — findByTestId retries until it does.
+    expect((await findByTestId("worksheet-pane")).textContent).toBe("sheet:d1");
     expect(container.textContent).toContain("▦ sheet"); // the kind badge (glyph, never emoji)
   });
 
@@ -424,9 +426,11 @@ describe("WindowCanvas — item 17 (worksheet/map document windows)", () => {
       ],
       focusedWindowId: "w1",
     });
-    const { container, getByTestId } = render(<WindowCanvas />);
+    const { container, findByTestId } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(1));
-    expect(getByTestId("map-stage").textContent).toBe("map:d1");
+    // MapStage is a dynamic import (bundle-size headroom recovery), so its
+    // mock resolves through a microtask — findByTestId retries until it does.
+    expect((await findByTestId("map-stage")).textContent).toBe("map:d1");
     expect(container.textContent).toContain("▩ map");
   });
 

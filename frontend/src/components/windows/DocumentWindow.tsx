@@ -15,9 +15,18 @@
 // state — two map windows still share them; only the dataset binding (and
 // MapStage's local channel picks) are per-window.
 
+// CODE SPLITTING: both are dynamic imports (bundle-size headroom recovery) —
+// most workspaces have zero worksheet/map document windows, and `MapStage`
+// alone pulls in `d3-contour`. Stage.tsx's own Map/Worksheet tabs lazy-import
+// the identical specifiers, so Vite serves both call sites from the same
+// chunk.
+
+import { lazy, Suspense } from "react";
+
 import type { Dataset } from "../../lib/types";
-import MapStage from "../Stage/MapStage";
-import WorksheetPane from "../Stage/worksheet/WorksheetPane";
+
+const MapStage = lazy(() => import("../Stage/MapStage"));
+const WorksheetPane = lazy(() => import("../Stage/worksheet/WorksheetPane"));
 
 /** Decision #4's "dataset removed" state. Library clicks never retarget a
  *  document window (they're not passive-rebind candidates), so the only way
@@ -35,10 +44,18 @@ function DocumentEmptyState() {
 
 export function WorksheetWindow({ dataset, windowId }: { dataset: Dataset | null; windowId: string }) {
   if (!dataset) return <DocumentEmptyState />;
-  return <WorksheetPane datasetId={dataset.id} windowId={windowId} />;
+  return (
+    <Suspense fallback={null}>
+      <WorksheetPane datasetId={dataset.id} windowId={windowId} />
+    </Suspense>
+  );
 }
 
 export function MapWindow({ dataset }: { dataset: Dataset | null }) {
   if (!dataset) return <DocumentEmptyState />;
-  return <MapStage dataset={dataset} />;
+  return (
+    <Suspense fallback={null}>
+      <MapStage dataset={dataset} />
+    </Suspense>
+  );
 }
