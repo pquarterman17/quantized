@@ -22,7 +22,8 @@
 // scale flyouts opened "way off" and closed before the pointer could reach
 // them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
 // vertically when the flyout would overflow the viewport.
-//
+// Stacking: root 2100 / flyout 2101, above InteractionHints (1200) and
+// .qz-tip (2000, platform.css); see ContextMenu.test.tsx's stacking test.
 // GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
 // `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
 // Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
@@ -97,7 +98,7 @@ function PopupBox({
         else if (boxRef) (boxRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
       className="qzk-menu-pop qzk-ctx"
-      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 1000 }}
+      style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 2100 }} // see module header: stacking
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => {
         // `createPortal` moves the DOM node to <body>, but a React synthetic
@@ -142,7 +143,7 @@ function FlyoutBox({ children }: { children: React.ReactNode }) {
     <div
       ref={ref}
       className="qzk-menu-pop qzk-ctx"
-      style={{ position: "absolute", top: -4 + shiftY, zIndex: 1001, ...sidePos }}
+      style={{ position: "absolute", top: -4 + shiftY, zIndex: 2101, ...sidePos }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {children}

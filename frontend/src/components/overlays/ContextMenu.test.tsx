@@ -123,6 +123,37 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  // Stacking order regression (2026-08-02): an OPEN context menu must paint
+  // over every other overlay layer, or its "Got it" button / dwell tooltip
+  // can visually occlude — or, worse, intercept clicks on — the menu. The
+  // two layers that previously beat it: InteractionHints.tsx's first-run
+  // card (zIndex 1200) and platform.css's `.qz-tip` dwell tooltip
+  // (z-index: 2000). If this test starts failing after a deliberate zIndex
+  // change elsewhere, raise ContextMenu's root/flyout zIndex to stay above
+  // both — never lower this assertion.
+  it("stacks above the InteractionHints card (1200) and the .qz-tip layer (2000)", () => {
+    const INTERACTION_HINTS_Z = 1200;
+    const QZ_TIP_Z = 2000;
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={vi.fn()}
+        items={[{ label: "More", submenu: [{ label: "Deep", run: vi.fn() }] }]}
+      />,
+    );
+    const root = document.body.querySelector(".qzk-ctx") as HTMLElement;
+    const rootZ = Number(root.style.zIndex);
+    expect(rootZ).toBeGreaterThan(INTERACTION_HINTS_Z);
+    expect(rootZ).toBeGreaterThan(QZ_TIP_Z);
+
+    fireEvent.mouseEnter(screen.getByText("More").closest(".qzk-ctx-subwrap")!);
+    const flyout = screen.getByText("Deep").closest(".qzk-ctx") as HTMLElement;
+    const flyoutZ = Number(flyout.style.zIndex);
+    expect(flyoutZ).toBeGreaterThan(INTERACTION_HINTS_Z);
+    expect(flyoutZ).toBeGreaterThan(QZ_TIP_Z);
+  });
+
   it("carries ARIA menu roles: menu / menuitem / menuitemcheckbox + aria-disabled", () => {
     render(
       <ContextMenu

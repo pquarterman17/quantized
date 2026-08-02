@@ -241,6 +241,8 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
     <div
       ref={rootRef}
       className="qzk-menu-pop qzk-ctx"
+      // ContextMenu sits above this at zIndex 2100 (see its module header),
+      // but the two never coexist: both close on any outside mousedown.
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 1000, width: 248 }}
     >
       <Section label="Insert" entries={SCRIPTS} onInsert={onInsert} cols={4} />
