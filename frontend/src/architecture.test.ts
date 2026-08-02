@@ -234,6 +234,14 @@ const MODULE_PINS: Record<string, number> = {
   // distribution/useDistributionByLevels.ts. The remaining oversize half is
   // the J12 fit/Compare/percentile block — the next extraction if this grows.
   "/distribution/useDistribution.ts": 492,
+  // F1 document guardrails (2026-08-02): both modules had grown past the
+  // general ceiling without a pin. They are intentionally pinned at their
+  // exact discovered sizes; future document/persistence work must extract a
+  // cohesive sibling instead of quietly extending either catch-all.
+  // `sources()` counts its trailing newline, so the 753 editor-visible lines
+  // are 754 under this guard's `split("\\n")` convention.
+  "/lib/workspace.ts": 754,
+  "/lib/plotview.ts": 978,
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {
@@ -308,6 +316,29 @@ describe("row-state model guard (#50 universal linking)", () => {
     expect(
       offenders(/\bfilteredOutRows\s*\(/, allow),
       "derive dropped rows via lib/rowstate.analysisData, not filteredOutRows",
+    ).toEqual([]);
+  });
+});
+
+describe("FigureDocument write chokepoint (F1)", () => {
+  it("routes PlotWindow.document writes through windowDocuments, except declared construction/persistence seams", () => {
+    // `document: FigureDocument` is a function parameter/type annotation, not
+    // a write. The remaining forms catch object-literal replacement and direct
+    // assignment without pretending a raw-text guard is a TypeScript parser.
+    const documentWrite = /(?:[,{]\s*document\s*:|\.document\s*=)/;
+    const seams = [
+      "/store/windowDocuments.ts", // canonical synchronize/replace helpers
+      "/store/windowDefaults.ts", // initial main-window construction
+      "/store/windows.ts", // create/duplicate construction through createPlotWindowDocument
+      "/lib/windowDocumentPersistence.ts", // legacy promotion and workspace sanitization
+    ];
+    const writes = sources()
+      .filter(([, src]) => documentWrite.test(src))
+      .map(([path]) => path)
+      .filter((path) => !seams.some((seam) => path.endsWith(seam)));
+    expect(
+      writes,
+      "mutate a canonical PlotWindow.document through store/windowDocuments.ts; construction and persistence seams are explicitly reviewed above",
     ).toEqual([]);
   });
 });

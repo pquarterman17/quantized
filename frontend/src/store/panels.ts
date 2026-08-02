@@ -10,7 +10,7 @@
 // every other window-creating action does, with one shared id sequence.
 //
 // Dataset-removal pruning (item 19's "a removed dataset drops out of the
-// panel") lives in `lib/plotview.ts`'s `pruneWindowDatasetRefs`, called from
+// panel") lives in `store/windowDocuments.ts`'s `pruneWindowDatasetRefs`, called from
 // `store/useApp.ts`'s three removal sites (removeDataset/removeSelected/
 // removeDatasets) — this file only builds the window, it never needs to
 // prune one.

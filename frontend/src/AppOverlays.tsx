@@ -1,16 +1,19 @@
 // The platform overlay + workshop mount block, extracted verbatim from
 // App.tsx (MAIN_PLAN #1, component-ceiling ratchet). Owns the open/closed
 // flag selectors so App stays a thin composition root; DOM order here is the
-// stacking order the monolithic App used (always-mounted dialogs first, then
-// the flag-gated workshop panels, then the sheets + toaster). CommandPalette
+// stacking order the monolithic App used (always-mounted infrastructure first,
+// then the flag-gated workshop panels and ordinary dialogs, then the sheets +
+// toaster). CommandPalette
 // stays in App — it needs the curated actions list.
 //
 // CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
 // `lazyPanel(...)`, not static imports: each renders only when its `open` flag
 // is true, so a static import made a user who opens ONE panel download all 25.
-// Most always-mounted dialogs stay eager. Help is the exception: its standalone
-// store exposes the open flag here, so its growing searchable catalog can be
-// omitted from startup without losing an event listener. `SqliteQueryDialog`
+// Most infrastructure dialogs stay eager because they expose promise/event
+// interfaces that must be ready before a component has rendered. Help and the
+// ordinary store-flag dialogs are exceptions: their open flags live here, so
+// their growing content can be omitted from startup without losing an event
+// listener. `SqliteQueryDialog`
 // is eager because it self-gates on a `SHOW_SQLITE_QUERY` window event
 // registered in a `useEffect`, so it must stay mounted to hear it at all.
 //
@@ -19,14 +22,10 @@
 // SplitDatasetDialog / TextFormatHelp / ReductionsPanel tests (the App tree is
 // too heavy to render in jsdom, so those tests scan this file's text).
 
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import AnnotationTextDialog from "./components/overlays/AnnotationTextDialog";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
-import PreferencesDialog from "./components/overlays/PreferencesDialog";
-import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
-import SplitDatasetDialog from "./components/overlays/SplitDatasetDialog";
-import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import WhatIsThis from "./components/overlays/WhatIsThis";
@@ -54,6 +53,17 @@ function lazyPanel(load: () => Promise<{ default: ComponentType }>): ComponentTy
       </Suspense>
     );
   };
+}
+
+/** Load an on-demand dialog only after its first opening, then leave it mounted
+ * while closed. That preserves local dialog state (for example Preferences'
+ * active tab) exactly as the former eager mount did. */
+function useKeepMountedAfterOpen(open: boolean): boolean {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted;
 }
 
 const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"));
@@ -88,6 +98,13 @@ const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflVie
 const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"));
 const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"));
 const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
+// These ordinary dialogs have no startup responsibility: their store flags are
+// already in this composition root, so loading them only when opened removes
+// their implementation (and dialog-only helpers) from first-paint JS.
+const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
+const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
+const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
+const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"));
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -122,13 +139,21 @@ export default function AppOverlays() {
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
   const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
+  const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
+  const shortcutsOpen = useApp((s) => s.shortcutsOpen);
+  const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
+  const prefsOpen = useApp((s) => s.prefsOpen);
+  const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
+  const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
+  const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
+  const prefsMounted = useKeepMountedAfterOpen(prefsOpen);
 
   return (
     <>
       <ParamDialog />
       <ConfirmDialog />
       <AnnotationTextDialog />
-      <SplitDatasetDialog />
+      {splitDialogMounted && <SplitDatasetDialog />}
       <TooltipLayer />
       <WhatIsThis />
       <InteractionHints />
@@ -164,10 +189,10 @@ export default function AppOverlays() {
       {reflViewOpen && <ReflView />}
       {trashOpen && <TrashPanel />}
       {searchOpen && <SearchPanel />}
-      <ShortcutsDialog />
+      {shortcutsMounted && <ShortcutsDialog />}
       {helpOpen && <HelpDialog />}
-      <TextFormatHelp />
-      <PreferencesDialog />
+      {textFormatHelpMounted && <TextFormatHelp />}
+      {prefsMounted && <PreferencesDialog />}
       <Toaster />
     </>
   );

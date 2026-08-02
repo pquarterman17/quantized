@@ -93,6 +93,23 @@ export function syncPlotWindow(
   };
 }
 
+/** Replace a plot window's canonical document and regenerate every legacy
+ * projection from it. Figure lifecycle actions must use this rather than
+ * assigning `window.document` beside a hand-maintained title/view/datasetId
+ * triple; that was exactly the desynchronization class found in the F1 review.
+ */
+export function withPlotWindowDocument(window: PlotWindow, document: FigureDocument): PlotWindow {
+  if (window.kind !== "plot") return window;
+  const canonical = structuredClone(document);
+  return {
+    ...window,
+    title: canonical.name,
+    datasetId: canonical.bindings.datasetId,
+    view: figureDocumentToPlotView(canonical),
+    document: canonical,
+  };
+}
+
 export function commitFocusedPlotWindow(
   windows: readonly PlotWindow[],
   focusedId: string | null,
@@ -128,4 +145,39 @@ export function syncDatasetWindowDocuments(
       ? syncPlotWindow(window, window.view, { errors, resetErrors: true })
       : window,
   );
+}
+
+/** Remove deleted dataset bindings from both projections of every live plot
+ * window. This belongs with the document-write chokepoint, rather than in the
+ * pure PlotWindow model, so a future binding change cannot update only one.
+ */
+export function pruneWindowDatasetRefs(
+  windows: readonly PlotWindow[],
+  removed: ReadonlySet<string>,
+): PlotWindow[] {
+  return windows.map((window) => {
+    // A canonical document wins over a stale compatibility projection. Fold
+    // the removal into it first, then regenerate title/dataset/view together.
+    // This also repairs a transitional window whose two dataset ids disagree.
+    if (window.kind === "plot" && window.document) {
+      const documentDatasetRemoved =
+        window.document.bindings.datasetId !== null && removed.has(window.document.bindings.datasetId);
+      const facadeDatasetRemoved = window.datasetId !== null && removed.has(window.datasetId);
+      if (!documentDatasetRemoved && !facadeDatasetRemoved) return window;
+      const document = documentDatasetRemoved
+        ? { ...window.document, bindings: { ...window.document.bindings, datasetId: null } }
+        : window.document;
+      return withPlotWindowDocument(window, document);
+    }
+    const datasetRemoved = window.datasetId !== null && removed.has(window.datasetId);
+    const panelDatasetIds = window.panel?.datasetIds;
+    const panelChanged = panelDatasetIds?.some((id) => removed.has(id)) ?? false;
+    if (!datasetRemoved && !panelChanged) return window;
+
+    const datasetId = datasetRemoved ? null : window.datasetId;
+    const panel = panelChanged && window.panel
+      ? { ...window.panel, datasetIds: window.panel.datasetIds.filter((id) => !removed.has(id)) }
+      : window.panel;
+    return { ...window, datasetId, ...(panel ? { panel } : {}) };
+  });
 }

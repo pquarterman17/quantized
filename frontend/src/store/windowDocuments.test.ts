@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
-import { syncPlotWindow } from "./windowDocuments";
+import { pruneWindowDatasetRefs, syncPlotWindow, withPlotWindowDocument } from "./windowDocuments";
 
 function plotWindow(view = defaultPlotView()): PlotWindow {
   return {
@@ -58,5 +58,42 @@ describe("syncPlotWindow error-binding ownership", () => {
 
     expect(synced.document?.bindings.errors).toEqual(rich);
     expect(synced.document?.plot.view.plotTitle).toBe("edited");
+  });
+});
+
+describe("PlotWindow document write chokepoint", () => {
+  it("replaces the canonical document and every compatibility projection together", () => {
+    const win = plotWindow();
+    const replacement = createFigureDocument({
+      id: "figure-replaced",
+      name: "Renamed figure",
+      datasetId: "d2",
+      view: { ...defaultPlotView(), plotTitle: "Canonical title" },
+    });
+
+    const updated = withPlotWindowDocument(win, replacement);
+
+    expect(updated).toMatchObject({
+      title: "Renamed figure",
+      datasetId: "d2",
+      document: { id: "figure-replaced", name: "Renamed figure" },
+    });
+    expect(updated.view.plotTitle).toBe("Canonical title");
+    expect(updated.document).not.toBe(replacement); // window state owns its clone
+  });
+
+  it("prunes a deleted dataset from both a plot document and its window facade", () => {
+    const [updated] = pruneWindowDatasetRefs([plotWindow()], new Set(["d1"]));
+
+    expect(updated.datasetId).toBeNull();
+    expect(updated.document?.bindings.datasetId).toBeNull();
+  });
+
+  it("repairs a stale facade from the canonical binding instead of pruning the wrong dataset", () => {
+    const staleFacade = { ...plotWindow(), datasetId: "removed" };
+    const [updated] = pruneWindowDatasetRefs([staleFacade], new Set(["removed"]));
+
+    expect(updated.datasetId).toBe("d1");
+    expect(updated.document?.bindings.datasetId).toBe("d1");
   });
 });

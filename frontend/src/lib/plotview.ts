@@ -887,7 +887,7 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
   return out;
 }
 
-/** Prune every window's dataset references when `removed` datasets are
+/** Dataset-removal semantics are implemented in `store/windowDocuments.ts`: when datasets are
  *  deleted from the store — the single helper `removeDataset`/
  *  `removeSelected`/`removeDatasets` in `store/useApp.ts` all call, so the
  *  "never force-close a window" rule (decision #4) applies uniformly: a
@@ -898,26 +898,6 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
  *  empty slot, and an empty `datasetIds` as the whole-window empty state).
  *  Identity (same window object) when nothing on it changed, so callers
  *  that spread this into other patch fields don't force needless re-renders. */
-export function pruneWindowDatasetRefs(
-  windows: readonly PlotWindow[],
-  removed: ReadonlySet<string>,
-): PlotWindow[] {
-  return windows.map((w) => {
-    const patch: Partial<PlotWindow> = {};
-    if (w.datasetId && removed.has(w.datasetId)) patch.datasetId = null;
-    if (w.document?.bindings.datasetId && removed.has(w.document.bindings.datasetId)) {
-      patch.document = {
-        ...w.document,
-        bindings: { ...w.document.bindings, datasetId: null },
-      };
-    }
-    if (w.panel && w.panel.datasetIds.some((id) => removed.has(id))) {
-      patch.panel = { ...w.panel, datasetIds: w.panel.datasetIds.filter((id) => !removed.has(id)) };
-    }
-    return Object.keys(patch).length > 0 ? { ...w, ...patch } : w;
-  });
-}
-
 // ── Edge / sibling snapping while dragging (item 12) ────────────────────────
 
 /** How close (px) a window edge must be to a snap line before it snaps. */

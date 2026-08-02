@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-01 — F1.4 editable-figure lifecycle implementation
+**Updated:** 2026-08-02 — F1 guardrails and bundle-headroom preflight
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -327,6 +327,23 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F1 guardrails and bundle-headroom preflight (ChatGPT-Sol; implementation delegated to GPT-5.6 Terra)
+
+- Centralized canonical PlotWindow document replacement and dataset-reference
+  pruning in `store/windowDocuments.ts`; an architecture regression guard now
+  rejects new direct document writes outside reviewed construction and
+  persistence seams.
+- Added shrink-only module pins for the previously unguarded oversized
+  `lib/workspace.ts` and `lib/plotview.ts`; the latter shrank when dataset
+  pruning moved to its canonical owner.
+- Lazy-loaded four ordinary, store-flag-driven dialogs only after first use,
+  retaining them thereafter so their local state survives close/reopen.
+  Measured eager JavaScript fell from about 919.1 kB to 904.1 kB under the
+  unchanged 919.2 kB budget, creating about 15.1 kB for the next F1/F2 slices.
+- Adversarial follow-up tightened the raw write guard so inferred writes cannot
+  evade it and added a non-vacuous stale-facade test proving the canonical
+  document wins during dataset pruning.
 
 ### 2026-08-01 — Claude adversarial review of the F1 stack (PRs #103–#106)
 

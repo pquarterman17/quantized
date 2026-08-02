@@ -58,7 +58,6 @@ import {
   dedupeWindowTitle,
   displayedWindowTitle,
   hydrateView,
-  pruneWindowDatasetRefs,
   scaleFromLog, snapshotView,
 } from "../lib/plotview";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
@@ -75,7 +74,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, syncDatasetWindowDocuments } from "./windowDocuments";
+import { pruneWindowDatasetRefs, rebindFocusedPlotWindow, syncDatasetWindowDocuments } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";

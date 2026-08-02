@@ -1,12 +1,12 @@
 // Editable FigureDocument lifecycle. These are the canonical, reopenable plot
 // documents; legacy FigureDoc objects remain the Publication Preview model.
 import {
-  figureDocumentToPlotView,
   updateFigureDocumentFromPlotView,
   type FigureDocument,
 } from "../lib/figureDocument";
 import { snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
+import { withPlotWindowDocument } from "./windowDocuments";
 
 let figureSequence = 0;
 const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;
@@ -91,7 +91,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
           ? current.editableFigures.map((saved) => saved.id === document.id ? document : saved)
           : [...current.editableFigures, document],
         plotWindows: current.plotWindows.map((candidate) =>
-          candidate.id === windowId ? { ...candidate, document, view: figureDocumentToPlotView(document) } : candidate,
+          candidate.id === windowId ? withPlotWindowDocument(candidate, document) : candidate,
         ),
         status: `figure "${document.name}" saved`,
       }));
@@ -109,7 +109,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
         editableFigures: [...s.editableFigures, document],
         plotWindows: s.plotWindows.map((candidate) =>
           candidate.id === windowId
-            ? { ...candidate, title: trimmed, document, view: figureDocumentToPlotView(document) }
+            ? withPlotWindowDocument(candidate, document)
             : candidate,
         ),
         status: `figure "${trimmed}" saved as a new document`,
@@ -128,18 +128,11 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
       }
       const document = state.editableFigures.find((candidate) => candidate.id === documentId);
       if (!document) return null;
-      const view = figureDocumentToPlotView(document);
-      const windowId = state.createWindow(document.bindings.datasetId, view, document.name);
+      const windowId = state.createWindow(document.bindings.datasetId, undefined, document.name);
       set((current) => ({
         plotWindows: current.plotWindows.map((window) =>
           window.id === windowId
-            ? {
-                ...window,
-                title: document.name,
-                datasetId: document.bindings.datasetId,
-                view,
-                document: structuredClone(document),
-              }
+            ? withPlotWindowDocument(window, document)
             : window,
         ),
       }));
@@ -156,7 +149,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
         ),
         plotWindows: state.plotWindows.map((window) =>
           window.kind === "plot" && window.document?.id === documentId
-            ? { ...window, title: trimmed, document: { ...window.document, name: trimmed } }
+            ? withPlotWindowDocument(window, { ...window.document, name: trimmed })
             : window,
         ),
       }));
