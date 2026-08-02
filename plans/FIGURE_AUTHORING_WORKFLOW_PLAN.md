@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F1 guardrails and bundle-headroom preflight
+**Updated:** 2026-08-02 — F1.5 reversible conversion path
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -176,7 +176,7 @@ migration design; GPT-5.6 Terra high / Claude Sonnet 5 for bounded UI slices.
 - [x] **F1.4 Add document lifecycle.** Implement Save, Save As, dirty state,
       close confirmation, update-in-place, duplicate, rename, and delete using
       normal workspace undo/recovery conventions.
-- [ ] **F1.5 Make conversions reversible.** Provide one tested path among
+- [x] **F1.5 Make conversions reversible.** Provide one tested path among
       FigureDocument, interactive PlotView, and export FigureSpec. Where exact
       reversal is impossible, keep the original canonical field and derive the
       transport representation without deleting information.
@@ -327,6 +327,25 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F1.5 reversible document/export conversion (ChatGPT-Sol; bounded implementation delegated to GPT-5.6 Terra)
+
+- Added one shared PlotView/data-to-FigureSpec core. The established live-store
+  export remains byte/deep-equal, while a canonical FigureDocument can now
+  derive the same transport without a second field-by-field implementation.
+- The document adapter uses canonical rich error roles, grouping, X breaks,
+  secondary-axis settings, series state, legend/decor, page geometry, and
+  saved output defaults. Live documents require the exact bound dataset;
+  frozen documents render from a cloned snapshot.
+- Preserved information that FigureSpec cannot represent (`mark`, `facetKey`,
+  and Y/Y2 breaks) in the FigureDocument instead of deleting or pretending to
+  serialize it. Grouping plus secondary Y fails early with an actionable error
+  because the current backend rejects that combination.
+- Characterization tests cover the document → PlotView → document canonical
+  round trip, document → FigureSpec projection, frozen/live resolution,
+  backend-invalid combinations, and exact parity for the pre-existing export
+  path. This is stacked on draft PR #107; the PR number for this slice is
+  recorded when it is opened.
 
 ### 2026-08-02 — F1 guardrails and bundle-headroom preflight (ChatGPT-Sol; implementation delegated to GPT-5.6 Terra)
 
