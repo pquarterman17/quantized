@@ -73,3 +73,41 @@ def test_convert_incompatible_dims_is_422() -> None:
         "/api/reference/convert", json={"value": 1.0, "from": "Oe", "to": "kg"}
     )
     assert resp.status_code == 422
+
+
+def test_convert_photon_energy_zero_is_422_with_ascii_detail() -> None:
+    resp = client.post(
+        "/api/reference/convert", json={"value": 0.0, "from": "eV", "to": "nm"}
+    )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert detail.isascii()
+    assert "positive" in detail
+
+
+def test_unit_categories_returns_curated_table() -> None:
+    resp = client.get("/api/reference/unit-categories")
+    assert resp.status_code == 200
+    cats = resp.json()["categories"]
+    ids = {c["id"] for c in cats}
+    assert {"length", "energy", "photon_energy", "magnetic_field", "magnetization",
+            "pressure", "temperature", "angle", "time", "mass", "resistivity",
+            "area", "volume", "frequency", "charge", "current", "voltage"} <= ids
+    for cat in cats:
+        assert len(cat["units"]) >= 2
+        for u in cat["units"]:
+            assert "value" in u and "label" in u
+
+
+def test_unit_categories_every_unit_is_convertible_via_convert_endpoint() -> None:
+    """Every unit string the categories endpoint advertises must actually be
+    accepted by /convert (round-tripped against itself) -- catches a typo'd
+    unit string in the curated table before it reaches the UI."""
+    cats = client.get("/api/reference/unit-categories").json()["categories"]
+    for cat in cats:
+        for u in cat["units"]:
+            resp = client.post(
+                "/api/reference/convert",
+                json={"value": 1.0, "from": u["value"], "to": u["value"]},
+            )
+            assert resp.status_code == 200, f"{cat['id']}: {u['value']} rejected by /convert"

@@ -15,6 +15,10 @@ vi.mock("../../../lib/api", () => ({
   getConstants: vi.fn(),
   sldFromFormula: vi.fn(),
 }));
+// useCalculators also fetches the units-converter category table from a
+// sibling module (kept out of the pinned lib/api.ts barrel — see
+// lib/api/reference.ts); unmocked here, its real getJSON() call rejects in
+// jsdom (no fetch) and the hook's .catch() swallows it, same as offline.
 
 const SLD_RESULT = {
   formula: "Si",
