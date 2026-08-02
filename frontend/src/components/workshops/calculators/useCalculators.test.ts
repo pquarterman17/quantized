@@ -14,7 +14,10 @@ vi.mock("../../../lib/api", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getConstants).mockResolvedValue({ constants: { h: 6.626e-34, c: 2.998e8 } });
+  vi.mocked(getConstants).mockResolvedValue({
+    constants: { h: 6.626e-34, c: 2.998e8 },
+    systems: { SI: [], CGS: [], eV: [] },
+  });
 });
 
 describe("useCalculators", () => {

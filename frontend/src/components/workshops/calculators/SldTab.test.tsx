@@ -33,7 +33,7 @@ async function computeSld(): Promise<void> {
 
 describe("SldTab → Reflectivity", () => {
   beforeEach(() => {
-    vi.mocked(getConstants).mockResolvedValue({ constants: {} });
+    vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
     vi.mocked(sldFromFormula).mockResolvedValue(SLD_RESULT);
     useApp.setState({ reflectivityOpen: false, reflectivitySeed: null });
     useToasts.setState({ toasts: [] });

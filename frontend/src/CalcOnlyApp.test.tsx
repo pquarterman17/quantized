@@ -14,14 +14,14 @@ vi.mock("./lib/api", () => ({
 
 describe("CalcOnlyApp", () => {
   it("renders a DiraCulator header and the calculators tab selector", () => {
-    vi.mocked(getConstants).mockResolvedValue({ constants: {} });
+    vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
     render(<CalcOnlyApp />);
     expect(screen.getByText("DiraCulator")).toBeInTheDocument();
     expect(screen.getByLabelText("calculator")).toBeInTheDocument();
   });
 
   it("does not mount the full app shell (Library/Stage/Inspector/menubar)", () => {
-    vi.mocked(getConstants).mockResolvedValue({ constants: {} });
+    vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
     render(<CalcOnlyApp />);
     // App.tsx's Library+Stage+Inspector row and the menubar are qzk-main /
     // qzk-menubar; CalcOnlyApp never imports those components, so neither

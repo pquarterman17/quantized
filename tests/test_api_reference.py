@@ -17,6 +17,28 @@ def test_constants_has_speed_of_light() -> None:
     assert c["c"] > 2.9e8  # speed of light, m/s
 
 
+def test_constants_has_systems_breakdown() -> None:
+    resp = client.get("/api/reference/constants")
+    assert resp.status_code == 200
+    body = resp.json()
+    systems = body["systems"]
+    assert set(systems.keys()) == {"SI", "CGS", "eV"}
+
+    si_by_key = {e["key"]: e for e in systems["SI"]}
+    # The flat "constants" field and the SI system entries must agree.
+    assert si_by_key["c"]["value"] == body["constants"]["c"]
+    assert si_by_key["c"]["unit"] == "m/s"
+
+    cgs_by_key = {e["key"]: e for e in systems["CGS"]}
+    assert cgs_by_key["muB"]["unit"] == "erg/G"
+
+    ev_by_key = {e["key"]: e for e in systems["eV"]}
+    assert ev_by_key["kB"]["unit"] == "eV/K"
+    # mu0/eps0 have no meaningful non-SI form -- must not appear elsewhere.
+    assert "mu0" not in cgs_by_key
+    assert "mu0" not in ev_by_key
+
+
 def test_elements_full_table() -> None:
     resp = client.get("/api/reference/elements")
     assert resp.status_code == 200
