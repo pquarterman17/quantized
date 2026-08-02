@@ -32,6 +32,7 @@ import {
 } from "../components/Library/folderOps";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
 import type { PlotMenuContext, MenuSeries } from "./plotMenu";
 import { loadTemplates } from "./template";
@@ -178,6 +179,17 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     label: "Plot (make active)",
     enabled: (t) => !t.active,
     run: (t) => useApp.getState().setActive(t.dataset.id),
+  },
+  // Multi-plot discoverability: a plain Library click REBINDS the focused
+  // window (unless pinned), so there was no direct "plot this dataset in a
+  // NEW window" gesture — users could only discover multiple windows via
+  // Graph Builder's "Create New Plot". Always enabled (unlike `dataset.plot`
+  // above): even the already-active dataset is worth plotting again, styled
+  // differently, side by side.
+  {
+    id: "dataset.plotInNewWindow",
+    label: "Plot in new window",
+    run: (t) => void plotInNewWindow(t.dataset.id),
   },
   { id: "dataset.duplicate", label: "Duplicate", run: (t) => void useApp.getState().duplicateDataset(t.dataset.id) },
   { id: "dataset.rename", label: "Rename…", run: (t) => t.onRename() },

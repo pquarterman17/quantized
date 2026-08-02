@@ -94,8 +94,8 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "figure-documents",
     origin: "Graph windows saved in the project",
     quantized:
-      "Every plot window is a figure document — Save / Save As keeps it under the Library's Editable figures and it reopens with errors, y2, styles, and annotations intact. The Editable button on a Publication figure promotes a copy.",
-    keywords: "save figure editable document reopen rename duplicate library graph window publication copy promote",
+      "Every plot window is a figure document — Save / Save As keeps it under the Library's Editable figures and it reopens with errors, y2, styles, and annotations intact. The Editable button on a Publication figure promotes a copy. A dataset isn't limited to one window either: right-click it in the Library (or the command palette) and choose Plot in new window to view it several ways side by side.",
+    keywords: "save figure editable document reopen rename duplicate library graph window publication copy promote plot in new window multiple windows side by side compare",
   },
   {
     id: "send-to-origin",

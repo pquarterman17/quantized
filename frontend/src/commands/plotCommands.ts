@@ -10,6 +10,7 @@
 import { askParams } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "../lib/exportActive";
 import { runPageSetupDialog } from "../lib/pageSetupCommand";
+import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
@@ -203,6 +204,27 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         ]);
         if (!params) return;
         s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
+      },
+    },
+    {
+      // Multi-plot discoverability: the palette counterpart of the Library
+      // row's "Plot in new window" (lib/contextActions.ts's
+      // `dataset.plotInNewWindow`) — a plain Library click only REBINDS the
+      // focused window (unless pinned), so this was the missing "plot this
+      // dataset again, styled differently, side by side" gesture.
+      id: "plot-in-new-window",
+      group: "Plot",
+      section: "Layout",
+      label: "Plot in new window",
+      description: "Open the active dataset in a new plot window, independent of the currently focused window.",
+      keywords: "duplicate window multiple views compare side by side library discoverability",
+      run: () => {
+        const id = s().activeId;
+        if (!id) {
+          toast("no active dataset", "danger");
+          return;
+        }
+        plotInNewWindow(id);
       },
     },
     ...(
