@@ -15,6 +15,10 @@ from quantized.calc.crystallography import (
     CRYSTAL_SYSTEMS,
     cell_volume,
     d_spacing,
+    direction_uvtw_to_uvw,
+    direction_uvw_to_uvtw,
+    hkil_to_hkl,
+    hkl_to_hkil,
     theoretical_density,
 )
 from quantized.calc.formula import formula_mass
@@ -148,3 +152,99 @@ def test_density_rejects_bad_inputs() -> None:
         theoretical_density(58.44, 0, 100.0)
     with pytest.raises(ValueError, match="molar mass"):
         theoretical_density(0.0, 4, 100.0)
+
+
+# ── Miller-Bravais 4-index <-> 3-index plane conversion ────────────────────────
+def test_hkl_to_hkil_0001() -> None:
+    assert hkl_to_hkil(0, 0, 1) == (0, 0, 0, 1)  # (001) -> (0001)
+
+
+def test_hkl_to_hkil_10m10() -> None:
+    assert hkl_to_hkil(1, 0, 0) == (1, 0, -1, 0)  # (100) -> (10-10)
+
+
+def test_hkl_to_hkil_11m20() -> None:
+    assert hkl_to_hkil(1, 1, 0) == (1, 1, -2, 0)  # (110) -> (11-20)
+
+
+def test_hkil_to_hkl_roundtrip() -> None:
+    assert hkil_to_hkl(0, 0, 0, 1) == (0, 0, 1)
+    assert hkil_to_hkl(1, 0, -1, 0) == (1, 0, 0)
+    assert hkil_to_hkl(1, 1, -2, 0) == (1, 1, 0)
+
+
+def test_hkil_to_hkl_rejects_bad_i() -> None:
+    with pytest.raises(ValueError, match=r"i must equal -\(h\+k\)"):
+        hkil_to_hkl(1, 1, 0, 0)  # i should be -2, not 0
+
+
+# ── d-spacing accepts either the 3- or 4-index hexagonal plane form ────────────
+def test_dspacing_hexagonal_mg_reference() -> None:
+    # Mg: a = 3.2094 Å, c = 5.2107 Å (textbook reference values).
+    a, c = 3.2094, 5.2107
+    assert d_spacing("hexagonal", a, 0, c, 0, 0, 2)["d"] == pytest.approx(2.60535, abs=1e-4)
+    assert d_spacing("hexagonal", a, 0, c, 1, 0, 0)["d"] == pytest.approx(2.77950, abs=1e-4)
+
+
+def test_dspacing_hexagonal_4index_matches_3index() -> None:
+    a, c = 3.2094, 5.2107
+    d3 = d_spacing("hexagonal", a, 0, c, 1, 0, 0)["d"]
+    d4 = d_spacing("hexagonal", a, 0, c, 1, 0, 0, i=-1)["d"]
+    assert d4 == pytest.approx(d3, rel=1e-12)
+    d3b = d_spacing("hexagonal", a, 0, c, 1, 1, 0)["d"]
+    d4b = d_spacing("hexagonal", a, 0, c, 1, 1, 0, i=-2)["d"]
+    assert d4b == pytest.approx(d3b, rel=1e-12)
+
+
+def test_dspacing_hexagonal_rejects_inconsistent_i() -> None:
+    with pytest.raises(ValueError, match=r"i must equal -\(h\+k\)"):
+        d_spacing("hexagonal", 3.2094, 0, 5.2107, 1, 0, 0, i=0)  # i should be -1
+
+
+def test_dspacing_i_rejected_for_non_hexagonal_system() -> None:
+    with pytest.raises(ValueError, match="only applies to the hexagonal system"):
+        d_spacing("cubic", 4.0, 0, 0, 1, 0, 0, i=-1)
+
+
+# ── Miller-Bravais 4-index <-> 3-index direction conversion (NOTE: a different
+# transform from planes above — direction components rescale by 3) ────────────
+def test_direction_uvw_to_uvtw_100() -> None:
+    assert direction_uvw_to_uvtw(1, 0, 0) == (2, -1, -1, 0)
+
+
+def test_direction_uvw_to_uvtw_110() -> None:
+    assert direction_uvw_to_uvtw(1, 1, 0) == (1, 1, -2, 0)
+
+
+def test_direction_uvw_to_uvtw_001() -> None:
+    assert direction_uvw_to_uvtw(0, 0, 1) == (0, 0, 0, 1)
+
+
+def test_direction_uvtw_to_uvw_roundtrip() -> None:
+    assert direction_uvtw_to_uvw(2, -1, -1, 0) == (1, 0, 0)
+    assert direction_uvtw_to_uvw(1, 1, -2, 0) == (1, 1, 0)
+    assert direction_uvtw_to_uvw(0, 0, 0, 1) == (0, 0, 1)
+
+
+def test_direction_roundtrip_is_consistent_for_arbitrary_direction() -> None:
+    # [uvtw] -> [UVW] -> [uvtw] must reproduce the original (already-reduced) indices.
+    for u, v, w in [(1, 0, 0), (1, 1, 0), (2, 1, 0), (1, -2, 3), (0, 1, 1)]:
+        uvtw = direction_uvw_to_uvtw(u, v, w)
+        assert direction_uvtw_to_uvw(*uvtw) == (u, v, w)
+
+
+def test_direction_uvtw_rejects_bad_t() -> None:
+    with pytest.raises(ValueError, match=r"t must equal -\(u\+v\)"):
+        direction_uvtw_to_uvw(1, 1, 0, 0)  # t should be -2, not 0
+
+
+def test_direction_uvw_zero_raises() -> None:
+    with pytest.raises(ValueError, match="must not all be zero"):
+        direction_uvw_to_uvtw(0, 0, 0)
+
+
+def test_direction_transform_differs_from_plane_transform() -> None:
+    # For the SAME 3-index triple, the plane and direction 4-index forms differ
+    # (planes: i = -(h+k), no scaling; directions: rescale by 3, then reduce).
+    assert hkl_to_hkil(1, 0, 0) == (1, 0, -1, 0)
+    assert direction_uvw_to_uvtw(1, 0, 0) == (2, -1, -1, 0)

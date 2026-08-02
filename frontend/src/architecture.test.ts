@@ -228,7 +228,11 @@ const MODULE_PINS: Record<string, number> = {
   // MapRequest/mapSeries moved to lib/api/plot.ts (the plotSeries `signal` +
   // x_min/x_max params would otherwise have pushed this back over its pin).
   // New /api/plot/* wrappers belong there, not here.
-  "/lib/api.ts": 1866,
+  // 1866 -> 1837 (hexagonal Miller-Bravais support): crystalDSpacing/
+  // crystalCell moved to lib/api/crystallography.ts (the added 4-index `i`
+  // field would otherwise have pushed this back over its pin). New
+  // /api/crystallography/* wrappers belong there, not here.
+  "/lib/api.ts": 1837,
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

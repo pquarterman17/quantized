@@ -64,3 +64,25 @@ def test_cell_density_from_formula() -> None:
 def test_cell_bad_formula_is_422() -> None:
     r = client.post("/api/crystallography/cell", json={"a": 4.0, "formula": "Xx2"})
     assert r.status_code == 422
+
+
+# ── 4-index Miller-Bravais (hkil) hexagonal plane form ──────────────────────
+def test_dspacing_hexagonal_accepts_4index_form() -> None:
+    body = {"system": "hexagonal", "a": 3.2094, "c": 5.2107, "h": 1, "k": 0, "l": 0, "i": -1}
+    r = client.post("/api/crystallography/dspacing", json=body)
+    assert r.status_code == 200
+    assert r.json()["d"] == pytest.approx(2.77950, abs=1e-4)
+
+
+def test_dspacing_hexagonal_rejects_inconsistent_i() -> None:
+    body = {"system": "hexagonal", "a": 3.2094, "c": 5.2107, "h": 1, "k": 0, "l": 0, "i": 0}
+    r = client.post("/api/crystallography/dspacing", json=body)
+    assert r.status_code == 422
+    assert "i must equal" in r.json()["detail"]
+
+
+def test_dspacing_4index_rejected_for_non_hexagonal() -> None:
+    body = {"system": "cubic", "a": 4.0, "h": 1, "k": 0, "l": 0, "i": -1}
+    r = client.post("/api/crystallography/dspacing", json=body)
+    assert r.status_code == 422
+    assert "hexagonal" in r.json()["detail"]
