@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
 import { createFigureDocument } from "../../../lib/figureDocument";
 import { defaultPlotView } from "../../../lib/plotview";
+import { pxToData } from "../../../lib/previewmap";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
@@ -376,5 +377,78 @@ describe("useFigureBuilder", () => {
       }],
       x_breaks: [[0.25, 0.5]],
     });
+  });
+
+  // Regression: canonical mode read/wrote ONLY `publication.overrides` (the
+  // publication-only delta), but the preview renders the MERGE of that delta
+  // with view-derived overrides (`lib/figureSpec.ts`'s `buildFigureSpecForView`
+  // -> `mergeFigureOverrides(withBreaks, extras.publicationOverrides)`). A
+  // view-derived annotation (added on the Stage, no publication overrides yet)
+  // was therefore invisible to the property panels and un-draggable — `dragElement`
+  // length-checked against `activeOverrides.annotations` which was always [].
+  it("reads canonical annotations through the view-derived merge and lets drag reach them", async () => {
+    const document = createFigureDocument({
+      id: "figure-ann",
+      name: "Annotated",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), annotations: [{ id: "a1", x: 1, y: 2, text: "Hello" }] },
+    });
+    useApp.setState({
+      figurePublicationSession: {
+        target: "window", windowId: "w1",
+        baseline: structuredClone(document), draft: structuredClone(document),
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+
+    // The view-derived annotation must be visible to the property panels —
+    // publication.overrides is absent, so the pre-fix read (`publication
+    // .overrides ?? overrides`) always saw [].
+    expect(result.current.overrides.annotations).toHaveLength(1);
+
+    // Drag must reach it too, not silently no-op against that same empty list.
+    const axes = result.current.hitmap!.axes;
+    const expected = pxToData(axes, 350, 150);
+    act(() => result.current.dragElement("ann:0", 350, 150));
+    const draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.publication?.overrides?.annotations?.[0]).toMatchObject({
+      x: expected.x,
+      y: expected.y,
+      text: "Hello",
+    });
+  });
+
+  // Regression (write side): the pre-fix `setCanonicalOverrides` wrote
+  // `compactOverrides(next)` verbatim, so ANY panel edit pinned the entire
+  // merged snapshot (including view-derived annotations/x_lim) into
+  // publication.overrides — freezing fields the user never touched instead
+  // of leaving them tracking the view.
+  it("writes only the changed top-level override key, leaving untouched view-derived keys out of the publication delta", async () => {
+    const document = createFigureDocument({
+      id: "figure-grid",
+      name: "Grid edit",
+      datasetId: "d1",
+      view: {
+        ...defaultPlotView(),
+        annotations: [{ id: "a1", x: 1, y: 2, text: "Hello" }],
+        xLim: [0, 10],
+      },
+    });
+    useApp.setState({
+      figurePublicationSession: {
+        target: "window", windowId: "w1",
+        baseline: structuredClone(document), draft: structuredClone(document),
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+    act(() => result.current.setOverrides({ ...result.current.overrides, grid: false }));
+    const overrides = useApp.getState().figurePublicationSession!.draft.publication?.overrides;
+    expect(overrides).toMatchObject({ grid: false });
+    expect(overrides).not.toHaveProperty("annotations");
+    expect(overrides).not.toHaveProperty("x_lim");
   });
 });

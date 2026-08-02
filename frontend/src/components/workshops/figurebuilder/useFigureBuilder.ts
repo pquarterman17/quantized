@@ -13,6 +13,7 @@ import {
   saveGraphTemplate,
   type GraphTemplate,
 } from "../../../lib/figuredoc";
+import { effectiveFigureOverrides, publicationOverridesDelta } from "./canonicalOverrides";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
@@ -189,14 +190,23 @@ export function useFigureBuilder() {
     patchCanonical((document) => ({ ...document, output: { ...document.output, ...patch } }));
   const setCanonicalView = (patch: Partial<FigureViewState>) =>
     patchCanonical((document) => ({ ...document, plot: { ...document.plot, view: { ...document.plot.view, ...patch } } }));
+  // Reads/writes route through the SAME merge the renderer uses (view +
+  // publication delta), as a minimal write-delta — see canonicalOverrides.ts's
+  // module doc for why a bare `publication.overrides` read/write was a bug.
+  const effective = canonical
+    ? effectiveFigureOverrides(canonicalView!, canonicalDocument?.publication?.overrides)
+    : null;
   const setCanonicalOverrides = (next: FigureOverrides) =>
     patchCanonical((document) => ({
       ...document,
-      publication: { ...document.publication, overrides: compactOverrides(next) },
+      publication: {
+        ...document.publication,
+        overrides: publicationOverridesDelta(effective!, next, document.publication?.overrides),
+      },
     }));
   const setCanonicalStyle = (next: string) =>
     setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
-  const activeOverrides = canonicalDocument?.publication?.overrides ?? overrides;
+  const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
@@ -454,8 +464,8 @@ export function useFigureBuilder() {
     canExport: !canonical || canonicalReadiness?.state === "ready",
     busy,
     exportNow,
-    overrides: canonicalDocument?.publication?.overrides ?? overrides,
-    setOverrides: canonical ? setCanonicalOverrides : setOverrides,
+    overrides: activeOverrides,
+    setOverrides: setActiveOverrides,
     data,
     hitmap,
     focusGroup,
