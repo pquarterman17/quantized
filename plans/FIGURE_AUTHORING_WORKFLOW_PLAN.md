@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F1.6 deterministic workspace migration
+**Updated:** 2026-08-02 — F2.1b/F2.2a canonical preview transaction
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -199,8 +199,14 @@ decisions are merged.
   - [x] **F2.1a Model/adapters.** FigureDocument v2 retains lossless
         publication-only overrides and exact export styles; v1 migrates without
         publication state. UI binding and Apply/Cancel remain open.
+  - [x] **F2.1b Focused canonical session.** File ▸ Publication Preview opens
+        a transient FigureDocument draft from the focused window; legacy and
+        Graph Builder entry points remain compatibility paths pending bridging.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
+  - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
+        focused window document and Cancel is mutation-free; broader entry
+        points and parity remain open.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
@@ -330,6 +336,20 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.1b/F2.2a canonical Publication Preview session (PR #111)
+
+- File ▸ Publication Preview now opens a clone-isolated FigureDocument draft
+  for the focused plot window. Canonical preview and export derive directly
+  from that draft; legacy FigureDoc and Graph Builder seeds remain unchanged
+  compatibility paths until their explicit bridge slice.
+- Apply verifies the focused window still folds to the session baseline before
+  making exactly one undoable document replacement and hydrating the focused
+  facade. Cancel and window close discard the session without persistent or
+  history mutation; concurrent Stage changes reject Apply rather than being
+  overwritten.
+- This covers the focused-window transaction only. F2.1/F2.2 stay open until
+  every entry point shares the session and publication controls reach parity.
 
 ### 2026-08-02 — F2.1a FigureDocument publication-state model (PR #110)
 

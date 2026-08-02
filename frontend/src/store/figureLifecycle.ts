@@ -1,10 +1,11 @@
 // Editable FigureDocument lifecycle. These are the canonical, reopenable plot
 // documents; legacy FigureDoc objects remain the Publication Preview model.
 import {
+  figureDocumentToPlotView,
   updateFigureDocumentFromPlotView,
   type FigureDocument,
 } from "../lib/figureDocument";
-import { snapshotView, type PlotWindow } from "../lib/plotview";
+import { hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
 
@@ -67,8 +68,26 @@ export function pruneEditableFigureRefs(
   );
 }
 
+/** A transient Publication Preview edit: never persisted or history-tracked
+ * until Apply replaces the target window's canonical document. */
+export interface FigurePublicationSession {
+  windowId: string;
+  baseline: FigureDocument;
+  draft: FigureDocument;
+}
+
+export function figurePublicationDirty(session: FigurePublicationSession | null): boolean {
+  return session !== null && JSON.stringify(session.baseline) !== JSON.stringify(session.draft);
+}
+
 export interface FigureLifecycleSlice {
   editableFigures: FigureDocument[];
+  figurePublicationSession: FigurePublicationSession | null;
+  beginFigurePublicationEdit: (windowId?: string) => boolean;
+  replaceFigurePublicationDraft: (draft: FigureDocument) => void;
+  patchFigurePublicationDraft: (patch: (draft: FigureDocument) => FigureDocument) => void;
+  applyFigurePublicationEdit: () => boolean;
+  cancelFigurePublicationEdit: () => void;
   saveFigure: (windowId: string) => string | null;
   saveFigureAs: (windowId: string, name: string) => string | null;
   openEditableFigure: (documentId: string) => string | null;
@@ -80,6 +99,66 @@ export interface FigureLifecycleSlice {
 export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): FigureLifecycleSlice {
   return {
     editableFigures: [],
+    figurePublicationSession: null,
+    beginFigurePublicationEdit: (requestedWindowId) => {
+      const state = get();
+      const windowId = requestedWindowId ?? state.focusedWindowId;
+      const window = windowId ? state.plotWindows.find((candidate) => candidate.id === windowId) : undefined;
+      const document = window && liveWindowDocument(state, window);
+      if (!window || !document || window.id !== state.focusedWindowId) return false;
+      set({
+        figurePublicationSession: {
+          windowId: window.id,
+          baseline: structuredClone(document),
+          draft: structuredClone(document),
+        },
+        figureBuilderOpen: true,
+      });
+      return true;
+    },
+    replaceFigurePublicationDraft: (draft) => set((state) =>
+      state.figurePublicationSession
+        ? { figurePublicationSession: { ...state.figurePublicationSession, draft: structuredClone(draft) } }
+        : {},
+    ),
+    patchFigurePublicationDraft: (patch) => set((state) => {
+      const session = state.figurePublicationSession;
+      if (!session) return {};
+      const draft = patch(structuredClone(session.draft));
+      return { figurePublicationSession: { ...session, draft: structuredClone(draft) } };
+    }),
+    applyFigurePublicationEdit: () => {
+      const state = get();
+      const session = state.figurePublicationSession;
+      const window = session && state.plotWindows.find((candidate) => candidate.id === session.windowId);
+      const live = window ? liveWindowDocument(state, window) : null;
+      if (
+        !session ||
+        !window ||
+        state.focusedWindowId !== session.windowId ||
+        window.kind !== "plot" ||
+        window.document?.id !== session.baseline.id ||
+        !live ||
+        JSON.stringify(live) !== JSON.stringify(session.baseline)
+      ) {
+        if (session) set({ status: "publication preview target changed; changes not applied" });
+        return false;
+      }
+      const document = structuredClone(session.draft);
+      const view = figureDocumentToPlotView(document);
+      state.recordHistory("apply publication preview");
+      set((current) => ({
+        plotWindows: current.plotWindows.map((candidate) =>
+          candidate.id === session.windowId ? withPlotWindowDocument(candidate, document) : candidate,
+        ),
+        ...hydrateView(view),
+        figurePublicationSession: null,
+        figureBuilderOpen: false,
+        status: `applied publication preview to "${document.name}"`,
+      }));
+      return true;
+    },
+    cancelFigurePublicationEdit: () => set({ figurePublicationSession: null, figureBuilderOpen: false }),
     saveFigure: (windowId) => {
       const state = get();
       const window = state.plotWindows.find((candidate) => candidate.id === windowId);

@@ -72,8 +72,8 @@ export interface FigureDocumentV1 {
 export interface FigurePublicationState {
   /** Raw backend overrides; absent publication means derive only from canonical PlotView. */
   overrides: FigureOverrides | null;
-  /** null explicitly omits styles; an array is an exact legacy wire projection. */
-  seriesStyles: (ExportSeriesStyle | null)[] | null;
+  /** Absent derives styles from PlotView; null omits them; an array is exact. */
+  seriesStyles?: (ExportSeriesStyle | null)[] | null;
 }
 
 export interface FigureDocumentV2 extends Omit<FigureDocumentV1, "version"> {
@@ -311,6 +311,7 @@ function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
 function publicationState(value: unknown): FigurePublicationState | undefined {
   if (!isObject(value)) return undefined;
   const overrides = value.overrides === null ? null : sanitizeFigureOverrides(value.overrides);
+  if (!("seriesStyles" in value)) return { overrides };
   const seriesStyles = value.seriesStyles === null ? null : sanitizeExportSeriesStyles(value.seriesStyles);
   return { overrides, seriesStyles };
 }

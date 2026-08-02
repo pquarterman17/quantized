@@ -1604,7 +1604,7 @@ export const useApp = create<AppState>((set, get) => ({
         recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
         figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
         editableFigures: ws.editableFigures ?? [],
-        figureDocSeed: null,
+        figureDocSeed: null, figurePublicationSession: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         staleDatasets: [],

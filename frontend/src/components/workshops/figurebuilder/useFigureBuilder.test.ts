@@ -2,6 +2,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
+import { createFigureDocument } from "../../../lib/figureDocument";
+import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
@@ -43,6 +45,7 @@ beforeEach(() => {
     yFmt: { mode: "auto", digits: 2 },
     seriesStyles: {},
     figureDocSeed: null,
+    figurePublicationSession: null,
     figureBuilderOpen: false,
     status: "",
   });
@@ -249,5 +252,39 @@ describe("useFigureBuilder", () => {
 
     act(() => result.current.setFmt("png")); // unrelated change doesn't reset it
     expect(result.current.dpi).toBe(1200);
+  });
+
+  it("renders and patches one canonical draft without dropping rich document state", async () => {
+    const document = createFigureDocument({
+      id: "figure-w1", name: "Canonical", datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0, 1], y2Keys: [0], y2Scale: "log", plotTitle: "Before" },
+      mark: "scatter",
+      facetKey: 1,
+      errors: [{ target: 1, channel: 0, axis: "y", side: "+" }],
+      axisBreaks: { x: [[0.2, 0.5]], y: [[1, 2]], y2: [[3, 4]] },
+      publication: { overrides: { font_name: "Helvetica" } },
+    });
+    useApp.setState({ figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) } });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+    expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0]).toMatchObject({
+      y2_keys: [0], overrides: { x_breaks: [[0.2, 0.5]] }, error_spans: [null, null],
+    });
+
+    act(() => {
+      result.current.setFmt("svg");
+      result.current.editElementText("title", "Edited");
+      result.current.dragElement("legend", 300, 200);
+    });
+    const draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.output.format).toBe("svg");
+    expect(draft.plot.view.plotTitle).toBe("Edited");
+    expect(draft.publication?.overrides?.legend).toMatchObject({ loc: "custom" });
+    expect(draft.bindings.y2Keys).toEqual([0]);
+    expect(draft.bindings.errors).toEqual(document.bindings.errors);
+    expect(draft.bindings.facetKey).toBe(1);
+    expect(draft.plot.mark).toBe("scatter");
+    expect(draft.plot.axisBreaks).toEqual(document.plot.axisBreaks);
   });
 });

@@ -5,18 +5,31 @@ import { fuzzy } from "../lib/fuzzy";
 import { useApp } from "../store/useApp";
 
 describe("Publication Preview command", () => {
-  it("describes the detached publication workflow before opening it", () => {
+  it("opens a canonical session when possible and a safe compatibility preview otherwise", () => {
     const setFigureBuilderOpen = vi.fn();
-    useApp.setState({ setFigureBuilderOpen });
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
+    const setStatus = vi.fn();
+    useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
     const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
 
     expect(command).toMatchObject({
       label: "Publication preview…",
-      description: expect.stringContaining("do not update the editable Stage plot"),
+      description: expect.stringContaining("Apply updates that figure"),
     });
 
     command?.run();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
+    expect(setStatus).toHaveBeenCalledWith("opened Publication Preview without an editable plot document");
     expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("begins a canonical focused-window session before falling back", () => {
+    const setFigureBuilderOpen = vi.fn();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(true);
+    useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit });
+    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
+    expect(setFigureBuilderOpen).not.toHaveBeenCalled();
   });
 
   it("identifies the multi-panel surface as a temporary export composition", () => {

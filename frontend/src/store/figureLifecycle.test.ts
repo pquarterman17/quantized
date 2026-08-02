@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
-import { editableFigureDirty } from "./figureLifecycle";
+import { editableFigureDirty, figurePublicationDirty } from "./figureLifecycle";
 import { useApp } from "./useApp";
 
 const document = () => createFigureDocument({
@@ -40,6 +40,7 @@ beforeEach(() => {
     plotWindows: [window()],
     focusedWindowId: "w1",
     editableFigures: [],
+    figurePublicationSession: null,
     history: [],
     future: [],
     ...defaultPlotView(),
@@ -85,5 +86,59 @@ describe("editable figure lifecycle", () => {
     const opened = useApp.getState().openEditableFigure("figure-w1");
     expect(opened).toBeTruthy();
     expect(useApp.getState().plotWindows.find((entry) => entry.id === opened)?.document?.id).toBe("figure-w1");
+  });
+});
+
+describe("canonical Publication Preview session", () => {
+  it("begins from the focused live facade with isolated baseline and draft", () => {
+    useApp.setState({ plotTitle: "Live title" });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    const session = useApp.getState().figurePublicationSession!;
+    expect(session.baseline.plot.view.plotTitle).toBe("Live title");
+    expect(session.draft).toEqual(session.baseline);
+    expect(session.draft).not.toBe(session.baseline);
+
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Draft name" }));
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Current plot");
+    expect(figurePublicationDirty(useApp.getState().figurePublicationSession)).toBe(true);
+  });
+
+  it("cancels with no persistent mutation or history entry", () => {
+    useApp.getState().beginFigurePublicationEdit();
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Discarded" }));
+    const before = structuredClone(useApp.getState().plotWindows);
+    const history = useApp.getState().history.length;
+    useApp.getState().cancelFigurePublicationEdit();
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+    expect(useApp.getState().plotWindows).toEqual(before);
+    expect(useApp.getState().history).toHaveLength(history);
+  });
+
+  it("applies once through the window bridge, hydrates the focused facade, and leaves saved figures untouched", () => {
+    useApp.getState().beginFigurePublicationEdit();
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      name: "Published",
+      output: { ...draft.output, dpi: 600 },
+      plot: { ...draft.plot, view: { ...draft.plot.view, plotTitle: "Published title" } },
+    }));
+    const history = useApp.getState().history.length;
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    const state = useApp.getState();
+    expect(state.history).toHaveLength(history + 1);
+    expect(state.editableFigures).toEqual([]);
+    expect(state.figurePublicationSession).toBeNull();
+    expect(state.plotWindows[0]).toMatchObject({ title: "Published", document: { output: { dpi: 600 } } });
+    expect(state.plotTitle).toBe("Published title");
+  });
+
+  it("rejects same-id concurrent focused-facade drift without recording history", () => {
+    useApp.getState().beginFigurePublicationEdit();
+    useApp.setState({ plotTitle: "Changed on Stage" });
+    const history = useApp.getState().history.length;
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().plotWindows[0].document?.name).toBe("Current plot");
+    expect(useApp.getState().figurePublicationSession).not.toBeNull();
   });
 });

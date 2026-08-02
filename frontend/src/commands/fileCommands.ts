@@ -291,11 +291,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Publication preview…",
-      description: "Preview and save or export a publication-sized copy; changes do not update the editable Stage plot.",
+      description: "Preview or export the focused figure at publication size; Apply updates that figure without changing its data.",
       // Legacy names stay searchable — the F0.1 rename must not orphan
       // "figure builder" muscle memory in the palette or Help.
       keywords: "figure builder live preview publication",
-      run: () => s().setFigureBuilderOpen(true),
+      run: () => {
+        if (s().beginFigurePublicationEdit()) return;
+        s().setStatus("opened Publication Preview without an editable plot document");
+        s().setFigureBuilderOpen(true);
+      },
     },
     {
       id: "figure-page",

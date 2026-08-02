@@ -18,9 +18,12 @@ export default function FigureBuilderView() {
   const [figName, setFigName] = useState("");
   const [figLive, setFigLive] = useState(true);
   const [tplName, setTplName] = useState("");
+  const title = f.canonical
+    ? `Publication preview — ${f.documentName}${f.dirty ? " (modified)" : ""}`
+    : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
 
   return (
-    <ToolWindow id="figurebuilder" title={f.frozen ? "Publication preview (frozen data)" : "Publication preview"} width={560} onClose={() => setOpen(false)}>
+    <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? f.cancel() : setOpen(false)}>
       {!f.data ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
@@ -34,7 +37,9 @@ export default function FigureBuilderView() {
               className="qzk-ds-meta"
               style={{ color: "var(--text-dim)", marginBottom: 2 }}
             >
-              Settings here affect saved and exported output; they do not change the editable Stage plot.
+              {f.canonical
+                ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
+                : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
             <label className="qzk-field-lbl">Format</label>
             <Select
@@ -65,6 +70,7 @@ export default function FigureBuilderView() {
               openGroup={f.focusGroup}
             />
 
+            {!f.canonical && <>
             {/* #12: save the configuration as a named, re-openable figure */}
             <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Save as figure</label>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -120,9 +126,16 @@ export default function FigureBuilderView() {
               />
             )}
 
+            </>}
             <Button variant="primary" onClick={f.exportNow} style={{ marginTop: 6 }}>
               Export {f.fmt.toUpperCase()}
             </Button>
+            {f.canonical && (
+              <div style={{ display: "flex", gap: 6 }}>
+                <Button variant="primary" onClick={f.apply} disabled={!f.dirty}>Apply</Button>
+                <Button onClick={f.cancel}>Cancel</Button>
+              </div>
+            )}
           </div>
           <div
             style={{

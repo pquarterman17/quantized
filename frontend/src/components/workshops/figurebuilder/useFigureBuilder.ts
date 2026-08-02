@@ -14,6 +14,8 @@ import {
   type GraphTemplate,
 } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
+import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
+import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import {
   groupForElement,
@@ -66,6 +68,11 @@ export function useFigureBuilder() {
   const figureDocSeed = useApp((s) => s.figureDocSeed);
   const clearFigureDocSeed = useApp((s) => s.clearFigureDocSeed);
   const addFigureDoc = useApp((s) => s.addFigureDoc);
+  const datasets = useApp((s) => s.datasets);
+  const publicationSession = useApp((s) => s.figurePublicationSession);
+  const patchFigurePublicationDraft = useApp((s) => s.patchFigurePublicationDraft);
+  const applyFigurePublicationEdit = useApp((s) => s.applyFigurePublicationEdit);
+  const cancelFigurePublicationEdit = useApp((s) => s.cancelFigurePublicationEdit);
 
   const [fmt, setFmt] = useState("pdf");
   const [style, setStyleRaw] = useState("default");
@@ -135,14 +142,46 @@ export function useFigureBuilder() {
     if (presetDpi !== undefined) setDpi(presetDpi);
   }
 
+  const canonical = publicationSession !== null;
+  const canonicalDocument = publicationSession?.draft ?? null;
+  const canonicalView = canonicalDocument ? figureDocumentToPlotView(canonicalDocument) : null;
+  const canonicalDataset = canonicalDocument?.bindings.datasetId
+    ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
+    : null;
+  const canonicalData = useMemo(() => {
+    if (!canonicalDocument) return null;
+    try {
+      return resolveFigureDocumentData(canonicalDocument, canonicalDataset).data;
+    } catch {
+      return null;
+    }
+  }, [canonicalDocument, canonicalDataset]);
+  const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
+    if (!canonical) return;
+    patchFigurePublicationDraft((draft) => patch(draft));
+  };
+  const setCanonicalOutput = (patch: Partial<NonNullable<typeof canonicalDocument>["output"]>) =>
+    patchCanonical((document) => ({ ...document, output: { ...document.output, ...patch } }));
+  const setCanonicalView = (patch: Partial<FigureViewState>) =>
+    patchCanonical((document) => ({ ...document, plot: { ...document.plot, view: { ...document.plot.view, ...patch } } }));
+  const setCanonicalOverrides = (next: FigureOverrides) =>
+    patchCanonical((document) => ({
+      ...document,
+      publication: { ...document.publication, overrides: compactOverrides(next) },
+    }));
+  const setCanonicalStyle = (next: string) =>
+    setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
+  const activeOverrides = canonicalDocument?.publication?.overrides ?? overrides;
+  const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
-  const data = frozenData ?? active?.data ?? null;
+  const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
   const effXKey = docXKey !== undefined ? docXKey : (xKey ?? null);
   const effYKeys = docYKeys !== undefined ? docYKeys : yKeys;
   const effXScale = docScales?.x ?? xScale;
   const effYScale = docScales?.y ?? yScale;
-  const spec = useMemo<FigureSpec | null>(() => {
+  const legacySpec = useMemo<FigureSpec | null>(() => {
     if (!data) return null;
     const plotted = effYKeys ?? data.labels.map((_, i) => i);
     return {
@@ -182,6 +221,15 @@ export function useFigureBuilder() {
     docGroupCol,
     overrides,
   ]);
+  const canonicalSpec = useMemo<FigureSpec | null>(() => {
+    if (!canonicalDocument || !canonicalData) return null;
+    try {
+      return buildFigureSpecFromDocument(canonicalDocument, canonicalDataset, "preview");
+    } catch {
+      return null;
+    }
+  }, [canonicalDocument, canonicalData, canonicalDataset]);
+  const spec = canonical ? canonicalSpec : legacySpec;
 
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
@@ -279,40 +327,59 @@ export function useFigureBuilder() {
 
   /** Double-click inline edit commits straight into the config fields. */
   function editElementText(id: string, value: string): void {
-    if (id === "title") setTitle(value);
-    else if (id === "xlabel") setXLabel(value);
-    else if (id === "ylabel") setYLabel(value);
+    if (id === "title") {
+      if (canonical) setCanonicalView({ plotTitle: value });
+      else setTitle(value);
+    } else if (id === "xlabel") {
+      if (canonical) setCanonicalView({ xAxisLabel: value });
+      else setXLabel(value);
+    } else if (id === "ylabel") {
+      if (canonical) setCanonicalView({ yAxisLabel: value });
+      else setYLabel(value);
+    }
   }
 
   const textOf = (id: string): string =>
-    id === "title" ? title : id === "xlabel" ? xLabel : id === "ylabel" ? yLabel : "";
+    id === "title" ? (canonicalView?.plotTitle ?? title) : id === "xlabel" ? (canonicalView?.xAxisLabel ?? xLabel) : id === "ylabel" ? (canonicalView?.yAxisLabel ?? yLabel) : "";
 
   /** Drag-to-place: legend -> custom figure-fraction anchor; annotation ->
    *  new data coords. Both commit through the ONE overrides object (#11). */
   function dragElement(id: string, px: number, py: number): void {
     if (!hitmap) return;
     if (id === "legend") {
-      setOverrides({
-        ...overrides,
+      setActiveOverrides({
+        ...activeOverrides,
         legend: {
-          ...overrides.legend,
+          ...activeOverrides.legend,
           loc: "custom",
           anchor: pxToFigureFraction(hitmap.width, hitmap.height, px, py),
         },
       });
     } else if (id.startsWith("ann:")) {
       const i = Number(id.slice(4));
-      const anns = overrides.annotations ?? [];
+      const anns = activeOverrides.annotations ?? [];
       if (!Number.isInteger(i) || i >= anns.length) return;
       const { x, y } = pxToData(hitmap.axes, px, py);
-      setOverrides({
-        ...overrides,
+      setActiveOverrides({
+        ...activeOverrides,
         annotations: anns.map((a, j) => (j === i ? { ...a, x, y } : a)),
       });
     }
   }
 
   async function exportNow(): Promise<void> {
+    if (canonicalDocument) {
+      try {
+        let dataset = canonicalDataset;
+        if (dataset?.pending) dataset = await useApp.getState().resolveDataset(dataset.id) ?? null;
+        const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
+        await exportFigure({ ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem), filename: stem });
+        setStatus(`exported ${stem}.${canonicalDocument.output.format}`);
+      } catch (e) {
+        setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+      }
+      return;
+    }
     if (!spec) return;
     try {
       // #38 deferred edge: a LIVE (non-frozen) spec tracks the active
@@ -334,24 +401,24 @@ export function useFigureBuilder() {
 
   return {
     active,
-    fmt,
-    setFmt,
-    style,
-    setStyle,
-    dpi,
-    setDpi,
-    title,
-    setTitle,
-    xLabel,
-    setXLabel,
-    yLabel,
-    setYLabel,
+    fmt: canonicalDocument?.output.format ?? fmt,
+    setFmt: canonical ? (next: string) => setCanonicalOutput({ format: next }) : setFmt,
+    style: canonicalDocument?.output.stylePreset ?? style,
+    setStyle: canonical ? setCanonicalStyle : setStyle,
+    dpi: canonicalDocument?.output.dpi ?? dpi,
+    setDpi: canonical ? (next: number) => setCanonicalOutput({ dpi: next }) : setDpi,
+    title: canonicalView?.plotTitle ?? title,
+    setTitle: canonical ? (next: string) => setCanonicalView({ plotTitle: next }) : setTitle,
+    xLabel: canonicalView?.xAxisLabel ?? xLabel,
+    setXLabel: canonical ? (next: string) => setCanonicalView({ xAxisLabel: next }) : setXLabel,
+    yLabel: canonicalView?.yAxisLabel ?? yLabel,
+    setYLabel: canonical ? (next: string) => setCanonicalView({ yAxisLabel: next }) : setYLabel,
     preview,
     error,
     busy,
     exportNow,
-    overrides,
-    setOverrides,
+    overrides: canonicalDocument?.publication?.overrides ?? overrides,
+    setOverrides: canonical ? setCanonicalOverrides : setOverrides,
     data,
     hitmap,
     focusGroup,
@@ -359,7 +426,12 @@ export function useFigureBuilder() {
     editElementText,
     textOf,
     dragElement,
-    frozen: frozenData !== null,
+    frozen: canonicalDocument?.data.mode === "frozen" || frozenData !== null,
+    canonical,
+    documentName: canonicalDocument?.name ?? null,
+    dirty: publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft),
+    apply: applyFigurePublicationEdit,
+    cancel: cancelFigurePublicationEdit,
     saveAsFigure,
     graphTemplates,
     saveStyleTemplate,
