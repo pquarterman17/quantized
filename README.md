@@ -48,11 +48,16 @@ interactive anchor points; Parratt reflectivity; RSM strain analysis;
 Williamson-Hall, FFT film thickness, and reflectivity-FFT reductions;
 hysteresis, relaxation, and a full statistics suite.
 
-**Publish** — vector PDF/SVG export (server-rendered matplotlib) that
-matches the screen: rich-text labels (µ₀H, Å⁻¹, χ″…), journal size
-presets (APS/Nature/thesis…), per-series styles, fills, color-mapped
-scatter, engineering/scientific tick formats, and a multi-panel figure
-composer for Fig. 1(a)–(d)-style pages.
+**Publish** — every plot window is a durable **figure document**: save,
+reopen, rename, and duplicate figures without losing errors, secondary
+axes, styles, or annotations. **Publication Preview** edits that same
+document at output size — tweak fonts, ticks, margins, axis breaks, and
+annotations in a live WYSIWYG preview (drag the legend, right-click any
+element), then Apply as one undoable change or Cancel cleanly. Export is
+vector PDF/SVG (server-rendered matplotlib) that matches the screen:
+rich-text labels (µ₀H, Å⁻¹, χ″…), journal size presets
+(APS/Nature/thesis…), per-series styles, fills, color-mapped scatter,
+and a multi-panel figure composer for Fig. 1(a)–(d)-style pages.
 
 **Stay reproducible** — every correction is a replayable pipeline step
 with a recalculation DAG, a macro recorder emits runnable scripts,

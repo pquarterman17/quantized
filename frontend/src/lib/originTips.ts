@@ -87,8 +87,15 @@ export const ORIGIN_TIPS: readonly OriginTip[] = [
     id: "export",
     origin: "Export Graph (EMF / PDF)",
     quantized:
-      "Export figure… renders a publication figure — vector PDF/SVG by default (raster only on request). Multi-panel export composes several plots into one labelled page.",
-    keywords: "export graph pdf svg vector emf publication figure page multi panel",
+      "Publication preview edits the focused figure at output size (fonts, ticks, margins, breaks, annotations) — Apply commits one undoable change; export is vector PDF/SVG by default (raster only on request). Multi-panel export composes several plots into one labelled page.",
+    keywords: "export graph pdf svg vector emf publication figure builder preview page multi panel apply",
+  },
+  {
+    id: "figure-documents",
+    origin: "Graph windows saved in the project",
+    quantized:
+      "Every plot window is a figure document — Save / Save As keeps it under the Library's Editable figures and it reopens with errors, y2, styles, and annotations intact. The Editable button on a Publication figure promotes a copy.",
+    keywords: "save figure editable document reopen rename duplicate library graph window publication copy promote",
   },
   {
     id: "send-to-origin",
