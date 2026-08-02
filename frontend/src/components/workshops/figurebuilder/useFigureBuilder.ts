@@ -13,7 +13,8 @@ import {
   saveGraphTemplate,
   type GraphTemplate,
 } from "../../../lib/figuredoc";
-import { effectiveFigureOverrides, publicationOverridesDelta } from "./canonicalOverrides";
+import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
+import { sessionLiveDrifted } from "./canonicalSession";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
@@ -69,6 +70,7 @@ export function useFigureBuilder() {
   const active = useActiveDataset();
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
+  const y2Keys = useApp((s) => s.y2Keys); // item 2: legacy secondary-axis presence
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -230,6 +232,15 @@ export function useFigureBuilder() {
     setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
   const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
+  // Item 2: does the panel's y2 min/max have a secondary axis to apply to --
+  // gateY2Overrides drops y2_lim server-side otherwise (placebo fields).
+  const hasY2 = canonical ? (canonicalDocument?.bindings.y2Keys?.length ?? 0) > 0 : (y2Keys?.length ?? 0) > 0;
+  // Item 3: canonical x-breaks read/write through the unified home — see
+  // canonicalOverrides.ts's effectiveXBreaks/migrateXBreaksPatch.
+  const xBreaks = canonical ? effectiveXBreaks(canonicalDocument!) : undefined;
+  const setXBreaks = canonical
+    ? (next: [number, number][]) => patchCanonical((document) => migrateXBreaksPatch(document, next))
+    : undefined;
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -292,14 +303,22 @@ export function useFigureBuilder() {
     !plotWindows.some((w) => w.id === publicationSession.windowId) ||
     focusedWindowId !== publicationSession.windowId
   );
-  const canApply = !targetBlocked && !publicationSession?.staleBaseline && canonicalReadiness?.state === "ready" && (
+  // Item 1: catch a Stage edit made behind the open, non-modal dialog on THIS
+  // render rather than only via a rejected Apply (staleBaseline, above).
+  // useApp.getState() reads live state directly here -- NOT a selector --
+  // so this adds no subscription; existing ones re-render the hook enough
+  // for a real edit to reach this check on its own.
+  const liveDrifted = publicationSession
+    ? sessionLiveDrifted(publicationSession, plotWindows, targetBlocked, useApp.getState())
+    : false;
+  const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
       publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
     )
   );
   const applyBlockedReason = targetBlocked
     ? "focus the previewed plot window to apply"
-    : publicationSession?.staleBaseline
+    : publicationSession?.staleBaseline || liveDrifted
     ? "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes"
     : null;
 
@@ -510,6 +529,9 @@ export function useFigureBuilder() {
     exportNow,
     overrides: activeOverrides,
     setOverrides: setActiveOverrides,
+    hasY2,
+    xBreaks,
+    setXBreaks,
     data,
     hitmap,
     focusGroup,

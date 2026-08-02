@@ -520,5 +520,114 @@ describe("useFigureBuilder", () => {
       expect(result.current.canApply).toBe(false);
       expect(result.current.applyBlockedReason).toContain("Cancel and reopen Publication Preview");
     });
+
+    // Item 1: proactive drift detection. Today the store only discovers a
+    // Stage edit made behind the open, non-modal preview dialog when the
+    // user clicks Apply (the staleBaseline test above). This must catch it
+    // on its own render instead.
+    it("blocks Apply and reports drift once the window's document changes behind the open dialog", async () => {
+      const s = session("w1", true);
+      const focusedDocument = structuredClone(s.baseline);
+      // liveWindowDocument uses window.title (not document.name) as the live
+      // document's name for a focused window -- keep it matching the
+      // baseline's name, and the singleton view fields matching
+      // defaultPlotView() (what the baseline's view was built from), so
+      // nothing has drifted yet.
+      const focused: PlotWindow = { ...win("w1"), title: s.baseline.name, document: focusedDocument };
+      useApp.setState({ ...defaultPlotView(), figurePublicationSession: s, plotWindows: [focused], focusedWindowId: "w1" });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      // Sanity: nothing has drifted yet, so the dirty+focused session is applyable.
+      expect(result.current.canApply).toBe(true);
+      expect(result.current.applyBlockedReason).toBeNull();
+
+      const driftedDocument = {
+        ...focusedDocument,
+        plot: { ...focusedDocument.plot, axisBreaks: { x: [[1, 2]] as [number, number][], y: [], y2: [] } },
+      };
+      act(() => {
+        useApp.setState({ plotWindows: [{ ...focused, document: driftedDocument }] });
+      });
+
+      expect(result.current.canApply).toBe(false);
+      expect(result.current.applyBlockedReason).toBe(
+        "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes",
+      );
+    });
+
+    it("does not report drift when the window's live document still matches the session baseline", async () => {
+      const s = session("w1", true);
+      const focused: PlotWindow = { ...win("w1"), title: s.baseline.name, document: structuredClone(s.baseline) };
+      useApp.setState({ ...defaultPlotView(), figurePublicationSession: s, plotWindows: [focused], focusedWindowId: "w1" });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.canApply).toBe(true);
+      expect(result.current.applyBlockedReason).toBeNull();
+    });
+  });
+
+  // Item 3: x-axis breaks unify on one canonical home
+  // (canonicalOverrides.ts's effectiveXBreaks/migrateXBreaksPatch); these
+  // exercise the hook's wiring on top of those pure functions.
+  describe("canonical x-axis breaks (item 3)", () => {
+    it("a canonical axisBreaks.x with no publication delta is the source, and an edit writes it straight back", async () => {
+      const document = createFigureDocument({
+        id: "figure-breaks-a", name: "Breaks A", datasetId: "d1", view: defaultPlotView(),
+        axisBreaks: { x: [[1, 2]] },
+      });
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.xBreaks).toEqual([[1, 2]]);
+
+      act(() => result.current.setXBreaks!([[1, 2], [5, 6]]));
+      const draft = useApp.getState().figurePublicationSession!.draft;
+      expect(draft.plot.axisBreaks.x).toEqual([[1, 2], [5, 6]]);
+      expect(draft.publication?.overrides?.x_breaks).toBeUndefined();
+
+      // Sanity: buildFigureSpecFromDocument emits axisBreaks.x as
+      // overrides.x_breaks -- the rendered spec must agree with the panel.
+      await waitFor(() => {
+        const last = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+        expect(last?.overrides?.x_breaks).toEqual([[1, 2], [5, 6]]);
+      });
+    });
+
+    it("a legacy-imported publication.overrides.x_breaks is the effective source, and an edit migrates it into axisBreaks.x", async () => {
+      const document = createFigureDocument({
+        id: "figure-breaks-b", name: "Breaks B", datasetId: "d1", view: defaultPlotView(),
+        axisBreaks: { x: [[9, 9.5]] }, // stale canonical value, shadowed by the publication delta
+        publication: { overrides: { x_breaks: [[1, 2]], font_name: "Times" } },
+      });
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.xBreaks).toEqual([[1, 2]]);
+
+      act(() => result.current.setXBreaks!([[3, 4]]));
+      const draft = useApp.getState().figurePublicationSession!.draft;
+      expect(draft.plot.axisBreaks.x).toEqual([[3, 4]]);
+      expect(draft.publication?.overrides?.x_breaks).toBeUndefined();
+      expect(draft.publication?.overrides?.font_name).toBe("Times"); // untouched sibling key survives
+
+      await waitFor(() => {
+        const last = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+        expect(last?.overrides?.x_breaks).toEqual([[3, 4]]);
+      });
+    });
+
+    it("leaves xBreaks/setXBreaks undefined in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.xBreaks).toBeUndefined();
+      expect(result.current.setXBreaks).toBeUndefined();
+    });
   });
 });

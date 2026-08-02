@@ -94,6 +94,9 @@ export default function FigureBuilderView() {
             <PropertyPanels
               overrides={f.overrides}
               setOverrides={f.setOverrides}
+              hasY2={f.hasY2}
+              xBreaks={f.xBreaks}
+              setXBreaks={f.setXBreaks}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />

@@ -46,11 +46,27 @@ function Group({
 export default function PropertyPanels({
   overrides,
   setOverrides,
+  hasY2,
+  xBreaks,
+  setXBreaks,
   openGroup = null,
   openNonce,
 }: {
   overrides: FigureOverrides;
   setOverrides: (overrides: FigureOverrides) => void;
+  /** Item 2: whether a secondary (right) Y axis has any channel plotted on
+   *  it -- without one the y2 min/max fields are placebo (the backend gate
+   *  drops y2_lim), so they render only when this is true. */
+  hasY2: boolean;
+  /** Item 3: the canonical home for x-axis breaks (document.plot.axisBreaks.x,
+   *  merged with a legacy-imported document's publication delta -- see
+   *  canonicalOverrides.ts's effectiveXBreaks). When supplied, the breaks UI
+   *  reads/writes ONLY this pair instead of `overrides.x_breaks`, so a
+   *  canonical session's panel edits and its rendered figure can never
+   *  diverge again. Absent (legacy mode) keeps the old overrides.x_breaks
+   *  behavior unchanged. */
+  xBreaks?: [number, number][];
+  setXBreaks?: (next: [number, number][]) => void;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -58,11 +74,15 @@ export default function PropertyPanels({
   openNonce?: number;
 }) {
   const patch = (change: Partial<FigureOverrides>) => setOverrides({ ...overrides, ...change });
+  const breaksControlled = xBreaks !== undefined;
+  const currentBreaks = breaksControlled ? xBreaks : (overrides.x_breaks ?? []);
+  const commitBreaks = (next: [number, number][]) =>
+    breaksControlled ? setXBreaks?.(next) : patch({ x_breaks: next });
   const [breakFrom, setBreakFrom] = useState("");
   const [breakTo, setBreakTo] = useState("");
   const from = Number(breakFrom);
   const to = Number(breakTo);
-  const overlapsBreak = (overrides.x_breaks ?? []).some(([lo, hi]) => from < hi && to > lo);
+  const overlapsBreak = currentBreaks.some(([lo, hi]) => from < hi && to > lo);
   const breakReason: string | null =
     breakFrom.trim() === "" || breakTo.trim() === ""
       ? "enter both bounds"
@@ -98,8 +118,12 @@ export default function PropertyPanels({
         <Num label="x max" value={overrides.x_lim?.[1] ?? undefined} onValue={(value) => patch({ x_lim: [overrides.x_lim?.[0] ?? null, value ?? null] })} />
         <Num label="y min" value={overrides.y_lim?.[0] ?? undefined} onValue={(value) => patch({ y_lim: [value ?? null, overrides.y_lim?.[1] ?? null] })} />
         <Num label="y max" value={overrides.y_lim?.[1] ?? undefined} onValue={(value) => patch({ y_lim: [overrides.y_lim?.[0] ?? null, value ?? null] })} />
-        <Num label="y2 min" value={overrides.y2_lim?.[0] ?? undefined} onValue={(value) => patch({ y2_lim: [value ?? null, overrides.y2_lim?.[1] ?? null] })} />
-        <Num label="y2 max" value={overrides.y2_lim?.[1] ?? undefined} onValue={(value) => patch({ y2_lim: [overrides.y2_lim?.[0] ?? null, value ?? null] })} />
+        {hasY2 && (
+          <>
+            <Num label="y2 min" value={overrides.y2_lim?.[0] ?? undefined} onValue={(value) => patch({ y2_lim: [value ?? null, overrides.y2_lim?.[1] ?? null] })} />
+            <Num label="y2 max" value={overrides.y2_lim?.[1] ?? undefined} onValue={(value) => patch({ y2_lim: [overrides.y2_lim?.[0] ?? null, value ?? null] })} />
+          </>
+        )}
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">tick direction</label>
           <Select
@@ -116,14 +140,14 @@ export default function PropertyPanels({
         <Checkbox checked={overrides.grid ?? false} onChange={(grid) => patch({ grid: grid || undefined })}>grid</Checkbox>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}>
           <span className="qzk-field-lbl" style={{ width: "100%" }}>x-axis breaks</span>
-          {(overrides.x_breaks ?? []).map(([lo, hi], index) => (
+          {currentBreaks.map(([lo, hi], index) => (
             <div key={`${lo}:${hi}:${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span className="qzk-ds-meta">{lo} to {hi}</span>
               <button
                 className="qz-btn qz-ghost qz-sm"
                 aria-label={`Remove x-axis break ${index + 1}`}
                 title="Remove this omitted x-axis range"
-                onClick={() => patch({ x_breaks: (overrides.x_breaks ?? []).filter((_, current) => current !== index) })}
+                onClick={() => commitBreaks(currentBreaks.filter((_, current) => current !== index))}
               >
                 Remove
               </button>
@@ -146,8 +170,8 @@ export default function PropertyPanels({
               disabled={!canAddBreak}
               onClick={() => {
                 if (!canAddBreak) return;
-                const xBreaks: [number, number][] = [...(overrides.x_breaks ?? []), [from, to]];
-                patch({ x_breaks: xBreaks.sort(([left], [right]) => left - right) });
+                const nextBreaks: [number, number][] = [...currentBreaks, [from, to]];
+                commitBreaks(nextBreaks.sort(([left], [right]) => left - right));
                 setBreakFrom("");
                 setBreakTo("");
               }}
