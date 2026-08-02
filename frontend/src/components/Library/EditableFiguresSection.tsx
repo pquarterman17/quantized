@@ -37,6 +37,7 @@ export default function EditableFiguresSection() {
             </button>
             <button
               className="qz-btn qz-ghost qz-sm"
+              style={{ minHeight: 24, minWidth: 24 }}
               title="rename editable figure"
               onClick={() => {
                 void import("../overlays/ParamDialog").then(({ askParams }) =>
@@ -52,6 +53,7 @@ export default function EditableFiguresSection() {
             </button>
             <button
               className="qz-btn qz-ghost qz-sm"
+              style={{ minHeight: 24, minWidth: 24 }}
               title="duplicate editable figure"
               onClick={() => duplicate(document.id)}
             >
@@ -59,6 +61,7 @@ export default function EditableFiguresSection() {
             </button>
             <button
               className="qz-btn qz-ghost qz-sm"
+              style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
               title="delete editable figure (undo available)"
               onClick={() => {
                 void askConfirm(

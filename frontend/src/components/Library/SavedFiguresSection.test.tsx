@@ -82,7 +82,7 @@ describe("SavedFiguresSection", () => {
     });
     render(<SavedFiguresSection />);
     expect(screen.getAllByTitle("source dataset is unavailable")[0]).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Create editable copy of dead" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Make editable copy of dead" })).toBeDisabled();
     expect(screen.getAllByRole("button", { name: "Open in new graph window" })[0]).toBeDisabled();
     fireEvent.click(screen.getByTitle(/open publication figure "frozen"/));
     expect(useApp.getState().figureDocSeed?.id).toBe("b");
@@ -94,13 +94,30 @@ describe("SavedFiguresSection", () => {
     const history = useApp.getState().history.length;
     render(<SavedFiguresSection />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Create editable copy of MH loop" }));
+    const copyButton = screen.getByRole("button", { name: "Make editable copy of MH loop" });
+    fireEvent.click(copyButton);
     const state = useApp.getState();
     expect(state.editableFigures).toHaveLength(1);
     expect(state.editableFigures[0]).toMatchObject({ name: "MH loop (editable copy)", bindings: { datasetId: "d1" } });
     expect(state.plotWindows).toHaveLength(windows);
     expect(state.history).toHaveLength(history + 1);
     expect(state.status).toContain("open it from Editable figures");
+  });
+
+  it("labels the promote button distinctly from duplicate, with the full action in its title", () => {
+    // The visible text stays short ("Editable") so it fits the Library
+    // sidebar down to its minimum resize width, but the aria-label and
+    // title carry the full "Make editable copy" phrasing so the button
+    // reads as distinct from the neighboring "⧉" (in-place duplicate).
+    useApp.setState({ figureDocs: [doc()] });
+    render(<SavedFiguresSection />);
+    const copyButton = screen.getByRole("button", { name: "Make editable copy of MH loop" });
+    expect(copyButton).toHaveTextContent("Editable");
+    expect(copyButton).not.toHaveTextContent("Copy");
+    expect(copyButton).toHaveAttribute(
+      "title",
+      "Create an editable copy under Editable figures; the publication figure stays unchanged.",
+    );
   });
 
   it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", async () => {

@@ -64,6 +64,7 @@ export default function SavedFiguresSection() {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                style={{ minHeight: 24, minWidth: 24 }}
                 aria-label="Open in new graph window"
                 title={
                   missingLiveSource
@@ -92,15 +93,27 @@ export default function SavedFiguresSection() {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
-                aria-label={`Create editable copy of ${d.name}`}
-                title={ok ? "Create an editable copy; the publication figure stays unchanged." : unavailableReason}
+                style={{ minHeight: 24, minWidth: 24 }}
+                aria-label={`Make editable copy of ${d.name}`}
+                title={
+                  ok
+                    ? "Create an editable copy under Editable figures; the publication figure stays unchanged."
+                    : unavailableReason
+                }
                 disabled={!ok}
                 onClick={() => promoteLegacyFigureDoc(d.id)}
               >
-                Copy
+                {/* "Editable" not "Make editable": the Library sidebar can be
+                    resized down to LIBRARY_PANEL_WIDTH_MIN (160px) and the
+                    longer label overflows the row at that width. The full
+                    phrase lives in the title/aria-label above, next to the
+                    "⧉" duplicate button so the two near-synonymous actions
+                    read distinctly. */}
+                Editable
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                style={{ minHeight: 24, minWidth: 24 }}
                 title="duplicate figure"
                 onClick={() => duplicateFigureDoc(d.id)}
               >
@@ -108,6 +121,7 @@ export default function SavedFiguresSection() {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
                 title="delete figure"
                 onClick={() => {
                   // A saved figure doc is authoring work (config + optional
