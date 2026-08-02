@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.1b/F2.2a canonical preview transaction
+**Updated:** 2026-08-02 — F2.3a publication-property parity slice
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -210,6 +210,9 @@ decisions are merged.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
+  - [x] **F2.3a Publication-property parity slice (planned PR #112).**
+        Canonical preview now exposes supported y2 limits, legend title,
+        in-place annotation/frame properties, and validated x-axis breaks.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
 - [ ] **F2.5 Unify render paths.** Stage copy, Stage export, publication
@@ -336,6 +339,19 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.3a publication-property parity slice (planned PR #112)
+
+- Added canonical-draft controls for existing render overrides only: y2 limits,
+  legend title, editable annotation text/coordinates/font/anchor/frame, and
+  finite non-overlapping x-axis breaks. No backend, schema, or shape changes
+  were needed.
+- Numeric controls now synchronize a replaced canonical draft without clobbering
+  unfinished valid typing; required annotation coordinates restore their last
+  committed finite value on blur.
+- F2.3 remains open: this focused publication slice does not yet bridge the
+  remaining Stage properties, channels, series, errors, ordering, shapes, or
+  reference objects.
 
 ### 2026-08-02 — F2.1b/F2.2a canonical Publication Preview session (PR #111)
 

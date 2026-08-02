@@ -1,46 +1,13 @@
-// Figure property panels (#11) — collapsible groups covering every export
-// property: Text & fonts · Axes & ticks · Legend · Canvas · Annotations.
-// (Per-series color/width/style/marker already rides the WYSIWYG
-// series_styles passthrough.) Every field writes ONE FigureOverrides object
-// that lands as render_figure's `overrides` kwarg — no side channels. Thin:
-// state lives in useFigureBuilder.
+// Publication property panels. All controls patch the one FigureOverrides
+// object supplied by the builder; canonical sessions persist that object on
+// their transient FigureDocument draft.
 
 import { useEffect, useState } from "react";
 
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
 import { Checkbox, NumberField, Select } from "../../primitives";
-
-/** A labelled numeric field committing a number (or undefined when cleared). */
-function Num({
-  label,
-  value,
-  onValue,
-  width = 64,
-}: {
-  label: string;
-  value: number | undefined;
-  onValue: (v: number | undefined) => void;
-  width?: number;
-}) {
-  const [text, setText] = useState(value === undefined ? "" : String(value));
-  return (
-    <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-      <label className="qzk-field-lbl">{label}</label>
-      <NumberField
-        value={text}
-        width={width}
-        onChange={(t) => {
-          setText(t);
-          if (t.trim() === "") onValue(undefined);
-          else {
-            const v = Number(t);
-            if (Number.isFinite(v)) onValue(v);
-          }
-        }}
-      />
-    </span>
-  );
-}
+import AnnotationEditor from "./AnnotationEditor";
+import Num from "./PropertyNumberField";
 
 function Group({
   title,
@@ -49,7 +16,6 @@ function Group({
 }: {
   title: string;
   children: React.ReactNode;
-  /** Preview click-to-select (#13): a matching group opens itself. */
   forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,7 +24,7 @@ function Group({
   }, [forceOpen]);
   return (
     <div className="qzk-report-section">
-      <button className="qzk-group-head" onClick={() => setOpen((o) => !o)}>
+      <button className="qzk-group-head" onClick={() => setOpen((current) => !current)}>
         <span className="qzk-group-caret">{open ? "▾" : "▸"}</span>
         <span className="qzk-group-name">{title}</span>
       </button>
@@ -73,195 +39,140 @@ export default function PropertyPanels({
   openGroup = null,
 }: {
   overrides: FigureOverrides;
-  setOverrides: (ov: FigureOverrides) => void;
-  /** #13 click-to-select: the group to force open (element -> group). */
+  setOverrides: (overrides: FigureOverrides) => void;
+  /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
 }) {
-  const ov = overrides;
-  const patch = (p: Partial<FigureOverrides>) => setOverrides({ ...ov, ...p });
-  const [annText, setAnnText] = useState("");
-  const [annX, setAnnX] = useState("");
-  const [annY, setAnnY] = useState("");
+  const patch = (change: Partial<FigureOverrides>) => setOverrides({ ...overrides, ...change });
+  const [breakFrom, setBreakFrom] = useState("");
+  const [breakTo, setBreakTo] = useState("");
+  const from = Number(breakFrom);
+  const to = Number(breakTo);
+  const overlapsBreak = (overrides.x_breaks ?? []).some(([lo, hi]) => from < hi && to > lo);
+  const canAddBreak =
+    breakFrom.trim() !== "" &&
+    breakTo.trim() !== "" &&
+    Number.isFinite(from) &&
+    Number.isFinite(to) &&
+    from < to &&
+    !overlapsBreak;
 
   return (
     <div>
       <Group title="Text & fonts" forceOpen={openGroup === "Text & fonts"}>
-        <Num label="font size" value={ov.font_size} onValue={(v) => patch({ font_size: v })} />
-        <Num label="title size" value={ov.title_size} onValue={(v) => patch({ title_size: v })} />
+        <Num label="font size" value={overrides.font_size} min={Number.MIN_VALUE} onValue={(font_size) => patch({ font_size })} />
+        <Num label="title size" value={overrides.title_size} min={Number.MIN_VALUE} onValue={(title_size) => patch({ title_size })} />
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">font name</label>
           <NumberField
+            aria-label="font name"
             numeric={false}
             width={110}
-            value={ov.font_name ?? ""}
+            value={overrides.font_name ?? ""}
             placeholder="(preset)"
-            onChange={(t) => patch({ font_name: t.trim() || undefined })}
+            onChange={(font_name) => patch({ font_name: font_name.trim() || undefined })}
           />
         </span>
       </Group>
 
-      <Group title="Axes & ticks">
-        <Num
-          label="x min"
-          value={ov.x_lim?.[0] ?? undefined}
-          onValue={(v) => patch({ x_lim: [v ?? null, ov.x_lim?.[1] ?? null] })}
-        />
-        <Num
-          label="x max"
-          value={ov.x_lim?.[1] ?? undefined}
-          onValue={(v) => patch({ x_lim: [ov.x_lim?.[0] ?? null, v ?? null] })}
-        />
-        <Num
-          label="y min"
-          value={ov.y_lim?.[0] ?? undefined}
-          onValue={(v) => patch({ y_lim: [v ?? null, ov.y_lim?.[1] ?? null] })}
-        />
-        <Num
-          label="y max"
-          value={ov.y_lim?.[1] ?? undefined}
-          onValue={(v) => patch({ y_lim: [ov.y_lim?.[0] ?? null, v ?? null] })}
-        />
+      <Group title="Axes & ticks" forceOpen={openGroup === "Axes & ticks"}>
+        <Num label="x min" value={overrides.x_lim?.[0] ?? undefined} onValue={(value) => patch({ x_lim: [value ?? null, overrides.x_lim?.[1] ?? null] })} />
+        <Num label="x max" value={overrides.x_lim?.[1] ?? undefined} onValue={(value) => patch({ x_lim: [overrides.x_lim?.[0] ?? null, value ?? null] })} />
+        <Num label="y min" value={overrides.y_lim?.[0] ?? undefined} onValue={(value) => patch({ y_lim: [value ?? null, overrides.y_lim?.[1] ?? null] })} />
+        <Num label="y max" value={overrides.y_lim?.[1] ?? undefined} onValue={(value) => patch({ y_lim: [overrides.y_lim?.[0] ?? null, value ?? null] })} />
+        <Num label="y2 min" value={overrides.y2_lim?.[0] ?? undefined} onValue={(value) => patch({ y2_lim: [value ?? null, overrides.y2_lim?.[1] ?? null] })} />
+        <Num label="y2 max" value={overrides.y2_lim?.[1] ?? undefined} onValue={(value) => patch({ y2_lim: [overrides.y2_lim?.[0] ?? null, value ?? null] })} />
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">tick direction</label>
           <Select
-            options={[
-              { value: "", label: "(preset)" },
-              { value: "in", label: "in" },
-              { value: "out", label: "out" },
-            ]}
-            value={ov.ticks?.dir ?? ""}
-            onChange={(e) =>
-              patch({
-                ticks: { ...ov.ticks, dir: (e.target.value || undefined) as "in" | "out" | undefined },
-              })
-            }
+            aria-label="tick direction"
+            options={[{ value: "", label: "(preset)" }, { value: "in", label: "in" }, { value: "out", label: "out" }]}
+            value={overrides.ticks?.dir ?? ""}
+            onChange={(event) => patch({ ticks: { ...overrides.ticks, dir: (event.target.value || undefined) as "in" | "out" | undefined } })}
           />
         </span>
-        <Num
-          label="tick length"
-          value={ov.ticks?.len}
-          onValue={(v) => patch({ ticks: { ...ov.ticks, len: v } })}
-        />
-        <Checkbox
-          checked={ov.ticks?.minor ?? false}
-          onChange={(v) => patch({ ticks: { ...ov.ticks, minor: v || undefined } })}
-        >
-          minor ticks
-        </Checkbox>
-        <Checkbox
-          checked={ov.spines?.top ?? true}
-          onChange={(v) => patch({ spines: { ...ov.spines, top: v } })}
-        >
-          top spine
-        </Checkbox>
-        <Checkbox
-          checked={ov.spines?.right ?? true}
-          onChange={(v) => patch({ spines: { ...ov.spines, right: v } })}
-        >
-          right spine
-        </Checkbox>
-        <Checkbox
-          checked={ov.grid ?? false}
-          onChange={(v) => patch({ grid: v || undefined })}
-        >
-          grid
-        </Checkbox>
+        <Num label="tick length" value={overrides.ticks?.len} min={0} onValue={(len) => patch({ ticks: { ...overrides.ticks, len } })} />
+        <Checkbox checked={overrides.ticks?.minor ?? false} onChange={(minor) => patch({ ticks: { ...overrides.ticks, minor: minor || undefined } })}>minor ticks</Checkbox>
+        <Checkbox checked={overrides.spines?.top ?? true} onChange={(top) => patch({ spines: { ...overrides.spines, top } })}>top spine</Checkbox>
+        <Checkbox checked={overrides.spines?.right ?? true} onChange={(right) => patch({ spines: { ...overrides.spines, right } })}>right spine</Checkbox>
+        <Checkbox checked={overrides.grid ?? false} onChange={(grid) => patch({ grid: grid || undefined })}>grid</Checkbox>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}>
+          <span className="qzk-field-lbl" style={{ width: "100%" }}>x-axis breaks</span>
+          {(overrides.x_breaks ?? []).map(([lo, hi], index) => (
+            <div key={`${lo}:${hi}:${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span className="qzk-ds-meta">{lo} to {hi}</span>
+              <button
+                className="qz-btn qz-ghost qz-sm"
+                aria-label={`Remove x-axis break ${index + 1}`}
+                title="Remove this omitted x-axis range"
+                onClick={() => patch({ x_breaks: (overrides.x_breaks ?? []).filter((_, current) => current !== index) })}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+            <label className="qzk-field-lbl">break from</label>
+            <NumberField aria-label="break from" value={breakFrom} width={64} onChange={setBreakFrom} />
+          </span>
+          <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+            <label className="qzk-field-lbl">break to</label>
+            <NumberField aria-label="break to" value={breakTo} width={64} onChange={setBreakTo} />
+          </span>
+          <button
+            className="qz-btn qz-sm"
+            disabled={!canAddBreak}
+            title="Omit a finite, non-overlapping x-range in the export"
+            onClick={() => {
+              if (!canAddBreak) return;
+              const xBreaks: [number, number][] = [...(overrides.x_breaks ?? []), [from, to]];
+              patch({ x_breaks: xBreaks.sort(([left], [right]) => left - right) });
+              setBreakFrom("");
+              setBreakTo("");
+            }}
+          >
+            Add break
+          </button>
+        </div>
       </Group>
 
       <Group title="Legend" forceOpen={openGroup === "Legend"}>
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">position</label>
           <Select
-            options={[
-              { value: "", label: "(preset: best)" },
-              ...LEGEND_LOCS.map((l) => ({ value: l, label: l })),
-            ]}
-            value={ov.legend?.loc ?? ""}
-            onChange={(e) =>
-              patch({ legend: { ...ov.legend, loc: e.target.value || undefined } })
-            }
+            aria-label="legend position"
+            options={[{ value: "", label: "(preset: best)" }, ...LEGEND_LOCS.map((value) => ({ value, label: value }))]}
+            value={overrides.legend?.loc ?? ""}
+            onChange={(event) => patch({ legend: { ...overrides.legend, loc: event.target.value || undefined } })}
           />
         </span>
-        <Checkbox
-          checked={ov.legend?.show ?? true}
-          onChange={(v) => patch({ legend: { ...ov.legend, show: v } })}
-        >
-          show
-        </Checkbox>
-        <Checkbox
-          checked={ov.legend?.frame ?? false}
-          onChange={(v) => patch({ legend: { ...ov.legend, frame: v } })}
-        >
-          frame
-        </Checkbox>
+        <Checkbox checked={overrides.legend?.show ?? true} onChange={(show) => patch({ legend: { ...overrides.legend, show } })}>show</Checkbox>
+        <Checkbox checked={overrides.legend?.frame ?? false} onChange={(frame) => patch({ legend: { ...overrides.legend, frame } })}>frame</Checkbox>
+        <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+          <label className="qzk-field-lbl">title</label>
+          <NumberField
+            aria-label="legend title"
+            numeric={false}
+            width={160}
+            value={overrides.legend?.title ?? ""}
+            placeholder="(none)"
+            onChange={(title) => patch({ legend: { ...overrides.legend, title: title || undefined } })}
+          />
+        </span>
       </Group>
 
       <Group title="Canvas (margins, fig fraction)">
-        <Num
-          label="left"
-          value={ov.margins?.left}
-          onValue={(v) => patch({ margins: { ...ov.margins, left: v } })}
-        />
-        <Num
-          label="right"
-          value={ov.margins?.right}
-          onValue={(v) => patch({ margins: { ...ov.margins, right: v } })}
-        />
-        <Num
-          label="top"
-          value={ov.margins?.top}
-          onValue={(v) => patch({ margins: { ...ov.margins, top: v } })}
-        />
-        <Num
-          label="bottom"
-          value={ov.margins?.bottom}
-          onValue={(v) => patch({ margins: { ...ov.margins, bottom: v } })}
-        />
+        <Num label="left" value={overrides.margins?.left} onValue={(left) => patch({ margins: { ...overrides.margins, left } })} />
+        <Num label="right" value={overrides.margins?.right} onValue={(right) => patch({ margins: { ...overrides.margins, right } })} />
+        <Num label="top" value={overrides.margins?.top} onValue={(top) => patch({ margins: { ...overrides.margins, top } })} />
+        <Num label="bottom" value={overrides.margins?.bottom} onValue={(bottom) => patch({ margins: { ...overrides.margins, bottom } })} />
       </Group>
 
       <Group title="Annotations" forceOpen={openGroup === "Annotations"}>
-        {(ov.annotations ?? []).map((a, i) => (
-          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", width: "100%" }}>
-            <span className="qzk-ds-meta">
-              “{a.text}” @ ({a.x}, {a.y})
-            </span>
-            <button
-              className="qz-btn qz-ghost qz-sm"
-              title="remove annotation"
-              onClick={() =>
-                patch({ annotations: (ov.annotations ?? []).filter((_, j) => j !== i) })
-              }
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <NumberField
-          numeric={false}
-          width={110}
-          value={annText}
-          placeholder="text"
-          onChange={setAnnText}
+        <AnnotationEditor
+          annotations={overrides.annotations ?? []}
+          onChange={(annotations) => patch({ annotations })}
         />
-        <NumberField value={annX} width={56} placeholder="x" onChange={setAnnX} />
-        <NumberField value={annY} width={56} placeholder="y" onChange={setAnnY} />
-        <button
-          className="qz-btn qz-sm"
-          disabled={!annText.trim() || !Number.isFinite(Number(annX)) || !Number.isFinite(Number(annY))}
-          onClick={() => {
-            patch({
-              annotations: [
-                ...(ov.annotations ?? []),
-                { x: Number(annX), y: Number(annY), text: annText.trim() },
-              ],
-            });
-            setAnnText("");
-            setAnnX("");
-            setAnnY("");
-          }}
-        >
-          + Add
-        </button>
       </Group>
     </div>
   );

@@ -286,5 +286,33 @@ describe("useFigureBuilder", () => {
     expect(draft.bindings.facetKey).toBe(1);
     expect(draft.plot.mark).toBe("scatter");
     expect(draft.plot.axisBreaks).toEqual(document.plot.axisBreaks);
+
+    act(() => result.current.setOverrides({
+      ...result.current.overrides,
+      y2_lim: [10, 20],
+      legend: { ...result.current.overrides.legend, title: "Secondary" },
+      annotations: [{
+        text: "Callout",
+        x: 0.2,
+        y: 0.8,
+        size: 11,
+        anchor: "page",
+        frame: { fill: "#fff", stroke: "#111", opacity: 0.5, pad: 3 },
+      }],
+      x_breaks: [[0.25, 0.5]],
+    }));
+    expect(useApp.getState().figurePublicationSession?.draft.publication?.overrides).toMatchObject({
+      y2_lim: [10, 20],
+      legend: { title: "Secondary" },
+      annotations: [{
+        text: "Callout",
+        x: 0.2,
+        y: 0.8,
+        size: 11,
+        anchor: "page",
+        frame: { fill: "#fff", stroke: "#111", opacity: 0.5, pad: 3 },
+      }],
+      x_breaks: [[0.25, 0.5]],
+    });
   });
 });
