@@ -19,7 +19,7 @@ vi.mock("../../../lib/api", async (importOriginal) => {
     ...actual,
     // useCalculators fetches constants unconditionally on mount; stub it so
     // the test never depends on a real network round trip.
-    getConstants: vi.fn().mockResolvedValue({ constants: {} }),
+    getConstants: vi.fn().mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } }),
   };
 });
 
