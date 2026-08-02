@@ -743,10 +743,17 @@ export interface BuildOptsArgs {
   wheelZoom?: boolean;
   /** Completed box-zoom/pan/wheel gesture, coalesced to one view-history step. */
   onViewChange?: (before: PlotViewBounds, after: PlotViewBounds) => void;
-  /** Stepped path builder (uPlot.paths.stepped) used for the "Step" default trace.
+  /** Stepped ("post") path builder (uPlot.paths.stepped) — used for the
+   *  "Step" default trace preference AND as the fallback for a per-series
+   *  `SeriesStyle.step: "post"` (GAP_PLOTTYPES "step" mark) override.
    *  Supplied by the caller so this module stays free of the uPlot *runtime*
    *  (a value import would pull uPlot's matchMedia init into headless tests). */
   steppedPaths?: uPlot.Series.PathBuilder;
+  /** Stepped "pre"/"mid" path builders — the other two `SeriesStyle.step`
+   *  alignments (GAP_PLOTTYPES). Sibling of `steppedPaths`, same runtime-free
+   *  reason for being caller-supplied (see `lib/uplotPaths.ts`). */
+  steppedPathsPre?: uPlot.Series.PathBuilder;
+  steppedPathsMid?: uPlot.Series.PathBuilder;
   /** Linear/points path builders (uPlot.paths.linear() / .points()), supplied by
    *  the caller for the same runtime-free reason as `steppedPaths`. Used when x
    *  is non-monotonic (hysteresis loops, swept-back scans): uPlot derives its
@@ -1358,9 +1365,19 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
       };
-      // Stepped trace: apply the caller-supplied step-after path builder (there's
-      // no per-series line-shape override, so it's a global default).
-      if (trace === "Step" && !style?.line && args.steppedPaths) {
+      // Per-series step alignment (SeriesStyle.step, GAP_PLOTTYPES "step"
+      // mark) — a MORE SPECIFIC override than the "Step" default-trace
+      // preference below, so it's checked first: a step-marked series
+      // renders correctly regardless of the ambient default trace.
+      if (style?.step) {
+        const builder =
+          style.step === "pre" ? args.steppedPathsPre
+          : style.step === "mid" ? args.steppedPathsMid
+          : args.steppedPaths;
+        if (builder) def.paths = xAscending ? builder : fullLine(builder);
+      } else if (trace === "Step" && !style?.line && args.steppedPaths) {
+        // Stepped trace: apply the caller-supplied step-after path builder
+        // (there's no per-series line-shape override, so it's a global default).
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.

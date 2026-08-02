@@ -41,7 +41,19 @@ function stylesForMark(
   seriesStyles: Record<number, SeriesStyle>,
 ): (ExportSeriesStyle | null)[] {
   const base = buildExportStyles(spec.zones.y.map((r) => r.channel), seriesStyles);
-  if (spec.mark === "line") return base;
+  if (spec.mark === "line") {
+    return spec.showMarkers ? base.map((style) => ({ ...(style ?? {}), marker: true })) : base;
+  }
+  if (spec.mark === "step") {
+    const step = spec.stepMode ?? "post";
+    return base.map((style) => ({
+      ...(style ?? {}),
+      step,
+      ...(spec.showMarkers ? { marker: true } : {}),
+    }));
+  }
+  // "scatter" — SeriesStyle's own "no line" mechanism translated to the
+  // export vocabulary (ExportSeriesStyle DOES have a real `line: "none"`).
   return base.map((style) => ({ ...(style ?? {}), line: "none", marker: true }));
 }
 
@@ -60,6 +72,7 @@ function displayToSeriesStyles(display: DisplayBlock | undefined): Record<number
     if (sd.marker !== undefined) style.marker = sd.marker;
     if (sd.markerShape !== undefined) style.markerShape = sd.markerShape;
     if (sd.line !== undefined) style.line = sd.line;
+    if (sd.step !== undefined) style.step = sd.step;
     out[Number(key)] = style;
   }
   return out;

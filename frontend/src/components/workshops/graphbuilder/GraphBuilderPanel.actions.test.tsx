@@ -26,6 +26,43 @@ vi.mock("../../primitives", () => ({
   Button: ({ variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string }) => (
     <button data-variant={variant} {...props} />
   ),
+  Checkbox: ({
+    checked,
+    onChange,
+    children,
+  }: {
+    checked: boolean;
+    onChange?: (v: boolean) => void;
+    children?: ReactNode;
+  }) => (
+    <label>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange?.(e.target.checked)} />
+      {children}
+    </label>
+  ),
+  SegmentedControl: <T extends string>({
+    options,
+    value,
+    onChange,
+  }: {
+    options: { value: T; label: string }[];
+    value: T;
+    onChange?: (v: T) => void;
+  }) => (
+    <div role="tablist">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="tab"
+          aria-selected={opt.value === value}
+          onClick={() => onChange?.(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 const builderState = {
@@ -35,6 +72,10 @@ const builderState = {
   mark: "scatter",
   family: "xy",
   marks: ["scatter"],
+  showMarkers: false,
+  setShowMarkers: vi.fn(),
+  stepMode: "post",
+  setStepMode: vi.fn(),
   render: {},
   options: [],
   chips: () => [],
@@ -138,5 +179,64 @@ describe("Graph Builder plot destinations", () => {
     expect(preview).toHaveAttribute("title", "Faceted plots need a multi-panel contract first.");
     fireEvent.click(preview);
     expect(openInFigureBuilder).not.toHaveBeenCalled();
+  });
+});
+
+// GAP_PLOTTYPES: the "step" mark's UI (Markers toggle + pre/post/mid select).
+describe("Graph Builder step mark UI", () => {
+  it("hides the Markers toggle and step select for scatter (the default builderState)", () => {
+    render(<GraphBuilderPanel />);
+    expect(screen.queryByText("Markers")).not.toBeInTheDocument();
+  });
+
+  it("shows the Markers toggle (but no step select) for a line mark", () => {
+    vi.mocked(useGraphBuilder).mockReturnValue({ ...builderState, mark: "line", marks: ["scatter", "line", "step"] });
+    render(<GraphBuilderPanel />);
+    expect(screen.getByText("Markers")).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+  });
+
+  it("shows both the Markers toggle and the pre/post/mid step select for a step mark", () => {
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      mark: "step",
+      marks: ["scatter", "line", "step"],
+      stepMode: "post",
+    });
+    render(<GraphBuilderPanel />);
+    expect(screen.getByText("Markers")).toBeInTheDocument();
+    const tabs = screen.getByRole("tablist");
+    expect(tabs).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "post" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("wires the Markers checkbox and step select to their setters", () => {
+    const setShowMarkers = vi.fn();
+    const setStepMode = vi.fn();
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      mark: "step",
+      marks: ["scatter", "line", "step"],
+      stepMode: "post",
+      setShowMarkers,
+      setStepMode,
+    });
+    render(<GraphBuilderPanel />);
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(setShowMarkers).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole("tab", { name: "mid" }));
+    expect(setStepMode).toHaveBeenCalledWith("mid");
+  });
+
+  it("uses the step glyph in the mark label", () => {
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      mark: "step",
+      marks: ["scatter", "line", "step"],
+    });
+    render(<GraphBuilderPanel />);
+    expect(screen.getByText("▤ step")).toBeInTheDocument();
   });
 });

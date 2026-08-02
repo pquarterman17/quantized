@@ -55,6 +55,31 @@ describe("plotSpecToFigureDoc", () => {
     ]);
   });
 
+  // ── GAP_PLOTTYPES: "step" mark + showMarkers publication parity ─────────
+  it("maps step (default 'post') to a step-drawstyle publication style, no forced markers", () => {
+    const doc = plotSpecToFigureDoc(xy({ mark: "step" }), "", {});
+    expect(doc?.config.seriesStyles).toEqual([
+      { color: expect.any(String), step: "post" },
+      { color: expect.any(String), step: "post" },
+    ]);
+  });
+
+  it("maps step + showMarkers to Origin's Line + Symbol equivalent", () => {
+    const doc = plotSpecToFigureDoc(xy({ mark: "step", stepMode: "mid", showMarkers: true }), "", {});
+    expect(doc?.config.seriesStyles).toEqual([
+      { color: expect.any(String), step: "mid", marker: true },
+      { color: expect.any(String), step: "mid", marker: true },
+    ]);
+  });
+
+  it("line stays plain without showMarkers, but adds markers when showMarkers is set", () => {
+    const plain = plotSpecToFigureDoc(xy({ mark: "line" }), "", {});
+    expect(plain?.config.seriesStyles?.[0]?.marker).toBeUndefined();
+    const withMarkers = plotSpecToFigureDoc(xy({ mark: "line", showMarkers: true }), "", {});
+    expect(withMarkers?.config.seriesStyles?.[0]?.marker).toBe(true);
+    expect(withMarkers?.config.seriesStyles?.[0]?.line).toBeUndefined(); // still a real line, not "none"
+  });
+
   // Regression pin (GUI_INTERACTION #12 Slice 5): faceted/statistical/
   // incomplete/cross-dataset specs stay fail-closed exactly as before --
   // ONLY grouped (without y2) was un-fail-closed this slice.

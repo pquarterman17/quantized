@@ -12,6 +12,7 @@ import {
   isMonotonicChannel,
   markContext,
   markFamily,
+  markSeriesStyle,
   moveYZone,
   plotSpecCoreEqual,
   plotSpecsEqual,
@@ -164,8 +165,8 @@ describe("markFamily", () => {
 });
 
 describe("validMarks", () => {
-  it("offers scatter/line for xy, box/violin/bar for categorical, none for incomplete", () => {
-    expect(validMarks(spec(ref(0), [ref(1)], "scatter"), ctx())).toEqual(["scatter", "line"]);
+  it("offers scatter/line/step for xy, box/violin/bar for categorical, none for incomplete", () => {
+    expect(validMarks(spec(ref(0), [ref(1)], "scatter"), ctx())).toEqual(["scatter", "line", "step"]);
     expect(validMarks(spec(ref(2), [ref(1)], "box"), ctx())).toEqual(["box", "violin", "bar"]);
     expect(validMarks(spec(ref(0), [], "scatter"), ctx())).toEqual([]);
   });
@@ -222,14 +223,44 @@ describe("cycleMark", () => {
     expect(cycleMark({ ...base, mark: "violin" }, c)).toBe("bar");
     expect(cycleMark({ ...base, mark: "bar" }, c)).toBe("box");
   });
-  it("cycles scatter ⇄ line", () => {
+  it("cycles scatter → line → step → scatter", () => {
     const base = spec(ref(0), [ref(1)], "scatter");
     const c = ctx();
     expect(cycleMark({ ...base, mark: "scatter" }, c)).toBe("line");
-    expect(cycleMark({ ...base, mark: "line" }, c)).toBe("scatter");
+    expect(cycleMark({ ...base, mark: "line" }, c)).toBe("step");
+    expect(cycleMark({ ...base, mark: "step" }, c)).toBe("scatter");
   });
   it("no-ops on an incomplete spec", () => {
     expect(cycleMark(spec(ref(0), [], "scatter"), ctx())).toBe("scatter");
+  });
+});
+
+// ── markSeriesStyle (GAP_PLOTTYPES: the mark → Stage style bridge) ──────────
+describe("markSeriesStyle", () => {
+  it("scatter: zero width + markers on — the SeriesStyle 'no line' mechanism", () => {
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "scatter"))).toEqual({ width: 0, marker: true });
+  });
+
+  it("line with no showMarkers: nothing to override", () => {
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "line"))).toEqual({});
+  });
+
+  it("line with showMarkers: markers on, line width untouched (Origin's Line + Symbol)", () => {
+    const s: PlotSpec = { ...spec(ref(0), [ref(1)], "line"), showMarkers: true };
+    expect(markSeriesStyle(s)).toEqual({ marker: true });
+  });
+
+  it("step with no stepMode defaults to post, no markers", () => {
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "step"))).toEqual({ step: "post" });
+  });
+
+  it("step honors an explicit stepMode + showMarkers", () => {
+    const s: PlotSpec = { ...spec(ref(0), [ref(1)], "step"), stepMode: "mid", showMarkers: true };
+    expect(markSeriesStyle(s)).toEqual({ step: "mid", marker: true });
+  });
+
+  it("box/violin/bar: nothing to override (not an xy mark)", () => {
+    expect(markSeriesStyle(spec(ref(2), [ref(1)], "box"))).toEqual({});
   });
 });
 
@@ -265,6 +296,23 @@ describe("specToRender", () => {
     expect(r.payload.data[0]).toHaveLength(12);
     expect(r.payload.series).toHaveLength(1);
     expect(r.payload.xLabel).toBe("x");
+  });
+
+  it("step mark → an xy render carrying stepMode (default 'post') and showMarkers when set", () => {
+    const r = specToRender({ ...spec(ref(0), [ref(1)], "step"), showMarkers: true }, [DS]);
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.mark).toBe("step");
+    expect(r.stepMode).toBe("post");
+    expect(r.showMarkers).toBe(true);
+  });
+
+  it("an xy render omits stepMode/showMarkers when not applicable/set", () => {
+    const r = specToRender(spec(ref(0), [ref(1)], "scatter"), [DS]);
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.stepMode).toBeUndefined();
+    expect(r.showMarkers).toBeUndefined();
   });
 
   it("a group channel splits the xy payload into one series per level", () => {
@@ -488,6 +536,36 @@ describe("serialize / deserialize / validate", () => {
 
   it("deserialize returns null for malformed JSON", () => {
     expect(deserializePlotSpec("{not json")).toBeNull();
+  });
+
+  // ── stepMode / showMarkers (GAP_PLOTTYPES): byte-stable v1 siblings of
+  // `mark`, tolerantly validated like every other field, round-tripping
+  // without promoting the spec to version 2. ─────────────────────────────
+  it("round-trips stepMode + showMarkers, staying version 1", () => {
+    const s: PlotSpec = { ...spec(ref(0), [ref(1)], "step"), stepMode: "mid", showMarkers: true };
+    const raw = serializePlotSpec(s);
+    expect(JSON.parse(raw).version).toBe(1);
+    const back = deserializePlotSpec(raw);
+    expect(back).toEqual(s);
+  });
+
+  it("normalizes a bad stepMode/showMarkers, dropping them rather than nulling the spec", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "step",
+      stepMode: "diagonal",
+      showMarkers: "yes",
+    });
+    expect(v).not.toBeNull();
+    expect(v!.stepMode).toBeUndefined();
+    expect(v!.showMarkers).toBeUndefined();
+  });
+
+  it("omits stepMode/showMarkers entirely from a spec that never set them (no JSON noise)", () => {
+    const raw = serializePlotSpec(spec(ref(0), [ref(1)], "line"));
+    expect(JSON.parse(raw)).not.toHaveProperty("stepMode");
+    expect(JSON.parse(raw)).not.toHaveProperty("showMarkers");
   });
 });
 
@@ -760,6 +838,15 @@ describe("plotSpecCoreEqual", () => {
 
   it("true for two empty specs", () => {
     expect(plotSpecCoreEqual(emptySpec(), emptySpec())).toBe(true);
+  });
+
+  it("false when stepMode or showMarkers differ (GAP_PLOTTYPES — these ARE core, unlike v2 blocks)", () => {
+    const a: PlotSpec = { ...spec(ref(0), [ref(1)], "step"), stepMode: "post" };
+    const b: PlotSpec = { ...spec(ref(0), [ref(1)], "step"), stepMode: "mid" };
+    expect(plotSpecCoreEqual(a, b)).toBe(false);
+    const c: PlotSpec = { ...spec(ref(0), [ref(1)], "line"), showMarkers: true };
+    const d: PlotSpec = spec(ref(0), [ref(1)], "line");
+    expect(plotSpecCoreEqual(c, d)).toBe(false);
   });
 });
 

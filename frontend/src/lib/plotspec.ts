@@ -129,7 +129,9 @@ import {
   groupBoxStatsClient,
   resolveGroups,
 } from "./statstage";
-import type { DataStruct, Dataset, ModelingType } from "./types";
+import type { DataStruct, Dataset, ModelingType, SeriesStyle, StepMode } from "./types";
+
+export type { StepMode } from "./types";
 
 export type {
   AxesBlock,
@@ -150,7 +152,7 @@ export interface ChannelRef {
 }
 
 /** The mark (glyph) a spec renders with. */
-export type PlotMark = "scatter" | "line" | "box" | "violin" | "bar";
+export type PlotMark = "scatter" | "line" | "step" | "box" | "violin" | "bar";
 
 /** The four drop wells. `facet` is typed from day one but inert in v1. */
 export type ZoneName = "x" | "y" | "group" | "facet";
@@ -170,6 +172,17 @@ export interface PlotSpec {
   version: 1 | 2;
   zones: PlotZones;
   mark: PlotMark;
+  /** Alignment for the "step" mark (GAP_PLOTTYPES). Ignored by every other
+   *  mark. Undefined = "post" (see `StepMode`'s doc for why that's the
+   *  right default). Part of the byte-stable v1 shape (a sibling of `mark`,
+   *  not a v2 "block" — never affects `version`). */
+  stepMode?: StepMode;
+  /** Origin's "Line + Symbol": overlay point markers on a connected mark.
+   *  Applies to "line"/"step" only — "scatter" always shows markers by
+   *  definition, so this field is meaningless (and ignored) there. Undefined/
+   *  false = today's plain-line behavior. Same byte-stable-v1 sibling-of-
+   *  `mark` status as `stepMode`. */
+  showMarkers?: boolean;
   /** Per-series style override + explicit display order (Slice 2 schema;
    *  wired by Slice 3/5). Omitted entirely (not even `undefined`-valued) when
    *  empty — see `./plotspec2` for the grammar + validators/builders. */
@@ -189,12 +202,12 @@ export interface PlotSpec {
 }
 
 /** Every mark, in declaration order (also the validation allow-list). */
-export const PLOT_MARKS: readonly PlotMark[] = ["scatter", "line", "box", "violin", "bar"];
+export const PLOT_MARKS: readonly PlotMark[] = ["scatter", "line", "step", "box", "violin", "bar"];
 
 /** Which "shape" a set of zones renders as. `null` = incomplete (no Y). */
 export type MarkFamily = "xy" | "categorical";
 
-const XY_MARKS: readonly PlotMark[] = ["scatter", "line"];
+const XY_MARKS: readonly PlotMark[] = ["scatter", "line", "step"];
 const CATEGORICAL_MARKS: readonly PlotMark[] = ["box", "violin", "bar"];
 
 /** The context inferMark needs: a channel-ref → modeling-type lookup plus an
@@ -339,6 +352,30 @@ export function withInferredMark(spec: PlotSpec, ctx: MarkContext): PlotSpec {
   return mark === spec.mark ? spec : { ...spec, mark };
 }
 
+/** Translate a spec's `mark` (+ `stepMode`/`showMarkers`) into the per-Y-
+ *  channel `SeriesStyle` patch the Stage understands — the Graph Builder
+ *  "commit to plot" bridge (GAP_PLOTTYPES). The Stage has no `line: "none"`
+ *  field; a ZERO `width` IS "no line" (marker-only), which is exactly the
+ *  mechanism the Inspector's own trace toggle already uses (see
+ *  `components/Inspector/SeriesStyleCard.tsx`'s `setTrace`):
+ *
+ *    "scatter"        → { width: 0, marker: true }         (always markers)
+ *    "step"           → { step, ...(showMarkers && marker) } (nonzero width)
+ *    "line" (default) → { } or { marker: true } when showMarkers
+ *
+ *  Returns `{}` for a plain line with no markers — the caller should treat
+ *  an empty result as "nothing to override" (today's ambient defaults still
+ *  apply) rather than skip the call outright; either is safe since
+ *  `setSeriesStyle` merges. Pure — no store/React import, unit-testable
+ *  standalone like every other function in this module. */
+export function markSeriesStyle(spec: PlotSpec): Partial<SeriesStyle> {
+  if (spec.mark === "scatter") return { width: 0, marker: true };
+  if (spec.mark === "step") {
+    return { step: spec.stepMode ?? "post", ...(spec.showMarkers ? { marker: true } : {}) };
+  }
+  return spec.showMarkers ? { marker: true } : {};
+}
+
 // ── Live-context builder (resolves types + monotonicity from real datasets) ──
 
 /** Is a channel's finite values sorted (non-decreasing OR non-increasing) in row
@@ -383,8 +420,14 @@ export type SpecRender =
   | {
       kind: "xy";
       payload: PlotPayload;
-      mark: "scatter" | "line";
+      mark: "scatter" | "line" | "step";
       grouped: boolean;
+      /** Mirrors `PlotSpec.showMarkers`/`stepMode`, carried onto the render so
+       *  a consumer (the Graph Builder mini-preview) can draw the SAME shape
+       *  the Stage commit produces without re-reading the raw spec. Omitted
+       *  when false/not-"step" (the ordinary-render case). */
+      showMarkers?: boolean;
+      stepMode?: StepMode;
       /** Small multiples (GAP_PLOTTYPES #5 faceting), one per facet-column
        *  level — present only when `zones.facet` is set. Absent = the
        *  ordinary single-panel xy render. */
@@ -478,7 +521,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
   const xKey = spec.zones.x?.channel ?? null;
   const yChannels = spec.zones.y.map((r) => r.channel);
 
-  if (spec.mark === "scatter" || spec.mark === "line") {
+  if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
     const groupCol = spec.zones.group?.channel ?? null;
     const facetCol = spec.zones.facet?.channel ?? null;
     // Small multiples (#5): one xy payload per facet-column level, built from
@@ -490,6 +533,8 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
       payload: buildXY(data, xKey, yChannels, groupCol),
       mark: spec.mark,
       grouped: groupCol !== null,
+      ...(spec.showMarkers ? { showMarkers: true } : {}),
+      ...(spec.mark === "step" ? { stepMode: spec.stepMode ?? "post" } : {}),
       ...(facets && facets.length > 0 ? { facets } : {}),
     };
   }
@@ -566,6 +611,12 @@ function isPlotMark(v: unknown): v is PlotMark {
   return typeof v === "string" && (PLOT_MARKS as readonly string[]).includes(v);
 }
 
+const STEP_MODES: readonly StepMode[] = ["pre", "post", "mid"];
+
+function isStepMode(v: unknown): v is StepMode {
+  return typeof v === "string" && (STEP_MODES as readonly string[]).includes(v);
+}
+
 /** Validate + normalize an arbitrary value into a PlotSpec, or null if it isn't
  *  one. Tolerant of missing/extra fields (a partial persisted spec still loads):
  *  unknown zone refs drop to null / out of the Y list, an unknown mark falls
@@ -593,6 +644,12 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
     facet: normRef(zin.facet),
   };
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
+  // Byte-stable v1 siblings of `mark` (never a v2 "block" — see PlotSpec's
+  // doc): tolerant per-field validation, omitted entirely when absent/
+  // default so a spec that never touched them serializes exactly as before
+  // this field existed.
+  const stepMode = isStepMode(o.stepMode) ? o.stepMode : undefined;
+  const showMarkers = typeof o.showMarkers === "boolean" ? o.showMarkers : undefined;
   const rawDisplay = validateDisplayBlock(o.display);
   const rawAxes = validateAxesBlock(o.axes);
   const rawDecor = validateDecorBlock(o.decor);
@@ -605,6 +662,8 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
     version: display || axes || decor || page ? 2 : 1,
     zones,
     mark,
+    ...(stepMode ? { stepMode } : {}),
+    ...(showMarkers ? { showMarkers } : {}),
     ...(display ? { display } : {}),
     ...(axes ? { axes } : {}),
     ...(page ? { page } : {}),
@@ -704,7 +763,15 @@ export function plotSpecsEqual(a: PlotSpec, b: PlotSpec): boolean {
 export function plotSpecCoreEqual(a: PlotSpec, b: PlotSpec): boolean {
   const core = (s: PlotSpec): string => {
     const norm = validatePlotSpec(s) ?? emptySpec();
-    return JSON.stringify({ zones: norm.zones, mark: norm.mark });
+    // stepMode/showMarkers are user-visible builder state exactly like mark
+    // (byte-stable v1 siblings of it, not a v2 block — see PlotSpec's doc),
+    // so they belong in the SAME "core" comparison as zones+mark.
+    return JSON.stringify({
+      zones: norm.zones,
+      mark: norm.mark,
+      stepMode: norm.stepMode,
+      showMarkers: norm.showMarkers,
+    });
   };
   return core(a) === core(b);
 }

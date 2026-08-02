@@ -16,8 +16,8 @@ const hasKeys = (value: object | null | undefined): boolean =>
   value !== null && value !== undefined && Object.keys(value).length > 0;
 
 function plotSpecPublicationBlocker(spec: PlotSpec): string | null {
-  if (spec.mark !== "line" && spec.mark !== "scatter") {
-    return "Only line and scatter plots can open in Publication Preview.";
+  if (spec.mark !== "line" && spec.mark !== "scatter" && spec.mark !== "step") {
+    return "Only line, scatter, and step plots can open in Publication Preview.";
   }
   if (spec.zones.y.length === 0) return "Assign at least one Y channel first.";
   if (spec.zones.facet) return "Faceted plots need a multi-panel Publication Preview contract first.";

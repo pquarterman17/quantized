@@ -77,7 +77,7 @@
 // block convention: capturing a spec from a plot that never touched styling
 // must not flip that spec to version 2.
 
-import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, StepMode, TickMode } from "./types";
 import { MARKER_SHAPES } from "./markers";
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
@@ -95,6 +95,12 @@ export interface SeriesDisplay {
   marker?: boolean;
   markerShape?: MarkerShape;
   line?: LineStyle;
+  /** Stepped-line alignment (GAP_PLOTTYPES "step" mark) — mirrors
+   *  `SeriesStyle.step` (see its doc); captured/applied alongside the other
+   *  style fields so a "step" mark's per-series look survives a Graph
+   *  Builder save/reopen even when the spec also carries a captured
+   *  `display` block (see `buildDisplayBlock`/`plotspecApply.applyDisplayBlock`). */
+  step?: StepMode;
   hidden?: boolean;
   /** Which Y scale this channel plots on: 0/undefined = primary, 1 =
    *  secondary (y2) — same convention as `Annotation.axis`/`SeriesStyle.axis`
@@ -213,6 +219,7 @@ export interface PageBlock {
 // ── Small validation primitives ───────────────────────────────────────────
 
 const LINE_STYLES: readonly LineStyle[] = ["solid", "dashed", "dotted"];
+const STEP_MODES: readonly StepMode[] = ["pre", "post", "mid"];
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
 const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 const MARKER_SHAPE_VALUES: ReadonlySet<MarkerShape> = new Set(MARKER_SHAPES.map((m) => m.value));
@@ -256,6 +263,9 @@ function validateSeriesDisplay(v: unknown): SeriesDisplay | null {
   }
   if (typeof o.line === "string" && (LINE_STYLES as readonly string[]).includes(o.line)) {
     out.line = o.line as LineStyle;
+  }
+  if (typeof o.step === "string" && (STEP_MODES as readonly string[]).includes(o.step)) {
+    out.step = o.step as StepMode;
   }
   if (typeof o.hidden === "boolean") out.hidden = o.hidden;
   if (o.axis === 0 || o.axis === 1) out.axis = o.axis;
@@ -427,7 +437,10 @@ export function pageBlockHasContent(b: PageBlock | null | undefined): b is PageB
 /** The live per-channel style shape `buildDisplayBlock` reads — the subset
  *  of `SeriesStyle` the display block captures (see the module doc for why
  *  `fill`/`colorBy`/`colormap`/`markerSize` aren't part of v2 yet). */
-export type SeriesDisplayStyle = Pick<SeriesDisplay, "color" | "width" | "marker" | "markerShape" | "line">;
+export type SeriesDisplayStyle = Pick<
+  SeriesDisplay,
+  "color" | "width" | "marker" | "markerShape" | "line" | "step"
+>;
 
 /** Capture a `DisplayBlock` from live styling + display state, for the
  *  PLOTTED channels only. `styles` is the store's `seriesStyles` map (or a
@@ -457,6 +470,7 @@ export function buildDisplayBlock(
     if (s?.marker !== undefined) sd.marker = s.marker;
     if (s?.markerShape !== undefined) sd.markerShape = s.markerShape;
     if (s?.line !== undefined) sd.line = s.line;
+    if (s?.step !== undefined) sd.step = s.step;
     if (hiddenSet.has(ch)) sd.hidden = true;
     if (y2Set.has(ch)) sd.axis = 1;
     if (Object.keys(sd).length > 0) series[ch] = sd;

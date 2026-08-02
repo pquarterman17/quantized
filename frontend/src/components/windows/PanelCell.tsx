@@ -35,7 +35,7 @@ import {
 import { defaultPlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
-import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
+import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { useApp } from "../../store/useApp";
 import PlotViewport from "../Stage/PlotViewport";
 import { usePlotPayload } from "../Stage/usePlotPayload";
@@ -164,6 +164,8 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
           baseLineWidth={defaultLineWidth}
           defaultTrace={defaultTrace}
           steppedPaths={STEPPED_PATHS}
+          steppedPathsPre={STEPPED_PATHS_PRE}
+          steppedPathsMid={STEPPED_MID_PATHS}
           linearPaths={LINEAR_PATHS}
           pointsPaths={POINTS_PATHS}
           wheelZoom={false}

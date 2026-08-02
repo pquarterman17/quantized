@@ -72,8 +72,14 @@ describe("figure transition compatibility", () => {
 
   it("keeps unsupported PlotSpecs blocked rather than describing them as lossy", () => {
     const report = plotSpecPublicationCompatibility(spec({ mark: "box" }));
-    expect(report.blocker).toContain("line and scatter");
+    expect(report.blocker).toContain("Publication Preview");
     expect(report.losses).toEqual([]);
+  });
+
+  it("line, scatter, AND step all open unblocked (GAP_PLOTTYPES)", () => {
+    expect(plotSpecPublicationCompatibility(spec({ mark: "line" })).blocker).toBeNull();
+    expect(plotSpecPublicationCompatibility(spec({ mark: "scatter" })).blocker).toBeNull();
+    expect(plotSpecPublicationCompatibility(spec({ mark: "step", stepMode: "mid" })).blocker).toBeNull();
   });
 
   it("reports the FigureDoc fields omitted by the fresh-window bridge", () => {

@@ -28,6 +28,7 @@ export function buildExportStyles(
       if (st.markerSize != null) spec.marker_size = st.markerSize;
     }
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
+    if (st?.step) spec.step = st.step;
     if (st?.colorBy != null) {
       spec.color_by = st.colorBy;
       spec.colormap = st.colormap ?? "viridis";

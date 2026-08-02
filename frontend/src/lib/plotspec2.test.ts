@@ -59,6 +59,15 @@ describe("validateDisplayBlock", () => {
     expect(validateDisplayBlock(v)).toEqual({ series: { 0: { color: "#fff" } } });
   });
 
+  it("captures a valid step value and drops an unrecognized one (GAP_PLOTTYPES)", () => {
+    expect(validateDisplayBlock({ series: { 0: { step: "mid" } } })).toEqual({
+      series: { 0: { step: "mid" } },
+    });
+    expect(validateDisplayBlock({ series: { 0: { color: "#fff", step: "diagonal" } } })).toEqual({
+      series: { 0: { color: "#fff" } },
+    });
+  });
+
   it("drops a negative or absurd width, keeping other fields", () => {
     const v = { series: { 0: { width: -1 }, 1: { width: 500 }, 2: { width: 0 }, 3: { width: NaN } } };
     // width 0 is a real value (marker-only preset); -1/500/NaN all drop.
@@ -182,6 +191,17 @@ describe("buildDisplayBlock", () => {
     const styles = { 0: { color: "#ff8800", width: 2, marker: true, markerShape: "square" as const, line: "dashed" as const } };
     expect(buildDisplayBlock(styles, [0], null, [], null)).toEqual({
       series: { 0: { color: "#ff8800", width: 2, marker: true, markerShape: "square", line: "dashed" } },
+    });
+  });
+
+  // GAP_PLOTTYPES: the "step" mark's per-series style must survive a Graph
+  // Builder save/reopen even when a display block was ALSO captured (see
+  // plotspecApply.ts's applyDisplayBlock, which resets+rebuilds a channel's
+  // style from exactly this shape).
+  it("captures step alongside the other style fields", () => {
+    const styles = { 1: { color: "#111", step: "mid" as const } };
+    expect(buildDisplayBlock(styles, [1], null, [], null)).toEqual({
+      series: { 1: { color: "#111", step: "mid" } },
     });
   });
 

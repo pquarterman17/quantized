@@ -102,6 +102,7 @@ function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void
     if (sd.marker !== undefined) patch.marker = sd.marker;
     if (sd.markerShape !== undefined) patch.markerShape = sd.markerShape;
     if (sd.line !== undefined) patch.line = sd.line;
+    if (sd.step !== undefined) patch.step = sd.step;
     if (Object.keys(patch).length > 0) state.setSeriesStyle(channel, patch);
     // toggleHidden is the only hidden-channel setter (no `setHiddenChannels`
     // action) — flip only when the captured state disagrees with the

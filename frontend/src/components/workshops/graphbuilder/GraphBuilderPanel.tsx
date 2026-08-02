@@ -2,17 +2,22 @@
 // #11) — view. A draggable ToolWindow: drop channels from the Channels card /
 // legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells (or
 // click-to-assign for keyboard/AT); the mark morphs as columns land (scatter
-// ⇄ line ⇄ box ⇄ violin ⇄ bar); a live preview updates; explicit Create New
-// Plot / Apply to Current Plot actions commit the spec; Export applies it to
-// the current plot, then exports through the
-// existing figure-export path. PlotSpecBar (the Save/Open/Duplicate/Rename/
-// Delete toolbar) sits ABOVE the wells and stays visible even with no dataset
+// ⇄ line ⇄ step ⇄ box ⇄ violin ⇄ bar); a live preview updates; explicit Create
+// New Plot / Apply to Current Plot actions commit the spec; Export applies it
+// to the current plot, then exports through the
+// existing figure-export path. line/step marks also expose a "Markers"
+// toggle (Origin's "Line + Symbol") and step exposes its pre/post/mid
+// alignment (GAP_PLOTTYPES) — both are spec-level defaults, translated onto
+// the plotted channels' own styles at commit time (see useGraphBuilder's
+// `markSeriesStyle`). PlotSpecBar (the Save/Open/Duplicate/Rename/Delete
+// toolbar) sits ABOVE the wells and stays visible even with no dataset
 // selected, so saved graphs are always reachable. Thin — all state and the
 // plot-spec grammar live in useGraphBuilder / lib/plotspec.
 
+import type { StepMode } from "../../../lib/plotspec";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button } from "../../primitives";
+import { Button, Checkbox, SegmentedControl } from "../../primitives";
 import GraphPreview from "./GraphPreview";
 import PlotSpecBar from "./PlotSpecBar";
 import { useGraphBuilder } from "./useGraphBuilder";
@@ -21,10 +26,17 @@ import ZoneWell from "./ZoneWell";
 const MARK_GLYPH: Record<string, string> = {
   scatter: "⣿ scatter",
   line: "╱ line",
+  step: "▤ step",
   box: "▯ box",
   violin: "◈ violin",
   bar: "▭ bar",
 };
+
+const STEP_MODE_OPTS: { value: StepMode; label: string }[] = [
+  { value: "pre", label: "pre" },
+  { value: "post", label: "post" },
+  { value: "mid", label: "mid" },
+];
 
 export default function GraphBuilderPanel() {
   const setOpen = useApp((s) => s.setGraphBuilderOpen);
@@ -108,6 +120,17 @@ export default function GraphBuilderPanel() {
               </Button>
             )}
           </div>
+
+          {(g.mark === "line" || g.mark === "step") && (
+            <div className="qzk-graph-mark-row">
+              <Checkbox checked={g.showMarkers} onChange={g.setShowMarkers}>
+                Markers
+              </Checkbox>
+              {g.mark === "step" && (
+                <SegmentedControl<StepMode> options={STEP_MODE_OPTS} value={g.stepMode} onChange={g.setStepMode} />
+              )}
+            </div>
+          )}
 
           <GraphPreview render={g.render} />
 

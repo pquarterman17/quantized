@@ -230,6 +230,16 @@ describe("applySpecBlocks — display block", () => {
     });
   });
 
+  // GAP_PLOTTYPES: a "step" mark's per-series alignment must survive the
+  // reset+rebuild the same way color/width/marker/line already do.
+  it("maps a step field through resetSeriesStyle + setSeriesStyle", () => {
+    const { s, state, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ display: { series: { 1: { step: "mid", marker: true } } } }), s);
+    expect(fns.resetSeriesStyle).toHaveBeenCalledWith(1);
+    expect(fns.setSeriesStyle).toHaveBeenCalledWith(1, { step: "mid", marker: true });
+    expect(state.seriesStyles[1]).toEqual({ step: "mid", marker: true });
+  });
+
   it("resets but does not call setSeriesStyle when a channel has no style fields (hidden-only entry)", () => {
     const { fns, s } = makeFakeStore();
     applySpecBlocks(baseSpec({ display: { series: { 2: { hidden: true } } } }), s);

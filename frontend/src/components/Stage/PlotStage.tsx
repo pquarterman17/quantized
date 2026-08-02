@@ -15,7 +15,7 @@ import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { resolvePlotBg } from "../../lib/uplotOpts";
-import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
+import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -293,6 +293,8 @@ export default function PlotStage() {
         baseLineWidth={plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth}
         defaultTrace={defaultTrace}
         steppedPaths={STEPPED_PATHS}
+        steppedPathsPre={STEPPED_PATHS_PRE}
+        steppedPathsMid={STEPPED_MID_PATHS}
         linearPaths={LINEAR_PATHS}
         pointsPaths={POINTS_PATHS}
         wheelZoom={wheelZoom}

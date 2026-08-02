@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 
 import type { FacetPanel } from "../../../lib/facet";
 import type { PlotPayload } from "../../../lib/plotdata";
-import type { SpecRender } from "../../../lib/plotspec";
+import type { SpecRender, StepMode } from "../../../lib/plotspec";
 import { finiteDomain } from "../../../lib/statstage";
 import { seriesColor } from "../../../lib/uplotOpts";
 import type { Accent, Theme } from "../../../store/useApp";
@@ -27,12 +27,84 @@ import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 const MARGIN = { left: 42, right: 10, top: 10, bottom: 26 };
 
 type Rect = { x: number; y: number; w: number; h: number };
+type XYMark = "scatter" | "line" | "step";
+
+/** Trace a step path (matplotlib's `steps-pre`/`steps-post`/`steps-mid`
+ *  vocabulary — see `types.ts`'s `StepMode` doc) into an ALREADY-OPEN canvas
+ *  path (caller does `beginPath`/`stroke`). Mirrors the interactive Stage's
+ *  own `lib/uplotPaths.ts` (`STEPPED_PATHS`/`STEPPED_PATHS_PRE`/
+ *  `STEPPED_MID_PATHS`) so the mini-preview draws the SAME shape a commit
+ *  produces — a hand-rolled canvas version rather than importing uPlot here
+ *  (this preview never mounts a real uPlot instance). */
+function traceStep(
+  ctx: CanvasRenderingContext2D,
+  xs: readonly number[],
+  ys: readonly number[],
+  sx: (v: number) => number,
+  sy: (v: number) => number,
+  stepMode: StepMode,
+) {
+  let pen = false;
+  let prevPx = 0;
+  let prevPy = 0;
+  for (let r = 0; r < xs.length; r++) {
+    const xv = xs[r];
+    const yv = ys[r];
+    if (!Number.isFinite(xv) || !Number.isFinite(yv)) {
+      pen = false;
+      continue;
+    }
+    const px = sx(xv);
+    const py = sy(yv);
+    if (pen) {
+      if (stepMode === "pre") {
+        ctx.lineTo(prevPx, py);
+        ctx.lineTo(px, py);
+      } else if (stepMode === "mid") {
+        const midX = (prevPx + px) / 2;
+        ctx.lineTo(midX, prevPy);
+        ctx.lineTo(midX, py);
+        ctx.lineTo(px, py);
+      } else {
+        // "post"
+        ctx.lineTo(px, prevPy);
+        ctx.lineTo(px, py);
+      }
+    } else {
+      ctx.moveTo(px, py);
+    }
+    prevPx = px;
+    prevPy = py;
+    pen = true;
+  }
+}
+
+/** Draw circle markers at every finite point — the shared marker pass for
+ *  "scatter" (always) and "line"/"step" when `showMarkers` is on. */
+function tracePoints(
+  ctx: CanvasRenderingContext2D,
+  xs: readonly number[],
+  ys: readonly number[],
+  sx: (v: number) => number,
+  sy: (v: number) => number,
+) {
+  for (let r = 0; r < xs.length; r++) {
+    const xv = xs[r];
+    const yv = ys[r];
+    if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
+    ctx.beginPath();
+    ctx.arc(sx(xv), sy(yv), 2, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
 
 function drawXYIntoRect(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
   payload: PlotPayload,
-  mark: "scatter" | "line",
+  mark: XYMark,
+  showMarkers: boolean,
+  stepMode: StepMode,
   label?: string,
 ) {
   const cols = payload.data as (number | null)[][];
@@ -74,32 +146,32 @@ function drawXYIntoRect(
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 1.5;
-    if (mark === "line") {
+    // "scatter" always shows markers, no connecting line; "line"/"step" draw
+    // their connector and add markers only when showMarkers is on — same
+    // rule the Stage commit uses (lib/plotspec.ts's markSeriesStyle).
+    if (mark === "line" || mark === "step") {
       ctx.beginPath();
-      let pen = false;
-      for (let r = 0; r < col.length; r++) {
-        const yv = col[r];
-        const xv = x[r];
-        if (!Number.isFinite(xv) || !Number.isFinite(yv)) {
-          pen = false;
-          continue;
+      if (mark === "step") traceStep(ctx, x, col, sx, sy, stepMode);
+      else {
+        let pen = false;
+        for (let r = 0; r < col.length; r++) {
+          const yv = col[r];
+          const xv = x[r];
+          if (!Number.isFinite(xv) || !Number.isFinite(yv)) {
+            pen = false;
+            continue;
+          }
+          const px = sx(xv);
+          const py = sy(yv);
+          if (pen) ctx.lineTo(px, py);
+          else ctx.moveTo(px, py);
+          pen = true;
         }
-        const px = sx(xv);
-        const py = sy(yv);
-        if (pen) ctx.lineTo(px, py);
-        else ctx.moveTo(px, py);
-        pen = true;
       }
       ctx.stroke();
+      if (showMarkers) tracePoints(ctx, x, col, sx, sy);
     } else {
-      for (let r = 0; r < col.length; r++) {
-        const yv = col[r];
-        const xv = x[r];
-        if (!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
-        ctx.beginPath();
-        ctx.arc(sx(xv), sy(yv), 2, 0, 2 * Math.PI);
-        ctx.fill();
-      }
+      tracePoints(ctx, x, col, sx, sy);
     }
   });
 }
@@ -123,11 +195,18 @@ function setupCanvas(
   return { ctx, W, H };
 }
 
-function drawXY(canvas: HTMLCanvasElement, host: HTMLElement, payload: PlotPayload, mark: "scatter" | "line") {
+function drawXY(
+  canvas: HTMLCanvasElement,
+  host: HTMLElement,
+  payload: PlotPayload,
+  mark: XYMark,
+  showMarkers: boolean,
+  stepMode: StepMode,
+) {
   const setup = setupCanvas(canvas, host);
   if (!setup) return;
   const { ctx, W, H } = setup;
-  drawXYIntoRect(ctx, { x: 0, y: 0, w: W, h: H }, payload, mark);
+  drawXYIntoRect(ctx, { x: 0, y: 0, w: W, h: H }, payload, mark, showMarkers, stepMode);
 }
 
 /** Small-multiples grid (#21 faceting): one mini xy panel per facet level,
@@ -136,7 +215,9 @@ function drawFacetGrid(
   canvas: HTMLCanvasElement,
   host: HTMLElement,
   panels: FacetPanel[],
-  mark: "scatter" | "line",
+  mark: XYMark,
+  showMarkers: boolean,
+  stepMode: StepMode,
 ) {
   const setup = setupCanvas(canvas, host);
   if (!setup || panels.length === 0) return;
@@ -148,7 +229,15 @@ function drawFacetGrid(
   panels.forEach((p, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    drawXYIntoRect(ctx, { x: col * cellW, y: row * cellH, w: cellW, h: cellH }, p.payload, mark, p.label);
+    drawXYIntoRect(
+      ctx,
+      { x: col * cellW, y: row * cellH, w: cellW, h: cellH },
+      p.payload,
+      mark,
+      showMarkers,
+      stepMode,
+      p.label,
+    );
   });
 }
 
@@ -165,10 +254,12 @@ function CanvasHost({ render, theme, accent }: { render: SpecRender; theme: Them
     if (!host || !canvas) return;
     const paint = () => {
       if (render.kind === "xy") {
+        const showMarkers = render.showMarkers ?? false;
+        const stepMode = render.stepMode ?? "post";
         if (render.facets && render.facets.length > 0) {
-          drawFacetGrid(canvas, host, render.facets, render.mark);
+          drawFacetGrid(canvas, host, render.facets, render.mark, showMarkers, stepMode);
         } else {
-          drawXY(canvas, host, render.payload, render.mark);
+          drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode);
         }
       } else if (render.kind === "box") {
         drawStat(canvas, host, {

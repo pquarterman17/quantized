@@ -33,7 +33,7 @@ import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
-import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
+import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
 import { useApp } from "../../store/useApp";
 import InsetPlot from "../Stage/InsetPlot";
@@ -160,6 +160,8 @@ function BackgroundXYWindow({
         }
         defaultTrace={defaultTrace}
         steppedPaths={STEPPED_PATHS}
+        steppedPathsPre={STEPPED_PATHS_PRE}
+        steppedPathsMid={STEPPED_MID_PATHS}
         linearPaths={LINEAR_PATHS}
         pointsPaths={POINTS_PATHS}
         // No wheel-zoom / on-plot tools until the window is focused (decision 2).

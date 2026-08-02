@@ -693,6 +693,18 @@ export interface RegionShade {
 
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
+
+/** Stepped-line alignment (GAP_PLOTTYPES — Graph Builder "step" mark), the
+ *  same three-way vocabulary as matplotlib's `drawstyle` ("steps-pre"/
+ *  "steps-post"/"steps-mid") and uPlot's `paths.stepped({align})`:
+ *  "post" (uPlot `align: 1`) holds a point's Y value until the NEXT x, then
+ *  jumps — the honest default for a right-continuous profile (an XRD
+ *  occupancy/SLD layer's value holds from its own x through the next);
+ *  "pre" (uPlot `align: -1`) jumps immediately at each point's OWN x, then
+ *  holds; "mid" jumps at the x-midpoint between two points (matplotlib
+ *  `steps-mid`; uPlot has no built-in "mid" align, so the interactive Stage
+ *  uses a small hand-rolled path builder — see `lib/uplotPaths.ts`). */
+export type StepMode = "pre" | "post" | "mid";
 export type MarkerShape =
   | "circle"
   | "square"
@@ -889,6 +901,13 @@ export interface SeriesStyle {
   /** Colormap for `colorBy` (`lib/colormap.ts`'s named maps — viridis/magma/
    *  gray). Only consulted when `colorBy` is set; default `"viridis"`. */
   colormap?: ColormapName;
+  /** Stepped-line alignment (GAP_PLOTTYPES Graph Builder "step" mark) — see
+   *  `StepMode`'s doc. Undefined = an ordinary straight-line connector (today's
+   *  behavior). Composes with `line` (dash pattern) and `marker`/`width`
+   *  (there is still no `line: "none"` sentinel here — a zero `width` is
+   *  what draws a marker-only series; `step` only changes the SHAPE of a
+   *  nonzero-width connector). */
+  step?: StepMode;
 }
 
 /** One element row from the reference table. */
