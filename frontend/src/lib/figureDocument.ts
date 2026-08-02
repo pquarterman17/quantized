@@ -237,16 +237,43 @@ function axisBreaks(value: unknown): FigurePlotState["axisBreaks"] {
   return { x: ranges(object.x), y: ranges(object.y), y2: ranges(object.y2) };
 }
 
-function isDataStruct(value: unknown): value is DataStruct {
-  if (!isObject(value) || !isObject(value.metadata)) return false;
-  return (
-    Array.isArray(value.time) && value.time.every(Number.isFinite) &&
-    Array.isArray(value.values) && value.values.every(
-      (row) => Array.isArray(row) && row.every(Number.isFinite),
-    ) &&
-    Array.isArray(value.labels) && value.labels.every((item) => typeof item === "string") &&
-    Array.isArray(value.units) && value.units.every((item) => typeof item === "string")
-  );
+/** Restore a frozen JSON snapshot without weakening the runtime DataStruct
+ * type. JSON.stringify turns every NaN/+Infinity/-Infinity cell into null;
+ * those nulls are therefore normalized to NaN (the original kind/sign is not
+ * recoverable). Any other non-number cell remains invalid and rejects only
+ * this frozen document, not the surrounding workspace. */
+function normalizeFrozenDataStruct(value: unknown): DataStruct | null {
+  if (!isObject(value) || !isObject(value.metadata)) return null;
+  const cells = (candidate: unknown): number[] | null => {
+    if (!Array.isArray(candidate)) return null;
+    const out: number[] = [];
+    for (const cell of candidate) {
+      if (cell === null) out.push(Number.NaN);
+      else if (typeof cell === "number") out.push(Number.isFinite(cell) ? cell : Number.NaN);
+      else return null;
+    }
+    return out;
+  };
+  const time = cells(value.time);
+  if (!time || !Array.isArray(value.values)) return null;
+  const values: number[][] = [];
+  for (const row of value.values) {
+    const normalized = cells(row);
+    if (!normalized) return null;
+    values.push(normalized);
+  }
+  if (
+    !Array.isArray(value.labels) || !value.labels.every((item) => typeof item === "string") ||
+    !Array.isArray(value.units) || !value.units.every((item) => typeof item === "string")
+  ) return null;
+  return {
+    ...(clone(value) as unknown as DataStruct),
+    time,
+    values,
+    labels: [...value.labels],
+    units: [...value.units],
+    metadata: clone(value.metadata),
+  };
 }
 
 function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
@@ -288,7 +315,8 @@ export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null 
   const mode = value.data.mode;
   if (mode !== "live" && mode !== "frozen") return null;
   if (mode === "live" && value.data.snapshot !== undefined) return null;
-  if (mode === "frozen" && !isDataStruct(value.data.snapshot)) return null;
+  const frozenSnapshot = mode === "frozen" ? normalizeFrozenDataStruct(value.data.snapshot) : null;
+  if (mode === "frozen" && !frozenSnapshot) return null;
 
   const mark = PLOT_MARKS.includes(value.plot.mark as PlotMark) ? value.plot.mark as PlotMark : "line";
   const rawOutput = isObject(value.output) ? value.output : {};
@@ -303,7 +331,7 @@ export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null 
     name: value.name,
     bindings,
     data: mode === "frozen"
-      ? { mode, snapshot: clone(value.data.snapshot as DataStruct) }
+      ? { mode, snapshot: frozenSnapshot! }
       : { mode },
     plot: {
       mark,

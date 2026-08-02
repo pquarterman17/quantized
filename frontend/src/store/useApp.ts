@@ -1560,12 +1560,13 @@ export const useApp = create<AppState>((set, get) => ({
       // from before item 7.
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
-      const restored = sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds);
+      const migrationWarnings = [...(ws.migrationWarnings ?? [])];
+      const restored = sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds, migrationWarnings);
+      const migrationNotice = migrationWarnings[0] ? ` — ${migrationWarnings[0]}${migrationWarnings.length > 1 ? ` (+${migrationWarnings.length - 1} more)` : ""}` : "";
       // Items 11/17: the ≥1-window invariant is specifically ≥1 PLOT window —
       // non-plot kinds (snapshot / worksheet / map) can't hold focus, so a
       // doc whose surviving windows are all non-plot still gets the fresh
-      // maximized main window appended; and the restored focus id must land
-      // on a plot window (falling back to the first one), never elsewhere.
+      // maximized main window appended; focus then falls back to the first plot window.
       const restoredHasPlot = restored.some((w) => w.kind === "plot");
       const plotWindows = restoredHasPlot ? restored : [...restored, win];
       const focusedWindowId =
@@ -1658,7 +1659,7 @@ export const useApp = create<AppState>((set, get) => ({
         // spread writes the identical field set the group above re-lists on the
         // restore path — one place to maintain as PlotView grows, not two.
         ...(restoredView ?? {}),
-        status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
+        status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}${migrationNotice}`,
       };
     }),
   appendWorkspace: (ws) => {

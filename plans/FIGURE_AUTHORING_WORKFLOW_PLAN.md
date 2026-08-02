@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F1.5 reversible conversion path
+**Updated:** 2026-08-02 — F1.6 deterministic workspace migration
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -180,7 +180,7 @@ migration design; GPT-5.6 Terra high / Claude Sonnet 5 for bounded UI slices.
       FigureDocument, interactive PlotView, and export FigureSpec. Where exact
       reversal is impossible, keep the original canonical field and derive the
       transport representation without deleting information.
-- [ ] **F1.6 Migrate existing workspaces.** Load old PlotViews/FigureDocs
+- [x] **F1.6 Migrate existing workspaces.** Load old PlotViews/FigureDocs
       deterministically, preserve frozen figures, and record migration tests.
 
 **F1 exit:** Figure → save → close → reopen produces an equivalent editable
@@ -328,6 +328,26 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-02 — F1.6 deterministic and isolated migration (ChatGPT-Sol; bounded implementation delegated to GPT-5.6 Terra)
+
+- Legacy PlotView-only windows still promote deterministically into canonical
+  FigureDocuments. A future-version window document now degrades only that
+  window to its sanitized PlotView projection instead of aborting the whole
+  workspace; valid siblings continue loading.
+- Future-version saved editable figures are isolated per entry. They are not
+  rewritten as v1; the load status names the first skipped/degraded item and
+  summarizes additional warnings so the user knows not to overwrite the
+  original file with an older Quantized version.
+- Frozen JSON snapshots normalize `null` cells produced by serialization of
+  NaN or infinities back to missing-data `NaN`, while invalid nonnumeric cells
+  still fail closed and snapshots remain mutation-isolated.
+- Legacy Publication Preview FigureDocs, including frozen snapshots, remain
+  unchanged and separate. Automatic promotion is deferred to F2 because their
+  preview-only overrides do not yet have lossless FigureDocument fields.
+- Migration warnings are transient and never written into `.dwk`. Mixed-schema,
+  frozen-data, legacy-figure, warning visibility, and deterministic promotion
+  paths have regression coverage. This slice is stacked on PR #108.
+
 ### 2026-08-02 — F1.5 reversible document/export conversion (ChatGPT-Sol; bounded implementation delegated to GPT-5.6 Terra)
 
 - Added one shared PlotView/data-to-FigureSpec core. The established live-store
@@ -344,8 +364,7 @@ Before starting a slice:
 - Characterization tests cover the document → PlotView → document canonical
   round trip, document → FigureSpec projection, frozen/live resolution,
   backend-invalid combinations, and exact parity for the pre-existing export
-  path. This is stacked on draft PR #107; the PR number for this slice is
-  recorded when it is opened.
+  path. Implemented in stacked draft PR #108.
 
 ### 2026-08-02 — F1 guardrails and bundle-headroom preflight (ChatGPT-Sol; implementation delegated to GPT-5.6 Terra)
 

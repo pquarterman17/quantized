@@ -70,6 +70,8 @@ export interface WorkspaceState {
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
   editableFigures?: FigureDocument[];
+  /** Load-time compatibility notices. Never serialized back into a .dwk. */
+  migrationWarnings?: string[];
   plotWindows?: PlotWindow[];
   focusedWindowId?: string | null;
   /** GUI_INTERACTION_PLAN #10 item 3 — every floating ToolWindow's persisted
@@ -98,6 +100,8 @@ export interface LoadedWorkspace {
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
   editableFigures: FigureDocument[];
+  /** Compatibility notices produced while parsing this workspace; transient. */
+  migrationWarnings: string[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
@@ -234,17 +238,17 @@ function parseFolders(v: unknown): FolderNode[] {
   return out.map((f) => (f.parentId && !ids.has(f.parentId) ? { ...f, parentId: null } : f));
 }
 
-/** Canonical editable figures are strict at the version boundary: silently
- * accepting a future schema could discard settings when the workspace is
- * saved again. Malformed v1 entries are dropped; duplicate ids keep first. */
-function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>): FigureDocument[] {
+/** Future editable schemas are skipped; malformed v1 and duplicate ids are dropped. */
+function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, migrationWarnings: string[]): FigureDocument[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const documents: FigureDocument[] = [];
   for (const candidate of value) {
     const version = figureDocumentVersion(candidate);
     if (version !== null && version !== FIGURE_DOCUMENT_VERSION) {
-      throw new Error(`unsupported editable figure version ${version}`);
+      const id = typeof candidate === "object" && candidate !== null && typeof (candidate as Record<string, unknown>).id === "string" ? ` "${(candidate as Record<string, unknown>).id}"` : "";
+      migrationWarnings.push(`skipped saved FigureDocument${id} with unsupported version ${version}`);
+      continue;
     }
     const document = sanitizeFigureDocument(candidate);
     if (!document || seen.has(document.id)) continue;
@@ -558,33 +562,18 @@ export function parseWorkspace(
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
+  // Legacy Publication Preview FigureDocs stay unchanged until F2 preserves their unsupported overrides.
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
-  const editableFigures = parseEditableFigures(o.editableFigures, dsIds);
-  // Plot window layout (MULTI_PLOT_PLAN item 7) — additive-optional, so a
-  // pre-item-7 doc (absent field) sanitizes to [] via the same
-  // undefined-input path every other sanitizer here already handles.
-  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds);
-  // The focus id must land on a kind:"plot" window — a snapshot window
-  // (MULTI_PLOT_PLAN item 11) can never hold focus, so a doc pointing at one
-  // clamps to null (the store's load path then falls back to the first plot
-  // window).
+  const migrationWarnings: string[] = [];
+  const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
+  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings);
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")
       ? o.focusedWindowId
       : null;
-  // GUI_INTERACTION_PLAN #10 item 3: validated AND clamped to `viewport`
-  // right here — a workspace saved on a big monitor must stay reachable on
-  // a laptop the moment it's restored, not just lazily whenever a given
-  // window is later reopened.
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
-  // GUI_INTERACTION_PLAN #11: additive-optional, so a pre-#11 doc (absent
-  // field) sanitizes to [] via the same undefined-input path every other
-  // sanitizer here already handles — a legacy .dwk loads unchanged.
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
-  // PLOT_WORKFLOW_PLAN item 5: additive-optional like savedPlotSpecs above —
-  // a pre-item-5 doc (absent field) sanitizes to {} via the same
-  // undefined-input path every other sanitizer here already handles.
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   return {
     datasets,
@@ -600,6 +589,7 @@ export function parseWorkspace(
     recalcMode,
     figureDocs,
     editableFigures,
+    migrationWarnings,
     plotWindows,
     focusedWindowId,
     toolWindowLayout,

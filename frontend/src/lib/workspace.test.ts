@@ -677,7 +677,7 @@ describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
 });
 
 describe("workspace figure documents (#12)", () => {
-  it("round-trips docs and clamps a dead dataset ref (frozen keeps its snapshot)", () => {
+  it("retains legacy Publication Preview FigureDocs unchanged (F2 owns promotion)", () => {
     const datasets = [makeDataset("a", "first")];
     const config = {
       xKey: null, yKeys: [0], xScale: "linear" as const, yScale: "log" as const, title: "t",
@@ -696,6 +696,7 @@ describe("workspace figure documents (#12)", () => {
     expect(loaded.figureDocs[0].datasetId).toBe("a");
     expect(loaded.figureDocs[1].datasetId).toBeNull();
     expect(loaded.figureDocs[1].dataSnapshot).toEqual(datasets[0].data);
+    expect(loaded.editableFigures).toEqual([]);
   });
 });
 
@@ -784,13 +785,47 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.figureDocs).toEqual([]);
   });
 
-  it("fails closed on an unsupported saved editable-figure version", () => {
-    const raw = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<string, unknown>;
-    raw.editableFigures = [{
-      ...createFigureDocument({ id: "future", name: "Future", datasetId: "a", view: defaultPlotView() }),
-      version: 2,
-    }];
-    expect(() => parseWorkspace(JSON.stringify(raw))).toThrow("unsupported editable figure version 2");
+  it("isolates future editable and window documents while preserving valid siblings", () => {
+    const datasets = [makeDataset("a", "first")];
+    const raw = JSON.parse(serializeWorkspace({ datasets, plotWindows: [
+      win({ id: "future-window", document: {
+        ...createFigureDocument({ id: "future-window-doc", name: "Future", datasetId: "a", view: defaultPlotView() }),
+        version: 2,
+      } as never }),
+      win({ id: "valid-window", document: createFigureDocument({
+        id: "valid-window-doc", name: "Valid", datasetId: "a", view: defaultPlotView(),
+      }) }),
+    ] })) as Record<string, unknown>;
+    raw.editableFigures = [
+      createFigureDocument({ id: "valid-editable", name: "Valid", datasetId: "a", view: defaultPlotView() }),
+      { ...createFigureDocument({ id: "future-editable", name: "Future", datasetId: "a", view: defaultPlotView() }), version: 2 },
+    ];
+
+    const loaded = parseWorkspace(JSON.stringify(raw));
+
+    expect(loaded.editableFigures.map((document) => document.id)).toEqual(["valid-editable"]);
+    expect(loaded.plotWindows.map((entry) => entry.document?.id)).toEqual(["figure-future-window", "valid-window-doc"]);
+    expect(loaded.migrationWarnings).toEqual([
+      'skipped saved FigureDocument "future-editable" with unsupported version 2',
+      'plot window "future-window" uses unsupported FigureDocument version 2; restored its legacy PlotView projection',
+    ]);
+    const savedAgain = serializeWorkspace(loaded);
+    expect(savedAgain).not.toContain("migrationWarnings");
+    expect(savedAgain).not.toContain("future-editable");
+  });
+
+  it("round-trips frozen canonical snapshots whose JSON cells were non-finite", () => {
+    const frozen = createFigureDocument({
+      id: "frozen", name: "Frozen", datasetId: null, view: defaultPlotView(),
+      data: {
+        mode: "frozen",
+        snapshot: { time: [0, Number.NaN], values: [[Number.POSITIVE_INFINITY]], labels: ["y"], units: [""], metadata: {} },
+      },
+    });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets: [makeDataset("a", "first")], editableFigures: [frozen] }));
+    const snapshot = loaded.editableFigures[0].data.snapshot!;
+    expect(Number.isNaN(snapshot.time[1])).toBe(true);
+    expect(Number.isNaN(snapshot.values[0][0])).toBe(true);
   });
 
   it("clamps a window's dangling dataset ref to null (never drops the window itself)", () => {
@@ -1165,8 +1200,9 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       reports: [],
       macroSteps: [],
       recalcMode: "auto",
-    figureDocs: [],
-    editableFigures: [],
+      figureDocs: [],
+      editableFigures: [],
+      migrationWarnings: [],
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},

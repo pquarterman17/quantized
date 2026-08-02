@@ -3276,8 +3276,9 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       reports: [],
       macroSteps: [],
       recalcMode: "auto",
-    figureDocs: [],
-    editableFigures: [],
+      figureDocs: [],
+      editableFigures: [],
+      migrationWarnings: [],
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},
@@ -4589,6 +4590,18 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
     const s = useApp.getState();
     expect(s.plotWindows).toHaveLength(1);
     expect(s.plotWindows[0].datasetId).toBeNull();
+  });
+
+  it("shows the first migration warning and count without re-sanitization duplicates", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      plotWindows: [win({ document: createFigureDocument({
+        id: "figure-w1", name: "w1", datasetId: "d1", view: defaultPlotView(),
+      }) })],
+      migrationWarnings: ["skipped saved FigureDocument \"future\" with unsupported version 2", "another migration warning"],
+    });
+    expect(useApp.getState().status).toContain('skipped saved FigureDocument "future" with unsupported version 2 (+1 more)');
+    expect(useApp.getState().status.match(/skipped saved FigureDocument/g)).toHaveLength(1);
   });
 
   it("loadWorkspace with NO persisted layout keeps today's single-maximized-window default + dataset-derived smart defaults", () => {

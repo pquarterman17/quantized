@@ -62,7 +62,7 @@ describe("document-backed plot-window persistence", () => {
     expect(restored.document?.id).toBe("figure-missing");
   });
 
-  it("refuses a future document version instead of overwriting it", () => {
+  it("isolates a future document version and promotes only that window's legacy projection", () => {
     const future = {
       ...createFigureDocument({
         id: "future",
@@ -73,9 +73,19 @@ describe("document-backed plot-window persistence", () => {
       version: 2,
     };
 
-    expect(() => sanitizeDocumentBackedPlotWindows([
+    const warnings: string[] = [];
+    const restored = sanitizeDocumentBackedPlotWindows([
       { ...window(), document: future },
-    ], new Set(["d1"]))).toThrow("unsupported figure document version: 2");
+      window({ id: "w2", title: "Valid", document: createFigureDocument({
+        id: "valid", name: "Valid", datasetId: "d1", view: defaultPlotView(),
+      }) }),
+    ], new Set(["d1"]), warnings);
+
+    expect(restored.map((entry) => entry.document?.id)).toEqual(["figure-w1", "valid"]);
+    expect(restored[0].view.plotTitle).toBe("legacy title");
+    expect(warnings).toEqual([
+      'plot window "w1" uses unsupported FigureDocument version 2; restored its legacy PlotView projection',
+    ]);
   });
 
   it("repairs duplicate document identities deterministically", () => {

@@ -29,10 +29,14 @@ function migrateLegacyWindow(window: PlotWindow): FigureDocument {
   });
 }
 
-/** Validate current documents and deterministically promote pre-F1 plot windows. */
+/** Validate current documents and deterministically promote pre-F1 plot windows.
+ * A newer document schema cannot be safely rewritten, so that ONE window falls
+ * back to its already-sanitized legacy PlotView projection and records a
+ * non-persisted migration warning; valid siblings keep loading normally. */
 export function sanitizeDocumentBackedPlotWindows(
   value: unknown,
   datasetIds: ReadonlySet<string>,
+  migrationWarnings: string[] = [],
 ): PlotWindow[] {
   const windows = sanitizePlotWindows(value, datasetIds);
   const rawDocuments = rawDocumentsByWindowId(value);
@@ -42,11 +46,16 @@ export function sanitizeDocumentBackedPlotWindows(
     if (window.kind !== "plot") return window;
     const rawDocument = rawDocuments.get(window.id);
     const version = figureDocumentVersion(rawDocument);
-    if (version !== null && version !== 1) {
-      throw new Error(`unsupported figure document version: ${version}`);
+    const futureVersion = version !== null && version !== 1;
+    if (futureVersion) {
+      migrationWarnings.push(
+        `plot window "${window.id}" uses unsupported FigureDocument version ${version}; restored its legacy PlotView projection`,
+      );
     }
 
-    let document = sanitizeFigureDocument(rawDocument) ?? migrateLegacyWindow(window);
+    let document = futureVersion
+      ? migrateLegacyWindow(window)
+      : (sanitizeFigureDocument(rawDocument) ?? migrateLegacyWindow(window));
     if (document.bindings.datasetId && !datasetIds.has(document.bindings.datasetId)) {
       document = { ...document, bindings: { ...document.bindings, datasetId: null } };
     }
