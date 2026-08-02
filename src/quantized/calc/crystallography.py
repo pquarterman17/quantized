@@ -1,6 +1,6 @@
 r"""Crystallographic geometry from lattice parameters (DiraCulator buildCrystalTab).
 
-Pure calc layer. Three families of formula:
+Pure calc layer. Four families of formula:
 
 **Interplanar d-spacing** — the reciprocal quadratic forms ``1/d^2`` per crystal
 system (lengths in Å, angles in degrees, ``h, k, l`` integers):
@@ -24,11 +24,26 @@ reciprocal metric tensor (covers every system as a special case).
 **Theoretical (X-ray) density** — ``ρ = Z·M / (N_A · V)`` from the formula molar
 mass ``M`` and formula units per cell ``Z``.
 
+**Miller-Bravais indices (hexagonal/trigonal)** — hexagonal planes and
+directions are conventionally expressed on 4 axes (a1, a2, a3, c) with the
+redundant third axis ``a3 = -(a1+a2)``. This gives 4-index forms alongside
+the ordinary 3-index ones:
+
+- *Planes* ``(hkl) <-> (hkil)``: ``i = -(h+k)``, and ``h, k, l`` are
+  unchanged — no rescaling (:func:`hkl_to_hkil` / :func:`hkil_to_hkl`).
+  :func:`d_spacing` accepts either form for ``system="hexagonal"``.
+- *Directions* ``[UVW] <-> [uvtw]``: ``U = 2u+v``, ``V = u+2v``, ``W = w``
+  with ``t = -(u+v)`` — a genuinely DIFFERENT transform from planes, because
+  the direction components pick up an overall scale factor of 3
+  (:func:`direction_uvw_to_uvtw` / :func:`direction_uvtw_to_uvw`).
+
 Pairs with :mod:`quantized.calc.xray`: once ``d`` is known, ``2θ`` follows from
 Bragg's law (``xray.bragg_two_theta``).
 
 Reference: Si (cubic, ``a = 5.4309 Å``), reflection (111) → ``d = 3.1356 Å``;
-NaCl (cubic, ``a = 5.6402 Å``, ``Z = 4``) → ``ρ ≈ 2.16 g/cm³``.
+NaCl (cubic, ``a = 5.6402 Å``, ``Z = 4``) → ``ρ ≈ 2.16 g/cm³``; Mg (hexagonal,
+``a = 3.2094 Å``, ``c = 5.2107 Å``), (0002) → ``d ≈ 2.6054 Å``, (10-10) →
+``d ≈ 2.7794 Å``.
 """
 
 from __future__ import annotations
@@ -38,11 +53,26 @@ from collections.abc import Callable
 from typing import Any
 
 from quantized.calc.constants import constants
+from quantized.calc.miller_bravais import (
+    direction_uvtw_to_uvw,
+    direction_uvw_to_uvtw,
+    hkil_to_hkl,
+    hkl_to_hkil,
+)
+from quantized.calc.plane_spacings import plane_spacings
 
+# Re-exported for backward-compatible call sites (calc.crystallography used to
+# own these; they now live in the focused calc.miller_bravais /
+# calc.plane_spacings modules — see each module's docstring for why).
 __all__ = [
     "CRYSTAL_SYSTEMS",
     "cell_volume",
     "d_spacing",
+    "direction_uvtw_to_uvw",
+    "direction_uvw_to_uvtw",
+    "hkil_to_hkl",
+    "hkl_to_hkil",
+    "interplanar_angle",
     "plane_spacings",
     "theoretical_density",
 ]
@@ -129,19 +159,30 @@ def _hexagonal(
     return _from_inv_d2((4.0 / 3.0) * (h * h + h * k + k * k) / (a * a) + (l * l) / (c * c))
 
 
-def _triclinic(
-    a: float, b: float, c: float, al: float, be: float, ga: float, h: int, k: int, l: int
-) -> float:
-    """General reciprocal-metric-tensor form — exact for every system."""
-    ca, cb, cg = _cos(al), _cos(be), _cos(ga)
-    sa, sb, sg = _sin(al), _sin(be), _sin(ga)
-    vol = cell_volume(a, b, c, al, be, ga)
+def _reciprocal_metric_terms(
+    a: float, b: float, c: float, alpha: float, beta: float, gamma: float
+) -> tuple[float, float, float, float, float, float, float]:
+    """Reciprocal-metric-tensor terms ``(S11, S22, S33, S12, S23, S13)`` plus the
+    cell volume, shared by :func:`_triclinic` (``1/d²`` of one plane) and
+    :func:`interplanar_angle` (the cross term between two planes) — the same
+    quadratic form, evaluated once per cell instead of duplicated twice."""
+    ca, cb, cg = _cos(alpha), _cos(beta), _cos(gamma)
+    sa, sb, sg = _sin(alpha), _sin(beta), _sin(gamma)
+    vol = cell_volume(a, b, c, alpha, beta, gamma)
     s11 = (b * c * sa) ** 2
     s22 = (a * c * sb) ** 2
     s33 = (a * b * sg) ** 2
     s12 = a * b * c * c * (ca * cb - cg)
     s23 = a * a * b * c * (cb * cg - ca)
     s13 = a * b * b * c * (cg * ca - cb)
+    return s11, s22, s33, s12, s23, s13, vol
+
+
+def _triclinic(
+    a: float, b: float, c: float, al: float, be: float, ga: float, h: int, k: int, l: int
+) -> float:
+    """General reciprocal-metric-tensor form — exact for every system."""
+    s11, s22, s33, s12, s23, s13, vol = _reciprocal_metric_terms(a, b, c, al, be, ga)
     inv = (
         s11 * h * h
         + s22 * k * k
@@ -215,6 +256,7 @@ def d_spacing(
     alpha: float = 90.0,
     beta: float = 90.0,
     gamma: float = 90.0,
+    i: int | None = None,
 ) -> dict[str, Any]:
     """Interplanar spacing ``d`` (Å) for a reflection ``(h,k,l)`` in ``system``.
 
@@ -223,12 +265,28 @@ def d_spacing(
     ``tetragonal`` / ``orthorhombic`` / ``hexagonal`` / ``rhombohedral`` /
     ``monoclinic`` / ``triclinic`` (the last three take the relevant angle(s)).
 
+    ``system="hexagonal"`` additionally accepts the 4-index Miller-Bravais
+    plane form (hkil) by passing ``i``: it is validated against the closure
+    rule ``i = -(h+k)`` (see :func:`hkl_to_hkil` / :func:`hkil_to_hkl`) and
+    then discarded — ``h, k, l`` alone determine ``d``, ``i`` is redundant by
+    construction. Passing ``i`` for any other system raises, since the
+    4-index form only applies to hexagonal/trigonal cells.
+
     >>> round(d_spacing("cubic", 4.0, 4.0, 4.0, 2, 0, 0)["d"], 6)
     2.0
+    >>> round(d_spacing("hexagonal", 3.2094, 0, 5.2107, 1, 0, 0, i=-1)["d"], 4)
+    2.7794
     """
     entry = _SYSTEMS.get(system)
     if entry is None:
         raise ValueError(f"unknown crystal system {system!r}; expected one of {sorted(_SYSTEMS)}")
+    if i is not None:
+        if system != "hexagonal":
+            raise ValueError(
+                "the 4-index Miller-Bravais (hkil) form only applies to the "
+                f"hexagonal system, not {system!r}"
+            )
+        hkil_to_hkl(h, k, i, l)  # raises ValueError if i != -(h+k)
     fn, needed_lengths, needed_angles = entry
     lengths = {"a": a, "b": b, "c": c}
     for name in needed_lengths:
@@ -244,157 +302,129 @@ def d_spacing(
     return {"d": d, "system": system}
 
 
-# ── Reflection enumeration (calc.crystal.planeSpacings) ───────────────────────
-_CENTERINGS: tuple[str, ...] = ("P", "F", "I", "A", "B", "C", "R")
-
-
-def _infer_system(a: float, b: float, c: float, alpha: float, beta: float, gamma: float) -> str:
-    """Crystal-system label from the cell (mirrors MATLAB ``dSpacing/inferSystem``).
-
-    Uses exact equality on the supplied lengths/angles, as MATLAB does — the
-    defaults ``b=c=a`` and ``α=β=γ=90`` reproduce cubic/tetragonal/hexagonal
-    exactly; anything else with right angles is orthorhombic, otherwise triclinic.
-    """
-    right_angles = alpha == 90 and beta == 90 and gamma == 90
-    b_is_a = b == a
-    c_is_a = c == a
-    if right_angles and b_is_a and c_is_a:
-        return "cubic"
-    if right_angles and b_is_a and not c_is_a:
-        return "tetragonal"
-    if alpha == 90 and beta == 90 and gamma == 120 and b_is_a:
-        return "hexagonal"
-    if right_angles:
-        return "orthorhombic"
-    return "triclinic"
-
-
-def _centering_allowed(h: int, k: int, l: int, centering: str) -> bool:
-    """Systematic-absence rule for a Bravais centering (``P/F/I/A/B/C/R``)."""
-    if centering == "F":  # all-odd or all-even
-        parity = (h % 2, k % 2, l % 2)
-        return parity == (0, 0, 0) or parity == (1, 1, 1)
-    if centering == "I":
-        return (h + k + l) % 2 == 0
-    if centering == "A":
-        return (k + l) % 2 == 0
-    if centering == "B":
-        return (h + l) % 2 == 0
-    if centering == "C":
-        return (h + k) % 2 == 0
-    if centering == "R":  # obverse setting (IUCr standard)
-        return (h - k + l) % 3 == 0
-    return True  # 'P' and any unknown → primitive (all allowed)
-
-
-def plane_spacings(
+# ── Interplanar angle (reciprocal metric tensor, all 7 systems) ────────────────
+def interplanar_angle(
+    system: str,
     a: float,
-    *,
-    b: float | None = None,
-    c: float | None = None,
+    b: float,
+    c: float,
+    h1: int,
+    k1: int,
+    l1: int,
+    h2: int,
+    k2: int,
+    l2: int,
     alpha: float = 90.0,
     beta: float = 90.0,
     gamma: float = 90.0,
-    max_hkl: int = 5,
-    lambda_: float = 1.5406,
-    centering: str = "P",
-    min_d: float = 0.0,
 ) -> dict[str, Any]:
-    r"""Enumerate allowed ``(hkl)`` reflections with d-spacings and ``2θ``.
+    r"""Angle ``φ`` between two lattice planes ``(h1 k1 l1)`` and ``(h2 k2 l2)``,
+    for any of the seven crystal systems, via the reciprocal metric tensor.
 
-    Ports ``calc.crystal.planeSpacings``: enumerate every ``(h,k,l)`` in
-    ``[-max_hkl, max_hkl]³`` (excluding ``000``), drop those forbidden by the
-    ``centering`` absence rule, compute ``d`` via the general triclinic reciprocal
-    metric tensor, group symmetry-equivalent planes by ``round(d, 8)`` (their count
-    is the multiplicity), pick a canonical representative per group, and sort by
-    descending ``d`` (ascending ``2θ``). ``2θ = 2·asin(λ/2d)`` in degrees, with
-    physically unreachable reflections (``λ/2d > 1``) marked ``NaN``.
+    .. math::
 
-    ``b``/``c`` default to ``a``. Returns a dict with ``hkl`` (list of ``[h,k,l]``),
-    ``d``, ``two_theta``, ``multiplicity``, ``centering``, ``system``, ``lambda``,
-    ``n_reflections``.
+        \cos\varphi = d_1 d_2 \Big[
+            S_{11} h_1 h_2 + S_{22} k_1 k_2 + S_{33} l_1 l_2
+            + S_{23}(k_1 l_2 + k_2 l_1) + S_{13}(l_1 h_2 + l_2 h_1)
+            + S_{12}(h_1 k_2 + h_2 k_1) \Big]
 
-    >>> r = plane_spacings(5.431, centering="F", max_hkl=3)
-    >>> r["hkl"][0], round(r["d"][0], 4)   # FCC: first reflection is (111)
-    ([1, 1, 1], 3.1356)
+    where ``d_i`` is each plane's d-spacing and ``S_ij`` are the
+    reciprocal-metric-tensor terms (:func:`_reciprocal_metric_terms` — the
+    same terms :func:`_triclinic` uses for ``1/d²`` of a single plane; this
+    is the general cross-term generalization, and reduces to it exactly
+    when ``(h1,k1,l1) == (h2,k2,l2)`` since ``cos 0 = 1``). Only the lattice
+    parameters relevant to ``system`` need be supplied and are validated
+    (same convention as :func:`d_spacing`) — unlike :func:`d_spacing`, which
+    dispatches to a per-system CLOSED-FORM ``1/d²`` that simply never reads
+    an unused length/angle, this function always evaluates the general
+    metric tensor (there is no simpler form for a two-plane cross term), so
+    the unsupplied lengths/angles are filled in first: ``b``/``c`` default
+    to ``a`` when unused, unused angles default to 90°, hexagonal's ``γ`` is
+    fixed at 120°, and rhombohedral's ``β``, ``γ`` are set equal to ``α``
+    (mirrors the frontend calculator's ``assembleCell()``).
+
+    Convention: e.g. Cullity, B.D. & Stock, S.R., *Elements of X-Ray
+    Diffraction*, 3rd ed. (Prentice Hall, 2001), Eq. 2-11 (general
+    triclinic metric-tensor form for the angle between planes).
+
+    Args:
+        system: crystal system (``cubic``/``tetragonal``/``orthorhombic``/
+            ``hexagonal``/``rhombohedral``/``monoclinic``/``triclinic``).
+        a, b, c: lattice lengths (Å); only those ``system`` needs are validated.
+        h1, k1, l1: Miller indices of the first plane.
+        h2, k2, l2: Miller indices of the second plane.
+        alpha, beta, gamma: lattice angles (degrees); only those ``system`` needs
+            are validated.
+
+    Returns a dict with ``angle_deg``, and each plane's d-spacing (``d1``, ``d2``).
+
+    Worked example — cubic Si, (100) vs (110):
+
+    >>> round(interplanar_angle("cubic", 5.4309, 5.4309, 5.4309, 1, 0, 0, 1, 1, 0)["angle_deg"], 4)
+    45.0
+    >>> round(interplanar_angle("cubic", 5.4309, 5.4309, 5.4309, 1, 0, 0, 1, 1, 1)["angle_deg"], 4)
+    54.7356
     """
-    if not (math.isfinite(a) and a > 0):
-        raise ValueError("lattice parameter a must be positive and finite")
-    if max_hkl < 1:
-        raise ValueError("max_hkl must be a positive integer")
-    bb = a if b is None else b
-    cc = a if c is None else c
-    cen = centering.upper()
+    entry = _SYSTEMS.get(system)
+    if entry is None:
+        raise ValueError(f"unknown crystal system {system!r}; expected one of {sorted(_SYSTEMS)}")
+    if (h1, k1, l1) == (0, 0, 0) or (h2, k2, l2) == (0, 0, 0):
+        raise ValueError("Miller indices (h, k, l) must not all be zero")
+    _, needed_lengths, needed_angles = entry
+    lengths = {"a": a, "b": b, "c": c}
+    for name in needed_lengths:
+        val = lengths[name]
+        if not (math.isfinite(val) and val > 0):
+            raise ValueError(f"lattice parameter {name} must be positive and finite for {system}")
+    angles = {"alpha": alpha, "beta": beta, "gamma": gamma}
+    for name in needed_angles:
+        val = angles[name]
+        if not (math.isfinite(val) and 0.0 < val < 180.0):
+            raise ValueError(f"lattice angle {name} must be in (0, 180) degrees for {system}")
 
-    # Enumerate + filter, preserving MATLAB's ih/ik/il order (matters for
-    # the canonical-representative tie-break, which is order-stable).
-    h_range = range(-max_hkl, max_hkl + 1)
-    groups: dict[float, list[tuple[int, int, int]]] = {}
-    group_d: dict[float, list[float]] = {}
-    for hh in h_range:
-        for kk in h_range:
-            for ll in h_range:
-                if hh == 0 and kk == 0 and ll == 0:
-                    continue
-                if not _centering_allowed(hh, kk, ll, cen):
-                    continue
-                d = _triclinic(a, bb, cc, alpha, beta, gamma, hh, kk, ll)
-                if d < min_d:
-                    continue
-                key = round(d, 8)
-                groups.setdefault(key, []).append((hh, kk, ll))
-                group_d.setdefault(key, []).append(d)
+    # Fill in what this system doesn't take independently, for the general
+    # metric tensor below (see the docstring note on why d_spacing's
+    # per-system dispatch doesn't need this but this function does).
+    b_eff = b if "b" in needed_lengths else a
+    c_eff = c if "c" in needed_lengths else a
+    alpha_eff = alpha if "alpha" in needed_angles else 90.0
+    beta_eff = beta if "beta" in needed_angles else 90.0
+    gamma_eff = gamma if "gamma" in needed_angles else 90.0
+    if system == "hexagonal":
+        gamma_eff = 120.0
+    elif system == "rhombohedral":
+        beta_eff = alpha_eff
+        gamma_eff = alpha_eff
 
-    # Collapse each group → (canonical hkl, mean d, multiplicity).
-    reps: list[tuple[list[int], float, int]] = []
-    for key, members in groups.items():
-        ds = group_d[key]
-        mult = len(members)
-        d_mean = sum(ds) / mult
-        # Prefer "positive-first" indices (h>0, or h==0&k>0, or h==0&k==0&l>0).
-        pos = [
-            m
-            for m in members
-            if m[0] > 0 or (m[0] == 0 and m[1] > 0) or (m[0] == 0 and m[1] == 0 and m[2] > 0)
-        ]
-        cand = pos if pos else members
-        # sortrows([nNegs, -sum, |h|, |k|, |l|]) ascending → first row.
-        chosen = min(
-            cand,
-            key=lambda m: (
-                sum(1 for x in m if x < 0),
-                -(m[0] + m[1] + m[2]),
-                abs(m[0]),
-                abs(m[1]),
-                abs(m[2]),
-            ),
-        )
-        reps.append(([chosen[0], chosen[1], chosen[2]], d_mean, mult))
+    s11, s22, s33, s12, s23, s13, vol = _reciprocal_metric_terms(
+        a, b_eff, c_eff, alpha_eff, beta_eff, gamma_eff
+    )
+    v2 = vol * vol
 
-    # Sort by descending d (ascending 2θ). Python sort is stable, matching MATLAB.
-    reps.sort(key=lambda r: -r[1])
+    def _inv_d2(h: int, k: int, l: int) -> float:
+        return (
+            s11 * h * h
+            + s22 * k * k
+            + s33 * l * l
+            + 2 * s12 * h * k
+            + 2 * s23 * k * l
+            + 2 * s13 * h * l
+        ) / v2
 
-    hkl_out = [r[0] for r in reps]
-    d_out = [r[1] for r in reps]
-    mult_out = [r[2] for r in reps]
-
-    if math.isnan(lambda_):
-        two_theta = [math.nan] * len(d_out)
-    else:
-        two_theta = []
-        for d in d_out:
-            sin_theta = lambda_ / (2.0 * d)
-            two_theta.append(
-                math.nan if sin_theta > 1.0 else 2.0 * math.degrees(math.asin(min(sin_theta, 1.0)))
-            )
-
+    d1 = _from_inv_d2(_inv_d2(h1, k1, l1))
+    d2 = _from_inv_d2(_inv_d2(h2, k2, l2))
+    cross = (
+        s11 * h1 * h2
+        + s22 * k1 * k2
+        + s33 * l1 * l2
+        + s23 * (k1 * l2 + k2 * l1)
+        + s13 * (l1 * h2 + l2 * h1)
+        + s12 * (h1 * k2 + h2 * k1)
+    ) / v2
+    cos_phi = max(-1.0, min(1.0, d1 * d2 * cross))
     return {
-        "hkl": hkl_out,
-        "d": d_out,
-        "two_theta": two_theta,
-        "multiplicity": mult_out,
-        "centering": cen,
-        "system": _infer_system(a, bb, cc, alpha, beta, gamma),
-        "lambda": lambda_,
-        "n_reflections": len(d_out),
+        "angle_deg": math.degrees(math.acos(cos_phi)),
+        "d1": d1,
+        "d2": d2,
+        "system": system,
     }

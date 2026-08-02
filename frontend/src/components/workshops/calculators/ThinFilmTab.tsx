@@ -18,6 +18,7 @@ import {
   KiessigCard,
   MultilayerThermalCard,
   ProjectedRangeCard,
+  SauerbreyCard,
   StoneyStressCard,
   ThermalMismatchCard,
 } from "./thinfilm/FilmCards";
@@ -35,6 +36,7 @@ export default function ThinFilmTab() {
       <ProjectedRangeCard />
       <StoneyStressCard />
       <ThermalMismatchCard />
+      <SauerbreyCard />
     </div>
   );
 }

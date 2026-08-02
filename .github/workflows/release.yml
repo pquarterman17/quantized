@@ -104,9 +104,38 @@ jobs:
             } catch { Start-Sleep -Milliseconds 1000 }
           }
           $spa = (Invoke-WebRequest http://127.0.0.1:8000/ -UseBasicParsing).StatusCode
+          # Package-data-backed endpoints (tools/bundle/qz-server.spec's
+          # collect_data_files("quantized") regression guard): each one reads
+          # a JSON/CSV file shipped alongside the module via Path(__file__).parent,
+          # so a sidecar built with a datas listing that drops package data
+          # ships a working /api/health + SPA but 500s on real use.
+          $failReason = $null
+          try {
+            $els = Invoke-RestMethod http://127.0.0.1:8000/api/reference/elements -TimeoutSec 5
+            if ($els.elements.Count -ne 118) {
+              $failReason = "elements endpoint returned $($els.elements.Count) entries, expected 118"
+            }
+          } catch { $failReason = "elements endpoint failed: $_" }
+          if (-not $failReason) {
+            try {
+              $presets = Invoke-RestMethod http://127.0.0.1:8000/api/reflectivity/presets -TimeoutSec 5
+              if ($presets.presets.Count -lt 1) {
+                $failReason = "reflectivity presets endpoint returned no presets"
+              }
+            } catch { $failReason = "reflectivity presets endpoint failed: $_" }
+          }
+          if (-not $failReason) {
+            try {
+              $demo = Invoke-RestMethod http://127.0.0.1:8000/api/samples/demo -TimeoutSec 5
+              if (-not $demo.time -or $demo.time.Count -lt 1) {
+                $failReason = "samples demo endpoint returned no data"
+              }
+            } catch { $failReason = "samples demo endpoint failed: $_" }
+          }
           Stop-Process -Id $p.Id -Force
           if (-not $ok -or $spa -ne 200) { throw "sidecar smoke failed (health=$ok spa=$spa)" }
-          Write-Host "sidecar healthy, SPA served"
+          if ($failReason) { throw "sidecar package-data smoke failed: $failReason" }
+          Write-Host "sidecar healthy, SPA served, package data (elements/presets/demo) loaded"
 
       - name: Smoke-test the sidecar (Unix)
         if: runner.os != 'Windows'
@@ -122,11 +151,36 @@ jobs:
             sleep 1
           done
           spa=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/ || echo 000)
+          # Package-data-backed endpoints (tools/bundle/qz-server.spec's
+          # collect_data_files("quantized") regression guard): each reads a
+          # JSON/CSV shipped alongside its module via Path(__file__).parent, so
+          # a sidecar whose datas listing drops package data still passes
+          # health + SPA but 500s the moment a user opens it.
+          fail_reason=""
+          n_elements=$(curl -sf http://127.0.0.1:8000/api/reference/elements | jq '.elements | length' 2>/dev/null || echo 0)
+          if [ "$n_elements" != "118" ]; then
+            fail_reason="elements endpoint returned $n_elements entries, expected 118"
+          fi
+          if [ -z "$fail_reason" ]; then
+            n_presets=$(curl -sf http://127.0.0.1:8000/api/reflectivity/presets | jq '.presets | length' 2>/dev/null || echo 0)
+            if [ "$n_presets" -lt 1 ]; then
+              fail_reason="reflectivity presets endpoint returned no presets"
+            fi
+          fi
+          if [ -z "$fail_reason" ]; then
+            n_demo=$(curl -sf http://127.0.0.1:8000/api/samples/demo | jq '.time | length' 2>/dev/null || echo 0)
+            if [ "$n_demo" -lt 1 ]; then
+              fail_reason="samples demo endpoint returned no data"
+            fi
+          fi
           kill "$pid" 2>/dev/null || true
           if [ "$ok" != "1" ] || [ "$spa" != "200" ]; then
             echo "sidecar smoke failed (health=$ok spa=$spa)"; exit 1
           fi
-          echo "sidecar healthy, SPA served"
+          if [ -n "$fail_reason" ]; then
+            echo "sidecar package-data smoke failed: $fail_reason"; exit 1
+          fi
+          echo "sidecar healthy, SPA served, package data (elements/presets/demo) loaded"
 
       - uses: dtolnay/rust-toolchain@stable
 

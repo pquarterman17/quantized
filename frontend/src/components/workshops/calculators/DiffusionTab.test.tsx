@@ -6,12 +6,17 @@ import {
   diffusionFickFlux,
   diffusionLength,
 } from "../../../lib/api";
+import { diffusionCProfile } from "../../../lib/api/diffusion";
 import DiffusionTab from "./DiffusionTab";
 
 vi.mock("../../../lib/api", () => ({
   diffusionArrhenius: vi.fn(),
   diffusionLength: vi.fn(),
   diffusionFickFlux: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/diffusion", () => ({
+  diffusionCProfile: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -69,5 +74,21 @@ describe("DiffusionTab", () => {
 
     fireEvent.click(screen.getAllByText("=")[0]);
     expect(await screen.findByText("T must be positive")).toBeInTheDocument();
+  });
+
+  it("computes the constant-source (erfc) diffusion profile", async () => {
+    vi.mocked(diffusionCProfile).mockResolvedValue({
+      c: 4.795e17,
+      x: 3e-5,
+      t: 3600,
+      D: 1e-12,
+      c0: 1e18,
+      L: 6e-5,
+    });
+    render(<DiffusionTab />);
+
+    fireEvent.click(screen.getAllByText("=")[3]);
+    expect(await screen.findByText(/c\(x,t\) = .* · L = √\(Dt\) = .* cm/)).toBeInTheDocument();
+    expect(diffusionCProfile).toHaveBeenCalledWith(3e-5, 3600, 1e-12, 1e18);
   });
 });

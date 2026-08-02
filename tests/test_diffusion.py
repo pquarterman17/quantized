@@ -111,3 +111,43 @@ def test_doctest_values_finite() -> None:
     assert math.isfinite(diffusion.arrhenius(0.1, 1.0, 1000.0)["D"])
     assert math.isfinite(diffusion.diffusion_length(1e-12, 3600.0)["L"])
     assert math.isfinite(diffusion.fick_flux(1e-12, 1e18, 1e-5)["J"])
+
+
+# ── constant-source (erfc) diffusion profile ────────────────────────────────
+def test_c_profile_surface_equals_c0() -> None:
+    # erfc(0) = 1 -> c(0, t) = c0 exactly, at any valid t, D.
+    out = diffusion.c_profile(0.0, 3600.0, 1e-12, 1e18)
+    assert out["c"] == pytest.approx(1e18, rel=1e-12)
+
+
+def test_c_profile_known_midpoint_value() -> None:
+    # x == L == sqrt(D t) -> argument x/(2L) = 1/2 -> c = c0 * erfc(0.5).
+    d, t, c0 = 1e-12, 3600.0, 1e18
+    length = math.sqrt(d * t)
+    out = diffusion.c_profile(length, t, d, c0)
+    assert out["L"] == pytest.approx(length, rel=1e-12)
+    assert out["c"] == pytest.approx(c0 * 0.4795001221869535, rel=1e-9)  # erfc(0.5)
+
+
+def test_c_profile_decreases_with_depth() -> None:
+    d, t, c0 = 1e-12, 3600.0, 1.0
+    shallow = diffusion.c_profile(1e-5, t, d, c0)["c"]
+    deep = diffusion.c_profile(5e-5, t, d, c0)["c"]
+    assert 0.0 < deep < shallow < c0
+
+
+def test_c_profile_vectorized_matches_scalar() -> None:
+    d, t, c0 = 1e-12, 3600.0, 1e18
+    xs = [0.0, 1e-5, 3e-5]
+    vec = diffusion.c_profile(xs, t, d, c0)
+    scalars = [diffusion.c_profile(x, t, d, c0)["c"] for x in xs]
+    assert vec["c"] == pytest.approx(scalars, rel=1e-12)
+
+
+def test_c_profile_rejects_bad_inputs() -> None:
+    with pytest.raises(ValueError):
+        diffusion.c_profile(1e-5, 0.0, 1e-12, 1e18)
+    with pytest.raises(ValueError):
+        diffusion.c_profile(1e-5, 3600.0, 0.0, 1e18)
+    with pytest.raises(ValueError):
+        diffusion.c_profile(-1e-5, 3600.0, 1e-12, 1e18)

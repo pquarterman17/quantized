@@ -13,6 +13,7 @@ import {
   magneticLangevin,
   magneticMomentConvert,
 } from "../../../lib/api";
+import { magneticCurieWeissFit } from "../../../lib/api/magnetic";
 import {
   Button,
   Card,
@@ -20,6 +21,7 @@ import {
   ROW,
   fmtNum,
   makeCardRunner,
+  parseXYPairs,
   resultLine,
   type CardResult,
 } from "./shared";
@@ -62,6 +64,10 @@ export default function MagneticTab() {
   const [dwA, setDwA] = useState("2e-6");
   const [dwK, setDwK] = useState("4.8e6");
   const [c5, setC5] = useState<CardResult>(null);
+
+  // Card 6 — Curie-Weiss fit from a pasted T, chi sweep.
+  const [cwFitText, setCwFitText] = useState("");
+  const [c6, setC6] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -201,6 +207,43 @@ export default function MagneticTab() {
           </Button>
         </div>
         {resultLine(c5)}
+      </Card>
+
+      <Card title="Curie-Weiss fit (paste T, χ)">
+        <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 4 }}>
+          Paste temperature + susceptibility columns (one "T χ" pair per line —
+          space, comma, or tab separated)
+        </div>
+        <textarea
+          className="qz-input"
+          style={{ width: "100%", minHeight: 80, fontFamily: "var(--font-mono)" }}
+          value={cwFitText}
+          onChange={(e) => setCwFitText(e.target.value)}
+          placeholder={"100, 0.0333\n150, 0.04\n200, 0.05\n..."}
+          aria-label="Curie-Weiss T, chi data"
+        />
+        <div style={{ ...ROW, marginTop: 8 }}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void run(setC6, "Curie-Weiss fit", async () => {
+                const { x: temperature, y: susceptibility } = parseXYPairs(cwFitText);
+                if (temperature.length < 3) {
+                  throw new Error("paste at least 3 valid T, χ rows");
+                }
+                const r = await magneticCurieWeissFit({ temperature, susceptibility });
+                return (
+                  `θ_CW = ${fmtNum(r.theta_cw)} K · C = ${fmtNum(r.C)} emu·K/mol · ` +
+                  `µ_eff = ${fmtNum(r.mu_eff)} µ_B · R² = ${fmtNum(r.r2)}`
+                );
+              })
+            }
+          >
+            Fit
+          </Button>
+        </div>
+        {resultLine(c6)}
       </Card>
     </div>
   );

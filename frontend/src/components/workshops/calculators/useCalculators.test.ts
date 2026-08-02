@@ -1,7 +1,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertUnits, crystalCell, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
+import {
+  convertUnits,
+  crystalCell,
+  crystalDSpacing,
+  getConstants,
+  xrayCalc,
+} from "../../../lib/api";
+import { getUnitCategories } from "../../../lib/api/reference";
+import { useCalcHistory } from "../../../store/calcHistory";
 import { assembleCell, type CrystalForm, useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
@@ -12,9 +20,49 @@ vi.mock("../../../lib/api", () => ({
   crystalCell: vi.fn(),
 }));
 
+vi.mock("../../../lib/api/reference", () => ({
+  getUnitCategories: vi.fn(),
+}));
+
+const MAGNETIC_FIELD_UNITS = [
+  { value: "T", label: "T" },
+  { value: "mT", label: "mT" },
+  { value: "G", label: "G" },
+  { value: "kG", label: "kG" },
+  { value: "Oe", label: "Oe" },
+  { value: "kOe", label: "kOe" },
+  { value: "A/m", label: "A/m" },
+];
+const PHOTON_ENERGY_UNITS = [
+  { value: "eV", label: "eV" },
+  { value: "nm", label: "nm (wavelength)" },
+  { value: "cm^-1", label: "cm-1 (wavenumber)" },
+  { value: "THz", label: "THz" },
+  { value: "K", label: "K (E / kB)" },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getConstants).mockResolvedValue({ constants: { h: 6.626e-34, c: 2.998e8 } });
+  useCalcHistory.setState({ history: [], favorites: [], seq: 0 });
+  vi.mocked(getConstants).mockResolvedValue({
+    constants: { h: 6.626e-34, c: 2.998e8 },
+    systems: { SI: [], CGS: [], eV: [] },
+  });
+  vi.mocked(getUnitCategories).mockResolvedValue({
+    categories: [
+      { id: "magnetic_field", label: "Magnetic Field (B / H)", hint: null, units: MAGNETIC_FIELD_UNITS },
+      { id: "photon_energy", label: "Photon / Thermal Energy", hint: null, units: PHOTON_ENERGY_UNITS },
+      {
+        id: "energy",
+        label: "Energy",
+        hint: null,
+        units: [
+          { value: "J", label: "J" },
+          { value: "eV", label: "eV" },
+        ],
+      },
+    ],
+  });
 });
 
 describe("useCalculators", () => {
@@ -55,6 +103,45 @@ describe("useCalculators", () => {
     expect(result.current.result).toBeNull();
   });
 
+  it("loads unit categories on mount", async () => {
+    const { result } = renderHook(() => useCalculators());
+    await waitFor(() => expect(result.current.unitCategories).not.toBeNull());
+    expect(result.current.unitCategories?.map((c) => c.id)).toContain("photon_energy");
+  });
+
+  it("setCategory switches the active category and resets from/to to its first two units", async () => {
+    const { result } = renderHook(() => useCalculators());
+    await waitFor(() => expect(result.current.unitCategories).not.toBeNull());
+
+    act(() => result.current.setCategory("energy"));
+    expect(result.current.category).toBe("energy");
+    expect(result.current.from).toBe("J");
+    expect(result.current.to).toBe("eV");
+    expect(result.current.result).toBeNull();
+  });
+
+  it("swapUnits exchanges from/to and clears the stale result", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 0.0001, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(result.current.result).not.toBeNull();
+
+    act(() => result.current.swapUnits());
+    expect(result.current.from).toBe("T");
+    expect(result.current.to).toBe("Oe");
+    expect(result.current.result).toBeNull();
+  });
+
+  it("setPair with a category argument switches the category too", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPair("J", "eV", "energy"));
+    expect(result.current.from).toBe("J");
+    expect(result.current.to).toBe("eV");
+    expect(result.current.category).toBe("energy");
+  });
+
   it("rejects a non-numeric value without calling the API", async () => {
     const { result } = renderHook(() => useCalculators());
     act(() => result.current.setValue("abc"));
@@ -76,6 +163,32 @@ describe("useCalculators", () => {
     expect(result.current.result).toBeNull();
   });
 
+  // ── History coverage (calculator audit #1 — Units/Xray/Crystal/Sld tabs
+  // never recorded to History, unlike every makeCardRunner tab) ─────────────
+  it("convert records a Units entry to calc history", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({
+      result: 0.0001,
+      info: { description: "1 Oe = 0.0001 T" },
+    });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Units");
+    expect(history[0].summary).toBe("1 Oe = 1.00000e-4 T");
+  });
+
+  it("a failed convert does NOT record to calc history", async () => {
+    vi.mocked(convertUnits).mockRejectedValue(new Error("incompatible dimensions"));
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(useCalcHistory.getState().history).toHaveLength(0);
+  });
+
   it("computes an x-ray conversion with the default mode + Cu Kα", async () => {
     vi.mocked(xrayCalc).mockResolvedValue({ result: 28.44, unit: "deg", description: "2θ from d" });
     const { result } = renderHook(() => useCalculators());
@@ -84,8 +197,8 @@ describe("useCalculators", () => {
       await result.current.xrayCompute();
     });
 
-    // defaults: mode "2theta_from_d", λ = 1.5406 (Cu Kα), value = 3.1356 (Si 111 d).
-    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356);
+    // defaults: mode "2theta_from_d", λ = 1.5406 (Cu Kα), value = 3.1356 (Si 111 d), n = 1.
+    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356, 1);
     expect(result.current.xrayResult?.result).toBeCloseTo(28.44, 2);
     expect(result.current.xrayResult?.unit).toBe("deg");
     expect(result.current.xrayError).toBeNull();
@@ -99,6 +212,38 @@ describe("useCalculators", () => {
     });
     expect(xrayCalc).not.toHaveBeenCalled();
     expect(result.current.xrayError).toContain("numeric");
+  });
+
+  it("rejects a non-integer diffraction order without calling the API", async () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setXrayOrder("1.5"));
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    expect(xrayCalc).not.toHaveBeenCalled();
+    expect(result.current.xrayError).toContain("order n");
+  });
+
+  it("xrayCompute records a Xray entry to calc history", async () => {
+    vi.mocked(xrayCalc).mockResolvedValue({ result: 28.44, unit: "deg", description: "2θ from d" });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Xray");
+    expect(history[0].summary).toContain("deg");
+  });
+
+  it("passes the diffraction order through to the API", async () => {
+    vi.mocked(xrayCalc).mockResolvedValue({ result: 58.7, unit: "deg", description: "2nd order" });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setXrayOrder("2"));
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356, 2);
   });
 
   it("surfaces an inaccessible-reflection error from the backend", async () => {
@@ -129,6 +274,61 @@ describe("useCalculators", () => {
     });
     expect(result.current.crResult?.d).toBeCloseTo(3.1356, 4);
     expect(result.current.crError).toBeNull();
+  });
+
+  it("includes the derived Miller-Bravais i for a hexagonal d-spacing", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 2.7794, system: "hexagonal" });
+    const { result } = renderHook(() => useCalculators());
+    act(() =>
+      result.current.updCrystal({ system: "hexagonal", a: "3.2094", c: "5.2107", h: "1", k: "0", l: "0" }),
+    );
+
+    await act(async () => {
+      await result.current.crCompute();
+    });
+
+    // i = -(h+k) = -1, derived and sent alongside h, k, l.
+    expect(crystalDSpacing).toHaveBeenCalledWith({
+      system: "hexagonal", a: 3.2094, b: 3.2094, c: 5.2107,
+      alpha: 90, beta: 90, gamma: 120, h: 1, k: 0, l: 0, i: -1,
+    });
+    expect(result.current.crResult?.d).toBeCloseTo(2.7794, 4);
+  });
+
+  it("omits i for non-hexagonal systems (cubic default)", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.crCompute();
+    });
+
+    const call = vi.mocked(crystalDSpacing).mock.calls[0][0];
+    expect(call).not.toHaveProperty("i");
+  });
+
+  it("crCompute records a Crystal entry to calc history", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.crCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Crystal");
+    expect(history[0].summary).toContain("3.1356");
+  });
+
+  it("cellCompute also records a Crystal entry to calc history", async () => {
+    vi.mocked(crystalCell).mockResolvedValue({ volume: 160.18, molar_mass: 28.09, density: 2.33 });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.cellCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Crystal");
+    expect(history[0].label).toBe("Cell volume & density");
   });
 
   it("updCrystal patches the form and switches system", () => {
@@ -177,6 +377,66 @@ describe("useCalculators", () => {
       a: 5.4309, b: 5.4309, c: 5.4309, alpha: 90, beta: 90, gamma: 90,
     });
     expect(result.current.cellResult?.volume).toBe(64);
+  });
+
+  // ── Photon/thermal energy panel (5 quantities at once) ─────────────────────
+  it("peCompute converts the entered value to every other unit in the family", async () => {
+    vi.mocked(convertUnits).mockImplementation((value, _from, to) => {
+      const table: Record<string, number> = {
+        nm: 1239.842, "cm^-1": 8065.54, THz: 241.799, K: 11604.5,
+      };
+      return Promise.resolve({ result: table[to] ?? Number(value), info: {} });
+    });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.peCompute();
+    });
+
+    expect(convertUnits).toHaveBeenCalledTimes(4); // eV -> the other 4 units
+    expect(result.current.peResults?.eV).toBe(1); // the entered value itself
+    expect(result.current.peResults?.nm).toBeCloseTo(1239.842, 2);
+    expect(result.current.peResults?.K).toBeCloseTo(11604.5, 1);
+    expect(result.current.peError).toBeNull();
+  });
+
+  it("peCompute recomputes relative to whichever quantity is selected as peFrom", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 42, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeFrom("nm"));
+    act(() => result.current.setPeValue("500"));
+
+    await act(async () => {
+      await result.current.peCompute();
+    });
+
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "eV");
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "THz");
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "K");
+    expect(result.current.peResults?.nm).toBe(500);
+  });
+
+  it("peCompute rejects a non-numeric value without calling the API", async () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeValue("abc"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(convertUnits).not.toHaveBeenCalled();
+    expect(result.current.peError).toContain("numeric");
+  });
+
+  it("peCompute surfaces a backend error (e.g. non-positive value)", async () => {
+    vi.mocked(convertUnits).mockRejectedValue(
+      new Error("photon/thermal energy conversions require a positive value"),
+    );
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeValue("0"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(result.current.peError).toContain("positive");
+    expect(result.current.peResults).toBeNull();
   });
 
   // ── Cross-panel hooks ──────────────────────────────────────────────────────

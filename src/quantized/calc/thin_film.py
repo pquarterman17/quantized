@@ -33,8 +33,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from quantized.calc import element_data
 from quantized.calc.constants import constants
+from quantized.calc.ion_range import projected_range
 
 __all__ = [
     "deposition_rate",
@@ -44,10 +44,16 @@ __all__ = [
     "kiessig_thickness",
     "multilayer_thermal_conductivity",
     "projected_range",
+    "sauerbrey",
     "sputter_rate",
     "stoney_stress",
     "thermal_mismatch_strain",
 ]
+
+# AT-cut quartz constants for the Sauerbrey equation (standard reference
+# values, e.g. Sauerbrey, Z. Phys. 155, 206 (1959)).
+_MU_Q = 2.947e11  # shear modulus, g/(cm*s^2)
+_RHO_Q = 2.648  # density, g/cm^3
 
 
 def deposition_rate(thickness: float, time: float) -> dict[str, float]:
@@ -231,71 +237,82 @@ def multilayer_thermal_conductivity(
     }
 
 
-def projected_range(ion: str, target: str, energy: float) -> dict[str, Any]:
-    """Ion projected range + straggle via simplified LSS theory (``projectedRange.m``).
+def sauerbrey(
+    delta_f: float,
+    f0: float,
+    *,
+    area: float | None = None,
+    density: float | None = None,
+) -> dict[str, Any]:
+    r"""QCM areal mass (and optional thickness) from a Sauerbrey frequency
+    shift (``sauerbrey.m`` / DiraCulator QCM card).
 
-    Combines ZBL nuclear stopping and the LSS velocity-proportional electronic
-    stopping; straggle uses the Lindhard form
-    ``ΔRp ≈ 0.4·Rp·√(M₁M₂)/(M₁+M₂)``. Target atomic density comes from
-    ``element_data`` (bulk density / molar mass); elements with no density fall
-    back to 5 g/cm³. Accuracy ±20–30 % — use SRIM/TRIM for precise work.
+    .. math::
+
+        \Delta f = -\frac{2 f_0^2}{\sqrt{\mu_q \rho_q}} \cdot \frac{\Delta m}{A}
+                 = -C_f \cdot \frac{\Delta m}{A}
+
+    Standard sign convention: a mass-loaded crystal's resonant frequency
+    DECREASES, so ``delta_f`` is negative for the ordinary case of added
+    mass (film growth, adsorption) — the returned areal mass is then
+    positive. ``Cf = 2·f0²/√(μ_q·ρ_q)`` is the crystal's mass-sensitivity
+    factor (Hz per g/cm²), using the standard AT-cut quartz shear modulus
+    ``μ_q = 2.947e11 g/(cm·s²)`` and density ``ρ_q = 2.648 g/cm³`` — for the
+    common 5 MHz crystal this evaluates to the textbook ``Cf ≈ 56.6 Hz·cm²/µg``.
+
+    Valid only in the thin, rigid-film regime (``|Δf|/f0 ≪ 1``, conventionally
+    up to a few percent of ``f0``); this function does not itself check for or
+    warn about that regime (it has no access to the raw admittance spectrum to
+    judge rigidity) — outside it, a viscoelastic model (Kanazawa-Gordon,
+    Voinova) is needed instead.
 
     Args:
-        ion: incident-ion symbol (e.g. 'Ar').
-        target: target-material symbol (e.g. 'Si').
-        energy: ion energy (keV), > 0.
+        delta_f: measured frequency shift (Hz); negative for added mass.
+        f0: crystal fundamental resonant frequency (Hz), > 0.
+        area: active electrode area (cm²); when given (> 0), the total
+            deposited mass ``delta_m = areal_mass · area`` is also returned.
+        density: film mass density (g/cm³); when given (> 0) together with
+            ``area``, the film thickness ``delta_m / (density · area)`` is
+            also returned (cm and nm).
 
-    Returns ``Rp`` and ``deltaRp`` (nm), plus a ``warning`` caveat string.
+    Returns ``areal_mass`` (g/cm²) and ``areal_mass_ng_cm2`` (ng/cm²), the
+    sensitivity factor ``Cf`` (Hz·cm²/g) and ``Cf_hz_cm2_ug`` (Hz·cm²/µg),
+    plus ``delta_m`` (g) and ``thickness``/``thickness_nm`` (cm/nm) when
+    ``area``/``density`` are supplied.
+
+    >>> r = sauerbrey(-10.0, 5e6)
+    >>> round(r["Cf_hz_cm2_ug"], 2)
+    56.6
+    >>> round(r["areal_mass_ng_cm2"], 4)
+    176.6766
     """
-    if energy <= 0:
-        raise ValueError("energy must be positive")
+    if f0 <= 0:
+        raise ValueError("f0 must be positive")
+    if area is not None and area <= 0:
+        raise ValueError("area must be positive")
+    if density is not None and density <= 0:
+        raise ValueError("density must be positive")
 
-    el_ion = element_data.by_symbol(ion)
-    el_target = element_data.by_symbol(target)
-    z1 = float(el_ion["Z"])
-    m1 = float(el_ion["mass"])
-    z2 = float(el_target["Z"])
-    m2 = float(el_target["mass"])
+    cf = 2.0 * f0**2 / math.sqrt(_MU_Q * _RHO_Q)  # Hz*cm^2/g
+    areal_mass = -delta_f / cf  # g/cm^2 (positive for delta_f < 0, added mass)
 
-    na = constants()["NA"]
-    rho_target = el_target.get("density")
-    if rho_target is None or rho_target <= 0:
-        rho_target = 5.0  # fallback (g/cm^3)
-    n = rho_target * na / m2  # atoms/cm^3
-
-    z_screen = z1 ** (2 / 3) + z2 ** (2 / 3)
-    a = 0.4685 / math.sqrt(z_screen)  # Thomas-Fermi screening length (Å)
-    epsilon = 32.53 * m2 * energy / (z1 * z2 * (m1 + m2) * math.sqrt(z_screen))
-
-    sqrt_eps = math.sqrt(epsilon)
-    sn_reduced = (
-        3.441 * sqrt_eps * math.log(epsilon + 2.718)
-    ) / (1 + 6.355 * sqrt_eps + epsilon * (6.882 * sqrt_eps - 1.708))
-    sn = sn_reduced * 4 * math.pi * a * z1 * z2 * (m1 / (m1 + m2)) * 1e-8 * 14.4 / z_screen
-
-    se = (
-        0.0793
-        * z1 ** (2 / 3)
-        * math.sqrt(z2)
-        * (m1 + m2) ** 1.5
-        / (m1**1.5 * math.sqrt(m2) * z_screen**0.75)
-        * math.sqrt(energy / m1)
-        * 1e-15
-    )
-
-    energy_ev = energy * 1e3
-    rp_cm = energy_ev / (n * (sn + se))
-    rp = rp_cm * 1e7  # cm -> nm
-    delta_rp = 0.4 * rp * math.sqrt(m1 * m2) / (m1 + m2)
-
-    return {
-        "Rp": rp,
-        "deltaRp": delta_rp,
-        "ion": ion,
-        "target": target,
-        "energy": energy,
-        "warning": "Approximate (±20-30%). Use SRIM for precise work.",
+    out: dict[str, Any] = {
+        "areal_mass": areal_mass,
+        "areal_mass_ng_cm2": areal_mass * 1e9,
+        "Cf": cf,
+        "Cf_hz_cm2_ug": cf / 1e6,
+        "delta_f": delta_f,
+        "f0": f0,
     }
+    if area is not None:
+        delta_m = areal_mass * area
+        out["delta_m"] = delta_m
+        out["delta_m_ng"] = delta_m * 1e9
+        if density is not None:
+            thickness = delta_m / (density * area)  # cm
+            out["thickness"] = thickness
+            out["thickness_nm"] = thickness * 1e7
+    return out
 
 
 def sputter_rate(y: float, j: float, rho: float, m: float) -> dict[str, float]:

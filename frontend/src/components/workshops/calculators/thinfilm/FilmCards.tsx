@@ -13,6 +13,7 @@ import {
   thinFilmStoneyStress,
   thinFilmThermalMismatch,
 } from "../../../../lib/api";
+import { thinFilmSauerbrey } from "../../../../lib/api/thinFilm";
 import {
   Button,
   Card,
@@ -218,6 +219,45 @@ export function ThermalMismatchCard() {
         </Button>
       </div>
       {resultLine(c10)}
+    </Card>
+  );
+}
+
+/** Card 11 — Sauerbrey QCM areal mass / thickness. */
+export function SauerbreyCard() {
+  const [sfDf, setSfDf] = useState("-10");
+  const [sfF0, setSfF0] = useState("5e6");
+  const [sfArea, setSfArea] = useState("");
+  const [sfRho, setSfRho] = useState("");
+  const [c11, setC11] = useState<CardResult>(null);
+
+  return (
+    <Card title="Sauerbrey (QCM)">
+      <div style={ROW}>
+        <Field label="Δf" value={sfDf} onChange={setSfDf} unit="Hz" width={64} />
+        <Field label="f₀" value={sfF0} onChange={setSfF0} unit="Hz" width={72} />
+        <Field label="A" value={sfArea} onChange={setSfArea} unit="cm² (opt)" width={72} />
+        <Field label="ρ" value={sfRho} onChange={setSfRho} unit="g/cm³ (opt)" width={80} />
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() =>
+            void runCalc(setC11, "Sauerbrey (QCM)", async () => {
+              const area = sfArea.trim() === "" ? undefined : Number(sfArea);
+              const density = sfRho.trim() === "" ? undefined : Number(sfRho);
+              const r = await thinFilmSauerbrey(Number(sfDf), Number(sfF0), area, density);
+              let s = `Δm/A = ${fmtNum(r.areal_mass_ng_cm2)} ng/cm² · Cf = ${fmtNum(
+                r.Cf_hz_cm2_ug,
+              )} Hz·cm²/µg`;
+              if (r.thickness_nm != null) s += ` · t = ${fmtNum(r.thickness_nm)} nm`;
+              return s;
+            })
+          }
+        >
+          Calculate
+        </Button>
+      </div>
+      {resultLine(c11)}
     </Card>
   );
 }

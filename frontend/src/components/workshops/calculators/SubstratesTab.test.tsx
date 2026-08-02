@@ -2,11 +2,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getSubstrates, substrateMismatch } from "../../../lib/api";
+import { substratesCriticalThickness } from "../../../lib/api/substrates";
 import SubstratesTab, { type SubstrateInfo } from "./SubstratesTab";
 
 vi.mock("../../../lib/api", () => ({
   getSubstrates: vi.fn(),
   substrateMismatch: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/substrates", () => ({
+  substratesCriticalThickness: vi.fn(),
 }));
 
 const SUBS: SubstrateInfo[] = [
@@ -120,5 +125,35 @@ describe("SubstratesTab", () => {
     vi.mocked(getSubstrates).mockRejectedValue(new Error("offline"));
     render(<SubstratesTab />);
     expect(await screen.findByText(/unavailable/)).toBeInTheDocument();
+  });
+
+  it("computes the Matthews-Blakeslee critical thickness", async () => {
+    vi.mocked(substratesCriticalThickness).mockResolvedValue({
+      h_c: 26.6115,
+      h_c_nm: 2.66115,
+      mismatch: 0.01,
+      b: 4.0,
+      nu: 0.3,
+    });
+    render(<SubstratesTab />);
+    await screen.findByText("SrTiO3(100)");
+    fireEvent.click(screen.getByText("SrTiO3(100)"));
+
+    fireEvent.click(screen.getByText("Calculate"));
+
+    expect(await screen.findByText(/h_c = .* Å = .* nm/)).toBeInTheDocument();
+    expect(substratesCriticalThickness).toHaveBeenCalledWith(0.01, 4.0, 0.3);
+  });
+
+  it("chains the last computed mismatch into the critical-thickness mismatch field", async () => {
+    render(<SubstratesTab />);
+    await screen.findByText("SrTiO3(100)");
+    fireEvent.click(screen.getByText("SrTiO3(100)"));
+
+    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "3.876" } });
+    fireEvent.click(screen.getByText("Mismatch"));
+    await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
+
+    expect(screen.getByLabelText("mismatch percent")).toHaveValue("-0.74264");
   });
 });

@@ -20,10 +20,19 @@ const DETAIL_FIELDS: [string, string, string][] = [
   ["Config", "electronConfig", ""],
   ["Density", "density", "g/cm³"],
   ["Electronegativity", "electronegativity", ""],
+  ["Atomic radius", "atomicRadius", "pm"],
+  ["Ionization energy", "ionizationEnergy", "eV"],
+  ["Electron affinity", "electronAffinity", "eV"],
   ["Melting pt", "meltingPoint", "K"],
   ["Boiling pt", "boilingPoint", "K"],
+  ["Thermal conductivity", "thermalConductivity", "W/(m·K)"],
   ["Neutron b_coh", "bCoherent", "fm"],
 ];
+
+// X-ray absorption edges (calc.element_data's xrayEdges: K/L1/L2/L3, raw eV —
+// rendered in keV per the calculator audit). A None edge (e.g. no L-shell
+// for a light element) is skipped rather than shown as a blank/NaN row.
+const XRAY_EDGE_LEVELS: readonly string[] = ["K", "L1", "L2", "L3"];
 
 export default function ElementsTab() {
   const [elements, setElements] = useState<ElementInfo[] | null>(null);
@@ -125,6 +134,24 @@ export default function ElementsTab() {
               </div>
             );
           })}
+          {(() => {
+            const edges = selected.xrayEdges as Record<string, number | null> | undefined;
+            const rows = XRAY_EDGE_LEVELS.filter((level) => edges?.[level] != null);
+            if (rows.length === 0) return null;
+            return (
+              <div style={{ marginTop: 6 }}>
+                <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 2 }}>
+                  X-ray absorption edges
+                </div>
+                {rows.map((level) => (
+                  <div key={level} className="qz-meta-row">
+                    <span className="qz-k">{level}</span>
+                    <span className="qz-v">{fmtNum((edges?.[level] ?? 0) / 1000)} keV</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

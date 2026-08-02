@@ -119,7 +119,7 @@ export default function CalculatorsContent() {
       {c.tab === "crystal" && <CrystalTab c={c} />}
       {c.tab === "sld" && <SldTab c={c} />}
       {c.tab === "elements" && <ElementsTab />}
-      {c.tab === "constants" && <ConstantsTab c={c} />}
+      {c.tab === "constants" && <ConstantsTab />}
       {c.tab === "electrical" && <ElectricalTab />}
       {c.tab === "thermal" && <ThermalTab />}
       {c.tab === "diffusion" && <DiffusionTab />}

@@ -5,11 +5,18 @@
 // tab owns its own local state (exactly as the per-tab copies did) and
 // composes these. The rendered DOM is identical to the former private copies.
 
-import { Button, NumberField } from "../../primitives";
+import { copyText } from "../../../lib/clipboard";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
+import { toast } from "../../../store/toasts";
+import { Button, IconButton, NumberField } from "../../primitives";
 
-export type CardResult = { text: string; err?: boolean } | null;
+/** A result string plus the exact value copy-to-clipboard should write —
+ *  usually the raw JS number's full-precision `String(...)`, not the
+ *  rounded `fmtNum` display text (item 5, calculator audit). Falls back to
+ *  `text` when omitted (most existing `makeCardRunner` cards, whose result
+ *  is only ever built as an already-formatted string). */
+export type CardResult = { text: string; err?: boolean; copyValue?: string } | null;
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 export function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -30,7 +37,11 @@ export function Card({ title, children }: { title: string; children: React.React
   );
 }
 
-/** A labelled NumberField (numeric by default — pass numeric={false} for text). */
+/** A labelled NumberField (numeric by default — pass numeric={false} for text).
+ *  The input's accessible name defaults to `label` (usually a short glyph like
+ *  "t" or "σ", visible right next to it) — pass `ariaLabel` when a card has
+ *  more than one field sharing that glyph (e.g. two "t" fields), so
+ *  `getByLabelText` and screen readers alike can tell them apart. */
 export function Field({
   label,
   value,
@@ -38,6 +49,7 @@ export function Field({
   width = 84,
   unit,
   numeric = true,
+  ariaLabel,
 }: {
   label: string;
   value: string;
@@ -45,6 +57,7 @@ export function Field({
   width?: number;
   unit?: string;
   numeric?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -57,6 +70,7 @@ export function Field({
         onChange={onChange}
         unit={unit}
         numeric={numeric}
+        aria-label={ariaLabel ?? label}
       />
     </span>
   );
@@ -83,6 +97,32 @@ export function parseList(s: string): number[] {
     .map(Number);
 }
 
+/** Parse pasted two-column data (one "x y" / "x, y" / "x\ty" pair per line —
+ *  whitespace/comma tolerant, like `parseList` but per row) into parallel x/y
+ *  arrays. Blank lines are skipped; a malformed row (not exactly 2 numeric
+ *  tokens) is silently dropped rather than throwing, so one bad paste row
+ *  doesn't block the whole card. Shared by every card that fits a pasted
+ *  (x, y) sweep — e.g. Curie-Weiss (T, χ) and the Hall-effect field sweep
+ *  (H, R_xy) — rather than each hand-rolling its own paste parser. */
+export function parseXYPairs(text: string): { x: number[]; y: number[] } {
+  const x: number[] = [];
+  const y: number[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const parts = line
+      .trim()
+      .split(/[\s,]+/)
+      .filter((p) => p.length > 0);
+    if (parts.length < 2) continue;
+    const a = Number(parts[0]);
+    const b = Number(parts[1]);
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      x.push(a);
+      y.push(b);
+    }
+  }
+  return { x, y };
+}
+
 /** Build one tab's card-calculation runner, bound to its history domain:
  *  success records to the calc history; failure surfaces the API error
  *  inline (never a toast — matches the MATLAB cards). */
@@ -102,6 +142,34 @@ export function makeCardRunner(domain: string) {
   };
 }
 
-export const resultLine = (r: CardResult) => r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+/** Copy-to-clipboard button for a calculator result (⧉ glyph — the same
+ *  convention as Inspector/MetadataCard's "⧉ Copy metadata"). One mechanism,
+ *  reused everywhere a result needs a copy affordance: `resultLine` below
+ *  and the four hook-backed tabs' custom result displays (Units/Xray/
+ *  Crystal/Sld) all render this rather than hand-rolling their own. */
+export function CopyButton({ value, label = "result" }: { value: string; label?: string }) {
+  return (
+    <IconButton
+      aria-label={`copy ${label}`}
+      title={`copy ${label}`}
+      style={{ marginLeft: 6 }}
+      onClick={() =>
+        void copyText(value).then((ok) =>
+          toast(ok ? `copied ${label}` : "clipboard unavailable", ok ? "ok" : "danger"),
+        )
+      }
+    >
+      ⧉
+    </IconButton>
+  );
+}
+
+export const resultLine = (r: CardResult) =>
+  r && (
+    <div style={r.err ? ERR : RESULT}>
+      <span>{r.text}</span>
+      {!r.err && <CopyButton value={r.copyValue ?? r.text} />}
+    </div>
+  );
 
 export { Button, fmtNum };

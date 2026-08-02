@@ -27,11 +27,15 @@ Reference values (closed-form physics, not MATLAB-idiosyncratic):
 from __future__ import annotations
 
 import math
+from typing import Any
+
+from scipy.special import erfc
 
 from quantized.calc.constants import constants
 
 __all__ = [
     "arrhenius",
+    "c_profile",
     "diffusion_length",
     "fick_flux",
     "kb_ev",
@@ -98,6 +102,53 @@ def diffusion_length(d: float, t: float) -> dict[str, float]:
         "L_nm": length * 1e7,
         "D": d,
         "t": t,
+    }
+
+
+def c_profile(x: float | list[float], t: float, d: float, c0: float) -> dict[str, Any]:
+    r"""Constant-source diffusion profile ``c(x,t) = c0·erfc(x / (2√(D·t)))``.
+
+    The complementary-error-function solution to Fick's second law for
+    semi-infinite diffusion from a constant surface concentration ``c0`` held
+    at ``x=0`` (e.g. dopant in-diffusion, or any species diffusing in from a
+    fixed-concentration boundary) — the standard companion result to
+    :func:`diffusion_length`, whose ``L = sqrt(D·t)`` is exactly this
+    profile's characteristic depth scale (the argument of ``erfc`` is
+    ``x/(2L)``).
+
+    Args:
+        x: depth(s) from the surface (cm), >= 0. Scalar or list.
+        t: diffusion time (s), > 0.
+        d: diffusion coefficient D (cm²/s), > 0.
+        c0: surface (boundary) concentration, any consistent unit.
+
+    Returns ``c`` (matching ``x``'s shape: a float if ``x`` was a scalar, else
+    a list), the echoed inputs, and the characteristic length ``L = sqrt(D·t)``
+    (cm) used in the argument.
+
+    >>> c_profile(0.0, 3600.0, 1e-12, 1e18)["c"]   # erfc(0) = 1 -> c = c0 at the surface
+    1e+18
+    >>> r = c_profile(6e-5, 3600.0, 1e-12, 1e18)   # x == L -> argument = 1/2
+    >>> round(r["c"] / 1e18, 6)
+    0.4795
+    """
+    if t <= 0:
+        raise ValueError("t must be positive")
+    if d <= 0:
+        raise ValueError("D must be positive")
+    length = math.sqrt(d * t)
+    is_scalar = isinstance(x, int | float)
+    xs = [float(x)] if isinstance(x, int | float) else [float(v) for v in x]
+    if any(v < 0 for v in xs):
+        raise ValueError("x must be non-negative")
+    cs = [c0 * float(erfc(v / (2.0 * length))) for v in xs]
+    return {
+        "c": cs[0] if is_scalar else cs,
+        "x": x,
+        "t": t,
+        "D": d,
+        "c0": c0,
+        "L": length,
     }
 
 

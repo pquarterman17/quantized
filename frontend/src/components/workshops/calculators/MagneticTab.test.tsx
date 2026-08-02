@@ -7,6 +7,7 @@ import {
   magneticDomainWall,
   magneticMomentConvert,
 } from "../../../lib/api";
+import { magneticCurieWeissFit } from "../../../lib/api/magnetic";
 import MagneticTab from "./MagneticTab";
 
 vi.mock("../../../lib/api", () => ({
@@ -15,6 +16,10 @@ vi.mock("../../../lib/api", () => ({
   magneticCurieWeiss: vi.fn(),
   magneticLangevin: vi.fn(),
   magneticDomainWall: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/magnetic", () => ({
+  magneticCurieWeissFit: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -87,5 +92,38 @@ describe("MagneticTab", () => {
 
     fireEvent.click(screen.getAllByText("Calculate")[1]);
     expect(await screen.findByText("C must be non-negative")).toBeInTheDocument();
+  });
+
+  it("fits Curie-Weiss parameters from pasted T, chi data", async () => {
+    vi.mocked(magneticCurieWeissFit).mockResolvedValue({
+      theta_cw: 50,
+      C: 4.0,
+      mu_eff: 5.657,
+      fit_line: [0.25, -12.5],
+      r2: 1.0,
+      inv_chi: [3, 4, 5],
+    });
+    render(<MagneticTab />);
+
+    fireEvent.change(screen.getByLabelText("Curie-Weiss T, chi data"), {
+      target: { value: "100, 0.02\n200, 0.0133\n300, 0.01" },
+    });
+    fireEvent.click(screen.getByText("Fit"));
+
+    expect(await screen.findByText(/θ_CW = .* K/)).toBeInTheDocument();
+    expect(magneticCurieWeissFit).toHaveBeenCalledWith({
+      temperature: [100, 200, 300],
+      susceptibility: [0.02, 0.0133, 0.01],
+    });
+  });
+
+  it("rejects a Curie-Weiss fit with fewer than 3 pasted rows", async () => {
+    render(<MagneticTab />);
+    fireEvent.change(screen.getByLabelText("Curie-Weiss T, chi data"), {
+      target: { value: "100, 0.02\n200, 0.0133" },
+    });
+    fireEvent.click(screen.getByText("Fit"));
+    expect(await screen.findByText(/at least 3/)).toBeInTheDocument();
+    expect(magneticCurieWeissFit).not.toHaveBeenCalled();
   });
 });

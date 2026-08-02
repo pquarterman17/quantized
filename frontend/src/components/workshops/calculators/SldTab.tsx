@@ -11,6 +11,7 @@ import { Button, NumberField, Pill } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { isCalcOnlyView } from "../../../lib/viewMode";
 import { toast } from "../../../store/toasts";
+import { CopyButton } from "./shared";
 import {
   NEUTRON_WAVELENGTHS,
   SLD_PRESETS,
@@ -46,6 +47,7 @@ function ProbeBlock({
       <div style={{ fontFamily: "var(--font-mono)", marginTop: 4 }}>
         <div style={{ fontSize: "var(--font-size-lg)" }}>
           {fmtNum(p.sld_real)} <span style={{ color: "var(--text-dim)" }}>{SLD_UNIT}</span>
+          <CopyButton value={String(p.sld_real)} label={`${title} value`} />
         </div>
         <div style={{ color: "var(--text-dim)", marginTop: 2 }}>
           + i {fmtNum(p.sld_imag)} {SLD_UNIT} <span style={{ color: "var(--text-faint)" }}>(abs)</span>

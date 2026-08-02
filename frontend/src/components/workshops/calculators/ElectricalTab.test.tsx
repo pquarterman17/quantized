@@ -6,6 +6,7 @@ import {
   electricalHall,
   electricalResistivity,
 } from "../../../lib/api";
+import { electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
 import ElectricalTab from "./ElectricalTab";
 
 vi.mock("../../../lib/api", () => ({
@@ -15,6 +16,11 @@ vi.mock("../../../lib/api", () => ({
   electricalMobility: vi.fn(),
   electricalCurrentDensity: vi.fn(),
   electricalHall: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/electrical", () => ({
+  electricalHallSweep: vi.fn(),
+  electricalVanDerPauw: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -59,5 +65,68 @@ describe("ElectricalTab", () => {
 
     fireEvent.click(screen.getAllByText("=")[0]);
     expect(await screen.findByText("rho must be positive")).toBeInTheDocument();
+  });
+
+  it("fits a Hall sweep from pasted H, R_xy data", async () => {
+    vi.mocked(electricalHallSweep).mockResolvedValue({
+      r_h: 2.0,
+      carrier_density: 3.12e18,
+      carrier_type: "hole",
+      mobility: NaN,
+      fit_r2: 1.0,
+    });
+    render(<ElectricalTab />);
+
+    fireEvent.change(screen.getByLabelText("Hall sweep H, R_xy data"), {
+      target: { value: "0, 0.5\n1, 2.5\n2, 4.5" },
+    });
+    fireEvent.click(screen.getByText("Fit"));
+
+    expect(await screen.findByText(/hole-type/)).toBeInTheDocument();
+    // t defaults to 100 nm -> 1e-5 cm.
+    const call = vi.mocked(electricalHallSweep).mock.calls[0][0];
+    expect(call.field).toEqual([0, 1, 2]);
+    expect(call.hall_resistance).toEqual([0.5, 2.5, 4.5]);
+    expect(call.thickness).toBeCloseTo(1e-5, 12);
+  });
+
+  it("shows mobility in the Hall sweep result when sigma is supplied", async () => {
+    vi.mocked(electricalHallSweep).mockResolvedValue({
+      r_h: 2.0,
+      carrier_density: 3.12e18,
+      carrier_type: "hole",
+      mobility: 12.5,
+      fit_r2: 1.0,
+    });
+    render(<ElectricalTab />);
+
+    fireEvent.change(screen.getByLabelText("Hall sweep H, R_xy data"), {
+      target: { value: "0, 0.5\n1, 2.5\n2, 4.5" },
+    });
+    fireEvent.change(screen.getByLabelText("Hall sweep sigma"), { target: { value: "1000" } });
+    fireEvent.click(screen.getByText("Fit"));
+
+    expect(await screen.findByText(/µ = .* cm²\/\(V·s\)/)).toBeInTheDocument();
+    const call = vi.mocked(electricalHallSweep).mock.calls[0][0];
+    expect(call.sigma).toBe(1000);
+  });
+
+  it("rejects a Hall sweep with fewer than 2 pasted rows", async () => {
+    render(<ElectricalTab />);
+    fireEvent.change(screen.getByLabelText("Hall sweep H, R_xy data"), {
+      target: { value: "0, 0.5" },
+    });
+    fireEvent.click(screen.getByText("Fit"));
+    expect(await screen.findByText(/at least 2/)).toBeInTheDocument();
+    expect(electricalHallSweep).not.toHaveBeenCalled();
+  });
+
+  it("computes van der Pauw sheet resistance", async () => {
+    vi.mocked(electricalVanDerPauw).mockResolvedValue({ Rs: 4.53236, Ra: 1.0, Rb: 1.0 });
+    render(<ElectricalTab />);
+
+    fireEvent.click(screen.getByText("Calculate"));
+    expect(await screen.findByText(/Rs = .* Ω\/sq/)).toBeInTheDocument();
+    expect(electricalVanDerPauw).toHaveBeenCalledWith(1, 1, undefined);
   });
 });

@@ -228,7 +228,12 @@ const MODULE_PINS: Record<string, number> = {
   // MapRequest/mapSeries moved to lib/api/plot.ts (the plotSeries `signal` +
   // x_min/x_max params would otherwise have pushed this back over its pin).
   // New /api/plot/* wrappers belong there, not here.
-  "/lib/api.ts": 1866,
+  // 1866 -> 1828 (DiraCulator expansion, two extractions composed):
+  // crystalDSpacing/crystalCell moved to lib/api/crystallography.ts and
+  // xrayCalc + neutronCalc/NeutronResult to lib/api/xray.ts — each wave's
+  // new fields would otherwise have pushed this back over its pin. New
+  // /api/crystallography/* and /api/xray/* wrappers belong there, not here.
+  "/lib/api.ts": 1828,
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

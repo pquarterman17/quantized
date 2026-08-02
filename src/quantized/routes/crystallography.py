@@ -12,7 +12,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from quantized.calc.crystallography import cell_volume, d_spacing, theoretical_density
+from quantized.calc.crystallography import (
+    cell_volume,
+    d_spacing,
+    interplanar_angle,
+    theoretical_density,
+)
 from quantized.calc.formula import formula_mass
 
 router = APIRouter(prefix="/api/crystallography", tags=["crystallography"])
@@ -29,11 +34,13 @@ class DSpacingRequest(BaseModel):
     h: int
     k: int
     l: int  # noqa: E741 — Miller index, the conventional name
+    i: int | None = None  # optional 4-index Miller-Bravais form (hexagonal only)
 
 
 @router.post("/dspacing")
 def dspacing(req: DSpacingRequest) -> dict[str, Any]:
-    """Interplanar d-spacing for (h,k,l) in the given crystal system."""
+    """Interplanar d-spacing for (h,k,l) — or (h,k,i,l) for hexagonal — in the
+    given crystal system."""
     try:
         return d_spacing(
             req.system,
@@ -43,6 +50,47 @@ def dspacing(req: DSpacingRequest) -> dict[str, Any]:
             req.h,
             req.k,
             req.l,
+            alpha=req.alpha,
+            beta=req.beta,
+            gamma=req.gamma,
+            i=req.i,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class InterplanarAngleRequest(BaseModel):
+    system: str
+    a: float
+    b: float = 0.0
+    c: float = 0.0
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+    h1: int
+    k1: int
+    l1: int  # noqa: E741 — Miller index, the conventional name
+    h2: int
+    k2: int
+    l2: int  # noqa: E741 — Miller index, the conventional name
+
+
+@router.post("/angle")
+def angle(req: InterplanarAngleRequest) -> dict[str, Any]:
+    """Angle between two lattice planes (h1k1l1) and (h2k2l2), for any of the
+    seven crystal systems, via the reciprocal metric tensor."""
+    try:
+        return interplanar_angle(
+            req.system,
+            req.a,
+            req.b,
+            req.c,
+            req.h1,
+            req.k1,
+            req.l1,
+            req.h2,
+            req.k2,
+            req.l2,
             alpha=req.alpha,
             beta=req.beta,
             gamma=req.gamma,

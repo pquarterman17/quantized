@@ -126,7 +126,7 @@ def test_calc_composes_with_desktop() -> None:
     ):
         cli.main(["--calc", "--desktop"])
     run_desktop.assert_called_once_with(
-        "127.0.0.1", 8000, title="DiraCulator", width=520, height=680, path="/?view=calc"
+        "127.0.0.1", 8000, title="DiraCulator", width=600, height=860, path="/?view=calc"
     )
     run.assert_not_called()
 

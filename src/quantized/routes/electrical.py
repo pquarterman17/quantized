@@ -47,6 +47,20 @@ class HallRequest(BaseModel):
     t: float  # thickness (cm)
 
 
+class HallSweepRequest(BaseModel):
+    field: list[float]
+    hall_resistance: list[float]
+    thickness: float | None = None  # cm
+    field_unit: str = "T"
+    sigma: float | None = None  # S/cm
+
+
+class VanDerPauwRequest(BaseModel):
+    r_a: float
+    r_b: float
+    thickness: float | None = None  # cm
+
+
 class WiedemannFranzRequest(BaseModel):
     temperature: float | list[float]
     resistivity: float | list[float]
@@ -93,6 +107,27 @@ def current_density(req: CurrentDensityRequest) -> dict[str, Any]:
 def hall(req: HallRequest) -> dict[str, Any]:
     """Single-point Hall: R_H, carrier density, carrier type."""
     return _call(electrical.hall_single_point, req.v_h, req.i, req.b, req.t)
+
+
+@router.post("/hall-sweep")
+def hall_sweep(req: HallSweepRequest) -> dict[str, Any]:
+    """Single-carrier Hall analysis from an R_xy vs H sweep: linear fit ->
+    R_H, carrier density, carrier type, mobility, fit R²."""
+    return _call(
+        electrical.hall_analysis,
+        req.field,
+        req.hall_resistance,
+        thickness=req.thickness,
+        field_unit=req.field_unit,
+        sigma=req.sigma,
+    )
+
+
+@router.post("/van-der-pauw")
+def van_der_pauw(req: VanDerPauwRequest) -> dict[str, Any]:
+    """Sheet resistance R_s from a van der Pauw Ra/Rb measurement (+ resistivity
+    when thickness is given)."""
+    return _call(electrical.van_der_pauw, req.r_a, req.r_b, thickness=req.thickness)
 
 
 @router.post("/wiedemann-franz")

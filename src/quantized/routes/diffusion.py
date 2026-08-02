@@ -33,6 +33,13 @@ class FickFluxRequest(BaseModel):
     dx: float  # distance (cm)
 
 
+class CProfileRequest(BaseModel):
+    x: float | list[float]  # depth(s) from the surface (cm)
+    t: float  # diffusion time (s)
+    d: float  # diffusion coefficient (cm²/s)
+    c0: float  # surface concentration
+
+
 def _call(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:
     try:
         return fn(*args, **kwargs)
@@ -56,3 +63,9 @@ def diffusion_length(req: DiffusionLengthRequest) -> dict[str, Any]:
 def fick_flux(req: FickFluxRequest) -> dict[str, Any]:
     """J = -D·ΔC/Δx (atoms/(cm²·s))."""
     return _call(diffusion.fick_flux, req.d, req.dc, req.dx)
+
+
+@router.post("/c-profile")
+def c_profile(req: CProfileRequest) -> dict[str, Any]:
+    """c(x,t) = c0·erfc(x / (2√(D·t))) — constant-source diffusion profile."""
+    return _call(diffusion.c_profile, req.x, req.t, req.d, req.c0)
