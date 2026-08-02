@@ -18,11 +18,14 @@ import { askConfirm } from "../overlays/ConfirmDialog";
 
 export default function SavedFiguresSection() {
   const docs = useApp((s) => s.figureDocs);
+  const datasets = useApp((s) => s.datasets);
   const openFigureDoc = useApp((s) => s.openFigureDoc);
   const openFigureDocInWindow = useApp((s) => s.openFigureDocInWindow);
+  const promoteLegacyFigureDoc = useApp((s) => s.promoteLegacyFigureDoc);
   const duplicateFigureDoc = useApp((s) => s.duplicateFigureDoc);
   const removeFigureDoc = useApp((s) => s.removeFigureDoc);
   const [collapsed, setCollapsed] = useState(false);
+  const datasetIds = new Set(datasets.map((dataset) => dataset.id));
 
   if (docs.length === 0) return null;
 
@@ -35,9 +38,13 @@ export default function SavedFiguresSection() {
       </button>
       {!collapsed &&
         docs.map((d) => {
-          const ok = docRenderable(d);
+          const ok = docRenderable(d, datasetIds);
+          const unavailableReason = d.live
+            ? "source dataset is unavailable"
+            : "frozen data snapshot is unavailable";
           const plotCompatibility = figureDocPlotCompatibility(d);
-          const canOpenWindow = plotCompatibility.blocker === null;
+          const missingLiveSource = d.live && !datasetIds.has(d.datasetId ?? "");
+          const canOpenWindow = !missingLiveSource && plotCompatibility.blocker === null;
           return (
             <div key={d.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
               <button
@@ -46,7 +53,7 @@ export default function SavedFiguresSection() {
                 title={
                   ok
                     ? `open publication figure "${d.name}"${d.live ? "" : " (frozen data)"} in Publication Preview`
-                    : "source dataset was removed"
+                    : unavailableReason
                 }
                 onClick={() => openFigureDoc(d.id)}
               >
@@ -57,8 +64,11 @@ export default function SavedFiguresSection() {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Open in new graph window"
                 title={
-                  plotCompatibility.blocker ??
+                  missingLiveSource
+                    ? unavailableReason
+                    : plotCompatibility.blocker ??
                   (plotCompatibility.losses.length > 0
                     ? `open in a new graph window with confirmation; omitted: ${plotCompatibility.losses.join(", ")}`
                     : "open in a new graph window")
@@ -79,6 +89,15 @@ export default function SavedFiguresSection() {
                 }}
               >
                 ⊞
+              </button>
+              <button
+                className="qz-btn qz-ghost qz-sm"
+                aria-label={`Create editable copy of ${d.name}`}
+                title={ok ? "Create an editable copy; the publication figure stays unchanged." : unavailableReason}
+                disabled={!ok}
+                onClick={() => promoteLegacyFigureDoc(d.id)}
+              >
+                Copy
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"

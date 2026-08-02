@@ -2698,9 +2698,9 @@ export const useApp = create<AppState>((set, get) => ({
         name: `${src.name} copy`,
       };
       return { figureDocs: [...s.figureDocs, copy] };
-    }),
+  }),
   openFigureDraft: (doc) => {
-    if (!doc || !docRenderable(doc)) return;
+    if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
     if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
     set({ figureDocSeed: doc, figureBuilderOpen: true });
   },
@@ -2714,12 +2714,12 @@ export const useApp = create<AppState>((set, get) => ({
   // dataset, then applies the config's channel/scale/label fields — NOT its
   // `seriesStyles` (a `FigureConfig` carries the EXPORT style shape,
   // `ExportSeriesStyle[]`, which has no inverse back to the live
-  // `Record<number,SeriesStyle>`; the window opens with default series
-  // styling, same as any other fresh window).
+  // `Record<number,SeriesStyle>`; the window opens with default series styling.
   openFigureDocInWindow: (id) => {
     const doc = get().figureDocs.find((f) => f.id === id);
     if (!doc || !doc.live || !doc.datasetId) return;
     const s = get();
+    if (!s.datasets.some((dataset) => dataset.id === doc.datasetId)) return;
     const title = dedupeWindowTitle(
       doc.name,
       s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),

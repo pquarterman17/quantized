@@ -202,8 +202,13 @@ export function useFigurePage() {
     [plotWindows, datasets],
   );
   const docSources = useMemo<PanelSource[]>(
-    () => figureDocs.filter(docRenderable).map((d) => ({ kind: "figdoc", id: d.id, name: d.name })),
-    [figureDocs],
+    () => {
+      const datasetIds = new Set(datasets.map((dataset) => dataset.id));
+      return figureDocs
+        .filter((document) => docRenderable(document, datasetIds))
+        .map((document) => ({ kind: "figdoc", id: document.id, name: document.name }));
+    },
+    [figureDocs, datasets],
   );
 
   /** Per-slot preview labels (auto sequence in row-major order, overrides win). */

@@ -44,8 +44,9 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
   });
 
   it("retains frozen data and rejects an invalid frozen legacy source clearly", () => {
-    const frozen = figureDocumentFromLegacyFigureDoc(legacy({ live: false, datasetId: null, dataSnapshot: snapshot }));
+    const frozen = figureDocumentFromLegacyFigureDoc(legacy({ live: false, datasetId: "stale-id", dataSnapshot: snapshot }));
     expect(frozen.data).toEqual({ mode: "frozen", snapshot });
+    expect(frozen.bindings.datasetId).toBeNull();
     expect(() => figureDocumentFromLegacyFigureDoc(legacy({ live: false, dataSnapshot: undefined })))
       .toThrow('frozen legacy FigureDoc "legacy-1" has no data snapshot');
   });

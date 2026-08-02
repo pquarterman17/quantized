@@ -84,10 +84,11 @@ describe("sanitizeFigureDocs", () => {
 
 describe("docRenderable", () => {
   it("live docs need their dataset; frozen docs need their snapshot", () => {
-    expect(docRenderable(doc())).toBe(true);
-    expect(docRenderable(doc({ datasetId: null }))).toBe(false);
-    expect(docRenderable(doc({ live: false, dataSnapshot: DATA, datasetId: null }))).toBe(true);
-    expect(docRenderable(doc({ live: false, datasetId: null }))).toBe(false);
+    expect(docRenderable(doc(), new Set(["d1"]))).toBe(true);
+    expect(docRenderable(doc({ datasetId: null }), new Set(["d1"]))).toBe(false);
+    expect(docRenderable(doc({ datasetId: "gone" }), new Set(["d1"]))).toBe(false);
+    expect(docRenderable(doc({ live: false, dataSnapshot: DATA, datasetId: null }), new Set())).toBe(true);
+    expect(docRenderable(doc({ live: false, datasetId: null }), new Set())).toBe(false);
   });
 });
 

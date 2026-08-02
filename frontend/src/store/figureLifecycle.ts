@@ -5,6 +5,7 @@ import {
   updateFigureDocumentFromPlotView,
   type FigureDocument,
 } from "../lib/figureDocument";
+import { figureDocumentFromLegacyFigureDoc } from "../lib/figureDocumentPublication";
 import { hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
@@ -88,6 +89,9 @@ export interface FigureLifecycleSlice {
   patchFigurePublicationDraft: (patch: (draft: FigureDocument) => FigureDocument) => void;
   applyFigurePublicationEdit: () => boolean;
   cancelFigurePublicationEdit: () => void;
+  /** Explicitly promote one legacy Publication Preview figure into a new
+   * canonical editable copy. The legacy source is never changed. */
+  promoteLegacyFigureDoc: (legacyFigureId: string) => string | null;
   saveFigure: (windowId: string) => string | null;
   saveFigureAs: (windowId: string, name: string) => string | null;
   openEditableFigure: (documentId: string) => string | null;
@@ -159,6 +163,41 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
       return true;
     },
     cancelFigurePublicationEdit: () => set({ figurePublicationSession: null, figureBuilderOpen: false }),
+    promoteLegacyFigureDoc: (legacyFigureId) => {
+      const state = get();
+      const legacy = state.figureDocs.find((candidate) => candidate.id === legacyFigureId);
+      if (!legacy) {
+        set({ status: "publication figure was not found; no editable copy created" });
+        return null;
+      }
+      if (
+        legacy.live &&
+        (!legacy.datasetId || !state.datasets.some((dataset) => dataset.id === legacy.datasetId))
+      ) {
+        set({ status: `cannot create editable copy of "${legacy.name}": source dataset is unavailable` });
+        return null;
+      }
+      let converted: FigureDocument;
+      try {
+        converted = figureDocumentFromLegacyFigureDoc(legacy);
+      } catch (error) {
+        set({
+          status: `cannot create editable copy of "${legacy.name}": ${error instanceof Error ? error.message : "conversion failed"}`,
+        });
+        return null;
+      }
+      const copy = {
+        ...converted,
+        id: nextFigureId(),
+        name: `${legacy.name} (editable copy)`,
+      };
+      state.recordHistory("create editable figure copy");
+      set((current) => ({
+        editableFigures: [...current.editableFigures, copy],
+        status: `created editable copy of "${legacy.name}"; open it from Editable figures`,
+      }));
+      return copy.id;
+    },
     saveFigure: (windowId) => {
       const state = get();
       const window = state.plotWindows.find((candidate) => candidate.id === windowId);

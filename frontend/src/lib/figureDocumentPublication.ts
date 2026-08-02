@@ -12,7 +12,10 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
   return createFigureDocument({
     id: legacy.id,
     name: legacy.name,
-    datasetId: legacy.datasetId,
+    // Frozen legacy figures render their snapshot, never a coincidentally
+    // active live dataset. A promoted editable window therefore has no live
+    // dataset binding to fall through to.
+    datasetId: legacy.live ? legacy.datasetId : null,
     view: {
       ...defaultPlotView(),
       xKey: config.xKey,

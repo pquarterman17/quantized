@@ -44,6 +44,7 @@ beforeEach(() => {
     datasets: [d1],
     activeId: null,
     figureDocs: [],
+    editableFigures: [],
     figureDocSeed: null,
     figureBuilderOpen: false,
   });
@@ -59,7 +60,7 @@ describe("SavedFiguresSection", () => {
     useApp.setState({ figureDocs: [doc()] });
     render(<SavedFiguresSection />);
     expect(screen.getByText("Publication figures")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /MH loop/ }));
+    fireEvent.click(screen.getByTitle(/open publication figure "MH loop"/));
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");
     expect(s.figureBuilderOpen).toBe(true);
@@ -69,7 +70,7 @@ describe("SavedFiguresSection", () => {
   it("disables a live doc whose dataset was removed; frozen still opens", () => {
     useApp.setState({
       figureDocs: [
-        doc({ id: "a", name: "dead", datasetId: null }),
+        doc({ id: "a", name: "dead", datasetId: "gone" }),
         doc({
           id: "b",
           name: "frozen",
@@ -80,9 +81,26 @@ describe("SavedFiguresSection", () => {
       ],
     });
     render(<SavedFiguresSection />);
-    expect(screen.getByRole("button", { name: /dead/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /frozen/ }));
+    expect(screen.getAllByTitle("source dataset is unavailable")[0]).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create editable copy of dead" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Open in new graph window" })[0]).toBeDisabled();
+    fireEvent.click(screen.getByTitle(/open publication figure "frozen"/));
     expect(useApp.getState().figureDocSeed?.id).toBe("b");
+  });
+
+  it("creates one canonical editable copy without opening a second history action", () => {
+    useApp.setState({ figureDocs: [doc()] });
+    const windows = useApp.getState().plotWindows.length;
+    const history = useApp.getState().history.length;
+    render(<SavedFiguresSection />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create editable copy of MH loop" }));
+    const state = useApp.getState();
+    expect(state.editableFigures).toHaveLength(1);
+    expect(state.editableFigures[0]).toMatchObject({ name: "MH loop (editable copy)", bindings: { datasetId: "d1" } });
+    expect(state.plotWindows).toHaveLength(windows);
+    expect(state.history).toHaveLength(history + 1);
+    expect(state.status).toContain("open it from Editable figures");
   });
 
   it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", async () => {

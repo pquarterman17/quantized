@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "../lib/figureDocument";
+import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { editableFigureDirty, figurePublicationDirty } from "./figureLifecycle";
 import { useApp } from "./useApp";
@@ -28,6 +29,19 @@ const window = (): PlotWindow => ({
   pinned: false,
 });
 
+const legacyFigure = (overrides: Partial<FigureDoc> = {}): FigureDoc => ({
+  id: "legacy-figure",
+  name: "Legacy figure",
+  datasetId: "d1",
+  live: true,
+  config: {
+    xKey: null, yKeys: [0], xScale: "linear", yScale: "linear",
+    title: "Legacy title", xLabel: "X", yLabel: "Y",
+    style: "default", fmt: "pdf", dpi: 300, overrides: null, seriesStyles: null,
+  },
+  ...overrides,
+});
+
 beforeEach(() => {
   useApp.setState({
     datasets: [{
@@ -39,6 +53,7 @@ beforeEach(() => {
     selectedIds: ["d1"],
     plotWindows: [window()],
     focusedWindowId: "w1",
+    figureDocs: [],
     editableFigures: [],
     figurePublicationSession: null,
     history: [],
@@ -86,6 +101,78 @@ describe("editable figure lifecycle", () => {
     const opened = useApp.getState().openEditableFigure("figure-w1");
     expect(opened).toBeTruthy();
     expect(useApp.getState().plotWindows.find((entry) => entry.id === opened)?.document?.id).toBe("figure-w1");
+  });
+});
+
+describe("legacy publication figure promotion", () => {
+  it("creates one fresh canonical editable copy without changing the legacy source and undo removes only the copy", () => {
+    const legacy = legacyFigure();
+    const before = structuredClone(legacy);
+    useApp.setState({ figureDocs: [legacy] });
+    const history = useApp.getState().history.length;
+
+    const id = useApp.getState().promoteLegacyFigureDoc(legacy.id);
+    const promoted = useApp.getState().editableFigures[0];
+    expect(id).toBeTruthy();
+    expect(id).not.toBe(legacy.id);
+    expect(promoted).toMatchObject({
+      id,
+      name: "Legacy figure (editable copy)",
+      bindings: { datasetId: "d1", yKeys: [0] },
+      data: { mode: "live" },
+    });
+    expect(useApp.getState().figureDocs).toEqual([before]);
+    expect(useApp.getState().history).toHaveLength(history + 1);
+
+    useApp.getState().undo();
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().figureDocs).toEqual([before]);
+  });
+
+  it("promotes a frozen snapshot without a live dataset and opens it unbound", () => {
+    const frozen = legacyFigure({
+      id: "frozen-legacy",
+      datasetId: "stale-id",
+      live: false,
+      dataSnapshot: { time: [0], values: [[3]], labels: ["Y"], units: [""], metadata: {} },
+    });
+    useApp.setState({ datasets: [], activeId: null, figureDocs: [frozen], plotWindows: [], focusedWindowId: null });
+
+    const id = useApp.getState().promoteLegacyFigureDoc(frozen.id);
+    expect(id).toBeTruthy();
+    expect(useApp.getState().editableFigures[0]).toMatchObject({
+      bindings: { datasetId: null },
+      data: { mode: "frozen", snapshot: frozen.dataSnapshot },
+    });
+    const windowId = useApp.getState().openEditableFigure(id!);
+    expect(useApp.getState().plotWindows.find((window) => window.id === windowId)).toMatchObject({
+      datasetId: null,
+      document: { id, data: { mode: "frozen" } },
+    });
+  });
+
+  it("rejects a live figure whose exact dataset is unavailable without mutation", () => {
+    const stale = legacyFigure({ datasetId: "gone" });
+    useApp.setState({ figureDocs: [stale] });
+    const before = structuredClone(useApp.getState().figureDocs);
+    const history = useApp.getState().history.length;
+
+    expect(useApp.getState().promoteLegacyFigureDoc(stale.id)).toBeNull();
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().figureDocs).toEqual(before);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().status).toContain("source dataset is unavailable");
+  });
+
+  it("reports a malformed frozen source without recording a mutation", () => {
+    const malformed = legacyFigure({ live: false, datasetId: null, dataSnapshot: undefined });
+    useApp.setState({ figureDocs: [malformed] });
+    const history = useApp.getState().history.length;
+
+    expect(useApp.getState().promoteLegacyFigureDoc(malformed.id)).toBeNull();
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().status).toContain("has no data snapshot");
   });
 });
 

@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.5a canonical preview readiness errors
+**Updated:** 2026-08-02 — F2.1c/F2.2b explicit legacy-figure promotion
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -202,11 +202,17 @@ decisions are merged.
   - [x] **F2.1b Focused canonical session.** File ▸ Publication Preview opens
         a transient FigureDocument draft from the focused window; legacy and
         Graph Builder entry points remain compatibility paths pending bridging.
+  - [x] **F2.1c Explicit legacy promotion (planned PR #114).** A saved legacy
+        Publication Figure can create a separately named canonical editable
+        copy without rewriting or auto-migrating the source.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
         focused window document and Cancel is mutation-free; broader entry
         points and parity remain open.
+  - [x] **F2.2b Promotion transaction (planned PR #114).** Creating an
+        editable legacy copy is one undoable mutation; invalid sources fail
+        visibly without opening a fallback dataset/window.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
@@ -342,6 +348,19 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.1c/F2.2b explicit legacy-figure promotion (planned PR #114)
+
+- Saved Publication Figures now offer an explicit “Create editable copy” flow.
+  It converts only the selected legacy document into a fresh-named canonical
+  FigureDocument and leaves the legacy entry byte-for-byte unchanged; no
+  workspace-load migration occurs.
+- Promotion is one undoable copy action. It does not auto-open a window because
+  doing so would add a second history entry; the status directs the user to
+  Editable figures. Frozen snapshots promote unbound, while live figures
+  require their exact current dataset.
+- F2.1/F2.2 remain open until all legacy and Graph Builder paths converge on
+  the canonical session and broader editor parity is complete.
 
 ### 2026-08-02 — F2.5a canonical preview readiness errors (planned PR #113)
 

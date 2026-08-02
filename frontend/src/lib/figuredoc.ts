@@ -111,9 +111,13 @@ export function sanitizeFigureDocs(v: unknown, dsIds: ReadonlySet<string>): Figu
   return out;
 }
 
-/** A FigureDoc can render when its data source still exists. */
-export function docRenderable(doc: FigureDoc): boolean {
-  return doc.live ? doc.datasetId !== null : doc.dataSnapshot !== undefined;
+/** A FigureDoc can render only from its exact live source or its frozen
+ * snapshot. Requiring the current id set makes every caller fail closed for
+ * stale live references instead of falling through to the active dataset. */
+export function docRenderable(doc: FigureDoc, datasetIds: ReadonlySet<string>): boolean {
+  return doc.live
+    ? doc.datasetId !== null && datasetIds.has(doc.datasetId)
+    : doc.dataSnapshot !== undefined;
 }
 
 // ── User graph templates (#15) — localStorage, like peak recipes ───────────
