@@ -38,6 +38,7 @@ import {
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
 import { datasetViewDefaults, mainWindow as createMainWindow } from "./windowDefaults";
@@ -516,14 +517,13 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target) return {}; // id not found
-        if (target.kind === "plot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1)
-          return {};
+        if (target.kind === "plot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1) return {};
         const remaining = s.plotWindows.filter((w) => w.id !== id);
-        const worksheetSelections = dropWorksheetSelection(s.worksheetSelections, id); // #14: no leak
-        if (s.focusedWindowId !== id) return { plotWindows: remaining, worksheetSelections };
+        const worksheetSelections = dropWorksheetSelection(s.worksheetSelections, id), sessionPatch = s.figurePublicationSession?.target === "window" && s.figurePublicationSession.windowId === id ? (toast("Publication Preview closed — its plot window was closed", "danger"), { figurePublicationSession: null, figureBuilderOpen: false }) : {}; // #14: no leak; item 3a: a window-target session can't outlive its target window closing
+        if (s.focusedWindowId !== id) return { plotWindows: remaining, worksheetSelections, ...sessionPatch };
         const next = remaining.filter((w) => w.kind === "plot").reduce((a, b) => (b.z > a.z ? b : a));
         return _focusHandoff(
-          { plotWindows: remaining, worksheetSelections },
+          { plotWindows: remaining, worksheetSelections, ...sessionPatch },
           next.id,
           plotWindowDatasetId(next),
           plotWindowView(next),

@@ -1,6 +1,26 @@
-import { editableFigureHasUnsavedEdits } from "../../store/figureLifecycle";
+import { editableFigureHasUnsavedEdits, figurePublicationDirty } from "../../store/figureLifecycle";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
+
+/** The Publication Preview discard gate (three close paths: the Cancel
+ *  button, the ToolWindow ×, and — once wired — any future close affordance)
+ *  — the same convention `closeFigureWindow` applies to a saved editable
+ *  figure: a dirty, non-undoable edit doesn't vanish without confirmation. A
+ *  Publication Preview draft is never history-tracked (it only becomes real
+ *  on Apply), so unlike closing a window, there is no Undo to fall back on. */
+export async function cancelPublicationPreview(): Promise<void> {
+  const state = useApp.getState();
+  if (
+    figurePublicationDirty(state.figurePublicationSession) &&
+    !(await askConfirm(
+      "Discard unpublished publication changes?",
+      "Changes made in this Publication Preview will be lost.",
+      "Discard changes",
+      true,
+    ))
+  ) return;
+  useApp.getState().cancelFigurePublicationEdit();
+}
 
 export async function saveFigureAs(windowId: string): Promise<void> {
   const state = useApp.getState();
