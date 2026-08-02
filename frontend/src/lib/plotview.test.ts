@@ -560,7 +560,7 @@ describe("snapshotView / hydrateView round-trip", () => {
       xKey: 2,
       yKeys: [0, 1],
       plotTitle: "M vs H",
-      seriesStyles: { 0: { color: "#fff" } },
+      seriesStyles: { 0: { color: "#fff", step: "mid" } },
       refLines: [{ id: "r1", axis: "y", value: 1.5 }] as PlotView["refLines"],
     };
     expect(hydrateView(snapshotView(view))).toEqual(view);

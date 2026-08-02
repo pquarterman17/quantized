@@ -30,6 +30,7 @@ import {
   emptySpec,
   markContext,
   markFamily,
+  markSeriesStyle,
   moveYZone,
   plotSpecCoreEqual,
   specDatasetId,
@@ -42,6 +43,7 @@ import {
   type PlotSpec,
   type SavedPlotSpec,
   type SpecRender,
+  type StepMode,
   type ZoneName,
 } from "../../../lib/plotspec";
 import { buildAxesBlock, buildDecorBlock, buildDisplayBlock, buildPageBlock } from "../../../lib/plotspec2";
@@ -57,6 +59,16 @@ export interface GraphBuilderState {
   mark: PlotMark;
   family: MarkFamily | null;
   marks: PlotMark[]; // the valid cycle for the current zones (>1 → cycler shown)
+  /** Origin's "Line + Symbol" toggle (line/step marks only — scatter always
+   *  shows markers). Mirrors `PlotSpec.showMarkers`, coerced to a plain
+   *  boolean for the UI. */
+  showMarkers: boolean;
+  setShowMarkers: (v: boolean) => void;
+  /** The "step" mark's alignment. Mirrors `PlotSpec.stepMode`, defaulted to
+   *  "post" for the UI (matches `markSeriesStyle`'s own default). Only
+   *  meaningful when `mark === "step"`. */
+  stepMode: StepMode;
+  setStepMode: (mode: StepMode) => void;
   render: SpecRender;
   /** Well options (click-to-assign) — every channel of the active dataset. */
   options: WellOption[];
@@ -217,6 +229,9 @@ export function useGraphBuilder(): GraphBuilderState {
 
   const cycle = () => setSpec((prev) => ({ ...prev, mark: cycleMark(prev, markContext(prev, datasets)) }));
 
+  const setShowMarkers = (v: boolean) => setSpec((prev) => ({ ...prev, showMarkers: v }));
+  const setStepMode = (mode: StepMode) => setSpec((prev) => ({ ...prev, stepMode: mode }));
+
   // #11: a Reset is a fresh start — it also unbinds from whatever saved spec
   // this session was editing, so the (now cleared) wells don't read as a
   // "dirty" divergence from a graph the user no longer intends to touch.
@@ -265,10 +280,22 @@ export function useGraphBuilder(): GraphBuilderState {
     // regardless of which tab the user is currently on.
     const wantTab = plotIntentStageTab(ds);
     if (useApp.getState().stageTab !== wantTab) setStageTab(wantTab);
-    if (spec.mark === "scatter" || spec.mark === "line") {
+    if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
       setXKey(spec.zones.x?.channel ?? null);
       setYKeys(spec.zones.y.map((r) => r.channel));
       setStatMode(false);
+      // GAP_PLOTTYPES: the mark NEVER otherwise reaches the Stage — without
+      // this, a "scatter"/"step" recipe would render however the window was
+      // last styled (or the ambient default trace), not what the user built.
+      // Translate mark+showMarkers/stepMode into a per-Y-channel style patch
+      // and push it BEFORE applySpecBlocks, so a saved spec's own captured
+      // per-series styles (the display block below) still WIN — setSeriesStyle
+      // merges by field, and applyDisplayBlock's reset+rebuild for a channel
+      // that HAS a captured entry fully supersedes whatever this set first.
+      const markStyle = markSeriesStyle(spec);
+      if (Object.keys(markStyle).length > 0) {
+        for (const y of spec.zones.y) useApp.getState().setSeriesStyle(y.channel, markStyle);
+      }
       // #12 Slice 5 / "part C": apply the spec's own captured
       // display/axes/decor blocks (if any) onto the now-live dataset —
       // closes the save/reopen/apply loop. A v1 spec (no blocks) makes zero
@@ -444,6 +471,14 @@ export function useGraphBuilder(): GraphBuilderState {
       version: display || axes || decor || page ? 2 : 1,
       zones: base.zones,
       mark: base.mark,
+      // GAP_PLOTTYPES: these are byte-stable v1 siblings of `mark` (see
+      // PlotSpec's doc), not derived from live store state — carried
+      // straight from the BUILDER's own spec (same as zones/mark above), so
+      // a saved "step" recipe still knows its alignment/marker toggle on
+      // reopen even though the display block below only ever captures the
+      // per-CHANNEL style, not this spec-level default.
+      ...(base.stepMode ? { stepMode: base.stepMode } : {}),
+      ...(base.showMarkers ? { showMarkers: base.showMarkers } : {}),
       ...(display ? { display } : {}),
       ...(axes ? { axes } : {}),
       ...(page ? { page } : {}),
@@ -523,7 +558,7 @@ export function useGraphBuilder(): GraphBuilderState {
   const exportPlot = async (): Promise<void> => {
     if (!ds || !canApplyToCurrent) return;
     applyToCurrent();
-    if (spec.mark === "scatter" || spec.mark === "line") {
+    if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
       await runExportFigureCommand(useApp.getState);
       return;
     }
@@ -537,6 +572,10 @@ export function useGraphBuilder(): GraphBuilderState {
     mark: spec.mark,
     family,
     marks,
+    showMarkers: spec.showMarkers === true,
+    setShowMarkers,
+    stepMode: spec.stepMode ?? "post",
+    setStepMode,
     render,
     options,
     chips,

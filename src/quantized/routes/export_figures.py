@@ -111,7 +111,12 @@ class FigureRequest(BaseModel):
     # Per-series style (aligned to the plotted y_keys order): color/width/line/
     # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}`) and MAIN
     # #14's `color_by`/`colormap` (channel indices — resolved against `dataset`
-    # by `calc.plotting.resolve_style_channels`, called from `_figure_series`).
+    # by `calc.plotting.resolve_style_channels`, called from `_figure_series`),
+    # and GAP_PLOTTYPES's `step` ("pre"/"post"/"mid" — the Graph Builder "step"
+    # mark; mapped to matplotlib's `drawstyle` by `calc.figure._plot_kwargs`).
+    # An entry is a loose dict (never a strict pydantic sub-model): a bad/
+    # unrecognized value in ANY of these keys degrades gracefully (dropped,
+    # rendered with matplotlib's default) rather than 422ing the whole export.
     series_styles: list[dict[str, Any] | None] | None = None
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.

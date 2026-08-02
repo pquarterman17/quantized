@@ -12,6 +12,10 @@ export interface ExportSeriesStyle {
   fill?: "under" | { vs: number };
   color_by?: number;
   colormap?: string;
+  /** Stepped-line alignment (GAP_PLOTTYPES Graph Builder "step" mark) —
+   *  the wire form of `SeriesStyle.step`/`StepMode`; mapped to matplotlib's
+   *  `drawstyle` by `calc.figure._plot_kwargs`. */
+  step?: "pre" | "post" | "mid";
 }
 
 const object = (value: unknown): Record<string, unknown> | null =>
@@ -40,6 +44,7 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     }
     if (Number.isInteger(raw.color_by) && (raw.color_by as number) >= 0) style.color_by = raw.color_by as number;
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
+    if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
     return Object.keys(style).length ? style : null;
   });
 }

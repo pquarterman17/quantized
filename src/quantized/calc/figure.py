@@ -35,6 +35,10 @@ __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
+# GAP_PLOTTYPES (Graph Builder "step" mark) export parity: the frontend's
+# per-series `step` ("pre"/"post"/"mid" — SeriesStyle.step / ExportSeriesStyle
+# .step) maps 1:1 onto matplotlib's own `Line2D.drawstyle` vocabulary.
+_DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
 # Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.
@@ -44,10 +48,15 @@ _FILL_ALPHA = 0.25
 def _plot_kwargs(
     default_lw: float, default_marker_size: float, spec: Mapping[str, Any] | None
 ) -> dict[str, Any]:
-    """Translate a per-series style spec (color/width/line/marker[/marker_size])
-    into matplotlib ``plot`` kwargs, so the export matches the on-screen styling.
-    ``default_marker_size`` is the active preset's calibrated marker size,
-    used only when a marker is requested without an explicit per-series size."""
+    """Translate a per-series style spec (color/width/line/marker[/marker_size]
+    /step) into matplotlib ``plot`` kwargs, so the export matches the
+    on-screen styling. ``default_marker_size`` is the active preset's
+    calibrated marker size, used only when a marker is requested without an
+    explicit per-series size. An unrecognized ``step``/``line`` value is
+    silently ignored (no ``drawstyle``/``linestyle`` key added) rather than
+    raising -- same degrade-gracefully contract as every other style field
+    here (see ``calc.plotting.resolve_style_channels``'s doc: "an export must
+    never 500 on a bad style hint")."""
     kw: dict[str, Any] = {"linewidth": default_lw}
     if not spec:
         return kw
@@ -60,6 +69,9 @@ def _plot_kwargs(
     line = spec.get("line")
     if line in _LINESTYLE:
         kw["linestyle"] = _LINESTYLE[line]
+    step = spec.get("step")
+    if step in _DRAWSTYLE:
+        kw["drawstyle"] = _DRAWSTYLE[step]
     if spec.get("marker"):
         kw["marker"] = "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size

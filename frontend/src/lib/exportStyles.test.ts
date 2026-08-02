@@ -54,4 +54,15 @@ describe("buildExportStyles", () => {
     expect(out[0]?.color_by).toBeUndefined();
     expect(out[0]?.colormap).toBeUndefined();
   });
+
+  // ── GAP_PLOTTYPES: Graph Builder "step" mark export parity ──────────────
+  it("carries step through — the chokepoint every export path (ordinary Export figure…, Figure Builder, Figure Page) shares", () => {
+    const out = buildExportStyles([0], { 0: { step: "mid" } });
+    expect(out[0]?.step).toBe("mid");
+  });
+
+  it("omits step when unset (no wire noise)", () => {
+    const out = buildExportStyles([0], { 0: { width: 2 } });
+    expect(out[0]?.step).toBeUndefined();
+  });
 });

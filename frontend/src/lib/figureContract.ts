@@ -98,6 +98,14 @@ export const PLOT_SPEC_FIELD_CONTRACT = {
   version: derived(null, "Schema metadata is owned by the recipe serializer."),
   zones: recipe("bindings"),
   mark: recipe("plot.mark"),
+  stepMode: recipe(
+    "series",
+    "Baked into each Y series' `step` override when the spec commits (useGraphBuilder's markSeriesStyle), not stored as separate document identity.",
+  ),
+  showMarkers: recipe(
+    "series",
+    "Baked into each Y series' `marker` override when the spec commits (useGraphBuilder's markSeriesStyle), not stored as separate document identity.",
+  ),
   display: recipe("series"),
   axes: recipe("axes"),
   page: recipe("page"),

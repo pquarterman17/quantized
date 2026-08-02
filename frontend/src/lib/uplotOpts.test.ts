@@ -305,6 +305,58 @@ describe("buildOpts defaultTrace", () => {
     expect(s.paths).toBe(fn);
   });
 
+  // ── GAP_PLOTTYPES: per-series SeriesStyle.step (Graph Builder "step" mark) ──
+  describe("per-series SeriesStyle.step", () => {
+    const post = vi.fn();
+    const pre = vi.fn();
+    const mid = vi.fn();
+    const stepBuilders = {
+      steppedPaths: post as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+      steppedPathsPre: pre as unknown as Parameters<typeof buildOpts>[1]["steppedPathsPre"],
+      steppedPathsMid: mid as unknown as Parameters<typeof buildOpts>[1]["steppedPathsMid"],
+    };
+
+    it("post (default) picks steppedPaths, ignoring the ambient default trace", () => {
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", defaultTrace: "Scatter",
+        seriesStyles: [{ step: "post" }], ...stepBuilders,
+      }).series?.[1] as S;
+      expect(s.paths).toBe(post);
+    });
+
+    it("pre picks steppedPathsPre", () => {
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ step: "pre" }], ...stepBuilders,
+      }).series?.[1] as S;
+      expect(s.paths).toBe(pre);
+    });
+
+    it("mid picks steppedPathsMid", () => {
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ step: "mid" }], ...stepBuilders,
+      }).series?.[1] as S;
+      expect(s.paths).toBe(mid);
+    });
+
+    it("a per-series step wins over the 'Step' default-trace preference", () => {
+      // "Step"+mid could never come from the ambient-trace branch (that
+      // branch only ever picks `steppedPaths`, i.e. post) — landing on
+      // `mid` here proves the per-series branch is the one actually taken.
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", defaultTrace: "Step",
+        seriesStyles: [{ step: "mid" }], ...stepBuilders,
+      }).series?.[1] as S;
+      expect(s.paths).toBe(mid);
+    });
+
+    it("no width:0 side effect — step is independent of the scatter 'no line' mechanism", () => {
+      const s = buildOpts(payload, {
+        ...base, yScale: "linear", tool: "zoom", seriesStyles: [{ step: "post" }],
+      }).series?.[1] as S;
+      expect(s.width).toBe(1.5); // baseLineWidth default, NOT 0
+    });
+  });
+
   it("disables time mode on the x scale (physics axes are never timestamps)", () => {
     // uPlot defaults scales.x.time = true, which formats Qz/2θ/field as dates
     // ("12/31/69", ":00.040") and blanks negative x. Must be explicitly false.

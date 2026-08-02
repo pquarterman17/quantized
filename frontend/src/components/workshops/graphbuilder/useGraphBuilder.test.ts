@@ -77,6 +77,14 @@ beforeEach(() => {
     editableFigures: [],
     figureDocs: [],
     seriesStyles: {},
+    // Undo history is otherwise a growing, capped (HISTORY_DEPTH=50) stack
+    // shared across every test in this file — without resetting it here, an
+    // EARLIER test's history-generating actions (setSeriesStyle, etc.) can
+    // saturate the cap before a LATER test's own "+1 after one action"
+    // assertion runs, making that assertion's outcome depend on test order/
+    // count rather than its own behavior.
+    history: [],
+    future: [],
     // Owner-routing item 1: starts parked on Worksheet so "applyToCurrent
     // surfaces the Plot tab" assertions below don't need a separate fixture.
     stageTab: "worksheet",
@@ -417,6 +425,131 @@ describe("useGraphBuilder — explicit plot destinations", () => {
     const s = useApp.getState();
     expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
+  });
+});
+
+// GAP_PLOTTYPES: the mark used to NEVER reach the Stage — a committed
+// scatter/step recipe rendered however the window was last styled (or the
+// ambient "Preferences ▸ Plot ▸ Default trace"), not what the user built in
+// Graph Builder. This is the failing-first regression coverage for that gap
+// plus the new "step" mark / showMarkers / stepMode surface.
+describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
+  beforeEach(() => {
+    useApp.setState({ seriesStyles: {} });
+  });
+
+  it("gap #3: a scatter spec committed to a fresh window yields marker-visible styles", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    expect(result.current.mark).toBe("scatter"); // sanity: this assign sequence's sticky default
+    act(() => result.current.createNewPlot());
+    expect(useApp.getState().seriesStyles[1]).toEqual({ width: 0, marker: true });
+  });
+
+  it("applies the same override to EVERY plotted Y channel", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("y", 2));
+    act(() => result.current.applyToCurrent());
+    const s = useApp.getState().seriesStyles;
+    expect(s[1]).toEqual({ width: 0, marker: true });
+    expect(s[2]).toEqual({ width: 0, marker: true });
+  });
+
+  it("a plain line mark (no showMarkers) makes no seriesStyles call at all", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle()); // scatter -> line
+    expect(result.current.mark).toBe("line");
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles).toEqual({});
+  });
+
+  it("line + showMarkers (Origin's Line + Symbol): markers on, no forced zero width", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle()); // scatter -> line
+    act(() => result.current.setShowMarkers(true));
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles[1]).toEqual({ marker: true });
+  });
+
+  it("step mark: defaults to post with no markers", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle()); // scatter -> line
+    act(() => result.current.cycle()); // line -> step
+    expect(result.current.mark).toBe("step");
+    expect(result.current.stepMode).toBe("post");
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles[1]).toEqual({ step: "post" });
+  });
+
+  it("step mark honors an explicit stepMode + showMarkers", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle());
+    act(() => result.current.cycle());
+    act(() => result.current.setStepMode("mid"));
+    act(() => result.current.setShowMarkers(true));
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles[1]).toEqual({ step: "mid", marker: true });
+  });
+
+  it("a saved spec's own captured per-series style still wins over the mark default", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    // Hand-style channel 1 (a color the mark override must not clobber),
+    // then save — this captures a v2 display block for channel 1.
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000", width: 5 } } }));
+    act(() => result.current.saveAs("Styled scatter"));
+    const id = result.current.activeSpec!.id;
+    // Wander off, reopen, apply — the captured display block's width:5 must
+    // survive even though markSeriesStyle runs first and sets width:0.
+    act(() => useApp.setState({ seriesStyles: {} }));
+    act(() => result.current.openSpec(id));
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles[1]).toMatchObject({ color: "#ff0000", width: 5 });
+  });
+
+  it("showMarkers/setShowMarkers and stepMode/setStepMode read/write the live spec", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.showMarkers).toBe(false); // default when unset
+    expect(result.current.stepMode).toBe("post"); // default when unset
+    act(() => result.current.setShowMarkers(true));
+    expect(result.current.showMarkers).toBe(true);
+    act(() => result.current.setStepMode("pre"));
+    expect(result.current.stepMode).toBe("pre");
+  });
+
+  it("saving a step spec captures stepMode/showMarkers and reopening restores them, staying v1", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle());
+    act(() => result.current.cycle());
+    act(() => result.current.setStepMode("pre"));
+    act(() => result.current.setShowMarkers(true));
+    act(() => result.current.saveAs("Step recipe"));
+    const saved = result.current.activeSpec!.spec;
+    const id = result.current.activeSpec!.id;
+    expect(saved.mark).toBe("step");
+    expect(saved.stepMode).toBe("pre");
+    expect(saved.showMarkers).toBe(true);
+    expect(saved.version).toBe(1); // a v1 sibling of mark, never a v2 block
+
+    act(() => result.current.reset());
+    act(() => result.current.openSpec(id));
+    expect(result.current.mark).toBe("step");
+    expect(result.current.stepMode).toBe("pre");
+    expect(result.current.showMarkers).toBe(true);
   });
 });
 
@@ -960,7 +1093,15 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
     });
   });
 
-  it("regression pin: applying a v1 spec leaves every style/axis/decor field byte-identical", () => {
+  // Regression pin for applySpecBlocks specifically (display/axes/decor are
+  // still an EXACT no-op for a v1 spec — no display block means
+  // applyDisplayBlock never runs). seriesStyles is DELIBERATELY excluded
+  // from the byte-identical claim as of GAP_PLOTTYPES: commitToPlot now
+  // ALWAYS translates the spec's mark onto the plotted channel's style
+  // (see the dedicated "mark reaches the Stage" describe block below) —
+  // that's a separate, earlier step than applySpecBlocks, not a display-
+  // block regression.
+  it("regression pin: applying a v1 spec leaves axis/decor fields byte-identical (applySpecBlocks stays a no-op)", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
@@ -979,7 +1120,6 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
     });
     const before = useApp.getState();
     const snapshot = {
-      seriesStyles: before.seriesStyles,
       hiddenChannels: before.hiddenChannels,
       y2Keys: before.y2Keys,
       seriesOrder: before.seriesOrder,
@@ -990,9 +1130,13 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
       legendPos: before.legendPos,
     };
     expect(result.current.activeSpec?.spec.version).not.toBe(2); // sanity: nothing saved, this is a plain v1 spec
+    expect(result.current.mark).toBe("scatter"); // sanity: this assign sequence's sticky default
     act(() => result.current.applyToCurrent());
     const s = useApp.getState();
-    expect(s.seriesStyles).toEqual(snapshot.seriesStyles);
+    // GAP_PLOTTYPES: the scatter mark's own style override (width:0,
+    // marker:true) MERGES onto channel 1's pre-existing color — never a
+    // full-record replace (setSeriesStyle patches per-field).
+    expect(s.seriesStyles).toEqual({ 1: { color: "#ff0000", width: 0, marker: true } });
     expect(s.hiddenChannels).toEqual(snapshot.hiddenChannels);
     expect(s.y2Keys).toEqual(snapshot.y2Keys);
     expect(s.seriesOrder).toEqual(snapshot.seriesOrder);

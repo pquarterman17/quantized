@@ -133,6 +133,38 @@ def test_extra_or_missing_series_styles_are_safe() -> None:
     assert out[:5] == b"%PDF-"
 
 
+# ── GAP_PLOTTYPES: Graph Builder "step" mark export parity ──────────────────
+
+
+def test_step_style_maps_to_matplotlib_drawstyle() -> None:
+    assert _plot_kwargs(1.5, 5.0, {"step": "post"})["drawstyle"] == "steps-post"
+    assert _plot_kwargs(1.5, 5.0, {"step": "pre"})["drawstyle"] == "steps-pre"
+    assert _plot_kwargs(1.5, 5.0, {"step": "mid"})["drawstyle"] == "steps-mid"
+
+
+def test_invalid_step_value_is_ignored_not_rejected() -> None:
+    # Same degrade-gracefully contract as an unrecognized `line` value (see
+    # calc.plotting.resolve_style_channels's doc): a malformed style hint
+    # must never fail the export, it's simply dropped.
+    kwargs = _plot_kwargs(1.5, 5.0, {"step": "diagonal"})
+    assert "drawstyle" not in kwargs
+
+
+def test_step_style_combines_with_markers() -> None:
+    kwargs = _plot_kwargs(1.5, 5.0, {"step": "mid", "marker": True})
+    assert kwargs["drawstyle"] == "steps-mid"
+    assert kwargs["marker"] == "o"
+
+
+def test_step_style_renders() -> None:
+    x = np.linspace(0, 10, 30)
+    for step in ("pre", "post", "mid"):
+        out = render_figure(
+            x, [("y", np.sin(x))], fmt="pdf", series_styles=[{"step": step}]
+        )
+        assert out[:5] == b"%PDF-"
+
+
 # ── Fill under/between curves (MAIN #13) ─────────────────────────────────────
 def test_fill_under_renders_and_changes_output() -> None:
     x = np.linspace(0, 10, 30)
