@@ -50,6 +50,7 @@ export * from "./api/stats";
 export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers (JMP_GAP #10)
 export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, not here.
 export * from "./api/crystallography"; // /api/crystallography/* wrappers. New ones go THERE, not here.
+export * from "./api/xray"; // /api/xray/* wrappers. New ones go THERE, not here.
 
 export interface SqliteQueryRequest {
   path: string;
@@ -442,16 +443,6 @@ export function convertUnits(
   to: string,
 ): Promise<{ result: number | (number | null)[]; info: CalcResult }> {
   return postJSON("/api/reference/convert", { value, from, to });
-}
-
-/** Bragg / Q↔2θ scalar conversion (calc.xray). `mode` selects the quantity. */
-export function xrayCalc(
-  mode: string,
-  wavelength: number,
-  value: number,
-  n = 1,
-): Promise<{ result: number; unit: string; description: string }> {
-  return postJSON("/api/xray/calc", { mode, wavelength, value, n });
 }
 
 /** One probe's SLD block: real + imaginary (absorption) SLD in 10⁻⁶ Å⁻². */

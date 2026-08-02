@@ -105,20 +105,48 @@ export function assembleCell(f: CrystalForm): {
   return { a, b, c, alpha, beta, gamma };
 }
 
-/** Bragg / Q↔2θ conversions: backend mode + the unit of the value it takes in. */
-export const XRAY_MODES: { value: string; label: string; inUnit: string }[] = [
+/** Bragg / Q / energy scalar conversions: backend mode + the unit of the
+ *  value it takes in. `needsWavelength: false` marks the energy<->wavelength
+ *  standalone modes, where the wavelength field isn't part of the input. */
+export const XRAY_MODES: {
+  value: string;
+  label: string;
+  inUnit: string;
+  needsWavelength?: boolean;
+}[] = [
   { value: "2theta_from_d", label: "d → 2θ", inUnit: "Å" },
   { value: "d_from_2theta", label: "2θ → d", inUnit: "°" },
+  { value: "theta_from_d", label: "d → θ", inUnit: "Å" },
+  { value: "d_from_theta", label: "θ → d", inUnit: "°" },
   { value: "q_from_2theta", label: "2θ → Q", inUnit: "°" },
   { value: "2theta_from_q", label: "Q → 2θ", inUnit: "1/Å" },
+  { value: "q_from_d", label: "d → Q", inUnit: "Å" },
+  { value: "d_from_q", label: "Q → d", inUnit: "1/Å" },
+  { value: "energy_from_wavelength", label: "λ → E", inUnit: "Å", needsWavelength: false },
+  { value: "wavelength_from_energy", label: "E → λ", inUnit: "keV", needsWavelength: false },
 ];
 
-/** Common characteristic X-ray wavelengths (Å) as one-click presets. */
+/** Common characteristic X-ray wavelengths (Å) as one-click presets (rounded
+ *  — SLD tab quick-picks, where sub-mÅ precision doesn't matter). */
 export const WAVELENGTHS: { label: string; a: number }[] = [
   { label: "Cu Kα", a: 1.5406 },
   { label: "Mo Kα", a: 0.7107 },
   { label: "Co Kα", a: 1.789 },
   { label: "Cr Kα", a: 2.2897 },
+];
+
+/** Precise characteristic-line wavelengths (Å) for the Bragg/Q converter's
+ *  anode presets. More precise than `WAVELENGTHS` above — textbook 2θ
+ *  comparisons want the resolved Kα1 line (or the Kα1/Kα2-weighted average
+ *  for "Cu Kα"), not a rounded quick-pick. */
+export const ANODE_PRESETS: { label: string; a: number }[] = [
+  { label: "Cu Kα1", a: 1.540598 },
+  { label: "Cu Kα", a: 1.5418 },
+  { label: "Co Kα1", a: 1.788996 },
+  { label: "Mo Kα1", a: 0.7093187 },
+  { label: "Cr Kα1", a: 2.289726 },
+  { label: "Fe Kα1", a: 1.936041 },
+  { label: "Ag Kα1", a: 0.5594075 },
 ];
 
 export interface XrayResult {
@@ -182,16 +210,18 @@ export interface CalculatorsState {
   convert: () => Promise<void>;
   // Constants
   constants: Record<string, number> | null;
-  // X-ray / neutron (Bragg, Q↔2θ)
+  // X-ray / neutron (Bragg, Q↔2θ, energy↔wavelength)
   xrayMode: string;
   wavelength: string;
   xrayValue: string;
+  xrayOrder: string;
   xrayResult: XrayResult | null;
   xrayError: string | null;
   xrayBusy: boolean;
   setXrayMode: (m: string) => void;
   setWavelength: (v: string) => void;
   setXrayValue: (v: string) => void;
+  setXrayOrder: (v: string) => void;
   xrayCompute: () => Promise<void>;
   // Crystallography (d-spacing from lattice + Miller indices)
   crystal: CrystalForm;
@@ -232,6 +262,7 @@ export function useCalculators(): CalculatorsState {
   const [xrayMode, setXrayMode] = useState("2theta_from_d");
   const [wavelength, setWavelength] = useState("1.5406"); // Cu Kα
   const [xrayValue, setXrayValue] = useState("3.1356"); // Si(111) d
+  const [xrayOrder, setXrayOrder] = useState("1"); // diffraction order n
   const [xrayResult, setXrayResult] = useState<XrayResult | null>(null);
   const [xrayError, setXrayError] = useState<string | null>(null);
   const [xrayBusy, setXrayBusy] = useState(false);
@@ -304,10 +335,14 @@ export function useCalculators(): CalculatorsState {
     try {
       const w = Number(wavelength);
       const v = Number(xrayValue);
+      const n = Number(xrayOrder);
       if (!Number.isFinite(w) || !Number.isFinite(v)) {
         throw new Error("enter numeric wavelength and value");
       }
-      setXrayResult(await xrayCalc(xrayMode, w, v));
+      if (!Number.isInteger(n) || n < 1) {
+        throw new Error("order n must be a positive integer");
+      }
+      setXrayResult(await xrayCalc(xrayMode, w, v, n));
     } catch (e) {
       setXrayResult(null);
       setXrayError(e instanceof Error ? e.message : "calculation failed");
@@ -387,6 +422,7 @@ export function useCalculators(): CalculatorsState {
     if (!crResult) return;
     setXrayValue(String(crResult.d));
     setXrayMode("2theta_from_d");
+    setXrayOrder("1");
     setXrayResult(null);
     setXrayError(null);
     setTab("xray");
@@ -463,12 +499,14 @@ export function useCalculators(): CalculatorsState {
     xrayMode,
     wavelength,
     xrayValue,
+    xrayOrder,
     xrayResult,
     xrayError,
     xrayBusy,
     setXrayMode,
     setWavelength,
     setXrayValue,
+    setXrayOrder,
     xrayCompute,
     crystal,
     crResult,

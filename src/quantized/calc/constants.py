@@ -42,6 +42,7 @@ def constants() -> dict[str, float]:
         "muB": 9.2740100783e-24,  # Bohr magneton (J/T)
         "r_e": 2.8179403262e-15,  # classical electron radius (m)
         "m_e": 9.1093837015e-31,  # electron mass (kg)
+        "m_n": 1.67492749804e-27,  # neutron mass (kg) — new, not in quantized_matlab
         "R": 8.314462618,  # molar gas constant (J/mol/K)
         "F": 96485.33212,  # Faraday constant (C/mol)
         "Phi0": 2.067833848e-15,  # magnetic flux quantum (Wb)
