@@ -111,7 +111,7 @@ test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/
   expect(initialBody.series_styles?.[0]).toMatchObject({ color: "#3366cc", width: 3, line: "none", marker: true });
   expect(initialBody.series_styles?.[1]).toMatchObject({ color: "#cc6633", line: "none", marker: true, marker_size: 7 });
 
-  const figureBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Publication preview", { exact: true }) });
+  const figureBuilder = page.locator(".qzk-win").filter({ has: page.getByText(/^Publication preview —/) });
   await expect(figureBuilder).toBeVisible();
   await figureBuilder.getByPlaceholder("(none)").fill("Round-trip figure");
   const autoLabels = figureBuilder.getByPlaceholder("auto");
@@ -132,18 +132,16 @@ test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/
     filename: "two-channel",
   });
 
-  const name = figureBuilder.getByPlaceholder("name");
-  await name.fill("Saved round trip");
-  await name.locator("..").getByRole("button", { name: "Save" }).click();
+  await figureBuilder.getByRole("button", { name: "Create Editable Figure" }).click();
   await expect.poll(() => page.evaluate(() =>
-    (window as unknown as { __qz: { useApp: { getState: () => { figureDocs: unknown[] } } } }).__qz.useApp.getState().figureDocs.length,
+    (window as unknown as { __qz: { useApp: { getState: () => { editableFigures: unknown[] } } } }).__qz.useApp.getState().editableFigures.length,
   )).toBe(1);
-  await figureBuilder.getByTitle("Close").click();
 
+  await page.getByTitle('open editable figure "Graph Builder plot"').click();
   const reopenedPreview = figureRequest(page, "figure-hitmap");
-  await page.getByTitle('open publication figure "Saved round trip"').click();
+  await runPaletteCommand(page, "Publication preview");
   await reopenedPreview;
-  const reopenedBuilder = page.locator(".qzk-win").filter({ has: page.getByText("Publication preview", { exact: true }) });
+  const reopenedBuilder = page.locator(".qzk-win").filter({ has: page.getByText(/^Publication preview —/) });
   const reopenedPdf = await exportFormat(page, reopenedBuilder, "pdf");
   expectSignature("pdf", reopenedPdf.bytes);
   expect(reopenedPdf.body).toEqual(firstPdf.body);

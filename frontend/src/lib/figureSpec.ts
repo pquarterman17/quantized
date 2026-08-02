@@ -107,6 +107,9 @@ function buildFigureSpecForView(
     publicationOverrides?: FigureOverrides | null;
     /** `undefined` derives from the canonical PlotView; `null` omits styles. */
     publicationSeriesStyles?: FigureSpec["series_styles"] | null;
+    /** Preserve the valid canonical case where an explicitly selected channel
+     * is deliberately used for both X and Y. */
+    allowExplicitXAsY?: boolean;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
@@ -129,7 +132,7 @@ function buildFigureSpecForView(
   const plotted = effectiveChannels(
     data,
     st.yKeys,
-    st.xKey,
+    extras.allowExplicitXAsY && st.yKeys !== null ? null : st.xKey,
     channelRoles,
     st.seriesOrder,
   ).filter((ch) => !st.hiddenChannels.includes(ch));
@@ -248,6 +251,7 @@ export function buildFigureSpecFromDocument(
       filename,
       publicationOverrides: document.publication?.overrides,
       publicationSeriesStyles: document.publication?.seriesStyles,
+      allowExplicitXAsY: true,
     },
   );
 }

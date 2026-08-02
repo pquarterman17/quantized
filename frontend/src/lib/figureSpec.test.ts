@@ -67,6 +67,25 @@ function richView() {
 }
 
 describe("FigureDocument FigureSpec adapter", () => {
+  it("preserves an explicitly bound Y channel that is also the X channel", () => {
+    const document = createFigureDocument({
+      id: "same-x-y",
+      name: "Resistance against itself and voltage",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [0, 1] },
+      publication: {
+        overrides: null,
+        seriesStyles: [{ color: "#3366cc" }, { color: "#cc6633" }],
+      },
+    });
+
+    const spec = buildFigureSpecFromDocument(document, dataset, "same-x-y");
+
+    expect(spec.x_key).toBe(0);
+    expect(spec.y_keys).toEqual([0, 1]);
+    expect(spec.series_styles).toEqual([{ color: "#3366cc" }, { color: "#cc6633" }]);
+  });
+
   it("keeps the established StoreGet FigureSpec wire shape byte/deep-equal", () => {
     const view = richView();
     const get = (() => view) as never;
