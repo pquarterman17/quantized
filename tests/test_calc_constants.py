@@ -32,6 +32,16 @@ _PRE_CHANGE_SI = {
     "Phi0": 2.067833848e-15,
 }
 
+# Constants added AFTER the MATLAB-verbatim table froze — each entry must name
+# its provenance. These are held to the same never-drift standard, but they are
+# deliberately NOT in _PRE_CHANGE_SI: that dict is the quantized_matlab
+# verbatim table and must stay byte-identical to it forever.
+_POST_MATLAB_ADDITIONS: dict[str, float] = {
+    # CODATA 2018 neutron mass — added for the DiraCulator neutron
+    # wavelength/energy web (calc.xray.neutron_calc); not in quantized_matlab.
+    "m_n": 1.67492749804e-27,
+}
+
 
 @pytest.mark.golden
 def test_constants_matches_matlab(
@@ -57,9 +67,14 @@ def test_constants_si_values_are_byte_identical_to_pre_expansion() -> None:
     module returned before CGS/eV support was added.
     """
     c = constants()
-    assert set(c.keys()) == set(_PRE_CHANGE_SI.keys())
+    assert set(c.keys()) == set(_PRE_CHANGE_SI.keys()) | set(_POST_MATLAB_ADDITIONS.keys()), (
+        "a constant appeared or vanished without being registered in the pinned"
+        " tables above (verbatim MATLAB table or documented additions)"
+    )
     for key, expected in _PRE_CHANGE_SI.items():
         assert c[key] == expected, f"{key} drifted from its pre-expansion SI value"
+    for key, expected in _POST_MATLAB_ADDITIONS.items():
+        assert c[key] == expected, f"{key} drifted from its documented added value"
 
 
 def _by_key(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

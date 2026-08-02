@@ -62,6 +62,7 @@ _META: dict[str, tuple[str, str]] = {
     "muB": ("Bohr magneton", "μ_B"),
     "r_e": ("Classical electron radius", "r_e"),
     "m_e": ("Electron mass", "m_e"),
+    "m_n": ("Neutron mass", "m_n"),
     "R": ("Molar gas constant", "R"),
     "F": ("Faraday constant", "F"),
     "Phi0": ("Magnetic flux quantum", "Φ₀"),
@@ -79,6 +80,7 @@ _SI_UNITS: dict[str, str] = {
     "muB": "J/T",
     "r_e": "m",
     "m_e": "kg",
+    "m_n": "kg",
     "R": "J/(mol·K)",
     "F": "C/mol",
     "Phi0": "Wb",
@@ -128,6 +130,7 @@ def constants_by_system() -> dict[str, list[dict[str, Any]]]:
         "muB": (moment, "erg/G"),
         "r_e": (length, "cm"),
         "m_e": (mass, "g"),
+        "m_n": (mass, "g"),
         "R": (energy, "erg/(mol·K)"),
         "F": (charge, "statC/mol"),
         "Phi0": (flux, "Mx"),
@@ -143,6 +146,7 @@ def constants_by_system() -> dict[str, list[dict[str, Any]]]:
         "NA": (1.0, "mol⁻¹"),
         "muB": (ev, "eV/T"),
         "m_e": (ev * c_si**2 / 1e6, "MeV/c²"),
+        "m_n": (ev * c_si**2 / 1e6, "MeV/c²"),
         # c, e, mu0, eps0, r_e, R, F, Phi0 excluded: charge/field/flux/length
         # quantities and per-mole quantities have no natural eV-based form
         # (eV-based tables conventionally hold per-particle energies).
