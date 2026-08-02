@@ -278,6 +278,15 @@ with parent items P1.3 and P1.5.
       deliberately remaps a figure; it is not itself a saved figure.
 - [ ] **F4.2 Add complete technique-scoped recipes.** Store plot type, roles,
       errors, groups/facets, transformations, axes, and style-template choice.
+  - [x] **F4.2a Plot-type + error designations (Claude, 2026-08-02).** The
+        recipe now stores a step mark (pre/post/mid), a Line+Symbol markers
+        toggle, and position-paired Y/X error wells with Origin-style
+        unambiguous-only prefill; committed marks finally translate into
+        Stage series styles (previously silently dropped), and error
+        designations flow through commit, preview whiskers, publication
+        handoff, and export. Transformations/style-template choice remain
+        open. A direct "Plot in new window" action (Library + palette)
+        closed the one-plot-per-dataset misconception.
 - [ ] **F4.3 Apply templates explicitly.** Never overwrite an already
       customized figure without a preview and confirmation.
 - [ ] **F4.4 Complete live grouping/faceting parity.** Grouped/faceted results
