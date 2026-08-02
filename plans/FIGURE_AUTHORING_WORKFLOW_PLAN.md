@@ -196,6 +196,9 @@ decisions are merged.
 
 - [ ] **F2.1 Bind the preview to FigureDocument.** Display document name and
       dirty state; stop creating a detached source of truth.
+  - [x] **F2.1a Model/adapters.** FigureDocument v2 retains lossless
+        publication-only overrides and exact export styles; v1 migrates without
+        publication state. UI binding and Apply/Cancel remain open.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
@@ -327,6 +330,21 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.1a FigureDocument publication-state model (PR #110)
+
+- Bumped the canonical FigureDocument schema to v2 before adding persisted
+  publication state: older builds must reject, rather than silently strip,
+  fields they do not understand. v1 documents deterministically migrate to v2
+  with publication absent.
+- Added a safe, clone-isolated publication payload for raw FigureOverrides and
+  exact legacy export styles, plus a pure legacy FigureDoc-to-FigureDocument
+  adapter. This is an explicit opening boundary, not an automatic rewrite of
+  saved Publication Preview entries.
+- Rendering now layers explicit publication overrides over canonical view
+  derivation without replacing partial nested groups; explicit null styles
+  omit the wire field. F2.1/F2.2 remain open until the preview UI owns one
+  canonical draft with Apply/Cancel.
 
 ### 2026-08-02 — F1.6 deterministic and isolated migration (ChatGPT-Sol; bounded implementation delegated to GPT-5.6 Terra)
 

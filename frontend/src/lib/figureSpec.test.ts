@@ -191,6 +191,10 @@ describe("FigureDocument FigureSpec adapter", () => {
       errors: [{ target: -1, channel: 5, axis: "x", side: "both" }, { target: 1, channel: 4, axis: "y", side: "+" }],
       axisBreaks: { x: [[1, 2]], y: [[3, 4]], y2: [[5, 6]] },
       output: { format: "tiff", dpi: 900, transparent: true, filename: "canonical" },
+      publication: {
+        overrides: { font_name: "Helvetica", margins: { left: 0.1 }, ticks: { dir: "in" } },
+        seriesStyles: [{ color: "#111111", line: "none", marker: true }],
+      },
     });
 
     const restored = updateFigureDocumentFromPlotView(document, { view: figureDocumentToPlotView(document) });
@@ -200,6 +204,37 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(restored.plot.mark).toBe("scatter");
     expect(restored.plot.axisBreaks).toEqual(document.plot.axisBreaks);
     expect(restored.output).toEqual(document.output);
+    expect(restored.publication).toEqual(document.publication);
+  });
+
+  it("merges publication overrides by explicit nested field and honors absent/null/exact series styles", () => {
+    const base = {
+      id: "publication", name: "Publication", datasetId: dataset.id,
+      view: { ...richView(), yKeys: [1], y2Keys: [], y2Scale: null, y2Fmt: null, y2Step: null, y2AxisLabel: "" },
+    };
+    const absent = createFigureDocument(base);
+    expect(buildFigureSpecFromDocument(absent, dataset, "absent").series_styles).toHaveLength(1);
+
+    const nullStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: null } });
+    expect(buildFigureSpecFromDocument(nullStyles, dataset, "null")).not.toHaveProperty("series_styles");
+
+    const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
+    const publication = createFigureDocument({
+      ...base,
+      publication: {
+        overrides: { font_size: 11, legend: { title: "Publication legend" }, margins: { left: 0.33 }, ticks: { dir: "in" } },
+        seriesStyles: exactStyles,
+      },
+    });
+    const spec = buildFigureSpecFromDocument(publication, dataset, "publication");
+    expect(spec.overrides).toMatchObject({
+      font_size: 11,
+      legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Publication legend" },
+      margins: { left: 0.33, right: 0.2, top: 0.1, bottom: 0.3 },
+      ticks: { dir: "in", minor: true },
+    });
+    expect(spec.series_styles).toEqual(exactStyles);
+    expect(spec.series_styles).not.toBe(exactStyles);
   });
 
   it("rejects a mismatched live dataset and resolves frozen documents from their snapshot", () => {

@@ -785,12 +785,24 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.figureDocs).toEqual([]);
   });
 
+  it("migrates v1 editable documents to v2 without inventing publication state", () => {
+    const editable = createFigureDocument({ id: "v1", name: "V1", datasetId: "a", view: defaultPlotView() });
+    const raw = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")], editableFigures: [editable] })) as Record<string, unknown>;
+    const v1 = { ...editable, version: 1 } as Record<string, unknown>;
+    delete v1.publication;
+    raw.editableFigures = [v1];
+    const loaded = parseWorkspace(JSON.stringify(raw));
+    expect(loaded.editableFigures[0]).toMatchObject({ id: "v1", version: 2 });
+    expect(loaded.editableFigures[0]).not.toHaveProperty("publication");
+    expect(serializeWorkspace(loaded)).toContain('"version": 2');
+  });
+
   it("isolates future editable and window documents while preserving valid siblings", () => {
     const datasets = [makeDataset("a", "first")];
     const raw = JSON.parse(serializeWorkspace({ datasets, plotWindows: [
       win({ id: "future-window", document: {
         ...createFigureDocument({ id: "future-window-doc", name: "Future", datasetId: "a", view: defaultPlotView() }),
-        version: 2,
+        version: 3,
       } as never }),
       win({ id: "valid-window", document: createFigureDocument({
         id: "valid-window-doc", name: "Valid", datasetId: "a", view: defaultPlotView(),
@@ -798,7 +810,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     ] })) as Record<string, unknown>;
     raw.editableFigures = [
       createFigureDocument({ id: "valid-editable", name: "Valid", datasetId: "a", view: defaultPlotView() }),
-      { ...createFigureDocument({ id: "future-editable", name: "Future", datasetId: "a", view: defaultPlotView() }), version: 2 },
+      { ...createFigureDocument({ id: "future-editable", name: "Future", datasetId: "a", view: defaultPlotView() }), version: 3 },
     ];
 
     const loaded = parseWorkspace(JSON.stringify(raw));
@@ -806,8 +818,8 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.editableFigures.map((document) => document.id)).toEqual(["valid-editable"]);
     expect(loaded.plotWindows.map((entry) => entry.document?.id)).toEqual(["figure-future-window", "valid-window-doc"]);
     expect(loaded.migrationWarnings).toEqual([
-      'skipped saved FigureDocument "future-editable" with unsupported version 2',
-      'plot window "future-window" uses unsupported FigureDocument version 2; restored its legacy PlotView projection',
+      'skipped saved FigureDocument "future-editable" with unsupported version 3',
+      'plot window "future-window" uses unsupported FigureDocument version 3; restored its legacy PlotView projection',
     ]);
     const savedAgain = serializeWorkspace(loaded);
     expect(savedAgain).not.toContain("migrationWarnings");

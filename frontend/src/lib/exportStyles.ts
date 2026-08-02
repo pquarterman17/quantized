@@ -4,31 +4,11 @@
 // straight from the per-channel overrides. Aligns 1:1 with the route's y_keys.
 
 import { resolveToHex } from "./color";
+import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { seriesColor } from "./uplotOpts";
 
-export interface ExportSeriesStyle {
-  color?: string;
-  width?: number;
-  /** `none` is the publication-renderer representation of a point-only
-   * Graph Builder scatter. Interactive SeriesStyle intentionally remains
-   * solid/dashed/dotted because uPlot controls line visibility separately. */
-  line?: "solid" | "dashed" | "dotted" | "none";
-  marker?: boolean;
-  marker_size?: number;
-  /** Fill under/between curves (MAIN #13) — mirrors `SeriesStyle.fill`, but
-   *  `vs` here is still a dataset *channel index* (the SAME semantic as the
-   *  screen side); the backend resolves it against the request's `y_keys`
-   *  (`calc/plotting.resolve_style_channels`), matching the frontend's own
-   *  "only a currently-plotted channel resolves" fallback. */
-  fill?: "under" | { vs: number };
-  /** Colour-mapped scatter (MAIN #14) — a dataset channel index; the backend
-   *  resolves it to the channel's concrete value array server-side (it
-   *  already has the full dataset in the request), so this wire field is
-   *  just the index, same as the screen-side `SeriesStyle.colorBy`. */
-  color_by?: number;
-  colormap?: string;
-}
+export type { ExportSeriesStyle } from "./publicationStyles";
 
 /** `plotted` = the channel indices being drawn (yKeys ?? all channels), in order.
  *  Returns one spec per series (null = no styling → matplotlib defaults). */

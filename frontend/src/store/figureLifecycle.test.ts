@@ -10,6 +10,7 @@ const document = () => createFigureDocument({
   name: "Current plot",
   datasetId: "d1",
   view: defaultPlotView(),
+  publication: { overrides: { font_size: 10 }, seriesStyles: [{ color: "#123456" }] },
 });
 
 const window = (): PlotWindow => ({
@@ -70,6 +71,9 @@ describe("editable figure lifecycle", () => {
     useApp.getState().renameEditableFigure("figure-w1", "Renamed");
     const copyId = useApp.getState().duplicateEditableFigure("figure-w1");
     expect(useApp.getState().editableFigures.map((entry) => entry.name)).toEqual(["Renamed", "Renamed copy"]);
+    const [source, copy] = useApp.getState().editableFigures;
+    expect(copy.publication).toEqual(source.publication);
+    expect(copy.publication).not.toBe(source.publication);
 
     useApp.getState().deleteEditableFigure(copyId!);
     expect(useApp.getState().editableFigures).toHaveLength(1);

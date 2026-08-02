@@ -59,6 +59,7 @@ export function createPlotWindowDocument(
     data: previous?.data,
     axisBreaks: previous?.plot.axisBreaks,
     output: previous?.output,
+    publication: previous?.publication,
   });
 }
 

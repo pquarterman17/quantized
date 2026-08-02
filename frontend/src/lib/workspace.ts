@@ -245,7 +245,7 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
   const documents: FigureDocument[] = [];
   for (const candidate of value) {
     const version = figureDocumentVersion(candidate);
-    if (version !== null && version !== FIGURE_DOCUMENT_VERSION) {
+    if (version !== null && version > FIGURE_DOCUMENT_VERSION) {
       const id = typeof candidate === "object" && candidate !== null && typeof (candidate as Record<string, unknown>).id === "string" ? ` "${(candidate as Record<string, unknown>).id}"` : "";
       migrationWarnings.push(`skipped saved FigureDocument${id} with unsupported version ${version}`);
       continue;

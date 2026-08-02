@@ -7,12 +7,14 @@
  * behind characterization tests instead of changing every surface at once.
  */
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
+import { sanitizeFigureOverrides, type FigureOverrides } from "./figureOverrides";
+import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
 import type { DataStruct } from "./types";
 
 export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
-export const FIGURE_DOCUMENT_VERSION = 1 as const;
+export const FIGURE_DOCUMENT_VERSION = 2 as const;
 
 /** Bindings have one owner; they are deliberately removed from visual state. */
 export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errKeys">;
@@ -54,9 +56,10 @@ export interface FigureOutputSettings {
   filename: string | null;
 }
 
+/** F1's persisted shape. v2 adds `publication`; this remains migration input only. */
 export interface FigureDocumentV1 {
   schema: typeof FIGURE_DOCUMENT_SCHEMA;
-  version: typeof FIGURE_DOCUMENT_VERSION;
+  version: 1;
   id: string;
   name: string;
   bindings: FigureBindings;
@@ -65,7 +68,21 @@ export interface FigureDocumentV1 {
   output: FigureOutputSettings;
 }
 
-export type FigureDocument = FigureDocumentV1;
+/** Exact publication-only settings that PlotView cannot represent. */
+export interface FigurePublicationState {
+  /** Raw backend overrides; absent publication means derive only from canonical PlotView. */
+  overrides: FigureOverrides | null;
+  /** null explicitly omits styles; an array is an exact legacy wire projection. */
+  seriesStyles: (ExportSeriesStyle | null)[] | null;
+}
+
+export interface FigureDocumentV2 extends Omit<FigureDocumentV1, "version"> {
+  version: typeof FIGURE_DOCUMENT_VERSION;
+  /** Absent on migrated v1 documents, preserving canonical-only render derivation. */
+  publication?: FigurePublicationState;
+}
+
+export type FigureDocument = FigureDocumentV2;
 
 export interface CreateFigureDocumentInput {
   id: string;
@@ -80,6 +97,7 @@ export interface CreateFigureDocumentInput {
   errors?: readonly ErrorBinding[];
   data?: FigureDataState;
   output?: Partial<FigureOutputSettings>;
+  publication?: FigurePublicationState;
 }
 
 const DEFAULT_OUTPUT: FigureOutputSettings = {
@@ -107,7 +125,7 @@ function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBi
  * Pure seed adapter for new documents. It removes binding fields from the
  * visual state so later editors cannot accidentally create two authorities.
  */
-export function createFigureDocument(input: CreateFigureDocumentInput): FigureDocumentV1 {
+export function createFigureDocument(input: CreateFigureDocumentInput): FigureDocument {
   const { xKey, yKeys, y2Keys, errKeys, ...view } = clone(snapshotView(input.view));
   const data = input.data ?? { mode: "live" as const };
   if (data.mode === "frozen" && data.snapshot === undefined) {
@@ -148,6 +166,7 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
       transparent: input.output?.transparent ?? DEFAULT_OUTPUT.transparent,
       filename: input.output?.filename ?? DEFAULT_OUTPUT.filename,
     },
+    ...(input.publication === undefined ? {} : { publication: clone(input.publication) }),
   };
 }
 
@@ -172,7 +191,7 @@ export interface UpdateFigureDocumentInput {
 export function updateFigureDocumentFromPlotView(
   document: FigureDocument,
   input: UpdateFigureDocumentInput,
-): FigureDocumentV1 {
+): FigureDocument {
   // The legacy facade can edit only symmetric Y errors. Preserve richer X and
   // asymmetric roles while replacing the projection it can actually control.
   const richErrors = document.bindings.errors.filter(
@@ -190,6 +209,7 @@ export function updateFigureDocumentFromPlotView(
     data: document.data,
     axisBreaks: document.plot.axisBreaks,
     output: document.output,
+    publication: document.publication,
   });
 }
 
@@ -288,13 +308,24 @@ function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
   return clone(view);
 }
 
+function publicationState(value: unknown): FigurePublicationState | undefined {
+  if (!isObject(value)) return undefined;
+  const overrides = value.overrides === null ? null : sanitizeFigureOverrides(value.overrides);
+  const seriesStyles = value.seriesStyles === null ? null : sanitizeExportSeriesStyles(value.seriesStyles);
+  return { overrides, seriesStyles };
+}
+
 /**
  * Validate an untrusted persisted document. Malformed optional fields degrade
  * to safe defaults; a bad envelope, identity, data mode, or frozen snapshot
  * rejects the whole document.
  */
-export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null {
-  if (!isObject(value) || value.schema !== FIGURE_DOCUMENT_SCHEMA || value.version !== 1) return null;
+export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
+  if (
+    !isObject(value) ||
+    value.schema !== FIGURE_DOCUMENT_SCHEMA ||
+    (value.version !== 1 && value.version !== FIGURE_DOCUMENT_VERSION)
+  ) return null;
   if (typeof value.id !== "string" || !value.id || typeof value.name !== "string") return null;
   if (!isObject(value.bindings) || !isObject(value.data) || !isObject(value.plot)) return null;
 
@@ -324,6 +355,9 @@ export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null 
     ? rawOutput.dpi
     : DEFAULT_OUTPUT.dpi;
 
+  const migratedPublication = value.version === FIGURE_DOCUMENT_VERSION
+    ? publicationState(value.publication)
+    : undefined;
   return {
     schema: FIGURE_DOCUMENT_SCHEMA,
     version: FIGURE_DOCUMENT_VERSION,
@@ -347,6 +381,7 @@ export function sanitizeFigureDocument(value: unknown): FigureDocumentV1 | null 
         ? rawOutput.filename
         : DEFAULT_OUTPUT.filename,
     },
+    ...(migratedPublication === undefined ? {} : { publication: migratedPublication }),
   };
 }
 
@@ -354,7 +389,7 @@ export function serializeFigureDocument(document: FigureDocument): string {
   return JSON.stringify(document);
 }
 
-export function deserializeFigureDocument(raw: string): FigureDocumentV1 | null {
+export function deserializeFigureDocument(raw: string): FigureDocument | null {
   try {
     return sanitizeFigureDocument(JSON.parse(raw));
   } catch {

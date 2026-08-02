@@ -4598,9 +4598,9 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
       plotWindows: [win({ document: createFigureDocument({
         id: "figure-w1", name: "w1", datasetId: "d1", view: defaultPlotView(),
       }) })],
-      migrationWarnings: ["skipped saved FigureDocument \"future\" with unsupported version 2", "another migration warning"],
+      migrationWarnings: ["skipped saved FigureDocument \"future\" with unsupported version 3", "another migration warning"],
     });
-    expect(useApp.getState().status).toContain('skipped saved FigureDocument "future" with unsupported version 2 (+1 more)');
+    expect(useApp.getState().status).toContain('skipped saved FigureDocument "future" with unsupported version 3 (+1 more)');
     expect(useApp.getState().status.match(/skipped saved FigureDocument/g)).toHaveLength(1);
   });
 

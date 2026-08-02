@@ -1,6 +1,7 @@
 // Workspace boundary for document-backed plot windows. Legacy PlotView-only
 // windows are promoted here; callers never need to maintain two migration paths.
 import {
+  FIGURE_DOCUMENT_VERSION,
   createFigureDocument,
   figureDocumentToPlotView,
   figureDocumentVersion,
@@ -46,7 +47,7 @@ export function sanitizeDocumentBackedPlotWindows(
     if (window.kind !== "plot") return window;
     const rawDocument = rawDocuments.get(window.id);
     const version = figureDocumentVersion(rawDocument);
-    const futureVersion = version !== null && version !== 1;
+    const futureVersion = version !== null && version > FIGURE_DOCUMENT_VERSION;
     if (futureVersion) {
       migrationWarnings.push(
         `plot window "${window.id}" uses unsupported FigureDocument version ${version}; restored its legacy PlotView projection`,

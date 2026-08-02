@@ -70,7 +70,7 @@ describe("document-backed plot-window persistence", () => {
         datasetId: "d1",
         view: defaultPlotView(),
       }),
-      version: 2,
+      version: 3,
     };
 
     const warnings: string[] = [];
@@ -84,7 +84,7 @@ describe("document-backed plot-window persistence", () => {
     expect(restored.map((entry) => entry.document?.id)).toEqual(["figure-w1", "valid"]);
     expect(restored[0].view.plotTitle).toBe("legacy title");
     expect(warnings).toEqual([
-      'plot window "w1" uses unsupported FigureDocument version 2; restored its legacy PlotView projection',
+      'plot window "w1" uses unsupported FigureDocument version 3; restored its legacy PlotView projection',
     ]);
   });
 

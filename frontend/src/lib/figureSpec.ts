@@ -25,6 +25,7 @@ import {
   compactOverrides,
   gateY2Overrides,
   legendPosToLoc,
+  mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
@@ -103,6 +104,9 @@ function buildFigureSpecForView(
     xBreaks?: readonly [number, number][];
     transparent?: boolean;
     filename?: string | null;
+    publicationOverrides?: FigureOverrides | null;
+    /** `undefined` derives from the canonical PlotView; `null` omits styles. */
+    publicationSeriesStyles?: FigureSpec["series_styles"] | null;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
@@ -161,7 +165,8 @@ function buildFigureSpecForView(
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
-  const gatedOverrides = gateY2Overrides(withBreaks, {
+  const publicationOverrides = mergeFigureOverrides(withBreaks, extras.publicationOverrides);
+  const gatedOverrides = gateY2Overrides(publicationOverrides, {
     y2Plotted: y2Axis !== null,
     minorTicks: st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis),
   });
@@ -189,7 +194,11 @@ function buildFigureSpecForView(
     title: o.title,
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
-    series_styles: buildExportStyles(plotted, st.seriesStyles),
+    ...(extras.publicationSeriesStyles === undefined
+      ? { series_styles: buildExportStyles(plotted, st.seriesStyles) }
+      : extras.publicationSeriesStyles === null
+        ? {}
+        : { series_styles: structuredClone(extras.publicationSeriesStyles) }),
     // MAIN #36: the SAME spans the canvas draws, so a PDF cannot quietly
     // understate the uncertainty the screen showed.
     ...(errors?.length
@@ -237,6 +246,8 @@ export function buildFigureSpecFromDocument(
       xBreaks: document.plot.axisBreaks.x,
       transparent: overrides.transparent ?? document.output.transparent,
       filename,
+      publicationOverrides: document.publication?.overrides,
+      publicationSeriesStyles: document.publication?.seriesStyles,
     },
   );
 }

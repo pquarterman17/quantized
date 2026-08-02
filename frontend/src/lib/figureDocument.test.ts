@@ -22,7 +22,7 @@ const snapshot: DataStruct = {
   metadata: {},
 };
 
-describe("FigureDocument v1", () => {
+describe("FigureDocument v2", () => {
   it("separates data bindings from visual state and preserves rich error roles", () => {
     const document = createFigureDocument({
       id: "figure-1",
@@ -107,8 +107,8 @@ describe("FigureDocument v1", () => {
 
     const restored: unknown = JSON.parse(JSON.stringify(document));
     expect(restored).toEqual(document);
-    expect(figureDocumentVersion(restored)).toBe(1);
-    expect(figureDocumentVersion({ ...document, version: 2 })).toBe(2);
+    expect(figureDocumentVersion(restored)).toBe(2);
+    expect(figureDocumentVersion({ ...document, version: 3 })).toBe(3);
     expect(figureDocumentVersion({ version: 1 })).toBeNull();
     expect(deserializeFigureDocument(serializeFigureDocument(document))).toEqual(document);
   });
@@ -192,9 +192,43 @@ describe("FigureDocument v1", () => {
       plot: { mark: "line", axisBreaks: { x: [[1, 2]], y: [], y2: [] } },
       output: { dpi: 300 },
     });
-    expect(sanitizeFigureDocument({ ...document, version: 2 })).toBeNull();
+    expect(sanitizeFigureDocument({ ...document, version: 3 })).toBeNull();
     expect(sanitizeFigureDocument({ ...document, id: "" })).toBeNull();
     expect(deserializeFigureDocument("not json")).toBeNull();
+  });
+
+  it("migrates v1 documents to v2 with publication absent and sanitizes publication fields in isolation", () => {
+    const document = createFigureDocument({
+      id: "publication", name: "Publication", datasetId: "dataset-1", view: defaultPlotView(),
+      publication: {
+        overrides: { font_size: 11, ticks: { dir: "in", len: 4 }, margins: { left: 0.1 } },
+        seriesStyles: [{ color: "#123456", line: "none", marker: true }],
+      },
+    });
+    const v1 = { ...document, version: 1 };
+    delete (v1 as { publication?: unknown }).publication;
+    const migrated = sanitizeFigureDocument(v1);
+    expect(migrated).toMatchObject({ version: 2 });
+    expect(migrated).not.toHaveProperty("publication");
+
+    const restored = sanitizeFigureDocument({
+      ...document,
+      publication: {
+        overrides: {
+          font_size: -1, ticks: { dir: "in", len: -1, minor: true }, margins: { left: 0.1, right: "bad" },
+          x_breaks: [[4, 1], [1, 3]], annotations: [{ x: 1, y: 2, text: "ok", size: -2 }, { x: "bad" }],
+        },
+        seriesStyles: [{ color: "#abc", width: -1, marker_size: 4, fill: { vs: 2 } }, { line: "bad" }],
+      },
+    })!;
+    expect(restored.publication).toEqual({
+      overrides: { ticks: { dir: "in", minor: true }, margins: { left: 0.1 }, x_breaks: [[1, 3]], annotations: [{ x: 1, y: 2, text: "ok" }] },
+      seriesStyles: [{ color: "#abc", marker_size: 4, fill: { vs: 2 } }, null],
+    });
+    restored.publication!.overrides!.margins!.left = 0.8;
+    restored.publication!.seriesStyles![0]!.color = "#fff";
+    expect(document.publication!.overrides!.margins!.left).toBe(0.1);
+    expect(document.publication!.seriesStyles![0]!.color).toBe("#123456");
   });
 
   it("commits facade edits while retaining errors the legacy view cannot express", () => {
