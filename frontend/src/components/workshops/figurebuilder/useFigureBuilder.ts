@@ -53,6 +53,14 @@ export const FIGURE_STYLE_DPI: Record<string, number> = {
   presentation: 150,
   poster: 150,
 };
+
+type CanonicalReadiness =
+  | { state: "ready"; data: DataStruct; spec: FigureSpec }
+  | { state: "missing-source"; error: string }
+  | { state: "invalid-spec"; data: DataStruct; error: string };
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "unknown error";
 const PREVIEW_DPI = 110; // screen-resolution preview; export uses the chosen DPI
 
 export function useFigureBuilder() {
@@ -148,14 +156,31 @@ export function useFigureBuilder() {
   const canonicalDataset = canonicalDocument?.bindings.datasetId
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
-  const canonicalData = useMemo(() => {
+  const canonicalReadiness = useMemo<CanonicalReadiness | null>(() => {
     if (!canonicalDocument) return null;
+    let canonicalData: DataStruct;
     try {
-      return resolveFigureDocumentData(canonicalDocument, canonicalDataset).data;
-    } catch {
-      return null;
+      canonicalData = resolveFigureDocumentData(canonicalDocument, canonicalDataset).data;
+    } catch (error) {
+      return { state: "missing-source", error: `source unavailable: ${errorMessage(error)}` };
+    }
+    try {
+      return {
+        state: "ready",
+        data: canonicalData,
+        spec: buildFigureSpecFromDocument(canonicalDocument, canonicalDataset, "preview"),
+      };
+    } catch (error) {
+      return {
+        state: "invalid-spec",
+        data: canonicalData,
+        error: `figure configuration is not previewable: ${errorMessage(error)}`,
+      };
     }
   }, [canonicalDocument, canonicalDataset]);
+  const canonicalData = canonicalReadiness?.state === "missing-source"
+    ? null
+    : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
     if (!canonical) return;
     patchFigurePublicationDraft((draft) => patch(draft));
@@ -221,14 +246,9 @@ export function useFigureBuilder() {
     docGroupCol,
     overrides,
   ]);
-  const canonicalSpec = useMemo<FigureSpec | null>(() => {
-    if (!canonicalDocument || !canonicalData) return null;
-    try {
-      return buildFigureSpecFromDocument(canonicalDocument, canonicalDataset, "preview");
-    } catch {
-      return null;
-    }
-  }, [canonicalDocument, canonicalData, canonicalDataset]);
+  const canonicalSpec = canonicalReadiness?.state === "ready"
+    ? canonicalReadiness.spec
+    : null;
   const spec = canonical ? canonicalSpec : legacySpec;
 
   // Save the current configuration as a named FigureDoc (#12). Live docs
@@ -294,6 +314,10 @@ export function useFigureBuilder() {
   useEffect(() => {
     if (!spec) {
       setPreview(null);
+      if (canonical) {
+        setHitmap(null);
+        setBusy(false);
+      }
       return;
     }
     let cancelled = false;
@@ -317,7 +341,7 @@ export function useFigureBuilder() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [spec]);
+  }, [canonical, spec]);
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
   /** Click: focus the matching #11 panel group. */
@@ -369,6 +393,10 @@ export function useFigureBuilder() {
 
   async function exportNow(): Promise<void> {
     if (canonicalDocument) {
+      if (canonicalReadiness?.state !== "ready") {
+        setStatus(`export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`);
+        return;
+      }
       try {
         let dataset = canonicalDataset;
         if (dataset?.pending) dataset = await useApp.getState().resolveDataset(dataset.id) ?? null;
@@ -414,7 +442,11 @@ export function useFigureBuilder() {
     yLabel: canonicalView?.yAxisLabel ?? yLabel,
     setYLabel: canonical ? (next: string) => setCanonicalView({ yAxisLabel: next }) : setYLabel,
     preview,
-    error,
+    error: canonicalReadiness?.state === "ready" || !canonicalReadiness
+      ? error
+      : canonicalReadiness.error,
+    canonicalReadiness: canonicalReadiness?.state ?? null,
+    canExport: !canonical || canonicalReadiness?.state === "ready",
     busy,
     exportNow,
     overrides: canonicalDocument?.publication?.overrides ?? overrides,

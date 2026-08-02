@@ -55,6 +55,8 @@ const figureState = {
   applyStyleTemplate: vi.fn(),
   exportNow: vi.fn(),
   error: null,
+  canonicalReadiness: null,
+  canExport: true,
   preview: null,
   hitmap: null,
   busy: false,
@@ -105,5 +107,25 @@ describe("Publication Preview role cues", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Window close" }));
     expect(figureState.cancel).toHaveBeenCalled();
+  });
+
+  it("shows canonical readiness failures accessibly without the legacy dataset prompt", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      documentName: "Missing figure",
+      dirty: true,
+      data: null,
+      canonicalReadiness: "missing-source",
+      canExport: false,
+      error: "source unavailable: FigureDocument requires dataset gone",
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("source unavailable");
+    expect(screen.queryByText("Select a dataset to preview a figure.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export PNG" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

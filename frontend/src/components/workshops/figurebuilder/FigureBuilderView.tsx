@@ -21,10 +21,11 @@ export default function FigureBuilderView() {
   const title = f.canonical
     ? `Publication preview — ${f.documentName}${f.dirty ? " (modified)" : ""}`
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
+  const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
 
   return (
     <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? f.cancel() : setOpen(false)}>
-      {!f.data ? (
+      {!f.data && !canonicalFailure ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
         </div>
@@ -127,7 +128,7 @@ export default function FigureBuilderView() {
             )}
 
             </>}
-            <Button variant="primary" onClick={f.exportNow} style={{ marginTop: 6 }}>
+            <Button variant="primary" onClick={f.exportNow} disabled={f.canonical && !f.canExport} style={{ marginTop: 6 }}>
               Export {f.fmt.toUpperCase()}
             </Button>
             {f.canonical && (
@@ -150,7 +151,7 @@ export default function FigureBuilderView() {
             }}
           >
             {f.error ? (
-              <div className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+              <div role="alert" aria-live="polite" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
                 {f.error}
               </div>
             ) : f.preview && f.hitmap ? (

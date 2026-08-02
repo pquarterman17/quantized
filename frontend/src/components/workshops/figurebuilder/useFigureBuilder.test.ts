@@ -254,6 +254,49 @@ describe("useFigureBuilder", () => {
     expect(result.current.dpi).toBe(1200);
   });
 
+  it("reports a canonical document's missing live source instead of falling back to the active dataset", async () => {
+    const document = createFigureDocument({
+      id: "missing-source",
+      name: "Missing source",
+      datasetId: "gone",
+      view: defaultPlotView(),
+    });
+    useApp.setState({
+      figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+
+    expect(result.current.canonicalReadiness).toBe("missing-source");
+    expect(result.current.error).toContain("source unavailable");
+    expect(result.current.error).toContain("gone");
+    expect(result.current.data).toBeNull();
+    expect(result.current.canExport).toBe(false);
+    expect(renderFigureHitmap).not.toHaveBeenCalled();
+    await act(async () => result.current.exportNow());
+    expect(exportFigure).not.toHaveBeenCalled();
+  });
+
+  it("reports an incompatible canonical spec while retaining its resolved source data", () => {
+    const document = createFigureDocument({
+      id: "grouped-y2",
+      name: "Grouped y2",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0], y2Keys: [0] },
+      groupKey: 0,
+    });
+    useApp.setState({
+      figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+
+    expect(result.current.canonicalReadiness).toBe("invalid-spec");
+    expect(result.current.error).toContain("figure configuration is not previewable");
+    expect(result.current.error).toContain("grouped figures cannot use a secondary Y axis");
+    expect(result.current.data).toEqual(DATA);
+    expect(result.current.canExport).toBe(false);
+    expect(renderFigureHitmap).not.toHaveBeenCalled();
+  });
+
   it("renders and patches one canonical draft without dropping rich document state", async () => {
     const document = createFigureDocument({
       id: "figure-w1", name: "Canonical", datasetId: "d1",

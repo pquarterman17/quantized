@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.3a publication-property parity slice
+**Updated:** 2026-08-02 — F2.5a canonical preview readiness errors
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -218,6 +218,9 @@ decisions are merged.
 - [ ] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output.
+  - [x] **F2.5a Canonical preview readiness errors (planned PR #113).**
+        Publication Preview distinguishes unavailable document sources from
+        invalid render specifications and fails visibly without a fallback.
 
 **F2 exit:** Opening publication preview can no longer reduce a figure, and
 every edit remains available in the internal plot after the dialog closes.
@@ -339,6 +342,19 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.5a canonical preview readiness errors (planned PR #113)
+
+- Canonical Publication Preview now preserves adapter failures as explicit
+  readiness states: a missing live/frozen source is distinguished from a
+  document whose render specification is incompatible (for example, grouped
+  secondary-axis output).
+- The preview shows an accessible, specific failure rather than the legacy
+  “Select a dataset” prompt, and Export is disabled until the exact canonical
+  document can produce a valid specification. Apply and Cancel remain available
+  for the draft transaction.
+- F2.5 remains open: this does not yet unify every Stage, saved-preview, and
+  reopen render path.
 
 ### 2026-08-02 — F2.3a publication-property parity slice (planned PR #112)
 
