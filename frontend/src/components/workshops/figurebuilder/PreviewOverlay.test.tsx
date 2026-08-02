@@ -42,13 +42,79 @@ const setup = () => {
   return { onSelect, onEditText, onDragEnd };
 };
 
-const el = (id: string) => document.querySelector(`[data-element="${id}"]`)!;
+const el = (id: string) => document.querySelector<HTMLElement>(`[data-element="${id}"]`)!;
 
 describe("PreviewOverlay", () => {
   it("click selects an element (#13)", () => {
     const { onSelect } = setup();
     fireEvent.click(el("legend"));
     expect(onSelect).toHaveBeenCalledWith("legend");
+  });
+
+  it("right-click opens an element-aware menu without selecting", () => {
+    const { onSelect } = setup();
+    fireEvent.contextMenu(el("legend"), { clientX: 24, clientY: 36 });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByText("Legend")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Properties…" })).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("advertises the available preview interactions in hitbox titles", () => {
+    setup();
+    expect(el("title")).toHaveAttribute("title", "Title \u2014 double-click to edit; right-click for properties");
+    expect(el("legend")).toHaveAttribute("title", "Legend \u2014 drag to move; right-click for properties");
+    expect(el("ann:0")).toHaveAttribute("title", "Annotation \u2014 drag to move; right-click for properties");
+  });
+
+  it("Properties uses the same selection pathway as a click", () => {
+    const { onSelect } = setup();
+    fireEvent.contextMenu(el("legend"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Properties…" }));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("legend");
+  });
+
+  it("offers text editing through the existing inline editor", () => {
+    const { onEditText } = setup();
+    fireEvent.contextMenu(el("title"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit text…" }));
+    const input = screen.getByDisplayValue("Old title");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onEditText).toHaveBeenCalledExactlyOnceWith("title", "Old title");
+  });
+
+  it("keeps unavailable series properties visibly inert", () => {
+    const seriesMap = { ...MAP, elements: [...MAP.elements, { id: "series:0", x0: 1, y0: 1, x1: 2, y1: 2 }] };
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={seriesMap} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.contextMenu(el("series:0"));
+    expect(screen.getByRole("menuitem", { name: "Series properties — edit on Stage" })).toBeDisabled();
+    expect(el("series:0")).toHaveAttribute("title", "Series \u2014 properties are edited on Stage");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("puts the smaller legend hitbox above an overlapping series hitbox", () => {
+    const overlapMap = {
+      ...MAP,
+      elements: [...MAP.elements, { id: "series:0", x0: 400, y0: 0, x1: 599, y1: 200 }],
+    };
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={overlapMap} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    expect(Number(el("legend").style.zIndex)).toBeGreaterThan(Number(el("series:0").style.zIndex));
+    fireEvent.contextMenu(el("legend"));
+    expect(screen.getByText("Legend")).toBeInTheDocument();
+  });
+
+  it("inherits ContextMenu keyboard navigation", () => {
+    setup();
+    fireEvent.contextMenu(el("title"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Properties…" }));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Edit text…" }));
   });
 
   it("double-click on a text element opens the inline editor and commits (#14)", () => {

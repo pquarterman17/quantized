@@ -7,10 +7,29 @@
 
 import { useRef, useState } from "react";
 
-import type { FigureHitmap, HitElement } from "../../../lib/previewmap";
+import { groupForElement, type FigureHitmap, type HitElement } from "../../../lib/previewmap";
+import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 
 const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
 const DRAGGABLE = (id: string) => id === "legend" || id.startsWith("ann:");
+const elementName = (id: string) => {
+  if (id.startsWith("ann:")) return "Annotation";
+  if (id.startsWith("series:")) return "Series";
+  return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
+};
+const elementTitle = (id: string) => {
+  const name = elementName(id);
+  if (TEXT_ELEMENTS.has(id)) return `${name} \u2014 double-click to edit; right-click for properties`;
+  if (DRAGGABLE(id)) return `${name} \u2014 drag to move; right-click for properties`;
+  if (id.startsWith("series:")) return `${name} \u2014 properties are edited on Stage`;
+  return name;
+};
+const hitboxArea = (element: HitElement) => (element.x1 - element.x0) * (element.y1 - element.y0);
+/** Keep DOM hitboxes aligned with `hitAt`: smallest box wins; source order breaks ties. */
+const hitboxZIndex = (elements: readonly HitElement[], element: HitElement, index: number) =>
+  1 + elements.filter((other, otherIndex) =>
+    hitboxArea(other) > hitboxArea(element) || (hitboxArea(other) === hitboxArea(element) && otherIndex > index),
+  ).length;
 
 export default function PreviewOverlay({
   src,
@@ -32,6 +51,7 @@ export default function PreviewOverlay({
   const [hover, setHover] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [dragPos, setDragPos] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
@@ -50,28 +70,41 @@ export default function PreviewOverlay({
     return [(clientX - rect.left) * scale, (clientY - rect.top) * scale];
   };
 
+  const startTextEdit = (id: string) => setEditing({ id, value: textOf(id) });
+  const menuItems = (id: string): ContextMenuItem[] => {
+    const group = groupForElement(id);
+    return [
+      { header: elementName(id) },
+      group
+        ? { label: "Properties…", run: () => onSelect(id) }
+        : id.startsWith("series:")
+          ? { label: "Series properties — edit on Stage", disabled: true, run: () => {} }
+          : { label: "Properties unavailable", disabled: true, run: () => {} },
+      ...(TEXT_ELEMENTS.has(id) ? [{ label: "Edit text…", run: () => startTextEdit(id) }] : []),
+    ];
+  };
+
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
       <img src={src} alt="figure preview" style={{ width: "100%", display: "block" }} />
-      {map.elements.map((e) => (
+      {map.elements.map((e, index) => (
         <div
           key={e.id}
           data-element={e.id}
-          title={
-            TEXT_ELEMENTS.has(e.id)
-              ? `${e.id} — double-click to edit`
-              : DRAGGABLE(e.id)
-                ? `${e.id} — drag to move`
-                : e.id
-          }
+          title={elementTitle(e.id)}
           onPointerEnter={() => setHover(e.id)}
           onPointerLeave={() => setHover(null)}
           onClick={() => onSelect(e.id)}
           onDoubleClick={() => {
-            if (TEXT_ELEMENTS.has(e.id)) setEditing({ id: e.id, value: textOf(e.id) });
+            if (TEXT_ELEMENTS.has(e.id)) startTextEdit(e.id);
+          }}
+          onContextMenu={(ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setMenu({ id: e.id, x: ev.clientX, y: ev.clientY });
           }}
           onPointerDown={(ev) => {
-            if (!DRAGGABLE(e.id)) return;
+            if (ev.button !== 0 || !DRAGGABLE(e.id)) return;
             dragRef.current = { id: e.id, startX: ev.clientX, startY: ev.clientY };
             // optional-chained: jsdom has no pointer capture
             (ev.target as Element).setPointerCapture?.(ev.pointerId);
@@ -95,6 +128,7 @@ export default function PreviewOverlay({
           style={{
             position: "absolute",
             ...pct(e),
+            zIndex: hitboxZIndex(map.elements, e, index),
             cursor: DRAGGABLE(e.id) ? "move" : "pointer",
             outline:
               hover === e.id ? "1.5px solid var(--accent)" : "1px solid transparent",
@@ -106,6 +140,14 @@ export default function PreviewOverlay({
           }}
         />
       ))}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems(menu.id)}
+          onClose={() => setMenu(null)}
+        />
+      )}
       {editing && (
         <input
           className="qz-input"

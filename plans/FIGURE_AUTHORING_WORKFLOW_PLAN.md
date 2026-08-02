@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.1d/F2.2c Graph Builder detached canonical preview
+**Updated:** 2026-08-02 — F2.4a Publication Preview element context menu
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -227,6 +227,9 @@ decisions are merged.
         in-place annotation/frame properties, and validated x-axis breaks.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
+  - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
+        annotations expose their existing property panel; text also exposes
+        the existing inline editor. Series remain visibly Stage-owned.
 - [ ] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output.
@@ -354,6 +357,18 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.4a Publication Preview element context menu (ChatGPT-Sol / GPT-5.6 Terra)
+
+- Hitmapped Publication Preview elements now open the shared keyboard-accessible
+  context menu on right-click. Text, legend, and annotations route Properties
+  through the same existing panel-selection path as a click; text additionally
+  reuses the inline editor.
+- Series deliberately remain Stage-owned and expose a disabled explanatory
+  entry instead of a no-op property action. Existing click, double-click, and
+  legend/annotation drag behavior is unchanged.
+- F2.4 remains open: Stage/preview direct-manipulation parity is broader than
+  this bounded menu slice.
 
 ### 2026-08-02 — F2.1d/F2.2c Graph Builder detached canonical preview (planned PR #115)
 

@@ -113,7 +113,12 @@ test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/
 
   const figureBuilder = page.locator(".qzk-win").filter({ has: page.getByText(/^Publication preview —/) });
   await expect(figureBuilder).toBeVisible();
-  await figureBuilder.getByPlaceholder("(none)").fill("Round-trip figure");
+  const legendHitbox = figureBuilder.locator('[data-element="legend"]');
+  await expect(legendHitbox).toBeVisible();
+  await legendHitbox.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Properties…" }).click();
+  await expect(figureBuilder.getByLabel("legend position")).toBeVisible();
+  await figureBuilder.getByPlaceholder("(none)").first().fill("Round-trip figure");
   const autoLabels = figureBuilder.getByPlaceholder("auto");
   await autoLabels.nth(0).fill("Applied field");
   const labeledPreview = figureRequest(page, "figure-hitmap");
