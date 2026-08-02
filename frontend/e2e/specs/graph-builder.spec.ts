@@ -35,9 +35,12 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   const builder = page.locator(".qzk-glass").filter({ has: page.getByText("Graph Builder", { exact: true }) });
   await expect(builder).toBeVisible();
 
-  await page.getByLabel("Assign a channel to X").selectOption({ label: "Resistance" });
-  await page.getByLabel("Assign a channel to Y").selectOption({ label: "Voltage" });
-  await page.getByLabel("Assign a channel to Y").selectOption({ label: "Resistance" });
+  // exact: true — the error-bar wells' labels ("Assign a channel to Y error")
+  // are substring-supersets of the X/Y labels, so the default matching would
+  // resolve to two elements.
+  await page.getByLabel("Assign a channel to X", { exact: true }).selectOption({ label: "Resistance" });
+  await page.getByLabel("Assign a channel to Y", { exact: true }).selectOption({ label: "Voltage" });
+  await page.getByLabel("Assign a channel to Y", { exact: true }).selectOption({ label: "Resistance" });
 
   await expect(wellByTitle(page, "X").locator(".qzk-zone-chip")).toContainText("Resistance");
   const yChips = wellByTitle(page, "Y").locator(".qzk-zone-chip");

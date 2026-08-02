@@ -42,9 +42,11 @@ async function buildOrderedXY(page: Page): Promise<Locator> {
   await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("two-channel.csv"));
   await waitForDatasetCount(page, 1);
   const builder = await openGraphBuilder(page);
-  await builder.getByLabel("Assign a channel to X").selectOption({ label: "Resistance" });
-  await builder.getByLabel("Assign a channel to Y").selectOption({ label: "Voltage" });
-  await builder.getByLabel("Assign a channel to Y").selectOption({ label: "Resistance" });
+  // exact: true — the error-bar wells' labels ("Assign a channel to Y error")
+  // are substring-supersets of the X/Y labels.
+  await builder.getByLabel("Assign a channel to X", { exact: true }).selectOption({ label: "Resistance" });
+  await builder.getByLabel("Assign a channel to Y", { exact: true }).selectOption({ label: "Voltage" });
+  await builder.getByLabel("Assign a channel to Y", { exact: true }).selectOption({ label: "Resistance" });
   await builder.getByRole("button", { name: "Move Resistance earlier" }).click();
   const chips = wellByTitle(page, "Y").locator(".qzk-zone-chip");
   await expect(chips.nth(0)).toContainText("Resistance");
