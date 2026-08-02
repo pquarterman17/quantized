@@ -6,6 +6,7 @@ import { NumberField } from "../../primitives";
  * reflecting externally replaced canonical-draft values. */
 export default function PropertyNumberField({
   label,
+  ariaLabel,
   value,
   onValue,
   width = 64,
@@ -14,6 +15,11 @@ export default function PropertyNumberField({
   required = false,
 }: {
   label: string;
+  /** Overrides the accessible name when it must stay fuller/unique than the
+   *  visible `label` text (e.g. a dense per-index field list where the
+   *  visible text drops a repeated "annotation N " prefix). Defaults to
+   *  `label`. */
+  ariaLabel?: string;
   value: number | undefined;
   onValue: (v: number | undefined) => void;
   width?: number;
@@ -32,7 +38,7 @@ export default function PropertyNumberField({
     <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
       <label className="qzk-field-lbl">{label}</label>
       <NumberField
-        aria-label={label}
+        aria-label={ariaLabel ?? label}
         value={text}
         width={width}
         min={min}

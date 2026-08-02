@@ -140,6 +140,12 @@ export function useFigureBuilder() {
   // The preview's element hit-map (#13) + which panel group a click focused.
   const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
   const [focusGroup, setFocusGroup] = useState<string | null>(null);
+  // Selection is a monotonic signal, not just the group name: re-selecting
+  // the SAME element after the user manually collapsed its panel must still
+  // reopen it, but a boolean/string `forceOpen` prop that stays unchanged
+  // gives Group's effect nothing to react to. Bumping this on every
+  // selection gives it one.
+  const [focusNonce, setFocusNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -162,6 +168,19 @@ export function useFigureBuilder() {
     : null;
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(() => {
     if (!canonicalDocument) return null;
+    // A live document whose bound dataset isn't in the store (closed,
+    // never loaded this session) would otherwise fall through to
+    // resolveFigureDocumentData and surface its raw internal dataset id in
+    // the user-facing message. Catch that specific, common case here with
+    // an actionable message before it gets there; other failures (a frozen
+    // document with no snapshot, a dataset/document id mismatch) still flow
+    // through the generic catch below unchanged.
+    if (canonicalDocument.data.mode !== "frozen" && canonicalDocument.bindings.datasetId !== null && !canonicalDataset) {
+      return {
+        state: "missing-source",
+        error: "source unavailable: this figure's dataset is not loaded — re-import it to preview or export",
+      };
+    }
     let canonicalData: DataStruct;
     try {
       canonicalData = resolveFigureDocumentData(canonicalDocument, canonicalDataset).data;
@@ -377,9 +396,12 @@ export function useFigureBuilder() {
   }, [canonical, spec]);
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
-  /** Click: focus the matching #11 panel group. */
+  /** Click: focus the matching #11 panel group. Always bumps the nonce so a
+   *  re-selection of the same group's element reopens a manually-collapsed
+   *  panel instead of being a no-op. */
   function selectElement(id: string): void {
     setFocusGroup(groupForElement(id));
+    setFocusNonce((n) => n + 1);
   }
 
   /** Double-click inline edit commits straight into the config fields. */
@@ -491,6 +513,7 @@ export function useFigureBuilder() {
     data,
     hitmap,
     focusGroup,
+    focusNonce,
     selectElement,
     editElementText,
     textOf,

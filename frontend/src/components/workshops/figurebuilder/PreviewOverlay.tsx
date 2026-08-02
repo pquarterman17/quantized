@@ -7,6 +7,7 @@
 
 import { useRef, useState } from "react";
 
+import { isContextMenuKeyEvent } from "../../../lib/contextActions";
 import { groupForElement, type FigureHitmap, type HitElement } from "../../../lib/previewmap";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 
@@ -70,7 +71,12 @@ export default function PreviewOverlay({
     return [(clientX - rect.left) * scale, (clientY - rect.top) * scale];
   };
 
-  const startTextEdit = (id: string) => setEditing({ id, value: textOf(id) });
+  /** Opening a second text edit while one is unsaved commits the first
+   *  (its input never blurs, so it would otherwise be silently discarded). */
+  const startTextEdit = (id: string) => {
+    if (editing && editing.id !== id) onEditText(editing.id, editing.value);
+    setEditing({ id, value: textOf(id) });
+  };
   const menuItems = (id: string): ContextMenuItem[] => {
     const group = groupForElement(id);
     return [
@@ -92,8 +98,13 @@ export default function PreviewOverlay({
           key={e.id}
           data-element={e.id}
           title={elementTitle(e.id)}
+          tabIndex={0}
+          role="button"
+          aria-label={elementTitle(e.id)}
           onPointerEnter={() => setHover(e.id)}
           onPointerLeave={() => setHover(null)}
+          onFocus={() => setHover(e.id)}
+          onBlur={() => setHover((current) => (current === e.id ? null : current))}
           onClick={() => onSelect(e.id)}
           onDoubleClick={() => {
             if (TEXT_ELEMENTS.has(e.id)) startTextEdit(e.id);
@@ -101,7 +112,21 @@ export default function PreviewOverlay({
           onContextMenu={(ev) => {
             ev.preventDefault();
             ev.stopPropagation();
+            dragRef.current = null;
+            setDragPos(null);
             setMenu({ id: e.id, x: ev.clientX, y: ev.clientY });
+          }}
+          onKeyDown={(ev) => {
+            if (ev.key === "Enter" || ev.key === " ") {
+              ev.preventDefault();
+              onSelect(e.id);
+              return;
+            }
+            if (isContextMenuKeyEvent(ev)) {
+              ev.preventDefault();
+              const r = ev.currentTarget.getBoundingClientRect();
+              setMenu({ id: e.id, x: r.left + r.width / 2, y: r.top + r.height / 2 });
+            }
           }}
           onPointerDown={(ev) => {
             if (ev.button !== 0 || !DRAGGABLE(e.id)) return;
@@ -169,7 +194,10 @@ export default function PreviewOverlay({
             position: "absolute",
             ...pct(map.elements.find((e) => e.id === editing.id)!),
             minWidth: 120,
-            zIndex: 2,
+            // Above every hitbox (hitboxZIndex tops out at map.elements.length)
+            // so the edited element's own invisible hitbox can't swallow
+            // caret/selection clicks inside the input (PR #116 regression).
+            zIndex: map.elements.length + 1,
           }}
         />
       )}

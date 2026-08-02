@@ -125,4 +125,84 @@ describe("PropertyPanels publication parity controls", () => {
     fireEvent.change(screen.getByLabelText("new annotation text"), { target: { value: "Missing coordinates" } });
     expect(screen.getByRole("button", { name: "+ Add" })).toBeDisabled();
   });
+
+  it("uses a sane positivity floor for font-size fields instead of Number.MIN_VALUE", async () => {
+    render(<PropertyPanels overrides={{}} openGroup="Text & fonts" setOverrides={vi.fn()} />);
+    expect(await screen.findByLabelText("font size")).toHaveAttribute("min", "1");
+    expect(screen.getByLabelText("title size")).toHaveAttribute("min", "1");
+  });
+
+  it("computes an Add-break reason, shown as a hint once both bounds are entered and as the disabled button's tooltip", () => {
+    const onChange = vi.fn();
+    render(<Harness initial={{}} openGroup="Axes & ticks" onChange={onChange} />);
+    const addButton = () => screen.getByRole("button", { name: "Add break" });
+    const addSpan = () => addButton().closest("span")!;
+
+    // Both blank: disabled, generic tooltip, but no inline hint yet (nothing
+    // to point at until the user has entered something).
+    expect(addButton()).toBeDisabled();
+    expect(addSpan()).toHaveAttribute("title", "enter both bounds");
+    expect(screen.queryByText("enter both bounds")).not.toBeInTheDocument();
+
+    const from = screen.getByLabelText("break from");
+    const to = screen.getByLabelText("break to");
+
+    fireEvent.change(from, { target: { value: "abc" } });
+    fireEvent.change(to, { target: { value: "5" } });
+    expect(screen.getByText("bounds must be numbers")).toBeInTheDocument();
+    expect(addSpan()).toHaveAttribute("title", "bounds must be numbers");
+    expect(addButton()).toBeDisabled();
+
+    fireEvent.change(from, { target: { value: "9" } });
+    expect(screen.getByText("'from' must be less than 'to'")).toBeInTheDocument();
+    expect(addSpan()).toHaveAttribute("title", "'from' must be less than 'to'");
+
+    fireEvent.change(from, { target: { value: "1" } });
+    fireEvent.change(to, { target: { value: "3" } });
+    expect(screen.queryByText(/must be|overlaps|enter both/)).not.toBeInTheDocument();
+    expect(addSpan()).toHaveAttribute("title", "Omit a finite, non-overlapping x-range in the export");
+    expect(addButton()).toBeEnabled();
+    fireEvent.click(addButton());
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ x_breaks: [[1, 3]] }));
+
+    fireEvent.change(from, { target: { value: "2" } });
+    fireEvent.change(to, { target: { value: "4" } });
+    expect(screen.getByText("overlaps an existing break")).toBeInTheDocument();
+    expect(addSpan()).toHaveAttribute("title", "overlaps an existing break");
+    expect(addButton()).toBeDisabled();
+  });
+});
+
+describe("PropertyPanels — reopening a manually-collapsed group (item 5/6)", () => {
+  it("reopens a group on re-selection of the SAME group via openNonce, and scrolls it into view", () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    // jsdom has no layout engine and no native scrollIntoView; the component
+    // optional-chains the call for exactly that reason (see PropertyPanels.tsx).
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const { rerender } = render(
+        <PropertyPanels overrides={{}} openGroup="Legend" openNonce={1} setOverrides={vi.fn()} />,
+      );
+      // forceOpen alone opens it on mount, and scrolls it into view once.
+      expect(screen.getByLabelText("legend title")).toBeInTheDocument();
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+      scrollIntoView.mockClear();
+
+      // Manually collapse via the group header.
+      fireEvent.click(screen.getByRole("button", { name: /Legend/ }));
+      expect(screen.queryByLabelText("legend title")).not.toBeInTheDocument();
+
+      // Re-selecting the SAME group (openGroup unchanged, forceOpen still
+      // true) does nothing by itself — but a bumped openNonce must reopen it.
+      rerender(<PropertyPanels overrides={{}} openGroup="Legend" openNonce={1} setOverrides={vi.fn()} />);
+      expect(screen.queryByLabelText("legend title")).not.toBeInTheDocument();
+
+      rerender(<PropertyPanels overrides={{}} openGroup="Legend" openNonce={2} setOverrides={vi.fn()} />);
+      expect(screen.getByLabelText("legend title")).toBeInTheDocument();
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
 });

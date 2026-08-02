@@ -3,7 +3,7 @@
 // a live, server-rendered WYSIWYG preview on the right. Thin: all state + the
 // preview/export wiring live in the hook.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import PreviewOverlay from "./PreviewOverlay";
 import PropertyPanels from "./PropertyPanels";
@@ -24,6 +24,16 @@ export default function FigureBuilderView() {
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
   const detachedCanonical = f.publicationTarget === "new-editable";
+  const exportDisabled = f.canonical && !f.canExport;
+
+  // DPI keeps its own in-progress text (PropertyNumberField's pattern):
+  // an invalid or out-of-range keystroke must not immediately snap back to
+  // the last committed value while the user is still typing.
+  const [dpiText, setDpiText] = useState(String(f.dpi));
+  const committedDpiText = String(f.dpi);
+  useEffect(() => {
+    setDpiText(committedDpiText);
+  }, [committedDpiText]);
 
   return (
     <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? void cancelPublicationPreview() : setOpen(false)}>
@@ -59,7 +69,19 @@ export default function FigureBuilderView() {
               onChange={(e) => f.setStyle(e.target.value)}
             />
             <label className="qzk-field-lbl">DPI (raster)</label>
-            <NumberField value={f.dpi} onChange={(v) => f.setDpi(Number(v) || 300)} width={90} />
+            <NumberField
+              value={dpiText}
+              onChange={(v) => {
+                setDpiText(v);
+                const n = Number(v);
+                // Only commit a finite, sane DPI; an invalid/out-of-range
+                // keystroke leaves the field text as typed and self-corrects
+                // once the entry becomes valid (no silent snap to 300, no
+                // negative/absurd DPI reaching the export request).
+                if (Number.isFinite(n) && n >= 10 && n <= 1200) f.setDpi(n);
+              }}
+              width={90}
+            />
             {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
                 via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
@@ -73,6 +95,7 @@ export default function FigureBuilderView() {
               overrides={f.overrides}
               setOverrides={f.setOverrides}
               openGroup={f.focusGroup}
+              openNonce={f.focusNonce}
             />
 
             {!f.canonical && <>
@@ -132,9 +155,11 @@ export default function FigureBuilderView() {
             )}
 
             </>}
-            <Button variant="primary" onClick={f.exportNow} disabled={f.canonical && !f.canExport} style={{ marginTop: 6 }}>
-              Export {f.fmt.toUpperCase()}
-            </Button>
+            <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
+              <Button variant="primary" onClick={f.exportNow} disabled={exportDisabled} style={{ marginTop: 6 }}>
+                Export {f.fmt.toUpperCase()}
+              </Button>
+            </span>
             {f.canonical && f.applyBlockedReason && (
               <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
                 {f.applyBlockedReason}

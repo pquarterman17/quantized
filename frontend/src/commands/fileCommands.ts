@@ -301,7 +301,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
           return;
         }
         if (s().beginFigurePublicationEdit()) return;
-        s().setStatus("opened Publication Preview without an editable plot document");
+        s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
         s().setFigureBuilderOpen(true);
       },
     },

@@ -185,4 +185,70 @@ describe("Publication Preview role cues", () => {
     expect(applyButton).toBeDisabled();
     expect(applyButton).toHaveAttribute("title", "focus the previewed plot window to apply");
   });
+
+  // Item 11: a disabled <button> has `pointer-events:none` (.qz-btn:disabled),
+  // so its own `title` attribute never gets a chance to show a tooltip — the
+  // title has to live on a wrapping element instead.
+  it("gives the disabled Export button an explanatory tooltip via a wrapping span", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      canExport: false,
+      error: "figure configuration is not previewable: grouped figures cannot use a secondary Y axis",
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+
+    const exportButton = screen.getByRole("button", { name: "Export PNG" });
+    expect(exportButton).toBeDisabled();
+    expect(exportButton).not.toHaveAttribute("title");
+    expect(exportButton.closest("span")).toHaveAttribute(
+      "title",
+      "figure configuration is not previewable: grouped figures cannot use a secondary Y axis",
+    );
+  });
+
+  it("falls back to a generic export-blocked tooltip when there is no error message", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      canExport: false,
+      error: null,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+
+    expect(screen.getByRole("button", { name: "Export PNG" }).closest("span")).toHaveAttribute(
+      "title",
+      "figure is not ready to export",
+    );
+  });
+
+  it("leaves the Export button tooltip-free when it is enabled", () => {
+    render(<FigureBuilderView />); // default figureState: canonical=false -> never disabled
+    expect(screen.getByRole("button", { name: "Export PNG" }).closest("span")).not.toHaveAttribute("title");
+  });
+});
+
+// Item 12: the DPI field must not silently snap an invalid/out-of-range
+// keystroke to 300, and must not commit a value the export request can't use.
+describe("Publication Preview DPI field", () => {
+  it("only commits DPI when the typed value is finite and within [10, 1200]", () => {
+    render(<FigureBuilderView />);
+    const dpiField = screen.getByDisplayValue("300") as HTMLInputElement;
+
+    fireEvent.change(dpiField, { target: { value: "abc" } });
+    expect(figureState.setDpi).not.toHaveBeenCalled();
+    expect(dpiField).toHaveValue("abc"); // self-corrects later, not snapped to 300
+
+    fireEvent.change(dpiField, { target: { value: "-5" } });
+    expect(figureState.setDpi).not.toHaveBeenCalled();
+
+    fireEvent.change(dpiField, { target: { value: "5" } }); // below the 10 floor
+    expect(figureState.setDpi).not.toHaveBeenCalled();
+
+    fireEvent.change(dpiField, { target: { value: "5000" } }); // above the 1200 ceiling
+    expect(figureState.setDpi).not.toHaveBeenCalled();
+
+    fireEvent.change(dpiField, { target: { value: "600" } });
+    expect(figureState.setDpi).toHaveBeenCalledExactlyOnceWith(600);
+  });
 });

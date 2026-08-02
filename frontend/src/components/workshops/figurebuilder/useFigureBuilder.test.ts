@@ -269,7 +269,12 @@ describe("useFigureBuilder", () => {
 
     expect(result.current.canonicalReadiness).toBe("missing-source");
     expect(result.current.error).toContain("source unavailable");
-    expect(result.current.error).toContain("gone");
+    // The message must stay actionable and must NOT leak the raw internal
+    // dataset id (item 14) — it used to read `...requires dataset "gone"`.
+    expect(result.current.error).not.toContain("gone");
+    expect(result.current.error).toBe(
+      "source unavailable: this figure's dataset is not loaded — re-import it to preview or export",
+    );
     expect(result.current.data).toBeNull();
     expect(result.current.canExport).toBe(false);
     expect(renderFigureHitmap).not.toHaveBeenCalled();

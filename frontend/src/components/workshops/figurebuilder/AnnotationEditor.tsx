@@ -38,7 +38,11 @@ export default function AnnotationEditor({
         <div key={index} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", width: "100%", paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
           <span className="qzk-ds-meta" style={{ width: "100%" }}>Annotation {index + 1}</span>
           <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-            <label className="qzk-field-lbl">annotation {index + 1} text</label>
+            {/* The "Annotation N" header above already carries the ordinal —
+                visible field labels drop the repeated "annotation N " prefix
+                (9 fields per annotation in a ~200px column) while aria-label
+                keeps the full, unique string for getByLabelText/screen readers. */}
+            <label className="qzk-field-lbl">text</label>
             <NumberField
               aria-label={`annotation ${index + 1} text`}
               numeric={false}
@@ -48,25 +52,28 @@ export default function AnnotationEditor({
             />
           </span>
           <PropertyNumberField
-            label={`annotation ${index + 1} x`}
+            label="x"
+            ariaLabel={`annotation ${index + 1} x`}
             value={annotation.x}
             required
             onValue={(x) => x === undefined ? undefined : updateAnnotation(index, { x })}
           />
           <PropertyNumberField
-            label={`annotation ${index + 1} y`}
+            label="y"
+            ariaLabel={`annotation ${index + 1} y`}
             value={annotation.y}
             required
             onValue={(y) => y === undefined ? undefined : updateAnnotation(index, { y })}
           />
           <PropertyNumberField
-            label={`annotation ${index + 1} font size`}
+            label="font size"
+            ariaLabel={`annotation ${index + 1} font size`}
             value={annotation.size}
-            min={Number.MIN_VALUE}
+            min={1}
             onValue={(size) => updateAnnotation(index, { size })}
           />
           <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-            <label className="qzk-field-lbl">annotation {index + 1} anchor</label>
+            <label className="qzk-field-lbl">anchor</label>
             <Select
               aria-label={`annotation ${index + 1} anchor`}
               value={annotation.anchor ?? "data"}
@@ -79,9 +86,10 @@ export default function AnnotationEditor({
           </span>
           <span className="qzk-ds-meta" style={{ width: "100%" }}>Text box frame</span>
           <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-            <label className="qzk-field-lbl">annotation {index + 1} frame fill</label>
+            <label className="qzk-field-lbl">frame fill</label>
             <NumberField
               aria-label={`annotation ${index + 1} frame fill`}
+              title='CSS or matplotlib color: a name ("red") or hex ("#d33")'
               numeric={false}
               width={96}
               value={annotation.frame?.fill ?? ""}
@@ -90,9 +98,10 @@ export default function AnnotationEditor({
             />
           </span>
           <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-            <label className="qzk-field-lbl">annotation {index + 1} frame stroke</label>
+            <label className="qzk-field-lbl">frame stroke</label>
             <NumberField
               aria-label={`annotation ${index + 1} frame stroke`}
+              title='CSS or matplotlib color: a name ("red") or hex ("#d33")'
               numeric={false}
               width={96}
               value={annotation.frame?.stroke ?? ""}
@@ -101,14 +110,16 @@ export default function AnnotationEditor({
             />
           </span>
           <PropertyNumberField
-            label={`annotation ${index + 1} frame opacity`}
+            label="frame opacity"
+            ariaLabel={`annotation ${index + 1} frame opacity`}
             value={annotation.frame?.opacity}
             min={0}
             max={1}
             onValue={(opacity) => updateAnnotationFrame(index, { opacity })}
           />
           <PropertyNumberField
-            label={`annotation ${index + 1} frame padding`}
+            label="frame padding"
+            ariaLabel={`annotation ${index + 1} frame padding`}
             value={annotation.frame?.pad}
             min={0}
             onValue={(pad) => updateAnnotationFrame(index, { pad })}

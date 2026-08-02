@@ -19,7 +19,9 @@ describe("Publication Preview command", () => {
 
     command?.run();
     expect(beginFigurePublicationEdit).toHaveBeenCalled();
-    expect(setStatus).toHaveBeenCalledWith("opened Publication Preview without an editable plot document");
+    expect(setStatus).toHaveBeenCalledWith(
+      "no plot window is focused — previewing the active dataset; Apply is unavailable in this mode",
+    );
     expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
   });
 

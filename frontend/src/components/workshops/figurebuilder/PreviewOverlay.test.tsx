@@ -159,4 +159,94 @@ describe("PreviewOverlay", () => {
     fireEvent.pointerUp(ann, { clientX: 260, clientY: 250, pointerId: 2 });
     expect(onDragEnd).toHaveBeenCalledWith("ann:0", expect.any(Number), expect.any(Number));
   });
+
+  it("right-click during an in-progress drag clears the armed drag state", () => {
+    const { onDragEnd } = setup();
+    const legend = el("legend");
+    fireEvent.pointerDown(legend, { clientX: 500, clientY: 90, pointerId: 1 });
+    fireEvent.pointerMove(legend, { clientX: 520, clientY: 130, pointerId: 1 });
+    fireEvent.contextMenu(legend, { clientX: 520, clientY: 130 });
+    // A pointerUp after the context menu interrupted the drag must NOT report
+    // a drop — the armed drag state was cleared, not carried through.
+    fireEvent.pointerUp(legend, { clientX: 520, clientY: 130, pointerId: 1 });
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it("the inline text-edit input sits above every hitbox, including large series boxes (PR #116 regression)", () => {
+    const bigMap: FigureHitmap = {
+      ...MAP,
+      elements: [
+        ...MAP.elements,
+        { id: "series:0", x0: 60, y0: 40, x1: 580, y1: 360 },
+        { id: "series:1", x0: 60, y0: 40, x1: 580, y1: 200 },
+      ],
+    };
+    render(
+      <PreviewOverlay
+        src="data:image/png;base64,"
+        map={bigMap}
+        textOf={(id) => (id === "title" ? "Old title" : "")}
+        onSelect={vi.fn()}
+        onEditText={vi.fn()}
+        onDragEnd={vi.fn()}
+      />,
+    );
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="title"]')!);
+    const input = screen.getByDisplayValue("Old title");
+    const inputZ = Number(input.style.zIndex);
+    for (const id of bigMap.elements.map((e) => e.id)) {
+      const hitboxZ = Number(document.querySelector<HTMLElement>(`[data-element="${id}"]`)!.style.zIndex);
+      expect(inputZ).toBeGreaterThan(hitboxZ);
+    }
+  });
+
+  it("double-clicking a second text element commits the first edit's unsaved value (#116 follow-up)", () => {
+    const withXlabel: FigureHitmap = {
+      ...MAP,
+      elements: [...MAP.elements, { id: "xlabel", x0: 250, y0: 370, x1: 350, y1: 390 }],
+    };
+    const onEditText = vi.fn();
+    render(
+      <PreviewOverlay
+        src="data:image/png;base64,"
+        map={withXlabel}
+        textOf={(id) => (id === "title" ? "Old title" : id === "xlabel" ? "Old x" : "")}
+        onSelect={vi.fn()}
+        onEditText={onEditText}
+        onDragEnd={vi.fn()}
+      />,
+    );
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="title"]')!);
+    fireEvent.change(screen.getByDisplayValue("Old title"), { target: { value: "New title" } });
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="xlabel"]')!);
+    expect(onEditText).toHaveBeenCalledExactlyOnceWith("title", "New title");
+    // the second edit is now open, seeded from its own current value
+    expect(screen.getByDisplayValue("Old x")).toBeInTheDocument();
+  });
+
+  it("is keyboard-reachable: ContextMenu key / Shift+F10 open the menu, Enter selects (GUI_INTERACTION #8 parity)", () => {
+    const { onSelect } = setup();
+    const legend = el("legend");
+    expect(legend).toHaveAttribute("tabindex", "0");
+    expect(legend).toHaveAttribute("role", "button");
+    expect(legend).toHaveAttribute("aria-label", "Legend — drag to move; right-click for properties");
+
+    fireEvent.keyDown(legend, { key: "ContextMenu" });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByText("Legend")).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.keyDown(legend, { key: "F10", shiftKey: true });
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.keyDown(legend, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledWith("legend");
+
+    onSelect.mockClear();
+    fireEvent.keyDown(legend, { key: " " });
+    expect(onSelect).toHaveBeenCalledWith("legend");
+  });
 });

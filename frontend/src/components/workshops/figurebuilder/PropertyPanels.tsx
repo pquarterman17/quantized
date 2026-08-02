@@ -2,7 +2,7 @@
 // object supplied by the builder; canonical sessions persist that object on
 // their transient FigureDocument draft.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
 import { Checkbox, NumberField, Select } from "../../primitives";
@@ -13,17 +13,27 @@ function Group({
   title,
   children,
   forceOpen,
+  openNonce,
 }: {
   title: string;
   children: React.ReactNode;
   forceOpen?: boolean;
+  /** A monotonic counter (useFigureBuilder's focusNonce): bumping it
+   *  re-triggers the effect below even when `forceOpen` stays true, so
+   *  re-selecting the same element reopens a manually-collapsed panel
+   *  instead of being a no-op against an unchanged boolean dependency. */
+  openNonce?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (forceOpen) setOpen(true);
-  }, [forceOpen]);
+    if (!forceOpen) return;
+    setOpen(true);
+    // optional-chained: jsdom has no scrollIntoView
+    rootRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [forceOpen, openNonce]);
   return (
-    <div className="qzk-report-section">
+    <div className="qzk-report-section" ref={rootRef}>
       <button className="qzk-group-head" onClick={() => setOpen((current) => !current)}>
         <span className="qzk-group-caret">{open ? "▾" : "▸"}</span>
         <span className="qzk-group-name">{title}</span>
@@ -37,11 +47,15 @@ export default function PropertyPanels({
   overrides,
   setOverrides,
   openGroup = null,
+  openNonce,
 }: {
   overrides: FigureOverrides;
   setOverrides: (overrides: FigureOverrides) => void;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
+  /** Bumped on every selection (even reselecting the same group) so a
+   *  manually-collapsed panel reopens. */
+  openNonce?: number;
 }) {
   const patch = (change: Partial<FigureOverrides>) => setOverrides({ ...overrides, ...change });
   const [breakFrom, setBreakFrom] = useState("");
@@ -49,19 +63,23 @@ export default function PropertyPanels({
   const from = Number(breakFrom);
   const to = Number(breakTo);
   const overlapsBreak = (overrides.x_breaks ?? []).some(([lo, hi]) => from < hi && to > lo);
-  const canAddBreak =
-    breakFrom.trim() !== "" &&
-    breakTo.trim() !== "" &&
-    Number.isFinite(from) &&
-    Number.isFinite(to) &&
-    from < to &&
-    !overlapsBreak;
+  const breakReason: string | null =
+    breakFrom.trim() === "" || breakTo.trim() === ""
+      ? "enter both bounds"
+      : !Number.isFinite(from) || !Number.isFinite(to)
+        ? "bounds must be numbers"
+        : !(from < to)
+          ? "'from' must be less than 'to'"
+          : overlapsBreak
+            ? "overlaps an existing break"
+            : null;
+  const canAddBreak = breakReason === null;
 
   return (
     <div>
-      <Group title="Text & fonts" forceOpen={openGroup === "Text & fonts"}>
-        <Num label="font size" value={overrides.font_size} min={Number.MIN_VALUE} onValue={(font_size) => patch({ font_size })} />
-        <Num label="title size" value={overrides.title_size} min={Number.MIN_VALUE} onValue={(title_size) => patch({ title_size })} />
+      <Group title="Text & fonts" forceOpen={openGroup === "Text & fonts"} openNonce={openNonce}>
+        <Num label="font size" value={overrides.font_size} min={1} onValue={(font_size) => patch({ font_size })} />
+        <Num label="title size" value={overrides.title_size} min={1} onValue={(title_size) => patch({ title_size })} />
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">font name</label>
           <NumberField
@@ -75,7 +93,7 @@ export default function PropertyPanels({
         </span>
       </Group>
 
-      <Group title="Axes & ticks" forceOpen={openGroup === "Axes & ticks"}>
+      <Group title="Axes & ticks" forceOpen={openGroup === "Axes & ticks"} openNonce={openNonce}>
         <Num label="x min" value={overrides.x_lim?.[0] ?? undefined} onValue={(value) => patch({ x_lim: [value ?? null, overrides.x_lim?.[1] ?? null] })} />
         <Num label="x max" value={overrides.x_lim?.[1] ?? undefined} onValue={(value) => patch({ x_lim: [overrides.x_lim?.[0] ?? null, value ?? null] })} />
         <Num label="y min" value={overrides.y_lim?.[0] ?? undefined} onValue={(value) => patch({ y_lim: [value ?? null, overrides.y_lim?.[1] ?? null] })} />
@@ -119,24 +137,28 @@ export default function PropertyPanels({
             <label className="qzk-field-lbl">break to</label>
             <NumberField aria-label="break to" value={breakTo} width={64} onChange={setBreakTo} />
           </span>
-          <button
-            className="qz-btn qz-sm"
-            disabled={!canAddBreak}
-            title="Omit a finite, non-overlapping x-range in the export"
-            onClick={() => {
-              if (!canAddBreak) return;
-              const xBreaks: [number, number][] = [...(overrides.x_breaks ?? []), [from, to]];
-              patch({ x_breaks: xBreaks.sort(([left], [right]) => left - right) });
-              setBreakFrom("");
-              setBreakTo("");
-            }}
-          >
-            Add break
-          </button>
+          {breakFrom.trim() !== "" && breakTo.trim() !== "" && breakReason && (
+            <div className="qzk-ds-meta" style={{ color: "var(--text-dim)", width: "100%" }}>{breakReason}</div>
+          )}
+          <span title={breakReason ?? "Omit a finite, non-overlapping x-range in the export"}>
+            <button
+              className="qz-btn qz-sm"
+              disabled={!canAddBreak}
+              onClick={() => {
+                if (!canAddBreak) return;
+                const xBreaks: [number, number][] = [...(overrides.x_breaks ?? []), [from, to]];
+                patch({ x_breaks: xBreaks.sort(([left], [right]) => left - right) });
+                setBreakFrom("");
+                setBreakTo("");
+              }}
+            >
+              Add break
+            </button>
+          </span>
         </div>
       </Group>
 
-      <Group title="Legend" forceOpen={openGroup === "Legend"}>
+      <Group title="Legend" forceOpen={openGroup === "Legend"} openNonce={openNonce}>
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">position</label>
           <Select
@@ -168,7 +190,7 @@ export default function PropertyPanels({
         <Num label="bottom" value={overrides.margins?.bottom} onValue={(bottom) => patch({ margins: { ...overrides.margins, bottom } })} />
       </Group>
 
-      <Group title="Annotations" forceOpen={openGroup === "Annotations"}>
+      <Group title="Annotations" forceOpen={openGroup === "Annotations"} openNonce={openNonce}>
         <AnnotationEditor
           annotations={overrides.annotations ?? []}
           onChange={(annotations) => patch({ annotations })}
