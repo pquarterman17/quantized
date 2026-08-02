@@ -1,7 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertUnits, crystalCell, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
+import {
+  convertUnits,
+  crystalCell,
+  crystalDSpacing,
+  getConstants,
+  xrayCalc,
+} from "../../../lib/api";
+import { getUnitCategories } from "../../../lib/api/reference";
 import { assembleCell, type CrystalForm, useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
@@ -12,9 +19,45 @@ vi.mock("../../../lib/api", () => ({
   crystalCell: vi.fn(),
 }));
 
+vi.mock("../../../lib/api/reference", () => ({
+  getUnitCategories: vi.fn(),
+}));
+
+const MAGNETIC_FIELD_UNITS = [
+  { value: "T", label: "T" },
+  { value: "mT", label: "mT" },
+  { value: "G", label: "G" },
+  { value: "kG", label: "kG" },
+  { value: "Oe", label: "Oe" },
+  { value: "kOe", label: "kOe" },
+  { value: "A/m", label: "A/m" },
+];
+const PHOTON_ENERGY_UNITS = [
+  { value: "eV", label: "eV" },
+  { value: "nm", label: "nm (wavelength)" },
+  { value: "cm^-1", label: "cm-1 (wavenumber)" },
+  { value: "THz", label: "THz" },
+  { value: "K", label: "K (E / kB)" },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getConstants).mockResolvedValue({ constants: { h: 6.626e-34, c: 2.998e8 } });
+  vi.mocked(getUnitCategories).mockResolvedValue({
+    categories: [
+      { id: "magnetic_field", label: "Magnetic Field (B / H)", hint: null, units: MAGNETIC_FIELD_UNITS },
+      { id: "photon_energy", label: "Photon / Thermal Energy", hint: null, units: PHOTON_ENERGY_UNITS },
+      {
+        id: "energy",
+        label: "Energy",
+        hint: null,
+        units: [
+          { value: "J", label: "J" },
+          { value: "eV", label: "eV" },
+        ],
+      },
+    ],
+  });
 });
 
 describe("useCalculators", () => {
@@ -53,6 +96,45 @@ describe("useCalculators", () => {
     expect(result.current.from).toBe("eV");
     expect(result.current.to).toBe("nm");
     expect(result.current.result).toBeNull();
+  });
+
+  it("loads unit categories on mount", async () => {
+    const { result } = renderHook(() => useCalculators());
+    await waitFor(() => expect(result.current.unitCategories).not.toBeNull());
+    expect(result.current.unitCategories?.map((c) => c.id)).toContain("photon_energy");
+  });
+
+  it("setCategory switches the active category and resets from/to to its first two units", async () => {
+    const { result } = renderHook(() => useCalculators());
+    await waitFor(() => expect(result.current.unitCategories).not.toBeNull());
+
+    act(() => result.current.setCategory("energy"));
+    expect(result.current.category).toBe("energy");
+    expect(result.current.from).toBe("J");
+    expect(result.current.to).toBe("eV");
+    expect(result.current.result).toBeNull();
+  });
+
+  it("swapUnits exchanges from/to and clears the stale result", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 0.0001, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(result.current.result).not.toBeNull();
+
+    act(() => result.current.swapUnits());
+    expect(result.current.from).toBe("T");
+    expect(result.current.to).toBe("Oe");
+    expect(result.current.result).toBeNull();
+  });
+
+  it("setPair with a category argument switches the category too", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPair("J", "eV", "energy"));
+    expect(result.current.from).toBe("J");
+    expect(result.current.to).toBe("eV");
+    expect(result.current.category).toBe("energy");
   });
 
   it("rejects a non-numeric value without calling the API", async () => {
@@ -177,6 +259,66 @@ describe("useCalculators", () => {
       a: 5.4309, b: 5.4309, c: 5.4309, alpha: 90, beta: 90, gamma: 90,
     });
     expect(result.current.cellResult?.volume).toBe(64);
+  });
+
+  // ── Photon/thermal energy panel (5 quantities at once) ─────────────────────
+  it("peCompute converts the entered value to every other unit in the family", async () => {
+    vi.mocked(convertUnits).mockImplementation((value, _from, to) => {
+      const table: Record<string, number> = {
+        nm: 1239.842, "cm^-1": 8065.54, THz: 241.799, K: 11604.5,
+      };
+      return Promise.resolve({ result: table[to] ?? Number(value), info: {} });
+    });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.peCompute();
+    });
+
+    expect(convertUnits).toHaveBeenCalledTimes(4); // eV -> the other 4 units
+    expect(result.current.peResults?.eV).toBe(1); // the entered value itself
+    expect(result.current.peResults?.nm).toBeCloseTo(1239.842, 2);
+    expect(result.current.peResults?.K).toBeCloseTo(11604.5, 1);
+    expect(result.current.peError).toBeNull();
+  });
+
+  it("peCompute recomputes relative to whichever quantity is selected as peFrom", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 42, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeFrom("nm"));
+    act(() => result.current.setPeValue("500"));
+
+    await act(async () => {
+      await result.current.peCompute();
+    });
+
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "eV");
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "THz");
+    expect(convertUnits).toHaveBeenCalledWith(500, "nm", "K");
+    expect(result.current.peResults?.nm).toBe(500);
+  });
+
+  it("peCompute rejects a non-numeric value without calling the API", async () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeValue("abc"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(convertUnits).not.toHaveBeenCalled();
+    expect(result.current.peError).toContain("numeric");
+  });
+
+  it("peCompute surfaces a backend error (e.g. non-positive value)", async () => {
+    vi.mocked(convertUnits).mockRejectedValue(
+      new Error("photon/thermal energy conversions require a positive value"),
+    );
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeValue("0"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(result.current.peError).toContain("positive");
+    expect(result.current.peResults).toBeNull();
   });
 
   // ── Cross-panel hooks ──────────────────────────────────────────────────────

@@ -2,8 +2,10 @@
 
 Pure calc layer. Parses compound unit strings (e.g. ``mA/cm^2``, ``uOhm*cm``)
 into a 7-D SI dimension vector + scale, then converts by ratio of scales — with
-special handling for temperature offsets (K/C/F) and equivalence bridges
-(energy↔wavelength/frequency/wavenumber, H↔B field).
+special handling for temperature offsets (K/C/F) and equivalence bridges: the
+photon/thermal-energy family (energy↔wavelength/frequency/wavenumber↔K, all
+routed through a common energy hub so any pair converts directly) and H↔B
+field (via vacuum permeability).
 """
 
 from __future__ import annotations
@@ -67,9 +69,31 @@ _BASE_UNITS: dict[str, tuple[tuple[int, ...], float]] = {
     "rad": (_ZERO, 1.0),
     "deg": (_ZERO, float(np.pi / 180.0)),
     "mrad": (_ZERO, 1e-3),
+    "arcmin": (_ZERO, float(np.pi / 10800.0)),
+    "arcsec": (_ZERO, float(np.pi / 648000.0)),
     "ions": (_ZERO, 1.0),
     "counts": (_ZERO, 1.0),
     "sq": (_ZERO, 1.0),
+    # Imperial / mixed length (m, cm, mm, um, nm, pm, km, Ang all reach via
+    # the SI-prefix + "m" mechanism below; these three don't have an SI prefix
+    # form so they're explicit).
+    "in": ((0, 1, 0, 0, 0, 0, 0), 0.0254),
+    "ft": ((0, 1, 0, 0, 0, 0, 0), 0.3048),
+    "mil": ((0, 1, 0, 0, 0, 0, 0), 2.54e-5),  # thou = 0.001 in
+    # Mass.
+    "lb": ((1, 0, 0, 0, 0, 0, 0), 0.45359237),
+    # Time: "h" alias for hour (kept alongside the pre-existing "hr").
+    "h": ((0, 0, 1, 0, 0, 0, 0), 3600.0),
+    # Energy: watt-hour (kWh reaches via the "k" prefix), Rydberg, Hartree
+    # (CODATA 2018 exact-defined-constant-derived values, J).
+    "Wh": ((1, 2, -2, 0, 0, 0, 0), 3600.0),
+    "Ry": ((1, 2, -2, 0, 0, 0, 0), 2.1798723611035e-18),
+    "Ha": ((1, 2, -2, 0, 0, 0, 0), 4.3597447222071e-18),
+    # Volume: liter (mL reaches via the "m" prefix).
+    "L": ((0, 3, 0, 0, 0, 0, 0), 1e-3),
+    # Frequency: revolutions per minute (1 rpm = 1/60 Hz; a revolution is a
+    # dimensionless count, same convention as Hz's implicit "per cycle").
+    "rpm": ((0, 0, -1, 0, 0, 0, 0), 1.0 / 60.0),
 }
 
 _PREFIXES: dict[str, float] = {
@@ -143,7 +167,13 @@ def _decompose_token(tok_str: str) -> tuple[NDArray[np.float64], float]:
             if rem in _BASE_UNITS:
                 dims, to_si = _BASE_UNITS[rem]
                 return np.array(dims, dtype=float), to_si * _PREFIXES[pfx]
-    return np.zeros(7), 1.0
+    # A bare numeric literal (e.g. the "1" in "1/cm") is a dimensionless scale
+    # factor, not a unit -- keep accepting it silently.
+    try:
+        return np.zeros(7), float(tok_str)
+    except ValueError:
+        pass
+    raise ValueError(f"unknown unit {tok_str!r}")
 
 
 def _parse_units(unit_str: str) -> dict[str, Any]:
@@ -205,22 +235,59 @@ def _try_bridge(
     def done(result_si: NDArray[np.float64]) -> tuple[bool, NDArray[np.float64], float]:
         return True, np.asarray(result_si / ts, dtype=float), nan
 
-    if np.array_equal(fd, energy) and np.array_equal(td, length):
-        return done(hc / si)
-    if np.array_equal(fd, length) and np.array_equal(td, energy):
-        return done(hc / si)
-    if np.array_equal(fd, energy) and np.array_equal(td, freq):
-        return done(si / c["h"])
-    if np.array_equal(fd, freq) and np.array_equal(td, energy):
-        return done(si * c["h"])
-    if np.array_equal(fd, energy) and np.array_equal(td, inv_len):
-        return done(si / hc)
-    if np.array_equal(fd, inv_len) and np.array_equal(td, energy):
-        return done(si * hc)
     if np.array_equal(fd, h_field) and np.array_equal(td, b_field):
         return done(si * c["mu0"])
     if np.array_equal(fd, b_field) and np.array_equal(td, h_field):
         return done(si / c["mu0"])
+
+    # Photon/thermal-energy family: energy <-> wavelength/wavenumber/frequency
+    # /temperature, all routed through a common energy (J) hub -- so e.g.
+    # nm <-> K or nm <-> cm^-1 work directly, not just energy <-> X. Every
+    # member is physically >= 0, and wavelength additionally sits on a true
+    # reciprocal (E=hc/lambda), so a non-positive input is rejected up front
+    # rather than silently producing +/-inf.
+    def to_energy_si(
+        v: NDArray[np.float64], dims: NDArray[np.float64]
+    ) -> NDArray[np.float64] | None:
+        if np.array_equal(dims, energy):
+            return v
+        if np.array_equal(dims, length):
+            return np.asarray(hc / v, dtype=float)
+        if np.array_equal(dims, freq):
+            return np.asarray(v * c["h"], dtype=float)
+        if np.array_equal(dims, inv_len):
+            return np.asarray(v * hc, dtype=float)
+        if np.array_equal(dims, _TEMP_DIM):
+            return np.asarray(v * c["kB"], dtype=float)
+        return None
+
+    def from_energy_si(
+        e: NDArray[np.float64], dims: NDArray[np.float64]
+    ) -> NDArray[np.float64] | None:
+        if np.array_equal(dims, energy):
+            return e
+        if np.array_equal(dims, length):
+            return np.asarray(hc / e, dtype=float)
+        if np.array_equal(dims, freq):
+            return np.asarray(e / c["h"], dtype=float)
+        if np.array_equal(dims, inv_len):
+            return np.asarray(e / hc, dtype=float)
+        if np.array_equal(dims, _TEMP_DIM):
+            return np.asarray(e / c["kB"], dtype=float)
+        return None
+
+    photon_dims = (energy, length, freq, inv_len, _TEMP_DIM)
+    fd_in_family = any(np.array_equal(fd, d) for d in photon_dims)
+    td_in_family = any(np.array_equal(td, d) for d in photon_dims)
+    if fd_in_family and td_in_family:
+        if np.any(si <= 0):
+            raise ValueError("photon/thermal energy conversions require a positive value")
+        e_si = to_energy_si(si, fd)
+        assert e_si is not None  # fd_in_family guarantees a match
+        result_si = from_energy_si(e_si, td)
+        assert result_si is not None  # td_in_family guarantees a match
+        return done(result_si)
+
     return False, None, nan
 
 

@@ -1,7 +1,10 @@
 // Calculators workshop — state hook. Two tools backed by golden calc helpers:
 // a unit converter (/api/reference/convert → calc.unit_convert, with dimensional,
-// temperature-offset, and energy↔wavelength / H↔B bridges) and a physical-constants
-// reference (/api/reference/constants → calc.constants, CODATA). Pure orchestration.
+// temperature-offset, and photon-energy / H↔B bridges) and a physical-constants
+// reference (/api/reference/constants → calc.constants, CODATA). The unit
+// converter's category -> unit table (/api/reference/unit-categories) is
+// fetched once and drives both the from/to pickers and the photon/thermal
+// energy panel's 5-quantity readout. Pure orchestration.
 
 import { useEffect, useState } from "react";
 
@@ -14,6 +17,13 @@ import {
   xrayCalc,
 } from "../../../lib/api";
 import type { SldFormulaResult } from "../../../lib/api";
+import { getUnitCategories } from "../../../lib/api/reference";
+import type { UnitCategoryDef } from "../../../lib/api/reference";
+
+// Fallback used only until the categories fetch resolves (offline-safe
+// default matching the backend's "photon_energy" category, so the panel is
+// usable immediately rather than blank on first paint).
+const PHOTON_ENERGY_FALLBACK = ["eV", "nm", "cm^-1", "THz", "K"];
 
 // Original shared-state tabs + self-contained domain tabs (each owns its own
 // hook; only the union member is needed here for the panel's tab selector).
@@ -152,16 +162,18 @@ export interface SldForm {
   xrayWavelength: string;
 }
 
-/** Common conversions offered as one-click chips (all supported by the backend). */
-export const QUICK_PAIRS: { label: string; from: string; to: string }[] = [
-  { label: "Oe → T", from: "Oe", to: "T" },
-  { label: "T → G", from: "T", to: "G" },
-  { label: "eV → nm", from: "eV", to: "nm" },
-  { label: "eV → THz", from: "eV", to: "THz" },
-  { label: "K → C", from: "K", to: "C" },
-  { label: "J → eV", from: "J", to: "eV" },
-  { label: "GPa → bar", from: "GPa", to: "bar" },
-  { label: "Ang → nm", from: "Ang", to: "nm" },
+/** Common conversions offered as one-click chips (all supported by the backend).
+ *  `category` switches the active category so the from/to pickers land on
+ *  units that are actually offered together. */
+export const QUICK_PAIRS: { label: string; from: string; to: string; category: string }[] = [
+  { label: "Oe → T", from: "Oe", to: "T", category: "magnetic_field" },
+  { label: "T → G", from: "T", to: "G", category: "magnetic_field" },
+  { label: "eV → nm", from: "eV", to: "nm", category: "photon_energy" },
+  { label: "eV → THz", from: "eV", to: "THz", category: "photon_energy" },
+  { label: "K → C", from: "K", to: "C", category: "temperature" },
+  { label: "J → eV", from: "J", to: "eV", category: "energy" },
+  { label: "GPa → bar", from: "GPa", to: "bar", category: "pressure" },
+  { label: "Ang → nm", from: "Ang", to: "nm", category: "length" },
 ];
 
 export interface CalculatorsState {
@@ -178,8 +190,22 @@ export interface CalculatorsState {
   setValue: (v: string) => void;
   setFrom: (v: string) => void;
   setTo: (v: string) => void;
-  setPair: (from: string, to: string) => void;
+  setPair: (from: string, to: string, category?: string) => void;
   convert: () => Promise<void>;
+  // Unit converter — category picker (drives the from/to Select options)
+  unitCategories: UnitCategoryDef[] | null;
+  category: string;
+  setCategory: (id: string) => void;
+  swapUnits: () => void;
+  // Unit converter — photon/thermal energy panel (all 5 quantities at once)
+  peValue: string;
+  peFrom: string;
+  peResults: Record<string, number> | null;
+  peError: string | null;
+  peBusy: boolean;
+  setPeValue: (v: string) => void;
+  setPeFrom: (u: string) => void;
+  peCompute: () => Promise<void>;
   // Constants
   constants: Record<string, number> | null;
   // X-ray / neutron (Bragg, Q↔2θ)
@@ -257,6 +283,13 @@ export function useCalculators(): CalculatorsState {
   const [sldResult, setSldResult] = useState<SldFormulaResult | null>(null);
   const [sldError, setSldError] = useState<string | null>(null);
   const [sldBusy, setSldBusy] = useState(false);
+  const [unitCategories, setUnitCategories] = useState<UnitCategoryDef[] | null>(null);
+  const [category, setCategoryState] = useState("magnetic_field"); // matches from="Oe"/to="T"
+  const [peValue, setPeValue] = useState("1");
+  const [peFrom, setPeFrom] = useState("eV");
+  const [peResults, setPeResults] = useState<Record<string, number> | null>(null);
+  const [peError, setPeError] = useState<string | null>(null);
+  const [peBusy, setPeBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,9 +305,44 @@ export function useCalculators(): CalculatorsState {
     };
   }, []);
 
-  const setPair = (f: string, t: string): void => {
+  useEffect(() => {
+    let cancelled = false;
+    getUnitCategories()
+      .then((r) => {
+        if (!cancelled) setUnitCategories(r.categories);
+      })
+      .catch(() => {
+        /* offline — from/to Selects fall back to free-text-less empty lists */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setPair = (f: string, t: string, cat?: string): void => {
     setFrom(f);
     setTo(t);
+    if (cat) setCategoryState(cat);
+    setResult(null);
+    setDescription(null);
+    setError(null);
+  };
+
+  const setCategory = (id: string): void => {
+    setCategoryState(id);
+    const units = unitCategories?.find((c) => c.id === id)?.units;
+    if (units && units.length > 0) {
+      setFrom(units[0].value);
+      setTo(units[1]?.value ?? units[0].value);
+    }
+    setResult(null);
+    setDescription(null);
+    setError(null);
+  };
+
+  const swapUnits = (): void => {
+    setFrom(to);
+    setTo(from);
     setResult(null);
     setDescription(null);
     setError(null);
@@ -295,6 +363,36 @@ export function useCalculators(): CalculatorsState {
       setError(e instanceof Error ? e.message : "conversion failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Photon/thermal energy: show all 5 interchangeable quantities (eV, nm,
+  // cm^-1, THz, K) for one entered value at once, rather than one from/to
+  // pair at a time — every non-`peFrom` unit is converted independently
+  // (the backend routes each through a common energy hub, so this works
+  // regardless of which quantity was entered).
+  async function peCompute(): Promise<void> {
+    setPeBusy(true);
+    setPeError(null);
+    try {
+      const v = Number(peValue);
+      if (!Number.isFinite(v)) throw new Error("enter a numeric value");
+      const photonUnits =
+        unitCategories?.find((c) => c.id === "photon_energy")?.units.map((u) => u.value) ??
+        PHOTON_ENERGY_FALLBACK;
+      const targets = photonUnits.filter((u) => u !== peFrom);
+      const responses = await Promise.all(targets.map((u) => convertUnits(v, peFrom, u)));
+      const out: Record<string, number> = { [peFrom]: v };
+      targets.forEach((u, i) => {
+        const r = responses[i].result;
+        if (typeof r === "number") out[u] = r;
+      });
+      setPeResults(out);
+    } catch (e) {
+      setPeResults(null);
+      setPeError(e instanceof Error ? e.message : "conversion failed");
+    } finally {
+      setPeBusy(false);
     }
   }
 
@@ -447,6 +545,18 @@ export function useCalculators(): CalculatorsState {
     setTo,
     setPair,
     convert,
+    unitCategories,
+    category,
+    setCategory,
+    swapUnits,
+    peValue,
+    peFrom,
+    peResults,
+    peError,
+    peBusy,
+    setPeValue,
+    setPeFrom,
+    peCompute,
     constants,
     xrayMode,
     wavelength,

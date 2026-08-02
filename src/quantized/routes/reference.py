@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from quantized.calc.constants import constants
 from quantized.calc.element_data import by_symbol, element_data
 from quantized.calc.unit_convert import unit_convert
+from quantized.calc.units_data import UNIT_CATEGORIES
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/reference", tags=["reference"])
@@ -56,3 +57,24 @@ def convert(req: ConvertRequest) -> dict[str, Any]:
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"result": to_jsonable(result), "info": to_jsonable(info)}
+
+
+@router.get("/unit-categories")
+def get_unit_categories() -> dict[str, Any]:
+    """Curated unit categories for the units-converter UI (category -> units).
+
+    Purely a UI-curation index -- the conversion math (factors, temperature
+    affine offsets, photon-energy/H-B bridges) lives in ``calc.unit_convert``;
+    every unit string listed here is guaranteed parseable by it.
+    """
+    return {
+        "categories": [
+            {
+                "id": cat.id,
+                "label": cat.label,
+                "hint": cat.hint,
+                "units": [{"value": u.value, "label": u.label} for u in cat.units],
+            }
+            for cat in UNIT_CATEGORIES
+        ]
+    }
