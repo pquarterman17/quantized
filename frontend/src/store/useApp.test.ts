@@ -4832,6 +4832,41 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     useApp.getState().openFigureDocInWindow("doc-frozen");
     expect(useApp.getState().plotWindows).toHaveLength(before);
   });
+
+  // PLOT_WORKFLOW_PLAN review finding #5: a canonical Publication Preview
+  // session in flight must not let a legacy Library click silently switch
+  // the active dataset out from under it while the builder stays canonical.
+  it("openFigureDraft refuses a legacy figure while a Publication Preview session is active", () => {
+    useApp.getState().addFigureDoc({
+      id: "doc-1",
+      name: "My Figure",
+      datasetId: "d2",
+      live: true,
+      config: {
+        xKey: null, yKeys: [0], xScale: "linear", yScale: "linear",
+        title: "", xLabel: "", yLabel: "", style: "default", fmt: "pdf", dpi: 200,
+        overrides: null, seriesStyles: null,
+      },
+    });
+    const document = createFigureDocument({
+      id: "session-doc", name: "Session", datasetId: "d1", view: defaultPlotView(),
+    });
+    useApp.setState({
+      activeId: "d1",
+      figureDocSeed: null,
+      figurePublicationSession: { target: "new-editable", windowId: null, baseline: document, draft: document },
+    });
+    useToasts.setState({ toasts: [] });
+
+    useApp.getState().openFigureDoc("doc-1");
+
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // setActive never fired
+    expect(s.figureDocSeed).toBeNull(); // the seed side effect never fired either
+    expect(s.figurePublicationSession).toMatchObject({ target: "new-editable" }); // untouched
+    expect(s.status).toContain("finish or cancel the current Publication Preview");
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
+  });
 });
 
 describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () => {

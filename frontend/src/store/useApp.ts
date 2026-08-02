@@ -2700,7 +2700,7 @@ export const useApp = create<AppState>((set, get) => ({
       return { figureDocs: [...s.figureDocs, copy] };
   }),
   openFigureDraft: (doc) => {
-    if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
+    if (get().figurePublicationSession) { toast("finish or cancel the current Publication Preview first", "danger"); set({ status: "finish or cancel the current Publication Preview first" }); return; } if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
     if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
     set({ figureDocSeed: doc, figureBuilderOpen: true });
   },

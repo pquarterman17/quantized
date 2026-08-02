@@ -6,6 +6,7 @@ import FigureBuilderView from "./FigureBuilderView";
 import { useFigureBuilder } from "./useFigureBuilder";
 
 const setOpen = vi.fn();
+const cancelPublicationPreview = vi.fn();
 
 vi.mock("../../../store/useApp", () => ({
   useApp: (selector: (state: { setFigureBuilderOpen: typeof setOpen }) => unknown) =>
@@ -16,6 +17,12 @@ vi.mock("./useFigureBuilder", () => ({
   FIGURE_FORMATS: ["png"],
   FIGURE_STYLES: ["default"],
   useFigureBuilder: vi.fn(),
+}));
+
+// Item 1: the canonical Cancel/ToolWindow-close paths now route through the
+// discard-gate wrapper instead of calling the hook's `cancel` directly.
+vi.mock("../../windows/figureLifecycleUi", () => ({
+  cancelPublicationPreview: (...args: unknown[]) => cancelPublicationPreview(...args) as Promise<void>,
 }));
 
 vi.mock("../../overlays/ToolWindow", () => ({
@@ -72,6 +79,7 @@ beforeEach(() => {
   vi.mocked(useFigureBuilder).mockReturnValue(
     figureState as unknown as ReturnType<typeof useFigureBuilder>,
   );
+  cancelPublicationPreview.mockReset();
 });
 
 describe("Publication Preview role cues", () => {
@@ -109,8 +117,14 @@ describe("Publication Preview role cues", () => {
     expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent("Apply updates this figure");
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    // Item 1: the discard gate wrapper, not the hook's `cancel`, owns both
+    // canonical close paths now — `cancel` is kept on the hook for
+    // tests/back-compat but the view no longer calls it directly.
     fireEvent.click(screen.getByRole("button", { name: "Window close" }));
-    expect(figureState.cancel).toHaveBeenCalled();
+    expect(cancelPublicationPreview).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(cancelPublicationPreview).toHaveBeenCalledTimes(2);
+    expect(figureState.cancel).not.toHaveBeenCalled();
   });
 
   it("labels an unchanged detached draft as creating an editable figure", () => {
@@ -150,5 +164,25 @@ describe("Publication Preview role cues", () => {
     expect(screen.getByRole("button", { name: "Export PNG" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  // Item 3b: a doomed/blocked window-target session gets an inline reason,
+  // not just a disabled button with no explanation.
+  it("shows the apply-blocked reason inline and on the Apply button when target liveness blocks it", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      documentName: "Device figure",
+      publicationTarget: "window",
+      dirty: true,
+      canApply: false,
+      applyBlockedReason: "focus the previewed plot window to apply",
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("focus the previewed plot window to apply");
+    const applyButton = screen.getByRole("button", { name: "Apply" });
+    expect(applyButton).toBeDisabled();
+    expect(applyButton).toHaveAttribute("title", "focus the previewed plot window to apply");
   });
 });

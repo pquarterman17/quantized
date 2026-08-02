@@ -24,6 +24,7 @@ import {
   type FigureHitmap,
 } from "../../../lib/previewmap";
 import { axisFmtParam, type AxisScale, type DataStruct } from "../../../lib/types";
+import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
@@ -77,6 +78,8 @@ export function useFigureBuilder() {
   const clearFigureDocSeed = useApp((s) => s.clearFigureDocSeed);
   const addFigureDoc = useApp((s) => s.addFigureDoc);
   const datasets = useApp((s) => s.datasets);
+  const plotWindows = useApp((s) => s.plotWindows);
+  const focusedWindowId = useApp((s) => s.focusedWindowId);
   const publicationSession = useApp((s) => s.figurePublicationSession);
   const patchFigurePublicationDraft = useApp((s) => s.patchFigurePublicationDraft);
   const applyFigurePublicationEdit = useApp((s) => s.applyFigurePublicationEdit);
@@ -250,11 +253,26 @@ export function useFigureBuilder() {
     ? canonicalReadiness.spec
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
-  const canApply = canonicalReadiness?.state === "ready" && (
+  // A window-target session outlives its target window closing/unfocusing
+  // (windows.ts's closeWindow clears the common case, but a session can still
+  // be left pointing at a background window — applyFigurePublicationEdit's
+  // window bridge requires the EXACT focused window, so Apply would otherwise
+  // silently no-op forever). `target === "new-editable"` short-circuits this
+  // to false — that path has no window to lose.
+  const targetBlocked = publicationSession?.target === "window" && (
+    !plotWindows.some((w) => w.id === publicationSession.windowId) ||
+    focusedWindowId !== publicationSession.windowId
+  );
+  const canApply = !targetBlocked && !publicationSession?.staleBaseline && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
       publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
     )
   );
+  const applyBlockedReason = targetBlocked
+    ? "focus the previewed plot window to apply"
+    : publicationSession?.staleBaseline
+    ? "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes"
+    : null;
 
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
@@ -399,7 +417,9 @@ export function useFigureBuilder() {
   async function exportNow(): Promise<void> {
     if (canonicalDocument) {
       if (canonicalReadiness?.state !== "ready") {
-        setStatus(`export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`);
+        const msg = `export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`;
+        toast(msg, "danger");
+        setStatus(msg);
         return;
       }
       try {
@@ -409,7 +429,9 @@ export function useFigureBuilder() {
         await exportFigure({ ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem), filename: stem });
         setStatus(`exported ${stem}.${canonicalDocument.output.format}`);
       } catch (e) {
-        setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+        const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
+        toast(msg, "danger");
+        setStatus(msg);
       }
       return;
     }
@@ -469,6 +491,7 @@ export function useFigureBuilder() {
     publicationTarget: publicationSession?.target ?? null,
     dirty: publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft),
     canApply,
+    applyBlockedReason,
     apply: applyFigurePublicationEdit,
     cancel: cancelFigurePublicationEdit,
     saveAsFigure,

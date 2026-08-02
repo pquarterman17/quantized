@@ -4,6 +4,7 @@ import { createFigureDocument, type FigureDocument } from "../lib/figureDocument
 import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { editableFigureDirty, figurePublicationDirty } from "./figureLifecycle";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
 const document = () => createFigureDocument({
@@ -300,13 +301,55 @@ describe("canonical Publication Preview session", () => {
     expect(state.plotTitle).toBe("Published title");
   });
 
-  it("rejects same-id concurrent focused-facade drift without recording history", () => {
+  it("rejects same-id concurrent focused-facade drift without recording history, and flags the session staleBaseline", () => {
     useApp.getState().beginFigurePublicationEdit();
     useApp.setState({ plotTitle: "Changed on Stage" });
     const history = useApp.getState().history.length;
+    useToasts.setState({ toasts: [] });
+
     expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+
     expect(useApp.getState().history).toHaveLength(history);
     expect(useApp.getState().plotWindows[0].document?.name).toBe("Current plot");
     expect(useApp.getState().figurePublicationSession).not.toBeNull();
+    // Item 4: the session survives (nothing to discard) but is now flagged so
+    // Apply stays a dead end until the user Cancels and reopens.
+    expect(useApp.getState().figurePublicationSession?.staleBaseline).toBe(true);
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("Cancel and reopen"))).toBe(true);
+
+    // Apply keeps failing (never re-enables itself) once flagged, even though
+    // nothing about the drift condition itself changed.
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+  });
+});
+
+describe("closeWindow and a window-target Publication Preview session (item 3a)", () => {
+  it("clears the session, closes the builder, and toasts when its target window closes", () => {
+    const w2 = useApp.getState().createWindow(null, undefined, "scratch");
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true); // targets the focused window, w1
+    useToasts.setState({ toasts: [] });
+
+    useApp.getState().closeWindow("w1");
+
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual([w2]);
+    expect(s.figurePublicationSession).toBeNull();
+    expect(s.figureBuilderOpen).toBe(false);
+    expect(
+      useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("its plot window was closed")),
+    ).toBe(true);
+  });
+
+  it("leaves the session untouched when a DIFFERENT window closes", () => {
+    const w2 = useApp.getState().createWindow(null, undefined, "scratch");
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true); // targets w1, not w2
+    useToasts.setState({ toasts: [] });
+
+    useApp.getState().closeWindow(w2);
+
+    const s = useApp.getState();
+    expect(s.figurePublicationSession).not.toBeNull();
+    expect(s.figureBuilderOpen).toBe(true);
+    expect(useToasts.getState().toasts).toHaveLength(0);
   });
 });

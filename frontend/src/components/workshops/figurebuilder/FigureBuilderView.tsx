@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import PreviewOverlay from "./PreviewOverlay";
 import PropertyPanels from "./PropertyPanels";
+import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Checkbox, NumberField, RichLabelInput, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
@@ -25,7 +26,7 @@ export default function FigureBuilderView() {
   const detachedCanonical = f.publicationTarget === "new-editable";
 
   return (
-    <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? f.cancel() : setOpen(false)}>
+    <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? void cancelPublicationPreview() : setOpen(false)}>
       {!f.data && !canonicalFailure ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to preview a figure.
@@ -134,12 +135,22 @@ export default function FigureBuilderView() {
             <Button variant="primary" onClick={f.exportNow} disabled={f.canonical && !f.canExport} style={{ marginTop: 6 }}>
               Export {f.fmt.toUpperCase()}
             </Button>
+            {f.canonical && f.applyBlockedReason && (
+              <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+                {f.applyBlockedReason}
+              </div>
+            )}
             {f.canonical && (
               <div style={{ display: "flex", gap: 6 }}>
-                <Button variant="primary" onClick={f.apply} disabled={!f.canApply}>
+                <Button
+                  variant="primary"
+                  onClick={f.apply}
+                  disabled={!f.canApply}
+                  title={f.applyBlockedReason ?? undefined}
+                >
                   {detachedCanonical ? "Create Editable Figure" : "Apply"}
                 </Button>
-                <Button onClick={f.cancel}>Cancel</Button>
+                <Button onClick={() => void cancelPublicationPreview()}>Cancel</Button>
               </div>
             )}
           </div>

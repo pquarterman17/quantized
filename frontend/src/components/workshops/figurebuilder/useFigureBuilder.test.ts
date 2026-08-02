@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
 import { createFigureDocument } from "../../../lib/figureDocument";
-import { defaultPlotView } from "../../../lib/plotview";
+import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
@@ -375,6 +375,71 @@ describe("useFigureBuilder", () => {
         frame: { fill: "#fff", stroke: "#111", opacity: 0.5, pad: 3 },
       }],
       x_breaks: [[0.25, 0.5]],
+    });
+  });
+
+  // Review finding #3: a window-target session outlives its target window
+  // closing or losing focus, and the bridge in applyFigurePublicationEdit
+  // requires the EXACT focused window — without this, Apply stays enabled
+  // and silently no-ops forever.
+  describe("window-target liveness", () => {
+    const win = (id: string): PlotWindow => ({
+      id, kind: "plot", title: id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+    });
+    const session = (windowId: string, dirty: boolean) => {
+      const baseline = createFigureDocument({ id: "figure-w1", name: "Live plot", datasetId: "d1", view: defaultPlotView() });
+      const draft = dirty ? { ...baseline, name: "Edited" } : baseline;
+      return { target: "window" as const, windowId, baseline, draft };
+    };
+
+    it("blocks Apply with a reason once the target window is closed", async () => {
+      useApp.setState({ figurePublicationSession: session("w1", true), plotWindows: [], focusedWindowId: null });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.canApply).toBe(false);
+      expect(result.current.applyBlockedReason).toBe("focus the previewed plot window to apply");
+    });
+
+    it("blocks Apply with a reason when the target window exists but isn't focused", async () => {
+      useApp.setState({
+        figurePublicationSession: session("w1", true),
+        plotWindows: [win("w1"), win("w2")],
+        focusedWindowId: "w2",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.canApply).toBe(false);
+      expect(result.current.applyBlockedReason).toBe("focus the previewed plot window to apply");
+    });
+
+    it("allows Apply with no blocked reason once the target window is focused", async () => {
+      useApp.setState({
+        figurePublicationSession: session("w1", true),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.canApply).toBe(true);
+      expect(result.current.applyBlockedReason).toBeNull();
+    });
+
+    it("blocks Apply with the drift reason once the session is flagged staleBaseline, even while focused", async () => {
+      useApp.setState({
+        figurePublicationSession: { ...session("w1", true), staleBaseline: true },
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+
+      expect(result.current.canApply).toBe(false);
+      expect(result.current.applyBlockedReason).toContain("Cancel and reopen Publication Preview");
     });
   });
 });

@@ -8,10 +8,16 @@ import {
 import { figureDocumentFromLegacyFigureDoc } from "../lib/figureDocumentPublication";
 import { hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
+import { toast } from "./toasts";
 import { withPlotWindowDocument } from "./windowDocuments";
 
 let figureSequence = 0;
 const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;
+// Shared by both begin* refusals (a session already open) — one wording, one
+// place to update, kept off the StatusBar-only rest of the file (toast(...) +
+// status both carry it — the convention the rest of the app follows for
+// refusals/failures the user might not be looking at the status bar for).
+const SESSION_BUSY_MSG = "finish or cancel the current Publication Preview before opening another";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -78,6 +84,13 @@ export interface FigurePublicationSession {
   windowId: string | null;
   baseline: FigureDocument;
   draft: FigureDocument;
+  /** Set when applyFigurePublicationEdit rejects a `window`-target session
+   *  because the live document drifted from `baseline` (edited on Stage, or
+   *  its window's binding changed, since the preview began). The session
+   *  deliberately survives the rejection (nothing to discard, the draft is
+   *  still intact) but Apply is a dead end until the user Cancels and
+   *  reopens — never cleared by further edits, only by a fresh session. */
+  staleBaseline?: true;
 }
 
 export function figurePublicationDirty(session: FigurePublicationSession | null): boolean {
@@ -111,7 +124,8 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     beginFigurePublicationEdit: (requestedWindowId) => {
       const state = get();
       if (state.figurePublicationSession) {
-        set({ status: "finish or cancel the current Publication Preview before opening another" });
+        toast(SESSION_BUSY_MSG, "danger");
+        set({ status: SESSION_BUSY_MSG });
         return false;
       }
       const windowId = requestedWindowId ?? state.focusedWindowId;
@@ -132,18 +146,23 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     beginDetachedFigurePublicationEdit: (document) => {
       const state = get();
       if (state.figurePublicationSession) {
-        set({ status: "finish or cancel the current Publication Preview before opening another" });
+        toast(SESSION_BUSY_MSG, "danger");
+        set({ status: SESSION_BUSY_MSG });
         return false;
       }
       if (
         document.data.mode === "live" &&
         (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
       ) {
-        set({ status: `cannot open "${document.name}" in Publication Preview: source dataset is unavailable` });
+        const msg = `cannot open "${document.name}" in Publication Preview: source dataset is unavailable`;
+        toast(msg, "danger");
+        set({ status: msg });
         return false;
       }
       if (document.data.mode === "frozen" && !document.data.snapshot) {
-        set({ status: `cannot open "${document.name}" in Publication Preview: frozen data is unavailable` });
+        const msg = `cannot open "${document.name}" in Publication Preview: frozen data is unavailable`;
+        toast(msg, "danger");
+        set({ status: msg });
         return false;
       }
       const draft = structuredClone(document);
@@ -180,11 +199,15 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
           document.data.mode === "live" &&
           (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
         ) {
-          set({ status: `cannot save editable figure "${document.name}": source dataset is unavailable` });
+          const msg = `cannot save editable figure "${document.name}": source dataset is unavailable`;
+          toast(msg, "danger");
+          set({ status: msg });
           return false;
         }
         if (document.data.mode === "frozen" && !document.data.snapshot) {
-          set({ status: `cannot save editable figure "${document.name}": frozen data is unavailable` });
+          const msg = `cannot save editable figure "${document.name}": frozen data is unavailable`;
+          toast(msg, "danger");
+          set({ status: msg });
           return false;
         }
         state.recordHistory("create editable figure");
@@ -206,7 +229,21 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
         !live ||
         JSON.stringify(live) !== JSON.stringify(session.baseline)
       ) {
-        if (session) set({ status: "publication preview target changed; changes not applied" });
+        if (session) {
+          // Item 4: the session survives (its draft is intact — nothing to
+          // discard) but Apply is now a dead end against this baseline; flag
+          // it so the UI can block Apply and point at the recovery (Cancel +
+          // reopen) instead of leaving only a status line to explain why
+          // Apply keeps silently failing.
+          toast(
+            "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes",
+            "danger",
+          );
+          set({
+            status: "publication preview target changed; changes not applied",
+            figurePublicationSession: { ...session, staleBaseline: true },
+          });
+        }
         return false;
       }
       const document = structuredClone(session.draft);
@@ -228,23 +265,27 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
       const state = get();
       const legacy = state.figureDocs.find((candidate) => candidate.id === legacyFigureId);
       if (!legacy) {
-        set({ status: "publication figure was not found; no editable copy created" });
+        const msg = "publication figure was not found; no editable copy created";
+        toast(msg, "danger");
+        set({ status: msg });
         return null;
       }
       if (
         legacy.live &&
         (!legacy.datasetId || !state.datasets.some((dataset) => dataset.id === legacy.datasetId))
       ) {
-        set({ status: `cannot create editable copy of "${legacy.name}": source dataset is unavailable` });
+        const msg = `cannot create editable copy of "${legacy.name}": source dataset is unavailable`;
+        toast(msg, "danger");
+        set({ status: msg });
         return null;
       }
       let converted: FigureDocument;
       try {
         converted = figureDocumentFromLegacyFigureDoc(legacy);
       } catch (error) {
-        set({
-          status: `cannot create editable copy of "${legacy.name}": ${error instanceof Error ? error.message : "conversion failed"}`,
-        });
+        const msg = `cannot create editable copy of "${legacy.name}": ${error instanceof Error ? error.message : "conversion failed"}`;
+        toast(msg, "danger");
+        set({ status: msg });
         return null;
       }
       const copy = {
