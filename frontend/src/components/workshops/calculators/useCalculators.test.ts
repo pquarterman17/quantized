@@ -131,6 +131,37 @@ describe("useCalculators", () => {
     expect(result.current.crError).toBeNull();
   });
 
+  it("includes the derived Miller-Bravais i for a hexagonal d-spacing", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 2.7794, system: "hexagonal" });
+    const { result } = renderHook(() => useCalculators());
+    act(() =>
+      result.current.updCrystal({ system: "hexagonal", a: "3.2094", c: "5.2107", h: "1", k: "0", l: "0" }),
+    );
+
+    await act(async () => {
+      await result.current.crCompute();
+    });
+
+    // i = -(h+k) = -1, derived and sent alongside h, k, l.
+    expect(crystalDSpacing).toHaveBeenCalledWith({
+      system: "hexagonal", a: 3.2094, b: 3.2094, c: 5.2107,
+      alpha: 90, beta: 90, gamma: 120, h: 1, k: 0, l: 0, i: -1,
+    });
+    expect(result.current.crResult?.d).toBeCloseTo(2.7794, 4);
+  });
+
+  it("omits i for non-hexagonal systems (cubic default)", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.crCompute();
+    });
+
+    const call = vi.mocked(crystalDSpacing).mock.calls[0][0];
+    expect(call).not.toHaveProperty("i");
+  });
+
   it("updCrystal patches the form and switches system", () => {
     const { result } = renderHook(() => useCalculators());
     act(() => result.current.updCrystal({ system: "hexagonal", a: "2.46", c: "6.70" }));

@@ -1,13 +1,15 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 //
-// Four pieces live in the `lib/api/` sibling directory (JMP_GAP #14 ratchet):
+// Five pieces live in the `lib/api/` sibling directory (JMP_GAP #14 ratchet):
 // `api/http.ts` (transport), `api/stats.ts` (`/api/stats/*`),
 // `api/exportMultivar.ts` (JMP_GAP #10, multivar `/api/export/*` figures),
-// and `api/plot.ts` (P3.4, `/api/plot/*`) — all re-exported below, so every
-// consumer keeps importing from `./lib/api`, which resolves to THIS file,
-// not the directory. Add a new stats wrapper to `api/stats.ts`, a new plot
-// wrapper to `api/plot.ts`; this file is pinned shrink-only in
+// `api/plot.ts` (P3.4, `/api/plot/*`), and `api/crystallography.ts`
+// (`/api/crystallography/*`) — all re-exported below, so every consumer
+// keeps importing from `./lib/api`, which resolves to THIS file, not the
+// directory. Add a new stats wrapper to `api/stats.ts`, a new plot wrapper
+// to `api/plot.ts`, a new crystallography wrapper to
+// `api/crystallography.ts`; this file is pinned shrink-only in
 // `architecture.test.ts`.
 
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
@@ -47,6 +49,7 @@ export { postForm, unwrap } from "./api/http";
 export * from "./api/stats";
 export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers (JMP_GAP #10)
 export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, not here.
+export * from "./api/crystallography"; // /api/crystallography/* wrappers. New ones go THERE, not here.
 
 export interface SqliteQueryRequest {
   path: string;
@@ -449,38 +452,6 @@ export function xrayCalc(
   n = 1,
 ): Promise<{ result: number; unit: string; description: string }> {
   return postJSON("/api/xray/calc", { mode, wavelength, value, n });
-}
-
-/** Interplanar d-spacing from lattice params + Miller indices (calc.crystallography).
- *  Angles (deg) default to 90 server-side; only the low-symmetry systems use them. */
-export function crystalDSpacing(body: {
-  system: string;
-  a: number;
-  b: number;
-  c: number;
-  h: number;
-  k: number;
-  l: number;
-  alpha?: number;
-  beta?: number;
-  gamma?: number;
-}): Promise<{ d: number; system: string }> {
-  return postJSON("/api/crystallography/dspacing", body);
-}
-
-/** Unit-cell volume (Å³) + optional molar mass & theoretical density from a
- *  chemical formula and Z (calc.crystallography + calc.formula). */
-export function crystalCell(body: {
-  a: number;
-  b: number;
-  c: number;
-  alpha?: number;
-  beta?: number;
-  gamma?: number;
-  formula?: string;
-  z?: number;
-}): Promise<{ volume: number; molar_mass?: number; density?: number }> {
-  return postJSON("/api/crystallography/cell", body);
 }
 
 /** One probe's SLD block: real + imaginary (absorption) SLD in 10⁻⁶ Å⁻². */

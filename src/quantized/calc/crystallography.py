@@ -1,6 +1,6 @@
 r"""Crystallographic geometry from lattice parameters (DiraCulator buildCrystalTab).
 
-Pure calc layer. Three families of formula:
+Pure calc layer. Four families of formula:
 
 **Interplanar d-spacing** — the reciprocal quadratic forms ``1/d^2`` per crystal
 system (lengths in Å, angles in degrees, ``h, k, l`` integers):
@@ -24,11 +24,26 @@ reciprocal metric tensor (covers every system as a special case).
 **Theoretical (X-ray) density** — ``ρ = Z·M / (N_A · V)`` from the formula molar
 mass ``M`` and formula units per cell ``Z``.
 
+**Miller-Bravais indices (hexagonal/trigonal)** — hexagonal planes and
+directions are conventionally expressed on 4 axes (a1, a2, a3, c) with the
+redundant third axis ``a3 = -(a1+a2)``. This gives 4-index forms alongside
+the ordinary 3-index ones:
+
+- *Planes* ``(hkl) <-> (hkil)``: ``i = -(h+k)``, and ``h, k, l`` are
+  unchanged — no rescaling (:func:`hkl_to_hkil` / :func:`hkil_to_hkl`).
+  :func:`d_spacing` accepts either form for ``system="hexagonal"``.
+- *Directions* ``[UVW] <-> [uvtw]``: ``U = 2u+v``, ``V = u+2v``, ``W = w``
+  with ``t = -(u+v)`` — a genuinely DIFFERENT transform from planes, because
+  the direction components pick up an overall scale factor of 3
+  (:func:`direction_uvw_to_uvtw` / :func:`direction_uvtw_to_uvw`).
+
 Pairs with :mod:`quantized.calc.xray`: once ``d`` is known, ``2θ`` follows from
 Bragg's law (``xray.bragg_two_theta``).
 
 Reference: Si (cubic, ``a = 5.4309 Å``), reflection (111) → ``d = 3.1356 Å``;
-NaCl (cubic, ``a = 5.6402 Å``, ``Z = 4``) → ``ρ ≈ 2.16 g/cm³``.
+NaCl (cubic, ``a = 5.6402 Å``, ``Z = 4``) → ``ρ ≈ 2.16 g/cm³``; Mg (hexagonal,
+``a = 3.2094 Å``, ``c = 5.2107 Å``), (0002) → ``d ≈ 2.6054 Å``, (10-10) →
+``d ≈ 2.7794 Å``.
 """
 
 from __future__ import annotations
@@ -38,11 +53,24 @@ from collections.abc import Callable
 from typing import Any
 
 from quantized.calc.constants import constants
+from quantized.calc.miller_bravais import (
+    direction_uvtw_to_uvw,
+    direction_uvw_to_uvtw,
+    hkil_to_hkl,
+    hkl_to_hkil,
+)
 
+# Re-exported for backward-compatible call sites (calc.crystallography used to
+# own these; they now live in the focused calc.miller_bravais module — see
+# that module's docstring for why planes and directions convert differently).
 __all__ = [
     "CRYSTAL_SYSTEMS",
     "cell_volume",
     "d_spacing",
+    "direction_uvtw_to_uvw",
+    "direction_uvw_to_uvtw",
+    "hkil_to_hkl",
+    "hkl_to_hkil",
     "plane_spacings",
     "theoretical_density",
 ]
@@ -215,6 +243,7 @@ def d_spacing(
     alpha: float = 90.0,
     beta: float = 90.0,
     gamma: float = 90.0,
+    i: int | None = None,
 ) -> dict[str, Any]:
     """Interplanar spacing ``d`` (Å) for a reflection ``(h,k,l)`` in ``system``.
 
@@ -223,12 +252,28 @@ def d_spacing(
     ``tetragonal`` / ``orthorhombic`` / ``hexagonal`` / ``rhombohedral`` /
     ``monoclinic`` / ``triclinic`` (the last three take the relevant angle(s)).
 
+    ``system="hexagonal"`` additionally accepts the 4-index Miller-Bravais
+    plane form (hkil) by passing ``i``: it is validated against the closure
+    rule ``i = -(h+k)`` (see :func:`hkl_to_hkil` / :func:`hkil_to_hkl`) and
+    then discarded — ``h, k, l`` alone determine ``d``, ``i`` is redundant by
+    construction. Passing ``i`` for any other system raises, since the
+    4-index form only applies to hexagonal/trigonal cells.
+
     >>> round(d_spacing("cubic", 4.0, 4.0, 4.0, 2, 0, 0)["d"], 6)
     2.0
+    >>> round(d_spacing("hexagonal", 3.2094, 0, 5.2107, 1, 0, 0, i=-1)["d"], 4)
+    2.7794
     """
     entry = _SYSTEMS.get(system)
     if entry is None:
         raise ValueError(f"unknown crystal system {system!r}; expected one of {sorted(_SYSTEMS)}")
+    if i is not None:
+        if system != "hexagonal":
+            raise ValueError(
+                "the 4-index Miller-Bravais (hkil) form only applies to the "
+                f"hexagonal system, not {system!r}"
+            )
+        hkil_to_hkl(h, k, i, l)  # raises ValueError if i != -(h+k)
     fn, needed_lengths, needed_angles = entry
     lengths = {"a": a, "b": b, "c": c}
     for name in needed_lengths:

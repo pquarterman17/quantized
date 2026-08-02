@@ -29,11 +29,13 @@ class DSpacingRequest(BaseModel):
     h: int
     k: int
     l: int  # noqa: E741 — Miller index, the conventional name
+    i: int | None = None  # optional 4-index Miller-Bravais form (hexagonal only)
 
 
 @router.post("/dspacing")
 def dspacing(req: DSpacingRequest) -> dict[str, Any]:
-    """Interplanar d-spacing for (h,k,l) in the given crystal system."""
+    """Interplanar d-spacing for (h,k,l) — or (h,k,i,l) for hexagonal — in the
+    given crystal system."""
     try:
         return d_spacing(
             req.system,
@@ -46,6 +48,7 @@ def dspacing(req: DSpacingRequest) -> dict[str, Any]:
             alpha=req.alpha,
             beta=req.beta,
             gamma=req.gamma,
+            i=req.i,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

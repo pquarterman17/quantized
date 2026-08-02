@@ -1,17 +1,36 @@
 // Calculators ▸ Crystal tab — interplanar d-spacing (all 7 systems) + unit-cell
 // volume & theoretical density (calc.crystallography + calc.formula).
-// Presentational; state in useCalculators.
+// Presentational; state in useCalculators. Hexagonal additionally offers the
+// 4-index Miller-Bravais (hkil) plane notation alongside the ordinary 3-index
+// (hkl) form — see calc.crystallography.hkl_to_hkil for the i = -(h+k) rule.
 
-import { Button, NumberField, Select } from "../../primitives";
+import { useState } from "react";
+
+import { Button, NumberField, SegmentedControl, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { CRYSTAL_SYSTEMS, type CalculatorsState, type CellAngle } from "./useCalculators";
 
 const ANGLE_GLYPH: Record<CellAngle, string> = { alpha: "α", beta: "β", gamma: "γ" };
 
+/** Space-separated Miller notation, e.g. "1 1 -2 0" (ASCII, unambiguous with
+ *  negative indices — never a bare "1 1-2 0"). */
+function fmtMiller(indices: number[]): string {
+  return indices.map((n) => (Number.isFinite(n) ? String(n) : "?")).join(" ");
+}
+
 export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const spec = CRYSTAL_SYSTEMS.find((s) => s.value === c.crystal.system);
   const lengths = spec?.lengths ?? [];
   const angles = spec?.angles ?? [];
+  const isHex = c.crystal.system === "hexagonal";
+  const [millerMode, setMillerMode] = useState<"3" | "4">("3");
+  const show4Index = isHex && millerMode === "4";
+  const hNum = Number(c.crystal.h);
+  const kNum = Number(c.crystal.k);
+  const lNum = Number(c.crystal.l);
+  // i = -(h+k): the Miller-Bravais closure rule (calc.crystallography.hkl_to_hkil).
+  // Always shown derived from h, k as the user types — never independently editable.
+  const derivedI = -(hNum + kNum);
   return (
     <div style={{ marginTop: 12 }}>
       <Select
@@ -66,13 +85,47 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
       )}
 
       {/* d-spacing from Miller indices */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <span className="qzk-field-lbl" style={{ margin: 0 }}>
-          hkl
+          {show4Index ? "hkil" : "hkl"}
         </span>
-        <NumberField value={c.crystal.h} width={44} onChange={(v) => c.updCrystal({ h: v })} />
-        <NumberField value={c.crystal.k} width={44} onChange={(v) => c.updCrystal({ k: v })} />
-        <NumberField value={c.crystal.l} width={44} onChange={(v) => c.updCrystal({ l: v })} />
+        <NumberField
+          value={c.crystal.h}
+          width={44}
+          onChange={(v) => c.updCrystal({ h: v })}
+          aria-label="h"
+        />
+        <NumberField
+          value={c.crystal.k}
+          width={44}
+          onChange={(v) => c.updCrystal({ k: v })}
+          aria-label="k"
+        />
+        {show4Index && (
+          <NumberField
+            value={Number.isFinite(derivedI) ? derivedI : ""}
+            width={44}
+            disabled
+            aria-label="i (derived)"
+            title="derived: i = -(h+k), not editable"
+          />
+        )}
+        <NumberField
+          value={c.crystal.l}
+          width={44}
+          onChange={(v) => c.updCrystal({ l: v })}
+          aria-label="l"
+        />
+        {isHex && (
+          <SegmentedControl<"3" | "4">
+            options={[
+              { value: "3", label: "3-idx" },
+              { value: "4", label: "4-idx" },
+            ]}
+            value={millerMode}
+            onChange={setMillerMode}
+          />
+        )}
         <Button variant="primary" size="sm" disabled={c.crBusy} onClick={() => void c.crCompute()}>
           =
         </Button>
@@ -82,6 +135,11 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
             d = {fmtNum(c.crResult.d)} <span style={{ color: "var(--text-dim)" }}>Å</span>
           </span>
+          {isHex && (
+            <span className="qzk-ds-meta" style={{ fontFamily: "var(--font-mono)" }}>
+              (hkl) {fmtMiller([hNum, kNum, lNum])} = (hkil) {fmtMiller([hNum, kNum, derivedI, lNum])}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"

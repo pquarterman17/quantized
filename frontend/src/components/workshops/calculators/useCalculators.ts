@@ -330,7 +330,19 @@ export function useCalculators(): CalculatorsState {
       if ([h, k, l].some((v) => !Number.isFinite(v))) {
         throw new Error("enter numeric Miller indices");
       }
-      setCrResult(await crystalDSpacing({ system: crystal.system, ...cell, h, k, l }));
+      // Hexagonal also carries the derived 4-index Miller-Bravais i = -(h+k)
+      // (backend re-validates it); every other system omits it.
+      const i = crystal.system === "hexagonal" ? -(h + k) : undefined;
+      setCrResult(
+        await crystalDSpacing({
+          system: crystal.system,
+          ...cell,
+          h,
+          k,
+          l,
+          ...(i !== undefined ? { i } : {}),
+        }),
+      );
     } catch (e) {
       setCrResult(null);
       setCrError(e instanceof Error ? e.message : "calculation failed");
