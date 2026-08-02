@@ -284,10 +284,21 @@ fn main() {
             // rather than stand up a second WebviewWindowBuilder — the sidecar
             // spawn/kill and health-poll plumbing below stay identical for
             // both modes.
+            //
+            // 520x680 (owner report, 2026-08-02) was too small: the calc-only
+            // shell centers its content in a 480px column
+            // (`.qzk-calc-body{max-width:480px}`, shell.css), so 520 left
+            // almost no margin, and 680 was too short for a typical card-heavy
+            // tab (e.g. Electrical's 5 cards) to be visible without a manual
+            // drag-resize first — matches the pywebview `--calc --desktop`
+            // path in server_launch.py/cli.py, which hits the identical CSS
+            // and needed the same fix. Very card-dense tabs (Semiconductor/
+            // Superconductor, 11+ cards) still rely on the calc body's own
+            // `overflow-y: auto` scroll — expected, not a regression.
             if mode == Mode::Calc {
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_title("DiraCulator");
-                    let _ = win.set_size(tauri::LogicalSize::new(520.0_f64, 680.0_f64));
+                    let _ = win.set_size(tauri::LogicalSize::new(600.0_f64, 860.0_f64));
                 }
             }
 
