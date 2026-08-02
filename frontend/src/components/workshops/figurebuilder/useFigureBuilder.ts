@@ -250,6 +250,11 @@ export function useFigureBuilder() {
     ? canonicalReadiness.spec
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
+  const canApply = canonicalReadiness?.state === "ready" && (
+    publicationSession?.target === "new-editable" || (
+      publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
+    )
+  );
 
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
@@ -461,7 +466,9 @@ export function useFigureBuilder() {
     frozen: canonicalDocument?.data.mode === "frozen" || frozenData !== null,
     canonical,
     documentName: canonicalDocument?.name ?? null,
+    publicationTarget: publicationSession?.target ?? null,
     dirty: publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft),
+    canApply,
     apply: applyFigurePublicationEdit,
     cancel: cancelFigurePublicationEdit,
     saveAsFigure,

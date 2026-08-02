@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createFigureDocument } from "../lib/figureDocument";
+import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { editableFigureDirty, figurePublicationDirty } from "./figureLifecycle";
@@ -188,6 +188,87 @@ describe("canonical Publication Preview session", () => {
     useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Draft name" }));
     expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Current plot");
     expect(figurePublicationDirty(useApp.getState().figurePublicationSession)).toBe(true);
+  });
+
+  it("refuses to replace an active Publication Preview session", () => {
+    const source = document();
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Dirty preview" }));
+    const session = structuredClone(useApp.getState().figurePublicationSession);
+    const history = useApp.getState().history.length;
+
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(false);
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(source)).toBe(false);
+    expect(useApp.getState().figurePublicationSession).toEqual(session);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().status).toContain("finish or cancel");
+  });
+
+  it("fails closed before opening an invalid detached draft", () => {
+    const missingSource = createFigureDocument({
+      id: "missing", name: "Missing", datasetId: "gone", view: defaultPlotView(),
+    });
+    const malformedFrozen = {
+      ...document(), id: "frozen", data: { mode: "frozen" },
+    } as FigureDocument;
+    const history = useApp.getState().history.length;
+
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(missingSource)).toBe(false);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(malformedFrozen)).toBe(false);
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().status).toContain("frozen data is unavailable");
+  });
+
+  it("applies an unchanged detached draft once as a fresh editable figure and undo restores the prior state", () => {
+    const source = document();
+    const before = structuredClone(source);
+    const history = useApp.getState().history.length;
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(source)).toBe(true);
+    const draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.id).not.toBe(source.id);
+    expect(draft).toMatchObject({ name: source.name, bindings: source.bindings });
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+
+    const state = useApp.getState();
+    expect(state.editableFigures).toEqual([draft]);
+    expect(state.editableFigures[0]).not.toBe(draft);
+    expect(state.history).toHaveLength(history + 1);
+    expect(state.figurePublicationSession).toBeNull();
+    expect(state.figureBuilderOpen).toBe(false);
+    expect(state.status).toContain("open it from Editable figures");
+    expect(source).toEqual(before);
+
+    state.undo();
+    expect(useApp.getState().editableFigures).toEqual([]);
+  });
+
+  it("refuses a detached Apply when its live source disappears after preview begins", () => {
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(document())).toBe(true);
+    const history = useApp.getState().history.length;
+    useApp.setState({ datasets: [], activeId: null });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().figurePublicationSession).not.toBeNull();
+    expect(useApp.getState().status).toContain("source dataset is unavailable");
+  });
+
+  it("keeps a detached draft transient on Cancel and persists its edits only on Apply", () => {
+    const source = document();
+    expect(useApp.getState().beginDetachedFigurePublicationEdit(source)).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Edited detached" }));
+    const history = useApp.getState().history.length;
+    useApp.getState().cancelFigurePublicationEdit();
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(history);
+
+    useApp.getState().beginDetachedFigurePublicationEdit(source);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Edited detached" }));
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().editableFigures[0].name).toBe("Edited detached");
   });
 
   it("cancels with no persistent mutation or history entry", () => {

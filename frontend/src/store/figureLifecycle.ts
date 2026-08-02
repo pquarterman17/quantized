@@ -70,9 +70,12 @@ export function pruneEditableFigureRefs(
 }
 
 /** A transient Publication Preview edit: never persisted or history-tracked
- * until Apply replaces the target window's canonical document. */
+ * until Apply updates its target or creates its detached editable document. */
 export interface FigurePublicationSession {
-  windowId: string;
+  /** `window` updates a verified focused facade; `new-editable` saves a
+   * detached canonical draft only when the user explicitly applies it. */
+  target: "window" | "new-editable";
+  windowId: string | null;
   baseline: FigureDocument;
   draft: FigureDocument;
 }
@@ -85,6 +88,7 @@ export interface FigureLifecycleSlice {
   editableFigures: FigureDocument[];
   figurePublicationSession: FigurePublicationSession | null;
   beginFigurePublicationEdit: (windowId?: string) => boolean;
+  beginDetachedFigurePublicationEdit: (document: FigureDocument) => boolean;
   replaceFigurePublicationDraft: (draft: FigureDocument) => void;
   patchFigurePublicationDraft: (patch: (draft: FigureDocument) => FigureDocument) => void;
   applyFigurePublicationEdit: () => boolean;
@@ -106,15 +110,50 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     figurePublicationSession: null,
     beginFigurePublicationEdit: (requestedWindowId) => {
       const state = get();
+      if (state.figurePublicationSession) {
+        set({ status: "finish or cancel the current Publication Preview before opening another" });
+        return false;
+      }
       const windowId = requestedWindowId ?? state.focusedWindowId;
       const window = windowId ? state.plotWindows.find((candidate) => candidate.id === windowId) : undefined;
       const document = window && liveWindowDocument(state, window);
       if (!window || !document || window.id !== state.focusedWindowId) return false;
       set({
         figurePublicationSession: {
+          target: "window",
           windowId: window.id,
           baseline: structuredClone(document),
           draft: structuredClone(document),
+        },
+        figureBuilderOpen: true,
+      });
+      return true;
+    },
+    beginDetachedFigurePublicationEdit: (document) => {
+      const state = get();
+      if (state.figurePublicationSession) {
+        set({ status: "finish or cancel the current Publication Preview before opening another" });
+        return false;
+      }
+      if (
+        document.data.mode === "live" &&
+        (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
+      ) {
+        set({ status: `cannot open "${document.name}" in Publication Preview: source dataset is unavailable` });
+        return false;
+      }
+      if (document.data.mode === "frozen" && !document.data.snapshot) {
+        set({ status: `cannot open "${document.name}" in Publication Preview: frozen data is unavailable` });
+        return false;
+      }
+      const draft = structuredClone(document);
+      draft.id = nextFigureId();
+      set({
+        figurePublicationSession: {
+          target: "new-editable",
+          windowId: null,
+          baseline: structuredClone(draft),
+          draft,
         },
         figureBuilderOpen: true,
       });
@@ -134,10 +173,32 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     applyFigurePublicationEdit: () => {
       const state = get();
       const session = state.figurePublicationSession;
+      if (!session) return false;
+      if (session.target === "new-editable") {
+        const document = session.draft;
+        if (
+          document.data.mode === "live" &&
+          (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
+        ) {
+          set({ status: `cannot save editable figure "${document.name}": source dataset is unavailable` });
+          return false;
+        }
+        if (document.data.mode === "frozen" && !document.data.snapshot) {
+          set({ status: `cannot save editable figure "${document.name}": frozen data is unavailable` });
+          return false;
+        }
+        state.recordHistory("create editable figure");
+        set((current) => ({
+          editableFigures: [...current.editableFigures, structuredClone(document)],
+          figurePublicationSession: null,
+          figureBuilderOpen: false,
+          status: `created editable figure "${document.name}"; open it from Editable figures`,
+        }));
+        return true;
+      }
       const window = session && state.plotWindows.find((candidate) => candidate.id === session.windowId);
       const live = window ? liveWindowDocument(state, window) : null;
       if (
-        !session ||
         !window ||
         state.focusedWindowId !== session.windowId ||
         window.kind !== "plot" ||

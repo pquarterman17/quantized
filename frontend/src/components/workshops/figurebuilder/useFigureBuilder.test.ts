@@ -262,7 +262,7 @@ describe("useFigureBuilder", () => {
       view: defaultPlotView(),
     });
     useApp.setState({
-      figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
     });
     const { result } = renderHook(() => useFigureBuilder());
 
@@ -276,6 +276,25 @@ describe("useFigureBuilder", () => {
     expect(exportFigure).not.toHaveBeenCalled();
   });
 
+  it("allows unchanged detached drafts only while their canonical source is ready", () => {
+    const document = createFigureDocument({
+      id: "detached", name: "Detached", datasetId: "d1", view: defaultPlotView(),
+    });
+    useApp.setState({
+      figurePublicationSession: {
+        target: "new-editable", windowId: null,
+        baseline: structuredClone(document), draft: structuredClone(document),
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.canApply).toBe(true);
+
+    act(() => useApp.setState({ datasets: [], activeId: null }));
+    expect(result.current.canonicalReadiness).toBe("missing-source");
+    expect(result.current.canApply).toBe(false);
+  });
+
   it("reports an incompatible canonical spec while retaining its resolved source data", () => {
     const document = createFigureDocument({
       id: "grouped-y2",
@@ -285,7 +304,7 @@ describe("useFigureBuilder", () => {
       groupKey: 0,
     });
     useApp.setState({
-      figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
     });
     const { result } = renderHook(() => useFigureBuilder());
 
@@ -307,7 +326,7 @@ describe("useFigureBuilder", () => {
       axisBreaks: { x: [[0.2, 0.5]], y: [[1, 2]], y2: [[3, 4]] },
       publication: { overrides: { font_name: "Helvetica" } },
     });
-    useApp.setState({ figurePublicationSession: { windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) } });
+    useApp.setState({ figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) } });
     const { result } = renderHook(() => useFigureBuilder());
     await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
     await waitFor(() => expect(result.current.hitmap).not.toBeNull());

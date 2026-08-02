@@ -9,7 +9,7 @@ describe("Publication Preview command", () => {
     const setFigureBuilderOpen = vi.fn();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
     const setStatus = vi.fn();
-    useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
+    useApp.setState({ figurePublicationSession: null, setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
     const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
 
     expect(command).toMatchObject({
@@ -30,6 +30,21 @@ describe("Publication Preview command", () => {
     buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
     expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(setFigureBuilderOpen).not.toHaveBeenCalled();
+  });
+
+  it("preserves an active Publication Preview instead of invoking the legacy fallback", () => {
+    const setFigureBuilderOpen = vi.fn();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
+    const setStatus = vi.fn();
+    const session = { target: "new-editable" as const, windowId: null, baseline: {} as never, draft: {} as never };
+    useApp.setState({ figurePublicationSession: session, setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
+
+    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
+
+    expect(beginFigurePublicationEdit).not.toHaveBeenCalled();
+    expect(setFigureBuilderOpen).not.toHaveBeenCalled();
+    expect(useApp.getState().figurePublicationSession).toBe(session);
+    expect(setStatus).toHaveBeenCalledWith("finish or cancel the current Publication Preview before opening another");
   });
 
   it("identifies the multi-panel surface as a temporary export composition", () => {

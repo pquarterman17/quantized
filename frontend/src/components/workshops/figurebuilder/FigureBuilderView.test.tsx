@@ -30,7 +30,9 @@ const figureState = {
   frozen: false,
   canonical: false,
   documentName: null,
+  publicationTarget: null,
   dirty: false,
+  canApply: false,
   apply: vi.fn(),
   cancel: vi.fn(),
   data: { labels: ["x", "y"] },
@@ -98,7 +100,9 @@ describe("Publication Preview role cues", () => {
       ...figureState,
       canonical: true,
       documentName: "Device figure",
+      publicationTarget: "window",
       dirty: true,
+      canApply: true,
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
     expect(screen.getByRole("region", { name: /Publication preview.*Device figure.*modified/ })).toBeInTheDocument();
@@ -109,12 +113,31 @@ describe("Publication Preview role cues", () => {
     expect(figureState.cancel).toHaveBeenCalled();
   });
 
+  it("labels an unchanged detached draft as creating an editable figure", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      documentName: "Graph Builder plot",
+      publicationTarget: "new-editable",
+      dirty: false,
+      canApply: true,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+
+    expect(screen.getByRole("note", { name: "Publication preview behavior" })).toHaveTextContent(
+      "Apply creates and saves an editable figure",
+    );
+    expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeEnabled();
+  });
+
   it("shows canonical readiness failures accessibly without the legacy dataset prompt", () => {
     vi.mocked(useFigureBuilder).mockReturnValue({
       ...figureState,
       canonical: true,
       documentName: "Missing figure",
+      publicationTarget: "new-editable",
       dirty: true,
+      canApply: false,
       data: null,
       canonicalReadiness: "missing-source",
       canExport: false,
@@ -125,7 +148,7 @@ describe("Publication Preview role cues", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("source unavailable");
     expect(screen.queryByText("Select a dataset to preview a figure.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export PNG" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.1c/F2.2b explicit legacy-figure promotion
+**Updated:** 2026-08-02 — F2.1d/F2.2c Graph Builder detached canonical preview
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -205,6 +205,9 @@ decisions are merged.
   - [x] **F2.1c Explicit legacy promotion (planned PR #114).** A saved legacy
         Publication Figure can create a separately named canonical editable
         copy without rewriting or auto-migrating the source.
+  - [x] **F2.1d Graph Builder detached canonical preview (planned PR #115).**
+        Graph Builder now opens a fresh detached FigureDocument transaction,
+        never an ephemeral legacy FigureDoc seed.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
@@ -213,6 +216,9 @@ decisions are merged.
   - [x] **F2.2b Promotion transaction (planned PR #114).** Creating an
         editable legacy copy is one undoable mutation; invalid sources fail
         visibly without opening a fallback dataset/window.
+  - [x] **F2.2c Detached-create transaction (planned PR #115).** Applying a
+        Graph Builder preview creates one undoable editable figure, including
+        an unchanged draft; Cancel remains mutation-free.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
@@ -348,6 +354,18 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-02 — F2.1d/F2.2c Graph Builder detached canonical preview (planned PR #115)
+
+- Graph Builder's characterized PlotSpec-to-legacy-FigureDoc bridge now ends
+  immediately at the tested FigureDocument adapter and a detached canonical
+  Publication Preview transaction; it no longer writes `figureDocSeed`.
+- The detached draft receives a fresh identity, derives preview/export solely
+  from its canonical document, and only Apply creates one editable figure and
+  one undo entry. Apply never opens a window, while Cancel is mutation-free.
+- Both entry paths reject replacing an existing preview; detached sources fail
+  visibly when their exact live dataset or frozen snapshot is unavailable.
+- F2.1/F2.2 remain open for broader legacy convergence and full preview parity.
 
 ### 2026-08-02 — F2.1c/F2.2b explicit legacy-figure promotion (planned PR #114)
 

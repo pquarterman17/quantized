@@ -296,6 +296,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // "figure builder" muscle memory in the palette or Help.
       keywords: "figure builder live preview publication",
       run: () => {
+        if (s().figurePublicationSession) {
+          s().setStatus("finish or cancel the current Publication Preview before opening another");
+          return;
+        }
         if (s().beginFigurePublicationEdit()) return;
         s().setStatus("opened Publication Preview without an editable plot document");
         s().setFigureBuilderOpen(true);

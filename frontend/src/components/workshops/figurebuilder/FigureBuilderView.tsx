@@ -22,6 +22,7 @@ export default function FigureBuilderView() {
     ? `Publication preview — ${f.documentName}${f.dirty ? " (modified)" : ""}`
     : (f.frozen ? "Publication preview (frozen data)" : "Publication preview");
   const canonicalFailure = f.canonical && f.canonicalReadiness !== "ready";
+  const detachedCanonical = f.publicationTarget === "new-editable";
 
   return (
     <ToolWindow id="figurebuilder" title={title} width={560} onClose={() => f.canonical ? f.cancel() : setOpen(false)}>
@@ -38,7 +39,9 @@ export default function FigureBuilderView() {
               className="qzk-ds-meta"
               style={{ color: "var(--text-dim)", marginBottom: 2 }}
             >
-              {f.canonical
+              {f.canonical && detachedCanonical
+                ? `Editing ${f.documentName}. Apply creates and saves an editable figure; Cancel discards it.`
+                : f.canonical
                 ? `Editing ${f.documentName}${f.dirty ? " — unpublished changes" : ""}. Apply updates this figure; Cancel discards them.`
                 : "Settings here affect saved and exported output; they do not change the editable Stage plot."}
             </div>
@@ -133,7 +136,9 @@ export default function FigureBuilderView() {
             </Button>
             {f.canonical && (
               <div style={{ display: "flex", gap: 6 }}>
-                <Button variant="primary" onClick={f.apply} disabled={!f.dirty}>Apply</Button>
+                <Button variant="primary" onClick={f.apply} disabled={!f.canApply}>
+                  {detachedCanonical ? "Create Editable Figure" : "Apply"}
+                </Button>
                 <Button onClick={f.cancel}>Cancel</Button>
               </div>
             )}

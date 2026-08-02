@@ -73,6 +73,8 @@ beforeEach(() => {
     composition: null,
     figureBuilderOpen: false,
     figureDocSeed: null,
+    figurePublicationSession: null,
+    editableFigures: [],
     figureDocs: [],
     seriesStyles: {},
     // Owner-routing item 1: starts parked on Worksheet so "applyToCurrent
@@ -431,11 +433,75 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     const state = useApp.getState();
     expect(state.figureBuilderOpen).toBe(true);
     expect(state.figureDocs).toEqual([]); // draft is not silently saved
-    expect(state.figureDocSeed?.config).toMatchObject({ xKey: 0, yKeys: [1] });
-    expect(state.figureDocSeed?.config.seriesStyles?.[0]).toMatchObject({
+    expect(state.figureDocSeed).toBeNull();
+    expect(state.figurePublicationSession).toMatchObject({
+      target: "new-editable",
+      windowId: null,
+      draft: { bindings: { xKey: 0, yKeys: [1] } },
+    });
+    expect(state.figurePublicationSession?.draft.publication?.seriesStyles?.[0]).toMatchObject({
       line: "none",
       marker: true,
     });
+  });
+
+  it("keeps a saved PlotSpec unchanged and assigns a fresh canonical id for each detached preview", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Reusable recipe"));
+    const recipe = structuredClone(useApp.getState().savedPlotSpecs);
+
+    await act(async () => result.current.openInFigureBuilder());
+    const firstId = useApp.getState().figurePublicationSession?.draft.id;
+    expect(firstId).toBeTruthy();
+    expect(useApp.getState().savedPlotSpecs).toEqual(recipe);
+    expect(useApp.getState().figureDocSeed).toBeNull();
+
+    act(() => useApp.getState().cancelFigurePublicationEdit());
+    await act(async () => result.current.openInFigureBuilder());
+    expect(useApp.getState().figurePublicationSession?.draft.id).not.toBe(firstId);
+    expect(useApp.getState().savedPlotSpecs).toEqual(recipe);
+  });
+
+  it("keeps an existing preview and its refusal status when Graph Builder tries to open another", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    await act(async () => result.current.openInFigureBuilder());
+    act(() => useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Keep this preview" })));
+    const session = structuredClone(useApp.getState().figurePublicationSession);
+
+    await act(async () => result.current.openInFigureBuilder());
+    expect(useApp.getState().figurePublicationSession).toEqual(session);
+    expect(useApp.getState().status).toContain("finish or cancel");
+  });
+
+  it("applies a Graph Builder preview once without opening a window and undo removes only its editable figure", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Recipe source"));
+    const recipe = structuredClone(useApp.getState().savedPlotSpecs);
+    const windows = useApp.getState().plotWindows.length;
+    const history = useApp.getState().history.length;
+
+    await act(async () => result.current.openInFigureBuilder());
+    const previewId = useApp.getState().figurePublicationSession?.draft.id;
+    let applied = false;
+    act(() => { applied = useApp.getState().applyFigurePublicationEdit(); });
+    expect(applied).toBe(true);
+
+    expect(useApp.getState().editableFigures).toMatchObject([{ id: previewId, name: "Recipe source" }]);
+    expect(useApp.getState().savedPlotSpecs).toEqual(recipe);
+    expect(useApp.getState().figureDocSeed).toBeNull();
+    expect(useApp.getState().plotWindows).toHaveLength(windows);
+    expect(useApp.getState().history).toHaveLength(history + 1);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().savedPlotSpecs).toEqual(recipe);
   });
 
   it("fails closed when a facet zone would be lost", async () => {
@@ -448,6 +514,7 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     await act(async () => result.current.openInFigureBuilder());
     expect(useApp.getState().figureBuilderOpen).toBe(false);
     expect(useApp.getState().figureDocSeed).toBeNull();
+    expect(useApp.getState().figurePublicationSession).toBeNull();
   });
 
   it("requires confirmation before opening a PlotSpec with settings the preview omits", async () => {
@@ -493,7 +560,8 @@ describe("useGraphBuilder — open in Figure Builder", () => {
 
     const state = useApp.getState();
     expect(state.figureBuilderOpen).toBe(true);
-    expect(state.figureDocSeed?.config).toMatchObject({ xKey: 0, yKeys: [1], groupCol: 2 });
+    expect(state.figureDocSeed).toBeNull();
+    expect(state.figurePublicationSession?.draft.bindings).toMatchObject({ xKey: 0, yKeys: [1], groupKey: 2 });
   });
 
   it("preserves an explicit Y reorder through save, Stage, and Figure Builder", async () => {
@@ -509,7 +577,8 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     act(() => result.current.applyToCurrent());
     expect(useApp.getState().yKeys).toEqual([2, 1]);
     await act(async () => result.current.openInFigureBuilder());
-    expect(useApp.getState().figureDocSeed?.config.yKeys).toEqual([2, 1]);
+    expect(useApp.getState().figureDocSeed).toBeNull();
+    expect(useApp.getState().figurePublicationSession?.draft.bindings.yKeys).toEqual([2, 1]);
   });
 });
 

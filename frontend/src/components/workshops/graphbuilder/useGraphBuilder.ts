@@ -18,6 +18,7 @@ import {
   figureTransitionWarning,
   plotSpecPublicationCompatibility,
 } from "../../../lib/figureCompatibility";
+import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
@@ -353,7 +354,7 @@ export function useGraphBuilder(): GraphBuilderState {
       toast(plotSpecFigureReason(spec) ?? "This graph cannot open in Publication Preview.", "info");
       return;
     }
-    useApp.getState().openFigureDraft(doc);
+    if (!useApp.getState().beginDetachedFigurePublicationEdit(figureDocumentFromLegacyFigureDoc(doc))) return;
     setStatus("opened XY plot in Publication Preview");
   }
 
