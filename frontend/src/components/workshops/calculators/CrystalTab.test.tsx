@@ -7,12 +7,17 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { crystalDSpacing, getConstants } from "../../../lib/api";
+import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
   getConstants: vi.fn(),
   crystalDSpacing: vi.fn(),
   crystalCell: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/crystallography", () => ({
+  crystalInterplanarAngle: vi.fn(),
 }));
 
 function openCrystalTab(): void {
@@ -90,5 +95,45 @@ describe("CrystalTab — hexagonal Miller-Bravais", () => {
     await screen.findByRole("button", { name: "→ X-ray" }); // renders once crResult is set
     expect(screen.queryByText(/\(hkil\)/)).not.toBeInTheDocument();
     expect(crystalDSpacing).toHaveBeenCalledWith(expect.not.objectContaining({ i: expect.anything() }));
+  });
+});
+
+describe("CrystalTab — interplanar angle", () => {
+  it("computes the angle between two planes for the default cubic cell", async () => {
+    vi.mocked(crystalInterplanarAngle).mockResolvedValue({
+      angle_deg: 45.0,
+      d1: 3.8387,
+      d2: 2.7154,
+      system: "cubic",
+    });
+    openCrystalTab();
+    fireEvent.change(screen.getByLabelText("h2"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("k2"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("l2"), { target: { value: "0" } });
+    // The angle card's "=" is the 3rd on the page (d-spacing, cell volume, angle).
+    fireEvent.click(screen.getAllByText("=")[2]);
+
+    expect(await screen.findByText(/φ = 45.*°/)).toBeInTheDocument();
+    expect(crystalInterplanarAngle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: "cubic",
+        a: 5.4309,
+        h1: 1,
+        k1: 0,
+        l1: 0,
+        h2: 1,
+        k2: 1,
+        l2: 0,
+      }),
+    );
+  });
+
+  it("surfaces an error for zero Miller indices", async () => {
+    vi.mocked(crystalInterplanarAngle).mockRejectedValue(
+      new Error("Miller indices (h, k, l) must not all be zero"),
+    );
+    openCrystalTab();
+    fireEvent.click(screen.getAllByText("=")[2]);
+    expect(await screen.findByText(/must not all be zero/)).toBeInTheDocument();
   });
 });

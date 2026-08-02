@@ -13,6 +13,7 @@ import {
   electricalResistivity,
   electricalSheetResistance,
 } from "../../../lib/api";
+import { electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
 import {
   Button,
   Card,
@@ -20,6 +21,7 @@ import {
   ROW,
   fmtNum,
   makeCardRunner,
+  parseXYPairs,
   resultLine,
   type CardResult,
 } from "./shared";
@@ -56,12 +58,24 @@ export default function ElectricalTab() {
   const [hallT, setHallT] = useState("100");
   const [c5, setC5] = useState<CardResult>(null);
 
+  // Card 6 — Hall sweep (paste H, R_xy), t in nm, optional sigma for mobility.
+  const [hsText, setHsText] = useState("");
+  const [hsT, setHsT] = useState("100");
+  const [hsSigma, setHsSigma] = useState("");
+  const [c6, setC6] = useState<CardResult>(null);
+
+  // Card 7 — van der Pauw (Ra, Rb; optional thickness in nm).
+  const [vdpRa, setVdpRa] = useState("1.0");
+  const [vdpRb, setVdpRb] = useState("1.0");
+  const [vdpT, setVdpT] = useState("");
+  const [c7, setC7] = useState<CardResult>(null);
+
   return (
     <div style={{ marginTop: 12 }}>
       <Card title="Resistivity / Sheet resistance">
         <div style={ROW}>
           <Field label="Rs" value={rs} onChange={setRs} unit="Ω/sq" />
-          <Field label="t" value={thick} onChange={setThick} unit="nm" />
+          <Field label="t" value={thick} onChange={setThick} unit="nm" ariaLabel="Rs/rho thickness" />
           <Button
             size="sm"
             onClick={() =>
@@ -157,7 +171,14 @@ export default function ElectricalTab() {
         </div>
         <div style={{ ...ROW, marginTop: 8 }}>
           <Field label="B" value={hallB} onChange={setHallB} unit="T" width={72} />
-          <Field label="t" value={hallT} onChange={setHallT} unit="nm" width={72} />
+          <Field
+            label="t"
+            value={hallT}
+            onChange={setHallT}
+            unit="nm"
+            width={72}
+            ariaLabel="Hall effect thickness"
+          />
           <Button
             variant="primary"
             size="sm"
@@ -179,6 +200,96 @@ export default function ElectricalTab() {
           </Button>
         </div>
         {resultLine(c5)}
+      </Card>
+
+      <Card title="Hall sweep (paste H, R_xy)">
+        <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 4 }}>
+          Paste field + Hall-resistance columns (one "H R_xy" pair per line —
+          space, comma, or tab separated)
+        </div>
+        <textarea
+          className="qz-input"
+          style={{ width: "100%", minHeight: 80, fontFamily: "var(--font-mono)" }}
+          value={hsText}
+          onChange={(e) => setHsText(e.target.value)}
+          placeholder={"-1, -0.002\n0, 0.0005\n1, 0.0025\n..."}
+          aria-label="Hall sweep H, R_xy data"
+        />
+        <div style={{ ...ROW, marginTop: 8 }}>
+          <Field
+            label="t"
+            value={hsT}
+            onChange={setHsT}
+            unit="nm (opt)"
+            width={72}
+            ariaLabel="Hall sweep thickness"
+          />
+          <Field
+            label="σ"
+            value={hsSigma}
+            onChange={setHsSigma}
+            unit="S/cm (opt)"
+            width={80}
+            ariaLabel="Hall sweep sigma"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void run(setC6, "Hall sweep", async () => {
+                const { x: field, y: hallResistance } = parseXYPairs(hsText);
+                if (field.length < 2) throw new Error("paste at least 2 valid H, R_xy rows");
+                const t = hsT.trim() === "" ? undefined : Number(hsT) * NM_TO_CM;
+                const sigma = hsSigma.trim() === "" ? undefined : Number(hsSigma);
+                const r = await electricalHallSweep({
+                  field,
+                  hall_resistance: hallResistance,
+                  thickness: t,
+                  sigma,
+                });
+                let s =
+                  `R_H = ${fmtNum(r.r_h)} cm³/C · n = ${fmtNum(r.carrier_density)} cm⁻³ · ` +
+                  `${r.carrier_type}-type · R² = ${fmtNum(r.fit_r2)}`;
+                if (Number.isFinite(r.mobility)) s += ` · µ = ${fmtNum(r.mobility)} cm²/(V·s)`;
+                return s;
+              })
+            }
+          >
+            Fit
+          </Button>
+        </div>
+        {resultLine(c6)}
+      </Card>
+
+      <Card title="Van der Pauw">
+        <div style={ROW}>
+          <Field label="Ra" value={vdpRa} onChange={setVdpRa} unit="Ω" width={64} />
+          <Field label="Rb" value={vdpRb} onChange={setVdpRb} unit="Ω" width={64} />
+          <Field
+            label="t"
+            value={vdpT}
+            onChange={setVdpT}
+            unit="nm (opt)"
+            width={72}
+            ariaLabel="Van der Pauw thickness"
+          />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void run(setC7, "Van der Pauw", async () => {
+                const t = vdpT.trim() === "" ? undefined : Number(vdpT) * NM_TO_CM;
+                const r = await electricalVanDerPauw(Number(vdpRa), Number(vdpRb), t);
+                let s = `Rs = ${fmtNum(r.Rs)} Ω/sq`;
+                if (r.rho != null) s += ` · ρ = ${fmtNum(r.rho)} Ω·cm`;
+                return s;
+              })
+            }
+          >
+            Calculate
+          </Button>
+        </div>
+        {resultLine(c7)}
       </Card>
     </div>
   );

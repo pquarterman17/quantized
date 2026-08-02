@@ -118,3 +118,55 @@ def test_zero_inputs_rejected() -> None:
 
 def test_doctest_mobility_value_is_finite() -> None:
     assert math.isfinite(electrical.mobility(1e-2, 1e18)["mu"])
+
+
+# ── van der Pauw ─────────────────────────────────────────────────────────────
+def test_van_der_pauw_symmetric_closed_form() -> None:
+    # Ra = Rb = 1 Ohm -> Rs = pi/ln(2) = 4.53236 Ohm/sq (textbook closed form).
+    out = electrical.van_der_pauw(1.0, 1.0)
+    assert out["Rs"] == pytest.approx(math.pi / math.log(2.0), rel=1e-12)
+    assert out["Rs"] == pytest.approx(4.53236, abs=1e-5)
+
+
+def test_van_der_pauw_symmetric_scales_with_r() -> None:
+    # The closed form is linear in R -- doubling both resistances doubles Rs.
+    out = electrical.van_der_pauw(2.0, 2.0)
+    assert out["Rs"] == pytest.approx(2.0 * math.pi / math.log(2.0), rel=1e-12)
+
+
+def test_van_der_pauw_asymmetric_satisfies_defining_equation() -> None:
+    # Independent cross-check: rather than trusting the same brentq call, plug
+    # the returned Rs back into the ORIGINAL van der Pauw relation and assert
+    # it holds to near machine precision -- the standard way to verify an
+    # implicit-equation root-finder without re-implementing the solver.
+    ra, rb = 1.0, 3.7
+    out = electrical.van_der_pauw(ra, rb)
+    rs = out["Rs"]
+    lhs = math.exp(-math.pi * ra / rs) + math.exp(-math.pi * rb / rs)
+    assert lhs == pytest.approx(1.0, abs=1e-9)
+    # Rs must lie strictly between the two closed-form single-resistance
+    # estimates (pi*Ra/ln2, pi*Rb/ln2) -- a sanity bound independent of brentq.
+    lo, hi = sorted([math.pi * ra / math.log(2.0), math.pi * rb / math.log(2.0)])
+    assert lo < rs < hi
+
+
+def test_van_der_pauw_extreme_ratio_still_converges() -> None:
+    # A 20-order-of-magnitude Ra/Rb spread must not break the bracket search.
+    out = electrical.van_der_pauw(1e-10, 1e10)
+    rs = out["Rs"]
+    lhs = math.exp(-math.pi * 1e-10 / rs) + math.exp(-math.pi * 1e10 / rs)
+    assert lhs == pytest.approx(1.0, abs=1e-6)
+
+
+def test_van_der_pauw_with_thickness_returns_resistivity() -> None:
+    out = electrical.van_der_pauw(1.0, 1.0, thickness=1e-5)
+    assert out["rho"] == pytest.approx(out["Rs"] * 1e-5, rel=1e-12)
+
+
+def test_van_der_pauw_rejects_nonpositive_inputs() -> None:
+    with pytest.raises(ValueError):
+        electrical.van_der_pauw(0.0, 1.0)
+    with pytest.raises(ValueError):
+        electrical.van_der_pauw(1.0, -1.0)
+    with pytest.raises(ValueError):
+        electrical.van_der_pauw(1.0, 1.0, thickness=0.0)

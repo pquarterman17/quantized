@@ -8,6 +8,7 @@ import {
   thinFilmStoneyStress,
   thinFilmThermalMismatch,
 } from "../../../lib/api";
+import { thinFilmSauerbrey } from "../../../lib/api/thinFilm";
 import ThinFilmTab from "./ThinFilmTab";
 
 vi.mock("../../../lib/api", () => ({
@@ -21,6 +22,10 @@ vi.mock("../../../lib/api", () => ({
   thinFilmProjectedRange: vi.fn(),
   thinFilmStoneyStress: vi.fn(),
   thinFilmThermalMismatch: vi.fn(),
+}));
+
+vi.mock("../../../lib/api/thinFilm", () => ({
+  thinFilmSauerbrey: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -102,5 +107,19 @@ describe("ThinFilmTab", () => {
 
     fireEvent.click(screen.getAllByText("Calculate")[0]);
     expect(await screen.findByText("thickness and time must be positive")).toBeInTheDocument();
+  });
+
+  it("computes the Sauerbrey areal mass and sensitivity factor", async () => {
+    vi.mocked(thinFilmSauerbrey).mockResolvedValue({
+      areal_mass: 1.7668e-7,
+      areal_mass_ng_cm2: 176.68,
+      Cf: 5.66e7,
+      Cf_hz_cm2_ug: 56.6,
+    });
+    render(<ThinFilmTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[10]);
+    expect(await screen.findByText(/Δm\/A = .* ng\/cm² · Cf = .* Hz·cm²\/µg/)).toBeInTheDocument();
+    expect(thinFilmSauerbrey).toHaveBeenCalledWith(-10, 5e6, undefined, undefined);
   });
 });

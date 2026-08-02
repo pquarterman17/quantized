@@ -11,6 +11,7 @@
 import { Button, NumberField, Pill, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import PhotonEnergyPanel from "./PhotonEnergyPanel";
+import { CopyButton } from "./shared";
 import { QUICK_PAIRS, type CalculatorsState } from "./useCalculators";
 
 export default function UnitsTab({ c }: { c: CalculatorsState }) {
@@ -95,6 +96,7 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
             <div style={{ marginTop: 12 }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
                 {fmtNum(c.result)} <span style={{ color: "var(--text-dim)" }}>{c.to}</span>
+                <CopyButton value={String(c.result)} label="converted value" />
               </div>
               {c.description && (
                 <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>

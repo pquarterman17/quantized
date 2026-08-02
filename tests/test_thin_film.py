@@ -184,3 +184,39 @@ def test_positive_input_validation() -> None:
         tf.kiessig_thickness(0.0)
     with pytest.raises(ValueError):
         tf.sputter_rate(0.0, 1.0, 19.3, 196.97)
+
+
+# ── Sauerbrey (QCM) ──────────────────────────────────────────────────────────
+def test_sauerbrey_5mhz_sensitivity_factor_reference() -> None:
+    # Canonical 5 MHz AT-cut quartz sensitivity factor Cf ~= 56.6 Hz*cm^2/ug.
+    r = tf.sauerbrey(-10.0, 5e6)
+    assert r["Cf_hz_cm2_ug"] == pytest.approx(56.6, abs=0.05)
+    assert r["Cf"] == pytest.approx(r["Cf_hz_cm2_ug"] * 1e6, rel=1e-12)
+
+
+def test_sauerbrey_negative_delta_f_gives_positive_areal_mass() -> None:
+    r = tf.sauerbrey(-10.0, 5e6)
+    assert r["areal_mass"] > 0
+    assert r["areal_mass_ng_cm2"] == pytest.approx(r["areal_mass"] * 1e9, rel=1e-12)
+
+
+def test_sauerbrey_areal_mass_scales_linearly_with_delta_f() -> None:
+    r1 = tf.sauerbrey(-10.0, 5e6)
+    r2 = tf.sauerbrey(-20.0, 5e6)
+    assert r2["areal_mass"] == pytest.approx(2.0 * r1["areal_mass"], rel=1e-12)
+
+
+def test_sauerbrey_with_area_and_density_gives_thickness() -> None:
+    r = tf.sauerbrey(-10.0, 5e6, area=1.0, density=2.0)
+    assert r["delta_m"] == pytest.approx(r["areal_mass"] * 1.0, rel=1e-12)
+    assert r["thickness"] == pytest.approx(r["delta_m"] / (2.0 * 1.0), rel=1e-12)
+    assert r["thickness_nm"] == pytest.approx(r["thickness"] * 1e7, rel=1e-12)
+
+
+def test_sauerbrey_rejects_bad_inputs() -> None:
+    with pytest.raises(ValueError):
+        tf.sauerbrey(-10.0, 0.0)
+    with pytest.raises(ValueError):
+        tf.sauerbrey(-10.0, 5e6, area=0.0)
+    with pytest.raises(ValueError):
+        tf.sauerbrey(-10.0, 5e6, area=1.0, density=-1.0)

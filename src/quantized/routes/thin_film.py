@@ -56,6 +56,13 @@ class ProjectedRangeRequest(BaseModel):
     energy: float  # keV
 
 
+class SauerbreyRequest(BaseModel):
+    delta_f: float  # Hz (negative for added mass)
+    f0: float  # Hz
+    area: float | None = None  # cm^2
+    density: float | None = None  # g/cm^3
+
+
 class SputterRateRequest(BaseModel):
     y: float  # atoms/ion
     j: float  # mA/cm^2
@@ -126,6 +133,12 @@ def multilayer_thermal(req: MultilayerThermalRequest) -> dict[str, Any]:
 def projected_range(req: ProjectedRangeRequest) -> dict[str, Any]:
     """LSS projected range Rp + straggle ΔRp (nm)."""
     return _call(thin_film.projected_range, req.ion, req.target, req.energy)
+
+
+@router.post("/sauerbrey")
+def sauerbrey(req: SauerbreyRequest) -> dict[str, Any]:
+    """Δf = -Cf·Δm/A (QCM areal mass, + total mass/thickness when area/density given)."""
+    return _call(thin_film.sauerbrey, req.delta_f, req.f0, area=req.area, density=req.density)
 
 
 @router.post("/sputter-rate")

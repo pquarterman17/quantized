@@ -8,7 +8,11 @@ import { useState } from "react";
 
 import { Button, NumberField, SegmentedControl, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
-import { CRYSTAL_SYSTEMS, type CalculatorsState, type CellAngle } from "./useCalculators";
+import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
+import { Card, CopyButton, ROW, makeCardRunner, resultLine, type CardResult } from "./shared";
+import { assembleCell, CRYSTAL_SYSTEMS, type CalculatorsState, type CellAngle } from "./useCalculators";
+
+const runAngle = makeCardRunner("Crystal");
 
 const ANGLE_GLYPH: Record<CellAngle, string> = { alpha: "α", beta: "β", gamma: "γ" };
 
@@ -24,6 +28,15 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const angles = spec?.angles ?? [];
   const isHex = c.crystal.system === "hexagonal";
   const [millerMode, setMillerMode] = useState<"3" | "4">("3");
+  // Interplanar-angle card — same crystal system/lattice as above; two plane
+  // index sets are its own local state.
+  const [ah1, setAh1] = useState("1");
+  const [ak1, setAk1] = useState("0");
+  const [al1, setAl1] = useState("0");
+  const [ah2, setAh2] = useState("1");
+  const [ak2, setAk2] = useState("1");
+  const [al2, setAl2] = useState("0");
+  const [angleResult, setAngleResult] = useState<CardResult>(null);
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
   const kNum = Number(c.crystal.k);
@@ -134,6 +147,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
             d = {fmtNum(c.crResult.d)} <span style={{ color: "var(--text-dim)" }}>Å</span>
+            <CopyButton value={String(c.crResult.d)} label="d-spacing" />
           </span>
           {isHex && (
             <span className="qzk-ds-meta" style={{ fontFamily: "var(--font-mono)" }}>
@@ -183,6 +197,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         <div style={{ marginTop: 10, fontFamily: "var(--font-mono)" }}>
           <div style={{ fontSize: "var(--font-size-lg)" }}>
             V = {fmtNum(c.cellResult.volume)} <span style={{ color: "var(--text-dim)" }}>Å³</span>
+            <CopyButton value={String(c.cellResult.volume)} label="cell volume" />
           </div>
           {c.cellResult.density != null && (
             <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -209,6 +224,56 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
           {c.cellError}
         </div>
       )}
+
+      {/* Interplanar angle — reuses the system + lattice above; two plane index sets */}
+      <Card title="Interplanar angle">
+        <div style={ROW}>
+          <span className="qzk-field-lbl" style={{ margin: 0 }}>
+            hkl₁
+          </span>
+          <NumberField value={ah1} width={40} onChange={setAh1} aria-label="h1" />
+          <NumberField value={ak1} width={40} onChange={setAk1} aria-label="k1" />
+          <NumberField value={al1} width={40} onChange={setAl1} aria-label="l1" />
+          <span className="qzk-field-lbl" style={{ margin: 0 }}>
+            hkl₂
+          </span>
+          <NumberField value={ah2} width={40} onChange={setAh2} aria-label="h2" />
+          <NumberField value={ak2} width={40} onChange={setAk2} aria-label="k2" />
+          <NumberField value={al2} width={40} onChange={setAl2} aria-label="l2" />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void runAngle(setAngleResult, "Interplanar angle", async () => {
+                const cell = assembleCell(c.crystal);
+                const h1v = Number(ah1);
+                const k1v = Number(ak1);
+                const l1v = Number(al1);
+                const h2v = Number(ah2);
+                const k2v = Number(ak2);
+                const l2v = Number(al2);
+                if ([h1v, k1v, l1v, h2v, k2v, l2v].some((v) => !Number.isFinite(v))) {
+                  throw new Error("enter numeric Miller indices for both planes");
+                }
+                const r = await crystalInterplanarAngle({
+                  system: c.crystal.system,
+                  ...cell,
+                  h1: h1v,
+                  k1: k1v,
+                  l1: l1v,
+                  h2: h2v,
+                  k2: k2v,
+                  l2: l2v,
+                });
+                return `φ = ${fmtNum(r.angle_deg)}°  (d₁ = ${fmtNum(r.d1)} Å, d₂ = ${fmtNum(r.d2)} Å)`;
+              })
+            }
+          >
+            =
+          </Button>
+        </div>
+        {resultLine(angleResult)}
+      </Card>
     </div>
   );
 }

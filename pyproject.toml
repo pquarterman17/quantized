@@ -145,6 +145,7 @@ select = ["E", "F", "I", "UP", "B"]
 # in crystallographic context (E741 "ambiguous variable name").
 "src/quantized/calc/crystallography.py" = ["E741"]
 "src/quantized/calc/miller_bravais.py" = ["E741"]
+"src/quantized/calc/plane_spacings.py" = ["E741"]
 "src/quantized/routes/crystallography.py" = ["E741"]
 "tests/test_crystallography.py" = ["E741"]
 "tests/test_calc_planespacings.py" = ["E741"]

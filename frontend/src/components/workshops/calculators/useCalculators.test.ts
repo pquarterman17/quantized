@@ -9,6 +9,7 @@ import {
   xrayCalc,
 } from "../../../lib/api";
 import { getUnitCategories } from "../../../lib/api/reference";
+import { useCalcHistory } from "../../../store/calcHistory";
 import { assembleCell, type CrystalForm, useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
@@ -42,6 +43,7 @@ const PHOTON_ENERGY_UNITS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useCalcHistory.setState({ history: [], favorites: [], seq: 0 });
   vi.mocked(getConstants).mockResolvedValue({
     constants: { h: 6.626e-34, c: 2.998e8 },
     systems: { SI: [], CGS: [], eV: [] },
@@ -161,6 +163,32 @@ describe("useCalculators", () => {
     expect(result.current.result).toBeNull();
   });
 
+  // ── History coverage (calculator audit #1 — Units/Xray/Crystal/Sld tabs
+  // never recorded to History, unlike every makeCardRunner tab) ─────────────
+  it("convert records a Units entry to calc history", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({
+      result: 0.0001,
+      info: { description: "1 Oe = 0.0001 T" },
+    });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Units");
+    expect(history[0].summary).toBe("1 Oe = 1.00000e-4 T");
+  });
+
+  it("a failed convert does NOT record to calc history", async () => {
+    vi.mocked(convertUnits).mockRejectedValue(new Error("incompatible dimensions"));
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(useCalcHistory.getState().history).toHaveLength(0);
+  });
+
   it("computes an x-ray conversion with the default mode + Cu Kα", async () => {
     vi.mocked(xrayCalc).mockResolvedValue({ result: 28.44, unit: "deg", description: "2θ from d" });
     const { result } = renderHook(() => useCalculators());
@@ -194,6 +222,18 @@ describe("useCalculators", () => {
     });
     expect(xrayCalc).not.toHaveBeenCalled();
     expect(result.current.xrayError).toContain("order n");
+  });
+
+  it("xrayCompute records a Xray entry to calc history", async () => {
+    vi.mocked(xrayCalc).mockResolvedValue({ result: 28.44, unit: "deg", description: "2θ from d" });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Xray");
+    expect(history[0].summary).toContain("deg");
   });
 
   it("passes the diffraction order through to the API", async () => {
@@ -265,6 +305,30 @@ describe("useCalculators", () => {
 
     const call = vi.mocked(crystalDSpacing).mock.calls[0][0];
     expect(call).not.toHaveProperty("i");
+  });
+
+  it("crCompute records a Crystal entry to calc history", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.crCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Crystal");
+    expect(history[0].summary).toContain("3.1356");
+  });
+
+  it("cellCompute also records a Crystal entry to calc history", async () => {
+    vi.mocked(crystalCell).mockResolvedValue({ volume: 160.18, molar_mass: 28.09, density: 2.33 });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.cellCompute();
+    });
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Crystal");
+    expect(history[0].label).toBe("Cell volume & density");
   });
 
   it("updCrystal patches the form and switches system", () => {

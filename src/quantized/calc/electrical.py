@@ -27,9 +27,11 @@ Reference values (frozen from ``quantized_matlab``):
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
+from scipy.optimize import brentq
 
 from quantized.calc.constants import constants
 
@@ -41,6 +43,7 @@ __all__ = [
     "mobility",
     "resistivity",
     "sheet_resistance",
+    "van_der_pauw",
     "wiedemann_franz",
 ]
 
@@ -246,3 +249,77 @@ def wiedemann_franz(
     with np.errstate(divide="ignore", invalid="ignore"):
         kappa = _LORENZ * t / rho
     return {"kappa": kappa.tolist(), "temperature": t.tolist(), "lorenz": _LORENZ}
+
+
+def van_der_pauw(r_a: float, r_b: float, *, thickness: float | None = None) -> dict[str, Any]:
+    r"""Sheet resistance from a van der Pauw measurement (DiraCulator ``doVanDerPauw``).
+
+    Solves the van der Pauw relation for the sheet resistance :math:`R_s` (Ω/sq):
+
+    .. math::
+
+        e^{-\pi R_a / R_s} + e^{-\pi R_b / R_s} = 1
+
+    given the two characteristic resistances ``R_a`` and ``R_b`` (Ω) measured
+    around the sample's perimeter (each the average of the two
+    current-reversed readings for that configuration; van der Pauw, *Philips
+    Res. Rep.* **13**, 1 (1958)). Note :math:`R_s` sits in the DENOMINATOR of
+    each exponent (the measured resistances are fixed inputs; the unknown
+    sheet resistance sets the exponents' scale) — the opposite arrangement
+    from the superficially similar-looking form with :math:`R_s` in the
+    numerator, which solves a different (and unphysical, for this problem)
+    equation.
+
+    The symmetric case (``R_a == R_b == R``) is exact and closed-form,
+    ``R_s = πR / ln 2`` — used directly when the two resistances match
+    exactly (the general iterative solve's Jacobian is degenerate there,
+    since both exponential terms coincide). Otherwise solves numerically via
+    ``scipy.optimize.brentq``: the left-hand side is strictly monotonically
+    INCREASING in :math:`R_s` (from -1 as :math:`R_s\to 0^+` to 1 as
+    :math:`R_s\to\infty`), so ``f(R_s) = e^{-\pi R_a/R_s} + e^{-\pi R_b/R_s} - 1``
+    has exactly one positive root. The bracket starts at the symmetric-case
+    estimate (the geometric mean of ``Ra``, ``Rb``) and expands geometrically
+    outward until the sign changes — a fixed-width bracket around that seed
+    is not always enough for a very asymmetric ``Ra``/``Rb`` (e.g. many
+    orders of magnitude apart), so the search is open-ended rather than
+    fixed-width.
+
+    Args:
+        r_a: characteristic resistance R_a (Ω), > 0.
+        r_b: characteristic resistance R_b (Ω), > 0.
+        thickness: sample thickness (cm); when given (> 0), also returns the
+            bulk resistivity ``rho = Rs·thickness`` (Ω·cm).
+
+    Returns ``Rs`` (Ω/sq), the inputs ``Ra``/``Rb``, and (when ``thickness`` is
+    given) ``rho`` (Ω·cm).
+
+    >>> round(van_der_pauw(1.0, 1.0)["Rs"], 5)
+    4.53236
+    """
+    if not (math.isfinite(r_a) and r_a > 0) or not (math.isfinite(r_b) and r_b > 0):
+        raise ValueError("Ra and Rb must be positive and finite")
+    if thickness is not None and thickness <= 0:
+        raise ValueError("thickness must be positive")
+
+    if r_a == r_b:
+        rs = math.pi * r_a / math.log(2.0)
+    else:
+
+        def _f(rs: float) -> float:
+            return math.exp(-math.pi * r_a / rs) + math.exp(-math.pi * r_b / rs) - 1.0
+
+        r0 = math.pi * math.sqrt(r_a * r_b) / math.log(2.0)
+        lo, hi = r0 * 1e-1, r0 * 1e1
+        for _ in range(200):
+            if _f(lo) < 0 and _f(hi) > 0:
+                break
+            lo /= 10.0
+            hi *= 10.0
+        else:  # pragma: no cover - unreachable for any finite positive Ra, Rb
+            raise ValueError("van der Pauw solve did not converge for these Ra, Rb")
+        rs = brentq(_f, lo, hi, xtol=1e-12, rtol=1e-12)
+
+    out: dict[str, Any] = {"Rs": rs, "Ra": r_a, "Rb": r_b}
+    if thickness is not None:
+        out["rho"] = rs * thickness
+    return out

@@ -82,3 +82,67 @@ def test_lattice_mismatch_rejects_nonpositive() -> None:
         substrates.lattice_mismatch(0.0, 3.9)
     with pytest.raises(ValueError):
         substrates.lattice_mismatch(3.9, -1.0)
+
+
+# ── Matthews-Blakeslee critical thickness ───────────────────────────────────
+def test_critical_thickness_f_1pct_matches_computed_pin() -> None:
+    # Derivation of the pin (defaults b=4.0 A, nu=0.3, 60-degree dislocations):
+    #   cos60=0.5, cos30=sqrt(3)/2
+    #   k = (1 - nu*cos60^2) / ((1+nu)*cos30) = (1-0.3*0.25)/(1.3*0.8660254...)
+    #     = 0.925 / 1.12583... = 0.821698...
+    #   A = b/(8*pi*f)*k = 4.0/(8*pi*0.01)*0.821698 = 15.91549...*0.821698
+    #     = 13.076390...
+    #   h_c solves h = A*ln(h/b + 1) -> h_c = 26.611533074174734 (fixed point
+    #   of the implicit equation, verified independently below by
+    #   substituting back in).
+    r = substrates.critical_thickness(0.01)
+    assert r["h_c"] == pytest.approx(26.611533074174734, rel=1e-9)
+    assert r["h_c_nm"] == pytest.approx(2.6611533074174734, rel=1e-9)
+    # Literature ballpark for the Matthews-Blakeslee EQUILIBRIUM model at ~1%
+    # mismatch (e.g. moderate-Ge-content SiGe/Si): a few nm, not sub-Angstrom
+    # and not microns.
+    assert 0.5 < r["h_c_nm"] < 20.0
+
+
+def test_critical_thickness_satisfies_defining_equation() -> None:
+    # Independent cross-check: substitute h_c back into the ORIGINAL implicit
+    # Matthews-Blakeslee equation (not the solver) and confirm it holds.
+    import math
+
+    b, nu, f = 4.0, 0.3, 0.01
+    r = substrates.critical_thickness(f, b=b, nu=nu)
+    cos60, cos30 = 0.5, math.sqrt(3.0) / 2.0
+    k = (1.0 - nu * cos60**2) / ((1.0 + nu) * cos30)
+    a_coeff = b / (8.0 * math.pi * f) * k
+    lhs = r["h_c"]
+    rhs = a_coeff * math.log(r["h_c"] / b + 1.0)
+    assert lhs == pytest.approx(rhs, rel=1e-8)
+
+
+def test_critical_thickness_decreases_with_larger_mismatch() -> None:
+    small = substrates.critical_thickness(0.005)["h_c"]
+    large = substrates.critical_thickness(0.02)["h_c"]
+    assert large < small
+
+
+def test_critical_thickness_sign_independent() -> None:
+    # Compressive (-f) and tensile (+f) mismatch of the same magnitude give
+    # the same critical thickness -- only |f| enters the model.
+    pos = substrates.critical_thickness(0.01)["h_c"]
+    neg = substrates.critical_thickness(-0.01)["h_c"]
+    assert pos == pytest.approx(neg, rel=1e-12)
+
+
+def test_critical_thickness_too_large_mismatch_raises() -> None:
+    # A/b <= 1 regime: no stable pseudomorphic thickness under this model.
+    with pytest.raises(ValueError):
+        substrates.critical_thickness(0.3)
+
+
+def test_critical_thickness_rejects_bad_inputs() -> None:
+    with pytest.raises(ValueError):
+        substrates.critical_thickness(0.0)
+    with pytest.raises(ValueError):
+        substrates.critical_thickness(0.01, b=0.0)
+    with pytest.raises(ValueError):
+        substrates.critical_thickness(0.01, nu=1.0)

@@ -19,6 +19,7 @@ from quantized.calc.crystallography import (
     direction_uvw_to_uvtw,
     hkil_to_hkl,
     hkl_to_hkil,
+    interplanar_angle,
     theoretical_density,
 )
 from quantized.calc.formula import formula_mass
@@ -248,3 +249,102 @@ def test_direction_transform_differs_from_plane_transform() -> None:
     # (planes: i = -(h+k), no scaling; directions: rescale by 3, then reduce).
     assert hkl_to_hkil(1, 0, 0) == (1, 0, -1, 0)
     assert direction_uvw_to_uvtw(1, 0, 0) == (2, -1, -1, 0)
+
+
+# ── Interplanar angle (reciprocal metric tensor) ────────────────────────────
+def test_interplanar_angle_cubic_100_110_is_45deg() -> None:
+    # Textbook cubic identity: cos(phi) = (h1h2+k1k2+l1l2)/sqrt((h1^2+..)(h2^2+..)).
+    r = interplanar_angle("cubic", 5.4309, 5.4309, 5.4309, 1, 0, 0, 1, 1, 0)
+    assert r["angle_deg"] == pytest.approx(45.0, abs=1e-9)
+
+
+def test_interplanar_angle_cubic_100_111_is_54_7356deg() -> None:
+    r = interplanar_angle("cubic", 5.4309, 5.4309, 5.4309, 1, 0, 0, 1, 1, 1)
+    assert r["angle_deg"] == pytest.approx(54.7356, abs=1e-4)
+    # Independent check via the plain cubic dot-product formula.
+    cos_phi = 1.0 / math.sqrt(3.0)
+    assert r["angle_deg"] == pytest.approx(math.degrees(math.acos(cos_phi)), rel=1e-9)
+
+
+def test_interplanar_angle_cubic_matches_dot_product_formula() -> None:
+    # Cross-check several (hkl) pairs against the elementary cubic dot-product
+    # angle formula (independent of the general metric-tensor code path).
+    pairs = [((1, 1, 0), (1, -1, 0)), ((2, 1, 0), (1, 2, 0)), ((1, 1, 1), (1, 1, -1))]
+    for (h1, k1, l1), (h2, k2, l2) in pairs:
+        r = interplanar_angle("cubic", 4.0, 4.0, 4.0, h1, k1, l1, h2, k2, l2)
+        num = h1 * h2 + k1 * k2 + l1 * l2
+        den = math.sqrt(h1**2 + k1**2 + l1**2) * math.sqrt(h2**2 + k2**2 + l2**2)
+        expected = math.degrees(math.acos(num / den))
+        assert r["angle_deg"] == pytest.approx(expected, abs=1e-9)
+
+
+def test_interplanar_angle_same_plane_is_zero() -> None:
+    r = interplanar_angle(
+        "triclinic", 5.0, 6.0, 7.0, 1, 2, 1, 1, 2, 1, alpha=80.0, beta=95.0, gamma=100.0
+    )
+    assert r["angle_deg"] == pytest.approx(0.0, abs=1e-8)
+
+
+def test_interplanar_angle_hexagonal_mg_0001_vs_10m11() -> None:
+    # Mg: a = 3.2094 A, c = 5.2107 A. Miller-Bravais (10-11) -> i=-(h+k)=-1,
+    # so the 3-index plane is (hkl) = (1, 0, 1) (the 4th index i is dropped;
+    # only h, k, l determine the plane -- see hkl_to_hkil's docstring).
+    #
+    # Independent derivation via the standard (non-metric-tensor) hexagonal
+    # interplanar-angle formula (e.g. Cullity & Stock App. 3, hexagonal case):
+    #   1/d^2 = (4/3)(h^2+hk+k^2)/a^2 + l^2/c^2
+    #   cos(phi) = d1*d2*[ (4/3)(h1h2+k1k2+0.5(h1k2+h2k1))/a^2 + l1l2/c^2 ]
+    a, c = 3.2094, 5.2107
+
+    def inv_d2(h: float, k: float, l: float) -> float:
+        return (4.0 / 3.0) * (h * h + h * k + k * k) / a**2 + l * l / c**2
+
+    h1, k1, l1 = 0, 0, 1
+    h2, k2, l2 = 1, 0, 1
+    d1 = 1.0 / math.sqrt(inv_d2(h1, k1, l1))
+    d2 = 1.0 / math.sqrt(inv_d2(h2, k2, l2))
+    cross = (4.0 / 3.0) * (h1 * h2 + k1 * k2 + 0.5 * (h1 * k2 + h2 * k1)) / a**2 + l1 * l2 / c**2
+    expected_deg = math.degrees(math.acos(d1 * d2 * cross))
+
+    r = interplanar_angle("hexagonal", a, a, c, h1, k1, l1, h2, k2, l2, gamma=120.0)
+    assert r["angle_deg"] == pytest.approx(expected_deg, rel=1e-9)
+    assert r["angle_deg"] == pytest.approx(61.924243552997495, rel=1e-9)
+    assert r["d1"] == pytest.approx(c, rel=1e-9)  # (0001) d-spacing = c
+
+
+def test_interplanar_angle_zero_hkl_raises() -> None:
+    with pytest.raises(ValueError, match="must not all be zero"):
+        interplanar_angle("cubic", 4.0, 4.0, 4.0, 0, 0, 0, 1, 1, 1)
+    with pytest.raises(ValueError, match="must not all be zero"):
+        interplanar_angle("cubic", 4.0, 4.0, 4.0, 1, 1, 1, 0, 0, 0)
+
+
+def test_interplanar_angle_unknown_system_raises() -> None:
+    with pytest.raises(ValueError, match="unknown crystal system"):
+        interplanar_angle("nonagonal", 4.0, 4.0, 4.0, 1, 0, 0, 1, 1, 0)
+
+
+def test_interplanar_angle_cubic_defaults_b_c_when_unsupplied() -> None:
+    # Regression: cubic only needs `a`; b/c=0 (a caller not supplying them,
+    # e.g. the route's Pydantic defaults) must NOT be fed into the general
+    # metric tensor as literal zeros (that raised "must be positive" before
+    # the b/c defaulting fix -- unlike d_spacing's per-system dispatch,
+    # interplanar_angle always needs a full assembled cell).
+    r = interplanar_angle("cubic", 4.0, 0.0, 0.0, 1, 0, 0, 1, 1, 0)
+    assert r["angle_deg"] == pytest.approx(45.0, abs=1e-9)
+
+
+def test_interplanar_angle_hexagonal_defaults_gamma_120_when_unsupplied() -> None:
+    # Regression: hexagonal's gamma=120 must be applied even when the caller
+    # leaves gamma at its (wrong, for hexagonal) 90-degree default.
+    a, c = 3.2094, 5.2107
+    with_gamma = interplanar_angle("hexagonal", a, a, c, 0, 0, 1, 1, 0, 1, gamma=120.0)
+    without_gamma = interplanar_angle("hexagonal", a, 0.0, c, 0, 0, 1, 1, 0, 1)
+    assert without_gamma["angle_deg"] == pytest.approx(with_gamma["angle_deg"], rel=1e-12)
+
+
+def test_interplanar_angle_rhombohedral_defaults_beta_gamma_to_alpha() -> None:
+    # Rhombohedral: alpha=beta=gamma by construction; at alpha=90 it must
+    # reduce exactly to the cubic (100)^(110) = 45 deg identity.
+    r = interplanar_angle("rhombohedral", 4.0, 0.0, 0.0, 1, 0, 0, 1, 1, 0, alpha=90.0)
+    assert r["angle_deg"] == pytest.approx(45.0, abs=1e-9)

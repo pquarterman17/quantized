@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getConstants, sldFromFormula } from "../../../lib/api";
 import { useApp } from "../../../store/useApp";
+import { useCalcHistory } from "../../../store/calcHistory";
 import { useToasts } from "../../../store/toasts";
 import CalculatorsContent from "./CalculatorsContent";
 
@@ -41,10 +42,19 @@ describe("SldTab → Reflectivity", () => {
     vi.mocked(sldFromFormula).mockResolvedValue(SLD_RESULT);
     useApp.setState({ reflectivityOpen: false, reflectivitySeed: null });
     useToasts.setState({ toasts: [] });
+    useCalcHistory.setState({ history: [], favorites: [], seq: 0 });
     window.history.pushState({}, "", "/");
   });
   afterEach(() => {
     window.history.pushState({}, "", "/");
+  });
+
+  it("records a Sld entry to calc history (calculator audit #1)", async () => {
+    await computeSld();
+    const history = useCalcHistory.getState().history;
+    expect(history).toHaveLength(1);
+    expect(history[0].domain).toBe("Sld");
+    expect(history[0].label).toBe("SLD from formula");
   });
 
   it("seeds the reflectivity workshop and opens it in the full app", async () => {

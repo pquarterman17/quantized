@@ -86,3 +86,17 @@ def test_dspacing_4index_rejected_for_non_hexagonal() -> None:
     r = client.post("/api/crystallography/dspacing", json=body)
     assert r.status_code == 422
     assert "hexagonal" in r.json()["detail"]
+
+
+# ── Interplanar angle ────────────────────────────────────────────────────────
+def test_angle_cubic_100_110_is_45deg() -> None:
+    body = {"system": "cubic", "a": 4.0, "h1": 1, "k1": 0, "l1": 0, "h2": 1, "k2": 1, "l2": 0}
+    r = client.post("/api/crystallography/angle", json=body)
+    assert r.status_code == 200
+    assert r.json()["angle_deg"] == pytest.approx(45.0, abs=1e-9)
+
+
+def test_angle_zero_hkl_is_422() -> None:
+    body = {"system": "cubic", "a": 4.0, "h1": 0, "k1": 0, "l1": 0, "h2": 1, "k2": 1, "l2": 0}
+    r = client.post("/api/crystallography/angle", json=body)
+    assert r.status_code == 422

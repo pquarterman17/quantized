@@ -10,6 +10,7 @@ import {
   diffusionFickFlux,
   diffusionLength,
 } from "../../../lib/api";
+import { diffusionCProfile } from "../../../lib/api/diffusion";
 import {
   Button,
   Card,
@@ -40,6 +41,13 @@ export default function DiffusionTab() {
   const [fickDC, setFickDC] = useState("1e18");
   const [fickDx, setFickDx] = useState("1e-5");
   const [c3, setC3] = useState<CardResult>(null);
+
+  // Card 4 — constant-source (erfc) diffusion profile.
+  const [cpX, setCpX] = useState("3e-5");
+  const [cpT, setCpT] = useState("3600");
+  const [cpD, setCpD] = useState("1e-12");
+  const [cpC0, setCpC0] = useState("1e18");
+  const [c4, setC4] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -103,6 +111,34 @@ export default function DiffusionTab() {
           </Button>
         </div>
         {resultLine(c3)}
+      </Card>
+
+      <Card title="Constant-source diffusion profile (erfc)">
+        <div style={ROW}>
+          <Field label="x" value={cpX} onChange={setCpX} unit="cm" width={72} />
+          <Field label="t" value={cpT} onChange={setCpT} unit="s" width={72} />
+          <Field label="D" value={cpD} onChange={setCpD} unit="cm²/s" width={72} />
+          <Field label="c₀" value={cpC0} onChange={setCpC0} width={72} />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() =>
+              void run(setC4, "Constant-source diffusion profile", async () => {
+                const r = await diffusionCProfile(
+                  Number(cpX),
+                  Number(cpT),
+                  Number(cpD),
+                  Number(cpC0),
+                );
+                const c = typeof r.c === "number" ? r.c : r.c[0];
+                return `c(x,t) = ${fmtNum(c)} · L = √(Dt) = ${fmtNum(r.L)} cm`;
+              })
+            }
+          >
+            =
+          </Button>
+        </div>
+        {resultLine(c4)}
       </Card>
     </div>
   );

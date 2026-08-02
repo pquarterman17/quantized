@@ -16,7 +16,7 @@ import {
   XRAY_MODES,
   type CalculatorsState,
 } from "./useCalculators";
-import { Card, ROW, makeCardRunner, resultLine, type CardResult } from "./shared";
+import { Card, CopyButton, ROW, makeCardRunner, resultLine, type CardResult } from "./shared";
 
 const runNeutron = makeCardRunner("Neutron");
 
@@ -117,6 +117,7 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
             <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
               {fmtNum(c.xrayResult.result)}{" "}
               <span style={{ color: "var(--text-dim)" }}>{c.xrayResult.unit}</span>
+              <CopyButton value={String(c.xrayResult.result)} label="result" />
             </div>
             <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
               {c.xrayResult.description}

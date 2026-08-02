@@ -44,3 +44,23 @@ export function crystalCell(body: {
 }): Promise<{ volume: number; molar_mass?: number; density?: number }> {
   return postJSON("/api/crystallography/cell", body);
 }
+
+/** Angle between two lattice planes (h1k1l1) and (h2k2l2), for any of the
+ *  seven crystal systems, via the reciprocal metric tensor (calc.crystallography). */
+export function crystalInterplanarAngle(body: {
+  system: string;
+  a: number;
+  b: number;
+  c: number;
+  h1: number;
+  k1: number;
+  l1: number;
+  h2: number;
+  k2: number;
+  l2: number;
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+}): Promise<{ angle_deg: number; d1: number; d2: number; system: string }> {
+  return postJSON("/api/crystallography/angle", body);
+}

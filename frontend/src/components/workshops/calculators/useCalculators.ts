@@ -17,8 +17,10 @@ import {
   xrayCalc,
 } from "../../../lib/api";
 import type { SldFormulaResult } from "../../../lib/api";
+import { fmtNum } from "../../../lib/format";
 import { getUnitCategories } from "../../../lib/api/reference";
 import type { UnitCategoryDef } from "../../../lib/api/reference";
+import { useCalcHistory } from "../../../store/calcHistory";
 
 // Fallback used only until the categories fetch resolves (offline-safe
 // default matching the backend's "photon_energy" category, so the panel is
@@ -389,6 +391,13 @@ export function useCalculators(): CalculatorsState {
       const out = typeof res.result === "number" ? res.result : null;
       setResult(out);
       setDescription(typeof res.info?.description === "string" ? res.info.description : null);
+      if (out != null) {
+        useCalcHistory.getState().record({
+          domain: "Units",
+          label: "Unit conversion",
+          summary: `${value} ${from} = ${fmtNum(out)} ${to}`,
+        });
+      }
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "conversion failed");
@@ -419,6 +428,13 @@ export function useCalculators(): CalculatorsState {
         if (typeof r === "number") out[u] = r;
       });
       setPeResults(out);
+      useCalcHistory.getState().record({
+        domain: "Units",
+        label: "Photon/thermal energy",
+        summary: Object.entries(out)
+          .map(([u, val]) => `${u}=${fmtNum(val)}`)
+          .join(" · "),
+      });
     } catch (e) {
       setPeResults(null);
       setPeError(e instanceof Error ? e.message : "conversion failed");
@@ -440,7 +456,13 @@ export function useCalculators(): CalculatorsState {
       if (!Number.isInteger(n) || n < 1) {
         throw new Error("order n must be a positive integer");
       }
-      setXrayResult(await xrayCalc(xrayMode, w, v, n));
+      const r = await xrayCalc(xrayMode, w, v, n);
+      setXrayResult(r);
+      useCalcHistory.getState().record({
+        domain: "Xray",
+        label: XRAY_MODES.find((m) => m.value === xrayMode)?.label ?? xrayMode,
+        summary: `${fmtNum(r.result)} ${r.unit}`,
+      });
     } catch (e) {
       setXrayResult(null);
       setXrayError(e instanceof Error ? e.message : "calculation failed");
@@ -466,16 +488,20 @@ export function useCalculators(): CalculatorsState {
       // Hexagonal also carries the derived 4-index Miller-Bravais i = -(h+k)
       // (backend re-validates it); every other system omits it.
       const i = crystal.system === "hexagonal" ? -(h + k) : undefined;
-      setCrResult(
-        await crystalDSpacing({
-          system: crystal.system,
-          ...cell,
-          h,
-          k,
-          l,
-          ...(i !== undefined ? { i } : {}),
-        }),
-      );
+      const r = await crystalDSpacing({
+        system: crystal.system,
+        ...cell,
+        h,
+        k,
+        l,
+        ...(i !== undefined ? { i } : {}),
+      });
+      setCrResult(r);
+      useCalcHistory.getState().record({
+        domain: "Crystal",
+        label: "d-spacing",
+        summary: `d = ${fmtNum(r.d)} Å (${r.system}, hkl=${h} ${k} ${l})`,
+      });
     } catch (e) {
       setCrResult(null);
       setCrError(e instanceof Error ? e.message : "calculation failed");
@@ -494,9 +520,15 @@ export function useCalculators(): CalculatorsState {
       if (formula && !(Number.isFinite(z) && z >= 1)) {
         throw new Error("Z must be an integer ≥ 1");
       }
-      setCellResult(
-        await crystalCell({ ...cell, ...(formula ? { formula, z } : {}) }),
-      );
+      const r = await crystalCell({ ...cell, ...(formula ? { formula, z } : {}) });
+      setCellResult(r);
+      useCalcHistory.getState().record({
+        domain: "Crystal",
+        label: "Cell volume & density",
+        summary:
+          `V = ${fmtNum(r.volume)} Å³` +
+          (r.density != null ? ` · ρ = ${fmtNum(r.density)} g/cm³` : ""),
+      });
     } catch (e) {
       setCellResult(null);
       setCellError(e instanceof Error ? e.message : "calculation failed");
@@ -562,14 +594,20 @@ export function useCalculators(): CalculatorsState {
       if (!sld.formula.trim()) throw new Error("enter a chemical formula");
       if (!(density > 0)) throw new Error("enter a positive density");
       if (!(nw > 0 && xw > 0)) throw new Error("enter positive wavelengths");
-      setSldResult(
-        await sldFromFormula({
-          formula: sld.formula.trim(),
-          density,
-          neutron_wavelength: nw,
-          xray_wavelength: xw,
-        }),
-      );
+      const r = await sldFromFormula({
+        formula: sld.formula.trim(),
+        density,
+        neutron_wavelength: nw,
+        xray_wavelength: xw,
+      });
+      setSldResult(r);
+      useCalcHistory.getState().record({
+        domain: "Sld",
+        label: "SLD from formula",
+        summary:
+          `${r.formula}: SLD_n = ${fmtNum(r.neutron.sld_real)}, ` +
+          `SLD_x = ${fmtNum(r.xray.sld_real)} ×10⁻⁶ Å⁻²`,
+      });
     } catch (e) {
       setSldResult(null);
       setSldError(e instanceof Error ? e.message : "calculation failed");

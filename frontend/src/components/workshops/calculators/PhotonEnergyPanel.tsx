@@ -6,6 +6,7 @@
 
 import { Button, DataTable, NumberField, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { CopyButton } from "./shared";
 import type { CalculatorsState } from "./useCalculators";
 
 const PHOTON_ENERGY_FALLBACK = [
@@ -61,6 +62,10 @@ export default function PhotonEnergyPanel({ c }: { c: CalculatorsState }) {
                 {fmtNum(c.peResults?.[u.value] ?? null)}
               </span>,
             ])}
+          />
+          <CopyButton
+            value={units.map((u) => `${u.value}\t${c.peResults?.[u.value] ?? ""}`).join("\n")}
+            label="all quantities"
           />
         </div>
       )}

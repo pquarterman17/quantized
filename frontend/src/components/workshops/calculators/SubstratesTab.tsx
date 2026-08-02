@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 
 import { getSubstrates, substrateMismatch } from "../../../lib/api";
+import { substratesCriticalThickness } from "../../../lib/api/substrates";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
 import { Card, resultLine, type CardResult } from "./shared";
@@ -55,6 +56,12 @@ export default function SubstratesTab() {
   // Lattice-mismatch mini-calculator (substrate a_sub = selected.a).
   const [aFilm, setAFilm] = useState("3.876");
   const [mm, setMm] = useState<CardResult>(null);
+
+  // Matthews-Blakeslee critical thickness, chained off the mismatch above.
+  const [mbMismatchPct, setMbMismatchPct] = useState("1.0");
+  const [mbB, setMbB] = useState("4.0");
+  const [mbNu, setMbNu] = useState("0.3");
+  const [mb, setMb] = useState<CardResult>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +116,7 @@ export default function SubstratesTab() {
       const r = await substrateMismatch(af, selected.a);
       const text = `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
       setMm({ text });
+      setMbMismatchPct(fmtNum(r.mismatchPct));
       useCalcHistory.getState().record({
         domain: DOMAIN,
         label: `Lattice mismatch vs ${selected.name}`,
@@ -116,6 +124,28 @@ export default function SubstratesTab() {
       });
     } catch {
       setMm({ text: "calculation failed", err: true });
+    }
+  }
+
+  async function runCriticalThickness(): Promise<void> {
+    const fPct = Number(mbMismatchPct);
+    const b = Number(mbB);
+    const nu = Number(mbNu);
+    if (!Number.isFinite(fPct) || fPct === 0) {
+      setMb({ text: "enter a non-zero mismatch %", err: true });
+      return;
+    }
+    try {
+      const r = await substratesCriticalThickness(fPct / 100, b, nu);
+      const text = `h_c = ${fmtNum(r.h_c)} Å = ${fmtNum(r.h_c_nm)} nm`;
+      setMb({ text });
+      useCalcHistory.getState().record({
+        domain: DOMAIN,
+        label: "Matthews-Blakeslee critical thickness",
+        summary: text,
+      });
+    } catch (e) {
+      setMb({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
   }
 
@@ -209,6 +239,53 @@ export default function SubstratesTab() {
                 </button>
               </span>
               {resultLine(mm)}
+            </Card>
+          )}
+
+          {!isAmorphous && (
+            <Card title="Matthews-Blakeslee critical thickness">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span className="qzk-field-lbl" style={{ margin: 0 }}>
+                  f
+                </span>
+                <input
+                  className="qz-input"
+                  style={{ width: 70 }}
+                  value={mbMismatchPct}
+                  onChange={(e) => setMbMismatchPct(e.target.value)}
+                  aria-label="mismatch percent"
+                />
+                <span className="qzk-field-lbl" style={{ margin: 0 }}>
+                  %
+                </span>
+                <span className="qzk-field-lbl" style={{ margin: 0 }}>
+                  b
+                </span>
+                <input
+                  className="qz-input"
+                  style={{ width: 56 }}
+                  value={mbB}
+                  onChange={(e) => setMbB(e.target.value)}
+                  aria-label="Burgers vector b"
+                />
+                <span className="qzk-field-lbl" style={{ margin: 0 }}>
+                  Å
+                </span>
+                <span className="qzk-field-lbl" style={{ margin: 0 }}>
+                  ν
+                </span>
+                <input
+                  className="qz-input"
+                  style={{ width: 48 }}
+                  value={mbNu}
+                  onChange={(e) => setMbNu(e.target.value)}
+                  aria-label="Poisson ratio"
+                />
+                <button className="qz-btn" onClick={() => void runCriticalThickness()}>
+                  Calculate
+                </button>
+              </span>
+              {resultLine(mb)}
             </Card>
           )}
         </div>

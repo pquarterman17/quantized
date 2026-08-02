@@ -22,6 +22,12 @@ class MismatchRequest(BaseModel):
     a_sub: float
 
 
+class CriticalThicknessRequest(BaseModel):
+    mismatch: float
+    b: float = 4.0  # Burgers vector (Å)
+    nu: float = 0.3  # Poisson ratio
+
+
 @router.get("")
 def list_substrates() -> dict[str, list[dict[str, Any]]]:
     """Full substrate reference table (list of property dicts)."""
@@ -42,5 +48,15 @@ def mismatch(req: MismatchRequest) -> dict[str, Any]:
     """f = (a_film - a_sub)/a_sub, with tensile/compressive/matched label."""
     try:
         return substrates.lattice_mismatch(req.a_film, req.a_sub)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/critical-thickness")
+def critical_thickness(req: CriticalThicknessRequest) -> dict[str, Any]:
+    """Matthews-Blakeslee equilibrium critical thickness h_c (Å, nm) from a
+    lattice mismatch f."""
+    try:
+        return substrates.critical_thickness(req.mismatch, b=req.b, nu=req.nu)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
