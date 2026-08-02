@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile } from "../lib/api";
+import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
@@ -65,6 +66,7 @@ beforeEach(() => {
     originFigures: [],
     reports: [],
     figureDocs: [],
+    editableFigures: [],
     history: [],
     future: [],
     status: "",
@@ -212,6 +214,94 @@ describe("reimportDataset — row/column count change", () => {
     const win = useApp.getState().plotWindows.find((w) => w.id === "wBg")!;
     expect(win.view.hiddenChannels).toEqual([]);
     expect(win.view.seriesStyles).toEqual({});
+  });
+
+  // commitReimport reset the live view AND every bound plotWindows entry on a
+  // shape change, but store/figureLifecycle.ts's `editableFigures` (a SAVED,
+  // possibly-closed FigureDocument) landed later (4bdd56c, after reimport.ts's
+  // last revision 40d4556) and was never wired in — its bindings/view stayed
+  // stale, silently rendering the wrong columns when reopened. The bound
+  // figure's indices here are IN RANGE under both layouts — a column-count
+  // change still resets them, because an in-range index is not proof its
+  // column still means the same thing.
+  it("resets a bound saved figure's bindings/view state on a column-count change; an unbound figure is untouched", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      values: [[11, 300], [21, 301], [31, 302]],
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+    });
+    const bound: FigureDocument = createFigureDocument({
+      id: "fig-bound",
+      name: "Bound",
+      datasetId: "d1",
+      view: {
+        ...defaultPlotView(),
+        yKeys: [0],
+        seriesStyles: { 0: { color: "#ff0000" } },
+        hiddenChannels: [0],
+      },
+      errors: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+    });
+    const unbound: FigureDocument = createFigureDocument({
+      id: "fig-unbound",
+      name: "Unbound",
+      datasetId: "d2",
+      view: {
+        ...defaultPlotView(),
+        yKeys: [0],
+        seriesStyles: { 0: { color: "#00ff00" } },
+        hiddenChannels: [0],
+      },
+      errors: [{ channel: 0, target: 0, axis: "y", side: "both" }],
+    });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [bound, unbound] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const figures = useApp.getState().editableFigures;
+    const resetBound = figures.find((d) => d.id === "fig-bound")!;
+    const stillUnbound = figures.find((d) => d.id === "fig-unbound")!;
+    expect(resetBound.bindings.yKeys).toBeNull();
+    expect(resetBound.bindings.errors).toEqual([]);
+    expect(resetBound.plot.view.seriesStyles).toEqual({});
+    expect(resetBound.plot.view.hiddenChannels).toEqual([]);
+    expect(stillUnbound).toBe(unbound); // different dataset — same reference, untouched
+  });
+
+  // Row-only reshapes never disturb saved figures: column meaning is provably
+  // intact, and a durable document's styling should survive — unlike the live
+  // view/window reset, which fires on any shape change.
+  it("leaves saved figures untouched (same array reference) on a row-only reshape", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2], values: [[11], [21]] });
+    const bound: FigureDocument = createFigureDocument({
+      id: "fig-bound",
+      name: "Bound",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0], seriesStyles: { 0: { color: "#ff0000" } } },
+    });
+    const initial = [bound];
+    useApp.setState({ datasets: [baseDataset()], editableFigures: initial });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().editableFigures).toBe(initial);
+  });
+
+  it("leaves editableFigures untouched (same array reference) on a same-shape reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh); // same 1-column shape
+    const bound: FigureDocument = createFigureDocument({
+      id: "fig-bound",
+      name: "Bound",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0] },
+    });
+    const initial = [bound];
+    useApp.setState({ datasets: [baseDataset()], editableFigures: initial });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().editableFigures).toBe(initial);
   });
 });
 

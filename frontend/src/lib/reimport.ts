@@ -60,6 +60,15 @@ export async function resolveFreshData(ds: Dataset, fresh: DataStruct): Promise<
  *  columns. Mirrors the existing xTrim (`applyCorrections`'s `rowsChanged`)
  *  and `installBookData`'s preview->full-swap precedents. */
 export function reimportShapeChanged(ds: Dataset, fresh: DataStruct): boolean {
+  return fresh.time.length !== ds.data.time.length || reimportColumnsChanged(ds, fresh);
+}
+
+/** The COLUMN half of `reimportShapeChanged` alone. A saved editable figure's
+ *  channel bindings stay provably valid across a row-only reshape (column
+ *  meaning is untouched), so `commitReimport` disturbs those durable documents
+ *  only on this narrower condition — unlike the live view/window reset, which
+ *  fires on any shape change because the user is actively looking at it. */
+export function reimportColumnsChanged(ds: Dataset, fresh: DataStruct): boolean {
   const baseCols = Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
-  return fresh.time.length !== ds.data.time.length || fresh.labels.length !== baseCols;
+  return fresh.labels.length !== baseCols;
 }

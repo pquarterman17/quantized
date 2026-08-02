@@ -23,6 +23,12 @@
 // keys (never reads the row-state field by property access), so it never
 // needs the #50 guard's allowlist in architecture.test.ts.
 //
+// The same staleness applies to a SAVED editable figure
+// (store/figureLifecycle.ts's `editableFigures`, added later than this file's
+// original staleness handling) — its bindings/view can index the OLD columns
+// too. lib/figureDocumentReimport.ts's `resetFigureDocumentForReshape` mirrors
+// the live-view/window reset below field-for-field; see its module doc.
+//
 // Corrections (`Dataset.corrections`/`raw`) re-apply to the FRESH raw through
 // the same `applyCorrectionsApi` chokepoint store/useApp.ts's own
 // `applyCorrections` action calls — inlined here (not a call to that action)
@@ -35,10 +41,11 @@ import {
   uploadFile,
   type CorrectionsRequest,
 } from "../lib/api";
+import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { recomputeData } from "../lib/formula";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
-import { reimportShapeChanged, resolveFreshData } from "../lib/reimport";
+import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -88,6 +95,13 @@ async function commitReimport(
   // the dataset-scoped clear below and removeFormula's window walk. An unchanged
   // shape keeps the view state (the user's styles still apply to the new data).
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
+  // A saved editable figure (store/figureLifecycle.ts's `editableFigures`) is
+  // neither the live view nor a bound plotWindows entry, so it needs its own
+  // reset — lib/figureDocumentReimport.ts mirrors the same field list. Gated
+  // on the COLUMN half only: row-only reshapes leave channel bindings
+  // provably valid, and a saved document is a durable artifact (see the
+  // helper's module doc for why in-range indices are not proof of freshness).
+  const columnsChanged = reimportColumnsChanged(ds, freshRaw);
   set((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
@@ -117,6 +131,15 @@ async function commitReimport(
             w.datasetId === ds.id
               ? syncPlotWindow(w, { ...plotWindowView(w), ...viewReset }, { resetErrors: true })
               : w,
+          ),
+        }
+      : {}),
+    ...(columnsChanged
+      ? {
+          editableFigures: s.editableFigures.map((document) =>
+            document.bindings.datasetId === ds.id
+              ? resetFigureDocumentForReshape(document)
+              : document,
           ),
         }
       : {}),
