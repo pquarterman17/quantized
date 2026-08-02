@@ -26,7 +26,7 @@ function setHexagonal(): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getConstants).mockResolvedValue({ constants: {} });
+  vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
 });
 
 describe("CrystalTab — hexagonal Miller-Bravais", () => {
