@@ -84,8 +84,8 @@ describe("useCalculators", () => {
       await result.current.xrayCompute();
     });
 
-    // defaults: mode "2theta_from_d", λ = 1.5406 (Cu Kα), value = 3.1356 (Si 111 d).
-    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356);
+    // defaults: mode "2theta_from_d", λ = 1.5406 (Cu Kα), value = 3.1356 (Si 111 d), n = 1.
+    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356, 1);
     expect(result.current.xrayResult?.result).toBeCloseTo(28.44, 2);
     expect(result.current.xrayResult?.unit).toBe("deg");
     expect(result.current.xrayError).toBeNull();
@@ -99,6 +99,26 @@ describe("useCalculators", () => {
     });
     expect(xrayCalc).not.toHaveBeenCalled();
     expect(result.current.xrayError).toContain("numeric");
+  });
+
+  it("rejects a non-integer diffraction order without calling the API", async () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setXrayOrder("1.5"));
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    expect(xrayCalc).not.toHaveBeenCalled();
+    expect(result.current.xrayError).toContain("order n");
+  });
+
+  it("passes the diffraction order through to the API", async () => {
+    vi.mocked(xrayCalc).mockResolvedValue({ result: 58.7, unit: "deg", description: "2nd order" });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setXrayOrder("2"));
+    await act(async () => {
+      await result.current.xrayCompute();
+    });
+    expect(xrayCalc).toHaveBeenCalledWith("2theta_from_d", 1.5406, 3.1356, 2);
   });
 
   it("surfaces an inaccessible-reflection error from the backend", async () => {
