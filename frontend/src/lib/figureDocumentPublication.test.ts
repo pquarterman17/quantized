@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ErrorBinding } from "./errorRoles";
 import { figureDocumentFromLegacyFigureDoc } from "./figureDocumentPublication";
 import type { FigureDoc } from "./figuredoc";
 import type { DataStruct } from "./types";
@@ -41,6 +42,20 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
     });
     document.publication!.overrides!.margins!.left = 0.8;
     expect(source).toEqual(before);
+  });
+
+  // #51 phase 3: the Graph Builder's error wells ride FigureConfig.errors,
+  // independent of Dataset.errorRoles (the wells may not be committed yet).
+  it("threads config.errors into bindings.errors", () => {
+    const errors: ErrorBinding[] = [{ channel: 3, target: 1, axis: "y", side: "both" }];
+    const source = legacy({ config: { ...legacy().config, errors } });
+    const document = figureDocumentFromLegacyFigureDoc(source);
+    expect(document.bindings.errors).toEqual(errors);
+  });
+
+  it("falls back to the legacy errKeys default when config.errors is absent (unchanged)", () => {
+    const document = figureDocumentFromLegacyFigureDoc(legacy());
+    expect(document.bindings.errors).toEqual([]);
   });
 
   it("retains frozen data and rejects an invalid frozen legacy source clearly", () => {

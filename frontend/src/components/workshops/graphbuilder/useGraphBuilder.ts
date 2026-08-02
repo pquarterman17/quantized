@@ -33,7 +33,9 @@ import {
   markSeriesStyle,
   moveYZone,
   plotSpecCoreEqual,
+  prefillErrorZones,
   specDatasetId,
+  specErrorBindings,
   specToRender,
   validMarks,
   withInferredMark,
@@ -51,6 +53,14 @@ import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import type { WellChip, WellOption } from "./ZoneWell";
+
+/** Does this spec's error wells already carry explicit content? Drives
+ *  `errorsTouched`'s reset on every wholesale spec replacement (#51 phase
+ *  3) — a spec loaded WITH wells content must never have it silently
+ *  auto-overwritten by a later Y drop. */
+function wellsHaveContent(s: PlotSpec): boolean {
+  return s.zones.yErr.length > 0 || s.zones.xErr !== null;
+}
 
 export interface GraphBuilderState {
   hasData: boolean;
@@ -131,6 +141,14 @@ export function useGraphBuilder(): GraphBuilderState {
   const liveSeriesStyles = useApp((s) => s.seriesStyles);
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
+  // Error wells (#51 phase 3): true once the user has explicitly touched the
+  // yErr/xErr wells (assigned OR removed a chip in either) OR loaded a spec
+  // that already carries wells content — from that point on, dropping a new
+  // Y never auto-prefills over what the user already has. Reset to whatever
+  // the freshly-loaded spec's OWN wells content implies whenever the whole
+  // spec is replaced wholesale (reset/openSpec/duplicateSpec/seed-consume/
+  // vanished-dataset wipe) — see `wellsHaveContent` below.
+  const [errorsTouched, setErrorsTouched] = useState(false);
 
   // MAIN #8i: the builder's WORKING dataset. An empty spec follows the active
   // dataset (the bare command-palette open, unchanged); a spec with channel
@@ -157,6 +175,7 @@ export function useGraphBuilder(): GraphBuilderState {
     const exists = bound !== null && useApp.getState().datasets.some((d) => d.id === bound);
     if (bound !== null && !exists) {
       setSpec(emptySpec());
+      setErrorsTouched(false);
       // #11: a wiped spec can no longer correspond to whatever saved entry
       // this session was bound to.
       useApp.getState().setActivePlotSpecId(null);
@@ -182,6 +201,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // rather than inferMark's sticky keep-if-valid rule.
       const ctx = markContext(seed, useApp.getState().datasets);
       setSpec({ ...seed, mark: defaultMark(seed, ctx) });
+      // #51 phase 3: a worksheet seed never carries wells content today, but
+      // stay honest about the rule rather than hardcoding false.
+      setErrorsTouched(wellsHaveContent(seed));
       // #11: a worksheet-handed seed starts as a fresh, unsaved graph — it
       // never carries a saved-spec id to bind to.
       useApp.getState().setActivePlotSpecId(null);
@@ -204,6 +226,7 @@ export function useGraphBuilder(): GraphBuilderState {
   const chips = (zone: ZoneName): WellChip[] => {
     const z = spec.zones;
     if (zone === "y") return z.y.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
+    if (zone === "yErr") return z.yErr.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
     const ref = z[zone];
     return ref ? [{ channel: ref.channel, label: labelOf(ref.channel) }] : [];
   };
@@ -211,16 +234,28 @@ export function useGraphBuilder(): GraphBuilderState {
   const assign = (zone: ZoneName, channel: number) => {
     if (!ds) return;
     const ref: ChannelRef = { datasetId: ds.id, channel };
+    // #51 phase 3: an explicit drop into either error well IS the user
+    // touching it — no further auto-prefill on this session's future Y drops.
+    if (zone === "yErr" || zone === "xErr") setErrorsTouched(true);
     setSpec((prev) => {
-      const next = assignZone(prev, zone, ref);
-      return withInferredMark(next, markContext(next, datasets));
+      let next = assignZone(prev, zone, ref);
+      next = withInferredMark(next, markContext(next, datasets));
+      // Origin's zero-click experience: a fresh Y drop, with the error wells
+      // still untouched, seeds them from the dataset's own name-based
+      // inference. Recomputes the WHOLE prefix each time (safe: nothing to
+      // lose while untouched) so removing/reordering Y stays consistent too.
+      if (zone === "y" && !errorsTouched) {
+        next = prefillErrorZones(next, ds.data, ds.id);
+      }
+      return next;
     });
   };
 
   const remove = (zone: ZoneName, channel: number) => {
+    if (zone === "yErr" || zone === "xErr") setErrorsTouched(true);
     setSpec((prev) => {
       const ref: ChannelRef = { datasetId: prev.zones.y[0]?.datasetId ?? ds?.id ?? "", channel };
-      const next = clearZone(prev, zone, zone === "y" ? ref : undefined);
+      const next = clearZone(prev, zone, zone === "y" || zone === "yErr" ? ref : undefined);
       return withInferredMark(next, markContext(next, datasets));
     });
   };
@@ -237,6 +272,7 @@ export function useGraphBuilder(): GraphBuilderState {
   // "dirty" divergence from a graph the user no longer intends to touch.
   const reset = () => {
     setSpec(emptySpec());
+    setErrorsTouched(false);
     useApp.getState().setActivePlotSpecId(null);
   };
 
@@ -295,6 +331,21 @@ export function useGraphBuilder(): GraphBuilderState {
       const markStyle = markSeriesStyle(spec);
       if (Object.keys(markStyle).length > 0) {
         for (const y of spec.zones.y) useApp.getState().setSeriesStyle(y.channel, markStyle);
+      }
+      // Error wells (#51 phase 3): translate to the canonical ErrorBinding[]
+      // and write through the SAME dataset-level action the Inspector's
+      // Error columns card uses (setErrorRoles) — error roles are a
+      // Dataset property, not per-window, so this is what makes the
+      // interactive Stage (usePlotPayload reads Dataset.errorRoles directly)
+      // AND the ordinary "Export figure…" path (buildFigureSpec reads
+      // ds.errorRoles) both pick up the wells with no further wiring.
+      // Deliberately a no-op when the wells are EMPTY: an empty-wells commit
+      // must not clear roles set some other way (Detect from names, the
+      // Inspector card, a prior commit) — same "don't reset unrelated view
+      // state" rule the mark-style patch above follows.
+      const errorBindings = specErrorBindings(spec);
+      if (errorBindings.length > 0) {
+        useApp.getState().setErrorRoles(ds.id, errorBindings);
       }
       // #12 Slice 5 / "part C": apply the spec's own captured
       // display/axes/decor blocks (if any) onto the now-live dataset —
@@ -506,6 +557,10 @@ export function useGraphBuilder(): GraphBuilderState {
     const saved = useApp.getState().savedPlotSpecs.find((p) => p.id === id);
     if (!saved) return;
     setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
+    // #51 phase 3: a reopened spec's own wells content (if any) is explicit
+    // user state from when it was saved — protect it from the next Y drop
+    // the same way a live touch does. An empty-wells save re-arms prefill.
+    setErrorsTouched(wellsHaveContent(saved.spec));
     useApp.getState().setActivePlotSpecId(id);
     // #12 Slice 5 / "part C": opening never applies the spec's
     // display/axes/decor blocks itself (that would silently mutate the live
@@ -523,6 +578,7 @@ export function useGraphBuilder(): GraphBuilderState {
     const saved = useApp.getState().savedPlotSpecs.find((p) => p.id === newId);
     if (!saved) return;
     setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
+    setErrorsTouched(wellsHaveContent(saved.spec));
     setStatus(`duplicated as "${saved.name}"`);
   };
 

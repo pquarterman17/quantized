@@ -11,7 +11,7 @@ import { useApp } from "./useApp";
 
 const spec = (channel: number): PlotSpec => ({
   version: 1,
-  zones: { x: null, y: [{ datasetId: "d1", channel }], group: null, facet: null },
+  zones: { x: null, y: [{ datasetId: "d1", channel }], group: null, facet: null, yErr: [], xErr: null },
   mark: "scatter",
 });
 

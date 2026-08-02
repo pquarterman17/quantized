@@ -10,13 +10,17 @@
 // THE GRAMMAR (read this before touching anything)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// A spec has four ZONES and one MARK:
+// A spec has six ZONES and one MARK:
 //
 //   zones.x     : ChannelRef | null   — the horizontal / category axis
 //   zones.y     : ChannelRef[]         — the value axis (one or more series)
 //   zones.group : ChannelRef | null   — a categorical split into coloured series
 //   zones.facet : ChannelRef | null   — small-multiples key (TYPED-BUT-INERT in
 //                                        v1; activates with GAP_PLOTTYPES #5)
+//   zones.yErr  : ChannelRef[]        — Y error columns, POSITION-paired with
+//                                        `y` (yErr[i] describes y[i]); XY
+//                                        family only (#51 phase 3)
+//   zones.xErr  : ChannelRef | null   — X error column; XY family only
 //
 //   mark        : "scatter" | "line" | "box" | "violin" | "bar"
 //
@@ -106,6 +110,8 @@
 // promotion seam.
 
 import { buildBarMatrix, type BarChartData } from "./barlayout";
+import { buildErrorSpans, type ErrorSpan } from "./errorbars";
+import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
@@ -154,14 +160,26 @@ export interface ChannelRef {
 /** The mark (glyph) a spec renders with. */
 export type PlotMark = "scatter" | "line" | "step" | "box" | "violin" | "bar";
 
-/** The four drop wells. `facet` is typed from day one but inert in v1. */
-export type ZoneName = "x" | "y" | "group" | "facet";
+/** The six drop wells. `facet` is typed from day one but inert in v1.
+ *  `yErr`/`xErr` (ORIGIN_GAP_PLAN #51 phase 3 — the COLUMN-DESIGNATION
+ *  model) are XY-family only: any scatter/line/step mark can carry error
+ *  bars, but a categorical mark (box/violin/bar) ignores them entirely — see
+ *  `specErrorBindings`'s doc. */
+export type ZoneName = "x" | "y" | "group" | "facet" | "yErr" | "xErr";
 
 export interface PlotZones {
   x: ChannelRef | null;
   y: ChannelRef[];
   group: ChannelRef | null;
   facet: ChannelRef | null;
+  /** Y error columns, POSITION-paired with `y`: `yErr[i]` describes `y[i]`.
+   *  Never longer than `y` after validation (a trailing unpaired entry is
+   *  invalid — position-pairing has no way to express "an error for a Y that
+   *  isn't there"). Every well drop is symmetric; there is no +/- half here
+   *  (see the Inspector's richer Error columns card for that). */
+  yErr: ChannelRef[];
+  /** X error column (single well, like `x`/`group`/`facet`). */
+  xErr: ChannelRef | null;
 }
 
 export interface PlotSpec {
@@ -226,7 +244,11 @@ export interface MarkContext {
 /** An empty spec: no zones filled, mark defaults to scatter (harmless until a
  *  Y lands and inferMark takes over). */
 export function emptySpec(): PlotSpec {
-  return { version: 1, zones: { x: null, y: [], group: null, facet: null }, mark: "scatter" };
+  return {
+    version: 1,
+    zones: { x: null, y: [], group: null, facet: null, yErr: [], xErr: null },
+    mark: "scatter",
+  };
 }
 
 /** Structural ChannelRef equality (same dataset + channel). */
@@ -258,6 +280,8 @@ export function assignZone(spec: PlotSpec, zone: ZoneName, ref: ChannelRef): Plo
   const zones = { ...spec.zones };
   if (zone === "y") {
     if (!zones.y.some((r) => channelRefEq(r, ref))) zones.y = [...zones.y, ref];
+  } else if (zone === "yErr") {
+    if (!zones.yErr.some((r) => channelRefEq(r, ref))) zones.yErr = [...zones.yErr, ref];
   } else {
     zones[zone] = ref;
   }
@@ -269,6 +293,8 @@ export function clearZone(spec: PlotSpec, zone: ZoneName, ref?: ChannelRef): Plo
   const zones = { ...spec.zones };
   if (zone === "y") {
     zones.y = ref ? zones.y.filter((r) => !channelRefEq(r, ref)) : [];
+  } else if (zone === "yErr") {
+    zones.yErr = ref ? zones.yErr.filter((r) => !channelRefEq(r, ref)) : [];
   } else {
     zones[zone] = null;
   }
@@ -292,6 +318,7 @@ export function moveYZone(spec: PlotSpec, ref: ChannelRef, direction: -1 | 1): P
 export function zoneChannels(spec: PlotSpec, zone: ZoneName): number[] {
   const z = spec.zones;
   if (zone === "y") return z.y.map((r) => r.channel);
+  if (zone === "yErr") return z.yErr.map((r) => r.channel);
   const ref = z[zone];
   return ref ? [ref.channel] : [];
 }
@@ -376,6 +403,60 @@ export function markSeriesStyle(spec: PlotSpec): Partial<SeriesStyle> {
   return spec.showMarkers ? { marker: true } : {};
 }
 
+// ── Error-column wells (ORIGIN_GAP_PLAN #51 phase 3 — "any XY mark can carry
+// error bars", the COLUMN-DESIGNATION model rather than error-bars-as-plot-
+// types): `yErr`/`xErr` are POSITION-paired with `y`, not channel-keyed — the
+// simple shape the wells UI drags into. Two pure helpers bridge that to the
+// canonical `lib/errorRoles.ErrorBinding` contract the interactive Stage
+// (`Dataset.errorRoles`), `.dwk`, and publication export already speak. ────
+
+/** Wells -> `ErrorBinding[]`, position-paired: `yErr[i]` describes `y[i]`
+ *  (only up to `min(y.length, yErr.length)` pairs — a stale/out-of-sync
+ *  wells state never invents a pairing beyond what's actually aligned).
+ *  `xErr` binds to the x axis (`target: -1`, the same sentinel
+ *  `lib/errorRoles` uses elsewhere). Every binding is symmetric
+ *  (`side: "both"`) — the simple wells model has no +/- half, unlike the
+ *  Inspector's richer Error columns card. XY-family only by convention: a
+ *  categorical mark's `zones.yErr`/`xErr` are validated like any other zone
+ *  content but callers never read this for box/violin/bar (see
+ *  useGraphBuilder's `commitToPlot` and `specToRender`'s xy branch). */
+export function specErrorBindings(spec: PlotSpec): ErrorBinding[] {
+  const { y, yErr, xErr } = spec.zones;
+  const out: ErrorBinding[] = [];
+  const n = Math.min(y.length, yErr.length);
+  for (let i = 0; i < n; i++) {
+    out.push({ channel: yErr[i].channel, target: y[i].channel, axis: "y", side: "both" });
+  }
+  if (xErr) out.push({ channel: xErr.channel, target: -1, axis: "x", side: "both" });
+  return out;
+}
+
+/** Seed `zones.yErr`/`zones.xErr` from the dataset's own name-based inference
+ *  (`lib/errorRoles.inferErrorBindings`) — Origin's zero-click experience:
+ *  drop a Y with no explicit error assignment and the matching error column
+ *  (if any) fills in for free. Only SYMMETRIC inferred bindings project (the
+ *  wells have no +/- half). The y-error prefix stops at the first Y channel
+ *  with no unambiguous inferred error, since position-pairing has no way to
+ *  represent a gap (an errorless Y followed by one that has an error) — this
+ *  IS the "only prefill when unambiguous" rule, not a separate check. Pure:
+ *  takes the live dataset's data in, never reads the store — the caller
+ *  (useGraphBuilder) owns deciding WHEN to call this (never once the user has
+ *  touched the error wells themselves). */
+export function prefillErrorZones(spec: PlotSpec, data: DataStruct, datasetId: string): PlotSpec {
+  const inferred = inferErrorBindings(data).filter((b) => b.side === "both");
+  const yErr: ChannelRef[] = [];
+  for (const yRef of spec.zones.y) {
+    const match = inferred.find((b) => b.axis === "y" && b.target === yRef.channel);
+    if (!match) break;
+    yErr.push({ datasetId, channel: match.channel });
+  }
+  const xMatch = inferred.find((b) => b.axis === "x" && b.target === -1);
+  return {
+    ...spec,
+    zones: { ...spec.zones, yErr, xErr: xMatch ? { datasetId, channel: xMatch.channel } : null },
+  };
+}
+
 // ── Live-context builder (resolves types + monotonicity from real datasets) ──
 
 /** Is a channel's finite values sorted (non-decreasing OR non-increasing) in row
@@ -432,6 +513,15 @@ export type SpecRender =
        *  level — present only when `zones.facet` is set. Absent = the
        *  ordinary single-panel xy render. */
       facets?: FacetPanel[];
+      /** Error whiskers for the Graph Builder mini-preview (ORIGIN_GAP_PLAN
+       *  #51 phase 3): the SAME pairing `specErrorBindings` derives, keyed
+       *  like `lib/errorbars.buildErrorSpans` (uPlot column index — 0 is x,
+       *  p+1 is the p-th plotted Y). Present only for the FLAT (non-grouped)
+       *  render: a grouped spec's synthetic per-level series already sheds
+       *  other per-series detail the same way (see `buildXY`'s doc), so
+       *  error whiskers degrade the same way rather than inventing a column
+       *  mapping for a split series. */
+      errorSpans?: Map<number, ErrorSpan[]>;
     }
   | {
       kind: "box";
@@ -528,6 +618,11 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
     // the SAME analysis-view data + zones as the single-panel path — facet
     // just partitions the rows first.
     const facets = facetCol !== null ? facetPayloads(data, facetCol, xKey, yChannels) : undefined;
+    // Error wells (#51 phase 3): only for the FLAT (non-grouped) render — a
+    // grouped spec's synthetic per-level series have no sound 1:1 mapping to
+    // the wells' y-index pairing (mirrors plotSpecFigure's own groupCol gate).
+    const errBindings = groupCol === null ? specErrorBindings(spec) : [];
+    const errorSpans = errBindings.length > 0 ? buildErrorSpans(data, yChannels, errBindings) : undefined;
     return {
       kind: "xy",
       payload: buildXY(data, xKey, yChannels, groupCol),
@@ -536,6 +631,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
       ...(spec.showMarkers ? { showMarkers: true } : {}),
       ...(spec.mark === "step" ? { stepMode: spec.stepMode ?? "post" } : {}),
       ...(facets && facets.length > 0 ? { facets } : {}),
+      ...(errorSpans && errorSpans.size > 0 ? { errorSpans } : {}),
     };
   }
 
@@ -607,6 +703,16 @@ function normRef(v: unknown): ChannelRef | null {
   return isChannelRef(v) ? { datasetId: v.datasetId, channel: v.channel } : null;
 }
 
+/** Drop later duplicates (same datasetId+channel) — a positionally-paired
+ *  well has no sound meaning for the same error column appearing twice. */
+function dedupeRefs(refs: ChannelRef[]): ChannelRef[] {
+  const out: ChannelRef[] = [];
+  for (const r of refs) {
+    if (!out.some((o) => channelRefEq(o, r))) out.push(r);
+  }
+  return out;
+}
+
 function isPlotMark(v: unknown): v is PlotMark {
   return typeof v === "string" && (PLOT_MARKS as readonly string[]).includes(v);
 }
@@ -637,11 +743,20 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
   if (o.version !== 1 && o.version !== 2) return null;
   const zin = (o.zones ?? {}) as Record<string, unknown>;
   const y = Array.isArray(zin.y) ? zin.y.map(normRef).filter((r): r is ChannelRef => r !== null) : [];
+  // yErr (#51 phase 3): malformed/out-of-range refs drop (normRef), then
+  // duplicates drop, then it's truncated to the y list's length — position-
+  // pairing has no way to express a trailing entry with no y to describe.
+  const yErrRaw = Array.isArray(zin.yErr)
+    ? zin.yErr.map(normRef).filter((r): r is ChannelRef => r !== null)
+    : [];
+  const yErr = dedupeRefs(yErrRaw).slice(0, y.length);
   const zones: PlotZones = {
     x: normRef(zin.x),
     y,
     group: normRef(zin.group),
     facet: normRef(zin.facet),
+    yErr,
+    xErr: normRef(zin.xErr),
   };
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
   // Byte-stable v1 siblings of `mark` (never a v2 "block" — see PlotSpec's

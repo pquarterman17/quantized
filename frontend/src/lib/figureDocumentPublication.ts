@@ -27,6 +27,13 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
       yAxisLabel: config.yLabel,
     },
     groupKey: config.groupCol ?? null,
+    // Graph Builder's error wells (#51 phase 3): threaded through so
+    // Publication Preview opened from Graph Builder carries the SAME error
+    // bars the wells describe, even before they've been committed to
+    // `Dataset.errorRoles` (see FigureConfig.errors' doc). `undefined` (every
+    // non-Graph-Builder FigureDoc) falls back to createFigureDocument's own
+    // legacy-errKeys default, unchanged.
+    errors: config.errors ?? undefined,
     data: legacy.live
       ? { mode: "live" }
       : { mode: "frozen", snapshot: legacy.dataSnapshot },

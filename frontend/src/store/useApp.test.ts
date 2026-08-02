@@ -101,7 +101,14 @@ describe("useApp graph-builder seed (MAIN_PLAN #4 — worksheet handoff)", () =>
 
   const spec = {
     version: 1 as const,
-    zones: { x: null, y: [{ datasetId: "d1", channel: 0 }], group: null, facet: null },
+    zones: {
+      x: null,
+      y: [{ datasetId: "d1", channel: 0 }],
+      group: null,
+      facet: null,
+      yErr: [],
+      xErr: null,
+    },
     mark: "scatter" as const,
   };
 

@@ -654,6 +654,8 @@ describe("Worksheet selection → Graph Builder handoff (MAIN_PLAN #4)", () => {
         y: [{ datasetId: "d1", channel: 1 }],
         group: null,
         facet: null,
+        yErr: [],
+        xErr: null,
       },
       mark: "scatter",
     });

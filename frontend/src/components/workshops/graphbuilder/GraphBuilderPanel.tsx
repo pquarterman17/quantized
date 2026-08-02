@@ -107,6 +107,29 @@ export default function GraphBuilderPanel() {
               onAssign={(c) => g.assign("facet", c)}
               onRemove={(c) => g.remove("facet", c)}
             />
+            {g.family === "xy" && (
+              <>
+                <ZoneWell
+                  title="Y error"
+                  hint="± uncertainty, paired by position with Y"
+                  multiple
+                  datasetId={g.datasetId}
+                  options={g.options}
+                  assigned={g.chips("yErr")}
+                  onAssign={(c) => g.assign("yErr", c)}
+                  onRemove={(c) => g.remove("yErr", c)}
+                />
+                <ZoneWell
+                  title="X error"
+                  hint="± uncertainty on the x axis"
+                  datasetId={g.datasetId}
+                  options={g.options}
+                  assigned={g.chips("xErr")}
+                  onAssign={(c) => g.assign("xErr", c)}
+                  onRemove={(c) => g.remove("xErr", c)}
+                />
+              </>
+            )}
           </div>
 
           <div className="qzk-graph-mark-row">

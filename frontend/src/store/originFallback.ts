@@ -125,6 +125,8 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
           y: yColumns.map((channel) => ({ datasetId, channel })),
           group: null,
           facet: null,
+          yErr: [],
+          xErr: null,
         },
         mark: entry.figure.curves?.some(
           (curve) => curve.style === "line" || curve.style === "line_symbol",

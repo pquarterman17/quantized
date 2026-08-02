@@ -14,6 +14,7 @@
 
 import { useEffect, useRef } from "react";
 
+import type { ErrorSpan } from "../../../lib/errorbars";
 import type { FacetPanel } from "../../../lib/facet";
 import type { PlotPayload } from "../../../lib/plotdata";
 import type { SpecRender, StepMode } from "../../../lib/plotspec";
@@ -23,6 +24,7 @@ import type { Accent, Theme } from "../../../store/useApp";
 import { useApp } from "../../../store/useApp";
 import StatStageCanvas from "../../Stage/StatStageCanvas";
 import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
+import { drawErrorWhiskers } from "./errorBarsCanvas";
 
 const MARGIN = { left: 42, right: 10, top: 10, bottom: 26 };
 
@@ -105,6 +107,7 @@ function drawXYIntoRect(
   mark: XYMark,
   showMarkers: boolean,
   stepMode: StepMode,
+  errorSpans?: Map<number, ErrorSpan[]>,
   label?: string,
 ) {
   const cols = payload.data as (number | null)[][];
@@ -173,6 +176,11 @@ function drawXYIntoRect(
     } else {
       tracePoints(ctx, x, col, sx, sy);
     }
+    // Error wells (#51 phase 3): same pairing specErrorBindings derives,
+    // keyed like buildErrorSpans (column 0 is x, column p+1 is the p-th
+    // plotted series) — `i` here IS that p.
+    const spans = errorSpans?.get(i + 1);
+    if (spans && spans.length > 0) drawErrorWhiskers(ctx, x, col, sx, sy, spans, color);
   });
 }
 
@@ -202,11 +210,12 @@ function drawXY(
   mark: XYMark,
   showMarkers: boolean,
   stepMode: StepMode,
+  errorSpans?: Map<number, ErrorSpan[]>,
 ) {
   const setup = setupCanvas(canvas, host);
   if (!setup) return;
   const { ctx, W, H } = setup;
-  drawXYIntoRect(ctx, { x: 0, y: 0, w: W, h: H }, payload, mark, showMarkers, stepMode);
+  drawXYIntoRect(ctx, { x: 0, y: 0, w: W, h: H }, payload, mark, showMarkers, stepMode, errorSpans);
 }
 
 /** Small-multiples grid (#21 faceting): one mini xy panel per facet level,
@@ -236,6 +245,7 @@ function drawFacetGrid(
       mark,
       showMarkers,
       stepMode,
+      undefined, // error wells degrade for faceted xy too (same gate as grouped — see plotspec.ts)
       p.label,
     );
   });
@@ -259,7 +269,7 @@ function CanvasHost({ render, theme, accent }: { render: SpecRender; theme: Them
         if (render.facets && render.facets.length > 0) {
           drawFacetGrid(canvas, host, render.facets, render.mark, showMarkers, stepMode);
         } else {
-          drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode);
+          drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode, render.errorSpans);
         }
       } else if (render.kind === "box") {
         drawStat(canvas, host, {

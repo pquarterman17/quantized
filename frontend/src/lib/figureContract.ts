@@ -127,6 +127,10 @@ export const FIGURE_CONFIG_FIELD_CONTRACT = {
   dpi: output("output.dpi"),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   seriesStyles: derived("series.styles"),
+  errors: derived(
+    "bindings.errors",
+    "Graph Builder's Y-error/X-error wells, threaded into FigureDocument.bindings.errors when opening Publication Preview -- independent of Dataset.errorRoles, since the wells may not be committed to the dataset yet.",
+  ),
 } satisfies FieldContractMap<FigureConfig>;
 
 /** Preserve FigureDoc identity/freeze semantics while its config becomes a projection. */

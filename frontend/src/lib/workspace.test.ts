@@ -1061,7 +1061,14 @@ describe("workspace ToolWindow layout persistence (GUI_INTERACTION_PLAN #10)", (
 describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () => {
   const specA: PlotSpec = {
     version: 1,
-    zones: { x: { datasetId: "a", channel: -1 }, y: [{ datasetId: "a", channel: 0 }], group: null, facet: null },
+    zones: {
+      x: { datasetId: "a", channel: -1 },
+      y: [{ datasetId: "a", channel: 0 }],
+      group: null,
+      facet: null,
+      yErr: [],
+      xErr: null,
+    },
     mark: "line",
   };
   const savedA: SavedPlotSpec = {
@@ -1081,7 +1088,14 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
   it("round-trips a v2 saved spec (display + axes blocks) unchanged (GUI_INTERACTION #12 Slice 2)", () => {
     const specV2: PlotSpec = {
       version: 2,
-      zones: { x: { datasetId: "a", channel: -1 }, y: [{ datasetId: "a", channel: 0 }], group: null, facet: null },
+      zones: {
+        x: { datasetId: "a", channel: -1 },
+        y: [{ datasetId: "a", channel: 0 }],
+        group: null,
+        facet: null,
+        yErr: [],
+        xErr: null,
+      },
       mark: "scatter",
       display: { series: { 0: { color: "#ff8800", width: 2 } } },
       axes: { x: { label: "Field", lim: [0, 10] }, title: "My graph" },

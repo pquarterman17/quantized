@@ -29,7 +29,7 @@ const specA: SavedPlotSpec = {
   name: "Alpha",
   createdAt: "2026-01-01T00:00:00.000Z",
   modifiedAt: "2026-01-03T00:00:00.000Z",
-  spec: { version: 1, zones: { x: null, y: [], group: null, facet: null }, mark: "scatter" },
+  spec: { version: 1, zones: { x: null, y: [], group: null, facet: null, yErr: [], xErr: null }, mark: "scatter" },
 };
 const specB: SavedPlotSpec = {
   id: "b",

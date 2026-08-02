@@ -15,6 +15,8 @@ const spec = (over: Partial<PlotSpec> = {}): PlotSpec => ({
     y: [{ datasetId: "d1", channel: 1 }],
     group: null,
     facet: null,
+    yErr: [],
+    xErr: null,
   },
   mark: "line",
   ...over,
@@ -74,6 +76,24 @@ describe("figure transition compatibility", () => {
     const report = plotSpecPublicationCompatibility(spec({ mark: "box" }));
     expect(report.blocker).toContain("Publication Preview");
     expect(report.losses).toEqual([]);
+  });
+
+  // ORIGIN_GAP_PLAN #51 phase 3: error bars are NOT a loss when the wells are
+  // set — plotSpecToFigureDoc threads them into FigureConfig.errors losslessly
+  // (see plotSpecFigure.test.ts's "error wells" describe block), unlike
+  // hidden-series/marker-shapes/etc. above, which genuinely have no
+  // FigureConfig equivalent.
+  it("never reports error bars as a loss, wells set or not", () => {
+    const withWells = plotSpecPublicationCompatibility(spec({
+      zones: {
+        ...spec().zones,
+        yErr: [{ datasetId: "d1", channel: 2 }],
+        xErr: { datasetId: "d1", channel: 3 },
+      },
+    }));
+    expect(withWells.blocker).toBeNull();
+    expect(withWells.losses).not.toContain("error bars");
+    expect(plotSpecPublicationCompatibility(spec()).losses).not.toContain("error bars");
   });
 
   it("line, scatter, AND step all open unblocked (GAP_PLOTTYPES)", () => {

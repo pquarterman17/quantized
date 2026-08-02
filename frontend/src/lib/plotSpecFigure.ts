@@ -25,11 +25,12 @@
 // axis — `buildXY` never assigns a grouped series to axis 1, so there's no
 // sound semantic for the combination (see `specUsesY2` below).
 
+import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
 import { plotSpecPublicationCompatibility } from "./figureCompatibility";
 import { compactOverrides, type FigureOverrides } from "./figureOverrides";
 import type { FigureDoc } from "./figuredoc";
-import { specDatasetId, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
+import { specDatasetId, specErrorBindings, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
 import type { AxisScale, SeriesStyle } from "./types";
 
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
@@ -118,6 +119,10 @@ export function plotSpecToFigureDoc(
   const liveSeriesStyles = spec.display ? displayToSeriesStyles(spec.display) : seriesStyles;
 
   const groupCol = spec.zones.group?.channel ?? null;
+  // Error wells (#51 phase 3): same groupCol gate as seriesStyles below --
+  // a grouped spec's synthetic per-level series have no sound 1:1 mapping to
+  // the wells' y-index pairing, so errors are omitted rather than misapplied.
+  const errors: ErrorBinding[] = groupCol === null ? specErrorBindings(spec) : [];
 
   return {
     id: `plotspec-${Date.now().toString(36)}`,
@@ -137,6 +142,7 @@ export function plotSpecToFigureDoc(
       fmt: "pdf",
       dpi: 300,
       overrides,
+      errors,
       // A grouped spec's yKeys don't align 1:1 with the rendered synthetic
       // per-level series (see the module doc comment) -- there's no sound
       // per-channel style to carry, so styling is omitted entirely and

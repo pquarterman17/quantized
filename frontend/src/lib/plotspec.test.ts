@@ -16,9 +16,11 @@ import {
   moveYZone,
   plotSpecCoreEqual,
   plotSpecsEqual,
+  prefillErrorZones,
   sanitizeSavedPlotSpecs,
   serializePlotSpec,
   specDatasetId,
+  specErrorBindings,
   specToRender,
   validMarks,
   validatePlotSpec,
@@ -102,8 +104,10 @@ function spec(
   mark: PlotSpec["mark"],
   group: ChannelRef | null = null,
   facet: ChannelRef | null = null,
+  yErr: ChannelRef[] = [],
+  xErr: ChannelRef | null = null,
 ): PlotSpec {
-  return { version: 1, zones: { x, y, group, facet }, mark };
+  return { version: 1, zones: { x, y, group, facet, yErr, xErr }, mark };
 }
 
 // ── ChannelRef / zone algebra ────────────────────────────────────────────────
@@ -261,6 +265,98 @@ describe("markSeriesStyle", () => {
 
   it("box/violin/bar: nothing to override (not an xy mark)", () => {
     expect(markSeriesStyle(spec(ref(2), [ref(1)], "box"))).toEqual({});
+  });
+});
+
+// ── Error wells (ORIGIN_GAP_PLAN #51 phase 3 — the COLUMN-DESIGNATION model)
+// ─────────────────────────────────────────────────────────────────────────
+// channel 0 "R" is a Y value; channel 1 "dR" is its error (leading-d
+// convention -> unambiguous base-name match to "R"); channel 2 "Y2" has NO
+// recognizable error column; channel 3 "xerr" is a global X error.
+const ERR_DATA: DataStruct = {
+  time: [0, 1, 2],
+  values: [
+    [1, 0.1, 5, 0.01],
+    [2, 0.2, 6, 0.02],
+    [3, 0.3, 7, 0.03],
+  ],
+  labels: ["R", "dR", "Y2", "xerr"],
+  units: ["", "", "", ""],
+  metadata: {},
+};
+const ERR_DS: Dataset = { id: "de", name: "err.dat", data: ERR_DATA };
+const eref = (channel: number): ChannelRef => ({ datasetId: "de", channel });
+
+describe("specErrorBindings", () => {
+  it("position-pairs yErr[i] with y[i] — regression: y[1]'s error pairs to y[1], not y[0]", () => {
+    const s = spec(null, [eref(5), eref(7)], "scatter", null, null, [eref(50), eref(70)]);
+    expect(specErrorBindings(s)).toEqual([
+      { channel: 50, target: 5, axis: "y", side: "both" },
+      { channel: 70, target: 7, axis: "y", side: "both" },
+    ]);
+  });
+
+  it("binds xErr to the x-axis sentinel target -1", () => {
+    const s = spec(null, [eref(5)], "scatter", null, null, [], eref(9));
+    expect(specErrorBindings(s)).toEqual([{ channel: 9, target: -1, axis: "x", side: "both" }]);
+  });
+
+  it("combines yErr and xErr bindings", () => {
+    const s = spec(null, [eref(5)], "scatter", null, null, [eref(50)], eref(9));
+    expect(specErrorBindings(s)).toEqual([
+      { channel: 50, target: 5, axis: "y", side: "both" },
+      { channel: 9, target: -1, axis: "x", side: "both" },
+    ]);
+  });
+
+  it("is empty for empty wells", () => {
+    expect(specErrorBindings(spec(null, [eref(5)], "scatter"))).toEqual([]);
+  });
+
+  it("defensively truncates a yErr longer than y (never invents a pairing)", () => {
+    // Bypasses assignZone/validatePlotSpec — a raw shape a caller could still
+    // hand this pure function directly.
+    const s: PlotSpec = {
+      ...spec(null, [eref(5)], "scatter"),
+      zones: { ...spec(null, [eref(5)], "scatter").zones, yErr: [eref(50), eref(70)] },
+    };
+    expect(specErrorBindings(s)).toEqual([{ channel: 50, target: 5, axis: "y", side: "both" }]);
+  });
+});
+
+describe("prefillErrorZones", () => {
+  it("prefills yErr from an unambiguous inferred binding (and xErr, independently)", () => {
+    const s = spec(null, [eref(0)], "scatter");
+    const filled = prefillErrorZones(s, ERR_DATA, "de");
+    expect(filled.zones.yErr).toEqual([eref(1)]);
+    expect(filled.zones.xErr).toEqual(eref(3)); // ERR_DATA's "xerr" column, dataset-wide
+  });
+
+  it("prefills xErr independently of yErr", () => {
+    const s = spec(null, [eref(2)], "scatter"); // Y2 has no inferred error
+    const filled = prefillErrorZones(s, ERR_DATA, "de");
+    expect(filled.zones.yErr).toEqual([]);
+    expect(filled.zones.xErr).toEqual(eref(3));
+  });
+
+  it("stops the yErr prefix at the first ambiguous/unmatched Y (never invents a gap)", () => {
+    const s = spec(null, [eref(0), eref(2)], "scatter"); // R has dR, Y2 does not
+    const filled = prefillErrorZones(s, ERR_DATA, "de");
+    expect(filled.zones.yErr).toEqual([eref(1)]); // stops before Y2, doesn't skip it
+  });
+
+  it("prefills nothing when the dataset has no recognizable error columns (ambiguous/none)", () => {
+    const filled = prefillErrorZones(spec(ref(0), [ref(1)], "scatter"), DATA, "d1");
+    expect(filled.zones.yErr).toEqual([]);
+    expect(filled.zones.xErr).toBeNull();
+  });
+
+  it("leaves x/y/group/facet/mark untouched", () => {
+    const s = spec(ref(3, "de"), [eref(0)], "line", eref(3), null);
+    const filled = prefillErrorZones(s, ERR_DATA, "de");
+    expect(filled.zones.x).toEqual(ref(3, "de"));
+    expect(filled.zones.group).toEqual(ref(3, "de"));
+    expect(filled.mark).toBe("line");
   });
 });
 
@@ -477,6 +573,39 @@ describe("specToRender", () => {
     });
   });
 
+  // ── Error wells (#51 phase 3): the same data + pairing the mini-preview
+  // draws from — GraphPreview just draws whatever this computes. ───────────
+  describe("errorSpans", () => {
+    it("carries yErr/xErr as ErrorSpans, keyed like buildErrorSpans (p+1)", () => {
+      const s = spec(eref(3), [eref(0)], "scatter", null, null, [eref(1)], eref(3));
+      const r = specToRender(s, [ERR_DS]);
+      expect(r.kind).toBe("xy");
+      if (r.kind !== "xy") return;
+      expect(r.errorSpans).toBeDefined();
+      const ySpan = r.errorSpans!.get(1)!.find((sp) => sp.axis === "y")!;
+      expect(ySpan.plus).toEqual([0.1, 0.2, 0.3]);
+      expect(ySpan.minus).toEqual([0.1, 0.2, 0.3]);
+      const xSpan = r.errorSpans!.get(1)!.find((sp) => sp.axis === "x")!;
+      expect(xSpan.plus).toEqual([0.01, 0.02, 0.03]);
+    });
+
+    it("omits errorSpans when no wells are set (untouched path)", () => {
+      const r = specToRender(spec(ref(0), [ref(1)], "scatter"), [DS]);
+      expect(r.kind).toBe("xy");
+      if (r.kind !== "xy") return;
+      expect(r.errorSpans).toBeUndefined();
+    });
+
+    it("omits errorSpans for a grouped spec (no sound 1:1 mapping to synthetic per-level series)", () => {
+      const s = spec(null, [eref(0)], "scatter", eref(2), null, [eref(1)]);
+      const r = specToRender(s, [ERR_DS]);
+      expect(r.kind).toBe("xy");
+      if (r.kind !== "xy") return;
+      expect(r.grouped).toBe(true);
+      expect(r.errorSpans).toBeUndefined();
+    });
+  });
+
   it("an empty spec is an incomplete hint", () => {
     expect(specToRender(emptySpec(), [DS])).toMatchObject({ kind: "message", tone: "hint" });
   });
@@ -567,14 +696,87 @@ describe("serialize / deserialize / validate", () => {
     expect(JSON.parse(raw)).not.toHaveProperty("stepMode");
     expect(JSON.parse(raw)).not.toHaveProperty("showMarkers");
   });
+
+  // ── yErr/xErr (#51 phase 3) — tolerant validation ─────────────────────────
+  it("emptySpec() initializes yErr/xErr", () => {
+    expect(emptySpec().zones.yErr).toEqual([]);
+    expect(emptySpec().zones.xErr).toBeNull();
+  });
+
+  it("round-trips yErr/xErr through serialize -> deserialize", () => {
+    const s = spec(ref(0), [ref(1), ref(2)], "line", null, null, [ref(3)], ref(4));
+    const back = deserializePlotSpec(serializePlotSpec(s));
+    expect(back).toEqual(s);
+  });
+
+  it("truncates a yErr longer than y — a trailing entry has no y to describe", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null, yErr: [ref(2), ref(3)], xErr: null },
+      mark: "scatter",
+    });
+    expect(v!.zones.yErr).toEqual([ref(2)]);
+  });
+
+  it("drops duplicate yErr refs", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: {
+        x: ref(0),
+        y: [ref(1), ref(9)],
+        group: null,
+        facet: null,
+        yErr: [ref(2), ref(2)],
+        xErr: null,
+      },
+      mark: "scatter",
+    });
+    expect(v!.zones.yErr).toEqual([ref(2)]);
+  });
+
+  it("drops malformed yErr entries and a malformed xErr, rather than nulling the spec", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: {
+        x: ref(0),
+        y: [ref(1)],
+        group: null,
+        facet: null,
+        yErr: [ref(2), { datasetId: "d1" }, 5, null],
+        xErr: "not a ref",
+      },
+      mark: "scatter",
+    });
+    expect(v).not.toBeNull();
+    expect(v!.zones.yErr).toEqual([ref(2)]);
+    expect(v!.zones.xErr).toBeNull();
+  });
+
+  it("tolerates a spec with no yErr/xErr keys at all (pre-#51-phase-3 payload)", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+    });
+    expect(v!.zones.yErr).toEqual([]);
+    expect(v!.zones.xErr).toBeNull();
+  });
 });
 
 // ── PlotSpec v2 (GUI_INTERACTION_PLAN #12, Slice 2) ─────────────────────────
 describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
-  // The EXACT string a v1 spec has always serialized to — the byte-stability
-  // contract every existing saved spec / .dwk payload depends on. If this
-  // literal ever needs to change, something broke back-compat.
+  // TODAY's exact v1 output shape — the byte-stability contract every
+  // existing saved spec / .dwk payload depends on. #51 phase 3 widened
+  // `zones` with yErr/xErr, always present at their empty default (the SAME
+  // "every zone field is always serialized, even as null/[]" convention
+  // x/group/facet already use) — this literal was updated ONCE, deliberately,
+  // for that widening. If it ever needs to change again, something else broke
+  // back-compat.
   const V1_FIXTURE =
+    '{"version":1,"zones":{"x":{"datasetId":"d1","channel":-1},"y":[{"datasetId":"d1","channel":0}],"group":null,"facet":null,"yErr":[],"xErr":null},"mark":"line"}';
+  // A genuinely OLD persisted payload — no yErr/xErr keys at all, exactly
+  // what a pre-#51-phase-3 .dwk/macro actually has on disk.
+  const LEGACY_V1_FIXTURE =
     '{"version":1,"zones":{"x":{"datasetId":"d1","channel":-1},"y":[{"datasetId":"d1","channel":0}],"group":null,"facet":null},"mark":"line"}';
 
   it("a v1 fixture string round-trips through load -> serialize byte-identical", () => {
@@ -583,6 +785,14 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
     expect(loaded!.version).toBe(1);
     expect(loaded!.display).toBeUndefined();
     expect(loaded!.axes).toBeUndefined();
+    expect(serializePlotSpec(loaded!)).toBe(V1_FIXTURE);
+  });
+
+  it("a legacy pre-#51-phase-3 payload (no yErr/xErr keys) loads and re-serializes to today's canonical shape", () => {
+    const loaded = validatePlotSpec(JSON.parse(LEGACY_V1_FIXTURE));
+    expect(loaded).not.toBeNull();
+    expect(loaded!.zones.yErr).toEqual([]);
+    expect(loaded!.zones.xErr).toBeNull();
     expect(serializePlotSpec(loaded!)).toBe(V1_FIXTURE);
   });
 
@@ -766,7 +976,11 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
 describe("plotSpecsEqual", () => {
   it("true for structurally identical specs, even with different field order", () => {
     const a = spec(ref(0), [ref(1), ref(2)], "scatter");
-    const b: PlotSpec = { mark: "scatter", zones: { y: [ref(1), ref(2)], x: ref(0), group: null, facet: null }, version: 1 };
+    const b: PlotSpec = {
+      mark: "scatter",
+      zones: { y: [ref(1), ref(2)], x: ref(0), group: null, facet: null, yErr: [], xErr: null },
+      version: 1,
+    };
     expect(plotSpecsEqual(a, b)).toBe(true);
   });
 
@@ -784,7 +998,7 @@ describe("plotSpecsEqual", () => {
     const a = spec(ref(0), [ref(1)], "scatter");
     const b: PlotSpec = {
       version: 2,
-      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null, yErr: [], xErr: null },
       mark: "scatter",
       display: { series: {}, order: [] },
       axes: { x: {}, y: {} },
@@ -846,6 +1060,15 @@ describe("plotSpecCoreEqual", () => {
     expect(plotSpecCoreEqual(a, b)).toBe(false);
     const c: PlotSpec = { ...spec(ref(0), [ref(1)], "line"), showMarkers: true };
     const d: PlotSpec = spec(ref(0), [ref(1)], "line");
+    expect(plotSpecCoreEqual(c, d)).toBe(false);
+  });
+
+  it("false when yErr or xErr differ (#51 phase 3 — the wells are core zone content)", () => {
+    const a = spec(ref(0), [ref(1)], "line", null, null, [ref(2)]);
+    const b = spec(ref(0), [ref(1)], "line", null, null, [ref(3)]);
+    expect(plotSpecCoreEqual(a, b)).toBe(false);
+    const c = spec(ref(0), [ref(1)], "line", null, null, [], ref(4));
+    const d = spec(ref(0), [ref(1)], "line");
     expect(plotSpecCoreEqual(c, d)).toBe(false);
   });
 });

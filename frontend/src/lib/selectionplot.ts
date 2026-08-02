@@ -166,6 +166,8 @@ export function selectionToSpec(
       y: yCols.map((channel) => ({ datasetId, channel })),
       group: null,
       facet: null,
+      yErr: [],
+      xErr: null,
     },
     mark: "scatter",
   };

@@ -14,7 +14,7 @@ import type { PageSetup } from "./pagesetup";
 import type { PanelFit } from "./panelLayout";
 import type { Annotation, AxisFormat, SeriesStyle, Shape } from "./types";
 
-const ZONES = { x: null, y: [], group: null, facet: null };
+const ZONES = { x: null, y: [], group: null, facet: null, yErr: [], xErr: null };
 
 function baseSpec(overrides: Partial<PlotSpec>): PlotSpec {
   return { version: 2, zones: ZONES, mark: "scatter", ...overrides };

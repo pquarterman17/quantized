@@ -167,6 +167,8 @@ describe("useGraphBuilder — worksheet seed (MAIN_PLAN #4)", () => {
       y: [{ datasetId, channel: 1 }],
       group: null,
       facet: null,
+      yErr: [],
+      xErr: null,
     },
     mark: "scatter" as const,
   });
@@ -307,6 +309,8 @@ describe("useGraphBuilder — explicit plot destinations", () => {
           y: [{ datasetId: "d2", channel: 1 }],
           group: null,
           facet: null,
+          yErr: [],
+          xErr: null,
         },
         mark: "scatter",
       }),
@@ -553,6 +557,133 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
   });
 });
 
+// ── Error wells (ORIGIN_GAP_PLAN #51 phase 3 — the COLUMN-DESIGNATION model)
+// ─────────────────────────────────────────────────────────────────────────
+// channel 0 "R" / channel 1 "dR" (its error, leading-d convention) and
+// channel 2 "S" / channel 3 "dS" (its error) -- two independent Y/error
+// pairs so a reorder/regression test can prove yErr[1] pairs to y[1], not
+// y[0]. channel 4 "xerr" is a dataset-wide X error.
+const ERR_DATA: DataStruct = {
+  time: [0, 1, 2, 3],
+  values: [
+    [1, 0.1, 5, 0.5, 0.01],
+    [2, 0.2, 6, 0.6, 0.02],
+    [3, 0.3, 7, 0.7, 0.03],
+    [4, 0.4, 8, 0.8, 0.04],
+  ],
+  labels: ["R", "dR", "S", "dS", "xerr"],
+  units: ["", "", "", "", ""],
+  metadata: {},
+};
+
+describe("useGraphBuilder — error wells (#51 phase 3)", () => {
+  it("auto-prefills yErr from an unambiguous inferred column when a fresh Y is dropped", () => {
+    useApp.setState({ datasets: [{ id: "de", name: "err.dat", data: ERR_DATA }], activeId: "de" });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 0)); // R
+    expect(result.current.chips("yErr")).toEqual([{ channel: 1, label: "dR" }]);
+  });
+
+  it("does not prefill from a dataset with no recognizable error columns (ambiguous/none)", () => {
+    const { result } = renderHook(() => useGraphBuilder()); // default DATA fixture, no error columns
+    act(() => result.current.assign("y", 1));
+    expect(result.current.chips("yErr")).toEqual([]);
+    expect(result.current.chips("xErr")).toEqual([]);
+  });
+
+  it("never overwrites wells the user has touched, even when a later Y drop would be unambiguous", () => {
+    useApp.setState({ datasets: [{ id: "de", name: "err.dat", data: ERR_DATA }], activeId: "de" });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 0)); // R -> auto-prefills yErr [dR]
+    expect(result.current.chips("yErr")).toEqual([{ channel: 1, label: "dR" }]);
+    act(() => result.current.remove("yErr", 1)); // the user explicitly clears it -> touched
+    expect(result.current.chips("yErr")).toEqual([]);
+    act(() => result.current.assign("y", 2)); // S has an equally unambiguous dS
+    // Still empty: touching the well once locks out every future auto-fill
+    // for this session, not just the one column that was cleared.
+    expect(result.current.chips("yErr")).toEqual([]);
+  });
+
+  it("a direct drop into the Y-error well also counts as touched", () => {
+    useApp.setState({ datasets: [{ id: "de", name: "err.dat", data: ERR_DATA }], activeId: "de" });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 0)); // R
+    act(() => result.current.remove("yErr", 1)); // clear the auto-fill, touched=true
+    act(() => result.current.assign("yErr", 3)); // user explicitly picks dS instead
+    expect(result.current.chips("yErr")).toEqual([{ channel: 3, label: "dS" }]);
+    act(() => result.current.assign("y", 2)); // adding S must not re-run inference over this
+    expect(result.current.chips("yErr")).toEqual([{ channel: 3, label: "dS" }]);
+  });
+
+  it("commit position-pairs yErr with y through setErrorRoles (regression: y[1]'s error pairs to y[1], not y[0])", () => {
+    useApp.setState({ datasets: [{ id: "de", name: "err.dat", data: ERR_DATA }], activeId: "de" });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 2)); // S first -> yErr auto-fills [dS]
+    act(() => result.current.assign("y", 0)); // then R -> yErr extends to [dS, dR]
+    expect(result.current.chips("yErr")).toEqual([
+      { channel: 3, label: "dS" },
+      { channel: 1, label: "dR" },
+    ]);
+    act(() => result.current.applyToCurrent());
+    const ds = useApp.getState().datasets.find((d) => d.id === "de")!;
+    // xErr auto-prefills too (ERR_DATA's "xerr" column, dataset-wide,
+    // independent of which Y channels are selected) -- not the focus of
+    // this regression, but part of the honest commit output.
+    expect(ds.errorRoles).toEqual([
+      { channel: 3, target: 2, axis: "y", side: "both" }, // dS -> S (y[0])
+      { channel: 1, target: 0, axis: "y", side: "both" }, // dR -> R (y[1])
+      { channel: 4, target: -1, axis: "x", side: "both" },
+    ]);
+  });
+
+  it("commit binds xErr to the x-axis sentinel target -1", () => {
+    useApp.setState({ datasets: [{ id: "de", name: "err.dat", data: ERR_DATA }], activeId: "de" });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 0));
+    act(() => result.current.assign("xErr", 4)); // explicit, mirrors auto-prefill's own choice
+    expect(result.current.chips("xErr")).toEqual([{ channel: 4, label: "xerr" }]);
+    act(() => result.current.applyToCurrent());
+    const ds = useApp.getState().datasets.find((d) => d.id === "de")!;
+    expect(ds.errorRoles).toContainEqual({ channel: 4, target: -1, axis: "x", side: "both" });
+  });
+
+  it("an empty-wells commit leaves the dataset's existing error roles untouched", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run.dat",
+          data: DATA,
+          errorRoles: [{ channel: 2, target: 1, axis: "y" as const, side: "both" as const }],
+        },
+      ],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1)); // DATA has no inferable errors -> wells stay empty
+    expect(result.current.chips("yErr")).toEqual([]);
+    act(() => result.current.applyToCurrent());
+    const ds = useApp.getState().datasets.find((d) => d.id === "d1")!;
+    expect(ds.errorRoles).toEqual([{ channel: 2, target: 1, axis: "y", side: "both" }]);
+  });
+
+  it("box/violin/bar commit ignores the error wells entirely (categorical marks never read them)", () => {
+    // DATA's channel 2 ("grp") is nominal -- assigning it to X morphs the
+    // mark to box. Wells CAN still hold content for a categorical spec
+    // (validation keeps it, per plotspec.ts's doc) -- only commit/render
+    // ignore it, which is exactly what this test pins.
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1)); // continuous
+    act(() => result.current.assign("x", 2)); // nominal -> morphs to box
+    expect(result.current.mark).toBe("box");
+    act(() => result.current.assign("yErr", 0)); // wells still accept a drop
+    expect(result.current.chips("yErr")).toEqual([{ channel: 0, label: "x" }]);
+    act(() => result.current.applyToCurrent());
+    const ds = useApp.getState().datasets.find((d) => d.id === "d1")!;
+    expect(ds.errorRoles).toBeUndefined(); // setErrorRoles was never called
+  });
+});
+
 describe("useGraphBuilder — open in Figure Builder", () => {
   it("opens an ordinary scatter as an ephemeral point-only FigureDoc", async () => {
     const { result } = renderHook(() => useGraphBuilder());
@@ -658,6 +789,8 @@ describe("useGraphBuilder — open in Figure Builder", () => {
         y: [{ datasetId: "d1", channel: 1 }],
         group: null,
         facet: null,
+        yErr: [],
+        xErr: null,
       },
       mark: "line",
       axes: { x: { step: 2, fmt: { mode: "fixed", digits: 1 } } },
@@ -822,7 +955,14 @@ describe("useGraphBuilder — saved PlotSpecs (GUI_INTERACTION_PLAN #11)", () =>
     act(() =>
       useApp.getState().openGraphBuilderSeeded({
         version: 1,
-        zones: { x: { datasetId: "d1", channel: 0 }, y: [{ datasetId: "d1", channel: 1 }], group: null, facet: null },
+        zones: {
+          x: { datasetId: "d1", channel: 0 },
+          y: [{ datasetId: "d1", channel: 1 }],
+          group: null,
+          facet: null,
+          yErr: [],
+          xErr: null,
+        },
         mark: "scatter",
       }),
     );
@@ -975,7 +1115,14 @@ describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)
     act(() =>
       useApp.getState().openGraphBuilderSeeded({
         version: 1,
-        zones: { x: { datasetId: "d2", channel: 0 }, y: [{ datasetId: "d2", channel: 1 }], group: null, facet: null },
+        zones: {
+          x: { datasetId: "d2", channel: 0 },
+          y: [{ datasetId: "d2", channel: 1 }],
+          group: null,
+          facet: null,
+          yErr: [],
+          xErr: null,
+        },
         mark: "scatter",
       }),
     );

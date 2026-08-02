@@ -12,6 +12,8 @@ const xy = (over: Partial<PlotSpec> = {}): PlotSpec => ({
     y: [{ datasetId: "d1", channel: 2 }, { datasetId: "d1", channel: 1 }],
     group: null,
     facet: null,
+    yErr: [],
+    xErr: null,
   },
   mark: "line",
   ...over,
@@ -129,6 +131,49 @@ describe("plotSpecToFigureDoc", () => {
   it("a non-grouped spec's config.groupCol is null", () => {
     const doc = plotSpecToFigureDoc(xy(), "My graph", {});
     expect(doc?.config.groupCol).toBeNull();
+  });
+});
+
+// ── Error wells handoff (ORIGIN_GAP_PLAN #51 phase 3) ───────────────────────
+// So Publication Preview opened directly from Graph Builder (without a prior
+// commit to a plot) still carries the wells' error bars — see
+// figureDocumentPublication.ts's threading into createFigureDocument.
+describe("plotSpecToFigureDoc — error wells", () => {
+  it("threads yErr/xErr into config.errors, position-paired with y (not channel order)", () => {
+    // xy()'s y is [channel 2, channel 1] (display order); yErr[0] pairs to
+    // y[0] (channel 2), yErr[1] to y[1] (channel 1) — NOT a channel-index sort.
+    const spec = xy({
+      zones: { ...xy().zones, yErr: [{ datasetId: "d1", channel: 5 }, { datasetId: "d1", channel: 6 }] },
+    });
+    const doc = plotSpecToFigureDoc(spec, "Errored", {});
+    expect(doc?.config.errors).toEqual([
+      { channel: 5, target: 2, axis: "y", side: "both" },
+      { channel: 6, target: 1, axis: "y", side: "both" },
+    ]);
+  });
+
+  it("threads xErr with the x-axis sentinel target -1", () => {
+    const spec = xy({ zones: { ...xy().zones, xErr: { datasetId: "d1", channel: 7 } } });
+    const doc = plotSpecToFigureDoc(spec, "Errored", {});
+    expect(doc?.config.errors).toContainEqual({ channel: 7, target: -1, axis: "x", side: "both" });
+  });
+
+  it("is an empty array (not undefined) when no wells are set", () => {
+    const doc = plotSpecToFigureDoc(xy(), "Plain", {});
+    expect(doc?.config.errors).toEqual([]);
+  });
+
+  it("omits errors for a grouped spec (same gate as seriesStyles -- no sound 1:1 mapping)", () => {
+    const grouped = xy({
+      zones: {
+        ...xy().zones,
+        group: { datasetId: "d1", channel: 3 },
+        yErr: [{ datasetId: "d1", channel: 5 }, { datasetId: "d1", channel: 6 }],
+      },
+    });
+    const doc = plotSpecToFigureDoc(grouped, "Grouped", {});
+    expect(doc?.config.errors).toEqual([]);
+    expect(doc?.config.seriesStyles).toBeNull(); // the existing sibling gate, for contrast
   });
 });
 

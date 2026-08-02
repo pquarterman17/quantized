@@ -57,6 +57,8 @@ describe("Origin figure fallbacks", () => {
         y: [{ datasetId: "d1", channel: 0 }],
         group: null,
         facet: null,
+        yErr: [],
+        xErr: null,
       },
       mark: "line",
     });
@@ -139,6 +141,8 @@ describe("Origin figure fallbacks", () => {
         y: [0, 1, 2].map((channel) => ({ datasetId: overlay!.id, channel })),
         group: null,
         facet: null,
+        yErr: [],
+        xErr: null,
       },
       mark: "line",
     });

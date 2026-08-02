@@ -8,6 +8,7 @@
 // (#15) is the style half of a doc — preset + overrides + per-series styles —
 // saved standalone and appliable to any figure. Pure.
 
+import type { ErrorBinding } from "./errorRoles";
 import type { FigureOverrides } from "./figureOverrides";
 import type { ExportSeriesStyle } from "./exportStyles";
 import { isAxisScale, scaleFromLog } from "./plotview";
@@ -36,6 +37,16 @@ export interface FigureConfig {
   dpi: number;
   overrides: FigureOverrides | null;
   seriesStyles: (ExportSeriesStyle | null)[] | null;
+  /** Canonical error-bar bindings (ORIGIN_GAP_PLAN #51 phase 3 — the Graph
+   *  Builder's Y-error/X-error wells). Additive/optional: absent on every doc
+   *  saved before this field existed and on every doc built outside the
+   *  Graph Builder bridge; `figureDocumentFromLegacyFigureDoc` threads it
+   *  into `createFigureDocument`'s `errors` input so Publication Preview
+   *  opened from Graph Builder carries the SAME error bars the wells
+   *  describe, independent of whatever `Dataset.errorRoles` currently holds
+   *  (the wells may not have been committed to the dataset yet — see
+   *  `plotSpecToFigureDoc`). Only `plotSpecToFigureDoc` ever sets it. */
+  errors?: ErrorBinding[] | null;
 }
 
 export interface FigureDoc {
