@@ -99,8 +99,15 @@ def _serve(argv: list[str]) -> None:
         return
     if args.desktop:
         if args.calc:
+            # 600x860 (owner report, 2026-08-02): 520x680 was too small — the
+            # calc-only shell centers content in a 480px column
+            # (.qzk-calc-body{max-width:480px}), so 520 left almost no
+            # margin, and 680 was too short for a typical card-heavy tab
+            # (e.g. Electrical's 5 cards) to be visible without a manual
+            # resize first. Matches the Tauri --calc window (src-tauri/src/
+            # main.rs), which hits the identical CSS.
             _run_desktop(
-                args.host, port, title="DiraCulator", width=520, height=680, path=calc_path
+                args.host, port, title="DiraCulator", width=600, height=860, path=calc_path
             )
         else:
             _run_desktop(args.host, port)

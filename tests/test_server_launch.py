@@ -242,12 +242,12 @@ def test_run_desktop_calc_combo_uses_diraculator_title_and_geometry(
     monkeypatch.setattr(server_launch, "_bind", lambda *a: None)  # reuse-if-healthy path
     monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)  # our own instance
     server_launch._run_desktop(
-        "127.0.0.1", 8000, title="DiraCulator", width=520, height=680, path="/?view=calc"
+        "127.0.0.1", 8000, title="DiraCulator", width=600, height=860, path="/?view=calc"
     )
     (args, kwargs) = webview.create_window.call_args
     assert args == ("DiraCulator", "http://127.0.0.1:8000/?view=calc")
-    assert kwargs["width"] == 520
-    assert kwargs["height"] == 680
+    assert kwargs["width"] == 600
+    assert kwargs["height"] == 860
     assert kwargs["background_color"] == "#121116"
     assert isinstance(kwargs["js_api"], DesktopApi)
     webview.start.assert_called_once()
