@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from quantized.calc.constants import constants
+from quantized.calc.constants import constants, constants_by_system
 from quantized.calc.element_data import by_symbol, element_data
 from quantized.calc.unit_convert import unit_convert
 from quantized.routes._payload import to_jsonable
@@ -29,8 +29,18 @@ class ConvertRequest(BaseModel):
 
 @router.get("/constants")
 def get_constants() -> dict[str, Any]:
-    """CODATA physical constants (name -> value)."""
-    return {"constants": to_jsonable(constants())}
+    """CODATA physical constants.
+
+    ``constants`` (name -> value, SI) is the original flat shape -- kept
+    as-is for existing consumers. ``systems`` is additive: the same
+    constants grouped by unit system (SI/CGS/eV), each entry carrying
+    display metadata ({key, name, symbol, value, unit}) for the Constants
+    tab's per-system listing.
+    """
+    return {
+        "constants": to_jsonable(constants()),
+        "systems": to_jsonable(constants_by_system()),
+    }
 
 
 @router.get("/elements")

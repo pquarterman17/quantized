@@ -899,6 +899,20 @@ export interface ElementInfo {
   [key: string]: unknown;
 }
 
+/** Unit system a physical constant can be listed in (Constants tab). */
+export type ConstantSystem = "SI" | "CGS" | "eV";
+
+/** One physical constant, expressed in one unit system. `key` matches the
+ *  legacy flat `constants` dict (plus synthetic derived entries like
+ *  "hbarc" that only exist in a non-SI system). */
+export interface ConstantEntry {
+  key: string;
+  name: string;
+  symbol: string;
+  value: number;
+  unit: string;
+}
+
 /** Correction-pipeline params (camelCase wire keys; all optional).
  *  Mirrors `routes/corrections.CorrectionParams` / MATLAB `correctionParams`. */
 export interface CorrectionParams {

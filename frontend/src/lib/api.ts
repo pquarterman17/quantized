@@ -421,7 +421,7 @@ export function baselineRegion(body: {
 }
 
 // ── Reference data ──────────────────────────────────────────────────────────
-export function getConstants(): Promise<{ constants: Record<string, number> }> {
+export function getConstants(): Promise<{ constants: Record<string, number>; systems: Record<"SI" | "CGS" | "eV", { key: string; name: string; symbol: string; value: number; unit: string }[]> }> {
   return getJSON("/api/reference/constants");
 }
 
