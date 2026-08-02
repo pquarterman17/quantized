@@ -8,10 +8,16 @@ import PropertyPanels from "./PropertyPanels";
 function Harness({
   initial,
   openGroup,
+  hasY2 = true,
+  xBreaks,
+  setXBreaks,
   onChange = vi.fn(),
 }: {
   initial: FigureOverrides;
   openGroup: string;
+  hasY2?: boolean;
+  xBreaks?: [number, number][];
+  setXBreaks?: (next: [number, number][]) => void;
   onChange?: (overrides: FigureOverrides) => void;
 }) {
   const [overrides, setOverrides] = useState(initial);
@@ -19,6 +25,9 @@ function Harness({
     <PropertyPanels
       overrides={overrides}
       openGroup={openGroup}
+      hasY2={hasY2}
+      xBreaks={xBreaks}
+      setXBreaks={setXBreaks}
       setOverrides={(next) => {
         onChange(next);
         setOverrides(next);
@@ -33,6 +42,7 @@ describe("PropertyPanels publication parity controls", () => {
       <PropertyPanels
         overrides={{ y2_lim: [1, 2] }}
         openGroup="Axes & ticks"
+        hasY2
         setOverrides={vi.fn()}
       />,
     );
@@ -44,6 +54,7 @@ describe("PropertyPanels publication parity controls", () => {
       <PropertyPanels
         overrides={{ y2_lim: [8, 9] }}
         openGroup="Axes & ticks"
+        hasY2
         setOverrides={vi.fn()}
       />,
     );
@@ -127,7 +138,7 @@ describe("PropertyPanels publication parity controls", () => {
   });
 
   it("uses a sane positivity floor for font-size fields instead of Number.MIN_VALUE", async () => {
-    render(<PropertyPanels overrides={{}} openGroup="Text & fonts" setOverrides={vi.fn()} />);
+    render(<PropertyPanels overrides={{}} openGroup="Text & fonts" hasY2={false} setOverrides={vi.fn()} />);
     expect(await screen.findByLabelText("font size")).toHaveAttribute("min", "1");
     expect(screen.getByLabelText("title size")).toHaveAttribute("min", "1");
   });
@@ -182,7 +193,7 @@ describe("PropertyPanels — reopening a manually-collapsed group (item 5/6)", (
     Element.prototype.scrollIntoView = scrollIntoView;
     try {
       const { rerender } = render(
-        <PropertyPanels overrides={{}} openGroup="Legend" openNonce={1} setOverrides={vi.fn()} />,
+        <PropertyPanels overrides={{}} openGroup="Legend" hasY2={false} openNonce={1} setOverrides={vi.fn()} />,
       );
       // forceOpen alone opens it on mount, and scrolls it into view once.
       expect(screen.getByLabelText("legend title")).toBeInTheDocument();
@@ -195,14 +206,90 @@ describe("PropertyPanels — reopening a manually-collapsed group (item 5/6)", (
 
       // Re-selecting the SAME group (openGroup unchanged, forceOpen still
       // true) does nothing by itself — but a bumped openNonce must reopen it.
-      rerender(<PropertyPanels overrides={{}} openGroup="Legend" openNonce={1} setOverrides={vi.fn()} />);
+      rerender(<PropertyPanels overrides={{}} openGroup="Legend" hasY2={false} openNonce={1} setOverrides={vi.fn()} />);
       expect(screen.queryByLabelText("legend title")).not.toBeInTheDocument();
 
-      rerender(<PropertyPanels overrides={{}} openGroup="Legend" openNonce={2} setOverrides={vi.fn()} />);
+      rerender(<PropertyPanels overrides={{}} openGroup="Legend" hasY2={false} openNonce={2} setOverrides={vi.fn()} />);
       expect(screen.getByLabelText("legend title")).toBeInTheDocument();
       expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
     } finally {
       Element.prototype.scrollIntoView = original;
     }
+  });
+});
+
+// Item 2: the y2 min/max fields are placebo controls without a secondary
+// axis to apply to (the backend gate drops y2_lim); they must render only
+// when the caller says a y2 channel is actually plotted.
+describe("PropertyPanels y2 fields (item 2)", () => {
+  it("hides y2 min/max fields when there is no secondary axis", () => {
+    render(
+      <PropertyPanels overrides={{ y2_lim: [1, 2] }} openGroup="Axes & ticks" hasY2={false} setOverrides={vi.fn()} />,
+    );
+    expect(screen.queryByLabelText("y2 min")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("y2 max")).not.toBeInTheDocument();
+  });
+
+  it("shows y2 min/max fields when a secondary axis is plotted", async () => {
+    render(
+      <PropertyPanels overrides={{ y2_lim: [1, 2] }} openGroup="Axes & ticks" hasY2 setOverrides={vi.fn()} />,
+    );
+    expect(await screen.findByLabelText("y2 min")).toHaveValue("1");
+    expect(screen.getByLabelText("y2 max")).toHaveValue("2");
+  });
+});
+
+// Item 3: x-axis breaks unify on one canonical home. Legacy mode (no xBreaks
+// prop) keeps reading/writing overrides.x_breaks unchanged; controlled mode
+// (xBreaks/setXBreaks supplied) reads/writes ONLY those, ignoring
+// overrides.x_breaks entirely, so a canonical session's panel and its
+// rendered figure can never disagree about which breaks are active.
+describe("PropertyPanels x-axis breaks (item 3)", () => {
+  it("legacy mode (no xBreaks prop) reads and writes overrides.x_breaks as before", () => {
+    const onChange = vi.fn();
+    render(<Harness initial={{ x_breaks: [[1, 2]] }} openGroup="Axes & ticks" onChange={onChange} />);
+    expect(screen.getByText("1 to 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove x-axis break 1" }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ x_breaks: [] }));
+  });
+
+  it("controlled mode reads exclusively from the xBreaks prop, ignoring a stale overrides.x_breaks", () => {
+    render(
+      <PropertyPanels
+        overrides={{ x_breaks: [[9, 9.5]] }}
+        openGroup="Axes & ticks"
+        hasY2={false}
+        xBreaks={[[1, 2]]}
+        setXBreaks={vi.fn()}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("1 to 2")).toBeInTheDocument();
+    expect(screen.queryByText("9 to 9.5")).not.toBeInTheDocument();
+  });
+
+  it("controlled mode writes adds and removes through setXBreaks, never setOverrides", () => {
+    const setOverrides = vi.fn();
+    const setXBreaks = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Axes & ticks"
+        hasY2={false}
+        xBreaks={[[1, 2]]}
+        setXBreaks={setXBreaks}
+        setOverrides={setOverrides}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove x-axis break 1" }));
+    expect(setXBreaks).toHaveBeenLastCalledWith([]);
+
+    fireEvent.change(screen.getByLabelText("break from"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("break to"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add break" }));
+    expect(setXBreaks).toHaveBeenLastCalledWith([[1, 2], [5, 8]]);
+
+    expect(setOverrides).not.toHaveBeenCalled();
   });
 });

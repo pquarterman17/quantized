@@ -11,6 +11,7 @@
 // the SAME merge: read the effective (rendered) overrides, write back only
 // what actually changed. Pure — no store import.
 
+import type { FigureDocument } from "../../../lib/figureDocument";
 import { compactOverrides, mergeFigureOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { viewOverrides } from "../../../lib/figureSpec";
 
@@ -57,4 +58,31 @@ export function publicationOverridesDelta(
     }
   }
   return compactOverrides({ ...currentPublication, ...(writeSet as FigureOverrides) });
+}
+
+/** Item 3: x-axis breaks have two possible homes on a canonical document.
+ *  `buildFigureSpecFromDocument` emits `plot.axisBreaks.x`; a legacy-imported
+ *  document can also carry `publication.overrides.x_breaks`, which otherwise
+ *  REPLACES `axisBreaks` wholesale in `mergeFigureOverrides` (see that
+ *  function above) -- so a document that somehow carries both disagrees with
+ *  itself about which one renders. Reading prefers the publication delta
+ *  (what the preview actually shows); writing migrates the edited value into
+ *  the canonical `axisBreaks.x` home and drops the publication key, so panel
+ *  edits and the rendered figure cannot diverge again after one edit. */
+export function effectiveXBreaks(document: FigureDocument): [number, number][] {
+  return document.publication?.overrides?.x_breaks ?? document.plot.axisBreaks.x;
+}
+
+export function migrateXBreaksPatch(
+  document: FigureDocument,
+  next: [number, number][],
+): FigureDocument {
+  return {
+    ...document,
+    plot: { ...document.plot, axisBreaks: { ...document.plot.axisBreaks, x: next } },
+    publication: {
+      ...document.publication,
+      overrides: compactOverrides({ ...document.publication?.overrides, x_breaks: undefined }),
+    },
+  };
 }

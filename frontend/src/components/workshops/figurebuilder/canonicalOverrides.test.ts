@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { createFigureDocument } from "../../../lib/figureDocument";
 import { defaultPlotView } from "../../../lib/plotview";
-import { effectiveFigureOverrides, publicationOverridesDelta } from "./canonicalOverrides";
+import {
+  effectiveFigureOverrides,
+  effectiveXBreaks,
+  migrateXBreaksPatch,
+  publicationOverridesDelta,
+} from "./canonicalOverrides";
 
 describe("effectiveFigureOverrides", () => {
   it("falls back to the view-derived overrides when publication is absent", () => {
@@ -61,5 +67,49 @@ describe("publicationOverridesDelta", () => {
   it("returns null (an absent override, not an empty object) when nothing changed and nothing was already set", () => {
     const effective = { grid: true, legend: { show: true } };
     expect(publicationOverridesDelta(effective, effective, null)).toBeNull();
+  });
+});
+
+// Item 3: x-axis breaks have two possible homes on a canonical document --
+// see the module doc above these two functions for why.
+describe("effectiveXBreaks", () => {
+  it("falls back to plot.axisBreaks.x when there is no publication delta", () => {
+    const document = createFigureDocument({
+      id: "d1", name: "Doc", datasetId: null, view: defaultPlotView(),
+      axisBreaks: { x: [[1, 2]] },
+    });
+    expect(effectiveXBreaks(document)).toEqual([[1, 2]]);
+  });
+
+  it("prefers a legacy-imported publication.overrides.x_breaks over a stale canonical axisBreaks.x", () => {
+    const document = createFigureDocument({
+      id: "d1", name: "Doc", datasetId: null, view: defaultPlotView(),
+      axisBreaks: { x: [[9, 9.5]] },
+      publication: { overrides: { x_breaks: [[1, 2]] } },
+    });
+    expect(effectiveXBreaks(document)).toEqual([[1, 2]]);
+  });
+});
+
+describe("migrateXBreaksPatch", () => {
+  it("writes the next value into plot.axisBreaks.x and drops publication.overrides.x_breaks, keeping sibling keys", () => {
+    const document = createFigureDocument({
+      id: "d1", name: "Doc", datasetId: null, view: defaultPlotView(),
+      axisBreaks: { x: [[9, 9.5]] },
+      publication: { overrides: { x_breaks: [[9, 9.5]], font_name: "Times" } },
+    });
+    const migrated = migrateXBreaksPatch(document, [[1, 2]]);
+    expect(migrated.plot.axisBreaks.x).toEqual([[1, 2]]);
+    expect(migrated.publication?.overrides?.x_breaks).toBeUndefined();
+    expect(migrated.publication?.overrides?.font_name).toBe("Times");
+  });
+
+  it("leaves publication.overrides null (not an empty object) when the document never had one", () => {
+    const document = createFigureDocument({
+      id: "d1", name: "Doc", datasetId: null, view: defaultPlotView(),
+    });
+    const migrated = migrateXBreaksPatch(document, [[3, 4]]);
+    expect(migrated.plot.axisBreaks.x).toEqual([[3, 4]]);
+    expect(migrated.publication).toEqual({ overrides: null });
   });
 });
