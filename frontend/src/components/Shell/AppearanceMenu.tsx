@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { PALETTES } from "../../lib/palettes";
+import { isCalcOnlyView } from "../../lib/viewMode";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
@@ -92,17 +93,23 @@ export default function AppearanceMenu() {
             value={palette}
             onChange={(e) => setPalette(e.target.value)}
           />
-          <button
-            className="qzk-menu-item"
-            style={{ marginTop: 6 }}
-            onClick={() => {
-              setOpen(false);
-              setPrefsOpen(true);
-            }}
-          >
-            <span>All preferences…</span>
-            <span className="qz-shortcut">{formatShortcut("⌘,", IS_MAC)}</span>
-          </button>
+          {/* Preferences (and the rest of the app shell it belongs to) isn't
+              mounted in the calc-only shell (?view=calc, MAIN_PLAN #22) — the
+              footer link would open a dialog nothing else in that shell
+              expects. One guarded render rather than forking the component. */}
+          {!isCalcOnlyView() && (
+            <button
+              className="qzk-menu-item"
+              style={{ marginTop: 6 }}
+              onClick={() => {
+                setOpen(false);
+                setPrefsOpen(true);
+              }}
+            >
+              <span>All preferences…</span>
+              <span className="qz-shortcut">{formatShortcut("⌘,", IS_MAC)}</span>
+            </button>
+          )}
         </div>
       )}
     </div>

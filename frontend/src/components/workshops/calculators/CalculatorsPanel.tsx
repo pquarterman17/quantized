@@ -13,10 +13,11 @@
 // content-fit clamped by `max-height: calc(100% - 24px)` (shell.css) — a
 // narrow box inflates wrapped-row height until a *fixed* max-height (it
 // doesn't know about the panel's own y offset) clips the bottom against the
-// viewport, which `body{overflow:hidden}` then makes unreachable. 480 (not a
-// new number — it's the SAME comfortable column width the standalone calc-
-// only shell already commits to, `.qzk-calc-body{max-width:480px}` in
-// shell.css) keeps a typical 2-3-field card row on one line; y=70 (matching
+// viewport, which `body{overflow:hidden}` then makes unreachable. 480 (this
+// in-app ToolWindow only — the standalone calc-only shell's own column widened
+// to 560px in the 2026-08-02 audit, `.qzk-calc-body{max-width:560px}` in
+// shell.css, since its window is wider) keeps a typical 2-3-field card row on
+// one line; y=70 (matching
 // ReflView/Waterfall's precedent, just below the 68px titlebar+menubar
 // chrome) reclaims the vertical headroom the default y=90 was spending
 // before the clamp even engages. Very card-dense tabs (Semiconductor/

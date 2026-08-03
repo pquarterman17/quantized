@@ -70,7 +70,7 @@ export default function SldTab({ c }: { c: CalculatorsState }) {
   // it would silently update state nothing renders, so no-op with a toast instead.
   const sendToReflectivity = (sldReal: number, probe: string): void => {
     if (isCalcOnlyView()) {
-      toast("open the full app for this");
+      toast("use ↗ in the title bar to open the full app");
       return;
     }
     seedReflectivityLayer({ sld: sldReal * 1e-6, label: `${r?.formula ?? "SLD"} ${probe}` });

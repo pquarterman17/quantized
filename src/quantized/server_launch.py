@@ -225,8 +225,12 @@ def _run_desktop(
             t.join(timeout=5)
 
 
-def _run_dev(host: str, port: int) -> None:
-    """Vite dev server (HMR) + auto-reloading uvicorn in one terminal."""
+def _run_dev(host: str, port: int, *, calc: bool = False) -> None:
+    """Vite dev server (HMR) + auto-reloading uvicorn in one terminal.
+
+    ``calc`` (MAIN_PLAN #22, ``qz --calc --dev`` combo) opens the Vite dev
+    URL at ``/?view=calc`` instead of the bare dev-server root, matching the
+    ``/?view=calc`` URL the non-dev ``--calc`` path already opens."""
     import os
     import subprocess
 
@@ -242,7 +246,8 @@ def _run_dev(host: str, port: int) -> None:
     # `qz --dev --port 9000` silently proxied /api to the WRONG server).
     env = dict(os.environ, QZ_BACKEND_PORT=str(port))
     vite = subprocess.Popen([npm, "run", "dev"], cwd=frontend, env=env)
-    _open_browser_later("http://localhost:5173")
+    calc_path = "/?view=calc" if calc else ""
+    _open_browser_later(f"http://localhost:5173{calc_path}")
     try:
         uvicorn.run("quantized.app:app", host=host, port=port, reload=True)
     finally:

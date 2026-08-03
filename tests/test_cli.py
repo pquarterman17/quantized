@@ -157,6 +157,20 @@ def test_main_calc_defaults_to_serving() -> None:
     opener.assert_called_once_with("http://127.0.0.1:8000/?view=calc", "127.0.0.1", 8000)
 
 
+def test_calc_composes_with_dev() -> None:
+    """`qz --calc --dev` (standalone-DiraCulator audit, 2026-08-02): --calc
+    used to get dropped on the --dev branch, which called _run_dev(host,
+    port) unconditionally — the Vite tab opened at the bare dev-server root
+    instead of /?view=calc."""
+    with (
+        patch("quantized.cli._run_dev") as run_dev,
+        patch("quantized.cli.uvicorn.run") as run,
+    ):
+        cli.main(["--calc", "--dev"])
+    run_dev.assert_called_once_with("127.0.0.1", 8000, calc=True)
+    run.assert_not_called()
+
+
 # ── port fallback (MAIN_PLAN #22) ────────────────────────────────────────────
 
 

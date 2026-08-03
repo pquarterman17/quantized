@@ -74,6 +74,6 @@ describe("SldTab → Reflectivity", () => {
     expect(useApp.getState().reflectivityOpen).toBe(false);
     expect(useApp.getState().reflectivitySeed).toBeNull();
     expect(useToasts.getState().toasts).toHaveLength(1);
-    expect(useToasts.getState().toasts[0].msg).toBe("open the full app for this");
+    expect(useToasts.getState().toasts[0].msg).toBe("use ↗ in the title bar to open the full app");
   });
 });

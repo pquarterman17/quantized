@@ -151,6 +151,42 @@ def test_run_dev_spawns_vite_and_reloading_uvicorn(
     vite.wait.assert_called_once()
 
 
+def test_run_dev_default_opens_plain_dev_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Pins the unchanged (no --calc) URL so the calc-combo test below can't
+    pass by accident (e.g. by always appending the suffix)."""
+    monkeypatch.setattr(server_launch, "_frontend_dir", lambda: tmp_path)
+    vite = MagicMock()
+    vite.pid = 4242
+    with (
+        patch("subprocess.Popen", return_value=vite),
+        patch("subprocess.run"),
+        patch("uvicorn.run"),
+        patch.object(server_launch, "_open_browser_later") as opener,
+    ):
+        server_launch._run_dev("127.0.0.1", 9001)
+    opener.assert_called_once_with("http://localhost:5173")
+
+
+def test_run_dev_calc_combo_opens_calc_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`qz --calc --dev` (standalone-DiraCulator audit, 2026-08-02): the Vite
+    dev URL must carry /?view=calc, matching the non-dev --calc path."""
+    monkeypatch.setattr(server_launch, "_frontend_dir", lambda: tmp_path)
+    vite = MagicMock()
+    vite.pid = 4242
+    with (
+        patch("subprocess.Popen", return_value=vite),
+        patch("subprocess.run"),
+        patch("uvicorn.run"),
+        patch.object(server_launch, "_open_browser_later") as opener,
+    ):
+        server_launch._run_dev("127.0.0.1", 9001, calc=True)
+    opener.assert_called_once_with("http://localhost:5173/?view=calc")
+
+
 def test_run_dev_stops_vite_when_uvicorn_dies(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

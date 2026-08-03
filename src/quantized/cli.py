@@ -9,8 +9,9 @@
     qz --desktop        native window (pywebview; pip install quantized[desktop])
     qz --calc           calculator-only view (DiraCulator materials calculators),
                         opens /?view=calc; combine with --desktop for a small
-                        native window titled "DiraCulator" (also: `diraculator`
-                        console-script alias runs this by default)
+                        native window titled "DiraCulator", or with --dev to
+                        open the Vite dev server at /?view=calc (also:
+                        `diraculator` console-script alias runs this by default)
     qz plugin list      list discovered plugins and what they contribute
     qz plugin enable <name>    re-enable a previously disabled plugin
     qz plugin disable <name>   disable a plugin without deleting it
@@ -95,7 +96,10 @@ def _serve(argv: list[str]) -> None:
     calc_path = "/?view=calc" if args.calc else ""
 
     if args.dev:
-        _run_dev(args.host, port)
+        if args.calc:
+            _run_dev(args.host, port, calc=True)
+        else:
+            _run_dev(args.host, port)
         return
     if args.desktop:
         if args.calc:
