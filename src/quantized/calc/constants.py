@@ -99,6 +99,14 @@ def constants_by_system() -> dict[str, list[dict[str, Any]]]:
     CGS and eV values are computed from the SI dict above via exact
     conversion factors -- never retyped -- so a constant can only drift out
     of parity with SI by a bug in the factor, not a mistyped literal.
+
+    >>> by_system = constants_by_system()
+    >>> e_cgs = next(e for e in by_system["CGS"] if e["key"] == "e")
+    >>> round(e_cgs["value"] * 1e10, 4), e_cgs["unit"]
+    (4.8032, 'statC')
+    >>> hbarc = next(e for e in by_system["eV"] if e["key"] == "hbarc")
+    >>> round(hbarc["value"], 4), hbarc["unit"]
+    (197.327, 'eV\xb7nm')
     """
     si = constants()
     c_si = si["c"]

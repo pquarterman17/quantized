@@ -165,11 +165,32 @@ def hall_analysis(
     field_unit: str = "T",
     sigma: float | None = None,
 ) -> dict[str, Any]:
-    """Single-carrier Hall analysis from an R_xy vs H sweep (``hallAnalysis.m``).
+    r"""Single-carrier Hall analysis from an R_xy vs H sweep (``hallAnalysis.m``).
 
-    Linear-fits ``R_xy = R_H·H + offset`` (normal equations, no toolbox), then
-    converts the slope to a Hall coefficient in cm³/C, deduces carrier type and
-    density, and — if σ is supplied — the Hall mobility ``μ_H = |R_H|·σ``.
+    Ordinary least-squares linear fit (normal equations, no toolbox dependency):
+
+    .. math::
+
+        R_{xy}(H) = R_H\,H + R_{xy,0}
+
+    the multi-point generalization of :func:`hall_single_point` — the slope
+    of the transverse resistance/resistivity vs field IS the Hall coefficient
+    (rather than reading it off a single ``(V_H, I, B)`` triple), so noise
+    averages out over the sweep and ``fit_r2`` reports the fit quality. The
+    slope (Ω/T, or Ω·cm/T if ``hall_resistance`` was already a resistivity) is
+    converted to ``R_H`` in cm³/C via the sample thickness ``t`` (cm):
+    ``R_H = slope · t`` (unit conversion ``1e4`` folded in for T→cm consistency).
+    From ``R_H``: single-carrier density ``n = 1/(|R_H|·q)`` (cm⁻³), carrier
+    type from ``sign(R_H)`` (+ hole, − electron; see module docstring), and,
+    when the longitudinal conductivity σ (S/cm) is supplied, the **Hall
+    mobility** ``μ_H = |R_H|·σ`` (cm²/(V·s)) — the same combination used to
+    report mobility from a van der Pauw + Hall pair (:func:`van_der_pauw` for
+    σ from ``ρ = 1/σ``).
+
+    Convention: e.g. Ashcroft, N.W. & Mermin, N.D., *Solid State Physics*
+    (Saunders, 1976), Ch. 1 (Drude-model Hall effect); van der Pauw, L.J.,
+    *Philips Res. Rep.* **13**, 1 (1958) for the geometry this sweep is
+    typically paired with.
 
     Args:
         field: magnetic field vector (T, or Oe if ``field_unit='Oe'``).
@@ -180,6 +201,14 @@ def hall_analysis(
 
     Returns a dict with ``r_h`` (cm³/C), ``carrier_density`` (cm⁻³),
     ``carrier_type``, ``mobility`` (cm²/V·s), and ``fit_r2``.
+
+    Worked example — clean electron-like sweep, t = 1e-3 cm, σ = 500 S/cm:
+
+    >>> field = [h * 0.5 for h in range(-5, 6)]
+    >>> rxy = [-1.2e-3 * h for h in field]
+    >>> r = hall_analysis(field, rxy, thickness=1e-3, sigma=500.0)
+    >>> round(r["r_h"], 4), r["carrier_type"], r["mobility"]
+    (-0.012, 'electron', 6.0)
     """
     h = np.asarray(field, dtype=float)
     ry = np.asarray(hall_resistance, dtype=float)
