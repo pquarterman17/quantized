@@ -1,6 +1,7 @@
 // Graph Builder (ORIGIN_GAP_PLAN #51 phase 2, durable artifact GUI_INTERACTION
 // #11) — view. A draggable ToolWindow: drop channels from the Channels card /
-// legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells (or
+// legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells —
+// plus the Y error / X error wells XY marks render (F4.2a) — (or
 // click-to-assign for keyboard/AT); the mark morphs as columns land (scatter
 // ⇄ line ⇄ step ⇄ box ⇄ violin ⇄ bar); a live preview updates; explicit Create
 // New Plot / Apply to Current Plot actions commit the spec; Export applies it
