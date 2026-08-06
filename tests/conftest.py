@@ -17,6 +17,14 @@ import numpy as np
 import pytest
 
 from quantized.datastruct import DataStruct
+from quantized.security import ALLOWED_HOSTS
+
+# app.py's Host-header guard (DNS-rebinding defense) only allows this app's
+# own hostnames. FastAPI's TestClient sends ``Host: testserver``, so every
+# TestClient test in the suite would 403 without this — extended here, in
+# the ONE place all call sites share, instead of per-file fixtures.
+# Production's default set (127.0.0.1/localhost/::1) never includes it.
+ALLOWED_HOSTS.add("testserver")
 
 TESTS_DIR = Path(__file__).parent
 FIXTURES = TESTS_DIR / "fixtures"

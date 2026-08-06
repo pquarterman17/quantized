@@ -11,10 +11,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
@@ -70,6 +70,7 @@ from quantized.routes import (
     vacuum,
     xray,
 )
+from quantized.security import host_allowed, origin_allowed
 
 __all__ = ["create_app", "app"]
 
@@ -94,19 +95,18 @@ _AUTO_SHUTDOWN = os.environ.get("QZ_AUTO_SHUTDOWN") == "1"
 _SHUTDOWN_GRACE_S = 1.5  # tab refresh disconnects + reconnects within ~1 s
 
 
-def _origin_allowed(origin: str) -> bool:
-    """Allow same-machine origins only (the WS upgrade bypasses CORS)."""
-    host = urlparse(origin).hostname
-    return host in {"127.0.0.1", "localhost", "::1"}
-
-
 async def _lifecycle_ws(ws: WebSocket) -> None:
     """Client-presence socket: count live tabs; (optionally) shut down when the
     last one drops past a refresh-safe grace window. Module-level to keep
     create_app simple."""
     global _clients, _ever_connected
+    # The HTTP middleware doesn't run on the WS upgrade — enforce the same
+    # Host + Origin checks here (closing before accept()).
+    if not host_allowed(ws.headers.get("host")):
+        await ws.close(code=1008)  # policy violation
+        return
     origin = ws.headers.get("origin")
-    if origin and not _origin_allowed(origin):
+    if origin and not origin_allowed(origin):
         await ws.close(code=1008)  # policy violation
         return
     await ws.accept()
@@ -151,6 +151,22 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @application.middleware("http")
+    async def _security_guard(request: Request, call_next):  # type: ignore[no-untyped-def]
+        """Host check (all paths, defeats DNS rebinding) then Origin check
+        (/api/* only, the CSRF guard) — see ``quantized.security`` for what
+        each one does and doesn't cover. CORSMiddleware alone is NOT this:
+        it never inspects Host and doesn't block simple cross-site POSTs."""
+        if not host_allowed(request.headers.get("host")):
+            return JSONResponse({"detail": "unrecognized Host header"}, status_code=403)
+        if request.url.path.startswith("/api"):
+            origin = request.headers.get("origin")
+            if origin and not origin_allowed(origin):
+                return JSONResponse(
+                    {"detail": "cross-origin API request blocked"}, status_code=403
+                )
+        return await call_next(request)
 
     @application.get("/api/health")
     def health() -> dict[str, str]:
