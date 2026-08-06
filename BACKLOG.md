@@ -28,7 +28,18 @@ quantized's opening screen). Health now carries `app: quantized` and all
 probes require it; mirror fix landed in fermiviewer (`9db61cf`). A
 graceful-coexistence follow-up (Tauri shell falls back to an ephemeral
 port instead of a 60 s timeout dialog when the sibling holds 8000) is in
-flight this session.
+flight this session. Same day, a scripting/API design pass shipped two
+MAIN items: **#40 the Origin/Host CSRF+DNS-rebinding request guard**
+(`4016ed5` — quantized had CORS but no Host/Origin check, unlike sibling
+fermiviewer; a pre-existing gap the scoping surfaced and closed same-day,
+ahead of being booked) and **#39 `quantized.client` slice 1** (a network
+client — `pip install quantized[client]` — for driving an already-running
+`qz` server the way the SPA does: import/corrections/fit/DREAM-via-job-
+queue, with a mandatory identity handshake so a script can't silently
+adopt the sibling fermiviewer the way #40 closes for browser requests).
+Neither needed an actionable-table row (shipped same session); the one
+residual — deciding the in-app scripting console's design (DSL vs. a real
+Python kernel) — is the new owner-gate row below.
 
 Prior (seventeenth pass, 2026-08-01). ChatGPT-Sol's v0.14.0
 figure-authoring audit is booked as active child plan
@@ -440,6 +451,7 @@ re-sweep periodically.
 
 | Item | Plan / item |
 |------|-------------|
+| **In-app scripting console** — decide DSL-over-`executeSteps` (a REPL over the macro recorder's typed `{kind, params}` objects, no string ever evaluated as code, needs no new backend surface) vs. a real out-of-process Python kernel (genuinely arbitrary code, but heavier: process lifecycle, stdout/stderr streaming, kernel death/restart, packaging) before building either. `quantized.client` (slice 1, shipped 2026-08-05) is what either option would end up driving | MAIN gate (was MAIN #39 owner gate) |
 | **First dated timed-workflow runs** — follow `docs/timed_workflow_baselines.md` (8 journey checklists, results template at the bottom); the gesture/confusion/discoverability fields need the owner's hands. Fixtures + protocol SHIPPED 2026-07-26 | PRIMARY SOFTWARE P0.3 residue |
 | **Gate J: JMP usage census + JMP switch trial** — list the JMP platforms actually opened in the last ~6 months (ranks JMP Tier 2, decides census-gated clustering/SPC/MSA/DOE), then run one real JMP-shaped deliverable under the P0.1 protocol with JMP closed. Can share a session with P0.1/Q9 | JMP_GAP Gate J |
 | **Real-GPU F1 interaction acceptance** — the automated headless run is 112 ms p95, 12 ms over target under software rendering; close only after a visible hardware-accelerated run on the owner workstation confirms or refutes it | PRIMARY SOFTWARE P0.4 acceptance |
@@ -547,7 +559,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#40 are shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard); remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
 | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. |

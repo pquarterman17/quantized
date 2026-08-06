@@ -2570,6 +2570,9 @@ dependencies = [
 bumps = [
     { name = "bumps" },
 ]
+client = [
+    { name = "httpx" },
+]
 desktop = [
     { name = "pywebview" },
 ]
@@ -2606,6 +2609,7 @@ requires-dist = [
     { name = "bumps", marker = "extra == 'bumps'", specifier = ">=1.0" },
     { name = "fastapi", specifier = ">=0.139.0" },
     { name = "h5py", specifier = ">=3.10" },
+    { name = "httpx", marker = "extra == 'client'", specifier = ">=0.27" },
     { name = "lifelines", marker = "extra == 'stats'", specifier = ">=0.27" },
     { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "numpy", specifier = ">=1.26" },
@@ -2622,7 +2626,7 @@ requires-dist = [
     { name = "statsmodels", marker = "extra == 'stats'", specifier = ">=0.14" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
 ]
-provides-extras = ["office", "origin-com", "desktop", "stats", "bumps"]
+provides-extras = ["office", "origin-com", "desktop", "stats", "bumps", "client"]
 
 [package.metadata.requires-dev]
 bundle = [{ name = "pyinstaller", specifier = ">=6.10" }]
