@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-05 — F2.3b series property parity in Publication Preview
+**Updated:** 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -235,6 +235,15 @@ decisions are merged.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
         annotations expose their existing property panel; text also exposes
         the existing inline editor. Series remain visibly Stage-owned.
+  - [x] **F2.4b Canonical direct-manipulation parity (Claude Sonnet 5).**
+        Gap analysis found every EXISTING gesture already worked and wrote
+        to the draft correctly (established by two prior commits, not this
+        slice); the real gap was zero Apply/Cancel round-trip test coverage
+        and zero xlabel/ylabel coverage. Closed both with tests; no
+        production code changed. F2.4 stays open only for gesture types
+        F2.3's still-missing shape/reference-object panels would need to
+        exist first (nothing to attach a drag to yet) — see the decision
+        log for the full matrix.
 - [ ] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output.
@@ -371,6 +380,59 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft (Claude Sonnet 5)
+
+- Gap-analysis matrix for the three EXISTING `PreviewOverlay` gestures in
+  CANONICAL mode, each traced through `useFigureBuilder.ts` to its write
+  target and confirmed by a passing test:
+
+  | Gesture | Before this slice | Write target |
+  |---|---|---|
+  | Legend drag | (a) already worked | `document.publication.overrides.legend` via the F2.3a `effectiveFigureOverrides`/`publicationOverridesDelta` bridge (commit 4e74bc4) |
+  | Annotation drag | (a) already worked | `document.publication.overrides.annotations[i]`, same bridge |
+  | Double-click title | (a) already worked | `document.plot.view.plotTitle` via `setCanonicalView` |
+  | Double-click xlabel | (a) already worked, but ZERO test coverage anywhere | `document.plot.view.xAxisLabel` |
+  | Double-click ylabel | (a) already worked, but ZERO test coverage anywhere | `document.plot.view.yAxisLabel` |
+  | Double-click annotation text | (b) does nothing — in BOTH legacy and canonical alike (`TEXT_ELEMENTS` never included `ann:*`; annotation text is Properties-panel-only) — not a canonical/legacy disparity, out of scope | n/a |
+
+  The canonical branches in `dragElement`/`editElementText` date to the
+  original canonical-session commit (`a6c809c`) and were already routed
+  through the correct view/publication-overrides bridge by the F2.3a
+  bugfix (`4e74bc4`, "route canonical preview edits through the rendered
+  overrides merge") — both landed before this slice. No gesture silently
+  no-oped or wrote to the wrong place.
+- What was actually missing, and what this slice closed: (1) `editElementText`
+  had never been exercised for `"xlabel"`/`"ylabel"` in canonical mode at
+  all (only `"title"`); (2) no test proved the full contract — gesture on
+  the canonical draft → Apply → the WINDOW document (and legacy top-level
+  facade) reflects it; Cancel → no persistent mutation — the pattern F2.3b
+  established for series properties but never applied to drag/text-edit.
+  Added both, plus legacy (non-canonical) characterization tests pinning
+  `dragElement`/`editElementText`'s unchanged plain-state behavior, all in
+  `useFigureBuilder.test.ts`. Zero production code changed.
+- Confirmed (documented, not "fixed"): the legend/annotation drag position
+  lands in `document.publication.overrides`, not `document.plot.view` —
+  so after Apply, the Stage's OWN interactive legend/annotation position is
+  unchanged; only the editable figure's publication-preview/export
+  rendering picks it up. This is the SAME architecture F2.3a's property
+  panels already use (`FigurePublicationState`: "exact publication-only
+  settings that PlotView cannot represent") and is consistent between
+  legacy and canonical — matplotlib's figure-fraction legend anchor and
+  the Stage canvas's own plot-fraction `legendXY` are different coordinate
+  systems with no converter in this codebase. Not a parity gap; verified
+  and left alone.
+- Incidental finding, not fixed (pre-existing, legacy-only, unreachable
+  from the real UI): legacy (non-canonical) `dragElement` writes through a
+  plain, non-functional `useState` setter, so two drags dispatched in the
+  same synchronous batch lose the first — real pointer gestures always
+  arrive as separate event-handler commits, so this never fires from
+  actual mouse/keyboard use; canonical mode is immune (Zustand's
+  functional `set()` doesn't share this trait). Left as a documented
+  observation rather than an in-scope fix.
+- F2.4 stays open: new gesture types (e.g. shape/reference-object drag)
+  remain deferred, and nothing exists yet to attach them to until F2.3
+  reaches shapes/reference objects.
 
 ### 2026-08-05 — F2.3b series property parity in Publication Preview (Claude Sonnet 5)
 
