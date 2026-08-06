@@ -40,7 +40,7 @@ import {
 import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
-import { mergeWorkspace, type LoadedWorkspace, type WorkspaceState } from "../lib/workspace";
+import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import {
   doubleYPartner,
@@ -78,7 +78,7 @@ import { pruneWindowDatasetRefs, rebindFocusedPlotWindow, syncDatasetWindowDocum
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-import { runSaveWorkspaceToFile } from "./workspaceIO";
+import { runAppendWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
@@ -95,6 +95,7 @@ import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, pruneEditableFigureRefs, type FigureLifecycleSlice } from "./figureLifecycle";
+import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
@@ -312,7 +313,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -926,6 +927,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
   ...createFigureLifecycleSlice(set, get),
+  ...createPageDocumentsSlice(),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1604,6 +1606,7 @@ export const useApp = create<AppState>((set, get) => ({
         recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
         figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
         editableFigures: ws.editableFigures ?? [],
+        pages: ws.pages ?? [],
         figureDocSeed: null, figurePublicationSession: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
@@ -1662,18 +1665,7 @@ export const useApp = create<AppState>((set, get) => ({
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}${migrationNotice}`,
       };
     }),
-  appendWorkspace: (ws) => {
-    const n = ws.datasets.length;
-    if (n === 0) {
-      toast("workspace has no datasets to append", "danger");
-      return;
-    }
-    get().recordHistory("append workspace");
-    const { datasets, renamed } = mergeWorkspace(get().datasets, ws, nextDatasetId);
-    const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)`;
-    set({ datasets, status: msg });
-    toast(msg, "ok");
-  },
+  appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
   setActive: (id) => {
     // Item 14 pin opt-out: a pinned focused window never follows a passive
     // plot intent — retarget it first (focus swap, or a fresh window), then

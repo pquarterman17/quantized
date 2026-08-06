@@ -3285,6 +3285,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       recalcMode: "auto",
       figureDocs: [],
       editableFigures: [],
+      pages: [],
       migrationWarnings: [],
       plotWindows: [],
       focusedWindowId: null,

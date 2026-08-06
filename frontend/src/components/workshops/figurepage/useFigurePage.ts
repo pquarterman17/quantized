@@ -6,6 +6,14 @@
 // /api/export/figure-page route (vector PDF by default). The heavy
 // composition is the matplotlib route — this is a thin WYSIWYG layer on it,
 // the figure-builder pattern applied to N panels.
+//
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.1: the grid geometry + output settings
+// are held as one PageDocument draft (lib/pageDocument.ts) instead of loose
+// parallel useStates, and `pageDocument` exposes the full persistable
+// projection (panels resolved to canonical FigureDocument ids where
+// possible). This composition still lives only in this hook's state — F3.3
+// wires Save/Save As into the store's `pages` library; closing the window
+// still discards it today.
 
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -19,6 +27,7 @@ import {
 } from "../../../lib/api";
 import { buildExportStyles } from "../../../lib/exportStyles";
 import { docRenderable } from "../../../lib/figuredoc";
+import type { FigureDocument } from "../../../lib/figureDocument";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import {
   PAGE_MAX_GRID,
@@ -34,10 +43,36 @@ import {
   type PageSlot,
   type PanelSource,
 } from "../../../lib/figurepage";
-import { displayedWindowTitle, type PlotView } from "../../../lib/plotview";
+import { createPageDocument, type PageDocument, type PagePanel } from "../../../lib/pageDocument";
+import { displayedWindowTitle, type PlotView, type PlotWindow } from "../../../lib/plotview";
 import { axisFmtParam, type DataStruct } from "../../../lib/types";
 import { useApp, type AppState } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
+
+/** Stable identity for the session's single in-progress page draft — F3.3's
+ *  Save/Save As gives it a real library id; until then, this hook has at
+ *  most one page open at a time (mirrors Publication Preview's one-session
+ *  rule) so a constant id is safe. */
+const DRAFT_PAGE_ID = "figurepage-draft";
+
+/** Resolve one assigned session source to the canonical FigureDocument id a
+ *  persisted PageDocument panel would reference (F3.2: reference, don't
+ *  flatten). A "figdoc" source is a legacy FigureDoc — F1 never gave it a
+ *  FigureDocument counterpart, so it has no representable id yet. A "window"
+ *  source resolves only once its document has actually been SAVED (present
+ *  in `editableFigures`); an open-but-unsaved window's figure isn't
+ *  reachable from a reopened page either, so it resolves to null rather than
+ *  pretending a transient id is durable. */
+function resolveSlotFigureId(
+  source: PanelSource | null,
+  plotWindows: readonly PlotWindow[],
+  editableFigures: readonly FigureDocument[],
+): string | null {
+  if (!source || source.kind === "figdoc") return null;
+  const win = plotWindows.find((w) => w.id === source.id);
+  const documentId = win && win.kind === "plot" ? win.document?.id : undefined;
+  return documentId && editableFigures.some((figure) => figure.id === documentId) ? documentId : null;
+}
 
 const PREVIEW_DPI = 90; // screen-resolution page preview; export uses the chosen DPI
 
@@ -177,20 +212,43 @@ export function useFigurePage() {
   const plotWindows = useApp((s) => s.plotWindows);
   const datasets = useApp((s) => s.datasets);
   const figureDocs = useApp((s) => s.figureDocs);
+  const editableFigures = useApp((s) => s.editableFigures);
   const setStatus = useApp((s) => s.setStatus);
 
-  const [rows, setRows] = useState(2);
-  const [cols, setCols] = useState(2);
+  // F3.1: the grid geometry + output settings live in ONE PageDocument draft
+  // (lib/pageDocument.ts) instead of loose parallel useStates — rows/cols/
+  // style/fmt/dpi/label format+position are all `draft` fields now; `panels`
+  // is resolved separately below (see `pageDocument`) since a session source
+  // can reference a still-unsaved window, which a persisted document can't.
+  const [draft, setDraft] = useState<PageDocument>(() => createPageDocument({ id: DRAFT_PAGE_ID, name: "Untitled page" }));
+  const rows = draft.rows;
+  const cols = draft.cols;
+  const labelFormat = draft.output.labelFormat;
+  const labelPos = draft.output.labelPos;
+  const style = draft.output.stylePreset;
+  const fmt = draft.output.format;
+  const dpi = draft.output.dpi;
+
   const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(2, 2));
-  const [labelFormat, setLabelFormat] = useState<PageLabelFormat>("(a)");
-  const [labelPos, setLabelPos] = useState<PageLabelPosition>("nw");
-  const [style, setStyleRaw] = useState("default");
-  const [fmt, setFmt] = useState("pdf"); // vector by default
-  const [dpi, setDpi] = useState(FIGURE_STYLE_DPI.default);
   const [selected, setSelected] = useState<number | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /** The full persistable draft (F3.1): `draft`'s geometry/output plus each
+   *  slot's session source resolved to a canonical FigureDocument id where
+   *  possible. This is what F3.3's eventual Save writes into `pages`. */
+  const pageDocument = useMemo<PageDocument>(
+    () => ({
+      ...draft,
+      panels: slots.map((slot): PagePanel => ({
+        figureId: resolveSlotFigureId(slot.source, plotWindows, editableFigures),
+        label: slot.label,
+        title: slot.title,
+      })),
+    }),
+    [draft, slots, plotWindows, editableFigures],
+  );
 
   // Panel sources: open (live, dataset-bound) plot windows + renderable
   // saved Library figures. Snapshot/worksheet/map windows are not plots.
@@ -223,17 +281,34 @@ export function useFigurePage() {
     const r = Math.max(1, Math.min(PAGE_MAX_GRID, Math.round(nextRows)));
     const c = Math.max(1, Math.min(PAGE_MAX_GRID, Math.round(nextCols)));
     setSlots((prev) => resizeSlots(prev, cols, r, c));
-    setRows(r);
-    setCols(c);
+    setDraft((prev) => ({ ...prev, rows: r, cols: c }));
     setSelected(null);
   }
 
   /** Style preset change re-syncs DPI to that preset's calibrated value
    *  (same convention as the figure builder); manual overrides stick after. */
   function setStyle(next: string): void {
-    setStyleRaw(next);
     const presetDpi = FIGURE_STYLE_DPI[next];
-    if (presetDpi !== undefined) setDpi(presetDpi);
+    setDraft((prev) => ({
+      ...prev,
+      output: { ...prev.output, stylePreset: next, ...(presetDpi !== undefined ? { dpi: presetDpi } : {}) },
+    }));
+  }
+
+  function setFmt(next: string): void {
+    setDraft((prev) => ({ ...prev, output: { ...prev.output, format: next } }));
+  }
+
+  function setDpi(next: number): void {
+    setDraft((prev) => ({ ...prev, output: { ...prev.output, dpi: next } }));
+  }
+
+  function setLabelFormat(next: PageLabelFormat): void {
+    setDraft((prev) => ({ ...prev, output: { ...prev.output, labelFormat: next } }));
+  }
+
+  function setLabelPos(next: PageLabelPosition): void {
+    setDraft((prev) => ({ ...prev, output: { ...prev.output, labelPos: next } }));
   }
 
   function assign(i: number, source: PanelSource): void {
@@ -373,6 +448,7 @@ export function useFigurePage() {
     setDpi,
     windowSources,
     docSources,
+    pageDocument,
     preview,
     error,
     busy,

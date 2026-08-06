@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
+import { createFigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
@@ -114,6 +115,71 @@ describe("useFigurePage", () => {
     act(() => result.current.assign(1, src));
     expect(result.current.slots[3].source).toBeNull();
     expect(result.current.slots[1].source?.id).toBe("w1");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F3.1: the hook maintains its grid geometry
+  // and output settings as ONE PageDocument draft, and derives a full
+  // persistable projection (`pageDocument`) — panels reference a canonical
+  // FigureDocument id ONLY when the session source resolves to one that has
+  // actually been saved into `editableFigures` (F3.2: reference, never flatten).
+  describe("F3.1 pageDocument draft", () => {
+    it("starts as an empty 2x2 document matching the default grid", () => {
+      const { result } = renderHook(() => useFigurePage());
+      expect(result.current.pageDocument).toMatchObject({
+        schema: "quantized.page",
+        version: 1,
+        rows: 2,
+        cols: 2,
+      });
+      expect(result.current.pageDocument.panels).toHaveLength(4);
+      expect(result.current.pageDocument.panels.every((p) => p.figureId === null)).toBe(true);
+    });
+
+    it("tracks grid resize and output-setting writes", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.setGrid(1, 3));
+      act(() => {
+        result.current.setFmt("svg");
+        result.current.setLabelFormat("A)");
+        result.current.setLabelPos("outside");
+      });
+      expect(result.current.pageDocument.rows).toBe(1);
+      expect(result.current.pageDocument.cols).toBe(3);
+      expect(result.current.pageDocument.panels).toHaveLength(3);
+      expect(result.current.pageDocument.output).toMatchObject({
+        format: "svg",
+        labelFormat: "A)",
+        labelPos: "outside",
+      });
+    });
+
+    it("resolves a window source to its FigureDocument id once that document is saved", () => {
+      const document = createFigureDocument({
+        id: "figure-saved", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      useApp.setState({
+        plotWindows: [win({ id: "w1", title: "Loop A", document })],
+        editableFigures: [document],
+      });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      expect(result.current.pageDocument.panels[0].figureId).toBe("figure-saved");
+    });
+
+    it("resolves an open-but-unsaved window (or a legacy figdoc) to null — never a lossy flattened copy", () => {
+      const document = createFigureDocument({
+        id: "figure-unsaved", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      useApp.setState({
+        plotWindows: [win({ id: "w1", title: "Loop A", document })],
+        editableFigures: [], // never saved
+      });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() => result.current.assign(1, result.current.docSources[0]));
+      expect(result.current.pageDocument.panels[0].figureId).toBeNull();
+      expect(result.current.pageDocument.panels[1].figureId).toBeNull();
+    });
   });
 
   it("assignToNext fills the selected slot, else the first empty one", () => {

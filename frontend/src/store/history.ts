@@ -58,6 +58,7 @@ export interface HistorySnapshot {
   reports: AppState["reports"];
   figureDocs: AppState["figureDocs"];
   editableFigures: AppState["editableFigures"];
+  pages: AppState["pages"];
   folders: AppState["folders"];
   smartFolders: AppState["smartFolders"];
   savedPlotSpecs: AppState["savedPlotSpecs"];
@@ -94,6 +95,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     reports: s.reports,
     figureDocs: s.figureDocs,
     editableFigures: s.editableFigures,
+    pages: s.pages,
     folders: s.folders,
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,

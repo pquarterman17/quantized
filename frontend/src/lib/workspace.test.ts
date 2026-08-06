@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
+import { createPageDocument } from "./pageDocument";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
@@ -700,6 +701,64 @@ describe("workspace figure documents (#12)", () => {
   });
 });
 
+describe("workspace pages (FIGURE_AUTHORING_WORKFLOW_PLAN F3.1)", () => {
+  it("defaults to [] on a workspace saved before this field existed (no crash)", () => {
+    const datasets = [makeDataset("a", "first")];
+    // serializeWorkspace always writes `pages` (defaulting to []) today;
+    // hand-simulate a genuinely pre-F3.1 .dwk that never had the field.
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    delete doc.pages;
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.pages).toEqual([]);
+  });
+
+  it("round-trips a page whose panels reference editableFigures ids", () => {
+    const datasets = [makeDataset("a", "first")];
+    const figure = createFigureDocument({
+      id: "figure-1", name: "Loop", datasetId: "a", view: defaultPlotView(),
+    });
+    const page = createPageDocument({
+      id: "page-1",
+      name: "Figure 1",
+      rows: 1,
+      cols: 2,
+      panels: [
+        { figureId: "figure-1", label: "(i)", title: null },
+        { figureId: null, label: null, title: null },
+      ],
+      output: { format: "svg", stylePreset: "aps", dpi: 600, labelFormat: "A)", labelPos: "outside" },
+    });
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, editableFigures: [figure], pages: [page] }),
+    );
+    expect(loaded.pages).toEqual([page]);
+  });
+
+  it("keeps a panel's reference to a FigureDocument id that isn't in editableFigures (fails visibly later, never silently dropped)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const page = createPageDocument({
+      id: "page-1",
+      name: "Dangling",
+      rows: 1,
+      cols: 1,
+      panels: [{ figureId: "deleted-figure", label: null, title: null }],
+    });
+    // No matching editableFigures entry at all — simulates reloading a
+    // workspace after the referenced figure was deleted.
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, pages: [page] }));
+    expect(loaded.pages[0].panels[0].figureId).toBe("deleted-figure");
+  });
+
+  it("drops malformed entries and skips a future schema version", () => {
+    const datasets = [makeDataset("a", "first")];
+    const valid = createPageDocument({ id: "page-1", name: "Valid" });
+    const raw = JSON.parse(serializeWorkspace({ datasets, pages: [valid] })) as Record<string, unknown>;
+    raw.pages = [valid, "junk", { ...valid, id: "page-2", version: 2 }];
+    const loaded = parseWorkspace(JSON.stringify(raw));
+    expect(loaded.pages.map((p) => p.id)).toEqual(["page-1"]);
+  });
+});
+
 describe("workspace smart folders (org #9)", () => {
   it("round-trips saved queries (additive-optional — no version bump)", () => {
     const datasets = [makeDataset("a", "first")];
@@ -1228,6 +1287,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       recalcMode: "auto",
       figureDocs: [],
       editableFigures: [],
+      pages: [],
       migrationWarnings: [],
       plotWindows: [],
       focusedWindowId: null,

@@ -12,10 +12,11 @@
 
 import { saveBlob } from "../lib/download";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
-import { serializeWorkspace } from "../lib/workspace";
+import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { toast } from "./toasts";
-import type { AppState } from "./useApp";
+import { nextDatasetId, type AppState } from "./useApp";
 
+type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
 export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
@@ -53,5 +54,22 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   );
   const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
   get().setStatus(msg);
+  toast(msg, "ok");
+}
+
+/** Append Project (MAIN_PLAN #16): join a freshly-parsed .dwk's flat dataset
+ *  list into the currently loaded library. See lib/workspace.mergeWorkspace
+ *  for the full reference-field matrix of what is (and deliberately isn't)
+ *  merged in. */
+export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): void {
+  const n = ws.datasets.length;
+  if (n === 0) {
+    toast("workspace has no datasets to append", "danger");
+    return;
+  }
+  get().recordHistory("append workspace");
+  const { datasets, renamed } = mergeWorkspace(get().datasets, ws, nextDatasetId);
+  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)`;
+  set({ datasets, status: msg });
   toast(msg, "ok");
 }
