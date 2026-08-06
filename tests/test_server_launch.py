@@ -4,8 +4,11 @@ same discipline as the Origin COM extra)."""
 
 from __future__ import annotations
 
+import http.server
+import json
 import socket
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -25,6 +28,46 @@ def test_health_ok_false_when_nothing_listens() -> None:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     assert server_launch._health_ok("127.0.0.1", port) is False
+
+
+def _health_server(payload: dict[str, str]) -> tuple[http.server.ThreadingHTTPServer, int]:
+    """Serve ``payload`` as JSON from every GET on an ephemeral local port."""
+    body = json.dumps(payload).encode()
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - stdlib handler naming
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass  # keep per-request lines out of the test output
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, srv.server_address[1]
+
+
+def test_health_ok_rejects_a_sibling_app_answering_status_ok() -> None:
+    """The sibling fermiviewer serves the same {"status": "ok"} shape on the
+    same default port; a probe keyed on status alone adopts it and points the
+    Quantized window at the wrong app (owner report 2026-08-05 — the
+    "Open a microscopy dataset" opening screen). Identity requires ``app``."""
+    srv, port = _health_server({"status": "ok", "version": "1.2.0"})
+    try:
+        assert server_launch._health_ok("127.0.0.1", port) is False
+    finally:
+        srv.shutdown()
+
+
+def test_health_ok_accepts_our_own_identified_server() -> None:
+    srv, port = _health_server({"status": "ok", "app": "quantized", "version": "0.0"})
+    try:
+        assert server_launch._health_ok("127.0.0.1", port) is True
+    finally:
+        srv.shutdown()
 
 
 def test_bind_returns_socket_then_none_when_taken() -> None:

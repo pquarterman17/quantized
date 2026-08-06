@@ -154,7 +154,11 @@ def create_app() -> FastAPI:
 
     @application.get("/api/health")
     def health() -> dict[str, str]:
-        return {"status": "ok", "version": __version__}
+        # "app" is the identity field the launchers key on: the sibling
+        # fermiviewer serves the same {"status": "ok"} shape on the same
+        # default port (8000), and a probe that checks status alone adopts
+        # it — rendering the wrong app's UI in a Quantized window.
+        return {"status": "ok", "app": "quantized", "version": __version__}
 
     application.include_router(parsers.router)
     application.include_router(books.router)

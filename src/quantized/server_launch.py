@@ -33,9 +33,16 @@ def _frontend_dir() -> Path:
 
 
 def _health_ok(host: str, port: int, timeout: float = 0.4) -> bool:
-    """True iff a *quantized* server answers /api/health with ``status: ok`` —
-    tells our own instance apart from a foreign app on the port, and gates
-    the browser/window open on the server actually being up."""
+    """True iff a *quantized* server answers /api/health — tells our own
+    instance apart from a foreign app on the port, and gates the
+    browser/window open on the server actually being up.
+
+    ``status: ok`` alone is NOT identity: the sibling fermiviewer app answers
+    the same default port with the same payload shape, and adopting it points
+    a Quantized window at the wrong app (owner report 2026-08-05 — the
+    "Open a microscopy dataset" opening screen). Require the health body to
+    name this app; a server too old to carry ``app`` reads as foreign, which
+    fails safe (we spawn our own instance / refuse, never render it)."""
     import json
     import urllib.request
 
@@ -46,7 +53,11 @@ def _health_ok(host: str, port: int, timeout: float = 0.4) -> bool:
             if r.status != 200:
                 return False
             data = json.loads(r.read())
-            return bool(isinstance(data, dict) and data.get("status") == "ok")
+            return bool(
+                isinstance(data, dict)
+                and data.get("status") == "ok"
+                and data.get("app") == "quantized"
+            )
     except Exception:
         return False
 

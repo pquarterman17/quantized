@@ -24,6 +24,9 @@ def test_ws_open_does_not_block_http() -> None:
         resp = client.get("/api/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
+        # The launchers key on this to tell a quantized server apart from the
+        # sibling fermiviewer on the shared default port — see server_launch.
+        assert resp.json()["app"] == "quantized"
 
 
 def test_ws_rejects_cross_origin() -> None:

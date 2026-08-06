@@ -119,8 +119,18 @@ fn hide_console(cmd: &mut Command) {
 #[cfg(not(target_os = "windows"))]
 fn hide_console(_cmd: &mut Command) {}
 
+/// Response classification for the health probe, split out pure so it is
+/// unit-testable without a socket. A 200 with `"status"` alone is NOT
+/// identity: the sibling fermiviewer app answers the same default port with
+/// the same `{"status": "ok", ...}` shape, and adopting it navigates this
+/// window into the wrong app's UI — so the body must also name this app.
+fn health_body_ok(buf: &str) -> bool {
+    buf.contains(" 200") && buf.contains("\"status\"") && buf.contains("\"app\"") && buf.contains("\"quantized\"")
+}
+
 /// One HTTP GET /api/health attempt — distinguishes *our* server (200 + a
-/// `"status"` JSON body) from a foreign app that merely holds the port.
+/// JSON body identifying itself as quantized) from a foreign app that
+/// merely holds the port.
 fn http_health_ok() -> bool {
     let addr = match ADDR.parse() {
         Ok(a) => a,
@@ -136,7 +146,7 @@ fn http_health_ok() -> bool {
     }
     let mut buf = String::new();
     let _ = stream.read_to_string(&mut buf);
-    buf.contains(" 200") && buf.contains("\"status\"")
+    health_body_ok(&buf)
 }
 
 /// Poll /api/health until it answers or the timeout elapses.
@@ -406,5 +416,31 @@ mod tests {
             webview_url("http://127.0.0.1:8000/?foo=bar", Mode::Calc),
             "http://127.0.0.1:8000/?foo=bar&view=calc"
         );
+    }
+
+    #[test]
+    fn health_body_accepts_our_own_identified_server() {
+        assert!(health_body_ok(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\r\n\
+             {\"status\":\"ok\",\"app\":\"quantized\",\"version\":\"0.16.0\"}"
+        ));
+    }
+
+    #[test]
+    fn health_body_rejects_a_sibling_app_answering_status_ok() {
+        // fermiviewer's /api/health on the same default port — the exact
+        // payload that used to be adopted as "ours" and navigated the
+        // Quantized window into the EM app (owner report 2026-08-05).
+        assert!(!health_body_ok(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\r\n\
+             {\"status\":\"ok\",\"version\":\"1.2.0\"}"
+        ));
+    }
+
+    #[test]
+    fn health_body_rejects_non_200() {
+        assert!(!health_body_ok(
+            "HTTP/1.1 404 Not Found\r\n\r\n{\"status\":\"ok\",\"app\":\"quantized\"}"
+        ));
     }
 }
