@@ -6,7 +6,31 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-08-01 (seventeenth pass). ChatGPT-Sol's v0.14.0
+**Last reconciled:** 2026-08-05 (eighteenth pass). Two stale cells fixed
+against the plans and git: the PRIMARY row still listed the P3.4
+zoom-refetch residual as "actionable now" although it shipped 2026-08-01
+(`232cf4f`, booked `cb8e9d2` — the 17th-pass header already said so; the
+row cell was missed), and the FIGURE row still read "F0 first" although
+**F0 and F1 are fully complete** and 2026-08-02 shipped seven bounded F2
+slices (PRs #110–#115 line: canonical Publication Preview session,
+legacy-figure promotion, Graph Builder detached preview, property/context-
+menu/readiness slices) plus F4.2a. The actionable table below is refilled
+with the figure campaign — F2 broader parity, F3 PageDocument, F4
+recipes — which has been the live dev queue since it was booked.
+`git branch --no-merged main` is clean. Also this pass (unbooked drive-by,
+owner report 2026-08-05): the **launch identity fix** `d37ac38` — both
+quantized and fermiviewer answered /api/health with identical
+`{"status": "ok"}` payloads on the shared default port 8000, so every
+reuse-if-healthy launcher probe (Tauri shell, `qz --desktop`) could adopt
+a running fermiviewer and render the EM app inside a Quantized window
+(the owner saw fermiviewer's "Open a microscopy dataset" screen as
+quantized's opening screen). Health now carries `app: quantized` and all
+probes require it; mirror fix landed in fermiviewer (`9db61cf`). A
+graceful-coexistence follow-up (Tauri shell falls back to an ephemeral
+port instead of a 60 s timeout dialog when the sibling holds 8000) is in
+flight this session.
+
+Prior (seventeenth pass, 2026-08-01). ChatGPT-Sol's v0.14.0
 figure-authoring audit is booked as active child plan
 `FIGURE_AUTHORING_WORKFLOW_PLAN.md`: Stage is the rich internal editor, while
 Figure Builder is currently a detached/reduced publication surface and Figure
@@ -324,6 +348,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
+| Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining Stage property bridge, direct-manipulation parity, render-path unification), then F3 durable PageDocument (F3.1–F3.6), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2–F4 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -525,8 +550,8 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **Actionable now:** the P3.4 zoom-refetch residual (row above). SHIPPED 2026-07-31: P3.4 server-side payload decimation (147.5→3.49 MB @1M×7) + P2.8's regrid defect-class (37→1.24 s @1M) + both export-dialog defects. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on PLOT_WORKFLOW #1's technique tag), followed by evidence-ranked P2/P3/P4 work. |
-| `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md` | Active | F0 first: honest publication-preview terminology, explicit Graph Builder Create/Apply, and centralized loss warnings. Then versioned FigureDocument, same-document publication editing, durable PageDocument, and recipes/grouping parity. Authored by ChatGPT-Sol, not Claude. |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. |
+| `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md` | Active | **F0 + F1 COMPLETE** (honest transitions; versioned FigureDocument with lifecycle, reversible conversions, migration). F2 mid-campaign: seven bounded slices shipped 2026-08-02 (canonical Publication Preview session PR #111, F2.1a–d/F2.2a–c/F2.3a/F2.4a/F2.5a); F2.1–F2.5 stay open for legacy/Graph-Builder convergence, the remaining Stage property bridge, direct-manipulation parity, and render-path unification. F3 PageDocument entirely open; F4 open except F4.2a (plot type + error designations, with the Graph Builder error-bar wells + step/Line+Symbol marks, v0.16.0). A1–A10 acceptance journeys unchecked. Authored by ChatGPT-Sol, not Claude. |
 | `plans/JMP_GAP_PLAN.md` | Active | **Every census-independent register item is SHIPPED** — campaign 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend) + the 2026-07-31 residual wave (J8 UI, J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon table verified) + #14 module splits w/ `MODULE_PINS` ratchet (2026-07-29). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5) — all Gate-A-sequenced; Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
