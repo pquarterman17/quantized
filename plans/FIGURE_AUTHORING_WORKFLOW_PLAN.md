@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft
+**Updated:** 2026-08-05 — F3.1 PageDocument persistence + F2.4b direct-manipulation parity
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -262,7 +262,7 @@ export session.
 **Recommended models:** GPT-5.6 Sol high / Claude Opus 4.8 for PageDocument
 ownership; Terra high / Sonnet 5 for panel-editor slices.
 
-- [ ] **F3.1 Define and persist PageDocument.** Store ID/name, page geometry,
+- [x] **F3.1 Define and persist PageDocument.** Store ID/name, page geometry,
       grid/free placement, panel references, panel labels, links, gaps,
       alignment, and output settings in `.dwk`.
 - [ ] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
@@ -433,6 +433,60 @@ Before starting a slice:
 - F2.4 stays open: new gesture types (e.g. shape/reference-object drag)
   remain deferred, and nothing exists yet to attach them to until F2.3
   reaches shapes/reference objects.
+
+### 2026-08-05 — F3.1 versioned PageDocument with workspace persistence (Claude Sonnet 5)
+
+- New pure module `lib/pageDocument.ts`: a versioned `PageDocument` (schema/
+  version, id/name, rows/cols grid geometry, `panels: PagePanel[]`, output
+  settings — format/stylePreset/dpi/labelFormat/labelPos). Panels reference
+  an `editableFigures` (F1) entry BY ID ONLY (`figureId: string | null`) —
+  never a flattened copy of its config; a panel's live/frozen behavior is
+  inherited entirely from whichever FigureDocument it references, since F1
+  already solved "detached panels" at that layer. `resolvePagePanel` is the
+  fail-closed resolver: a `figureId` that no longer matches any
+  `editableFigures` entry reports `{status:"missing"}`, never silently
+  collapsed to `{status:"empty"}` or dropped from the page.
+- `lib/workspace.ts` persists `pages: PageDocument[]` through `.dwk`
+  (serialize/parse + a `sanitizePageDocuments` migration: an absent field
+  loads as `[]`, no crash; malformed entries drop; a future schema version
+  is skipped, never silently coerced — same discipline as `editableFigures`).
+  New `store/pageDocuments.ts` slice (`pages` on `AppState`, empty by
+  default) wired into `loadWorkspace`, `store/history.ts`'s undo/redo
+  snapshot, and `useWorkspaceAutosave.ts`'s trigger field list, so pages
+  survive save/reopen, undo/redo, and autosave the same way `editableFigures`
+  does. `useApp.ts` was at its exact 2868-line pin (zero headroom); paid for
+  the new wiring by extracting `appendWorkspace`'s body to
+  `store/workspaceIO.ts` (`runAppendWorkspace`, mirroring the existing
+  `runSaveWorkspaceToFile`), landing at 2860 — net PIN COMPLIANT, not raised.
+- The ephemeral Figure Page workshop (`useFigurePage.ts`) now holds its grid
+  geometry + output settings as one `PageDocument` draft (`useState<PageDocument>`)
+  instead of seven parallel useStates, and exposes the full resolved
+  projection as `pageDocument`: each slot's session source (open window /
+  legacy FigureDoc) resolves to a canonical `figureId` ONLY when that
+  window's document has actually been saved into `editableFigures` — an
+  open-but-unsaved window or a legacy FigureDoc resolves to `null` rather
+  than a lossy flattened copy (F3.2's "reference, don't flatten", applied at
+  the session boundary too). The interactive assignment model itself (open
+  windows + legacy FigureDocs as pickable sources, drag/click onto slots)
+  is UNCHANGED — replacing it with "canonical figures only" would drop a
+  currently-working capability and is deliberately left to F3.4 (unify panel
+  editing) once a save/promote path exists for an in-session figure.
+- **F3.1a (honest partial, left for later slices):** the plan's F3.1 text
+  also lists "free placement" and "links, gaps, alignment" — none of those
+  are modeled here. Grid-only placement matches every other implementation
+  in the product today (no free-placement compositor exists anywhere to
+  port); links/gaps/alignment are F3.5's own deliverable ("Complete layout
+  controls") and adding placeholder fields now would only need revising once
+  that item defines their real shape. F3.2 (broader missing-source/frozen-
+  snapshot UI surfacing), F3.3 (Save/Save As/dirty-state/library UI), F3.4
+  (double-click/unlink panel editing), F3.5 (layout controls), and F3.6
+  (export from PageDocument) remain fully open — this slice is schema +
+  persistence plumbing only, with nothing yet writing into the store's
+  `pages` collection.
+- New tests: `lib/pageDocument.test.ts` (15, create/sanitize/migrate/resolve/
+  round-trip), `lib/workspace.test.ts` (+4, persistence/migration/dangling-
+  reference), `useFigurePage.test.ts` (+4, draft tracking + figureId
+  resolution). Full frontend gate green (see commit).
 
 ### 2026-08-05 — F2.3b series property parity in Publication Preview (Claude Sonnet 5)
 

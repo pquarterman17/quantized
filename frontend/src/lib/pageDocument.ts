@@ -1,0 +1,236 @@
+// Persisted multi-panel Figure Page document (FIGURE_AUTHORING_WORKFLOW_PLAN
+// F3.1). lib/figurepage.ts models one EPHEMERAL editing session — grid slots
+// holding open-window or legacy-FigureDoc sources, discarded on close (the
+// audited defect: "Figure Page cannot be saved/reopened as an editable
+// document"). This module models the PERSISTABLE artifact instead: a
+// versioned document whose panels reference canonical FigureDocument ids
+// (lib/figureDocument.ts's `editableFigures` collection) BY ID ONLY — never a
+// flattened copy of the figure's config (F3.2: "Do not flatten panels into
+// lossy reduced configs"). A panel's live/frozen behavior is inherited
+// entirely from whatever FigureDocument it references (F1 already solved
+// "detached panels" at that layer); the page never carries its own snapshot.
+// Pure: no store imports.
+
+import {
+  PAGE_LABEL_FORMATS,
+  PAGE_LABEL_POSITIONS,
+  PAGE_MAX_GRID,
+  panelLabel,
+  type PageLabelFormat,
+  type PageLabelPosition,
+} from "./figurepage";
+import type { FigureDocument } from "./figureDocument";
+
+export const PAGE_DOCUMENT_SCHEMA = "quantized.page" as const;
+export const PAGE_DOCUMENT_VERSION = 1 as const;
+
+/** One grid slot. `figureId === null` = empty. A non-null id references an
+ *  `editableFigures` entry BY ID (F3.2) — resolve with `resolvePagePanel`,
+ *  which never treats a missing id as empty and never drops it silently.
+ *  `label`/`title` mirror lib/figurepage.ts's `PageSlot` semantics exactly:
+ *  `label === null` = auto "(a)", "(b)", … in placement order; `""`
+ *  suppresses the label on this panel only. `title === null` keeps the
+ *  referenced figure's own name. */
+export interface PagePanel {
+  figureId: string | null;
+  label: string | null;
+  title: string | null;
+}
+
+export interface PageOutputSettings {
+  format: string;
+  stylePreset: string;
+  dpi: number;
+  labelFormat: PageLabelFormat;
+  labelPos: PageLabelPosition;
+}
+
+/** A versioned, persisted multi-panel page (F3.1). Row-major slot addressing
+ *  mirrors lib/figurepage.ts (index i -> row floor(i/cols), col i%cols); grid
+ *  placement only today — free placement is unimplemented anywhere in the
+ *  product yet, so it is not modeled here either (documented gap, not a
+ *  silent omission). */
+export interface PageDocument {
+  schema: typeof PAGE_DOCUMENT_SCHEMA;
+  version: typeof PAGE_DOCUMENT_VERSION;
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  panels: PagePanel[];
+  output: PageOutputSettings;
+}
+
+const DEFAULT_OUTPUT: PageOutputSettings = {
+  format: "pdf",
+  stylePreset: "default",
+  dpi: 300,
+  labelFormat: "(a)",
+  labelPos: "nw",
+};
+
+export function emptyPagePanels(rows: number, cols: number): PagePanel[] {
+  return Array.from({ length: rows * cols }, () => ({ figureId: null, label: null, title: null }));
+}
+
+export interface CreatePageDocumentInput {
+  id: string;
+  name: string;
+  rows?: number;
+  cols?: number;
+  /** Padded/truncated to `rows*cols` so callers never hand-sync the two. */
+  panels?: PagePanel[];
+  output?: Partial<PageOutputSettings>;
+}
+
+/** Pure constructor for a fresh/trusted document (the sanitizer below is the
+ *  untrusted-input boundary — this one only floors rows/cols at 1). */
+export function createPageDocument(input: CreatePageDocumentInput): PageDocument {
+  const rows = Math.max(1, Math.round(input.rows ?? 2));
+  const cols = Math.max(1, Math.round(input.cols ?? 2));
+  const base = emptyPagePanels(rows, cols);
+  const panels = base.map((slot, i) => input.panels?.[i] ?? slot);
+  return {
+    schema: PAGE_DOCUMENT_SCHEMA,
+    version: PAGE_DOCUMENT_VERSION,
+    id: input.id,
+    name: input.name,
+    rows,
+    cols,
+    panels,
+    output: { ...DEFAULT_OUTPUT, ...input.output },
+  };
+}
+
+// ── panel resolution (F3.2 — fail closed, no silent drop) ──────────────────
+
+export type PagePanelResolution =
+  | { status: "empty" }
+  | { status: "missing"; figureId: string }
+  | { status: "ok"; figure: FigureDocument };
+
+/** Resolve one panel against the CURRENT editable-figures library. A
+ *  non-null `figureId` that isn't found is reported "missing" — never
+ *  treated as empty, and never silently dropped from the page. Callers (a
+ *  renderer, an export, or a panel-editor UI) must surface it explicitly
+ *  rather than skip it. */
+export function resolvePagePanel(
+  panel: PagePanel,
+  figures: readonly FigureDocument[],
+): PagePanelResolution {
+  if (panel.figureId === null) return { status: "empty" };
+  const figure = figures.find((candidate) => candidate.id === panel.figureId);
+  return figure ? { status: "ok", figure } : { status: "missing", figureId: panel.figureId };
+}
+
+/** Per-panel preview labels — mirrors lib/figurepage.ts's `slotLabels`: every
+ *  occupied panel (including one whose reference is currently MISSING — it
+ *  still holds its place on the page) counts through the auto sequence in
+ *  row-major order; an explicit override wins; only a genuinely empty slot
+ *  previews "". */
+export function pagePanelLabels(panels: readonly PagePanel[], fmt: PageLabelFormat): string[] {
+  let k = 0;
+  return panels.map((panel) => {
+    if (panel.figureId === null) return "";
+    const auto = panelLabel(k, fmt);
+    k += 1;
+    return panel.label !== null ? panel.label : auto;
+  });
+}
+
+// ── validation / persistence boundary ───────────────────────────────────────
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sanitizePagePanel(value: unknown): PagePanel {
+  if (!isObject(value)) return { figureId: null, label: null, title: null };
+  const figureId = typeof value.figureId === "string" && value.figureId ? value.figureId : null;
+  const label = typeof value.label === "string" ? value.label : null;
+  const title = typeof value.title === "string" ? value.title : null;
+  return { figureId, label, title };
+}
+
+function sanitizeOutput(value: unknown): PageOutputSettings {
+  const o = isObject(value) ? value : {};
+  const dpi = typeof o.dpi === "number" && Number.isFinite(o.dpi) && o.dpi > 0 ? o.dpi : DEFAULT_OUTPUT.dpi;
+  const labelFormat =
+    typeof o.labelFormat === "string" && (PAGE_LABEL_FORMATS as readonly string[]).includes(o.labelFormat)
+      ? (o.labelFormat as PageLabelFormat)
+      : DEFAULT_OUTPUT.labelFormat;
+  const labelPos =
+    typeof o.labelPos === "string" && (PAGE_LABEL_POSITIONS as readonly string[]).includes(o.labelPos)
+      ? (o.labelPos as PageLabelPosition)
+      : DEFAULT_OUTPUT.labelPos;
+  return {
+    format: typeof o.format === "string" ? o.format : DEFAULT_OUTPUT.format,
+    stylePreset: typeof o.stylePreset === "string" ? o.stylePreset : DEFAULT_OUTPUT.stylePreset,
+    dpi,
+    labelFormat,
+    labelPos,
+  };
+}
+
+/** Validate an untrusted persisted document. A bad envelope/identity rejects
+ *  the whole document (returns null); malformed nested fields degrade to
+ *  safe defaults instead — same discipline as figureDocument.ts's sanitizer. */
+export function sanitizePageDocument(value: unknown): PageDocument | null {
+  if (
+    !isObject(value) ||
+    value.schema !== PAGE_DOCUMENT_SCHEMA ||
+    value.version !== PAGE_DOCUMENT_VERSION
+  ) return null;
+  if (typeof value.id !== "string" || !value.id || typeof value.name !== "string") return null;
+  const rows =
+    Number.isInteger(value.rows) && (value.rows as number) >= 1 && (value.rows as number) <= PAGE_MAX_GRID
+      ? (value.rows as number)
+      : 1;
+  const cols =
+    Number.isInteger(value.cols) && (value.cols as number) >= 1 && (value.cols as number) <= PAGE_MAX_GRID
+      ? (value.cols as number)
+      : 1;
+  const rawPanels = Array.isArray(value.panels) ? value.panels : [];
+  const base = emptyPagePanels(rows, cols);
+  const panels = base.map((slot, i) => (i < rawPanels.length ? sanitizePagePanel(rawPanels[i]) : slot));
+  return {
+    schema: PAGE_DOCUMENT_SCHEMA,
+    version: PAGE_DOCUMENT_VERSION,
+    id: value.id,
+    name: value.name,
+    rows,
+    cols,
+    panels,
+    output: sanitizeOutput(value.output),
+  };
+}
+
+/** Future-version documents are skipped (never silently coerced) — same
+ *  forward-compatibility discipline as figureDocument.ts's editableFigures
+ *  loader. Malformed entries and duplicate ids are dropped. An absent/empty
+ *  `value` (a workspace saved before this field existed) returns `[]` —
+ *  the deterministic "no field -> no pages, no crash" migration. */
+export function sanitizePageDocuments(value: unknown): PageDocument[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const documents: PageDocument[] = [];
+  for (const candidate of value) {
+    const document = sanitizePageDocument(candidate);
+    if (!document || seen.has(document.id)) continue;
+    seen.add(document.id);
+    documents.push(document);
+  }
+  return documents;
+}
+
+export function serializePageDocument(document: PageDocument): string {
+  return JSON.stringify(document);
+}
+
+export function deserializePageDocument(raw: string): PageDocument | null {
+  try {
+    return sanitizePageDocument(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}

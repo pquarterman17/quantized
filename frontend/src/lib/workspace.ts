@@ -15,6 +15,7 @@ import {
   sanitizeFigureDocument,
   type FigureDocument,
 } from "./figureDocument";
+import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import type { PlotWindow } from "./plotview";
@@ -70,6 +71,9 @@ export interface WorkspaceState {
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
   editableFigures?: FigureDocument[];
+  /** FIGURE_AUTHORING_WORKFLOW_PLAN F3.1 — persisted multi-panel pages,
+   *  panels referencing `editableFigures` ids (never a flattened copy). */
+  pages?: PageDocument[];
   /** Load-time compatibility notices. Never serialized back into a .dwk. */
   migrationWarnings?: string[];
   plotWindows?: PlotWindow[];
@@ -100,6 +104,7 @@ export interface LoadedWorkspace {
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
   editableFigures: FigureDocument[];
+  pages: PageDocument[];
   /** Compatibility notices produced while parsing this workspace; transient. */
   migrationWarnings: string[];
   plotWindows: PlotWindow[];
@@ -126,6 +131,7 @@ interface WorkspaceDoc {
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
   editableFigures: FigureDocument[];
+  pages: PageDocument[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
@@ -151,6 +157,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     recalcMode: ws.recalcMode ?? "auto",
     figureDocs: ws.figureDocs ?? [],
     editableFigures: ws.editableFigures ?? [],
+    pages: ws.pages ?? [],
     // MULTI_PLOT_PLAN item 7: passed through VERBATIM — the caller (the
     // store's `windowsForSave()`, per the interface doc above) is
     // responsible for the focused window's live-view snapshot; this module
@@ -566,6 +573,7 @@ export function parseWorkspace(
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
   const migrationWarnings: string[] = [];
   const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
+  const pages = sanitizePageDocuments(o.pages);
   const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings);
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
@@ -589,6 +597,7 @@ export function parseWorkspace(
     recalcMode,
     figureDocs,
     editableFigures,
+    pages,
     migrationWarnings,
     plotWindows,
     focusedWindowId,

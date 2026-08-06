@@ -15,6 +15,7 @@ const base: AutosaveState = {
   recalcMode: "auto",
   figureDocs: [],
   editableFigures: [],
+  pages: [],
   plotWindows: [],
   focusedWindowId: null,
   savedPlotSpecs: [],
@@ -29,7 +30,7 @@ describe("shouldAutosave", () => {
   // was omitted from the trigger list when the collection first shipped, so
   // deleting/duplicating a saved figure never scheduled an autosave.
   it.each(
-    ["originFigures", "reports", "macroSteps", "figureDocs", "editableFigures", "savedPlotSpecs"] as const,
+    ["originFigures", "reports", "macroSteps", "figureDocs", "editableFigures", "pages", "savedPlotSpecs"] as const,
   )("saves when %s changes", (field) => {
     expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
   });
