@@ -11,7 +11,12 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-01 (ChatGPT-Sol figure-authoring workflow audit added
+**Updated:** 2026-08-05 (Scripting/API design pass booked and shipped MAIN
+#39/#40: `quantized.client` (#39) — a network client for driving an
+already-running `qz` server, slice 1 complete same day, follow-on +
+console owner gate booked; #40 — the Origin/Host CSRF+DNS-rebinding
+request guard, a pre-existing gap the scoping surfaced and shipped
+(`4016ed5`) ahead of being booked here. Prior: 2026-08-01 (ChatGPT-Sol figure-authoring workflow audit added
 `FIGURE_AUTHORING_WORKFLOW_PLAN.md`; this makes the Stage/Graph Builder/Figure
 Builder/reopen/page/export contract an explicit multi-session campaign. Prior:
 ROBUSTNESS_PLAN completed and archived — Tiers
@@ -252,6 +257,67 @@ already gone stale.)*
     - Build on #31's storage/path boundary; integrate with the existing
       session undo and `.dwk` serialization instead of inventing a
       parallel state format.
+
+*(items 39–40 booked 2026-08-05 from the scripting/API design pass —
+`scripting-api-design.md`, a read-only scoping session against `quantized`
+@ `7e4afff`. #39 is the client itself; #40 is a pre-existing security gap
+the scoping surfaced, independent of the client and shipped same day ahead
+of being booked here.)*
+
+~~39. **Python client for live sessions (`quantized.client`)**~~ SLICE 1
+    COMPLETED 2026-08-05 — HTTP client driving an already-running `qz`
+    server the same way the SPA does (REST + poll-jobs, no new protocol);
+    lets a notebook/script import data, apply corrections, fit, and pull
+    results out of a local session. Distinct from the existing headless
+    `quantized.api` (in-process, no server involved) — this one talks to a
+    live process over `/api/*`.
+    - [x] Slice 1: `src/quantized/client.py` (321 lines), `QuantizedClient`
+          (httpx-backed, new `client` extra), mandatory health/identity
+          handshake (`app == "quantized"`, refuses a foreign server — e.g.
+          the sibling fermiviewer — before any other call succeeds).
+          Methods: `health`, `import_bytes`, `import_path`,
+          `apply_corrections`, `fit`, `fit_dream` (submits to the DREAM job
+          queue and polls to completion), `job_status`, `cancel_job`, plus
+          `close`/context-manager support for the connection pool. 17 tests
+          (`tests/test_client.py`): per-method happy paths, the identity-
+          refusal case (a fake fermiviewer-shaped `/api/health`), a jobs
+          poll-to-done case, a frozen-surface test mirroring
+          `test_public_api.py`, and one opt-in live-socket smoke test
+          (`QZ_LIVE_SMOKE=1`, skipped by default, never in CI).
+    - Follow-on (explicit non-goal for slice 1, not yet booked as its own
+      item): async client; `run_steps()` interpreting the macro recorder's
+      typed `{kind, params}` vocabulary (never the cosmetic `code` string —
+      stays no-eval-safe by construction); a connection-file /
+      `platformdirs.user_runtime_dir` discovery mechanism so a script
+      doesn't need an explicit port when `--port` fell back to an
+      ephemeral one (`server_launch._resolve_port` does this silently
+      today).
+    - Owner gate moved to Owner gates below: in-app scripting console
+      (DSL-over-`executeSteps` vs. an out-of-process Python kernel) —
+      don't build console scaffolding speculatively ahead of that answer.
+    - Deferred, not decided: promoting the client's transport core to a
+      shared package if/when `fermiviewer` wants the same thing — no plan
+      in either repo books this; leave the seam, don't build the package.
+
+~~40. **Origin/Host request guard (CSRF + DNS-rebinding)**~~ COMPLETED
+    2026-08-05 (`4016ed5`, shipped the same day the scripting/API scoping
+    surfaced the gap, ahead of being booked here — a side-effect
+    completion per plan-hygiene) — quantized relied on `CORSMiddleware`
+    alone, which never inspects `Host` and does not block non-preflighted
+    simple cross-site requests (`multipart/form-data` uploads, plain GETs).
+    - [x] Ported fermiviewer's `_security_guard` middleware into
+          `app.py`: `host_allowed` (every path, defeats DNS rebinding) +
+          `origin_allowed` (`/api/*` only, the CSRF guard), both enforced
+          on the WS upgrade path too (the HTTP middleware doesn't cover
+          that separately) — new pure `src/quantized/security.py`.
+    - [x] `tests/test_csrf_guard.py` ported as the executable spec: own
+          app origins (served SPA, Vite dev, pywebview, exact Tauri
+          origins) pass; foreign origins 403 on GET and mutating POST;
+          spoofed Host 403 on both `/api/*` and `/`; the WS upgrade
+          rejects a spoofed Host too.
+    - Verified NOT to affect `quantized.client` (#39) or any other native
+      HTTP client: `origin_allowed` only inspects an Origin header when
+      one is present, and httpx/requests send none by default.
 
 ## Tier 2 — Medium Impact
 
@@ -556,6 +622,16 @@ in git history @ `e4f6590`.)*
 
 ## Owner gates (folded from the archived plans)
 
+- **In-app scripting console** (was MAIN #39 sub-item, scripting/API
+  design pass 2026-08-05) — DECIDE DSL-over-`executeSteps` (a REPL-flavored
+  front end over the macro recorder's typed `{kind, params}` objects plus
+  read-only query verbs; no string is ever evaluated as code; needs no new
+  backend surface) vs. a real out-of-process Python kernel (genuinely
+  arbitrary code, but heavier: process lifecycle, stdout/stderr streaming,
+  kernel death/restart, and whether a Python interpreter is even
+  guaranteed present in a packaged Tauri install) BEFORE building either.
+  No-eval forbids a string-eval console outright either way. `quantized.client`
+  (#39 slice 1, shipped) is what either option would end up driving.
 - **Pop-out books/plots into windows** (was MULTI_PLOT #19) — PLAN WITH
   OWNER FIRST: gesture, "pop out a BOOK" semantics, bulk "window
   everything" command.
@@ -614,6 +690,96 @@ in git history @ `e4f6590`.)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- **#39 Python client for live sessions (`quantized.client`)** (2026-08-05)
+  — slice 1 shipped: `src/quantized/client.py` (321 lines), a sync
+  httpx-backed `QuantizedClient` behind a new optional `client` extra
+  (`pip install quantized[client]`; httpx was already a dev dependency for
+  `TestClient`, so this adds no new CI package, only a new extras group).
+  - **Mandatory identity handshake, not optional.** The first request of
+    any kind runs `GET /api/health` and refuses to continue unless it
+    answers `app == "quantized"` — the same field `app.py`'s own health
+    route comment names for exactly this purpose. This is the client-side
+    half of the same bug class #40 closes on the server side: a probe (or
+    a script) that checks `status` alone can silently adopt the sibling
+    `fermiviewer`, which serves the identical `{"status": "ok"}` shape on
+    the same default port 8000. Verified with a fake fermiviewer-shaped
+    `/api/health` app: `health()` raises, and so does every OTHER public
+    method (the check gates every request, not one call site).
+  - **Distinct on purpose from `quantized.api`** (in-process, headless, no
+    server — ORIGIN_GAP_PLAN #9). This module talks HTTP to a LIVE `qz`
+    server process, possibly one a human already has open in a browser
+    tab. No dataset state lives on the server between requests; every
+    method is a self-contained round trip over the SAME `/api/*` surface
+    the SPA drives (import, corrections, fitting, the poll-based job
+    queue) — nothing new server-side for slice 1.
+  - **`fit_dream` is the first non-SPA exerciser of the job queue** —
+    submits `POST /api/fitting/bumps` with `engine="dream"`, then polls
+    `GET /api/jobs/{id}` at a configurable interval until terminal and
+    fetches `/result`, porting the exact contract `usePipeline.ts`/
+    `executeSteps.ts` already use client-side. `job_status`/`cancel_job`
+    are exposed directly too, not just as `fit_dream` internals, since a
+    script may want to poll/cancel a job it didn't submit itself.
+  - **Import defaults to upload, not path.** `import_bytes` (multipart,
+    `POST /api/parsers/upload`) never sends a server-side path and is the
+    recommended entry point for scripts; `import_path` (`POST
+    /api/parsers/import`) is documented as the same-machine-script
+    alternative, inheriting the existing allowlist/consent checks
+    unchanged rather than adding a second path-validation surface.
+  - **Deviations from the design doc, both recorded in the module/test
+    docstrings:** (1) `apply_corrections`'s `background` parameter accepts
+    a `DataStruct` OR a raw dict (the doc specified `dict | None`) — more
+    ergonomic for a Python caller building one DataStruct end to end, and
+    still serializes to exactly the `bg_dataset` dict shape the route
+    expects. (2) Added `close()` + `__enter__`/`__exit__` for the
+    underlying connection pool (not in the doc's method list) — ordinary
+    resource hygiene for an httpx.Client wrapper, not a scope change; the
+    frozen-surface test includes it deliberately. (3) The test injection
+    seam uses `TestClient` (a `starlette.testclient.TestClient`, itself an
+    `httpx.Client` subclass) rather than a raw
+    `httpx.Client(transport=httpx.ASGITransport(app=app), ...)` as the doc
+    suggested — httpx 0.28's `ASGITransport` implements only the ASYNC
+    transport interface (`handle_async_request`), so a *sync*
+    `httpx.Client` (what `QuantizedClient` and every real caller use)
+    cannot drive it directly (`AttributeError: no attribute
+    'handle_request'`, confirmed by running it). `TestClient` bridges that
+    gap internally and satisfies the same `_client: httpx.Client | None`
+    seam with no change to production code.
+  - Verified: backend 3745 passed / 69 skipped / 8 xfailed + ruff (`src
+    tests`) + mypy (`src`, strict) all clean; `tests/test_client.py` (16
+    always-on tests + 1 opt-in live-socket test, both runs green) adds no
+    regressions to the full suite. `test_repo_integrity.py`'s 500-line
+    ceiling and no-GPL/pure-layer guards cover the new file automatically
+    (it isn't in `io`/`calc`/`plugins`, so the pure-layer import check
+    doesn't apply structurally, but the module still imports nothing from
+    fastapi/pydantic/starlette by design, per the porting-workflow rule).
+
+- **#40 Origin/Host request guard (CSRF + DNS-rebinding)** (2026-08-05,
+  `4016ed5`) — quantized relied on `CORSMiddleware` alone, which never
+  inspects `Host` and does not block non-preflighted simple cross-site
+  requests. Ported fermiviewer's `_security_guard` middleware verbatim in
+  spirit: new pure `src/quantized/security.py` (`host_allowed` +
+  `origin_allowed`, unit-testable with no server), wired in `app.py` as
+  one `@application.middleware("http")` hook checked before any route
+  runs, PLUS the same two checks enforced separately on the `/api/ws`
+  upgrade path (the HTTP middleware doesn't cover that). This was a
+  **side-effect completion**: found and shipped the same day the
+  scripting/API design pass (which produced #39) independently re-flagged
+  it during its own security-posture inventory, ahead of being formally
+  booked here — recorded per plan-hygiene rather than left open on the
+  grounds it "wasn't formally closed."
+  - **Confirmed harmless to native/script clients by construction, not
+    just by claim** — `origin_allowed` only inspects an Origin header when
+    one is *present*, and httpx/requests (what `quantized.client` and any
+    curl/notebook caller use) send none by default, so they pass on the
+    `host_allowed` check alone. `tests/test_client.py`'s full suite
+    (driving the real guarded app) is itself the proof: nothing in it
+    needed an Origin header or any guard-specific workaround.
+  - `tests/test_csrf_guard.py`: own-origin allow-list (served SPA, Vite
+    dev, pywebview, exact Tauri origins on both platform schemes) passes;
+    foreign origins 403 on GET and mutating POST; spoofed Host 403 on
+    `/api/*` and on `/` (Host is checked everywhere, Origin only under
+    `/api/*`); the WS upgrade rejects a spoofed Host too.
 
 - **#35 Publication-quality figure copy** (2026-07-25) — shipped in two
   commits (`70342fa` extraction, `e45cb48` feature); two sub-items left
