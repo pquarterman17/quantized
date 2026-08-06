@@ -173,6 +173,33 @@ describe("FigureDocument v2", () => {
     expect(document.plot.view.seriesStyles[1].color).toBe("#123456");
   });
 
+  // F2.3b: per-series properties (color/width/mode, visibility renames,
+  // display order) round-trip through the SAME full JSON serialization save/
+  // reopen already relies on for every other canonical field.
+  it("round-trips per-series properties through full JSON serialization (F2.3b)", () => {
+    const document = createFigureDocument({
+      id: "figure-series-json",
+      name: "Series JSON",
+      datasetId: "dataset-1",
+      view: {
+        ...defaultPlotView(),
+        yKeys: [0, 1],
+        seriesStyles: { 0: { color: "--series-4", width: 2, marker: true }, 1: { step: "post" } },
+        seriesLabels: { 1: "Renamed" },
+        seriesOrder: [1, 0],
+        hiddenChannels: [1],
+      },
+    });
+    const restored = deserializeFigureDocument(serializeFigureDocument(document));
+    expect(restored?.plot.view.seriesStyles).toEqual({
+      0: { color: "--series-4", width: 2, marker: true },
+      1: { step: "post" },
+    });
+    expect(restored?.plot.view.seriesLabels).toEqual({ 1: "Renamed" });
+    expect(restored?.plot.view.seriesOrder).toEqual([1, 0]);
+    expect(restored?.plot.view.hiddenChannels).toEqual([1]);
+  });
+
   it("sanitizes optional fields and rejects unsafe envelopes", () => {
     const document = createFigureDocument({
       id: "figure-safe",

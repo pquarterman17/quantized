@@ -57,6 +57,16 @@ const figureState = {
   setYLabel: vi.fn(),
   overrides: {},
   setOverrides: vi.fn(),
+  // F2.3b: series editing is canonical-only; the default (legacy) mock state
+  // has nothing plotted, matching a fresh (non-canonical) figureState.
+  seriesChannels: [],
+  seriesStyles: {},
+  hiddenChannels: [],
+  seriesLabels: {},
+  seriesErrors: [],
+  setSeriesStyle: vi.fn(),
+  setSeriesHidden: vi.fn(),
+  moveSeries: vi.fn(),
   focusGroup: null,
   saveAsFigure: vi.fn(),
   saveStyleTemplate: vi.fn(),
@@ -125,6 +135,20 @@ describe("Publication Preview role cues", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(cancelPublicationPreview).toHaveBeenCalledTimes(2);
     expect(figureState.cancel).not.toHaveBeenCalled();
+  });
+
+  // F2.3b: the view builds a `series` prop for PropertyPanels only once
+  // canonical AND something is plotted; PropertyPanels itself is mocked here
+  // (its own tests cover the group's content), so this just pins that the
+  // construction never throws on either shape.
+  it("builds the canonical series prop without throwing once channels are plotted", () => {
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState,
+      canonical: true,
+      seriesChannels: [0, 1],
+      seriesStyles: { 0: { color: "--series-2" } },
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    expect(() => render(<FigureBuilderView />)).not.toThrow();
   });
 
   it("labels an unchanged detached draft as creating an editable figure", () => {

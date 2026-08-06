@@ -3,7 +3,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import PropertyPanels from "./PropertyPanels";
+import PropertyPanels, { type SeriesPanelProps } from "./PropertyPanels";
 
 function Harness({
   initial,
@@ -291,5 +291,59 @@ describe("PropertyPanels x-axis breaks (item 3)", () => {
     expect(setXBreaks).toHaveBeenLastCalledWith([[1, 2], [5, 8]]);
 
     expect(setOverrides).not.toHaveBeenCalled();
+  });
+});
+
+// F2.3b: series properties have no legacy FigureOverrides equivalent — the
+// Series group exists only when the caller supplies a canonical `series` prop
+// with at least one plotted channel, and it delegates straight to
+// SeriesPropertiesPanel (already unit-tested standalone) rather than
+// duplicating its behavior here.
+describe("PropertyPanels Series group (F2.3b)", () => {
+  const series = (overrides: Partial<SeriesPanelProps> = {}): SeriesPanelProps => ({
+    labels: ["Alpha", "Beta"],
+    channels: [0, 1],
+    styles: {},
+    hiddenChannels: [],
+    nameOverrides: {},
+    errors: [],
+    onStyle: vi.fn(),
+    onHiddenChange: vi.fn(),
+    onMove: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the Series group entirely when no series prop is supplied (legacy mode)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Series" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Series/ })).not.toBeInTheDocument();
+  });
+
+  it("omits the Series group when the canonical draft has nothing plotted", () => {
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Series"
+        hasY2={false}
+        series={series({ channels: [] })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Series/ })).not.toBeInTheDocument();
+  });
+
+  it("renders the Series group and forwards edits to the supplied callbacks", () => {
+    const onStyle = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Series"
+        hasY2={false}
+        series={series({ onStyle })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("series 1 mode")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("series 1 width"), { target: { value: "2" } });
+    expect(onStyle).toHaveBeenCalledWith(0, { width: 2 });
   });
 });

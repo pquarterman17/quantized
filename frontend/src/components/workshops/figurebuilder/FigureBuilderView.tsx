@@ -97,6 +97,21 @@ export default function FigureBuilderView() {
               hasY2={f.hasY2}
               xBreaks={f.xBreaks}
               setXBreaks={f.setXBreaks}
+              // F2.3b: series editing has no legacy equivalent -- omit the
+              // prop entirely (rather than pass an always-empty object) so a
+              // canonical draft with nothing plotted degrades the same way
+              // legacy mode does.
+              series={f.canonical && f.seriesChannels.length > 0 ? {
+                labels: f.data?.labels ?? [],
+                channels: f.seriesChannels,
+                styles: f.seriesStyles,
+                hiddenChannels: f.hiddenChannels,
+                nameOverrides: f.seriesLabels,
+                errors: f.seriesErrors,
+                onStyle: f.setSeriesStyle,
+                onHiddenChange: f.setSeriesHidden,
+                onMove: f.moveSeries,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />
@@ -208,6 +223,7 @@ export default function FigureBuilderView() {
                 onSelect={f.selectElement}
                 onEditText={f.editElementText}
                 onDragEnd={f.dragElement}
+                canonicalSeries={f.canonical && f.seriesChannels.length > 0}
               />
             ) : (
               <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>

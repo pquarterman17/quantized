@@ -568,6 +568,139 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3b: per-series properties (color/width/mode, visibility, order) live
+  // straight on document.plot.view — these exercise the hook's setters, plus
+  // the required Apply-commits/Cancel-is-mutation-free pin.
+  describe("canonical per-series properties (F2.3b)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      // liveWindowDocument names the "live" document from window.title
+      // (updateFigureDocumentFromPlotView's `name: window.title`) -- it must
+      // match the document's own name or Apply sees a name drift and rejects.
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const twoChannelDocument = (id: string) => createFigureDocument({
+      id, name: "Series doc", datasetId: "d1", view: { ...defaultPlotView(), yKeys: [0, 1] },
+    });
+
+    it("computes an empty channel list in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.seriesChannels).toEqual([]);
+      expect(result.current.seriesStyles).toEqual({});
+      expect(result.current.hiddenChannels).toEqual([]);
+    });
+
+    it("computes the display-order channel list from bindings + seriesOrder once canonical", () => {
+      const document = twoChannelDocument("figure-series-a");
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.seriesChannels).toEqual([0, 1]);
+    });
+
+    it("setSeriesStyle merges a per-channel patch without disturbing sibling channels", () => {
+      const document = createFigureDocument({
+        id: "figure-series-b", name: "Series doc", datasetId: "d1",
+        view: { ...defaultPlotView(), yKeys: [0, 1], seriesStyles: { 0: { color: "--series-2" } } },
+      });
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setSeriesStyle(1, { width: 3 }));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.seriesStyles).toEqual({
+        0: { color: "--series-2" },
+        1: { width: 3 },
+      });
+    });
+
+    it("setSeriesHidden toggles one channel's visibility on and off", () => {
+      const document = twoChannelDocument("figure-series-c");
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setSeriesHidden(0, true));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.hiddenChannels).toEqual([0]);
+      act(() => result.current.setSeriesHidden(0, false));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.hiddenChannels).toEqual([]);
+    });
+
+    it("moveSeries swaps two adjacent channels' display order", () => {
+      const document = twoChannelDocument("figure-series-d");
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.seriesChannels).toEqual([0, 1]);
+      act(() => result.current.moveSeries(1, -1));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.seriesOrder).toEqual([1, 0]);
+    });
+
+    it("Apply commits series edits into the window document and the legacy facade", async () => {
+      const document = twoChannelDocument("figure-series-e");
+      useApp.setState({
+        // applyFigurePublicationEdit resolves the FOCUSED window's "live"
+        // document from the store's top-level ambient PlotView fields
+        // (liveWindowDocument -> updateFigureDocumentFromPlotView), not from
+        // window.document.plot.view -- these must mirror the baseline's view
+        // (defaultPlotView() + yKeys) or Apply rejects as drifted.
+        ...defaultPlotView(),
+        yKeys: [0, 1],
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      act(() => {
+        result.current.setSeriesStyle(0, { color: "--series-5", width: 2 });
+        result.current.setSeriesHidden(1, true);
+        result.current.moveSeries(1, -1);
+      });
+      act(() => {
+        result.current.apply();
+      });
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view).toMatchObject({
+        seriesStyles: { 0: { color: "--series-5", width: 2 } },
+        hiddenChannels: [1],
+        seriesOrder: [1, 0],
+      });
+      // hydrateView spreads the applied view onto the legacy top-level facade
+      // fields too (the same fields SeriesStyleCard/PlotObjectsCard read).
+      expect(state.seriesStyles).toEqual({ 0: { color: "--series-5", width: 2 } });
+      expect(state.hiddenChannels).toEqual([1]);
+      expect(state.seriesOrder).toEqual([1, 0]);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = twoChannelDocument("figure-series-f");
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => {
+        result.current.setSeriesStyle(0, { color: "--series-5" });
+        result.current.setSeriesHidden(1, true);
+      });
+      act(() => {
+        result.current.cancel();
+      });
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+  });
+
   // Item 3: x-axis breaks unify on one canonical home
   // (canonicalOverrides.ts's effectiveXBreaks/migrateXBreaksPatch); these
   // exercise the hook's wiring on top of those pure functions.

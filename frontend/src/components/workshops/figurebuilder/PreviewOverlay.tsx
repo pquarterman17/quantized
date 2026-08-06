@@ -18,11 +18,19 @@ const elementName = (id: string) => {
   if (id.startsWith("series:")) return "Series";
   return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
 };
-const elementTitle = (id: string) => {
+/** F2.3b: a "series:N" hitbox becomes reachable once the canonical draft has
+ *  per-series controls to open (`canonicalSeriesEditable`) -- legacy/detached
+ *  sessions with nothing to edit keep the original "edited on Stage" wording
+ *  unchanged, so every EXISTING PreviewOverlay caller/test is byte-identical. */
+const elementTitle = (id: string, canonicalSeriesEditable: boolean) => {
   const name = elementName(id);
   if (TEXT_ELEMENTS.has(id)) return `${name} \u2014 double-click to edit; right-click for properties`;
   if (DRAGGABLE(id)) return `${name} \u2014 drag to move; right-click for properties`;
-  if (id.startsWith("series:")) return `${name} \u2014 properties are edited on Stage`;
+  if (id.startsWith("series:")) {
+    return canonicalSeriesEditable
+      ? `${name} \u2014 right-click for properties`
+      : `${name} \u2014 properties are edited on Stage`;
+  }
   return name;
 };
 const hitboxArea = (element: HitElement) => (element.x1 - element.x0) * (element.y1 - element.y0);
@@ -39,6 +47,7 @@ export default function PreviewOverlay({
   onSelect,
   onEditText,
   onDragEnd,
+  canonicalSeries = false,
 }: {
   src: string;
   map: FigureHitmap;
@@ -48,6 +57,10 @@ export default function PreviewOverlay({
   onEditText: (id: string, value: string) => void;
   /** Drop position in image pixels. */
   onDragEnd: (id: string, px: number, py: number) => void;
+  /** F2.3b: the canonical draft has per-series controls to open (the Series
+   *  property group). Default false keeps every other/legacy caller's
+   *  "properties are edited on Stage" hitbox exactly as before. */
+  canonicalSeries?: boolean;
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
@@ -78,10 +91,11 @@ export default function PreviewOverlay({
     setEditing({ id, value: textOf(id) });
   };
   const menuItems = (id: string): ContextMenuItem[] => {
+    const seriesEditable = id.startsWith("series:") && canonicalSeries;
     const group = groupForElement(id);
     return [
       { header: elementName(id) },
-      group
+      group || seriesEditable
         ? { label: "Properties…", run: () => onSelect(id) }
         : id.startsWith("series:")
           ? { label: "Series properties — edit on Stage", disabled: true, run: () => {} }
@@ -97,10 +111,10 @@ export default function PreviewOverlay({
         <div
           key={e.id}
           data-element={e.id}
-          title={elementTitle(e.id)}
+          title={elementTitle(e.id, canonicalSeries)}
           tabIndex={0}
           role="button"
-          aria-label={elementTitle(e.id)}
+          aria-label={elementTitle(e.id, canonicalSeries)}
           onPointerEnter={() => setHover(e.id)}
           onPointerLeave={() => setHover(null)}
           onFocus={() => setHover(e.id)}

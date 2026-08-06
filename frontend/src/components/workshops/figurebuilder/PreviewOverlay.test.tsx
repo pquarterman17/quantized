@@ -95,6 +95,35 @@ describe("PreviewOverlay", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  // F2.3b: once the canonical draft has per-series controls to open,
+  // `canonicalSeries` flips the SAME hitbox from inert to a real Properties…
+  // action, routed through the ordinary click-select pathway.
+  it("routes a series hitbox to Properties… once canonicalSeries is enabled", () => {
+    const seriesMap = { ...MAP, elements: [...MAP.elements, { id: "series:0", x0: 1, y0: 1, x1: 2, y1: 2 }] };
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay
+        src="data:image/png;base64,"
+        map={seriesMap}
+        textOf={() => ""}
+        onSelect={onSelect}
+        onEditText={vi.fn()}
+        onDragEnd={vi.fn()}
+        canonicalSeries
+      />,
+    );
+    expect(el("series:0").getAttribute("title")).toContain("right-click for properties");
+
+    fireEvent.contextMenu(el("series:0"));
+    expect(screen.queryByRole("menuitem", { name: "Series properties — edit on Stage" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Properties…" }));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+
+    onSelect.mockClear();
+    fireEvent.click(el("series:0"));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+  });
+
   it("puts the smaller legend hitbox above an overlapping series hitbox", () => {
     const overlapMap = {
       ...MAP,

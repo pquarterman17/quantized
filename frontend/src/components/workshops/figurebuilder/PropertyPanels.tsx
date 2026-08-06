@@ -4,10 +4,30 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import type { ErrorBinding } from "../../../lib/errorRoles";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
+import type { SeriesStyle } from "../../../lib/types";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import Num from "./PropertyNumberField";
+import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
+
+/** F2.3b: per-series properties on the canonical draft. Supplied only when a
+ *  canonical session has at least one plotted channel (legacy Publication
+ *  Preview has no lossless series-level document field to edit — see
+ *  useFigureBuilder.ts's field doc) — the Series group renders nothing when
+ *  this is absent. */
+export interface SeriesPanelProps {
+  labels: readonly string[];
+  channels: readonly number[];
+  styles: Record<number, SeriesStyle>;
+  hiddenChannels: readonly number[];
+  nameOverrides: Record<number, string>;
+  errors: readonly ErrorBinding[];
+  onStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
+  onHiddenChange: (channel: number, hidden: boolean) => void;
+  onMove: (channel: number, direction: -1 | 1) => void;
+}
 
 function Group({
   title,
@@ -49,6 +69,7 @@ export default function PropertyPanels({
   hasY2,
   xBreaks,
   setXBreaks,
+  series,
   openGroup = null,
   openNonce,
 }: {
@@ -67,6 +88,10 @@ export default function PropertyPanels({
    *  behavior unchanged. */
   xBreaks?: [number, number][];
   setXBreaks?: (next: [number, number][]) => void;
+  /** F2.3b: canonical per-series properties. Absent (legacy mode, or a
+   *  canonical draft with nothing plotted) hides the Series group entirely —
+   *  there is no lossless legacy equivalent to fall back to. */
+  series?: SeriesPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -206,6 +231,22 @@ export default function PropertyPanels({
           />
         </span>
       </Group>
+
+      {series && series.channels.length > 0 && (
+        <Group title="Series" forceOpen={openGroup === "Series"} openNonce={openNonce}>
+          <SeriesPropertiesPanel
+            labels={series.labels}
+            channels={series.channels}
+            styles={series.styles}
+            hiddenChannels={series.hiddenChannels}
+            seriesLabels={series.nameOverrides}
+            errors={series.errors}
+            onStyle={series.onStyle}
+            onHiddenChange={series.onHiddenChange}
+            onMove={series.onMove}
+          />
+        </Group>
+      )}
 
       <Group title="Canvas (margins, fig fraction)">
         <Num label="left" value={overrides.margins?.left} onValue={(left) => patch({ margins: { ...overrides.margins, left } })} />

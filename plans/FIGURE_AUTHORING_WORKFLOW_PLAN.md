@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-02 — F2.4a Publication Preview element context menu
+**Updated:** 2026-08-05 — F2.3b series property parity in Publication Preview
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -225,6 +225,11 @@ decisions are merged.
   - [x] **F2.3a Publication-property parity slice (planned PR #112).**
         Canonical preview now exposes supported y2 limits, legend title,
         in-place annotation/frame properties, and validated x-axis breaks.
+  - [x] **F2.3b Series property parity (Claude Sonnet 5).** Canonical draft
+        now exposes per-series color/width/mode (line/scatter/line+symbol/
+        step, reusing the shipped mark vocabulary), visibility, and display
+        order, plus read-only error-bar designation text. No schema change:
+        these already lived on `document.plot.view`.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
@@ -366,6 +371,43 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-05 — F2.3b series property parity in Publication Preview (Claude Sonnet 5)
+
+- Added canonical-draft controls for per-series properties: color, line
+  width, and mode (line / scatter / line + symbol / step — reusing the
+  `StepMode`/marker/width vocabulary `feat(plot)` commits 954c8bf and
+  163864b shipped, not a parallel enum), visibility (hidden/shown), and
+  display order. All write straight through `setCanonicalView` into
+  `document.plot.view.{seriesStyles,hiddenChannels,seriesOrder}` — the
+  same mechanism F2.3a's title/label edits already use — because, unlike
+  legend/annotations/breaks, these fields have no `FigureOverrides`
+  equivalent to bridge through. No schema, backend, or shape changes were
+  needed: `FigureViewState` already carried them losslessly (F1.2).
+- Error-bar DESIGNATIONS (`document.bindings.errors`) are DISPLAY-only in
+  this slice: each series row shows its bound error channel(s) read-only,
+  and a shared line above the list shows any x-axis-wide binding.
+  Reassigning bindings needs the same channel-picker "well" UI Graph
+  Builder already owns (`useGraphBuilder.ts`'s Y/X error wells); building
+  a second, narrower reassignment surface here would duplicate that
+  contract instead of reaching parity with it, so it was left out of
+  scope rather than half-built.
+- The F2.4a "Series properties — edit on Stage" disabled context-menu
+  entry now enables once the canonical draft has a Series group to open
+  (`PreviewOverlay`'s new `canonicalSeries` prop, default `false` — every
+  other/legacy caller is byte-identical); a plain click on a rendered
+  series hitbox also now focuses the new Series group, the same way
+  clicking the legend or an annotation already does.
+- New pure module `canonicalSeries.ts` (mode derivation/patch, error-text
+  summaries) and view component `SeriesPropertiesPanel.tsx`, both unit
+  tested standalone; `useFigureBuilder.ts` gained the setters/derived
+  state (canonical-only — empty/no-op in legacy mode). Pinned: draft edit
+  → Apply → the window document and legacy top-level facade both reflect
+  it; Cancel → no persistent mutation; full JSON serialize/deserialize
+  round-trips `seriesStyles`/`seriesLabels`/`seriesOrder`/`hiddenChannels`.
+- F2.3 remains open: channels/errors reassignment, grouping/faceting,
+  tick formats, shapes, and reference objects are still unreached by the
+  canonical preview.
 
 ### 2026-08-02 — F2.4a Publication Preview element context menu (ChatGPT-Sol / GPT-5.6 Terra)
 

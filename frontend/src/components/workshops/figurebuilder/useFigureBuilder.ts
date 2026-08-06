@@ -19,13 +19,14 @@ import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverr
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
+import { effectiveChannels } from "../../../lib/plotdata";
 import {
   groupForElement,
   pxToData,
   pxToFigureFraction,
   type FigureHitmap,
 } from "../../../lib/previewmap";
-import { axisFmtParam, type AxisScale, type DataStruct } from "../../../lib/types";
+import { axisFmtParam, type AxisScale, type DataStruct, type SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -242,6 +243,49 @@ export function useFigureBuilder() {
     ? (next: [number, number][]) => patchCanonical((document) => migrateXBreaksPatch(document, next))
     : undefined;
 
+  // F2.3b: per-series properties (color/width/mode, visibility, order) are
+  // genuinely canonical PlotView fields (seriesStyles/hiddenChannels/
+  // seriesOrder/seriesLabels) with no FigureOverrides equivalent -- unlike
+  // legend/annotations/breaks above, they write straight through
+  // setCanonicalView instead of the publication-overrides delta bridge, the
+  // same way editElementText's title/xLabel/yLabel already do. Error-bar
+  // DESIGNATIONS (document.bindings.errors) are canonical too but stay
+  // display-only here -- reassigning them needs the same channel-picker
+  // "well" Graph Builder already owns (useGraphBuilder.ts), not a per-row
+  // toggle; see canonicalSeries.ts's doc and the F2.3b decision log.
+  const seriesChannels = canonical && canonicalData && canonicalDocument
+    ? effectiveChannels(
+        canonicalData,
+        canonicalDocument.bindings.yKeys,
+        canonicalDocument.bindings.xKey,
+        canonicalDataset?.channelRoles,
+        canonicalView?.seriesOrder ?? null,
+      )
+    : [];
+  const setSeriesStyle = (channel: number, patch: Partial<SeriesStyle>) =>
+    setCanonicalView({
+      seriesStyles: {
+        ...canonicalView?.seriesStyles,
+        [channel]: { ...canonicalView?.seriesStyles?.[channel], ...patch },
+      },
+    });
+  const setSeriesHidden = (channel: number, hidden: boolean) => {
+    const current = canonicalView?.hiddenChannels ?? [];
+    setCanonicalView({
+      hiddenChannels: hidden
+        ? (current.includes(channel) ? current : [...current, channel])
+        : current.filter((c) => c !== channel),
+    });
+  };
+  const moveSeries = (channel: number, direction: -1 | 1) => {
+    const order = [...seriesChannels];
+    const index = order.indexOf(channel);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    setCanonicalView({ seriesOrder: order });
+  };
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -417,9 +461,13 @@ export function useFigureBuilder() {
   // ── Preview interactions (#13/#14) ────────────────────────────────────
   /** Click: focus the matching #11 panel group. Always bumps the nonce so a
    *  re-selection of the same group's element reopens a manually-collapsed
-   *  panel instead of being a no-op. */
+   *  panel instead of being a no-op. F2.3b: a rendered "series:N" hitbox now
+   *  has somewhere to go too -- `groupForElement` deliberately stays null for
+   *  it (per-series styles have no single N->channel mapping without the
+   *  hitmap's plotted-position order), so it is special-cased straight to
+   *  the new Series group here instead. */
   function selectElement(id: string): void {
-    setFocusGroup(groupForElement(id));
+    setFocusGroup(id.startsWith("series:") ? "Series" : groupForElement(id));
     setFocusNonce((n) => n + 1);
   }
 
@@ -532,6 +580,15 @@ export function useFigureBuilder() {
     hasY2,
     xBreaks,
     setXBreaks,
+    // F2.3b: canonical-only (empty/no-op in legacy mode — see the field doc above).
+    seriesChannels,
+    seriesStyles: canonicalView?.seriesStyles ?? {},
+    hiddenChannels: canonicalView?.hiddenChannels ?? [],
+    seriesLabels: canonicalView?.seriesLabels ?? {},
+    seriesErrors: canonicalDocument?.bindings.errors ?? [],
+    setSeriesStyle,
+    setSeriesHidden,
+    moveSeries,
     data,
     hitmap,
     focusGroup,
