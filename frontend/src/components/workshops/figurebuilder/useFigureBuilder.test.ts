@@ -701,6 +701,174 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
+  // double-click text (title/xlabel/ylabel) gestures already branched on
+  // `canonical` from the initial canonical session (a6c809c), and commit
+  // 4e74bc4 (F2.3a) already routed drag through the SAME effective-overrides
+  // read/write bridge property panels use -- so legend drag, annotation
+  // drag, and title double-click already wrote into the draft correctly.
+  // Two real gaps, both in COVERAGE, not implementation: xlabel/ylabel
+  // double-click had zero test coverage anywhere in this file, and no test
+  // proved the full gesture -> Apply -> window document, gesture -> Cancel
+  // -> no-mutation round trip this slice's contract requires (only F2.3b's
+  // series properties had that pattern). These tests close both. The
+  // legacy-mode block pins current (unchanged) behavior first, per the
+  // "characterize before touching a shared handler" rule -- even though the
+  // investigation found no shared-handler change was needed.
+  describe("direct manipulation parity (F2.4b)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const documentWithAnnotation = (id: string) => createFigureDocument({
+      id, name: "Annotated", datasetId: "d1",
+      view: { ...defaultPlotView(), annotations: [{ id: "a1", x: 1, y: 2, text: "Hello" }] },
+    });
+
+    describe("legacy (non-canonical) characterization", () => {
+      it("editElementText writes straight into the local title/label fields, no session involved", async () => {
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        act(() => {
+          result.current.editElementText("title", "Local title");
+          result.current.editElementText("xlabel", "Local x");
+          result.current.editElementText("ylabel", "Local y");
+        });
+        expect(result.current.title).toBe("Local title");
+        expect(result.current.xLabel).toBe("Local x");
+        expect(result.current.yLabel).toBe("Local y");
+        expect(useApp.getState().figurePublicationSession).toBeNull();
+      });
+
+      it("dragElement writes straight into the local overrides object, no session involved", async () => {
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        act(() => result.current.setOverrides({
+          ...result.current.overrides,
+          annotations: [{ x: 1, y: 2, text: "Hello" }],
+        }));
+        // One act() per drag: legacy mode's setOverrides is a plain (non-
+        // functional) useState setter reading the closed-over `overrides`,
+        // so two calls batched into one synchronous act() would have the
+        // second overwrite the first with a stale base -- an artifact of
+        // this test harness batching what real, separate pointer gestures
+        // never do, not a product bug (canonical mode's patchCanonical goes
+        // through Zustand's functional set() and does not share this trait).
+        act(() => result.current.dragElement("legend", 300, 200));
+        act(() => result.current.dragElement("ann:0", 350, 150));
+        expect(result.current.overrides.legend).toMatchObject({ loc: "custom" });
+        expect(result.current.overrides.annotations?.[0]).toMatchObject({ text: "Hello" });
+        expect(useApp.getState().figurePublicationSession).toBeNull();
+      });
+    });
+
+    // Previously untested in canonical mode (only "title" had coverage).
+    describe("canonical double-click text", () => {
+      it('editElementText("xlabel") writes document.plot.view.xAxisLabel', async () => {
+        const document = createFigureDocument({ id: "figure-xlabel", name: "Doc", datasetId: "d1", view: defaultPlotView() });
+        useApp.setState({
+          figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        act(() => result.current.editElementText("xlabel", "New X"));
+        expect(useApp.getState().figurePublicationSession!.draft.plot.view.xAxisLabel).toBe("New X");
+      });
+
+      it('editElementText("ylabel") writes document.plot.view.yAxisLabel', async () => {
+        const document = createFigureDocument({ id: "figure-ylabel", name: "Doc", datasetId: "d1", view: defaultPlotView() });
+        useApp.setState({
+          figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        act(() => result.current.editElementText("ylabel", "New Y"));
+        expect(useApp.getState().figurePublicationSession!.draft.plot.view.yAxisLabel).toBe("New Y");
+      });
+    });
+
+    describe("gesture -> Apply -> window document reflects it; Cancel -> no mutation", () => {
+      it("Apply commits legend drag, annotation drag, and title/xlabel/ylabel edits into the window document and legacy facade", async () => {
+        const document = documentWithAnnotation("figure-drag-apply");
+        useApp.setState({
+          // liveWindowDocument folds the top-level ambient PlotView fields
+          // into the focused window's document (F2.3b's Apply test needs the
+          // same mirroring) -- keep the singleton annotations in sync with
+          // the baseline so Apply doesn't see the focused window as drifted.
+          ...defaultPlotView(),
+          annotations: document.plot.view.annotations,
+          figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+          plotWindows: [win("w1", structuredClone(document))],
+          focusedWindowId: "w1",
+        });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        // One act() per gesture, mirroring separate real pointer/keyboard
+        // events (and this file's own legacy-mode pattern above) rather than
+        // batching five state-changing calls into one synchronous callback.
+        act(() => result.current.dragElement("legend", 300, 200));
+        act(() => result.current.dragElement("ann:0", 350, 150));
+        act(() => result.current.editElementText("title", "Applied title"));
+        act(() => result.current.editElementText("xlabel", "Applied X"));
+        act(() => result.current.editElementText("ylabel", "Applied Y"));
+        act(() => {
+          result.current.apply();
+        });
+
+        const state = useApp.getState();
+        expect(state.figurePublicationSession).toBeNull();
+        const appliedDoc = state.plotWindows[0].document!;
+        expect(appliedDoc.plot.view).toMatchObject({
+          plotTitle: "Applied title",
+          xAxisLabel: "Applied X",
+          yAxisLabel: "Applied Y",
+        });
+        expect(appliedDoc.publication?.overrides?.legend).toMatchObject({ loc: "custom" });
+        expect(appliedDoc.publication?.overrides?.annotations?.[0]).toMatchObject({ text: "Hello" });
+        // hydrateView spreads the applied view onto the legacy top-level
+        // facade (same pattern F2.3b's Apply test pins for series fields):
+        // title/labels live on plot.view, so they reach the facade exactly
+        // like a Stage edit always has.
+        expect(state.plotTitle).toBe("Applied title");
+        expect(state.xAxisLabel).toBe("Applied X");
+        expect(state.yAxisLabel).toBe("Applied Y");
+        // The legend/annotation drag position is a PUBLICATION-only delta
+        // (FigurePublicationState: "exact publication-only settings that
+        // PlotView cannot represent" -- see canonicalOverrides.ts's module
+        // doc), by the same design F2.3a's property-panel edits already
+        // use -- it does NOT flow into plot.view or the Stage facade. This
+        // is unchanged, deliberate architecture, not a gap: matplotlib's
+        // figure-fraction legend anchor and the Stage canvas's own
+        // plot-fraction legendXY are different coordinate systems, and nothing
+        // in this codebase converts between them.
+        expect(state.legendXY).toBeNull();
+      });
+
+      it("Cancel after a legend/annotation drag and a text edit makes no persistent mutation", async () => {
+        const document = documentWithAnnotation("figure-drag-cancel");
+        useApp.setState({
+          figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+          plotWindows: [win("w1", structuredClone(document))],
+          focusedWindowId: "w1",
+        });
+        const before = structuredClone(useApp.getState().plotWindows);
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        act(() => result.current.dragElement("legend", 300, 200));
+        act(() => result.current.dragElement("ann:0", 350, 150));
+        act(() => result.current.editElementText("title", "Should not persist"));
+        act(() => {
+          result.current.cancel();
+        });
+        const state = useApp.getState();
+        expect(state.figurePublicationSession).toBeNull();
+        expect(state.plotWindows).toEqual(before);
+      });
+    });
+  });
+
   // Item 3: x-axis breaks unify on one canonical home
   // (canonicalOverrides.ts's effectiveXBreaks/migrateXBreaksPatch); these
   // exercise the hook's wiring on top of those pure functions.
