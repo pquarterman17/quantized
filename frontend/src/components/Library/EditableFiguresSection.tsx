@@ -2,12 +2,14 @@
 // figures so users can tell an editable plot from an export-preview artifact.
 import { useState } from "react";
 
+import { pagesReferencingFigure } from "../../lib/pageDocument";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 
 export default function EditableFiguresSection() {
   const documents = useApp((state) => state.editableFigures);
   const datasets = useApp((state) => state.datasets);
+  const pages = useApp((state) => state.pages);
   const open = useApp((state) => state.openEditableFigure);
   const rename = useApp((state) => state.renameEditableFigure);
   const duplicate = useApp((state) => state.duplicateEditableFigure);
@@ -64,9 +66,22 @@ export default function EditableFiguresSection() {
               style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
               title="delete editable figure (undo available)"
               onClick={() => {
+                // F3.2 referential integrity: a Figure Page panel references
+                // this document BY ID ONLY (never a flattened copy), so
+                // deleting it never cascades — the panel just resolves to
+                // "missing" on its next read (lib/pageDocument.ts's
+                // resolvePagePanel, fail-closed). Name the affected page(s)
+                // and slot(s) here, before the delete, rather than only
+                // discovering the gap later on the page itself.
+                const refs = pagesReferencingFigure(pages, document.id);
+                const refWarning = refs.length > 0
+                  ? ` Also used on ${refs
+                      .map((r) => `"${r.page.name}" (panel ${r.labels.join(", ")})`)
+                      .join("; ")} — that panel will show as missing.`
+                  : "";
                 void askConfirm(
                   `Delete "${document.name}"?`,
-                  "The saved figure will be removed. You can restore it with Undo.",
+                  `The saved figure will be removed. You can restore it with Undo.${refWarning}`,
                   "Delete",
                   true,
                 ).then((confirmed) => {

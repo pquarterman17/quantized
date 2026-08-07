@@ -3,7 +3,13 @@
 // workflow). The grid is a flat row-major slot array (index i -> row
 // floor(i/cols), col i%cols); the backend route (/api/export/figure-page)
 // owns the real layout + label rendering — these helpers keep the UI's slot
-// state and preview labels consistent with it. Pure: no store imports.
+// state and preview labels consistent with it. Pure: no store imports (type-
+// only imports of PlotWindow/FigureDoc for the session-liveness resolver
+// below are fine — no store, no cycle).
+
+import type { FigureDoc } from "./figuredoc";
+import { docRenderable } from "./figuredoc";
+import type { PlotWindow } from "./plotview";
 
 export type PanelSourceKind = "window" | "figdoc";
 
@@ -108,4 +114,52 @@ export function slotLabels(slots: PageSlot[], fmt: PageLabelFormat): string[] {
 
 export function filledCount(slots: PageSlot[]): number {
   return slots.reduce((n, s) => n + (s.source ? 1 : 0), 0);
+}
+
+// ── live-session source resolution (FIGURE_AUTHORING_WORKFLOW_PLAN F3.2) ───
+//
+// The PERSISTED PageDocument model (lib/pageDocument.ts) resolves a panel's
+// canonical `figureId` against `editableFigures` and fails closed to
+// `{status:"missing"}` — never silently empty, never dropped. This session
+// model has its own, older reference shape (`PanelSource`: an open window OR
+// a legacy `figureDocs` entry, not yet unified with editableFigures — see
+// useFigurePage.ts's `resolveSlotFigureId`), and needed the SAME fail-closed
+// discipline: today a slot's cached `PanelSource` is displayed unconditionally
+// once assigned, even after its window closes or its figdoc is deleted, so the
+// grid kept showing a perfectly normal-looking tile for a dead reference until
+// the whole page's preview/export failed with one generic message. This
+// resolver is the fix's foundation: it re-checks LIVENESS on every render
+// using the exact same rules `windowSources`/`docSources` already use to
+// decide what is pickable in the first place (a window must still be a
+// dataset-bound plot; a figdoc must still be `docRenderable`), so "can I
+// assign it" and "is it still valid" can never drift apart.
+
+export type PanelLifecycle = "live" | "frozen";
+
+export type PanelSourceStatus =
+  | { status: "empty" }
+  | { status: "missing" }
+  | { status: "ok"; lifecycle: PanelLifecycle };
+
+/** Resolve one slot's assigned source against the CURRENT session state.
+ *  `missing` covers both "the window/figdoc no longer exists" and "it exists
+ *  but can no longer render" (dataset unbound/removed) — both leave the panel
+ *  unable to produce a figure, and the caller (SlotGrid) treats them
+ *  identically: label it, keep it selectable/clearable, never blank it. */
+export function resolvePanelSource(
+  source: PanelSource | null,
+  plotWindows: readonly PlotWindow[],
+  figureDocs: readonly FigureDoc[],
+  datasetIds: ReadonlySet<string>,
+): PanelSourceStatus {
+  if (!source) return { status: "empty" };
+  if (source.kind === "window") {
+    const win = plotWindows.find((w) => w.id === source.id);
+    if (!win || win.kind !== "plot" || win.datasetId === null) return { status: "missing" };
+    const lifecycle: PanelLifecycle = win.document?.data.mode === "frozen" ? "frozen" : "live";
+    return { status: "ok", lifecycle };
+  }
+  const doc = figureDocs.find((d) => d.id === source.id);
+  if (!doc || !docRenderable(doc, datasetIds)) return { status: "missing" };
+  return { status: "ok", lifecycle: doc.live ? "live" : "frozen" };
 }

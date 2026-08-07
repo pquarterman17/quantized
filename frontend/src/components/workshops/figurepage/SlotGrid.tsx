@@ -4,10 +4,20 @@
 // assign via the hook. Click selects a slot (its label/title overrides edit
 // in the side panel); the x chip clears it. Pure presentational — all state
 // lives in useFigurePage.
+//
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.2: a slot's `PanelSourceStatus` (computed
+// live every render by `resolvePanelSource`) drives two cues this component
+// used to have no idea about: (1) "missing" — the assigned window/figdoc no
+// longer exists or can no longer render — replaces the stale cached name with
+// a labeled warning instead of silently looking like a normal, live panel;
+// (2) "frozen" — the assigned figure won't update if its source data changes
+// — gets a subtle glyph next to its name. Neither invents new behavior: both
+// are read straight off the same liveness/lifecycle state the preview/export
+// path already depends on.
 
 import type { DragEvent } from "react";
 
-import type { PageSlot, PanelSource } from "../../../lib/figurepage";
+import type { PageSlot, PanelSource, PanelSourceStatus } from "../../../lib/figurepage";
 
 export const PANEL_SOURCE_MIME = "application/x-qz-panel-source";
 
@@ -16,6 +26,7 @@ interface SlotGridProps {
   cols: number;
   slots: PageSlot[];
   labels: string[]; // per-slot previewed labels (auto sequence + overrides)
+  statuses: PanelSourceStatus[]; // per-slot live status (F3.2)
   selected: number | null;
   onSelect: (i: number) => void;
   onClear: (i: number) => void;
@@ -38,6 +49,7 @@ export default function SlotGrid({
   cols,
   slots,
   labels,
+  statuses,
   selected,
   onSelect,
   onClear,
@@ -55,6 +67,12 @@ export default function SlotGrid({
     >
       {slots.map((slot, i) => {
         const isSel = selected === i;
+        // F3.2: "missing" is checked independently of slot.source's mere
+        // presence -- a stale-but-still-cached source must not render as if
+        // it were a normal, working panel.
+        const status = statuses[i] ?? { status: slot.source ? "ok" : "empty", lifecycle: "live" };
+        const isMissing = status.status === "missing";
+        const isFrozen = status.status === "ok" && status.lifecycle === "frozen";
         return (
           <div
             key={i}
@@ -67,7 +85,7 @@ export default function SlotGrid({
             }}
             style={{
               border: `1px ${slot.source ? "solid" : "dashed"} ${
-                isSel ? "var(--accent)" : "var(--border)"
+                isMissing ? "var(--danger)" : isSel ? "var(--accent)" : "var(--border)"
               }`,
               borderRadius: 4,
               padding: "6px 8px",
@@ -97,18 +115,40 @@ export default function SlotGrid({
               )}
             </div>
             {slot.source ? (
-              <span
-                style={{
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-                title={slot.source.name}
-              >
-                {slot.source.kind === "figdoc" ? "▣ " : "□ "}
-                {slot.source.name}
-              </span>
+              isMissing ? (
+                <span
+                  role="status"
+                  style={{
+                    fontSize: 12,
+                    color: "var(--danger)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={`"${slot.source.name}" is no longer available - clear or reassign this panel`}
+                >
+                  {"⚠ missing: "}
+                  {slot.source.name}
+                </span>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 12,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={
+                    isFrozen
+                      ? `${slot.source.name} (frozen snapshot - won't update with new data)`
+                      : slot.source.name
+                  }
+                >
+                  {slot.source.kind === "figdoc" ? "▣ " : "□ "}
+                  {isFrozen && "❄ "}
+                  {slot.source.name}
+                </span>
+              )
             ) : (
               <span style={{ fontSize: 12, color: "var(--text-faint)" }}>drop a plot here</span>
             )}

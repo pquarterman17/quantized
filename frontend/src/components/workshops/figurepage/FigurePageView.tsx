@@ -150,6 +150,7 @@ export default function FigurePageView() {
             cols={p.cols}
             slots={p.slots}
             labels={p.labels}
+            statuses={p.sourceStatuses}
             selected={p.selected}
             onSelect={p.setSelected}
             onClear={p.clear}

@@ -13,6 +13,8 @@ import {
   deserializePageDocument,
   emptyPagePanels,
   pagePanelLabels,
+  pagePanelLifecycle,
+  pagesReferencingFigure,
   resolvePagePanel,
   sanitizePageDocument,
   sanitizePageDocuments,
@@ -25,6 +27,17 @@ const FIGURE = createFigureDocument({
   name: "MvsH loop",
   datasetId: "d1",
   view: defaultPlotView(),
+});
+
+const FROZEN_FIGURE = createFigureDocument({
+  id: "figure-frozen",
+  name: "frozen snapshot fig",
+  datasetId: null,
+  view: defaultPlotView(),
+  data: {
+    mode: "frozen",
+    snapshot: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+  },
 });
 
 describe("createPageDocument", () => {
@@ -149,6 +162,66 @@ describe("resolvePagePanel (F3.2 fail-closed)", () => {
     // Specifically NOT collapsed to "empty" — a missing reference must stay
     // visibly distinct so a renderer/export/editor can surface it.
     expect(result.status).not.toBe("empty");
+  });
+});
+
+describe("pagePanelLifecycle (F3.2 — inherited from the referenced FigureDocument, no second mechanism)", () => {
+  it("is null for an empty panel", () => {
+    expect(pagePanelLifecycle({ status: "empty" })).toBeNull();
+  });
+
+  it("is null for a missing (dangling) reference — nothing to classify", () => {
+    expect(pagePanelLifecycle({ status: "missing", figureId: "gone" })).toBeNull();
+  });
+
+  it("reads live/frozen straight off the resolved FigureDocument's own data.mode", () => {
+    expect(pagePanelLifecycle({ status: "ok", figure: FIGURE })).toBe("live");
+    expect(pagePanelLifecycle({ status: "ok", figure: FROZEN_FIGURE })).toBe("frozen");
+  });
+});
+
+describe("pagesReferencingFigure (F3.2 item 3 — referential integrity at the delete site)", () => {
+  it("returns [] when no page references the figure", () => {
+    const page = createPageDocument({ id: "p1", name: "Untitled page" });
+    expect(pagesReferencingFigure([page], "figure-1")).toEqual([]);
+  });
+
+  it("names every page and slot (by previewed label) referencing the figure", () => {
+    const page = createPageDocument({
+      id: "p1",
+      name: "Results page",
+      rows: 1,
+      cols: 3,
+      panels: [
+        { figureId: "figure-1", label: null, title: null },
+        { figureId: "figure-2", label: null, title: null },
+        { figureId: "figure-1", label: null, title: null },
+      ],
+    });
+    const refs = pagesReferencingFigure([page], "figure-1");
+    expect(refs).toHaveLength(1);
+    expect(refs[0].page.id).toBe("p1");
+    expect(refs[0].slots).toEqual([0, 2]);
+    // Row-major auto sequence: slot 0 -> (a), slot 1 -> (b) [not a match],
+    // slot 2 -> (c) -- the labels named are the ones the user actually sees.
+    expect(refs[0].labels).toEqual(["(a)", "(c)"]);
+  });
+
+  it("does not cross-match a different figure's id", () => {
+    const page = createPageDocument({
+      id: "p1",
+      name: "x",
+      panels: [{ figureId: "figure-2", label: null, title: null }],
+    });
+    expect(pagesReferencingFigure([page], "figure-1")).toEqual([]);
+  });
+
+  it("covers multiple pages independently", () => {
+    const a = createPageDocument({ id: "a", name: "A", panels: [{ figureId: "figure-1", label: null, title: null }] });
+    const b = createPageDocument({ id: "b", name: "B", panels: [{ figureId: "figure-9", label: null, title: null }] });
+    const c = createPageDocument({ id: "c", name: "C", panels: [{ figureId: "figure-1", label: null, title: null }] });
+    const refs = pagesReferencingFigure([a, b, c], "figure-1");
+    expect(refs.map((r) => r.page.id)).toEqual(["a", "c"]);
   });
 });
 

@@ -138,6 +138,54 @@ export function pagePanelLabels(panels: readonly PagePanel[], fmt: PageLabelForm
   });
 }
 
+/** F3.2 "frozen-snapshot behavior, defined": the lifecycle cue a resolved
+ *  panel surfaces is inherited ENTIRELY from the referenced FigureDocument's
+ *  own live/frozen state (`FigureDocument.data.mode`) — the page never
+ *  defines a second freeze mechanism of its own (per the plan's explicit
+ *  instruction). `null` for an empty or missing panel: there is no document
+ *  to classify. Callers (a panel-editor UI, a page renderer) surface this as
+ *  a subtle cue on the panel, same spirit as the session-level
+ *  `resolvePanelSource`'s `lifecycle` field in lib/figurepage.ts. */
+export function pagePanelLifecycle(resolution: PagePanelResolution): "live" | "frozen" | null {
+  return resolution.status === "ok" ? resolution.figure.data.mode : null;
+}
+
+// ── referential integrity at the delete site (F3.2 item 3) ─────────────────
+
+/** One page's references to a figure being considered for deletion: which
+ *  panel (slot) indices point at it, plus the labels those slots would
+ *  preview (so a delete confirmation can name "slot (b)" the way the user
+ *  sees it, not a raw array index). */
+export interface PageFigureReference {
+  page: PageDocument;
+  slots: number[];
+  labels: string[];
+}
+
+/** Which persisted pages (and which of their panels) reference `figureId`.
+ *  Used at the editableFigures delete site so deleting a figure a page
+ *  depends on WARNS by name before it happens, rather than only surfacing as
+ *  a "missing" panel after the fact. Deleting the figure never cascades to
+ *  the page itself — the panel is left referencing the now-dangling id and
+ *  resolves through `resolvePagePanel` to `{status:"missing"}` on its next
+ *  read, exactly like any other dangling reference (fail closed, never
+ *  dropped). */
+export function pagesReferencingFigure(
+  pages: readonly PageDocument[],
+  figureId: string,
+): PageFigureReference[] {
+  const out: PageFigureReference[] = [];
+  for (const page of pages) {
+    const slots = page.panels
+      .map((panel, i) => (panel.figureId === figureId ? i : -1))
+      .filter((i) => i >= 0);
+    if (slots.length === 0) continue;
+    const labels = pagePanelLabels(page.panels, page.output.labelFormat);
+    out.push({ page, slots, labels: slots.map((i) => labels[i] || `#${i + 1}`) });
+  }
+  return out;
+}
+
 // ── validation / persistence boundary ───────────────────────────────────────
 
 function isObject(value: unknown): value is Record<string, unknown> {

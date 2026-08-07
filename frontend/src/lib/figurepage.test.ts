@@ -2,6 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import { createFigureDocument } from "./figureDocument";
+import type { FigureDoc } from "./figuredoc";
 import {
   assignSlot,
   clearSlot,
@@ -10,9 +12,12 @@ import {
   panelLabel,
   patchSlot,
   resizeSlots,
+  resolvePanelSource,
   slotLabels,
   type PanelSource,
 } from "./figurepage";
+import { defaultPlotView, type PlotWindow } from "./plotview";
+import type { DataStruct } from "./types";
 
 const winA: PanelSource = { kind: "window", id: "w1", name: "Graph 1" };
 const winB: PanelSource = { kind: "window", id: "w2", name: "Graph 2" };
@@ -113,5 +118,109 @@ describe("slotLabels", () => {
     let slots = emptySlots(1, 2);
     slots = assignSlot(slots, 0, winA);
     expect(slotLabels(slots, "none")).toEqual(["", ""]);
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.2: live-session liveness/lifecycle
+// resolution for an assigned slot. Distinct from lib/pageDocument.ts's
+// resolvePagePanel (which resolves a PERSISTED figureId) — this checks the
+// SESSION reference (open window / legacy figdoc) using the exact same
+// renderability rules windowSources/docSources already use to decide what's
+// pickable, so "can I assign it" and "is it still valid" can never drift.
+describe("resolvePanelSource", () => {
+  const DATA: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
+
+  function win(over: Partial<PlotWindow> = {}): PlotWindow {
+    return {
+      id: "w1",
+      kind: "plot",
+      title: "",
+      datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 },
+      z: 0,
+      winState: "normal",
+      view: defaultPlotView(),
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      ...over,
+    };
+  }
+
+  function figDoc(over: Partial<FigureDoc> = {}): FigureDoc {
+    return {
+      id: "f1",
+      name: "MvsH fig",
+      datasetId: "d1",
+      live: true,
+      config: {
+        xKey: null,
+        yKeys: [0],
+        xScale: "linear",
+        yScale: "linear",
+        title: "",
+        xLabel: "",
+        yLabel: "",
+        style: "aps",
+        fmt: "pdf",
+        dpi: 300,
+        overrides: null,
+        seriesStyles: null,
+      },
+      ...over,
+    };
+  }
+
+  const noDatasets = new Set<string>();
+  const withD1 = new Set(["d1"]);
+
+  it("reports empty for a null source", () => {
+    expect(resolvePanelSource(null, [], [], noDatasets)).toEqual({ status: "empty" });
+  });
+
+  it("resolves a live, dataset-bound window as ok/live", () => {
+    expect(resolvePanelSource(winA, [win()], [], withD1)).toEqual({ status: "ok", lifecycle: "live" });
+  });
+
+  it("resolves a window carrying a FROZEN FigureDocument as ok/frozen — inherited, not a second mechanism", () => {
+    const frozen = createFigureDocument({
+      id: "fd1",
+      name: "frozen",
+      datasetId: null,
+      view: defaultPlotView(),
+      data: { mode: "frozen", snapshot: DATA },
+    });
+    expect(
+      resolvePanelSource(winA, [win({ document: frozen })], [], withD1),
+    ).toEqual({ status: "ok", lifecycle: "frozen" });
+  });
+
+  it("reports missing when the assigned window no longer exists (closed)", () => {
+    expect(resolvePanelSource(winA, [], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when the assigned window lost its dataset binding", () => {
+    expect(resolvePanelSource(winA, [win({ datasetId: null })], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when the assigned window is no longer a plot (e.g. became a worksheet)", () => {
+    expect(resolvePanelSource(winA, [win({ kind: "worksheet" })], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("resolves a live figdoc with its dataset present as ok/live", () => {
+    expect(resolvePanelSource(doc, [], [figDoc()], withD1)).toEqual({ status: "ok", lifecycle: "live" });
+  });
+
+  it("resolves a frozen figdoc with its snapshot present as ok/frozen", () => {
+    const frozen = figDoc({ live: false, datasetId: null, dataSnapshot: DATA });
+    expect(resolvePanelSource(doc, [], [frozen], noDatasets)).toEqual({ status: "ok", lifecycle: "frozen" });
+  });
+
+  it("reports missing when the assigned figdoc was deleted from the library", () => {
+    expect(resolvePanelSource(doc, [], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when a live figdoc's source dataset was removed (doc still exists, unrenderable)", () => {
+    expect(resolvePanelSource(doc, [], [figDoc()], noDatasets)).toEqual({ status: "missing" });
   });
 });

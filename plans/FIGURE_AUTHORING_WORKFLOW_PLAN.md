@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-05 — F3.1 PageDocument persistence + F2.4b direct-manipulation parity
+**Updated:** 2026-08-06 — F3.2 missing-source and frozen-snapshot panel semantics
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -265,7 +265,7 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
 - [x] **F3.1 Define and persist PageDocument.** Store ID/name, page geometry,
       grid/free placement, panel references, panel labels, links, gaps,
       alignment, and output settings in `.dwk`.
-- [ ] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
+- [x] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
       reduced configs. Define missing-source and frozen-snapshot behavior.
 - [ ] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
       access, duplicate, rename, and delete.
@@ -380,6 +380,126 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-06 — F3.2 missing-source and frozen-snapshot panel semantics (Claude Sonnet 5)
+
+- **What F3.1 already covered (verified by reading it, not re-done):** the
+  "reference by id, never flatten" contract itself. `PagePanel.figureId` is
+  ID-only; `resolvePagePanel` was already the fail-closed resolver for a
+  PERSISTED panel, returning `{status:"missing"}` for a dangling id (never
+  silently "empty", never dropped) — that data-level contract needed no
+  changes. What F3.1 explicitly left open was surfacing that behavior
+  anywhere a person could see it, plus the session-level (pre-F3.3) model
+  that the actual running Figure Page workshop uses today.
+- **The real remaining gap, found by reading the live workshop, not the
+  schema:** nothing yet loads a persisted `PageDocument` back into an editable
+  workshop session (`store.pages` has no Save/reopen UI — that is F3.3, and no
+  double-click/reassign panel editor — that is F3.4, both correctly out of
+  this slice's scope). So `resolvePagePanel`'s "missing" status has no live
+  caller in the app yet. The workshop that DOES run today (`useFigurePage.ts`)
+  uses an OLDER, separate session model — `PanelSource` (an open plot window
+  or a legacy `figureDocs` entry) assigned into `PageSlot`s — and THAT model
+  had the exact bug class F3.2 exists to prevent, live and reachable:
+  `SlotGrid` rendered `slot.source.name` unconditionally once assigned, with
+  no check that the window/figdoc it pointed at still existed. Closing the
+  window or deleting the figdoc left the tile looking like a perfectly normal
+  panel until the whole page's preview/export failed.
+- **Two real bugs found and fixed while building the fix, not just the
+  intended surfacing:**
+  1. The preview `useEffect` unconditionally called `setError(null)`
+     immediately after `buildSpec()` had already called `setError(<specific
+     "slot N: source ... no longer exists" message>)` for a dead source — so
+     the message was set and then clobbered back to null in the same tick,
+     and the preview pane silently fell back to the plain "assign plots to
+     grid slots" empty-state text. Exactly the "render a hole without
+     explanation" failure mode this item rules out. Fixed by only clearing
+     `preview`, not `error`, in that branch (see the comment at the fix site,
+     `useFigurePage.ts`).
+  2. `exportNow()` reported the same "assign at least one panel to export a
+     figure page" status whether NOTHING was assigned or something WAS
+     assigned but had gone missing — actively misleading in the second case.
+     Fixed by checking `filledCount(slots) === 0` first and giving a distinct,
+     accurate message when `buildSpec()` fails for a different reason.
+- **Missing-source, surfaced (item 1):** new `resolvePanelSource` in
+  `lib/figurepage.ts` re-checks a slot's assigned `PanelSource` every render
+  using the EXACT SAME renderability rules `windowSources`/`docSources`
+  already use to decide what's pickable (a window must still be a
+  dataset-bound plot; a figdoc must still be `docRenderable`) — "can I assign
+  it" and "is it still valid" can't drift apart. `useFigurePage.ts` exposes
+  the per-slot result as `sourceStatuses`; `SlotGrid.tsx` renders a `missing`
+  status as a labeled, danger-colored warning tile ("⚠ missing: <stale
+  name>") instead of a normal-looking panel, keeps the existing × clear
+  affordance reachable, and the page-level failure (preview/export) now
+  surfaces the SAME specific message instead of a generic one (the two bugs
+  above).
+- **Frozen-snapshot, defined and surfaced (item 2):** decided the contract —
+  a panel's live/frozen cue is inherited ENTIRELY from whatever it currently
+  resolves to; the page layer defines no second freeze mechanism (per the
+  plan's explicit instruction). Implemented at BOTH layers this slice
+  touches: `resolvePanelSource`'s `lifecycle: "live" | "frozen"` for the live
+  session (`window.document.data.mode`, or a legacy figdoc's `.live` flag),
+  surfaced in `SlotGrid` as a small "❄" glyph + tooltip; and
+  `pagePanelLifecycle(resolution)` in `lib/pageDocument.ts` for the PERSISTED
+  layer, reading `FigureDocument.data.mode` straight off whatever
+  `resolvePagePanel` resolved — ready for F3.3/F3.4 to surface without
+  redefining the contract, though nothing calls it live yet (same "no UI path
+  exists yet" gap as the missing-source persisted case above).
+- **Referential integrity at the delete site (item 3):** new
+  `pagesReferencingFigure(pages, figureId)` in `lib/pageDocument.ts` finds
+  every persisted page and panel (by previewed label, e.g. "(a)") that
+  references a figure. Wired into `EditableFiguresSection.tsx`'s existing
+  delete confirm (mirroring its established pattern — this is the ONE place
+  in the codebase that already confirms before an unrecoverable-without-undo
+  removal): the confirm message now names the affected page(s)/panel(s) when
+  any exist. The delete itself still never cascades — `deleteEditableFigure`
+  is unchanged; a referencing panel's `figureId` simply dangles and resolves
+  to `{status:"missing"}` on its next read, exactly like any other stale
+  reference (fail closed, not dropped).
+  - **Deliberately NOT extended to the active in-session workshop draft:**
+    the plan text asks to warn on "the active page draft (or any stored page
+    in store.pages)". Traced why the ACTIVE draft needs no equivalent check
+    for `editableFigures` deletion specifically: a "window"-sourced slot in
+    the live session renders from the window's OWN live view, never through
+    the `editableFigures` id (`resolveSlotFigureId`, F3.1) — deleting the
+    saved copy does not touch the open window's rendering at all, only
+    silently changes what a FUTURE save-as-page-panel would reference (a
+    pre-existing, already-null-safe resolution, not a new break). There is
+    nothing live to warn about there. The workshop's session state
+    (`useFigurePage`'s slots) is also plain React-local state with no store
+    presence a `deleteEditableFigure` caller could inspect even if there were.
+  - **Deliberately out of scope, named honestly:** the legacy `figureDocs`
+    ("Publication figures") delete site (`SavedFiguresSection.tsx`) has no
+    equivalent warning, even though a "figdoc" session source IS the kind
+    that can actually go missing live in today's workshop (confirmed by the
+    new `resolvePanelSource` tests). `PageDocument.panels` deliberately never
+    modeled figdoc references at all (F3.1: "F1 never gave it a
+    FigureDocument counterpart") — extending referential-integrity warnings
+    to that older, separate collection is a different, pre-F1 gap the plan
+    doesn't ask this item to close, and doing it would have meant touching a
+    file this slice has no other reason to change.
+- **Tests:** `lib/figurepage.test.ts` (+11: `resolvePanelSource` for every
+  empty/ok-live/ok-frozen/missing combination across both source kinds,
+  including a live figdoc whose dataset alone was removed);
+  `lib/pageDocument.test.ts` (+9: `pagePanelLifecycle`,
+  `pagesReferencingFigure` across zero/one/multiple pages and non-matching
+  ids); `useFigurePage.test.ts` (+6: `sourceStatuses` wiring, missing-on-
+  window-close, missing-on-figdoc-delete, a fail-before/pass-after test for
+  the error-clobbering bug with the fix reverted as the falsifying check, and
+  both branches of the corrected `exportNow` status message);
+  `EditableFiguresSection.test.tsx` (new file, 5 tests: plain delete, a
+  referencing page named in the confirm message, delete-still-proceeds
+  without cascading, cancel leaves the figure, empty-state render).
+- **Gate:** `npm run lint` clean (0 errors, pre-existing unrelated warnings
+  only); full `npx vitest run` 391 files / 5639 tests passed (one flaky,
+  order-dependent failure in `useFigureBuilder.test.ts` on the first full run
+  — unrelated to this slice, passed standalone and on a clean rerun);
+  `npm run build` clean, bundle 871.2 kB eager / 903.3 kB budget (32.1 kB
+  headroom, essentially unchanged — all new logic is in already-lazy-loaded
+  workshop code plus small pure `lib/` additions).
+- F3.2 is now checked. F3.3 (Save/Save As/dirty/library UI for pages) and F3.4
+  (unify panel editing, double-click/unlink) remain fully open and are what
+  would give the PERSISTED-layer missing/frozen contracts (`resolvePagePanel`,
+  `pagePanelLifecycle`) their first live caller.
 
 ### 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft (Claude Sonnet 5)
 

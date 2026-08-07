@@ -37,11 +37,13 @@ import {
   filledCount,
   patchSlot,
   resizeSlots,
+  resolvePanelSource,
   slotLabels,
   type PageLabelFormat,
   type PageLabelPosition,
   type PageSlot,
   type PanelSource,
+  type PanelSourceStatus,
 } from "../../../lib/figurepage";
 import { createPageDocument, type PageDocument, type PagePanel } from "../../../lib/pageDocument";
 import { displayedWindowTitle, type PlotView, type PlotWindow } from "../../../lib/plotview";
@@ -250,6 +252,8 @@ export function useFigurePage() {
     [draft, slots, plotWindows, editableFigures],
   );
 
+  const datasetIds = useMemo(() => new Set(datasets.map((dataset) => dataset.id)), [datasets]);
+
   // Panel sources: open (live, dataset-bound) plot windows + renderable
   // saved Library figures. Snapshot/worksheet/map windows are not plots.
   const windowSources = useMemo<PanelSource[]>(
@@ -260,17 +264,25 @@ export function useFigurePage() {
     [plotWindows, datasets],
   );
   const docSources = useMemo<PanelSource[]>(
-    () => {
-      const datasetIds = new Set(datasets.map((dataset) => dataset.id));
-      return figureDocs
+    () =>
+      figureDocs
         .filter((document) => docRenderable(document, datasetIds))
-        .map((document) => ({ kind: "figdoc", id: document.id, name: document.name }));
-    },
-    [figureDocs, datasets],
+        .map((document) => ({ kind: "figdoc", id: document.id, name: document.name })),
+    [figureDocs, datasetIds],
   );
 
   /** Per-slot preview labels (auto sequence in row-major order, overrides win). */
   const labels = useMemo(() => slotLabels(slots, labelFormat), [slots, labelFormat]);
+
+  /** Per-slot LIVE status (F3.2): re-checked every render against the current
+   *  session state, so a source that dies (window closed, figdoc deleted, its
+   *  dataset removed) while assigned is reported "missing" instead of
+   *  silently keeping the stale cached name on display — see
+   *  lib/figurepage.ts's `resolvePanelSource` for the fail-closed contract. */
+  const sourceStatuses = useMemo<PanelSourceStatus[]>(
+    () => slots.map((slot) => resolvePanelSource(slot.source, plotWindows, figureDocs, datasetIds)),
+    [slots, plotWindows, figureDocs, datasetIds],
+  );
 
   // #8g: the store state the assigned panels render from (see
   // panelRenderInputs) — useShallow keeps the reference stable until one of
@@ -381,8 +393,16 @@ export function useFigurePage() {
           const spec = await buildSpec();
           if (cancelled) return;
           if (!spec) {
+            // F3.2: past the filledCount===0 guard above, buildSpec() can
+            // only return null because it hit a dead source and already
+            // called setError() with the specific "slot N: ... no longer
+            // exists" message — do NOT clear it here. This branch used to
+            // unconditionally setError(null) right after buildSpec set it,
+            // so a missing panel silently fell back to the plain "assign
+            // plots to grid slots" empty-state text with no explanation
+            // (exactly the "render a hole without explanation" failure mode
+            // F3.2 rules out). Only clear preview; leave the message intact.
             setPreview(null);
-            setError(null);
             return;
           }
           const blob = await renderFigurePageBlob({ ...spec, fmt: "png", dpi: PREVIEW_DPI });
@@ -411,9 +431,21 @@ export function useFigurePage() {
 
   async function exportNow(): Promise<void> {
     try {
+      // F3.2: distinguish "nothing assigned" from "something is assigned but
+      // can't render" BEFORE calling buildSpec — it used to report the same
+      // "assign at least one panel" message for both, which is actively
+      // misleading when panels ARE assigned and one has simply gone missing
+      // (window closed / figure deleted since it was dropped onto the grid).
+      if (filledCount(slots) === 0) {
+        setStatus("assign at least one panel to export a figure page");
+        return;
+      }
       const spec = await buildSpec();
       if (!spec) {
-        setStatus("assign at least one panel to export a figure page");
+        // buildSpec() already set the specific `error` state (visible in the
+        // preview pane); mirror it on the status bar too so Export's failure
+        // reads the same as the preview's, not a generic non-sequitur.
+        setStatus("cannot export: a panel's source is missing - see the highlighted slot, then clear or reassign it");
         return;
       }
       await exportFigurePage({ ...spec, fmt, dpi });
@@ -429,6 +461,7 @@ export function useFigurePage() {
     setGrid,
     slots,
     labels,
+    sourceStatuses,
     selected,
     setSelected,
     assign,

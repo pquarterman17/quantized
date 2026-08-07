@@ -383,4 +383,82 @@ describe("useFigurePage", () => {
       );
     });
   });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F3.2: missing-source behavior, surfaced.
+  describe("F3.2 missing-source semantics", () => {
+    it("exposes per-slot live status: empty/ok-live/ok-frozen alongside the slots", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0])); // live window
+      act(() => result.current.assign(1, result.current.docSources[0])); // frozen figdoc (FROZEN_DOC)
+      expect(result.current.sourceStatuses[0]).toEqual({ status: "ok", lifecycle: "live" });
+      expect(result.current.sourceStatuses[1]).toEqual({ status: "ok", lifecycle: "frozen" });
+      expect(result.current.sourceStatuses[2]).toEqual({ status: "empty" });
+    });
+
+    it("reports missing once an assigned window's source disappears (closed) — status flips live", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      expect(result.current.sourceStatuses[0]).toEqual({ status: "ok", lifecycle: "live" });
+      act(() => {
+        useApp.setState((s) => ({ plotWindows: s.plotWindows.filter((w) => w.id !== "w1") }));
+      });
+      expect(result.current.sourceStatuses[0]).toEqual({ status: "missing" });
+    });
+
+    it("reports missing once an assigned figdoc is deleted from the library", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.docSources[0]));
+      expect(result.current.sourceStatuses[0]).toEqual({ status: "ok", lifecycle: "frozen" });
+      act(() => {
+        useApp.setState((s) => ({ figureDocs: s.figureDocs.filter((d) => d.id !== "f1") }));
+      });
+      expect(result.current.sourceStatuses[0]).toEqual({ status: "missing" });
+    });
+
+    // Fail-before/pass-after: the preview effect used to unconditionally
+    // setError(null) right after buildSpec() had ALREADY set the specific
+    // "slot N: ... no longer exists" message for a dead source, so the
+    // preview panel silently reverted to the plain empty-state text with no
+    // explanation at all — a "hole without explanation", exactly what F3.2
+    // rules out. Reverting the fix (re-adding that setError(null) call) makes
+    // this test fail: `error` would settle to null instead of the message.
+    it("keeps the specific missing-source message on screen instead of clobbering it back to null", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      act(() => {
+        useApp.setState((s) => ({ plotWindows: s.plotWindows.filter((w) => w.id !== "w1") }));
+      });
+      await waitFor(
+        () => expect(result.current.error).toMatch(/slot 1: source "Loop A" no longer exists/),
+        { timeout: 2000 },
+      );
+      expect(result.current.preview).toBeNull();
+      // No SECOND preview fetch was attempted for the dead source.
+      expect(renderFigurePageBlob).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives a specific export status for a missing source, not the generic 'assign a panel' message", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() => {
+        useApp.setState((s) => ({ plotWindows: s.plotWindows.filter((w) => w.id !== "w1") }));
+      });
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      expect(exportFigurePage).not.toHaveBeenCalled();
+      const status = useApp.getState().status;
+      expect(status).toMatch(/panel's source is missing/);
+      expect(status).not.toBe("assign at least one panel to export a figure page");
+    });
+
+    it("still gives the plain 'assign a panel' message when truly nothing is assigned", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      expect(useApp.getState().status).toBe("assign at least one panel to export a figure page");
+    });
+  });
 });
