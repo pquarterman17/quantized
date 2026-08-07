@@ -1100,6 +1100,17 @@ Before starting a slice:
 
 ### 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft (Claude Sonnet 5)
 
+> **KNOWN FLAKE (booked 2026-08-07, two sightings):** the "Apply commits
+> legend drag …" test in `useFigureBuilder.test.ts` is order-dependent —
+> it fails intermittently in a FULL suite run (`expected undefined to
+> match { loc: 'custom' }`, i.e. the legend-drag pendingEdit is missing
+> at Apply) while passing standalone and on rerun. Seen 2026-08-06 in the
+> F3.3 session's local full run and 2026-08-07 in CI's
+> `frontend-node-current` lane on `504b6b6` (a backend-only commit; the
+> identical frontend tree passed the same lane an hour earlier).
+> Root-cause the inter-test state leak (store or module state shared with
+> an earlier test in the file) rather than retry-masking it.
+
 - Gap-analysis matrix for the three EXISTING `PreviewOverlay` gestures in
   CANONICAL mode, each traced through `useFigureBuilder.ts` to its write
   target and confirmed by a passing test:
