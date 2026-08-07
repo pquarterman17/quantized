@@ -34,6 +34,7 @@ import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 
 const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
+const PagesSection = lazy(() => import("./PagesSection"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -239,6 +240,7 @@ export default function Library() {
       <OriginFidelitySection />
       <Suspense fallback={null}><EditableFiguresSection /></Suspense>
       <SavedFiguresSection />
+      <Suspense fallback={null}><PagesSection /></Suspense>
       <ReportsSection />
       <BookFamiliesSection />
       <SmartFoldersSection onFilterTag={setQuery} />

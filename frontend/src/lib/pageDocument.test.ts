@@ -12,6 +12,8 @@ import {
   createPageDocument,
   deserializePageDocument,
   emptyPagePanels,
+  pageDocumentDirty,
+  pageDocumentHasUnsavedEdits,
   pagePanelLabels,
   pagePanelLifecycle,
   pagesReferencingFigure,
@@ -68,6 +70,81 @@ describe("createPageDocument", () => {
     const doc = createPageDocument({ id: "p1", name: "x", rows: 0, cols: -3 });
     expect(doc.rows).toBe(1);
     expect(doc.cols).toBe(1);
+  });
+
+  it("stamps createdAt/modifiedAt to now by default, or a caller's exact values", () => {
+    const fresh = createPageDocument({ id: "p1", name: "x" });
+    expect(fresh.createdAt).toBe(fresh.modifiedAt); // same instant, both "now"
+    expect(() => new Date(fresh.createdAt).toISOString()).not.toThrow();
+
+    const restored = createPageDocument({
+      id: "p1",
+      name: "x",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      modifiedAt: "2026-02-02T00:00:00.000Z",
+    });
+    expect(restored.createdAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(restored.modifiedAt).toBe("2026-02-02T00:00:00.000Z");
+  });
+});
+
+describe("createdAt/modifiedAt sanitization (F3.3 — additive, no version bump)", () => {
+  it("defaults an absent createdAt/modifiedAt to the epoch (pre-F3.3 document)", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "p1",
+      name: "x",
+    });
+    expect(restored).not.toBeNull();
+    expect(restored!.createdAt).toBe(new Date(0).toISOString());
+    expect(restored!.modifiedAt).toBe(new Date(0).toISOString());
+  });
+
+  it("preserves real timestamps through sanitization", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "p1",
+      name: "x",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      modifiedAt: "2026-03-03T00:00:00.000Z",
+    });
+    expect(restored!.createdAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(restored!.modifiedAt).toBe("2026-03-03T00:00:00.000Z");
+  });
+
+  it("falls back modifiedAt to createdAt when only modifiedAt is malformed", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "p1",
+      name: "x",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      modifiedAt: 12345,
+    });
+    expect(restored!.modifiedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+});
+
+describe("pageDocumentDirty / pageDocumentHasUnsavedEdits (F3.3)", () => {
+  it("dirty is true for a page never saved at all; hasUnsavedEdits is false", () => {
+    const draft = createPageDocument({ id: "draft-1", name: "Untitled page" });
+    expect(pageDocumentDirty(draft, [])).toBe(true);
+    expect(pageDocumentHasUnsavedEdits(draft, [])).toBe(false);
+  });
+
+  it("both are false immediately after reopening an unmodified saved page", () => {
+    const saved = createPageDocument({ id: "p1", name: "Results" });
+    expect(pageDocumentDirty(saved, [saved])).toBe(false);
+    expect(pageDocumentHasUnsavedEdits(saved, [saved])).toBe(false);
+  });
+
+  it("both are true once a SAVED page drifts from its saved copy", () => {
+    const saved = createPageDocument({ id: "p1", name: "Results" });
+    const edited: PageDocument = { ...saved, name: "Results (edited)" };
+    expect(pageDocumentDirty(edited, [saved])).toBe(true);
+    expect(pageDocumentHasUnsavedEdits(edited, [saved])).toBe(true);
   });
 });
 

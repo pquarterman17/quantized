@@ -7,14 +7,19 @@
 // only imports of PlotWindow/FigureDoc for the session-liveness resolver
 // below are fine — no store, no cycle).
 
+import type { FigureDocument } from "./figureDocument";
 import type { FigureDoc } from "./figuredoc";
 import { docRenderable } from "./figuredoc";
 import type { PlotWindow } from "./plotview";
 
-export type PanelSourceKind = "window" | "figdoc";
+export type PanelSourceKind = "window" | "figdoc" | "figure";
 
 /** Where a panel's plot comes from: an open plot window (live view + bound
- *  dataset) or a saved Library figure (FigureDoc). */
+ *  dataset), a legacy Publication figure (FigureDoc), or — F3.3 — a saved
+ *  canonical `editableFigures` entry picked directly (also how a reopened
+ *  PageDocument's persisted `figureId` panels re-enter this session model:
+ *  a saved page ONLY ever references a canonical id, so every one of its
+ *  panels hydrates to a "figure" source, never "window"/"figdoc"). */
 export interface PanelSource {
   kind: PanelSourceKind;
   id: string;
@@ -142,15 +147,22 @@ export type PanelSourceStatus =
   | { status: "ok"; lifecycle: PanelLifecycle };
 
 /** Resolve one slot's assigned source against the CURRENT session state.
- *  `missing` covers both "the window/figdoc no longer exists" and "it exists
- *  but can no longer render" (dataset unbound/removed) — both leave the panel
- *  unable to produce a figure, and the caller (SlotGrid) treats them
- *  identically: label it, keep it selectable/clearable, never blank it. */
+ *  `missing` covers both "the window/figdoc/figure no longer exists" and "it
+ *  exists but can no longer render" (dataset unbound/removed, frozen snapshot
+ *  missing) — both leave the panel unable to produce a figure, and the
+ *  caller (SlotGrid) treats them identically: label it, keep it
+ *  selectable/clearable, never blank it.
+ *
+ *  `editableFigures` defaults to `[]` so every pre-F3.3 call site (this
+ *  session model predates the "figure" source kind) keeps compiling and
+ *  behaving identically — none of them ever assign a "figure"-kind source,
+ *  so an empty list can never wrongly report one as missing. */
 export function resolvePanelSource(
   source: PanelSource | null,
   plotWindows: readonly PlotWindow[],
   figureDocs: readonly FigureDoc[],
   datasetIds: ReadonlySet<string>,
+  editableFigures: readonly FigureDocument[] = [],
 ): PanelSourceStatus {
   if (!source) return { status: "empty" };
   if (source.kind === "window") {
@@ -158,6 +170,17 @@ export function resolvePanelSource(
     if (!win || win.kind !== "plot" || win.datasetId === null) return { status: "missing" };
     const lifecycle: PanelLifecycle = win.document?.data.mode === "frozen" ? "frozen" : "live";
     return { status: "ok", lifecycle };
+  }
+  if (source.kind === "figure") {
+    const document = editableFigures.find((f) => f.id === source.id);
+    if (!document) return { status: "missing" };
+    if (document.data.mode === "live") {
+      if (!document.bindings.datasetId || !datasetIds.has(document.bindings.datasetId)) {
+        return { status: "missing" };
+      }
+      return { status: "ok", lifecycle: "live" };
+    }
+    return document.data.snapshot ? { status: "ok", lifecycle: "frozen" } : { status: "missing" };
   }
   const doc = figureDocs.find((d) => d.id === source.id);
   if (!doc || !docRenderable(doc, datasetIds)) return { status: "missing" };

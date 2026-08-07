@@ -11,9 +11,21 @@
 // are held as one PageDocument draft (lib/pageDocument.ts) instead of loose
 // parallel useStates, and `pageDocument` exposes the full persistable
 // projection (panels resolved to canonical FigureDocument ids where
-// possible). This composition still lives only in this hook's state — F3.3
-// wires Save/Save As into the store's `pages` library; closing the window
-// still discards it today.
+// possible).
+//
+// F3.3: Save/Save As now write that projection into the store's `pages`
+// library (store/pageDocuments.ts), and a saved page can be reopened
+// (`store.openPageDocument` seeds `pageDocSeed`; the effect below consumes it
+// once, mirroring `figureDocSeed`'s pattern for the figure builder). A saved
+// PageDocument panel only ever references a canonical `editableFigures` id
+// (F3.1/F3.2's "reference, never flatten" contract), so reopening hydrates
+// every occupied panel to a NEW session source kind, "figure" — a saved
+// figure picked directly, distinct from "window" (an open plot window) and
+// "figdoc" (a legacy Publication figure). Save is refused, with a specific
+// per-slot reason, whenever a FILLED slot has no canonical figureId yet
+// (an open-but-unsaved window, or a figdoc that can never resolve) — saving
+// anyway would silently persist `figureId: null`, i.e. drop the panel, the
+// exact failure F3.2 exists to prevent.
 
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -28,6 +40,7 @@ import {
 import { buildExportStyles } from "../../../lib/exportStyles";
 import { docRenderable } from "../../../lib/figuredoc";
 import type { FigureDocument } from "../../../lib/figureDocument";
+import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import {
   PAGE_MAX_GRID,
@@ -45,32 +58,52 @@ import {
   type PanelSource,
   type PanelSourceStatus,
 } from "../../../lib/figurepage";
-import { createPageDocument, type PageDocument, type PagePanel } from "../../../lib/pageDocument";
+import {
+  createPageDocument,
+  pageDocumentDirty,
+  pageDocumentHasUnsavedEdits,
+  type PageDocument,
+  type PagePanel,
+} from "../../../lib/pageDocument";
 import { displayedWindowTitle, type PlotView, type PlotWindow } from "../../../lib/plotview";
 import { axisFmtParam, type DataStruct } from "../../../lib/types";
+import { toast } from "../../../store/toasts";
 import { useApp, type AppState } from "../../../store/useApp";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
 
-/** Stable identity for the session's single in-progress page draft — F3.3's
- *  Save/Save As gives it a real library id; until then, this hook has at
- *  most one page open at a time (mirrors Publication Preview's one-session
- *  rule) so a constant id is safe. */
-const DRAFT_PAGE_ID = "figurepage-draft";
+// F3.3: a FRESH id per mount (never a shared literal) — this hook has at most
+// one page open at a time (mirrors Publication Preview's one-session rule),
+// but `savePage` upserts `pages` BY ID, so two DIFFERENT never-saved sessions
+// sharing one constant id would make the second session's first Save
+// silently overwrite whatever the first session had already saved under it.
+// A per-mount counter costs nothing and closes that hole outright.
+let _draftSeq = 0;
+const nextDraftId = (): string => `figurepage-draft-${Date.now().toString(36)}-${++_draftSeq}`;
 
 /** Resolve one assigned session source to the canonical FigureDocument id a
  *  persisted PageDocument panel would reference (F3.2: reference, don't
  *  flatten). A "figdoc" source is a legacy FigureDoc — F1 never gave it a
- *  FigureDocument counterpart, so it has no representable id yet. A "window"
+ *  FigureDocument counterpart, so it has no representable id yet (and never
+ *  will, until it is explicitly converted to an editable copy). A "window"
  *  source resolves only once its document has actually been SAVED (present
  *  in `editableFigures`); an open-but-unsaved window's figure isn't
  *  reachable from a reopened page either, so it resolves to null rather than
- *  pretending a transient id is durable. */
+ *  pretending a transient id is durable. A "figure" source (F3.3: a saved
+ *  figure picked directly, or a reopened page's own hydrated panel) already
+ *  IS a canonical id — pass it through UNCONDITIONALLY, even if the figure
+ *  has since been deleted from `editableFigures`: Save must persist that
+ *  reference as-is so it resolves through `resolvePagePanel` to "missing" on
+ *  its next read (F3.2's fail-closed contract), the same as any other
+ *  dangling reference, rather than silently emptying the panel. */
 function resolveSlotFigureId(
   source: PanelSource | null,
   plotWindows: readonly PlotWindow[],
   editableFigures: readonly FigureDocument[],
 ): string | null {
-  if (!source || source.kind === "figdoc") return null;
+  if (!source) return null;
+  if (source.kind === "figure") return source.id;
+  if (source.kind === "figdoc") return null;
   const win = plotWindows.find((w) => w.id === source.id);
   const documentId = win && win.kind === "plot" ? win.document?.id : undefined;
   return documentId && editableFigures.some((figure) => figure.id === documentId) ? documentId : null;
@@ -88,13 +121,49 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** x_breaks / margins are single-figure-only (the page composer rejects them
+ *  with a 422) — strip them from a saved override bag, keeping everything
+ *  else. Shared by the "figdoc" and "figure" (F3.3) panel-source branches
+ *  below, both of which embed a document's saved overrides into a panel. */
+function stripPageIncompatibleOverrides(
+  saved: FigureOverrides | null | undefined,
+): FigureOverrides | undefined {
+  const { x_breaks: _xb, margins: _mg, ...overrides } = saved ?? {};
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+}
+
 /** Resolve one panel source into the single-figure payload the page route
  *  embeds. Reads through the store at call time: `windowsForSave()` so the
  *  FOCUSED window's live view is captured, `resolveDataset` so a pending
  *  (preview-only) dataset never exports small (#38 discipline). Returns null
- *  when the source can no longer render (window unbound, doc dataset gone). */
+ *  when the source can no longer render (window unbound, doc dataset gone,
+ *  or — F3.3's "figure" kind — the referenced editableFigures entry is gone,
+ *  its live dataset is unavailable, or its FigureDocument->FigureSpec adapter
+ *  rejects the document, e.g. a grouped figure with a secondary axis). */
 async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
   const s = useApp.getState();
+  if (source.kind === "figure") {
+    const document = s.editableFigures.find((f) => f.id === source.id);
+    if (!document) return null;
+    if (document.data.mode === "live" && !document.bindings.datasetId) return null;
+    const dataset =
+      document.data.mode === "live" && document.bindings.datasetId
+        ? await s.resolveDataset(document.bindings.datasetId)
+        : undefined;
+    if (document.data.mode === "live" && !dataset) return null;
+    // F1.5's reversible FigureDocument -> FigureSpec adapter — the SAME path
+    // Publication Preview's export/copy uses, so a page panel sourced from a
+    // saved figure renders identically to opening that figure on its own.
+    // It can throw (no visible series, a dataset mismatch, an unsupported
+    // grouped+secondary-axis combination) — any such failure is exactly a
+    // "this source can no longer render" case, same as a dead window/figdoc.
+    try {
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+    } catch {
+      return null;
+    }
+  }
   if (source.kind === "window") {
     const win = s.windowsForSave().find((w) => w.id === source.id);
     if (!win || win.kind !== "plot" || !win.datasetId) return null;
@@ -130,10 +199,6 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
   }
   if (!data) return null;
   const c = doc.config;
-  // x_breaks / margins are single-figure-only (the page composer rejects
-  // them with a 422) — strip them, keep every other saved override.
-  const saved: FigureOverrides = c.overrides ?? {};
-  const { x_breaks: _xb, margins: _mg, ...overrides } = saved;
   // MAIN #24: FigureConfig (a saved Library figure) doesn't persist a tick
   // format at all -- unlike xScale/yScale, this predates the feature, so
   // there is no saved xFmt/yFmt to restore here; a doc-sourced panel exports
@@ -150,7 +215,7 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
     x_label: c.xLabel.trim() || undefined,
     y_label: c.yLabel.trim() || undefined,
     series_styles: c.seriesStyles ?? undefined,
-    overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+    overrides: stripPageIncompatibleOverrides(c.overrides),
   };
 }
 
@@ -193,6 +258,20 @@ function panelRenderInputs(slots: PageSlot[], s: AppState): unknown[] {
         v.yAxisLabel,
         v.seriesStyles,
       );
+    } else if (source.kind === "figure") {
+      // F3.3: mirrors the figdoc branch below — the document itself is
+      // immutable (any edit replaces the reference), plus its live dataset.
+      const document = s.editableFigures.find((f) => f.id === source.id);
+      if (!document) {
+        parts.push("gone");
+        continue;
+      }
+      parts.push(
+        document,
+        document.data.mode === "live" && document.bindings.datasetId
+          ? s.datasets.find((d) => d.id === document.bindings.datasetId)?.data
+          : null,
+      );
     } else {
       const doc = s.figureDocs.find((d) => d.id === source.id);
       if (!doc) {
@@ -216,13 +295,16 @@ export function useFigurePage() {
   const figureDocs = useApp((s) => s.figureDocs);
   const editableFigures = useApp((s) => s.editableFigures);
   const setStatus = useApp((s) => s.setStatus);
+  const pages = useApp((s) => s.pages);
+  const pageDocSeed = useApp((s) => s.pageDocSeed);
+  const clearPageDocSeed = useApp((s) => s.clearPageDocSeed);
 
   // F3.1: the grid geometry + output settings live in ONE PageDocument draft
   // (lib/pageDocument.ts) instead of loose parallel useStates — rows/cols/
   // style/fmt/dpi/label format+position are all `draft` fields now; `panels`
   // is resolved separately below (see `pageDocument`) since a session source
   // can reference a still-unsaved window, which a persisted document can't.
-  const [draft, setDraft] = useState<PageDocument>(() => createPageDocument({ id: DRAFT_PAGE_ID, name: "Untitled page" }));
+  const [draft, setDraft] = useState<PageDocument>(() => createPageDocument({ id: nextDraftId(), name: "Untitled page" }));
   const rows = draft.rows;
   const cols = draft.cols;
   const labelFormat = draft.output.labelFormat;
@@ -270,6 +352,22 @@ export function useFigurePage() {
         .map((document) => ({ kind: "figdoc", id: document.id, name: document.name })),
     [figureDocs, datasetIds],
   );
+  // F3.3: saved canonical figures, pickable directly (not just via an open
+  // window that happens to have been saved) — also how a reopened page's
+  // panels are named once hydrated (see the pageDocSeed effect below). Only
+  // renderable ones are offered, mirroring docSources' docRenderable filter
+  // (the same "ok" test resolvePanelSource applies once assigned).
+  const figureSources = useMemo<PanelSource[]>(
+    () =>
+      editableFigures
+        .filter((document) =>
+          document.data.mode === "live"
+            ? document.bindings.datasetId !== null && datasetIds.has(document.bindings.datasetId)
+            : document.data.snapshot !== undefined,
+        )
+        .map((document) => ({ kind: "figure", id: document.id, name: document.name })),
+    [editableFigures, datasetIds],
+  );
 
   /** Per-slot preview labels (auto sequence in row-major order, overrides win). */
   const labels = useMemo(() => slotLabels(slots, labelFormat), [slots, labelFormat]);
@@ -280,8 +378,11 @@ export function useFigurePage() {
    *  silently keeping the stale cached name on display — see
    *  lib/figurepage.ts's `resolvePanelSource` for the fail-closed contract. */
   const sourceStatuses = useMemo<PanelSourceStatus[]>(
-    () => slots.map((slot) => resolvePanelSource(slot.source, plotWindows, figureDocs, datasetIds)),
-    [slots, plotWindows, figureDocs, datasetIds],
+    () =>
+      slots.map((slot) =>
+        resolvePanelSource(slot.source, plotWindows, figureDocs, datasetIds, editableFigures),
+      ),
+    [slots, plotWindows, figureDocs, datasetIds, editableFigures],
   );
 
   // #8g: the store state the assigned panels render from (see
@@ -345,6 +446,141 @@ export function useFigurePage() {
 
   function setSlotTitle(i: number, title: string | null): void {
     setSlots((prev) => patchSlot(prev, i, { title }));
+  }
+
+  function setName(next: string): void {
+    setDraft((prev) => ({ ...prev, name: next }));
+  }
+
+  // F3.3: reopen a saved page. `store.openPageDocument` seeds `pageDocSeed`;
+  // this effect consumes it ONCE — mirrors useFigureBuilder.ts's own
+  // `figureDocSeed` effect exactly, including its "unconditionally overwrite
+  // the current session" behavior (opening a different page while this one
+  // is unsaved is treated the same as switching documents in the figure
+  // builder, not a new confirm surface — the close-confirm gate below covers
+  // discarding via the WINDOW's close button). A saved PageDocument panel
+  // only ever holds a canonical figureId (F3.1/F3.2), so every occupied panel
+  // hydrates to a "figure" source; a dangling figureId (its figure was since
+  // deleted) still gets a slot — it keeps its place on the grid and surfaces
+  // through sourceStatuses/SlotGrid as "missing", never silently dropped.
+  useEffect(() => {
+    if (!pageDocSeed) return;
+    const figures = useApp.getState().editableFigures;
+    setDraft(pageDocSeed);
+    setSlots(
+      pageDocSeed.panels.map((panel): PageSlot => ({
+        source: panel.figureId
+          ? {
+              kind: "figure",
+              id: panel.figureId,
+              name: figures.find((f) => f.id === panel.figureId)?.name ?? "deleted figure",
+            }
+          : null,
+        label: panel.label,
+        title: panel.title,
+      })),
+    );
+    setSelected(null);
+    clearPageDocSeed();
+  }, [pageDocSeed, clearPageDocSeed]);
+
+  /** F3.3: FILLED slots that would be silently dropped (`figureId: null`) if
+   *  saved right now — an open plot window never saved as an editable
+   *  figure, or a legacy Publication figure (F1 never gave that kind a
+   *  FigureDocument counterpart, so it can never resolve). A "figure" source
+   *  is NEVER listed here even if its target was since deleted: it already
+   *  carries a real id, so Save persists that reference as-is (F3.2 fail-
+   *  closed) rather than needing to block. Each entry names its slot's
+   *  PREVIEWED label (matching what the user sees on the grid) and a
+   *  specific, actionable next step — reusing the existing save/promote
+   *  mechanisms (F1.4's per-window Save, and "Editable" copy-conversion)
+   *  rather than inventing a new one. */
+  const unresolvedSlots = useMemo(() => {
+    const out: string[] = [];
+    slots.forEach((slot, i) => {
+      if (!slot.source) return;
+      if (resolveSlotFigureId(slot.source, plotWindows, editableFigures) !== null) return;
+      const label = labels[i] || `#${i + 1}`;
+      out.push(
+        slot.source.kind === "window"
+          ? `slot ${label}: "${slot.source.name}" is an open plot window not yet saved as an editable figure — save it (its title-bar Save button, or File > Save Editable Figure), then Save this page again`
+          : `slot ${label}: "${slot.source.name}" is a Publication figure — create an editable copy first (its "Editable" button in the Library), then assign the copy to this slot`,
+      );
+    });
+    return out;
+  }, [slots, labels, plotWindows, editableFigures]);
+
+  /** Has this session ever been saved (its id names a real `pages` entry)?
+   *  Drives the view's "not yet saved" disclosure — the honest, narrower
+   *  replacement for the pre-F3.3 blanket "this composition is temporary"
+   *  note, which stopped being true the moment Save existed. */
+  const everSaved = pages.some((p) => p.id === pageDocument.id);
+
+  /** F3.3 dirty state: broad (never saved, OR a saved page has drifted) —
+   *  drives the Save affordance's "•" cue, mirroring
+   *  store/figureLifecycle.ts's `editableFigureDirty`. */
+  const dirty = pageDocumentDirty(pageDocument, pages);
+  /** Narrower than `dirty` — false for a page never saved at all. Mirrors the
+   *  corrected `editableFigureHasUnsavedEdits` convention: only a SAVED
+   *  page's drift gates a close confirmation. */
+  const hasUnsavedEdits = pageDocumentHasUnsavedEdits(pageDocument, pages);
+
+  /** Save (update-in-place once saved, insert on the first save). Refused
+   *  with the specific per-slot reasons above rather than silently dropping
+   *  an unresolved panel. */
+  function save(): void {
+    if (unresolvedSlots.length > 0) {
+      const msg = `cannot save page: ${unresolvedSlots.join("; ")}`;
+      setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
+    const id = useApp.getState().savePage(pageDocument);
+    const saved = useApp.getState().pages.find((p) => p.id === id);
+    if (saved) setDraft((prev) => ({ ...prev, id: saved.id, createdAt: saved.createdAt, modifiedAt: saved.modifiedAt }));
+  }
+
+  /** Save As: always a NEW named entry; rebinds this session's draft to it so
+   *  the next plain Save updates the new entry, not the old one (mirrors
+   *  `saveFigureAs` rebinding the window's document). */
+  async function saveAs(): Promise<void> {
+    if (unresolvedSlots.length > 0) {
+      const msg = `cannot save page: ${unresolvedSlots.join("; ")}`;
+      setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
+    const { askParams } = await import("../../overlays/ParamDialog");
+    const params = await askParams("Save page as", [
+      { key: "name", label: "Name", type: "text", default: draft.name || "Untitled page" },
+    ]);
+    if (!params) return;
+    const id = useApp.getState().savePageAs(pageDocument, String(params.name));
+    if (!id) return;
+    const saved = useApp.getState().pages.find((p) => p.id === id);
+    if (saved) {
+      setDraft((prev) => ({
+        ...prev,
+        id: saved.id,
+        name: saved.name,
+        createdAt: saved.createdAt,
+        modifiedAt: saved.modifiedAt,
+      }));
+    }
+  }
+
+  /** Gate the ToolWindow's close button: only a SAVED page's drift confirms
+   *  (see `hasUnsavedEdits`'s doc) — a fresh, never-saved page discards
+   *  plainly, same as the pre-F3.3 "this composition is temporary" behavior.
+   *  Returns whether the caller should actually close. */
+  async function requestClose(): Promise<boolean> {
+    if (!hasUnsavedEdits) return true;
+    return askConfirm(
+      `Close "${draft.name || "Untitled page"}" without saving?`,
+      "Changes to this saved page will be lost. Use Save first to keep them.",
+      "Close without saving",
+      true,
+    );
   }
 
   /** The page spec (sans format/dpi — the preview and the export choose their
@@ -481,7 +717,16 @@ export function useFigurePage() {
     setDpi,
     windowSources,
     docSources,
+    figureSources,
     pageDocument,
+    name: draft.name,
+    setName,
+    everSaved,
+    dirty,
+    unresolvedSlots,
+    save,
+    saveAs,
+    requestClose,
     preview,
     error,
     busy,

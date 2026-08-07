@@ -59,6 +59,16 @@ export interface PageDocument {
   cols: number;
   panels: PagePanel[];
   output: PageOutputSettings;
+  /** F3.3 "recent access" — ISO timestamps. Purely informational (no render
+   *  impact), so this is an ADDITIVE field, not a schema version bump (same
+   *  convention as WorkspaceState's optional fields, and unlike
+   *  FigureDocument's v1->v2 `publication`, which changes render semantics
+   *  and so needed one). `modifiedAt` is bumped by the store's save actions
+   *  (store/pageDocuments.ts), never by this pure module — mirrors
+   *  lib/plotspec.ts's SavedPlotSpec, whose store slice stamps the timestamp
+   *  at the actual save site. */
+  createdAt: string;
+  modifiedAt: string;
 }
 
 const DEFAULT_OUTPUT: PageOutputSettings = {
@@ -81,6 +91,10 @@ export interface CreatePageDocumentInput {
   /** Padded/truncated to `rows*cols` so callers never hand-sync the two. */
   panels?: PagePanel[];
   output?: Partial<PageOutputSettings>;
+  /** Default both to "now" — a caller restoring an existing document (the
+   *  workspace loader, or a reopened seed) passes its real saved values. */
+  createdAt?: string;
+  modifiedAt?: string;
 }
 
 /** Pure constructor for a fresh/trusted document (the sanitizer below is the
@@ -90,6 +104,7 @@ export function createPageDocument(input: CreatePageDocumentInput): PageDocument
   const cols = Math.max(1, Math.round(input.cols ?? 2));
   const base = emptyPagePanels(rows, cols);
   const panels = base.map((slot, i) => input.panels?.[i] ?? slot);
+  const now = new Date().toISOString();
   return {
     schema: PAGE_DOCUMENT_SCHEMA,
     version: PAGE_DOCUMENT_VERSION,
@@ -99,6 +114,8 @@ export function createPageDocument(input: CreatePageDocumentInput): PageDocument
     cols,
     panels,
     output: { ...DEFAULT_OUTPUT, ...input.output },
+    createdAt: input.createdAt ?? now,
+    modifiedAt: input.modifiedAt ?? now,
   };
 }
 
@@ -186,6 +203,38 @@ export function pagesReferencingFigure(
   return out;
 }
 
+// ── save/dirty state (F3.3) ─────────────────────────────────────────────────
+
+function pageDocumentsEqual(a: PageDocument, b: PageDocument): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** F3.3: does `pageDocument` (the session's current resolved draft) have
+ *  anything worth saving — never saved at all (no `pages` entry shares its
+ *  id), or a saved entry exists but differs from the current draft. Drives
+ *  the Save affordance's dirty cue (name + "•"), mirroring
+ *  store/figureLifecycle.ts's `editableFigureDirty` (true for EVERY
+ *  never-saved document, not just a drifted one). */
+export function pageDocumentDirty(pageDocument: PageDocument, pages: readonly PageDocument[]): boolean {
+  const saved = pages.find((p) => p.id === pageDocument.id);
+  return !saved || !pageDocumentsEqual(saved, pageDocument);
+}
+
+/** F3.3: narrower than `pageDocumentDirty` — false for a page never saved at
+ *  all. Mirrors `editableFigureHasUnsavedEdits`'s corrected convention (the
+ *  2026-08-01 adversarial review found the broader predicate over-fired a
+ *  close-confirm on every routine never-saved close): only a SAVED page that
+ *  has since drifted gates a close confirmation. Closing a fresh, never-saved
+ *  page discards it exactly like the pre-F3.3 "this composition is
+ *  temporary" behavior — a known, already-disclosed loss, not a new one. */
+export function pageDocumentHasUnsavedEdits(
+  pageDocument: PageDocument,
+  pages: readonly PageDocument[],
+): boolean {
+  const saved = pages.find((p) => p.id === pageDocument.id);
+  return saved !== undefined && !pageDocumentsEqual(saved, pageDocument);
+}
+
 // ── validation / persistence boundary ───────────────────────────────────────
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -241,6 +290,13 @@ export function sanitizePageDocument(value: unknown): PageDocument | null {
   const rawPanels = Array.isArray(value.panels) ? value.panels : [];
   const base = emptyPagePanels(rows, cols);
   const panels = base.map((slot, i) => (i < rawPanels.length ? sanitizePagePanel(rawPanels[i]) : slot));
+  // F3.3 addition: absent on a pre-F3.3 document (none has ever actually been
+  // written to `store.pages` yet — F3.1/F3.2 shipped the schema before any
+  // writer existed) -- default to the epoch rather than "now" so a genuinely
+  // undated legacy document sorts LAST in a recency list, not first.
+  const epoch = new Date(0).toISOString();
+  const createdAt = typeof value.createdAt === "string" ? value.createdAt : epoch;
+  const modifiedAt = typeof value.modifiedAt === "string" ? value.modifiedAt : createdAt;
   return {
     schema: PAGE_DOCUMENT_SCHEMA,
     version: PAGE_DOCUMENT_VERSION,
@@ -250,6 +306,8 @@ export function sanitizePageDocument(value: unknown): PageDocument | null {
     cols,
     panels,
     output: sanitizeOutput(value.output),
+    createdAt,
+    modifiedAt,
   };
 }
 

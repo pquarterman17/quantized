@@ -2,8 +2,9 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
-import { createFigureDocument } from "../../../lib/figureDocument";
+import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
+import { createPageDocument } from "../../../lib/pageDocument";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -15,6 +16,16 @@ vi.mock("../../../lib/api", () => ({
     .fn()
     .mockResolvedValue(new Blob(["png-bytes"], { type: "image/png" })),
   fetchBookData: vi.fn(),
+}));
+
+const askConfirm = vi.fn();
+vi.mock("../../overlays/ConfirmDialog", () => ({
+  askConfirm: (...args: unknown[]) => askConfirm(...args) as Promise<boolean>,
+}));
+
+const askParams = vi.fn();
+vi.mock("../../overlays/ParamDialog", () => ({
+  askParams: (...args: unknown[]) => askParams(...args) as Promise<Record<string, unknown> | null>,
 }));
 
 const DATA: DataStruct = {
@@ -459,6 +470,186 @@ describe("useFigurePage", () => {
         await result.current.exportNow();
       });
       expect(useApp.getState().status).toBe("assign at least one panel to export a figure page");
+    });
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.3: Save/Save As/dirty state/reopen.
+describe("useFigurePage F3.3 save/reopen/dirty", () => {
+  const FIGURE: FigureDocument = createFigureDocument({
+    id: "figure-1",
+    name: "Saved loop",
+    datasetId: "d1",
+    view: { ...defaultPlotView(), yKeys: [1], plotTitle: "Saved loop title" },
+  });
+
+  beforeEach(() => {
+    askConfirm.mockReset();
+    askParams.mockReset();
+    useApp.setState({ editableFigures: [], pages: [], pageDocSeed: null, figurePageOpen: false });
+  });
+
+  it("figureSources enumerates renderable saved (editable) figures", () => {
+    useApp.setState({ editableFigures: [FIGURE] });
+    const { result } = renderHook(() => useFigurePage());
+    expect(result.current.figureSources).toEqual([
+      { kind: "figure", id: "figure-1", name: "Saved loop" },
+    ]);
+  });
+
+  it("refuses to save an open-but-unsaved window panel, naming the slot and the fix", () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    act(() => result.current.save());
+    expect(useApp.getState().pages).toEqual([]);
+    expect(useApp.getState().status).toMatch(/cannot save page/);
+    expect(useApp.getState().status).toMatch(/"Loop A" is an open plot window not yet saved/);
+  });
+
+  it("refuses to save a legacy Publication figure panel, pointing at the Editable conversion", () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.docSources[0]));
+    act(() => result.current.save());
+    expect(useApp.getState().pages).toEqual([]);
+    expect(useApp.getState().status).toMatch(/is a Publication figure/);
+    expect(useApp.getState().status).toMatch(/create an editable copy/);
+  });
+
+  it("saves a page whose panels are all resolved (figure-kind sources), and clears dirty", () => {
+    useApp.setState({ editableFigures: [FIGURE] });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.figureSources[0]));
+    expect(result.current.dirty).toBe(true);
+
+    act(() => result.current.save());
+    expect(useApp.getState().pages).toHaveLength(1);
+    expect(useApp.getState().pages[0].panels[0].figureId).toBe("figure-1");
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.everSaved).toBe(true);
+  });
+
+  it("becomes dirty again after a saved page is edited further", () => {
+    useApp.setState({ editableFigures: [FIGURE] });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.figureSources[0]));
+    act(() => result.current.save());
+    expect(result.current.dirty).toBe(false);
+
+    act(() => result.current.setName("Renamed"));
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it("Save As creates a new named entry and rebinds the session to it", async () => {
+    useApp.setState({ editableFigures: [FIGURE] });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.figureSources[0]));
+    askParams.mockResolvedValueOnce({ name: "Copy of page" });
+
+    await act(async () => {
+      await result.current.saveAs();
+    });
+
+    expect(useApp.getState().pages).toHaveLength(1);
+    expect(useApp.getState().pages[0].name).toBe("Copy of page");
+    expect(result.current.dirty).toBe(false);
+
+    // A later plain Save updates the SAME (new) entry, not a second one.
+    act(() => result.current.setName("Copy of page")); // no-op edit, still clean-equivalent
+    act(() => result.current.save());
+    expect(useApp.getState().pages).toHaveLength(1);
+  });
+
+  it("Save As refuses the same unresolved-panel check as Save", async () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.docSources[0]));
+    await act(async () => {
+      await result.current.saveAs();
+    });
+    expect(askParams).not.toHaveBeenCalled();
+    expect(useApp.getState().pages).toEqual([]);
+  });
+
+  it("reopens a saved page: grid, output, and panel references are restored", () => {
+    const saved = createPageDocument({
+      id: "page-1",
+      name: "Reopened page",
+      rows: 1,
+      cols: 2,
+      panels: [
+        { figureId: "figure-1", label: "(x)", title: "custom" },
+        { figureId: null, label: null, title: null },
+      ],
+      output: { format: "svg", stylePreset: "aps", dpi: 600, labelFormat: "A)", labelPos: "outside" },
+    });
+    useApp.setState({ editableFigures: [FIGURE], pages: [saved] });
+    useApp.getState().openPageDocument("page-1");
+
+    const { result } = renderHook(() => useFigurePage());
+    expect(result.current.name).toBe("Reopened page");
+    expect(result.current.rows).toBe(1);
+    expect(result.current.cols).toBe(2);
+    expect(result.current.fmt).toBe("svg");
+    expect(result.current.style).toBe("aps");
+    expect(result.current.slots[0].source).toEqual({
+      kind: "figure",
+      id: "figure-1",
+      name: "Saved loop",
+    });
+    expect(result.current.slots[0].label).toBe("(x)");
+    expect(result.current.slots[0].title).toBe("custom");
+    expect(result.current.slots[1].source).toBeNull();
+    // Reopening an unmodified page is clean, not dirty.
+    expect(result.current.dirty).toBe(false);
+    expect(useApp.getState().pageDocSeed).toBeNull(); // one-shot seed consumed
+  });
+
+  it("reopening a page whose figure was since deleted surfaces it as missing, not dropped", () => {
+    const saved = createPageDocument({
+      id: "page-1",
+      name: "Stale page",
+      panels: [{ figureId: "figure-gone", label: null, title: null }],
+    });
+    useApp.setState({ editableFigures: [], pages: [saved] }); // the figure never existed here
+    useApp.getState().openPageDocument("page-1");
+
+    const { result } = renderHook(() => useFigurePage());
+    expect(result.current.slots[0].source).toMatchObject({ kind: "figure", id: "figure-gone" });
+    expect(result.current.sourceStatuses[0]).toEqual({ status: "missing" });
+    // The dangling reference survives a re-save rather than being silently dropped.
+    act(() => result.current.save());
+    expect(useApp.getState().pages[0].panels[0].figureId).toBe("figure-gone");
+  });
+
+  describe("requestClose", () => {
+    it("closes a fresh, never-saved page without any confirm", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      const ok = await result.current.requestClose();
+      expect(ok).toBe(true);
+      expect(askConfirm).not.toHaveBeenCalled();
+    });
+
+    it("gates a SAVED page that has since drifted, and cancel keeps it open", async () => {
+      useApp.setState({ editableFigures: [FIGURE] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.figureSources[0]));
+      act(() => result.current.save());
+      act(() => result.current.setName("Drifted"));
+
+      askConfirm.mockResolvedValueOnce(false);
+      expect(await result.current.requestClose()).toBe(false);
+      expect(askConfirm).toHaveBeenCalledOnce();
+
+      askConfirm.mockResolvedValueOnce(true);
+      expect(await result.current.requestClose()).toBe(true);
+    });
+
+    it("closes an unmodified reopened (saved) page without a confirm", async () => {
+      const saved = createPageDocument({ id: "page-1", name: "Clean page" });
+      useApp.setState({ pages: [saved] });
+      useApp.getState().openPageDocument("page-1");
+      const { result } = renderHook(() => useFigurePage());
+      expect(await result.current.requestClose()).toBe(true);
+      expect(askConfirm).not.toHaveBeenCalled();
     });
   });
 });
