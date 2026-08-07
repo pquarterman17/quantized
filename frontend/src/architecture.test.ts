@@ -233,7 +233,12 @@ const MODULE_PINS: Record<string, number> = {
   // xrayCalc + neutronCalc/NeutronResult to lib/api/xray.ts — each wave's
   // new fields would otherwise have pushed this back over its pin. New
   // /api/crystallography/* and /api/xray/* wrappers belong there, not here.
-  "/lib/api.ts": 1828,
+  // 1828 -> 1782 (2026-08-07, FIGURE_AUTHORING F3.5): PagePanelSpec/
+  // FigurePageSpec/exportFigurePage/renderFigurePageBlob moved to lib/
+  // api/figurePage.ts — F3.5's new row_gap/col_gap/link_x/link_y/
+  // align_labels/resize_mode fields would otherwise have pushed this back
+  // over its pin. New figure-page fields/wrappers belong there, not here.
+  "/lib/api.ts": 1782,
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

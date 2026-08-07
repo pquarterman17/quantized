@@ -87,6 +87,50 @@ export function patchSlot(slots: PageSlot[], i: number, patch: Partial<PageSlot>
   return slots.map((s, j) => (j === i ? { ...s, ...patch } : s));
 }
 
+/** F3.5 manual rearrangement: swap the WHOLE slot record (source + label +
+ *  title) at `i` and `j` as one unit — a panel's caption travels WITH it,
+ *  not with the grid position it leaves behind. This is deliberately
+ *  DIFFERENT from `assignSlot`'s "move" semantics (dragging a source-list
+ *  item onto an already-occupied-elsewhere source only relocates the
+ *  `source` field, leaving each slot's own label/title override behind):
+ *  `assignSlot` is "put THIS source into this slot" (a fresh content pick,
+ *  where the position's own caption is a legitimate thing to keep);
+ *  `moveSlot` is "move this existing panel, caption included, to a new grid
+ *  position" (the panel IS the source+caption together — nothing meaningful
+ *  is left behind for the vacated slot to keep). No-op for an out-of-range
+ *  or identical index pair. */
+export function moveSlot(slots: PageSlot[], i: number, j: number): PageSlot[] {
+  if (i === j || i < 0 || j < 0 || i >= slots.length || j >= slots.length) return slots;
+  const next = slots.slice();
+  [next[i], next[j]] = [next[j], next[i]];
+  return next;
+}
+
+export type GridDirection = "up" | "down" | "left" | "right";
+
+/** The grid index adjacent to `index` in `direction` (row-major, `cols`-wide,
+ *  `rows`-tall) — `null` when that would leave the grid. Shared by
+ *  SlotGrid's Shift+Arrow rearrange handler (F3.5). */
+export function gridNeighborIndex(
+  index: number,
+  cols: number,
+  rows: number,
+  direction: GridDirection,
+): number | null {
+  const r = Math.floor(index / cols);
+  const c = index % cols;
+  const [nr, nc] =
+    direction === "up"
+      ? [r - 1, c]
+      : direction === "down"
+        ? [r + 1, c]
+        : direction === "left"
+          ? [r, c - 1]
+          : [r, c + 1];
+  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return null;
+  return nr * cols + nc;
+}
+
 /** Mirror of the backend auto-label generator (calc/figure_page.panel_label):
  *  0 -> "(a)", 1 -> "(b)", … with spreadsheet-style rollover (26 -> "(aa)"). */
 export function panelLabel(index: number, fmt: PageLabelFormat): string {

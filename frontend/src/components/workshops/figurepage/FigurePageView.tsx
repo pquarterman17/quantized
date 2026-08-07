@@ -16,18 +16,36 @@
 // F3.4: panels are now directly editable — SlotGrid owns the double-click/
 // context-menu/keyboard wiring (see its own header + panelMenu.ts); this
 // view only forwards the per-index callbacks useFigurePage exposes.
+//
+// F3.5 "complete layout controls": a new Layout block (row/col gap, link X/Y
+// axes, align labels, resize mode — see lib/pageDocument.ts's
+// PageLayoutSettings doc for what each does) sits beside the grid-size
+// field; SlotGrid gets the same manual-rearrangement wiring (drag a filled
+// tile, or Shift+Arrow) it uses for its own double-click/context-menu paths.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, RichLabelInput, Select } from "../../primitives";
+import { Button, Checkbox, NumberField, RichLabelInput, Select } from "../../primitives";
 import {
   PAGE_LABEL_FORMATS,
   PAGE_LABEL_POSITIONS,
   type PanelSource,
 } from "../../../lib/figurepage";
+import { PAGE_RESIZE_MODES } from "../../../lib/pageDocument";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES } from "../figurebuilder/useFigureBuilder";
 import SlotGrid, { PANEL_SOURCE_MIME } from "./SlotGrid";
 import { useFigurePage } from "./useFigurePage";
+
+/** null (auto) <-> the NumberField's blank-string convention. */
+function gapFieldValue(v: number | null): string {
+  return v === null ? "" : String(v);
+}
+function parseGapField(v: string): number | null {
+  const trimmed = v.trim();
+  if (trimmed === "") return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
 
 const SOURCE_GLYPH: Record<PanelSource["kind"], string> = { figure: "◇ ", figdoc: "▣ ", window: "□ " };
 
@@ -128,6 +146,38 @@ export default function FigurePageView() {
             <NumberField value={p.rows} onChange={(v) => p.setGrid(Number(v) || 1, p.cols)} width={60} />
             <NumberField value={p.cols} onChange={(v) => p.setGrid(p.rows, Number(v) || 1)} width={60} />
           </div>
+          <label className="qzk-field-lbl">Row / col gap</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <NumberField
+              value={gapFieldValue(p.layout.rowGap)}
+              placeholder="auto"
+              onChange={(v) => p.setLayout({ rowGap: parseGapField(v) })}
+              width={60}
+            />
+            <NumberField
+              value={gapFieldValue(p.layout.colGap)}
+              placeholder="auto"
+              onChange={(v) => p.setLayout({ colGap: parseGapField(v) })}
+              width={60}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Checkbox checked={p.layout.linkX} onChange={(v) => p.setLayout({ linkX: v })}>
+              Link X
+            </Checkbox>
+            <Checkbox checked={p.layout.linkY} onChange={(v) => p.setLayout({ linkY: v })}>
+              Link Y
+            </Checkbox>
+          </div>
+          <Checkbox checked={p.layout.alignLabels} onChange={(v) => p.setLayout({ alignLabels: v })}>
+            Align labels
+          </Checkbox>
+          <label className="qzk-field-lbl">Resize mode</label>
+          <Select
+            options={PAGE_RESIZE_MODES.map((v) => ({ value: v, label: v }))}
+            value={p.layout.resizeMode}
+            onChange={(e) => p.setLayout({ resizeMode: e.target.value as typeof p.layout.resizeMode })}
+          />
           <label className="qzk-field-lbl">Panel labels</label>
           <div style={{ display: "flex", gap: 6 }}>
             <Select
@@ -205,6 +255,7 @@ export default function FigurePageView() {
             onSelect={p.setSelected}
             onClear={p.clear}
             onDropSource={p.assign}
+            onMoveSlot={p.moveSlot}
             onEdit={p.editSlot}
             onSaveAsFigure={p.saveSlotAsFigure}
             onPromote={p.promoteSlot}

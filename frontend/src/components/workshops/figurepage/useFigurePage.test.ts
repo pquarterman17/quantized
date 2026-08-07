@@ -138,7 +138,7 @@ describe("useFigurePage", () => {
       const { result } = renderHook(() => useFigurePage());
       expect(result.current.pageDocument).toMatchObject({
         schema: "quantized.page",
-        version: 1,
+        version: 2, // F3.5 bumped the schema for the new `layout` field
         rows: 2,
         cols: 2,
       });
@@ -293,6 +293,18 @@ describe("useFigurePage", () => {
     expect(body.panels[0].title).toBe("$\\mu_0 H$ loop");
   });
 
+  it("moveSlot swaps two panels (source + label/title as one unit) and follows selection", () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    act(() => result.current.setSlotLabel(0, "(iv)"));
+    act(() => result.current.assign(3, result.current.docSources[0]));
+    act(() => result.current.moveSlot(0, 3));
+    expect(result.current.slots[3].source?.id).toBe("w1");
+    expect(result.current.slots[3].label).toBe("(iv)"); // the caption travels WITH the panel
+    expect(result.current.slots[0].source?.id).toBe("f1");
+    expect(result.current.selected).toBe(3); // selection follows the moved panel
+  });
+
   it("is inert when nothing is assigned", async () => {
     const { result } = renderHook(() => useFigurePage());
     await act(async () => {
@@ -392,6 +404,72 @@ describe("useFigurePage", () => {
       expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].panels[0].figure.title).toBe(
         "edited title",
       );
+    });
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F3.5: gap/link/align/resize-mode controls.
+  describe("F3.5 layout controls", () => {
+    it("starts with DEFAULT_LAYOUT and buildSpec sends it as today's exact defaults", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      expect(result.current.layout).toEqual({
+        rowGap: null,
+        colGap: null,
+        linkX: false,
+        linkY: false,
+        alignLabels: false,
+        resizeMode: "constrained",
+      });
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      const spec = await result.current.buildSpec();
+      expect(spec).toMatchObject({
+        row_gap: null,
+        col_gap: null,
+        link_x: false,
+        link_y: false,
+        align_labels: false,
+        resize_mode: "constrained",
+      });
+    });
+
+    it("setLayout patches only the given fields, preserving the rest", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.setLayout({ linkX: true, rowGap: 0.3 }));
+      expect(result.current.layout).toMatchObject({ linkX: true, rowGap: 0.3, linkY: false });
+      act(() => result.current.setLayout({ resizeMode: "tight" }));
+      expect(result.current.layout).toMatchObject({ linkX: true, rowGap: 0.3, resizeMode: "tight" });
+    });
+
+    it("buildSpec threads a customized layout through to the request", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() =>
+        result.current.setLayout({
+          rowGap: 0.1,
+          colGap: 0.2,
+          linkX: true,
+          linkY: true,
+          alignLabels: true,
+          resizeMode: "none",
+        }),
+      );
+      const spec = await result.current.buildSpec();
+      expect(spec).toMatchObject({
+        row_gap: 0.1,
+        col_gap: 0.2,
+        link_x: true,
+        link_y: true,
+        align_labels: true,
+        resize_mode: "none",
+      });
+    });
+
+    it("a layout change re-renders the debounced preview, like a style/label change does", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      act(() => result.current.setLayout({ linkX: true }));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(2), { timeout: 2000 });
+      expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].link_x).toBe(true);
     });
   });
 

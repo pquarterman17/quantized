@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-06 — F3.4 unified panel editing
+**Updated:** 2026-08-07 — F3.5 complete layout controls
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -271,7 +271,7 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
       access, duplicate, rename, and delete.
 - [x] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
       the referenced figure; provide explicit unlink/duplicate-for-page actions.
-- [ ] **F3.5 Complete layout controls.** Preserve manual rearrangement,
+- [x] **F3.5 Complete layout controls.** Preserve manual rearrangement,
       adjustable spacing, shared/independent axes, link/unlink, alignment, and
       recommended resize modes.
 - [ ] **F3.6 Export from PageDocument.** Clipboard and file export must consume
@@ -380,6 +380,206 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-07 — F3.5 complete layout controls (Claude Sonnet 5)
+
+- **Survey first — nothing in this item's scope existed yet.** Read
+  `SlotGrid.tsx`/`FigurePageView.tsx`/`useFigurePage.ts` (frontend) and
+  `calc/figure_page.py`/`routes/export_page.py` (backend) before writing
+  code: manual rearrangement did NOT exist (a filled `SlotGrid` tile had no
+  `draggable`/`onDragStart` — only the source-list items did; a slot could
+  only be reassigned by re-dragging a NEW source from the list, not by
+  moving an existing panel); no spacing control existed anywhere
+  (`SlotGrid`'s CSS grid used a hardcoded `gap: 6`, purely visual; the
+  backend's grid path always called `fig.add_gridspec(rows, cols)` with no
+  wspace/hspace); no link/unlink or shared-axis concept existed at either
+  layer; no alignment control; the backend's grid path always hardcoded
+  `layout="constrained"` with no alternative. This item is a from-scratch
+  build, not a completion of partial work — confirmed by reading, not
+  assumed from the plan text.
+- **Schema decision — bump `PAGE_DOCUMENT_VERSION` 1 -> 2, mirroring
+  `FigureDocument`'s own v1->v2 precedent (F2.1a), NOT F3.3's
+  additive-no-bump precedent.** F3.3's `createdAt`/`modifiedAt` were purely
+  informational (zero render-semantics impact), so they landed as additive
+  fields. `layout` is the opposite case explicitly flagged by this task:
+  `linkX`/`linkY`/`resizeMode`/gaps change what the exported page LOOKS
+  LIKE. The risk a version bump defends against is a genuinely OLDER,
+  already-shipped Quantized build silently loading a newer `.dwk` and
+  dropping the user's link/gap/resize choices with no warning — exactly
+  what `figureDocument.ts`'s F2.1a comment names as the reason for its own
+  bump ("older builds must reject, rather than silently strip, fields they
+  do not understand"). Implemented identically to that precedent:
+  `sanitizePageDocument` accepts `version === 1 || version === 2` (a v1
+  document migrates, reading `layout` only when `version === 2` — a v1
+  envelope that happens to carry a `layout`-shaped key, e.g. hand-edited or
+  corrupted, is never read, proven by a dedicated test), always WRITES
+  `version: 2` back out (auto-upgrades on next save), and rejects `version
+  >= 3` outright (`sanitizePageDocuments` skips it, keeping valid
+  siblings) — the existing "future version" tests in `pageDocument.test.ts`
+  and `workspace.test.ts` had hardcoded `version: 2` as the "future" probe
+  value from when 2 WAS future; both updated to `version: 3` (found by a
+  full-suite run, not anticipated in advance — the exact "verify before
+  trusting green" class).
+- **Link-group design — page-wide "link all" / "unlink all", NOT
+  arbitrary per-row/per-column groups.** The task explicitly offered this
+  choice; picked the minimal core because (a) it is exactly what A6 (the
+  plan's own acceptance journey: "Build a 2x2 page, link then unlink axes")
+  needs and nothing more, (b) matplotlib's native `sharex=`/`sharey=`
+  mechanism makes "link all" a ~10-line pure function
+  (`figure_page_layout.share_targets`: every panel after the first shares
+  with panel 0) with zero new schema shape, while per-row/col groups would
+  need a group-id-per-panel schema and a UI for assigning panels to groups
+  — real added complexity for a capability the acceptance journey doesn't
+  ask for. Residue named honestly below, not silently dropped.
+- **"Recommended resize modes" — researched, not guessed (the task's own
+  instruction).** The phrase has no prior use anywhere in this codebase or
+  plan. Delegated to `analysis-software-expert` to check OriginPro's Layout
+  Page vocabulary before implementing: Origin actually splits this across
+  TWO orthogonal concepts — layer/page **spacing** (`Layer Management`'s
+  Horizontal/Vertical Gap, `Fit Page to Layers`'s Margin Control
+  Border/Tight) and **element scaling** on resize (`Plot Details` Size
+  tab's "Scale With Layer Frame" vs "Fixed Factor" — whether fonts/line
+  widths grow with the panel or stay pixel-fixed). Implemented the first
+  (spacing/layout-engine choice) as `resizeMode: "constrained" | "tight" |
+  "none"`, mapped directly onto matplotlib's OWN real layout-engine
+  vocabulary (`Figure.set_layout_engine` accepts exactly these names) —
+  "constrained" (default/recommended: auto-avoids overlapping titles/labels
+  while still respecting an explicit gap, since gridspec wspace/hspace are
+  an ADDITIVE floor under constrained layout) / "tight" (recommended when
+  minimizing whitespace matters more — trims the bounding box post-layout;
+  an explicit gap is NOT honored in this mode, a named tradeoff, not a
+  silently dropped setting) / "none" (fixed manual spacing, what free
+  page-coordinate placement has always used implicitly). Origin's SECOND
+  concept — element scale-with-frame vs fixed-factor — is NOT built here:
+  it would require decoupling font/line-width size from the whole
+  publication-style pipeline (`calc/figure_styles.py`), a materially larger
+  feature the plan's own bullet list already separates from "adjustable
+  spacing" and "recommended resize modes" by listing them as distinct
+  items; named as residue, not conflated with what shipped.
+- **Manual rearrangement — does the label follow the panel or the slot
+  position? The panel.** New `lib/figurepage.ts` `moveSlot(slots, i, j)`
+  swaps the WHOLE `PageSlot` record (source + label + title) as one unit —
+  deliberately DIFFERENT from the existing `assignSlot`'s "move" semantics
+  (re-dragging a source-list item that's already assigned elsewhere only
+  relocates `source`, leaving each slot's own label/title override
+  behind). Justified from how auto-lettering already works: the letter
+  sequence ("(a)", "(b)", ...) is ENTIRELY a function of grid placement
+  order — a panel dragged from position 0 to position 3 automatically gets
+  whatever letter position 3 implies, nothing to decide there. The only
+  real question is the EXPLICIT override a user typed in ("(iv) Special
+  result"): that caption describes the PANEL'S CONTENT, not the grid cell
+  it happens to occupy, so it travels with the panel — matching how
+  PowerPoint/Word treat a moved object's own caption, and avoiding the
+  surprising alternative (moving panel A into panel B's old slot silently
+  inherits B's leftover caption on A's content). `assignSlot`'s different
+  behavior stays as-is: it is "put THIS source into this slot" (a content
+  pick, where the position's own caption is legitimate to keep), a
+  different interaction from "move this existing panel, caption included."
+- **Drag + keyboard, mirroring SlotGrid's existing F3.4 conventions.** A
+  filled tile is now `draggable`, writing its own index as a NEW
+  `PANEL_SLOT_MIME` payload; `onDrop` checks it FIRST, falling back to the
+  existing `PANEL_SOURCE_MIME` (source-list drag) so the two drag kinds can
+  never be confused — proven by a regression test asserting each MIME kind
+  calls only its own handler. Keyboard: Shift+Arrow (a spreadsheet
+  "move-selected-row" idiom) moves the FOCUSED panel one grid step in that
+  direction via the same `onMoveSlot`, no-ops on an empty slot or a grid
+  edge (`lib/figurepage.ts`'s new `gridNeighborIndex`), and follows DOM
+  focus to the panel's new tile so repeated presses keep moving the same
+  panel — chosen over inventing a separate "pick up / arrow / drop" grabbed
+  -mode (the react-beautiful-dnd keyboard-sensor pattern) as unnecessary
+  complexity once a direct swap-in-one-keypress does the same job. Plain
+  Arrow (no Shift) is deliberately inert — this slice doesn't add grid
+  focus navigation, only the move gesture the task asked for.
+- **Backend split — new sibling `calc/figure_page_layout.py`, NOT grown
+  inline.** `figure_page.py` was already at 449/500 lines. `validate_layout`
+  /`layout_engine_kwargs`/`share_targets` (the pure gap-validation,
+  matplotlib-layout-engine-kwarg, and axis-share-index math) moved to the
+  new module; `figure_page.py` itself only gained the signature threading,
+  the `sharex`/`sharey` wiring in its axes-construction loop, and the
+  `fig.align_labels()` call — landing at **492/500 lines** (8 headroom),
+  never approaching the ceiling despite the real feature surface. All five
+  new params (`row_gap`/`col_gap`/`link_x`/`link_y`/`align_labels`/
+  `resize_mode`) default to today's EXACT rendering — proven by a
+  byte-identical test at both the calc and route level (mirrors this
+  file's own `test_no_y2_mask_is_byte_identical_to_omitting_it` precedent).
+- **Frontend size ratchet — `lib/api.ts` was AT its 1828-line pin (zero
+  headroom); F3.5's 8 new `FigurePageSpec` fields would have pushed it to
+  1836.** Extracted the whole figure-page wrapper block (`PagePanelSpec`,
+  `FigurePageSpec`, `exportFigurePage`, `renderFigurePageBlob`) to a new
+  `lib/api/figurePage.ts`, re-exported from `api.ts` — the SAME template
+  `api/plot.ts`/`api/stats.ts` already established for this exact
+  situation. `FigureSpec` (defined in `api.ts` itself) is imported into the
+  new sibling as `import type` only — erased at compile time, so there is
+  no runtime circular dependency, verified by a clean `tsc -b --noEmit`.
+  Net result: `api.ts` DROPPED to 1782 lines (46 headroom, pin lowered to
+  match, `architecture.test.ts` updated) despite the net-new fields —
+  offsetting a pin overrun with a real extraction rather than trimming
+  comments to survive at the wire, per this repo's own ratchet discipline.
+- **`useFigurePage.ts` landed at 483/500 lines** (445 after F3.4) — under
+  the habit ceiling but the closest this file has been to it. Not split
+  this slice (the new surface — one `setLayout` patch-setter instead of six
+  field setters, one `moveSlot` wrapper — is already about as compact as it
+  can be without a new extraction); logged rather than silently left for a
+  future session to discover, per this plan's own discipline.
+- **Deliberately out of scope, named honestly:**
+  - F3.6 (export from PageDocument) remains fully open.
+  - Per-row/per-column (or arbitrary) axis link GROUPS — only page-wide
+    link-all/unlink-all shipped; see the link-group design note above.
+  - Origin's "Scale With Layer Frame vs Fixed Factor" element-scaling
+    behavior on resize — a different, larger concept than the spacing/
+    layout-engine `resizeMode` that shipped; see the resize-mode note above.
+  - The interactive `SlotGrid` assignment UI's own CSS `gap` was NOT wired
+    to `layout.rowGap`/`colGap` — that grid is a lightweight assignment
+    surface, not a pixel-accurate preview (the server-rendered PNG below it
+    already is); conflating the two would misrepresent the assignment UI as
+    WYSIWYG when it never has been.
+  - Explicit per-panel axis-limit overrides (`overrides.x_lim`/`y_lim`) can
+    still win over a page-wide link, since matplotlib's shared-axis state is
+    one underlying object per link group and `_apply_overrides` runs last,
+    per-panel, in placement order — a real, documented interaction (last
+    panel's explicit override wins for the whole group), not a bug, and not
+    solved here (solving it generally needs a link-vs-override precedence
+    rule this task didn't ask for).
+- **Tests:** backend — `test_calc_figure_page_layout.py` (new file, 15:
+  `validate_layout`/`layout_engine_kwargs`/`share_targets` pure-math
+  coverage); `test_calc_figure_page.py` (+10: byte-identical defaults,
+  explicit-gap changes the render, tight/none resize modes render, unknown
+  resize_mode and out-of-range gap raise, link_x/link_y actually share
+  `get_xlim()`/`get_ylim()` across panels via `_build_page_figure`, the
+  unlinked default is byte-identical, `align_labels` runs without error,
+  free placement ignores gap/resize_mode but still honors links);
+  `test_api_export_page.py` (+4: layout fields render at the route, unknown
+  resize_mode and out-of-range gap 422, route-level byte-identical
+  defaults). Frontend — `lib/pageDocument.test.ts` (+8: DEFAULT_LAYOUT on
+  create, partial-layout override, v1->v2 migration to DEFAULT_LAYOUT, a v1
+  envelope's layout-shaped junk is ignored not read, a valid v2 layout
+  passes through, a malformed v2 layout degrades field-by-field, explicit
+  `null` gap preserved as auto (not coerced to a fallback number), JSON
+  round trip of a non-default layout; 2 existing "future version" tests
+  updated 2->3); `lib/figurepage.test.ts` (+5: `moveSlot` swaps the whole
+  record/moves onto empty/no-ops out-of-range, `gridNeighborIndex` computes
+  every direction and returns null at every edge); `useFigurePage.test.ts`
+  (+5: `moveSlot` swaps + follows selection, DEFAULT_LAYOUT flows through
+  `buildSpec` as byte-identical defaults, `setLayout` patches only given
+  fields, a customized layout threads through `buildSpec`, a layout change
+  re-renders the debounced preview like a style change does; 1 existing
+  test's hardcoded `version: 1` updated to 2); `SlotGrid.test.tsx` (+8: a
+  filled slot is draggable/an empty one isn't, dragstart writes its own
+  index as `PANEL_SLOT_MIME`, dropping it elsewhere calls `onMoveSlot` not
+  `onDropSource`, a `PANEL_SOURCE_MIME` drop still calls `onDropSource` not
+  `onMoveSlot`, Shift+ArrowRight moves the focused panel, Shift+Arrow at a
+  grid edge and on an empty slot are no-ops, a plain Arrow key never
+  triggers a move); `workspace.test.ts` (1 existing "future version" test
+  updated 2->3, found by the full-suite run).
+- **Gate:** Backend — `uv run pytest -q`: **3851 collected, 3774 passed, 69
+  skipped, 8 xfailed, 0 failed** (no shrinkage from the pre-slice baseline);
+  `ruff check src tests` clean; `mypy src` clean (249 source files).
+  Frontend — `npm run lint` clean (0 errors, 9 pre-existing unrelated
+  warnings, unchanged from F3.3/F3.4's baseline); full `npx vitest run`
+  **395 files / 5750 tests passed**; `npx tsc -b --noEmit` clean; `npm run
+  build` clean, bundle 874.6 kB eager / 903.3 kB budget (28.7 kB headroom).
+- F3.5 is now checked. F3.6 (export from PageDocument) is the only item
+  left open in F3.
 
 ### 2026-08-06 — F3.4 unified panel editing (Claude Sonnet 5)
 

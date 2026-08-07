@@ -22,7 +22,61 @@ import {
 import type { FigureDocument } from "./figureDocument";
 
 export const PAGE_DOCUMENT_SCHEMA = "quantized.page" as const;
-export const PAGE_DOCUMENT_VERSION = 1 as const;
+// F3.5: v1 -> v2 for `layout` (gap/link/align/resize-mode) -- unlike F3.3's
+// purely informational createdAt/modifiedAt (additive, no version bump
+// needed), `layout` changes RENDER SEMANTICS (link/unlink literally changes
+// what the exported page looks like), so it follows FigureDocument's own
+// v1->v2 precedent (F2.1a, lib/figureDocument.ts): a version bump means an
+// OLDER build that doesn't understand `layout` REJECTS a newer document
+// (sanitizePageDocuments already skips unknown future versions) instead of
+// silently loading it and dropping the user's link/gap settings with no
+// warning. v1 documents still migrate forward (see sanitizePageDocument) —
+// only versions beyond PAGE_DOCUMENT_VERSION are rejected.
+export const PAGE_DOCUMENT_VERSION = 2 as const;
+
+export const PAGE_RESIZE_MODES = ["constrained", "tight", "none"] as const;
+export type PageResizeMode = (typeof PAGE_RESIZE_MODES)[number];
+
+/** F3.5 "complete layout controls". Mirrors calc.figure_page_layout's
+ *  vocabulary exactly (see its module doc for the full rationale) so the
+ *  frontend/backend contract needs no translation layer.
+ *
+ *  `rowGap`/`colGap`: matplotlib gridspec wspace/hspace fractions; `null`
+ *  ("auto", the default) omits the override entirely so the chosen
+ *  `resizeMode` engine picks its own spacing -- today's exact rendering.
+ *
+ *  `linkX`/`linkY`: share every panel's x/y-axis limits page-wide ("link
+ *  all" -- the acceptance journey's (A6) sufficient core, not arbitrary
+ *  per-row/per-column link groups; see the plan's decision log).
+ *
+ *  `alignLabels`: matplotlib `fig.align_labels()` -- axis labels line up
+ *  across panels despite differing tick-label widths.
+ *
+ *  `resizeMode`: the automatic layout engine. "constrained" (default,
+ *  RECOMMENDED for an ordinary grid page -- auto-avoids overlapping
+ *  titles/labels while still respecting an explicit gap); "tight"
+ *  (recommended when minimizing whitespace matters more than an exact gap
+ *  -- trims the bounding box post-layout; an explicit gap is NOT honored
+ *  in this mode, a named tradeoff); "none" (fixed manual spacing only, no
+ *  automatic adjustment -- what free page-coordinate placement has always
+ *  used implicitly). */
+export interface PageLayoutSettings {
+  rowGap: number | null;
+  colGap: number | null;
+  linkX: boolean;
+  linkY: boolean;
+  alignLabels: boolean;
+  resizeMode: PageResizeMode;
+}
+
+const DEFAULT_LAYOUT: PageLayoutSettings = {
+  rowGap: null,
+  colGap: null,
+  linkX: false,
+  linkY: false,
+  alignLabels: false,
+  resizeMode: "constrained",
+};
 
 /** One grid slot. `figureId === null` = empty. A non-null id references an
  *  `editableFigures` entry BY ID (F3.2) — resolve with `resolvePagePanel`,
@@ -59,6 +113,8 @@ export interface PageDocument {
   cols: number;
   panels: PagePanel[];
   output: PageOutputSettings;
+  /** F3.5 "complete layout controls" — see PageLayoutSettings' own doc. */
+  layout: PageLayoutSettings;
   /** F3.3 "recent access" — ISO timestamps. Purely informational (no render
    *  impact), so this is an ADDITIVE field, not a schema version bump (same
    *  convention as WorkspaceState's optional fields, and unlike
@@ -91,6 +147,7 @@ export interface CreatePageDocumentInput {
   /** Padded/truncated to `rows*cols` so callers never hand-sync the two. */
   panels?: PagePanel[];
   output?: Partial<PageOutputSettings>;
+  layout?: Partial<PageLayoutSettings>;
   /** Default both to "now" — a caller restoring an existing document (the
    *  workspace loader, or a reopened seed) passes its real saved values. */
   createdAt?: string;
@@ -114,6 +171,7 @@ export function createPageDocument(input: CreatePageDocumentInput): PageDocument
     cols,
     panels,
     output: { ...DEFAULT_OUTPUT, ...input.output },
+    layout: { ...DEFAULT_LAYOUT, ...input.layout },
     createdAt: input.createdAt ?? now,
     modifiedAt: input.modifiedAt ?? now,
   };
@@ -269,14 +327,35 @@ function sanitizeOutput(value: unknown): PageOutputSettings {
   };
 }
 
+function sanitizeLayout(value: unknown): PageLayoutSettings {
+  const o = isObject(value) ? value : {};
+  const gap = (raw: unknown, fallback: number | null): number | null =>
+    raw === null ? null : typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : fallback;
+  const resizeMode =
+    typeof o.resizeMode === "string" && (PAGE_RESIZE_MODES as readonly string[]).includes(o.resizeMode)
+      ? (o.resizeMode as PageResizeMode)
+      : DEFAULT_LAYOUT.resizeMode;
+  return {
+    rowGap: gap(o.rowGap, DEFAULT_LAYOUT.rowGap),
+    colGap: gap(o.colGap, DEFAULT_LAYOUT.colGap),
+    linkX: typeof o.linkX === "boolean" ? o.linkX : DEFAULT_LAYOUT.linkX,
+    linkY: typeof o.linkY === "boolean" ? o.linkY : DEFAULT_LAYOUT.linkY,
+    alignLabels: typeof o.alignLabels === "boolean" ? o.alignLabels : DEFAULT_LAYOUT.alignLabels,
+    resizeMode,
+  };
+}
+
 /** Validate an untrusted persisted document. A bad envelope/identity rejects
  *  the whole document (returns null); malformed nested fields degrade to
- *  safe defaults instead — same discipline as figureDocument.ts's sanitizer. */
+ *  safe defaults instead — same discipline as figureDocument.ts's sanitizer.
+ *  Accepts v1 (pre-F3.5, migrates to DEFAULT_LAYOUT — today's exact
+ *  rendering) or the current version; a genuinely future version is
+ *  rejected outright, same forward-compat discipline as figureDocument.ts. */
 export function sanitizePageDocument(value: unknown): PageDocument | null {
   if (
     !isObject(value) ||
     value.schema !== PAGE_DOCUMENT_SCHEMA ||
-    value.version !== PAGE_DOCUMENT_VERSION
+    (value.version !== 1 && value.version !== PAGE_DOCUMENT_VERSION)
   ) return null;
   if (typeof value.id !== "string" || !value.id || typeof value.name !== "string") return null;
   const rows =
@@ -297,6 +376,10 @@ export function sanitizePageDocument(value: unknown): PageDocument | null {
   const epoch = new Date(0).toISOString();
   const createdAt = typeof value.createdAt === "string" ? value.createdAt : epoch;
   const modifiedAt = typeof value.modifiedAt === "string" ? value.modifiedAt : createdAt;
+  // v1 never had `layout` -- migrate to DEFAULT_LAYOUT (today's exact
+  // rendering) rather than reading a field that version never wrote.
+  const layout =
+    value.version === PAGE_DOCUMENT_VERSION ? sanitizeLayout(value.layout) : DEFAULT_LAYOUT;
   return {
     schema: PAGE_DOCUMENT_SCHEMA,
     version: PAGE_DOCUMENT_VERSION,
@@ -306,6 +389,7 @@ export function sanitizePageDocument(value: unknown): PageDocument | null {
     cols,
     panels,
     output: sanitizeOutput(value.output),
+    layout,
     createdAt,
     modifiedAt,
   };

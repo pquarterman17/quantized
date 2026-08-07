@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepage";
-import SlotGrid from "./SlotGrid";
+import SlotGrid, { PANEL_SLOT_MIME, PANEL_SOURCE_MIME } from "./SlotGrid";
 
 const FIGURE_SLOT: PageSlot = { source: { kind: "figure", id: "f1", name: "Loop" }, label: null, title: null };
 const WINDOW_SLOT: PageSlot = { source: { kind: "window", id: "w1", name: "Loop A" }, label: null, title: null };
@@ -24,6 +24,7 @@ function baseProps(slots: PageSlot[], statuses: PanelSourceStatus[]) {
     onSelect: vi.fn(),
     onClear: vi.fn(),
     onDropSource: vi.fn(),
+    onMoveSlot: vi.fn(),
     onEdit: vi.fn(),
     onSaveAsFigure: vi.fn(),
     onPromote: vi.fn(),
@@ -190,5 +191,106 @@ describe("SlotGrid transient-source tooltip (F3.4 unification decision)", () => 
       el.textContent?.includes("Loop"),
     );
     expect(span?.getAttribute("title")).toBe("Loop");
+  });
+});
+
+// F3.5 manual rearrangement — drag a filled tile onto another slot, or
+// Shift+Arrow, mirrors DatasetRow.test.tsx's hand-built DragEvent + fireEvent
+// technique (jsdom has no real DnD/layout).
+function fireDrag(el: Element, type: "dragstart" | "drop", dataTransfer: unknown) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+describe("SlotGrid manual rearrangement (F3.5)", () => {
+  it("a filled slot is draggable; an empty slot is not", () => {
+    const props = baseProps([FIGURE_SLOT, EMPTY_SLOT], [
+      { status: "ok", lifecycle: "live" },
+      { status: "empty" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    const tiles = container.querySelectorAll("[tabindex]");
+    expect(tiles[0].getAttribute("draggable")).toBe("true");
+    expect(tiles[1].getAttribute("draggable")).toBe("false");
+  });
+
+  it("dragstart on a filled slot writes its own index as PANEL_SLOT_MIME", () => {
+    const props = baseProps([FIGURE_SLOT], [{ status: "ok", lifecycle: "live" }]);
+    const { container } = render(<SlotGrid {...props} />);
+    const setData = vi.fn();
+    fireDrag(container.querySelectorAll("[tabindex]")[0], "dragstart", { setData });
+    expect(setData).toHaveBeenCalledWith(PANEL_SLOT_MIME, "0");
+  });
+
+  it("dropping a PANEL_SLOT_MIME payload onto another slot calls onMoveSlot(from, to)", () => {
+    const props = baseProps([FIGURE_SLOT, WINDOW_SLOT], [
+      { status: "ok", lifecycle: "live" },
+      { status: "ok", lifecycle: "live" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    const tiles = container.querySelectorAll("[tabindex]");
+    fireDrag(tiles[1], "drop", { getData: (t: string) => (t === PANEL_SLOT_MIME ? "0" : "") });
+    expect(props.onMoveSlot).toHaveBeenCalledWith(0, 1);
+    expect(props.onDropSource).not.toHaveBeenCalled();
+  });
+
+  it("a PANEL_SOURCE_MIME drop (from the source list) still calls onDropSource, not onMoveSlot", () => {
+    const props = baseProps([EMPTY_SLOT], [{ status: "empty" }]);
+    const { container } = render(<SlotGrid {...props} />);
+    const source = { kind: "window", id: "w9", name: "New" };
+    fireDrag(container.querySelectorAll("[tabindex]")[0], "drop", {
+      getData: (t: string) => (t === PANEL_SOURCE_MIME ? JSON.stringify(source) : ""),
+    });
+    expect(props.onDropSource).toHaveBeenCalledWith(0, source);
+    expect(props.onMoveSlot).not.toHaveBeenCalled();
+  });
+
+  it("Shift+ArrowRight moves the focused panel to its right-hand neighbor", () => {
+    const props = baseProps([FIGURE_SLOT, EMPTY_SLOT], [
+      { status: "ok", lifecycle: "live" },
+      { status: "empty" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], {
+      key: "ArrowRight",
+      shiftKey: true,
+    });
+    expect(props.onMoveSlot).toHaveBeenCalledWith(0, 1);
+  });
+
+  it("Shift+Arrow at a grid edge is a no-op (no neighbor in that direction)", () => {
+    const props = baseProps([FIGURE_SLOT, EMPTY_SLOT], [
+      { status: "ok", lifecycle: "live" },
+      { status: "empty" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    // A 1x2 grid: slot 0 has no neighbor "up" or "left".
+    fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], { key: "ArrowUp", shiftKey: true });
+    fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], { key: "ArrowLeft", shiftKey: true });
+    expect(props.onMoveSlot).not.toHaveBeenCalled();
+  });
+
+  it("Shift+Arrow on an empty slot is a no-op (nothing to move)", () => {
+    const props = baseProps([EMPTY_SLOT, FIGURE_SLOT], [
+      { status: "empty" },
+      { status: "ok", lifecycle: "live" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], {
+      key: "ArrowRight",
+      shiftKey: true,
+    });
+    expect(props.onMoveSlot).not.toHaveBeenCalled();
+  });
+
+  it("a plain Arrow key (no Shift) never triggers a move", () => {
+    const props = baseProps([FIGURE_SLOT, EMPTY_SLOT], [
+      { status: "ok", lifecycle: "live" },
+      { status: "empty" },
+    ]);
+    const { container } = render(<SlotGrid {...props} />);
+    fireEvent.keyDown(container.querySelectorAll("[tabindex]")[0], { key: "ArrowRight" });
+    expect(props.onMoveSlot).not.toHaveBeenCalled();
   });
 });

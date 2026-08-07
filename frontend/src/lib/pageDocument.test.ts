@@ -22,6 +22,7 @@ import {
   sanitizePageDocuments,
   serializePageDocument,
   type PageDocument,
+  type PageLayoutSettings,
 } from "./pageDocument";
 
 const FIGURE = createFigureDocument({
@@ -127,6 +128,98 @@ describe("createdAt/modifiedAt sanitization (F3.3 — additive, no version bump)
   });
 });
 
+const DEFAULT_LAYOUT: PageLayoutSettings = {
+  rowGap: null,
+  colGap: null,
+  linkX: false,
+  linkY: false,
+  alignLabels: false,
+  resizeMode: "constrained",
+};
+
+describe("layout (F3.5 — v1->v2, render-semantics version bump)", () => {
+  it("createPageDocument defaults to DEFAULT_LAYOUT (today's exact rendering)", () => {
+    const doc = createPageDocument({ id: "p1", name: "x" });
+    expect(doc.version).toBe(2);
+    expect(doc.layout).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("createPageDocument accepts a partial layout override", () => {
+    const doc = createPageDocument({ id: "p1", name: "x", layout: { linkX: true, rowGap: 0.3 } });
+    expect(doc.layout).toEqual({ ...DEFAULT_LAYOUT, linkX: true, rowGap: 0.3 });
+  });
+
+  it("a v1 document (no layout field at all) migrates to DEFAULT_LAYOUT, version 2", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "p1",
+      name: "x",
+    });
+    expect(restored).not.toBeNull();
+    expect(restored!.version).toBe(2);
+    expect(restored!.layout).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("a v1 document's layout-shaped junk is IGNORED, not read — v1 never wrote that field", () => {
+    // Proves the version gate, not just a missing-field default: a v1
+    // envelope carrying a `layout` key (as if hand-crafted or corrupted)
+    // must still migrate to DEFAULT_LAYOUT, never read the attacker/legacy-
+    // supplied value.
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "p1",
+      name: "x",
+      layout: { linkX: true, resizeMode: "tight", rowGap: 5 },
+    });
+    expect(restored!.layout).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("sanitizes a valid v2 layout through untouched", () => {
+    const doc = createPageDocument({
+      id: "p1",
+      name: "x",
+      layout: { rowGap: 0.5, colGap: 0.25, linkX: true, linkY: true, alignLabels: true, resizeMode: "tight" },
+    });
+    const restored = sanitizePageDocument(doc);
+    expect(restored!.layout).toEqual(doc.layout);
+  });
+
+  it("degrades a malformed v2 layout to DEFAULT_LAYOUT field-by-field", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 2,
+      id: "p1",
+      name: "x",
+      layout: { rowGap: -5, colGap: "big", linkX: "yes", resizeMode: "auto" },
+    });
+    expect(restored!.layout).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("preserves an explicit null gap (auto) as null, not a fallback number", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: 2,
+      id: "p1",
+      name: "x",
+      layout: { rowGap: null, colGap: 0.4 },
+    });
+    expect(restored!.layout.rowGap).toBeNull();
+    expect(restored!.layout.colGap).toBe(0.4);
+  });
+
+  it("round-trips a non-default layout through JSON serialize/deserialize", () => {
+    const doc = createPageDocument({
+      id: "p1",
+      name: "x",
+      layout: { rowGap: 0.1, colGap: 0.2, linkX: true, linkY: false, alignLabels: true, resizeMode: "none" },
+    });
+    const restored = deserializePageDocument(serializePageDocument(doc));
+    expect(restored).toEqual(doc);
+  });
+});
+
 describe("pageDocumentDirty / pageDocumentHasUnsavedEdits (F3.3)", () => {
   it("dirty is true for a page never saved at all; hasUnsavedEdits is false", () => {
     const draft = createPageDocument({ id: "draft-1", name: "Untitled page" });
@@ -174,9 +267,11 @@ describe("serialize / sanitize round trip", () => {
     expect(sanitizePageDocument({ schema: "other", version: 1, id: "p1", name: "x" })).toBeNull();
   });
 
-  it("rejects a future schema version rather than silently coercing it", () => {
+  it("rejects a genuinely future schema version rather than silently coercing it", () => {
+    // F3.5 bumped PAGE_DOCUMENT_VERSION to 2 (layout changes render
+    // semantics) -- 2 is now CURRENT, not future; only beyond it is rejected.
     const doc = createPageDocument({ id: "p1", name: "x" });
-    expect(sanitizePageDocument({ ...doc, version: 2 })).toBeNull();
+    expect(sanitizePageDocument({ ...doc, version: 3 })).toBeNull();
   });
 
   it("degrades malformed nested fields to safe defaults instead of rejecting the document", () => {
@@ -215,7 +310,7 @@ describe("sanitizePageDocuments (migration)", () => {
 
   it("skips a future-version document while keeping valid siblings", () => {
     const valid = createPageDocument({ id: "p1", name: "Valid" });
-    const future = { ...createPageDocument({ id: "p2", name: "Future" }), version: 2 };
+    const future = { ...createPageDocument({ id: "p2", name: "Future" }), version: 3 };
     expect(sanitizePageDocuments([valid, future]).map((d) => d.id)).toEqual(["p1"]);
   });
 });

@@ -38,6 +38,7 @@ import {
   clearSlot,
   emptySlots,
   filledCount,
+  moveSlot as swapSlots,
   patchSlot,
   resizeSlots,
   resolvePanelSource,
@@ -47,7 +48,7 @@ import {
   type PanelSource,
   type PanelSourceStatus,
 } from "../../../lib/figurepage";
-import { createPageDocument } from "../../../lib/pageDocument";
+import { createPageDocument, type PageLayoutSettings } from "../../../lib/pageDocument";
 import { displayedWindowTitle } from "../../../lib/plotview";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
@@ -96,6 +97,7 @@ export function useFigurePage() {
   const style = draft.output.stylePreset;
   const fmt = draft.output.format;
   const dpi = draft.output.dpi;
+  const layout = draft.layout; // F3.5: gap/link/align/resize-mode controls
 
   const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(2, 2));
   const [selected, setSelected] = useState<number | null>(null);
@@ -193,9 +195,26 @@ export function useFigurePage() {
     setDraft((prev) => ({ ...prev, output: { ...prev.output, labelPos: next } }));
   }
 
+  /** F3.5: one patch setter for every layout field (gap/link/align/resize
+   *  mode) rather than six near-identical setters — keeps this hook's own
+   *  growth minimal (it sits near its size habit; see the module header). */
+  function setLayout(patch: Partial<PageLayoutSettings>): void {
+    setDraft((prev) => ({ ...prev, layout: { ...prev.layout, ...patch } }));
+  }
+
   function assign(i: number, source: PanelSource): void {
     setSlots((prev) => assignSlot(prev, i, source));
     setSelected(i);
+  }
+
+  /** F3.5 manual rearrangement: swap the panel (source + label/title
+   *  caption, as one unit — see lib/figurepage.ts's `moveSlot` doc for why)
+   *  at `i` with whatever occupies `j`, then follow selection to its new
+   *  position. Used by both SlotGrid's drag-a-filled-tile handler and its
+   *  Shift+Arrow keyboard equivalent. */
+  function moveSlot(i: number, j: number): void {
+    setSlots((prev) => swapSlots(prev, i, j));
+    setSelected(j);
   }
 
   /** Click a source: fill the selected slot, else the first empty one. */
@@ -313,7 +332,20 @@ export function useFigurePage() {
       });
     }
     if (panels.length === 0) return null;
-    return { rows, cols, panels, style, label_format: labelFormat, label_pos: labelPos };
+    return {
+      rows,
+      cols,
+      panels,
+      style,
+      label_format: labelFormat,
+      label_pos: labelPos,
+      row_gap: layout.rowGap,
+      col_gap: layout.colGap,
+      link_x: layout.linkX,
+      link_y: layout.linkY,
+      align_labels: layout.alignLabels,
+      resize_mode: layout.resizeMode,
+    };
   }
 
   // Debounced low-DPI PNG preview — re-renders on any page-shape change AND
@@ -363,12 +395,14 @@ export function useFigurePage() {
       cancelled = true;
       clearTimeout(timer);
     };
-    // buildSpec reads slots/rows/cols/style/labels from local state plus the
-    // panels' windows/datasets/docs THROUGH the store — renderInputs is the
-    // fingerprint of exactly those store reads (#8g); the 400 ms debounce
-    // absorbs any churn while they settle.
+    // buildSpec reads slots/rows/cols/style/labels/layout from local state
+    // plus the panels' windows/datasets/docs THROUGH the store — renderInputs
+    // is the fingerprint of exactly those store reads (#8g); the 400 ms
+    // debounce absorbs any churn while they settle. F3.5: `layout` joins the
+    // dep list so a gap/link/align/resize-mode change refreshes the preview
+    // the same way a style/label change already does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, rows, cols, style, labelFormat, labelPos, renderInputs]);
+  }, [slots, rows, cols, style, labelFormat, labelPos, layout, renderInputs]);
 
   async function exportNow(): Promise<void> {
     try {
@@ -407,6 +441,7 @@ export function useFigurePage() {
     setSelected,
     assign,
     assignToNext,
+    moveSlot,
     clear,
     setSlotLabel,
     setSlotTitle,
@@ -424,6 +459,8 @@ export function useFigurePage() {
     setFmt,
     dpi,
     setDpi,
+    layout,
+    setLayout,
     windowSources,
     docSources,
     figureSources,

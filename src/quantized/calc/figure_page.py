@@ -20,6 +20,9 @@ clear ``ValueError`` (-> 422 at the route): per-panel ``x_breaks`` (the break
 renderer owns its own figure) and per-panel ``margins`` (page layout is
 constrained-layout, figure-level).
 
+F3.5 layout controls (gap, link/unlink, alignment, resize mode) are pure
+math in the sibling module ``calc.figure_page_layout`` -- see its doc.
+
 FREE PAGE-COORDINATE PLACEMENT (#54 residual): when every panel carries a
 ``page_rect`` (page-normalized ``(x, y, w, h)``, TOP-LEFT origin -- the
 frontend's ``NormalizedFrameRect`` convention, e.g. a decoded Origin page
@@ -45,6 +48,7 @@ import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
+from quantized.calc import figure_page_layout as fpl  # noqa: E402
 from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_overrides import _validate_overrides  # noqa: E402
@@ -268,6 +272,12 @@ def render_figure_page(
     dpi: int | None = None,
     label_format: str = "(a)",
     label_pos: str = "nw",
+    row_gap: float | None = None,
+    col_gap: float | None = None,
+    link_x: bool = False,
+    link_y: bool = False,
+    align_labels: bool = False,
+    resize_mode: str = "constrained",
 ) -> bytes:
     """Compose ``panels`` onto one rows x cols page and render to image bytes.
 
@@ -289,6 +299,14 @@ def render_figure_page(
     the module docstring); ``rows``/``cols`` are then accepted but unused,
     and overlapping rects are allowed. Mixing panels with and without
     ``page_rect`` raises ``ValueError``.
+
+    F3.5 layout controls (see ``calc.figure_page_layout``): ``row_gap``/
+    ``col_gap`` are gridspec spacing fractions (``None`` = engine default);
+    ``link_x``/``link_y`` share every panel's x/y-axis limits ("link all");
+    ``align_labels`` calls ``fig.align_labels()``; ``resize_mode`` picks the
+    layout engine (``"constrained"`` default / ``"tight"`` / ``"none"``).
+    All five default to today's exact rendering; free placement ignores
+    ``row_gap``/``col_gap``/``resize_mode`` but still honors the links.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -297,6 +315,7 @@ def render_figure_page(
     if label_format != "none" and label_format not in _LABEL_TEMPLATES:
         allowed = (*_LABEL_TEMPLATES, "none")
         raise ValueError(f"label_format must be one of {allowed}")
+    fpl.validate_layout(row_gap, col_gap, resize_mode)
 
     has_rect = [p.page_rect is not None for p in panels]
     free_placement = any(has_rect)
@@ -346,6 +365,12 @@ def render_figure_page(
             st=st,
             label_format=label_format,
             label_pos=label_pos,
+            row_gap=row_gap,
+            col_gap=col_gap,
+            link_x=link_x,
+            link_y=link_y,
+            align_labels=align_labels,
+            resize_mode=resize_mode,
         )
         try:
             buf = BytesIO()
@@ -366,33 +391,51 @@ def _build_page_figure(
     st: FigureStyle,
     label_format: str,
     label_pos: str,
+    row_gap: float | None = None,
+    col_gap: float | None = None,
+    link_x: bool = False,
+    link_y: bool = False,
+    align_labels: bool = False,
+    resize_mode: str = "constrained",
 ) -> Any:
     """Build (but do not save or close) the composed page figure, in
     ``ordered`` placement order. Split out of ``render_figure_page`` so a
     test can inspect ``ax.get_position()`` directly -- the free-placement
     y-flip is otherwise only observable via rendered image bytes. Must run
-    inside the caller's ``matplotlib.rc_context(style_rc(st, {}))``."""
-    # Constrained layout fights manually placed axes (add_axes) -- only the
-    # grid path (gridspec subplots) uses it.
-    fig = (
-        plt.figure(figsize=(w, h))
-        if free_placement
-        else plt.figure(figsize=(w, h), layout="constrained")
+    inside the caller's ``matplotlib.rc_context(style_rc(st, {}))``. F3.5
+    kwargs: see ``render_figure_page``'s doc -- free placement always
+    ignores ``resize_mode``/gaps but still honors ``link_x``/``link_y``."""
+    engine, spacing = (
+        (None, {}) if free_placement else fpl.layout_engine_kwargs(resize_mode, row_gap, col_gap)
     )
-    gs = None if free_placement else fig.add_gridspec(rows, cols)
+    fig = plt.figure(figsize=(w, h), layout=engine)
+    gs = None if free_placement else fig.add_gridspec(rows, cols, **spacing)
+    share_x = fpl.share_targets(len(ordered), link_x)
+    share_y = fpl.share_targets(len(ordered), link_y)
+    axes: list[Any] = []
     for idx, p in enumerate(ordered):
+        sx, sy = share_x[idx], share_y[idx]
+        sharex = axes[sx] if sx is not None else None
+        sharey = axes[sy] if sy is not None else None
         if free_placement:
             assert p.page_rect is not None
             x, y, pw, ph = p.page_rect
             # y-flip: page_rect is top-left origin; matplotlib axes rects
             # are bottom-left origin.
-            ax = fig.add_axes((x, 1 - y - ph, pw, ph))
+            ax = fig.add_axes((x, 1 - y - ph, pw, ph), sharex=sharex, sharey=sharey)
         else:
             assert gs is not None
-            ax = fig.add_subplot(gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span])
+            ax = fig.add_subplot(
+                gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span],
+                sharex=sharex,
+                sharey=sharey,
+            )
+        axes.append(ax)
         _draw_panel(fig, ax, p, st)
         text = p.label if p.label is not None else panel_label(idx, label_format)
         _place_label(ax, safe_mathtext_label(text), label_pos, st)
+    if align_labels:
+        fig.align_labels()
     return fig
 
 

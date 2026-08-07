@@ -67,6 +67,14 @@ class FigurePageRequest(BaseModel):
     label_format: str = "(a)"  # (a) | a) | a. | (A) | A) | A. | none
     label_pos: str = "nw"  # nw | ne | outside
     filename: str = "figure_page"
+    # F3.5 layout controls (calc.figure_page_layout) -- all default to
+    # today's exact rendering (byte-identical when omitted).
+    row_gap: float | None = None
+    col_gap: float | None = None
+    link_x: bool = False
+    link_y: bool = False
+    align_labels: bool = False
+    resize_mode: str = "constrained"  # constrained | tight | none
 
 
 @router.post("/figure-page")
@@ -136,6 +144,12 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             dpi=dpi,
             label_format=req.label_format,
             label_pos=req.label_pos,
+            row_gap=req.row_gap,
+            col_gap=req.col_gap,
+            link_x=req.link_x,
+            link_y=req.link_y,
+            align_labels=req.align_labels,
+            resize_mode=req.resize_mode,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

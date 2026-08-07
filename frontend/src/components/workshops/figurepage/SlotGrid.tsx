@@ -28,15 +28,25 @@
 // duplicate-for-page/clear, per source kind. A window- or figdoc-kind slot's
 // tooltip now also names its transient (not-yet-durable) status directly on
 // the tile, not only at Save time (see the plan's F3.4 decision log).
+//
+// F3.5 "manual rearrangement": a FILLED slot is now itself draggable — drop
+// it on another slot to swap them (`PANEL_SLOT_MIME`, checked before the
+// existing source-list `PANEL_SOURCE_MIME` on every drop so the two drag
+// kinds can never be confused) — plus a keyboard equivalent, Shift+Arrow,
+// mirroring the existing ContextMenu-key/Enter/Delete keyboard conventions
+// this component already established in F3.4. Both call the SAME
+// `onMoveSlot(from, to)`, which swaps the whole slot record (source + its
+// label/title override) as one unit — see lib/figurepage.ts's `moveSlot` doc.
 
 import { useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 
 import { isContextMenuKeyEvent } from "../../../lib/contextActions";
-import type { PageSlot, PanelSource, PanelSourceStatus } from "../../../lib/figurepage";
+import { gridNeighborIndex, type GridDirection, type PageSlot, type PanelSource, type PanelSourceStatus } from "../../../lib/figurepage";
 import ContextMenu from "../../overlays/ContextMenu";
 import { buildPanelMenuItems, primaryPanelAction, type PanelMenuActions } from "./panelMenu";
 
 export const PANEL_SOURCE_MIME = "application/x-qz-panel-source";
+export const PANEL_SLOT_MIME = "application/x-qz-panel-slot";
 
 interface SlotGridProps {
   rows: number;
@@ -48,6 +58,8 @@ interface SlotGridProps {
   onSelect: (i: number) => void;
   onClear: (i: number) => void;
   onDropSource: (i: number, source: PanelSource) => void;
+  /** F3.5 manual rearrangement — see the module header. */
+  onMoveSlot: (from: number, to: number) => void;
   /** F3.4 panel-editing actions, one callback per slot index — see
    *  panelMenu.ts's `PanelMenuActions` for what each does per source kind. */
   onEdit: (i: number) => void;
@@ -66,6 +78,22 @@ function parseSource(e: DragEvent): PanelSource | null {
     return null;
   }
 }
+
+/** F3.5: the origin slot index of a panel-tile drag, or null when this drop
+ *  didn't carry one (a source-list drag, or an unrelated drop). */
+function parseSlotIndex(e: DragEvent): number | null {
+  const raw = e.dataTransfer.getData(PANEL_SLOT_MIME);
+  if (!raw) return null;
+  const i = Number(raw);
+  return Number.isInteger(i) ? i : null;
+}
+
+const SHIFT_ARROW_DIRECTION: Record<string, GridDirection> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
 
 /** F3.4: window/figdoc kinds haven't reached a durable canonical identity
  *  yet — named directly on the tile (not only surfaced lazily by F3.3's
@@ -88,6 +116,7 @@ export default function SlotGrid({
   onSelect,
   onClear,
   onDropSource,
+  onMoveSlot,
   onEdit,
   onSaveAsFigure,
   onPromote,
@@ -140,6 +169,20 @@ export default function SlotGrid({
       e.preventDefault();
       onClear(i);
     }
+    // F3.5: Shift+Arrow moves the FOCUSED panel one grid step in that
+    // direction (mirrors the spreadsheet "move selected row" idiom) — a
+    // no-op on an empty slot (nothing to move) or at a grid edge (no
+    // neighbor). Focus follows the panel to its new tile so repeated
+    // presses keep moving the same panel, the same way onMoveSlot's caller
+    // (useFigurePage) follows selection.
+    if (e.shiftKey && slot.source && e.key in SHIFT_ARROW_DIRECTION) {
+      const target = gridNeighborIndex(i, cols, rows, SHIFT_ARROW_DIRECTION[e.key]);
+      if (target === null) return;
+      e.preventDefault();
+      onMoveSlot(i, target);
+      const grid = e.currentTarget.parentElement;
+      (grid?.querySelector<HTMLElement>(`[data-slot-index="${target}"]`))?.focus();
+    }
   };
 
   return (
@@ -164,14 +207,25 @@ export default function SlotGrid({
         return (
           <div
             key={i}
+            data-slot-index={i}
             tabIndex={0}
+            draggable={!!slot.source}
             onClick={() => onSelect(i)}
             onDoubleClick={() => primary?.()}
             onContextMenu={(e) => onSlotContextMenu(i, status, e)}
             onKeyDown={(e) => onSlotKeyDown(i, status, e)}
+            // F3.5: a filled tile drags itself (rearrange); an empty tile
+            // has nothing to offer PANEL_SLOT_MIME, so its own drag is
+            // simply inert (draggable=false above).
+            onDragStart={(e) => slot.source && e.dataTransfer.setData(PANEL_SLOT_MIME, String(i))}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
+              const fromSlot = parseSlotIndex(e);
+              if (fromSlot !== null) {
+                onMoveSlot(fromSlot, i);
+                return;
+              }
               const src = parseSource(e);
               if (src) onDropSource(i, src);
             }}

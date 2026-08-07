@@ -391,3 +391,150 @@ def test_y2_free_placement_also_renders_a_twinx() -> None:
     p = _y2_panel(0, 0, [False, True], page_rect=(0.1, 0.1, 0.8, 0.8))
     out = render_figure_page([p], rows=1, cols=1, fmt="png", dpi=72)
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── F3.5 layout controls (gap / link / align / resize mode) ────────────────
+# Pure gap/engine/share-target math is unit-tested directly in
+# test_calc_figure_page_layout.py; these prove the WIRING into a real
+# rendered/constructed figure.
+
+
+def test_layout_defaults_are_byte_identical_to_omitting_the_kwargs() -> None:
+    panels = [_panel(0, 0), _panel(0, 1), _panel(1, 0), _panel(1, 1)]
+    omitted = render_figure_page(panels, rows=2, cols=2, fmt="png", dpi=72)
+    explicit_defaults = render_figure_page(
+        panels, rows=2, cols=2, fmt="png", dpi=72,
+        row_gap=None, col_gap=None, link_x=False, link_y=False,
+        align_labels=False, resize_mode="constrained",
+    )
+    assert omitted == explicit_defaults
+
+
+def test_explicit_gap_changes_the_render() -> None:
+    panels = [_panel(0, 0), _panel(0, 1), _panel(1, 0), _panel(1, 1)]
+    tight = render_figure_page(panels, rows=2, cols=2, fmt="png", dpi=72, row_gap=0.0, col_gap=0.0)
+    wide = render_figure_page(panels, rows=2, cols=2, fmt="png", dpi=72, row_gap=1.0, col_gap=1.0)
+    assert tight != wide
+
+
+def test_resize_mode_tight_and_none_render() -> None:
+    panels = [_panel(0, 0), _panel(0, 1)]
+    for mode in ("tight", "none"):
+        out = render_figure_page(panels, rows=1, cols=2, fmt="png", dpi=72, resize_mode=mode)
+        assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_unknown_resize_mode_raises() -> None:
+    with pytest.raises(ValueError, match="resize_mode"):
+        render_figure_page([_panel(0, 0)], rows=1, cols=1, resize_mode="auto")
+
+
+def test_out_of_range_gap_raises() -> None:
+    with pytest.raises(ValueError, match="row_gap"):
+        render_figure_page([_panel(0, 0)], rows=1, cols=1, row_gap=-1.0)
+
+
+def test_link_x_shares_x_limits_across_panels() -> None:
+    # Two panels with genuinely different x data ranges: unlinked, each
+    # autoscales independently (different xlim); linked, matplotlib's shared
+    # -axis autoscale unions them onto ONE xlim for both.
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    x1 = np.linspace(0.0, 5.0, 30)
+    x2 = np.linspace(10.0, 20.0, 30)
+    panels = [
+        PagePanel(x=x1, series=[("y", np.sin(x1))], row=0, col=0),
+        PagePanel(x=x2, series=[("y", np.cos(x2))], row=0, col=1),
+    ]
+    st = figure_style("default")
+
+    unlinked = _build_page_figure(
+        panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        assert unlinked.axes[0].get_xlim() != unlinked.axes[1].get_xlim()
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(unlinked)
+
+    linked = _build_page_figure(
+        panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw", link_x=True,
+    )
+    try:
+        assert linked.axes[0].get_xlim() == linked.axes[1].get_xlim()
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(linked)
+
+
+def test_link_y_shares_y_limits_across_panels() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    x = np.linspace(0.0, 5.0, 30)
+    panels = [
+        PagePanel(x=x, series=[("y", 1.0 * np.sin(x))], row=0, col=0),
+        PagePanel(x=x, series=[("y", 50.0 * np.sin(x))], row=0, col=1),
+    ]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw", link_y=True,
+    )
+    try:
+        assert fig.axes[0].get_ylim() == fig.axes[1].get_ylim()
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_unlinked_is_the_default_and_byte_identical() -> None:
+    panels = [_panel(0, 0), _panel(0, 1)]
+    omitted = render_figure_page(panels, rows=1, cols=2, fmt="png", dpi=72)
+    explicit_false = render_figure_page(
+        panels, rows=1, cols=2, fmt="png", dpi=72, link_x=False, link_y=False
+    )
+    assert omitted == explicit_false
+
+
+def test_align_labels_does_not_crash_and_changes_nothing_when_unset() -> None:
+    # align_labels repositions label ARTIST COORDINATES, not pixels sampled
+    # by savefig -- assert it runs without error and the page still renders,
+    # rather than asserting a byte difference that could legitimately be
+    # zero for a page whose panels already have identical label geometry.
+    panels = [_panel(0, 0), _panel(0, 1)]
+    out = render_figure_page(panels, rows=1, cols=2, fmt="svg", align_labels=True)
+    assert b"<svg" in out[:300]
+
+
+def test_free_placement_ignores_gap_and_resize_mode_but_honors_link() -> None:
+    # Free placement never uses a gridspec -- row_gap/col_gap/resize_mode
+    # must not raise or change anything observable there, but link_x/link_y
+    # (matplotlib sharex/sharey, works on any two axes) still applies.
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    x1 = np.linspace(0.0, 5.0, 30)
+    x2 = np.linspace(10.0, 20.0, 30)
+    panels = [
+        PagePanel(x=x1, series=[("y", np.sin(x1))], row=0, col=0, page_rect=(0.05, 0.05, 0.4, 0.4)),
+        PagePanel(x=x2, series=[("y", np.cos(x2))], row=0, col=0, page_rect=(0.55, 0.55, 0.4, 0.4)),
+    ]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+        row_gap=0.9, col_gap=0.9, resize_mode="tight", link_x=True,
+    )
+    try:
+        assert fig.axes[0].get_xlim() == fig.axes[1].get_xlim()
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)

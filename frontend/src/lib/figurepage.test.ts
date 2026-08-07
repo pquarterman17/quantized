@@ -9,6 +9,8 @@ import {
   clearSlot,
   emptySlots,
   filledCount,
+  gridNeighborIndex,
+  moveSlot,
   panelLabel,
   patchSlot,
   resizeSlots,
@@ -92,6 +94,53 @@ describe("slot model", () => {
     expect(shrunk).toHaveLength(2);
     expect(shrunk[0].source?.id).toBe("w1");
     expect(filledCount(shrunk)).toBe(1);
+  });
+});
+
+describe("moveSlot (F3.5 manual rearrangement)", () => {
+  it("swaps the whole slot record (source + label + title) as one unit", () => {
+    let slots = emptySlots(2, 2);
+    slots = assignSlot(slots, 0, winA);
+    slots = patchSlot(slots, 0, { label: "(iv)", title: "Custom" });
+    slots = assignSlot(slots, 3, winB);
+    slots = moveSlot(slots, 0, 3);
+    // winA's caption travels WITH it to slot 3; slot 0 becomes winB with
+    // its OWN (unset) overrides, not winA's leftover caption.
+    expect(slots[3]).toEqual({ source: winA, label: "(iv)", title: "Custom" });
+    expect(slots[0]).toEqual({ source: winB, label: null, title: null });
+  });
+
+  it("moving onto an empty slot leaves the origin empty", () => {
+    let slots = emptySlots(1, 2);
+    slots = assignSlot(slots, 0, winA);
+    slots = moveSlot(slots, 0, 1);
+    expect(slots[0].source).toBeNull();
+    expect(slots[1].source).toEqual(winA);
+  });
+
+  it("is a no-op for identical or out-of-range indices", () => {
+    let slots = emptySlots(1, 2);
+    slots = assignSlot(slots, 0, winA);
+    expect(moveSlot(slots, 0, 0)).toBe(slots);
+    expect(moveSlot(slots, 0, -1)).toBe(slots);
+    expect(moveSlot(slots, 0, 2)).toBe(slots);
+  });
+});
+
+describe("gridNeighborIndex", () => {
+  it("computes the row-major neighbor in each direction", () => {
+    // 2x3 grid: index 4 = row 1, col 1.
+    expect(gridNeighborIndex(4, 3, 2, "up")).toBe(1);
+    expect(gridNeighborIndex(4, 3, 2, "left")).toBe(3);
+    expect(gridNeighborIndex(4, 3, 2, "right")).toBe(5);
+    expect(gridNeighborIndex(1, 3, 2, "down")).toBe(4);
+  });
+
+  it("returns null at every grid edge", () => {
+    expect(gridNeighborIndex(0, 2, 2, "up")).toBeNull();
+    expect(gridNeighborIndex(0, 2, 2, "left")).toBeNull();
+    expect(gridNeighborIndex(1, 2, 2, "right")).toBeNull();
+    expect(gridNeighborIndex(3, 2, 2, "down")).toBeNull();
   });
 });
 
