@@ -1,9 +1,17 @@
 // Figure page composer workshop (GOTO #4) — view. A draggable ToolWindow:
-// page options on the left (format / style preset / DPI / panel-label
+// page options on the left (name / format / style preset / DPI / panel-label
 // format + position / grid size), the panel sources next to them (open plot
-// windows + saved Library figures — drag onto a slot or click to assign),
-// and the slot grid + server-rendered low-DPI preview on the right. Thin:
-// all state + the preview/export wiring live in useFigurePage.
+// windows, saved Publication figures, and — F3.3 — saved Editable figures
+// picked directly, drag onto a slot or click to assign), and the slot grid +
+// server-rendered low-DPI preview on the right. Thin: all state + the
+// preview/export/save wiring live in useFigurePage.
+//
+// F3.3: Save/Save As write the page into the Library's saved-pages
+// collection (see Library/PagesSection.tsx for reopen/rename/duplicate/
+// delete); the title shows the saved name + a "•" dirty cue once anything is
+// worth saving, and closing a page that was SAVED then edited confirms
+// before discarding (a fresh, never-saved page still discards plainly, per
+// the note below).
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, NumberField, RichLabelInput, Select } from "../../primitives";
@@ -16,6 +24,8 @@ import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES } from "../figurebuilder/useFigureBuilder";
 import SlotGrid, { PANEL_SOURCE_MIME } from "./SlotGrid";
 import { useFigurePage } from "./useFigurePage";
+
+const SOURCE_GLYPH: Record<PanelSource["kind"], string> = { figure: "◇ ", figdoc: "▣ ", window: "□ " };
 
 function SourceList({
   heading,
@@ -52,7 +62,7 @@ function SourceList({
               textOverflow: "ellipsis",
             }}
           >
-            {src.kind === "figdoc" ? "▣ " : "□ "}
+            {SOURCE_GLYPH[src.kind]}
             {src.name}
           </div>
         ))
@@ -67,14 +77,48 @@ export default function FigurePageView() {
   const selIdx = p.selected;
   const sel = selIdx !== null ? p.slots[selIdx] : null;
 
+  const requestClose = () => {
+    void p.requestClose().then((ok) => {
+      if (ok) setOpen(false);
+    });
+  };
+
   return (
-    <ToolWindow id="figurepage" title="Multi-panel export" width={840} onClose={() => setOpen(false)}>
+    <ToolWindow
+      id="figurepage"
+      title={`Multi-panel export — ${p.name}${p.dirty ? " •" : ""}`}
+      width={840}
+      onClose={requestClose}
+    >
       <div style={{ display: "flex", gap: 12 }}>
         {/* Page options */}
         <div style={{ width: 170, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div role="note" className="qzk-ds-meta" style={{ color: "var(--text-dim)" }}>
-            This composition is temporary; closing it discards the page layout.
+          <label className="qzk-field-lbl">Page name</label>
+          <NumberField numeric={false} value={p.name} onChange={p.setName} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <Button onClick={p.save} title="Save (updates this page if already saved)">
+              Save
+            </Button>
+            <Button onClick={() => void p.saveAs()} title="Save as a new named page">
+              Save As…
+            </Button>
           </div>
+          {p.unresolvedSlots.length > 0 ? (
+            <div role="note" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+              Cannot save yet:
+              <ul style={{ margin: "2px 0 0", paddingLeft: 16 }}>
+                {p.unresolvedSlots.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            !p.everSaved && (
+              <div role="note" className="qzk-ds-meta" style={{ color: "var(--text-dim)" }}>
+                Not yet saved — closing without saving discards this page.
+              </div>
+            )
+          )}
           <label className="qzk-field-lbl">Grid (rows × cols)</label>
           <div style={{ display: "flex", gap: 6 }}>
             <NumberField value={p.rows} onChange={(v) => p.setGrid(Number(v) || 1, p.cols)} width={60} />
@@ -139,6 +183,8 @@ export default function FigurePageView() {
         {/* Panel sources */}
         <div style={{ width: 190, display: "flex", flexDirection: "column", gap: 4 }}>
           <SourceList heading="Plot windows" sources={p.windowSources} onPick={p.assignToNext} />
+          <div style={{ height: 4 }} />
+          <SourceList heading="Editable figures" sources={p.figureSources} onPick={p.assignToNext} />
           <div style={{ height: 4 }} />
           <SourceList heading="Publication figures" sources={p.docSources} onPick={p.assignToNext} />
         </div>

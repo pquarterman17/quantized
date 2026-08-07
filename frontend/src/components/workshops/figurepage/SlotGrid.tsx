@@ -14,6 +14,11 @@
 // — gets a subtle glyph next to its name. Neither invents new behavior: both
 // are read straight off the same liveness/lifecycle state the preview/export
 // path already depends on.
+//
+// F3.3 adds a third source kind, "figure" (◇, matching the Library's
+// Editable figures glyph) — a saved canonical figure picked directly, or how
+// a reopened page's panels are named (a saved page only ever references a
+// canonical figureId, never a window/figdoc).
 
 import type { DragEvent } from "react";
 
@@ -144,7 +149,7 @@ export default function SlotGrid({
                       : slot.source.name
                   }
                 >
-                  {slot.source.kind === "figdoc" ? "▣ " : "□ "}
+                  {slot.source.kind === "figure" ? "◇ " : slot.source.kind === "figdoc" ? "▣ " : "□ "}
                   {isFrozen && "❄ "}
                   {slot.source.name}
                 </span>

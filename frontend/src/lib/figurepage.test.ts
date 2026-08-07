@@ -223,4 +223,48 @@ describe("resolvePanelSource", () => {
   it("reports missing when a live figdoc's source dataset was removed (doc still exists, unrenderable)", () => {
     expect(resolvePanelSource(doc, [], [figDoc()], noDatasets)).toEqual({ status: "missing" });
   });
+
+  // F3.3: the "figure" source kind — a saved canonical editableFigures entry
+  // picked directly (or a reopened page's hydrated panel). `editableFigures`
+  // is the 5th, defaulted (`= []`) param — every call above omits it and
+  // keeps behaving identically, since none of them ever assign a "figure".
+  describe("figure source kind (F3.3)", () => {
+    const figureSrc: PanelSource = { kind: "figure", id: "fig1", name: "Loop A" };
+
+    it("defaults to missing when editableFigures is omitted entirely", () => {
+      expect(resolvePanelSource(figureSrc, [], [], withD1)).toEqual({ status: "missing" });
+    });
+
+    it("resolves a live figure with its dataset present as ok/live", () => {
+      const live = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      expect(resolvePanelSource(figureSrc, [], [], withD1, [live])).toEqual({
+        status: "ok",
+        lifecycle: "live",
+      });
+    });
+
+    it("resolves a frozen figure with its snapshot present as ok/frozen", () => {
+      const frozen = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: null, view: defaultPlotView(),
+        data: { mode: "frozen", snapshot: DATA },
+      });
+      expect(resolvePanelSource(figureSrc, [], [], noDatasets, [frozen])).toEqual({
+        status: "ok",
+        lifecycle: "frozen",
+      });
+    });
+
+    it("reports missing when the figure was deleted from editableFigures", () => {
+      expect(resolvePanelSource(figureSrc, [], [], withD1, [])).toEqual({ status: "missing" });
+    });
+
+    it("reports missing when a live figure's source dataset was removed", () => {
+      const live = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      expect(resolvePanelSource(figureSrc, [], [], noDatasets, [live])).toEqual({ status: "missing" });
+    });
+  });
 });

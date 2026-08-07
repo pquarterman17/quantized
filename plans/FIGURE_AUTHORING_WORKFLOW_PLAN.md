@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-06 — F3.2 missing-source and frozen-snapshot panel semantics
+**Updated:** 2026-08-06 — F3.3 page save/reopen lifecycle
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -267,7 +267,7 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
       alignment, and output settings in `.dwk`.
 - [x] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
       reduced configs. Define missing-source and frozen-snapshot behavior.
-- [ ] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
+- [x] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
       access, duplicate, rename, and delete.
 - [ ] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
       the referenced figure; provide explicit unlink/duplicate-for-page actions.
@@ -380,6 +380,152 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-06 — F3.3 page save/reopen lifecycle (Claude Sonnet 5)
+
+- **Unresolved-slot Save policy (the core design decision) — BLOCK, with a
+  specific per-slot message, never save-with-empty-panel.** A filled slot
+  whose session source has no canonical `figureId` yet (an open plot window
+  never saved as an editable figure, or a legacy Publication figure — F1
+  never gave that kind a FigureDocument counterpart at all) refuses Save
+  entirely rather than persisting `figureId: null` for that panel — silently
+  dropping it is exactly the F3.2 failure this item exists not to repeat.
+  Chose blocking over "save with a warning" because it matches every other
+  save-refusal precedent already in this codebase
+  (`applyFigurePublicationEdit`'s missing-dataset/missing-snapshot checks,
+  `promoteLegacyFigureDoc`'s source-unavailable check) — none of them save a
+  degraded document and warn after the fact. Investigated whether a "save
+  this window's figure into the Library" action already exists (F1.4): yes
+  (`saveFigure`/the title-bar Save button), and the block message for a
+  window-sourced slot names it directly ("save it (its title-bar Save
+  button, or File > Save Editable Figure), then Save this page again") —
+  once that figure is saved, the SAME slot assignment auto-resolves next
+  render (no reassignment needed, since `resolveSlotFigureId` re-checks
+  `editableFigures` on every recompute). A figdoc-sourced slot's message
+  instead points at F1.4's other existing action, "Create editable copy"
+  (SavedFiguresSection's "Editable" button), because a figdoc can NEVER
+  resolve on its own — the user must assign the resulting copy to the slot.
+  A "figure"-kind slot (a saved figure picked directly, or a reopened page's
+  hydrated panel) is NEVER blocking, even once its target is deleted: it
+  already carries a real canonical id, so Save persists that reference
+  as-is and it resolves through `resolvePagePanel` to `{status:"missing"}`
+  on its next read — F3.2's fail-closed contract, not a reason to block.
+- **Reopen source-model choice — one new session source kind, not full
+  unification (deferred to F3.4, per F3.1's own log).** `lib/figurepage.ts`'s
+  `PanelSourceKind` gained `"figure"` alongside the existing `"window"` and
+  `"figdoc"` — a saved `editableFigures` entry picked directly. A reopened
+  `PageDocument`'s panels ONLY ever reference a canonical `figureId` (F3.1/
+  F3.2), so every occupied panel hydrates to this new kind
+  (`store.openPageDocument` seeds `pageDocSeed`; `useFigurePage.ts`'s effect
+  consumes it once, mirroring `useFigureBuilder.ts`'s existing `figureDocSeed`
+  pattern exactly — including its "unconditionally overwrite the current
+  session" behavior on a new seed, not a new confirm surface). Rendering a
+  "figure"-kind panel reuses F1.5's `buildFigureSpecFromDocument` adapter
+  UNCHANGED — the same one Publication Preview's export/copy already uses —
+  so a page panel sourced from a saved figure renders identically to opening
+  that figure on its own. Its `x_breaks`/`margins` overrides are stripped
+  (page-incompatible, a 422 otherwise) via a new shared
+  `stripPageIncompatibleOverrides` helper, deduplicating what used to be a
+  figdoc-only inline destructure. `resolvePanelSource` gained a 5th,
+  DEFAULTED (`= []`) `editableFigures` parameter rather than being inserted
+  positionally, so every pre-F3.3 call site (including all of
+  `lib/figurepage.test.ts`'s existing cases) keeps compiling and behaving
+  identically without being touched.
+- **Dirty state — two predicates, mirroring `figureLifecycle.ts`'s corrected
+  convention, not its original one.** `pageDocumentDirty` (broad: true when
+  never saved OR a saved page has drifted) drives the Save affordance's name
+  + "•" cue in the ToolWindow title, matching `editableFigureDirty`.
+  `pageDocumentHasUnsavedEdits` (narrow: false for a page never saved at
+  all) gates the close-confirm — deliberately the CORRECTED convention the
+  2026-08-01 adversarial review arrived at for editable figures
+  (`editableFigureHasUnsavedEdits`, after finding the broader predicate
+  popped a confirm on every routine never-saved close), applied here from
+  the start rather than rediscovered. A fresh, never-saved page still
+  discards plainly on close — the pre-F3.3 "this composition is temporary"
+  note now shows CONDITIONALLY (only while `!everSaved`) instead of always,
+  since it stopped being universally true the moment Save existed.
+- **Schema addition — `createdAt`/`modifiedAt`, no version bump.** Purely
+  informational timestamps (recency sorting only, zero render-semantics
+  impact) are additive to `PageDocument` without bumping
+  `PAGE_DOCUMENT_VERSION` — unlike `FigureDocument`'s v1->v2 `publication`
+  field, which changes what a document RENDERS AS and so genuinely needed a
+  version fork. The sanitizer defaults an absent value to the Unix epoch
+  (not "now"), so a genuinely undated pre-F3.3 document — none has actually
+  been written yet; F3.1/F3.2 shipped the schema before any writer existed —
+  sorts LAST in a recency list rather than first. `modifiedAt` is stamped by
+  the store's save actions (`store/pageDocuments.ts`), never by the pure
+  `createPageDocument` constructor, mirroring `lib/plotspec.ts`'s
+  `SavedPlotSpec`/`store/graphBuilder.ts` split.
+- **A real bug found and fixed while building the fix, not just the intended
+  feature:** the session draft's id (`DRAFT_PAGE_ID`) was a SHARED LITERAL
+  constant ("figurepage-draft") reused by every never-saved session, on the
+  reasoning that "this hook has at most one page open at a time." But
+  `savePage` upserts `store.pages` BY ID — so saving a fresh page A, closing,
+  opening a SECOND fresh page B (same literal id), and saving B would
+  silently overwrite A's saved entry instead of creating a second one.
+  Fixed with a per-mount counter (`nextDraftId()`), the same pattern
+  `figureLifecycle.ts`'s `nextFigureId()` already uses for exactly this
+  reason.
+- **Library section:** new `components/Library/PagesSection.tsx`, mirroring
+  `EditableFiguresSection.tsx`'s list/rename/duplicate/delete pattern
+  (confirm + Undo via the existing history snapshot — `pages` already rides
+  it, F3.1), lazy-loaded the same way. Listed most-recently-modified first
+  (`modifiedAt` descending) — F3.3's minimal take on "recent access": a
+  plain sort by the new timestamp field, no separate recency index.
+- **Deferred, named honestly:**
+  - F3.4 (unify panel editing — double-click a panel to edit its referenced
+    figure, explicit unlink/duplicate-for-page) and F3.5 (layout controls)
+    remain fully open, as does F3.6 (export from PageDocument specifically —
+    export today still goes through the SESSION model's `buildSpec`, not a
+    reopened `PageDocument` directly; the two happen to agree today because
+    reopening fully hydrates the session, but F3.6 is the item that commits
+    to that path explicitly).
+  - Renaming a page via the Library while that SAME page happens to be open
+    in the Figure Page workshop does not live-sync into the open session —
+    the session's `name` is local React state (this hook's model predates a
+    store-backed session, and F3.3 deliberately did not restructure it into
+    one; that is F3.4/full-source-model-unification territory). The next
+    Save from that stale session would overwrite the Library rename with
+    the session's own (older) name. Narrow and low-frequency (requires
+    renaming a page from the Library while it is ALSO the one open in the
+    workshop), not fixed in this slice.
+  - `components/workshops/figurepage/useFigurePage.ts` is now 736 lines
+    (`wc -l`), unpinned by any ratchet (`MODULE_PINS` covers specific listed
+    `.ts` files only, not every workshop hook) but above the 500-line
+    habit — the SAME already-acknowledged-but-unaddressed class as
+    `useFigureBuilder.ts` (615) and `useGraphBuilder.ts` (662; flagged in
+    this plan's 2026-08-01 review log as a booked follow-up, not yet acted
+    on). Not fixed here — a rushed split at the end of an already large,
+    fully-green slice risked more than it saved — but logged rather than
+    left silently discovered later, per this plan's own discipline.
+- **Tests:** `lib/pageDocument.test.ts` (+9: createdAt/modifiedAt stamping/
+  sanitization/epoch-fallback, `pageDocumentDirty`/`pageDocumentHasUnsavedEdits`
+  across never-saved/clean/drifted); `lib/figurepage.test.ts` (+5:
+  `resolvePanelSource`'s new "figure" kind across omitted-param/live/frozen/
+  missing/dataset-removed); `store/pageDocuments.test.ts` (new file, 14:
+  save insert/update-in-place/undo, Save As new-id/blank-name-rejection,
+  rename/duplicate/delete/undo, `openPageDocument` seed/not-found/clear, and
+  a `.dwk` serialize/parse round trip); `components/workshops/figurepage/
+  useFigurePage.test.ts` (+14: figureSources enumeration, Save blocked for
+  an unsaved window and for a figdoc with the exact expected messages, Save
+  succeeding + clearing dirty, re-dirtying after a further edit, Save As
+  rebind, reopen restoring grid/output/panel references, reopen of a page
+  whose figure was since deleted surfacing as missing-not-dropped and
+  surviving a re-save, and `requestClose`'s three branches: never-saved
+  discards plainly, a saved-and-drifted page gates + respects cancel/
+  confirm, an unmodified reopened page closes plainly);
+  `components/Library/PagesSection.test.tsx` (new file, 7: empty state,
+  recency ordering, open/reopen, rename, duplicate, delete + cancel).
+- **Gate:** `npm run lint` clean (0 errors, 9 pre-existing unrelated
+  warnings); full `npx vitest run` 393 files / 5684 tests passed; `npm run
+  build` clean, bundle 873.5 kB eager / 903.3 kB budget (29.8 kB headroom;
+  +2.3 kB over the F3.2 baseline — only the store-composed
+  `pageDocuments.ts`/`pageDocument.ts`/`figurepage.ts` additions are eager,
+  everything else (the workshop hook/view/PagesSection) is already
+  lazy-loaded); `npm run typecheck` (`tsc -b --noEmit`) clean.
+- F3.3 is now checked. F3.4 (unify panel editing) and F3.5 (layout controls)
+  remain fully open; F3.6 (export from PageDocument) is open and now has a
+  reopened session to actually export from, which it didn't before this slice.
 
 ### 2026-08-06 — F3.2 missing-source and frozen-snapshot panel semantics (Claude Sonnet 5)
 
