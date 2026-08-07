@@ -211,12 +211,21 @@ def test_fit_dream_submits_and_polls_to_done(qz_client: QuantizedClient) -> None
     assert len(result["popt"]) == 3
 
 
-def test_fit_dream_timeout_raises(qz_client: QuantizedClient) -> None:
-    # Deliberately tiny timeout (not a large sample budget) so the deadline
-    # is guaranteed to already be past by the first poll — this tests the
-    # timeout branch itself, not job duration, and keeps the underlying job
-    # small (same fast budget as the poll-to-done test above) so it doesn't
-    # tie up a job-pool worker thread for the rest of the suite.
+def test_fit_dream_timeout_raises(
+    qz_client: QuantizedClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # timeout=0.0 alone is NOT deterministic: fit_dream polls the job once
+    # BEFORE its first deadline check (returning an already-finished job is
+    # correct client behavior even at timeout 0), so a fast runner can
+    # complete the tiny job inside the submit->first-poll gap and return
+    # success — exactly what three CI matrix legs did on the v0.17.0 release
+    # commit (2026-08-07). Pin the polled status to "running" so the
+    # deadline branch is reached regardless of real job speed; the real
+    # poll-to-done path is covered by the test above, and the real
+    # (tiny-budget) job still drains from the pool on its own.
+    monkeypatch.setattr(
+        qz_client, "job_status", lambda _job_id: {"status": "running"}
+    )
     x, y = _gaussian_xy()
     with pytest.raises(QuantizedClientError, match="did not finish within"):
         qz_client.fit_dream(
