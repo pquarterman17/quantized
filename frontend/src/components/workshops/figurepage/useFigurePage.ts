@@ -221,6 +221,73 @@ export function useFigurePage() {
     setDraft((prev) => ({ ...prev, name: next }));
   }
 
+  /** F3.4 "unify panel editing": open the referenced figure for editing
+   *  (figure kind), or focus/restore its window (window kind). Not called
+   *  for a figdoc slot (see `promoteSlot`) or a missing source — SlotGrid
+   *  gates the call via `panelMenu.ts`'s `primaryPanelAction`. */
+  function editSlot(i: number): void {
+    const slot = slots[i];
+    if (!slot.source) return;
+    const s = useApp.getState();
+    if (slot.source.kind === "figure") {
+      s.openEditableFigure(slot.source.id);
+      return;
+    }
+    if (slot.source.kind === "window") {
+      const win = s.plotWindows.find((w) => w.id === slot.source?.id);
+      if (!win) return;
+      if (win.winState === "minimized") s.restoreWindow(win.id);
+      else s.focusWindow(win.id);
+    }
+  }
+
+  /** F3.4: a window-kind panel's "Save as editable figure" — the SAME action
+   *  its title-bar Save button runs (`saveFigure`), reachable directly from
+   *  the panel so resolving F3.3's unresolved-slot Save block doesn't
+   *  require leaving the workshop to find the window. Once saved, the slot
+   *  automatically resolves to the new `editableFigures` entry on its next
+   *  read (`resolveSlotFigureId` already checks `editableFigures` — no local
+   *  reassignment needed, unlike `promoteSlot`/`duplicateForPage` below). */
+  function saveSlotAsFigure(i: number): void {
+    const slot = slots[i];
+    if (!slot.source || slot.source.kind !== "window") return;
+    useApp.getState().saveFigure(slot.source.id);
+  }
+
+  /** F3.4: a figdoc-kind panel's "Create editable copy" — the existing
+   *  promotion (`promoteLegacyFigureDoc`, F2.1c) plus repointing THIS slot at
+   *  the new copy in one step, so the panel converts straight from
+   *  non-durable ("figdoc") to durable ("figure") without a second manual
+   *  reassignment. The Library's own "Editable" button performs the same
+   *  promotion with no slot to repoint. */
+  function promoteSlot(i: number): void {
+    const slot = slots[i];
+    if (!slot.source || slot.source.kind !== "figdoc") return;
+    const s = useApp.getState();
+    const newId = s.promoteLegacyFigureDoc(slot.source.id);
+    if (!newId) return;
+    const created = useApp.getState().editableFigures.find((f) => f.id === newId);
+    assign(i, { kind: "figure", id: newId, name: created?.name ?? `${slot.source.name} (editable copy)` });
+  }
+
+  /** F3.4 "duplicate for this page" / unlink: only meaningful for a
+   *  `figure`-kind panel — the only kind with a real duplicable identity (a
+   *  window has no saved copy to duplicate; a figdoc's "copy" IS what
+   *  `promoteSlot` above performs). Duplicates the referenced figure (one
+   *  undoable store mutation, `duplicateEditableFigure`) and repoints THIS
+   *  panel at the copy — editing the copy afterward no longer touches the
+   *  original or any OTHER page still referencing it. */
+  function duplicateForPage(i: number): void {
+    const slot = slots[i];
+    if (!slot.source || slot.source.kind !== "figure") return;
+    const s = useApp.getState();
+    const newId = s.duplicateEditableFigure(slot.source.id);
+    if (!newId) return;
+    const created = useApp.getState().editableFigures.find((f) => f.id === newId);
+    assign(i, { kind: "figure", id: newId, name: created?.name ?? `${slot.source.name} copy` });
+    setStatus(`duplicated "${slot.source.name}" for this page; editing the copy no longer affects the original`);
+  }
+
   /** The page spec (sans format/dpi — the preview and the export choose their
    *  own). null when nothing is assigned or nothing can render anymore. */
   async function buildSpec(): Promise<FigurePageSpec | null> {
@@ -343,6 +410,10 @@ export function useFigurePage() {
     clear,
     setSlotLabel,
     setSlotTitle,
+    editSlot,
+    saveSlotAsFigure,
+    promoteSlot,
+    duplicateForPage,
     labelFormat,
     setLabelFormat,
     labelPos,

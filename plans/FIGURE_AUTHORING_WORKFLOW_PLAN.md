@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-06 — F3.3 page save/reopen lifecycle
+**Updated:** 2026-08-06 — F3.4 unified panel editing
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -269,7 +269,7 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
       reduced configs. Define missing-source and frozen-snapshot behavior.
 - [x] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
       access, duplicate, rename, and delete.
-- [ ] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
+- [x] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
       the referenced figure; provide explicit unlink/duplicate-for-page actions.
 - [ ] **F3.5 Complete layout controls.** Preserve manual rearrangement,
       adjustable spacing, shared/independent axes, link/unlink, alignment, and
@@ -380,6 +380,121 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-06 — F3.4 unified panel editing (Claude Sonnet 5)
+
+- **Size discipline first (separate commit).** `useFigurePage.ts` was 736
+  lines (flagged by F3.3's log, not acted on). Extracted, zero behavior
+  change: `panelResolve.ts` (panel-source id resolution + single-panel
+  FigureSpec building — `resolveSlotFigureId`, `stripPageIncompatibleOverrides`,
+  `panelFigure`, `panelRenderInputs`) and `usePageLifecycle.ts` (the save/
+  dirty/reopen half — `pageDocument` projection, F3.3's unresolved-slot
+  Save gate, dirty predicates, Save/Save As/close-confirm, the `pageDocSeed`
+  reopen effect). `useFigurePage.ts`: 736 -> 374 lines before any F3.4 code;
+  445 after. Full frontend gate green on both commits.
+- **The unification decision (the plan's own open question) — KEEP the
+  three-kind session-source model (window/figdoc/figure); do NOT collapse
+  pickable sources to "canonical figures only".** F3.1's log deliberately
+  deferred this to F3.4 "once a save/promote path exists" — F3.3 built that
+  path (Save blocks on an unresolved slot and names the exact fix). Having
+  the path available does not, on inspection, obligate REMOVING the
+  alternative sources: nothing in F3.4's stated scope (double-click edit,
+  unlink/duplicate-for-page) requires it, and doing so would drop a
+  currently-working capability F3.1's log explicitly warned against (open
+  windows and legacy Publication figures are still real, useful panel
+  sources — a plot doesn't stop being pickable just because it hasn't been
+  saved as a canonical figure yet). What genuinely unifies this slice is the
+  EDITING interaction, not the source list: every panel kind now gets
+  exactly ONE double-click/context-menu entry point (never a silent no-op),
+  and every kind's menu steers toward acquiring — or, for a "figure" kind,
+  already having — a durable canonical identity:
+  - **figure** kind: double-click/"Edit figure" opens the editable figure
+    for editing (`openEditableFigure`, F1.4) — already durable, nothing to
+    convert.
+  - **window** kind: double-click/"Focus window" raises (and un-minimizes)
+    its window; a new "Save as editable figure" menu entry runs the SAME
+    action its title-bar Save button does (`saveFigure`) directly from the
+    panel, so resolving F3.3's unresolved-slot Save block no longer requires
+    hunting for the window itself. The slot's kind stays "window" — no
+    reassignment needed, since `resolveSlotFigureId` already re-checks
+    `editableFigures` on every read (F3.1).
+  - **figdoc** kind: double-click/"Create editable copy" runs the existing
+    promotion (`promoteLegacyFigureDoc`, F2.1c) AND repoints THIS slot at
+    the new copy in one step (the Library's own "Editable" button performs
+    the same promotion with no slot to repoint) — converts the panel
+    straight from non-durable to durable without a second manual
+    reassignment.
+  - **missing** status (any kind): never a dead end, but also never an
+    invented edit target — the menu offers ONLY "Clear panel" (the existing
+    × chip's action), since there is nothing left at the far end of a
+    dangling reference to open/promote/duplicate.
+  - The tooltip on a window/figdoc-kind tile now also names its transient
+    (not-yet-durable) status directly ("— open window, not yet a saved
+    figure" / "— Publication figure (export-only); double-click to make it
+    editable"), so the distinction is visible on the grid itself, not only
+    surfaced lazily by F3.3's Save-time block message.
+- **Unlink / duplicate-for-page** (a `figure`-kind panel only — the only
+  kind with a real duplicable identity; a window has no saved copy to
+  duplicate, and a figdoc's "copy" IS what the promotion above performs):
+  "Duplicate for this page" calls `duplicateEditableFigure` (one undoable
+  store mutation, F1.4) and repoints THIS panel at the copy via the
+  existing `assign`, so editing the copy afterward no longer touches the
+  original or any OTHER page still referencing it — literal unlink-via-copy
+  semantics, named in the UI the way the plan states it.
+- **Preview invalidation (item 3) — verified, not fixed.** Traced whether
+  editing a referenced canonical ("figure"-kind) figure and re-saving it
+  reaches the page preview: `panelRenderInputs`'s existing "figure" branch
+  (`lib/figurepage`/now `panelResolve.ts`) already tracks the DOCUMENT
+  OBJECT itself (not just its id), and every store action that edits a
+  saved `editableFigures` entry (`saveFigure`, rename, `duplicateEditableFigure`,
+  `applyFigurePublicationEdit`'s "new-editable" target) replaces it with a
+  new reference via `.map()`/spread rather than mutating in place — so the
+  `useShallow`-compared render-input array already changes reference and
+  re-triggers the debounced preview fetch. This was true before this slice
+  but had ZERO test coverage (the existing #8g "re-renders when an assigned
+  saved figure (doc) is edited" test exercises the OLDER "figdoc" branch,
+  not the F3.3 "figure" one) — added the missing characterization test
+  rather than "fixing" a bug that, on inspection, doesn't exist. No
+  production code changed for this item.
+- **F3.3 residue (Library rename while open) — carried forward, NOT fixed
+  here.** F3.3's log flagged that renaming a page in the Library while that
+  SAME page is open in the workshop doesn't live-sync (the session's `name`
+  is local React state; the next Save from the stale session overwrites the
+  Library rename). This slice's editing unification touches panel SOURCES
+  (`slots`), not the page-level session identity/name, so the gap doesn't
+  fall out of anything built here — `usePageLifecycle.ts`'s `draft` state is
+  the exact same local-React-state model F3.3 left in place, just relocated
+  to its own module. Still narrow and low-frequency (requires renaming a
+  page from the Library while it is ALSO the one open in the workshop). Real
+  fix needs the session to read its name reactively from `store.pages`
+  instead of a local snapshot — deferred, named honestly rather than
+  silently dropped a second time.
+- **F3.5 (layout controls) and F3.6 (export from PageDocument) remain fully
+  open** — untouched by this slice.
+- **Tests:** `panelMenu.test.ts` (new file, 11: `primaryPanelAction`
+  null-for-empty/null-for-missing/dispatch-per-kind; `buildPanelMenuItems`
+  empty-for-unassigned, Clear-only-for-missing, full per-kind item lists +
+  their `run` wiring); `SlotGrid.test.tsx` (new file, 20: double-click
+  dispatch per kind incl. no-op for empty/missing, right-click menu
+  contents + item clicks incl. missing-shows-only-Clear and
+  empty-opens-no-menu, keyboard ContextMenu-key/Shift+F10/Enter/Delete/
+  Backspace incl. Enter-no-ops-when-missing and Delete-no-ops-when-empty,
+  the transient-tooltip cases including "frozen wins over transient" and a
+  durable figure-kind panel carrying no note); `useFigurePage.test.ts`
+  (+8: `editSlot` for figure/window/minimized-window kinds, `promoteSlot`
+  converting+repointing a figdoc slot, `duplicateForPage` duplicating+
+  repointing a figure slot and its no-op on window/figdoc kinds,
+  `saveSlotAsFigure` saving a window slot's document (auto-resolving next
+  read, no reassignment) and its no-op on figure/figdoc kinds, plus the
+  figure-kind preview-invalidation characterization test above).
+- **Gate, both commits:** `npm run lint` clean (0 errors, 9 pre-existing
+  unrelated warnings); full `npx vitest run` green — 393/5684 after the
+  refactor commit (unchanged from F3.3's baseline, confirming zero behavior
+  change), 395/5724 after the feature commit; `npm run build` clean, bundle
+  873.6 kB eager / 903.3 kB budget (unchanged — all F3.4 code lives in the
+  already-lazy-loaded Figure Page workshop chunk); `npx tsc -b --noEmit`
+  clean on both.
+- F3.4 is now checked.
 
 ### 2026-08-06 — F3.3 page save/reopen lifecycle (Claude Sonnet 5)
 

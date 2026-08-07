@@ -12,6 +12,10 @@
 // worth saving, and closing a page that was SAVED then edited confirms
 // before discarding (a fresh, never-saved page still discards plainly, per
 // the note below).
+//
+// F3.4: panels are now directly editable — SlotGrid owns the double-click/
+// context-menu/keyboard wiring (see its own header + panelMenu.ts); this
+// view only forwards the per-index callbacks useFigurePage exposes.
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, NumberField, RichLabelInput, Select } from "../../primitives";
@@ -201,6 +205,10 @@ export default function FigurePageView() {
             onSelect={p.setSelected}
             onClear={p.clear}
             onDropSource={p.assign}
+            onEdit={p.editSlot}
+            onSaveAsFigure={p.saveSlotAsFigure}
+            onPromote={p.promoteSlot}
+            onDuplicateForPage={p.duplicateForPage}
           />
           <div
             style={{

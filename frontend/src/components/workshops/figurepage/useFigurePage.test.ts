@@ -652,4 +652,148 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
       expect(askConfirm).not.toHaveBeenCalled();
     });
   });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F3.4: "unify panel editing" — double-
+  // click/context-menu actions dispatch through these hook functions;
+  // SlotGrid.test.tsx covers the UI wiring, this covers the store effects.
+  describe("F3.4 panel editing", () => {
+    it("editSlot opens/focuses a window bound to a figure-kind panel's document", () => {
+      useApp.setState({ editableFigures: [FIGURE] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.figureSources[0]));
+      const before = useApp.getState().plotWindows.length;
+      act(() => result.current.editSlot(0));
+      const after = useApp.getState();
+      expect(after.plotWindows.length).toBe(before + 1);
+      const opened = after.plotWindows.find((w) => w.kind === "plot" && w.document?.id === "figure-1");
+      expect(opened).toBeDefined();
+      expect(after.focusedWindowId).toBe(opened!.id);
+    });
+
+    it("editSlot focuses a window-kind panel's already-open window", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      expect(useApp.getState().focusedWindowId).not.toBe("w1");
+      act(() => result.current.editSlot(0));
+      expect(useApp.getState().focusedWindowId).toBe("w1");
+    });
+
+    it("editSlot restores a minimized window-kind panel's window instead of merely focusing it", () => {
+      useApp.setState((s) => ({
+        plotWindows: s.plotWindows.map((w) => (w.id === "w1" ? { ...w, winState: "minimized" } : w)),
+      }));
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() => result.current.editSlot(0));
+      const w1 = useApp.getState().plotWindows.find((w) => w.id === "w1");
+      expect(w1?.winState).toBe("normal");
+      expect(useApp.getState().focusedWindowId).toBe("w1");
+    });
+
+    it("promoteSlot converts a figdoc-kind panel to an editable copy and repoints the slot at it", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.docSources[0])); // FROZEN_DOC ("f1")
+      expect(useApp.getState().editableFigures).toHaveLength(0);
+
+      act(() => result.current.promoteSlot(0));
+
+      const figures = useApp.getState().editableFigures;
+      expect(figures).toHaveLength(1);
+      expect(result.current.slots[0].source).toMatchObject({ kind: "figure", id: figures[0].id });
+      // The panel now resolves — this is exactly what F3.3's unresolved-slot
+      // Save block was pointing the user to do manually.
+      expect(result.current.pageDocument.panels[0].figureId).toBe(figures[0].id);
+    });
+
+    it("duplicateForPage duplicates a figure-kind panel's document and repoints THIS slot, leaving the original untouched", () => {
+      useApp.setState({ editableFigures: [FIGURE] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.figureSources[0]));
+
+      act(() => result.current.duplicateForPage(0));
+
+      const figures = useApp.getState().editableFigures;
+      expect(figures).toHaveLength(2);
+      expect(figures.find((f) => f.id === "figure-1")).toBeDefined(); // original unchanged
+      const slot0 = result.current.slots[0].source;
+      expect(slot0?.kind).toBe("figure");
+      expect(slot0?.id).not.toBe("figure-1"); // repointed at the copy, not the original
+      expect(useApp.getState().status).toMatch(/duplicated .* for this page/);
+    });
+
+    it("duplicateForPage is a no-op for a window- or figdoc-kind panel", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() => result.current.assign(1, result.current.docSources[0]));
+      act(() => {
+        result.current.duplicateForPage(0);
+        result.current.duplicateForPage(1);
+      });
+      expect(useApp.getState().editableFigures).toHaveLength(0);
+      expect(result.current.slots[0].source?.id).toBe("w1");
+      expect(result.current.slots[1].source?.id).toBe("f1");
+    });
+
+    it("saveSlotAsFigure saves a window-kind panel's document, and the slot auto-resolves next read", () => {
+      // saveFigure (the store action this delegates to) reads the window's
+      // OWN bound document (every REAL window carries one from createWindow;
+      // this file's `win()` fixture omits it by default since most tests
+      // don't care) — give w1 one, matching the F3.1 "resolves a window
+      // source..." test's own setup a few describes up.
+      const document = createFigureDocument({
+        id: "figure-w1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      useApp.setState({ plotWindows: [win({ id: "w1", title: "Loop A", document })] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      expect(result.current.pageDocument.panels[0].figureId).toBeNull(); // not yet resolvable
+
+      act(() => result.current.saveSlotAsFigure(0));
+
+      const figures = useApp.getState().editableFigures;
+      expect(figures).toHaveLength(1);
+      expect(figures[0].id).toBe("figure-w1");
+      // "window" kind is unchanged — no reassignment needed, unlike promote/duplicate.
+      expect(result.current.slots[0].source).toMatchObject({ kind: "window", id: "w1" });
+      expect(result.current.pageDocument.panels[0].figureId).toBe("figure-w1");
+    });
+
+    it("saveSlotAsFigure is a no-op for a figure- or figdoc-kind panel", () => {
+      useApp.setState({ editableFigures: [FIGURE] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.figureSources[0]));
+      act(() => result.current.assign(1, result.current.docSources[0]));
+      act(() => {
+        result.current.saveSlotAsFigure(0);
+        result.current.saveSlotAsFigure(1);
+      });
+      expect(useApp.getState().editableFigures).toHaveLength(1); // unchanged: still just FIGURE
+    });
+
+    // F3.4 item 3: the preview must pick up an edit to a REFERENCED canonical
+    // figure. The existing #8g coverage (top describe block) only exercised
+    // the "figdoc" branch of panelRenderInputs — this closes the gap for the
+    // newer "figure" (F3.3) branch, which tracks the document object itself.
+    it("re-renders the preview when an assigned canonical figure (figure kind) is edited", async () => {
+      useApp.setState({ editableFigures: [FIGURE] });
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.figureSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), { timeout: 2000 });
+
+      act(() => {
+        useApp.setState((s) => ({
+          editableFigures: s.editableFigures.map((d) =>
+            d.id === "figure-1"
+              ? { ...d, plot: { ...d.plot, view: { ...d.plot.view, plotTitle: "edited canonical title" } } }
+              : d,
+          ),
+        }));
+      });
+
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(2), { timeout: 2000 });
+      expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].panels[0].figure.title).toBe(
+        "edited canonical title",
+      );
+    });
+  });
 });
