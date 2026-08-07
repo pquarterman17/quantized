@@ -51,54 +51,18 @@ from numpy.typing import ArrayLike  # noqa: E402
 from quantized.calc import figure_page_layout as fpl  # noqa: E402
 from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_overrides import _validate_overrides  # noqa: E402
+from quantized.calc.figure_page_panel_labels import (  # noqa: E402
+    _LABEL_TEMPLATES,
+    _place_label,
+    panel_label,
+)
+from quantized.calc.figure_page_validate import _validate_page, _validate_page_rects  # noqa: E402
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 _LABEL_POSITIONS = ("nw", "ne", "outside")
-# Auto-label formats, keyed by the rendered form of the FIRST panel:
-# (wrap template, uppercase letters?). "none" suppresses auto labels entirely.
-_LABEL_TEMPLATES: dict[str, tuple[str, bool]] = {
-    "(a)": ("({})", False),
-    "a)": ("{})", False),
-    "a.": ("{}.", False),
-    "(A)": ("({})", True),
-    "A)": ("{})", True),
-    "A.": ("{}.", True),
-}
-# Grid cap: a journal page never needs more; guards absurd allocations.
-_MAX_GRID = 8
-
-
-def _letters(index: int) -> str:
-    """0 -> "a", 25 -> "z", 26 -> "aa", ... (spreadsheet-style rollover)."""
-    out = ""
-    n = index
-    while True:
-        out = chr(ord("a") + n % 26) + out
-        n = n // 26 - 1
-        if n < 0:
-            return out
-
-
-def panel_label(index: int, label_format: str = "(a)") -> str:
-    """The auto-generated label for the ``index``-th panel (0-based, row-major
-    placement order): ``panel_label(1, "(a)") == "(b)"``. ``"none"`` returns
-    an empty string (no labels). Raises ``ValueError`` on an unknown format
-    or a negative index."""
-    if index < 0:
-        raise ValueError("panel index must be >= 0")
-    if label_format == "none":
-        return ""
-    try:
-        template, upper = _LABEL_TEMPLATES[label_format]
-    except KeyError as exc:
-        allowed = (*_LABEL_TEMPLATES, "none")
-        raise ValueError(f"label_format must be one of {allowed}") from exc
-    letters = _letters(index)
-    return template.format(letters.upper() if upper else letters)
 
 
 @dataclass(frozen=True)
@@ -155,101 +119,6 @@ class PagePanel:
     y2_scale: str | None = None
     y2_fmt: Mapping[str, Any] | None = None
     y2_step: float | None = None
-
-
-# Tolerance on a page_rect's [0, 1] bounds -- decode rounding can put a
-# rect a hair outside the exact unit square.
-_RECT_EPS = 1e-6
-
-
-def _validate_panel_overrides(n: int, p: PagePanel) -> None:
-    """Raise ``ValueError`` on a page-incompatible per-panel override
-    (``x_breaks`` / ``margins``) or a malformed ``y2_mask`` (GUI_INTERACTION
-    #12 slice 4c -- mirrors ``calc.figure._render_impl``'s own
-    ``len(y2_mask) != len(series)`` guard), shared by both the grid and
-    free-placement validators."""
-    ov = dict(p.overrides or {})
-    if "x_breaks" in ov:
-        raise ValueError(f"panel {n}: x_breaks is not supported on a figure page")
-    if "margins" in ov:
-        raise ValueError(
-            f"panel {n}: margins are page-level on a figure page; "
-            "remove the per-panel margins override"
-        )
-    _validate_overrides(ov)
-    if p.y2_mask is not None and len(p.y2_mask) != len(p.series):
-        raise ValueError(f"panel {n}: y2_mask must have the same length as series")
-
-
-def _validate_page(rows: int, cols: int, panels: Sequence[PagePanel]) -> None:
-    """Raise ``ValueError`` on an invalid page spec: bad grid, empty page,
-    out-of-bounds or overlapping panels, page-incompatible overrides."""
-    if rows < 1 or cols < 1:
-        raise ValueError("page grid must have at least 1 row and 1 column")
-    if rows > _MAX_GRID or cols > _MAX_GRID:
-        raise ValueError(f"page grid is capped at {_MAX_GRID}x{_MAX_GRID}")
-    if not panels:
-        raise ValueError("page must contain at least one panel")
-    occupied: dict[tuple[int, int], int] = {}
-    for n, p in enumerate(panels):
-        if p.row_span < 1 or p.col_span < 1:
-            raise ValueError(f"panel {n}: row_span and col_span must be >= 1")
-        if p.row < 0 or p.col < 0 or p.row + p.row_span > rows or p.col + p.col_span > cols:
-            raise ValueError(
-                f"panel {n} does not fit the {rows}x{cols} grid (row={p.row} "
-                f"col={p.col} row_span={p.row_span} col_span={p.col_span})"
-            )
-        for r in range(p.row, p.row + p.row_span):
-            for c in range(p.col, p.col + p.col_span):
-                other = occupied.get((r, c))
-                if other is not None:
-                    raise ValueError(f"panels {other} and {n} overlap at grid cell ({r}, {c})")
-                occupied[(r, c)] = n
-        _validate_panel_overrides(n, p)
-
-
-def _validate_page_rects(panels: Sequence[PagePanel]) -> None:
-    """Raise ``ValueError`` on an invalid free-placement page spec: empty
-    page, an out-of-bounds/degenerate ``page_rect``, page-incompatible
-    overrides. Unlike ``_validate_page``, overlapping rects are ALLOWED
-    (Origin layers can legitimately overlap) -- rows/cols placement is not
-    involved at all."""
-    if not panels:
-        raise ValueError("page must contain at least one panel")
-    for n, p in enumerate(panels):
-        assert p.page_rect is not None  # caller guarantees this (free_placement)
-        x, y, w, h = p.page_rect
-        if w <= 0 or h <= 0:
-            raise ValueError(f"panel {n}: page_rect width/height must be positive")
-        if x < -_RECT_EPS or y < -_RECT_EPS:
-            raise ValueError(f"panel {n}: page_rect x/y must be >= 0")
-        if x + w > 1 + _RECT_EPS or y + h > 1 + _RECT_EPS:
-            raise ValueError(
-                f"panel {n}: page_rect must fit within the page (x + w <= 1, y + h <= 1)"
-            )
-        _validate_panel_overrides(n, p)
-
-
-def _place_label(ax: Any, text: str, pos: str, st: FigureStyle) -> None:
-    """Draw one panel label. ``nw``/``ne`` sit inside the axes at the top
-    corner; ``outside`` uses matplotlib's LEFT title slot above the axes,
-    which coexists with the panel's own (center) title -- the standard
-    journal placement."""
-    if not text:
-        return
-    size = float(st.title_font_size)
-    if pos == "outside":
-        ax.set_title(text, loc="left", fontweight="bold", fontsize=size)
-    elif pos == "ne":
-        ax.text(
-            0.97, 0.96, text, transform=ax.transAxes,
-            ha="right", va="top", fontweight="bold", fontsize=size,
-        )
-    else:  # "nw"
-        ax.text(
-            0.03, 0.96, text, transform=ax.transAxes,
-            ha="left", va="top", fontweight="bold", fontsize=size,
-        )
 
 
 def _rect_sort_key(p: PagePanel) -> tuple[float, float]:
