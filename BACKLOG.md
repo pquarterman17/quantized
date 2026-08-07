@@ -470,6 +470,28 @@ re-sweep periodically.
 | ~~**Baseline: frontend channel-bind vs. backend corrections-DAG** (#5)~~ **RESOLVED 2026-07-19** — the established DAG stays authoritative for its default time/value-0 channel; an arbitrary plotted X/Y baseline subtracts into a DERIVED dataset carrying explicit channel provenance, so the raw source and unrelated channels are never silently rewritten | GUI_INTERACTION #5 gate |
 | ~~**Plot Objects tree scope** (#2)~~ **MOOT 2026-07-24** — the large bet was taken and delivered (PR #66) as a bounded Inspector extension, not a full Object Manager; every #2 sub-item is struck. The gate was simply never closed behind the shipped work | GUI_INTERACTION #2 gate |
 
+### Dependency security (swept 2026-08-06 — 6 alerts closed)
+
+`fd7c5d0` applied all 5 open Dependabot PR groups as ONE commit (same
+mutually-conflicting-lockfile rationale as the 2026-07-24 sweep below):
+
+- **aiohttp 3.14.1 → 3.14.3 closed 3 alerts** (1 high: OOB heap read in the
+  C response parser; 2 moderate: WS request smuggling + unnegotiated
+  compressed frames). Transitive RUNTIME dep via `bumps` (DREAM fit engine,
+  reached through `routes/jobs_api`).
+- **ip-address 10.2.0 → 10.4.0 closed 3 alerts** (1 high SSRF-class octal
+  decode + 2 moderate misclassifications) in `tools/visual` — dev-only
+  screenshot harness, low reachability, fix was free within semver range.
+- Routine riders: fastapi 0.141.1 + ruff 0.16.1, frontend npm dev-tooling
+  minors (vite 8.2.0, playwright 1.62.1, types), `codeql-action` pinned
+  v4.37.4 at both call sites. TypeScript untouched at ~6.0.3 (deliberate).
+- Full dual gate green: pytest 3745 passed / **3822 collected** (no
+  shrinkage), ruff/mypy clean, frontend 5,639 tests + build, tools/visual
+  audit now 0.
+- **Left for owner:** `brace-expansion` shows as an npm-audit high
+  (eslint→minimatch, frontend devDependency only) but has NO Dependabot
+  alert and no PR — out of the sweep's scope, not yet fixed.
+
 ### Dependency security (swept 2026-07-24 — 13 of 14 alerts CLOSED)
 
 `c63f7af` applied all ten open Dependabot PRs in one commit. They fell into
