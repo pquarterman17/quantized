@@ -6,10 +6,42 @@
 // Listed most-recently-modified first ("recent access" — F3.3's minimal
 // take: a plain sort by the `modifiedAt` timestamp F3.3 added to
 // PageDocument, no separate recency index).
+//
+// F3.6 "export a saved page without reopening it": the ⤓ button resolves the
+// SAVED PageDocument directly (`buildPageSpecFromDocument`, the same
+// resolve-and-build path a reopened session's canonical panels already go
+// through) and exports it, so the common case — a page whose panels are all
+// already-saved editable figures — never needs a reopen round trip. A panel
+// that can't resolve (a dangling reference, or one that still needs the
+// workshop's own unresolved-slot Save gate) fails visibly with the specific
+// reason, never a silent partial export.
 import { useState } from "react";
 
+import { exportFigurePage } from "../../lib/api";
 import { useApp } from "../../store/useApp";
+import { toast } from "../../store/toasts";
+import { buildPageSpecFromDocument } from "../workshops/figurepage/panelResolve";
 import { askConfirm } from "../overlays/ConfirmDialog";
+import type { PageDocument } from "../../lib/pageDocument";
+
+async function exportSavedPage(page: PageDocument): Promise<void> {
+  const s = useApp.getState();
+  try {
+    const spec = await buildPageSpecFromDocument(page, s.editableFigures);
+    if (!spec) {
+      const msg = `"${page.name}" has no assigned panels to export`;
+      s.setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
+    await exportFigurePage({ ...spec, fmt: page.output.format, dpi: page.output.dpi });
+    s.setStatus(`exported figure_page.${page.output.format}`);
+  } catch (e) {
+    const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
+    s.setStatus(msg);
+    toast(msg, "danger");
+  }
+}
 
 export default function PagesSection() {
   const pages = useApp((state) => state.pages);
@@ -65,6 +97,14 @@ export default function PagesSection() {
             onClick={() => duplicate(page.id)}
           >
             ⧉
+          </button>
+          <button
+            className="qz-btn qz-ghost qz-sm"
+            style={{ minHeight: 24, minWidth: 24 }}
+            title={`export "${page.name}" without reopening it`}
+            onClick={() => void exportSavedPage(page)}
+          >
+            ⤓
           </button>
           <button
             className="qz-btn qz-ghost qz-sm"

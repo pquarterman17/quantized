@@ -5,23 +5,52 @@
 // no React state of their own; they read the store fresh via `useApp.getState()`
 // or take an explicit `AppState` snapshot, exactly like they did inline. Moving
 // them changes nothing about behavior, only where the code lives.
+//
+// F3.6 "unified export from PageDocument": `panelFigure`'s "window" branch
+// used to hand-assemble a REDUCED FigureSpec from a handful of PlotView
+// fields (x/y key, scale, fmt, step, title, labels, series styles only) —
+// exactly the "parallel ad-hoc spec assembly" the plan calls out, and a real
+// fidelity gap: every open plot window has carried a canonical FigureDocument
+// since F1 (`PlotWindow.document`, kept in sync by `syncPlotWindow`), so the
+// reduced spec was silently dropping error bars, secondary-axis state,
+// grouping, axis breaks, and publication overrides that the SAME window
+// would export/copy/preview correctly once saved+reopened as a "figure"-kind
+// panel. It now resolves through the exact same `buildFigureSpecFromDocument`
+// adapter the "figure" branch already uses, so a window-sourced panel and its
+// post-save "figure"-sourced reincarnation render identically — the round-
+// trip property the F3 exit criterion names ("save -> close -> reopen ->
+// export retains every ... visual setting"). The "figdoc" (legacy
+// Publication figure) branch is UNCHANGED: F1 never gave that kind a
+// FigureDocument counterpart at all (F3.1's log), so there is no canonical
+// adapter to route it through — a pre-existing, already-documented gap this
+// slice does not close.
+//
+// F3.6 also adds `buildPageSpecFromDocument`: the same resolve-and-build path
+// applied to a SAVED `PageDocument` directly (Library "Export…"), so a page
+// can be exported without reopening it into the workshop session.
 
 import {
   type FigureSpec,
   type PagePanelSpec,
 } from "../../../lib/api";
-import { buildExportStyles } from "../../../lib/exportStyles";
+import type { FigurePageSpec } from "../../../lib/api/figurePage";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepage";
-import { axisFmtParam, type DataStruct } from "../../../lib/types";
-import { type PlotView, type PlotWindow } from "../../../lib/plotview";
+import {
+  pagePanelLabels,
+  resolvePagePanel,
+  type PageDocument,
+} from "../../../lib/pageDocument";
+import type { DataStruct } from "../../../lib/types";
+import { type PlotWindow } from "../../../lib/plotview";
 import { useApp, type AppState } from "../../../store/useApp";
 
 // PagePanelSpec is re-exported here only so callers that import panelFigure's
 // return-adjacent types don't need a second import line; buildSpec (still in
-// useFigurePage.ts) is the only real consumer today.
+// useFigurePage.ts, now via usePagePreviewExport.ts) is the only real
+// consumer today.
 export type { PagePanelSpec };
 
 /** Resolve one assigned session source to the canonical FigureDocument id a
@@ -96,29 +125,28 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
     }
   }
   if (source.kind === "window") {
+    // F3.6: route through the SAME canonical adapter the "figure" branch
+    // above uses, via the window's own bound FigureDocument (`win.document`
+    // — every real window has one since F1; `windowsForSave()` also
+    // freshens the FOCUSED window's document from its live view, mirroring
+    // what it already does for `.view`). This closes the fidelity gap a
+    // hand-assembled PlotView-only spec had (see the module header).
     const win = s.windowsForSave().find((w) => w.id === source.id);
-    if (!win || win.kind !== "plot" || !win.datasetId) return null;
-    const ds = await s.resolveDataset(win.datasetId);
-    if (!ds) return null;
-    const v = win.view;
-    const plotted = v.yKeys ?? ds.data.labels.map((_, i) => i);
-    return {
-      dataset: ds.data,
-      x_key: v.xKey ?? undefined,
-      y_keys: v.yKeys ?? undefined,
-      x_log: v.xScale === "log",
-      y_log: v.yScale === "log",
-      x_scale: v.xScale,
-      y_scale: v.yScale,
-      x_fmt: axisFmtParam(v.xFmt),
-      y_fmt: axisFmtParam(v.yFmt),
-      x_step: v.xStep,
-      y_step: v.yStep,
-      title: v.plotTitle.trim(),
-      x_label: v.xAxisLabel.trim() || undefined,
-      y_label: v.yAxisLabel.trim() || undefined,
-      series_styles: buildExportStyles(plotted, v.seriesStyles),
-    };
+    if (!win || win.kind !== "plot" || !win.document) return null;
+    const document = win.document;
+    // A window's document is always "live" (frozen documents belong to
+    // kind:"snapshot" windows, which are never a page source) — it always
+    // needs its bound dataset.
+    const dataset = document.bindings.datasetId
+      ? await s.resolveDataset(document.bindings.datasetId)
+      : undefined;
+    if (!dataset) return null;
+    try {
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+    } catch {
+      return null;
+    }
   }
   const doc = s.figureDocs.find((d) => d.id === source.id);
   if (!doc) return null;
@@ -161,42 +189,73 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
  *  half of buildSpec's export-time guard (review 2026-07-11), which re-reads
  *  the same store state at export time.
  *
- *  F3.4: the "figure" branch already tracks the document OBJECT (not just
- *  its id) — every store action that edits a saved editableFigures entry
- *  (`saveFigure`, Save As, rename, `applyFigurePublicationEdit` for a
- *  "new-editable" target, `duplicateEditableFigure`) replaces it with a new
- *  reference via `.map()`/spread, never mutates in place, so this dependency
- *  correctly picks up an edit-then-save without any change here — verified
- *  by a characterization test in useFigurePage.test.ts rather than assumed. */
+ *  F3.4/F3.6: the "figure" branch, and a NON-focused "window" branch, both
+ *  track the DOCUMENT OBJECT (not just an id) — every store action that
+ *  edits a saved editableFigures entry (`saveFigure`, Save As, rename,
+ *  `applyFigurePublicationEdit` for a "new-editable" target,
+ *  `duplicateEditableFigure`) replaces it with a new reference via
+ *  `.map()`/spread, never mutates in place, and `syncPlotWindow` does the
+ *  same for a window's own `.document` on every COMMITTED edit — so this
+ *  dependency picks up any such change without maintaining a parallel field
+ *  list. The FOCUSED window is deliberately different: its `.document` is
+ *  stale until the edit commits (the live state rides the top-level
+ *  singleton fields instead — see `windowsForSave()`'s doc), and calling
+ *  `windowsForSave()` HERE to freshen it would be wrong even though
+ *  `panelFigure` safely calls it at render/export time: this function runs
+ *  inside a `useShallow` selector, which React's `useSyncExternalStore` may
+ *  invoke several times per commit to verify a stable snapshot;
+ *  `windowsForSave()` reconstructs the focused window's document via
+ *  `structuredClone` on every call, so two calls in the same tick are never
+ *  `===`, and React logs "getSnapshot should be cached" then loops until
+ *  "Maximum update depth exceeded" (verified — this was the fix's own first,
+ *  failing attempt). The focused branch below instead lists the live
+ *  singleton fields directly (stable object/primitive references that only
+ *  change when the store actually changes) — the same shape the pre-F3.6
+ *  code used, extended with the fields the canonical adapter now also reads
+ *  (error bindings, hidden/reordered series, secondary axis). */
 export function panelRenderInputs(slots: { source: PanelSource | null }[], s: AppState): unknown[] {
   const parts: unknown[] = [];
   for (const { source } of slots) {
     if (!source) continue;
     if (source.kind === "window") {
       const win = s.plotWindows.find((w) => w.id === source.id);
-      if (!win || win.kind !== "plot" || !win.datasetId) {
+      if (!win || win.kind !== "plot" || !win.document) {
         parts.push("gone"); // dead source — re-render so the guard surfaces it
         continue;
       }
-      // The FOCUSED window's record view is stale (store/windows.ts): its
-      // live view rides the top-level singleton fields — the same swap
-      // windowsForSave() makes for panelFigure. Only the view fields the
-      // panel payload serializes matter (xLim/zoom etc. deliberately don't).
-      const v: PlotView = win.id === s.focusedWindowId ? s : win.view;
-      parts.push(
-        win.datasetId,
-        s.datasets.find((d) => d.id === win.datasetId)?.data,
-        v.xKey,
-        v.yKeys,
-        v.xScale,
-        v.yScale,
-        v.xFmt,
-        v.yFmt,
-        v.plotTitle,
-        v.xAxisLabel,
-        v.yAxisLabel,
-        v.seriesStyles,
-      );
+      if (win.id === s.focusedWindowId) {
+        parts.push(
+          win.datasetId,
+          s.datasets.find((d) => d.id === win.datasetId)?.data,
+          s.xKey,
+          s.yKeys,
+          s.xScale,
+          s.yScale,
+          s.xFmt,
+          s.yFmt,
+          s.xStep,
+          s.yStep,
+          s.plotTitle,
+          s.xAxisLabel,
+          s.yAxisLabel,
+          s.seriesStyles,
+          s.errKeys,
+          s.hiddenChannels,
+          s.seriesOrder,
+          s.y2Keys,
+          s.y2Lim,
+          s.y2Scale,
+          s.y2Step,
+          s.y2AxisLabel,
+        );
+      } else {
+        parts.push(
+          win.document,
+          win.document.bindings.datasetId
+            ? s.datasets.find((d) => d.id === win.document?.bindings.datasetId)?.data
+            : null,
+        );
+      }
     } else if (source.kind === "figure") {
       // F3.3: mirrors the figdoc branch below — the document itself is
       // immutable (any edit replaces the reference), plus its live dataset.
@@ -226,4 +285,73 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
     }
   }
   return parts;
+}
+
+/** F3.6 "export a saved page without reopening it": resolve a SAVED
+ *  `PageDocument` directly into the page route's spec (sans fmt/dpi — the
+ *  caller's own choice, same convention as `buildSpec`'s session
+ *  equivalent), without hydrating a workshop session first. Reuses the exact
+ *  `resolvePagePanel`/`buildFigureSpecFromDocument` path a reopened session's
+ *  "figure"-kind panels already resolve through (F3.3), so a Library
+ *  "Export…" action produces the SAME output opening the page would.
+ *
+ *  Fail-closed (F3.2): a "missing" panel (a dangling `figureId`) or a figure
+ *  whose adapter rejects it (dataset gone, unsupported grouped+secondary-axis
+ *  combination) throws naming the panel's own previewed label, rather than
+ *  silently skipping it and exporting a smaller page. Returns null only when
+ *  every panel is genuinely empty (nothing to export). */
+export async function buildPageSpecFromDocument(
+  pageDoc: PageDocument,
+  figures: readonly FigureDocument[],
+): Promise<FigurePageSpec | null> {
+  const labels = pagePanelLabels(pageDoc.panels, pageDoc.output.labelFormat);
+  const panels: PagePanelSpec[] = [];
+  for (let i = 0; i < pageDoc.panels.length; i++) {
+    const panel = pageDoc.panels[i];
+    const resolution = resolvePagePanel(panel, figures);
+    if (resolution.status === "empty") continue;
+    const label = labels[i] || `#${i + 1}`;
+    if (resolution.status === "missing") {
+      throw new Error(`panel ${label}: referenced figure no longer exists — open the page to clear or reassign it`);
+    }
+    const document = resolution.figure;
+    const dataset =
+      document.data.mode === "live" && document.bindings.datasetId
+        ? await useApp.getState().resolveDataset(document.bindings.datasetId)
+        : undefined;
+    if (document.data.mode === "live" && !dataset) {
+      throw new Error(`panel ${label}: "${document.name}" is missing its dataset — open the page to clear or reassign it`);
+    }
+    let figure: FigureSpec;
+    try {
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      figure = { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+    } catch (e) {
+      throw new Error(
+        `panel ${label}: "${document.name}" can't be rendered — ${e instanceof Error ? e.message : "error"}`,
+      );
+    }
+    panels.push({
+      figure,
+      row: Math.floor(i / pageDoc.cols),
+      col: i % pageDoc.cols,
+      ...(panel.label !== null ? { label: panel.label } : {}),
+      ...(panel.title !== null ? { title: panel.title } : {}),
+    });
+  }
+  if (panels.length === 0) return null;
+  return {
+    rows: pageDoc.rows,
+    cols: pageDoc.cols,
+    panels,
+    style: pageDoc.output.stylePreset,
+    label_format: pageDoc.output.labelFormat,
+    label_pos: pageDoc.output.labelPos,
+    row_gap: pageDoc.layout.rowGap,
+    col_gap: pageDoc.layout.colGap,
+    link_x: pageDoc.layout.linkX,
+    link_y: pageDoc.layout.linkY,
+    align_labels: pageDoc.layout.alignLabels,
+    resize_mode: pageDoc.layout.resizeMode,
+  };
 }

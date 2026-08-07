@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-07 — F3.5 complete layout controls
+**Updated:** 2026-08-07 — F3.6 unified export from PageDocument; F3 complete
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -274,11 +274,17 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
 - [x] **F3.5 Complete layout controls.** Preserve manual rearrangement,
       adjustable spacing, shared/independent axes, link/unlink, alignment, and
       recommended resize modes.
-- [ ] **F3.6 Export from PageDocument.** Clipboard and file export must consume
+- [x] **F3.6 Export from PageDocument.** Clipboard and file export must consume
       the same reopened page model used by the internal preview.
 
 **F3 exit:** Page → save → close → reopen → edit → copy/export retains every
-panel, relationship, and visual setting.
+panel, relationship, and visual setting. **Coded-and-tested as of F3.6
+(2026-08-07):** a fail-before/pass-after characterization test plus a direct
+round-trip test (pre-save spec vs. post-reopen spec, byte-for-byte) prove
+this holds for the paths this campaign built. Still NOT owner-verified in the
+live desktop app — per this plan's own "Required acceptance journeys" rule,
+A6 (multi-panel) stays an unchecked owner acceptance journey, not implied
+complete by F3's checkboxes.
 
 ### F4 — Recipes and templates on top of the document contract
 
@@ -380,6 +386,136 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-07 — F3.6 unified export from PageDocument (Claude Sonnet 5)
+
+- **Survey first.** Read the F3.1–F3.5 logs plus the live code before writing
+  anything: `useFigurePage.ts`'s `buildSpec()` was ALREADY the one place that
+  turns `slots` into a `FigurePageSpec` — both the debounced preview
+  (`renderFigurePageBlob`) and file export (`exportFigurePage`) already called
+  it, so "preview vs file export disagree" was not a live bug. There was no
+  clipboard-copy action anywhere in the Figure Page workshop (`FigurePageView.tsx`
+  had only "Export {FMT}"); the app's existing 300-DPI clipboard convention
+  (A7) lives entirely in `lib/copyFigureCommand.ts` + `lib/clipboard.ts`,
+  wired to the STAGE plot toolbar only (`usePlotStageActions.ts`) — nothing
+  reused it for a composed page. Nothing let a SAVED page export without
+  first reopening it into the workshop session (`store/pageDocuments.ts`'s
+  `openPageDocument` only ever seeds a live session via `pageDocSeed`).
+- **The real divergence, found by reading `panelResolve.ts`'s `panelFigure`
+  line by line, not assumed from the plan text.** The "window" session-source
+  branch hand-assembled a REDUCED `FigureSpec` from ~10 `PlotView` fields
+  (x/y key, scale, fmt, step, title, labels, series styles) — while the
+  "figure" branch (a saved canonical figure picked directly) already routed
+  through F1.5's `buildFigureSpecFromDocument` adapter, which reads the FULL
+  `FigureDocument` (error bindings, secondary axis, grouping, x-axis breaks,
+  publication overrides, hidden/reordered series). Every `kind:"plot"` window
+  has carried a live canonical `FigureDocument` since F1
+  (`PlotWindow.document`, `store/windowDocuments.ts`'s `syncPlotWindow` keeps
+  it current) — the ad-hoc branch simply wasn't using it. Net effect: a page
+  panel sourced from an OPEN WINDOW silently dropped error bars, y2 state,
+  groups, x-breaks, and overrides that the SAME window would preserve once
+  saved and reopened as a "figure"-kind panel — a real, provable violation of
+  the F3 exit criterion ("retains every panel, relationship, and visual
+  setting"), and exactly the "parallel ad-hoc spec assembly" this item's own
+  text warns against. Fixed by routing the window branch through the SAME
+  `buildFigureSpecFromDocument(win.document, dataset, ...)` adapter the
+  "figure" branch uses — see `panelResolve.ts`'s module header for the full
+  before/after. The "figdoc" (legacy Publication figure) branch is
+  UNCHANGED and stays ad hoc: F1 never gave that kind a `FigureDocument`
+  counterpart at all (a pre-existing, already-documented gap from F3.1's own
+  log), so there is no canonical adapter to route it through.
+- **A real bug found while wiring the fix, not invented as scope creep: the
+  #8g preview-invalidation fingerprint for a FOCUSED window's document
+  infinite-loops React if built naively.** The first attempt fingerprinted
+  the window branch on `windowsForSave().find(...).document` (mirroring the
+  "figure" branch exactly) — this is safe when called from `panelFigure`
+  (an ordinary async function), but `panelRenderInputs` runs inside a
+  `useShallow` selector backing `useSyncExternalStore`, which React may call
+  several times per commit to verify a stable snapshot. `windowsForSave()`
+  reconstructs the FOCUSED window's document via `structuredClone` on every
+  call, so two calls in the same tick are never `===`, and two of the
+  existing `editSlot` tests failed with "Maximum update depth exceeded"
+  (caught by the existing suite, not a new test — proof the guard works).
+  Fixed by NOT calling `windowsForSave()` inside the selector: a non-focused
+  window's stable `.document` reference is used directly (safe — it only
+  changes via an actual store mutation that replaces it); the FOCUSED window
+  instead lists the live singleton fields directly (stable references),
+  extended from the pre-F3.6 field list to also cover error bindings,
+  hidden/reordered series, and secondary-axis state — the same fields the
+  fidelity fix newly makes visible. See `panelRenderInputs`'s doc comment for
+  the full account, including the acknowledged residual (some live-focused
+  fields, e.g. axis breaks/page-setup margins, are not in the tracked list —
+  a preview-freshness gap only, since `buildSpec` always re-reads fresh state
+  at export/copy time regardless).
+- **Clipboard copy (item 3) — reuses A7's mechanism, not a new one.** New
+  `copyNow` in the extracted `usePagePreviewExport.ts` calls the SAME
+  `buildSpec()` the preview/export already share, then
+  `copyImageAsync(renderFigurePageBlob({...spec, fmt:"png", dpi:300}))` —
+  the identical gesture-preserving pattern `copyFigureCommand.ts` established
+  (hand the PENDING render promise to the Clipboard API rather than awaiting
+  it first) and the identical 300 DPI floor (`COPY_PAGE_DPI`, matching
+  `COPY_FIGURE_DPI`). Checks `clipboardImageSupported()` BEFORE any render
+  work, exactly like the single-figure command. File export stays vector
+  (PDF) by default per the repo's export convention; copy is always raster
+  (Office pastes vector poorly) — the same split the single-figure copy/export
+  pair already makes. Wired as a new "Copy" button beside "Export" in
+  `FigurePageView.tsx`.
+- **Saved-page export (item 4) — shipped, not deferred; stayed cheap because
+  it composes existing pieces.** New `buildPageSpecFromDocument` in
+  `panelResolve.ts` walks a PERSISTED `PageDocument`'s panels through
+  `resolvePagePanel` (F3.2's fail-closed resolver) and
+  `buildFigureSpecFromDocument` (the SAME adapter the fidelity fix above
+  uses) — so the Library "Export…" (⤓) action on `PagesSection.tsx` produces
+  byte-identical output to reopening the page and exporting it, proven by a
+  dedicated test suite (`panelResolve.test.ts`) rather than asserted. A
+  dangling `figureId` or an adapter rejection (dataset gone, unsupported
+  grouped+secondary-axis combination) throws naming the panel's own
+  previewed label ("panel (b): ..."), never silently exports a smaller page.
+- **F3 exit criterion — coded-and-tested, not owner-verified.** Added a
+  direct round-trip test: build a window-sourced panel's spec, save the page,
+  simulate close (unmount the hook) and reopen (seed + fresh mount), rebuild
+  the spec, assert byte-for-byte equality. This is the strongest automated
+  proof available for "save → close → reopen → export retains every panel,
+  relationship, and visual setting" — but per this plan's own "Required
+  acceptance journeys" section, only an owner-visible desktop run can check
+  A6 (multi-panel journey). That box stays unchecked; this log states the
+  automated status honestly instead of implying A6 is done.
+- **Size discipline — `useFigurePage.ts` was at 483/500 (F3.5's own log
+  flagged it), so it was 0 lines from the ceiling before this slice added
+  anything.** Extracted the debounced preview effect, `buildSpec`, and
+  `exportNow` (plus the new `copyNow`) to a new sibling
+  `usePagePreviewExport.ts`, mirroring F3.4's "extract a cohesive slice"
+  precedent (`panelResolve.ts`/`usePageLifecycle.ts`). `useFigurePage.ts`:
+  483 → 336 lines (`wc -l`) before any F3.6 feature code density — the hook
+  now only owns grid/slot/source-list state and delegates preview/export/copy
+  to the new module. `calc/figure_page.py` needed NO backend change (stayed
+  at its existing 361 lines) — F3.5 already carries every layout field over
+  the wire, and the existing `/api/export/figure-page` route already renders
+  PNG at any requested DPI, which is all the 300-DPI clipboard copy needed.
+- **Tests:** `useFigurePage.test.ts` (+18: the fidelity-gap characterization
+  test — error bindings absent before the fix, present after; the round-trip
+  test; 4 `copyNow` tests — success via the shared `buildSpec`, capability
+  check before any render, the same missing-source message export uses,
+  the same plain "nothing assigned" message; plus 2 existing window-branch
+  tests updated for the new canonical-adapter output shape: `x_log` → `x_scale`,
+  and the "re-renders on view change" test now updates the window's
+  `.document` alongside `.view`, matching how a real committed edit keeps
+  both in sync); `panelResolve.test.ts` (new file, 5:
+  `buildPageSpecFromDocument` null-when-empty, multi-panel with layout/output
+  threading, dangling-figureId fails closed naming the panel, missing-dataset
+  fails closed, sparse panels keep their true grid position);
+  `PagesSection.test.tsx` (+3: exports using the page's own output settings,
+  the no-panels status message, the dangling-reference failure message).
+- **Gate:** Frontend — `npm run lint` clean (0 errors, 9 pre-existing
+  unrelated warnings, unchanged baseline); full `npx vitest run` **396 files /
+  5764 tests passed** (+1 file / +14 tests over F3.5's 395/5750); `npx tsc -b
+  --noEmit` clean; `npm run build` clean, bundle 874.9 kB eager / 903.3 kB
+  budget (28.4 kB headroom — the new modules land in the already-lazy-loaded
+  Figure Page/Library chunks). Backend untouched this slice — no backend gate
+  run (nothing to verify that the existing suite doesn't already cover).
+- **F3 is now COMPLETE (F3.1–F3.6 all checked).** F4 (recipes/templates) is
+  the only fully-open tier left in this plan besides F2's remaining broader-
+  parity items; A1–A10 acceptance journeys remain owner-gated as always.
 
 ### 2026-08-07 — F3.5 complete layout controls (Claude Sonnet 5)
 

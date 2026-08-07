@@ -1,11 +1,9 @@
 // Figure page composer state hook (GOTO #4). Holds the page grid (rows x
 // cols of slots), the panel sources assigned into them (open plot windows
-// and/or saved Library figures), the page-level options (style preset,
-// label format/position, export format + DPI), drives a debounced
-// server-rendered low-DPI PNG preview, and exports through the same
-// /api/export/figure-page route (vector PDF by default). The heavy
-// composition is the matplotlib route — this is a thin WYSIWYG layer on it,
-// the figure-builder pattern applied to N panels.
+// and/or saved Library figures), and the page-level options (style preset,
+// label format/position, export format + DPI). The heavy composition is the
+// matplotlib route — this is a thin WYSIWYG layer on it, the figure-builder
+// pattern applied to N panels.
 //
 // FIGURE_AUTHORING_WORKFLOW_PLAN F3.1: the grid geometry + output settings
 // are held as one PageDocument draft (lib/pageDocument.ts) instead of loose
@@ -20,24 +18,19 @@
 // its pre-F3.4 size — see that module's header for the split rationale).
 // panelResolve.ts holds the panel-source resolution + single-panel spec-
 // building helpers (`panelFigure`/`panelRenderInputs`), extracted the same
-// pass.
+// pass. F3.6 extracted the debounced preview + export + clipboard-copy half
+// (the ONE `buildSpec` derivation and its three consumers) to
+// usePagePreviewExport.ts — this hook was already at 483/500, flagged by
+// F3.5's log; see that module's header for what moved and why.
 
-import { useEffect, useMemo, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useMemo, useState } from "react";
 
-import {
-  exportFigurePage,
-  renderFigurePageBlob,
-  type FigurePageSpec,
-  type PagePanelSpec,
-} from "../../../lib/api";
 import { docRenderable } from "../../../lib/figuredoc";
 import {
   PAGE_MAX_GRID,
   assignSlot,
   clearSlot,
   emptySlots,
-  filledCount,
   moveSlot as swapSlots,
   patchSlot,
   resizeSlots,
@@ -52,8 +45,8 @@ import { createPageDocument, type PageLayoutSettings } from "../../../lib/pageDo
 import { displayedWindowTitle } from "../../../lib/plotview";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
-import { panelFigure, panelRenderInputs } from "./panelResolve";
 import { usePageLifecycle } from "./usePageLifecycle";
+import { usePagePreviewExport } from "./usePagePreviewExport";
 
 // F3.3: a FRESH id per mount (never a shared literal) — this hook has at most
 // one page open at a time (mirrors Publication Preview's one-session rule),
@@ -63,18 +56,6 @@ import { usePageLifecycle } from "./usePageLifecycle";
 // A per-mount counter costs nothing and closes that hole outright.
 let _draftSeq = 0;
 const nextDraftId = (): string => `figurepage-draft-${Date.now().toString(36)}-${++_draftSeq}`;
-
-const PREVIEW_DPI = 90; // screen-resolution page preview; export uses the chosen DPI
-
-/** Blob -> data: URL (FileReader, jsdom-safe — no URL.createObjectURL). */
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(new Error("preview read failed"));
-    r.readAsDataURL(blob);
-  });
-}
 
 export function useFigurePage() {
   const plotWindows = useApp((s) => s.plotWindows);
@@ -101,11 +82,11 @@ export function useFigurePage() {
 
   const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(2, 2));
   const [selected, setSelected] = useState<number | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const lifecycle = usePageLifecycle(draft, setDraft, slots, setSlots, setSelected);
+  // F3.6: the ONE spec-derivation path (buildSpec) plus preview/export/copy —
+  // see usePagePreviewExport.ts's header for why this extracted out.
+  const pv = usePagePreviewExport(slots, { rows, cols, style, labelFormat, labelPos, layout, fmt, dpi });
   const { labels } = lifecycle;
 
   const datasetIds = useMemo(() => new Set(datasets.map((dataset) => dataset.id)), [datasets]);
@@ -155,11 +136,6 @@ export function useFigurePage() {
       ),
     [slots, plotWindows, figureDocs, datasetIds, editableFigures],
   );
-
-  // #8g: the store state the assigned panels render from (see
-  // panelRenderInputs) — useShallow keeps the reference stable until one of
-  // those inputs actually changes, so it can key the preview effect below.
-  const renderInputs = useApp(useShallow((s) => panelRenderInputs(slots, s)));
 
   function setGrid(nextRows: number, nextCols: number): void {
     const r = Math.max(1, Math.min(PAGE_MAX_GRID, Math.round(nextRows)));
@@ -307,129 +283,6 @@ export function useFigurePage() {
     setStatus(`duplicated "${slot.source.name}" for this page; editing the copy no longer affects the original`);
   }
 
-  /** The page spec (sans format/dpi — the preview and the export choose their
-   *  own). null when nothing is assigned or nothing can render anymore. */
-  async function buildSpec(): Promise<FigurePageSpec | null> {
-    if (filledCount(slots) === 0) return null;
-    const panels: PagePanelSpec[] = [];
-    for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
-      if (!slot.source) continue;
-      const figure = await panelFigure(slot.source);
-      if (!figure) {
-        // A dead source (window closed, dataset gone) must FAIL the build,
-        // not silently drop the panel and re-letter the rest (review
-        // 2026-07-11: export no longer matched the last-rendered preview).
-        setError(`slot ${i + 1}: source "${slot.source.name}" no longer exists - clear or reassign it`);
-        return null;
-      }
-      panels.push({
-        figure,
-        row: Math.floor(i / cols),
-        col: i % cols,
-        ...(slot.label !== null ? { label: slot.label } : {}),
-        ...(slot.title !== null ? { title: slot.title } : {}),
-      });
-    }
-    if (panels.length === 0) return null;
-    return {
-      rows,
-      cols,
-      panels,
-      style,
-      label_format: labelFormat,
-      label_pos: labelPos,
-      row_gap: layout.rowGap,
-      col_gap: layout.colGap,
-      link_x: layout.linkX,
-      link_y: layout.linkY,
-      align_labels: layout.alignLabels,
-      resize_mode: layout.resizeMode,
-    };
-  }
-
-  // Debounced low-DPI PNG preview — re-renders on any page-shape change AND
-  // when the store state an assigned panel renders from changes underneath
-  // it (#8g — renderInputs), so the preview never goes silently stale.
-  useEffect(() => {
-    let cancelled = false;
-    if (filledCount(slots) === 0) {
-      setPreview(null);
-      setError(null);
-      setBusy(false);
-      return;
-    }
-    setBusy(true);
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const spec = await buildSpec();
-          if (cancelled) return;
-          if (!spec) {
-            // F3.2: past the filledCount===0 guard above, buildSpec() can
-            // only return null because it hit a dead source and already
-            // called setError() with the specific "slot N: ... no longer
-            // exists" message — do NOT clear it here. This branch used to
-            // unconditionally setError(null) right after buildSpec set it,
-            // so a missing panel silently fell back to the plain "assign
-            // plots to grid slots" empty-state text with no explanation
-            // (exactly the "render a hole without explanation" failure mode
-            // F3.2 rules out). Only clear preview; leave the message intact.
-            setPreview(null);
-            return;
-          }
-          const blob = await renderFigurePageBlob({ ...spec, fmt: "png", dpi: PREVIEW_DPI });
-          const url = await blobToDataUrl(blob);
-          if (!cancelled) {
-            setPreview(url);
-            setError(null);
-          }
-        } catch (e) {
-          if (!cancelled) setError(e instanceof Error ? e.message : "preview failed");
-        } finally {
-          if (!cancelled) setBusy(false);
-        }
-      })();
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // buildSpec reads slots/rows/cols/style/labels/layout from local state
-    // plus the panels' windows/datasets/docs THROUGH the store — renderInputs
-    // is the fingerprint of exactly those store reads (#8g); the 400 ms
-    // debounce absorbs any churn while they settle. F3.5: `layout` joins the
-    // dep list so a gap/link/align/resize-mode change refreshes the preview
-    // the same way a style/label change already does.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, rows, cols, style, labelFormat, labelPos, layout, renderInputs]);
-
-  async function exportNow(): Promise<void> {
-    try {
-      // F3.2: distinguish "nothing assigned" from "something is assigned but
-      // can't render" BEFORE calling buildSpec — it used to report the same
-      // "assign at least one panel" message for both, which is actively
-      // misleading when panels ARE assigned and one has simply gone missing
-      // (window closed / figure deleted since it was dropped onto the grid).
-      if (filledCount(slots) === 0) {
-        setStatus("assign at least one panel to export a figure page");
-        return;
-      }
-      const spec = await buildSpec();
-      if (!spec) {
-        // buildSpec() already set the specific `error` state (visible in the
-        // preview pane); mirror it on the status bar too so Export's failure
-        // reads the same as the preview's, not a generic non-sequitur.
-        setStatus("cannot export: a panel's source is missing - see the highlighted slot, then clear or reassign it");
-        return;
-      }
-      await exportFigurePage({ ...spec, fmt, dpi });
-      setStatus(`exported figure_page.${fmt}`);
-    } catch (e) {
-      setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
-    }
-  }
-
   return {
     rows,
     cols,
@@ -473,10 +326,11 @@ export function useFigurePage() {
     save: lifecycle.save,
     saveAs: lifecycle.saveAs,
     requestClose: lifecycle.requestClose,
-    preview,
-    error,
-    busy,
-    buildSpec,
-    exportNow,
+    preview: pv.preview,
+    error: pv.error,
+    busy: pv.busy,
+    buildSpec: pv.buildSpec,
+    exportNow: pv.exportNow,
+    copyNow: pv.copyNow,
   };
 }

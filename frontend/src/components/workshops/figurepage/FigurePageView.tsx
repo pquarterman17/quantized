@@ -22,6 +22,14 @@
 // PageLayoutSettings doc for what each does) sits beside the grid-size
 // field; SlotGrid gets the same manual-rearrangement wiring (drag a filled
 // tile, or Shift+Arrow) it uses for its own double-click/context-menu paths.
+//
+// F3.6 "export from PageDocument": a Copy button sits beside Export — 300-DPI
+// PNG straight to the Office clipboard (A7 convention, matching the Stage
+// plot toolbar's single-figure "Copy figure"), rendered through the SAME
+// buildSpec the preview and file export already share (see
+// usePagePreviewExport.ts). File export stays vector-by-default (PDF) per
+// the repo's export convention; Copy is always a raster (Office pastes
+// vector figures poorly), same tradeoff the single-figure copy makes.
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Checkbox, NumberField, RichLabelInput, Select } from "../../primitives";
@@ -229,9 +237,14 @@ export default function FigurePageView() {
             </>
           )}
 
-          <Button variant="primary" onClick={p.exportNow} style={{ marginTop: 6 }}>
-            Export {p.fmt.toUpperCase()}
-          </Button>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <Button variant="primary" onClick={p.exportNow}>
+              Export {p.fmt.toUpperCase()}
+            </Button>
+            <Button onClick={() => void p.copyNow()} title="Copy a 300 DPI image of this page to the clipboard">
+              Copy
+            </Button>
+          </div>
         </div>
 
         {/* Panel sources */}

@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
+import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard";
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { createPageDocument } from "../../../lib/pageDocument";
@@ -16,6 +17,11 @@ vi.mock("../../../lib/api", () => ({
     .fn()
     .mockResolvedValue(new Blob(["png-bytes"], { type: "image/png" })),
   fetchBookData: vi.fn(),
+}));
+
+vi.mock("../../../lib/clipboard", () => ({
+  clipboardImageSupported: vi.fn(() => true),
+  copyImageAsync: vi.fn().mockResolvedValue(true),
 }));
 
 const askConfirm = vi.fn();
@@ -40,8 +46,16 @@ const DATA: DataStruct = {
   metadata: {},
 };
 
+// F3.6: every REAL plot window carries a canonical FigureDocument since F1
+// (createWindow always sets one; store/windowDocuments.ts keeps it in sync)
+// — panelFigure/panelRenderInputs now render/invalidate from `.document`,
+// not the ad-hoc `.view` fields, so a fixture that omitted `.document` would
+// make its window silently unrenderable under the new path. Auto-derive one
+// from whatever id/title/datasetId/view a call configures, unless the
+// caller passes its own `document` explicitly (a few tests need a specific,
+// known id to assert against).
 function win(over: Partial<PlotWindow>): PlotWindow {
-  return {
+  const base: PlotWindow = {
     id: "w1",
     kind: "plot",
     title: "",
@@ -55,6 +69,15 @@ function win(over: Partial<PlotWindow>): PlotWindow {
     pinned: false,
     ...over,
   };
+  if (base.kind === "plot" && over.document === undefined) {
+    base.document = createFigureDocument({
+      id: `figure-${base.id}`,
+      name: base.title,
+      datasetId: base.datasetId,
+      view: base.view,
+    });
+  }
+  return base;
 }
 
 const FROZEN_DOC: FigureDoc = {
@@ -215,11 +238,14 @@ describe("useFigurePage", () => {
     expect(spec!.panels).toHaveLength(2);
 
     const [p0, p1] = spec!.panels;
-    // Window panel: grid cell (0,0), payload mirrors the window's OWN view.
+    // Window panel: grid cell (0,0), rendered from the window's own bound
+    // FigureDocument (F3.6) — the canonical adapter emits x_scale (which the
+    // backend prefers over the legacy x_log boolean; see api.ts's FigureSpec
+    // doc), not x_log.
     expect([p0.row, p0.col]).toEqual([0, 0]);
     expect(p0.figure.dataset).toEqual(DATA);
     expect(p0.figure.y_keys).toEqual([1]);
-    expect(p0.figure.x_log).toBe(true);
+    expect(p0.figure.x_scale).toBe("log");
     expect(p0.figure.title).toBe("W title");
     // Doc panel: grid cell (1,1), frozen snapshot + config; the page-
     // incompatible x_breaks/margins overrides are stripped, grid survives.
@@ -369,11 +395,23 @@ describe("useFigurePage", () => {
       });
       await new Promise((r) => setTimeout(r, 600)); // past the 400 ms debounce
       expect(renderFigurePageBlob).toHaveBeenCalledTimes(1);
-      // The ASSIGNED window's view changes (title edited) -> re-render.
+      // The ASSIGNED window's view changes (title edited) -> re-render. F3.6:
+      // the panel now renders from the window's bound `.document`, not
+      // `.view` — a real edit keeps both in sync (syncPlotWindow), so the
+      // fixture updates both here too, exactly like a real title edit would.
       act(() => {
         useApp.setState((s) => ({
           plotWindows: s.plotWindows.map((w) =>
-            w.id === "w1" ? { ...w, view: { ...w.view, plotTitle: "renamed" } } : w,
+            w.id === "w1" && w.document
+              ? {
+                  ...w,
+                  view: { ...w.view, plotTitle: "renamed" },
+                  document: {
+                    ...w.document,
+                    plot: { ...w.document.plot, view: { ...w.document.plot.view, plotTitle: "renamed" } },
+                  },
+                }
+              : w,
           ),
         }));
       });
@@ -814,9 +852,9 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
 
     it("saveSlotAsFigure saves a window-kind panel's document, and the slot auto-resolves next read", () => {
       // saveFigure (the store action this delegates to) reads the window's
-      // OWN bound document (every REAL window carries one from createWindow;
-      // this file's `win()` fixture omits it by default since most tests
-      // don't care) — give w1 one, matching the F3.1 "resolves a window
+      // OWN bound document (`win()` auto-derives one, but with a
+      // fixture-generated id) — give w1 a SPECIFIC known id here so the
+      // assertions below can name it, matching the F3.1 "resolves a window
       // source..." test's own setup a few describes up.
       const document = createFigureDocument({
         id: "figure-w1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
@@ -872,6 +910,136 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
       expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].panels[0].figure.title).toBe(
         "edited canonical title",
       );
+    });
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.6: one spec-derivation path (buildSpec)
+// for preview/export/copy, the window-panel fidelity fix, and the F3 exit
+// criterion's round-trip proof (save -> reopen -> export retains every
+// panel, relationship, and visual setting).
+describe("useFigurePage F3.6 unified export from PageDocument", () => {
+  beforeEach(() => {
+    askConfirm.mockReset();
+    vi.mocked(clipboardImageSupported).mockReturnValue(true);
+    vi.mocked(copyImageAsync).mockResolvedValue(true);
+    useApp.setState({ editableFigures: [], pages: [], pageDocSeed: null, figurePageOpen: false });
+  });
+
+  // The gap this closes (see panelResolve.ts's module header): the old
+  // ad-hoc window branch never threaded error bindings through at all, so a
+  // window's error bars silently vanished from its page panel. Fail-before/
+  // pass-after: reverting panelFigure's window branch to the pre-F3.6
+  // hand-assembled spec makes this fail (error_spans absent).
+  it("renders a window panel's error bars, not just its ad-hoc PlotView fields", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({
+          id: "w1",
+          title: "Loop A",
+          view: { ...defaultPlotView(), yKeys: [1], errKeys: { 1: 0 } },
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    const spec = await result.current.buildSpec();
+    expect(spec!.panels[0].figure.error_spans).toBeDefined();
+    expect(spec!.panels[0].figure.error_spans![0]).not.toBeNull();
+  });
+
+  // The F3 exit criterion, proven directly: a window-sourced panel's spec
+  // BEFORE save must equal the SAME panel's spec after save -> (simulated)
+  // close -> reopen, once the window's document is already durable
+  // (Save requires that anyway — F3.3's unresolved-slot gate). Round-tripping
+  // through the persisted PageDocument must not change a single byte of what
+  // gets rendered.
+  it("round-trips: a saved page's reopened spec equals its pre-save spec byte-for-byte", async () => {
+    const seeded = win({
+      id: "w1",
+      title: "Loop A",
+      view: { ...defaultPlotView(), yKeys: [1], plotTitle: "Loop A plot", errKeys: { 1: 0 } },
+    });
+    useApp.setState({
+      plotWindows: [seeded],
+      editableFigures: [seeded.document!], // already saved, matching F3.3's Save precondition
+    });
+
+    const before = renderHook(() => useFigurePage());
+    act(() => before.result.current.assign(0, before.result.current.windowSources[0]));
+    act(() => before.result.current.setSlotLabel(0, "(zz)"));
+    act(() => before.result.current.setSlotTitle(0, "custom panel title"));
+    const specBeforeSave = await before.result.current.buildSpec();
+    expect(specBeforeSave).not.toBeNull();
+
+    act(() => before.result.current.save());
+    const savedId = useApp.getState().pages[0].id;
+    expect(useApp.getState().pages[0].panels[0].figureId).toBe(seeded.document!.id);
+    before.unmount();
+
+    // Simulated close -> reopen: a fresh session seeded from the saved
+    // PageDocument (mirrors PagesSection's "open" action + the workshop
+    // remounting), not the same hook instance continuing.
+    useApp.getState().openPageDocument(savedId);
+    const after = renderHook(() => useFigurePage());
+    expect(after.result.current.slots[0].source).toMatchObject({ kind: "figure", id: seeded.document!.id });
+    const specAfterReopen = await after.result.current.buildSpec();
+
+    expect(specAfterReopen).toEqual(specBeforeSave);
+  });
+
+  describe("copyNow (300-DPI clipboard copy, A7)", () => {
+    it("copies through the SAME buildSpec preview/export share", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      await act(async () => {
+        await result.current.copyNow();
+      });
+      expect(copyImageAsync).toHaveBeenCalledTimes(1);
+      // copyImageAsync receives the PENDING render promise (not yet awaited)
+      // so the clipboard write stays inside the user gesture — resolve it to
+      // inspect what was actually rendered.
+      const pending = vi.mocked(copyImageAsync).mock.calls[0][0];
+      await expect(pending).resolves.toBeInstanceOf(Blob);
+      const body = vi.mocked(renderFigurePageBlob).mock.calls.at(-1)![0];
+      expect(body.fmt).toBe("png");
+      expect(body.dpi).toBe(300);
+      expect(useApp.getState().status).toBe("figure page copied to clipboard");
+    });
+
+    it("checks clipboard capability BEFORE doing any render work", async () => {
+      vi.mocked(clipboardImageSupported).mockReturnValue(false);
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      vi.mocked(renderFigurePageBlob).mockClear();
+      await act(async () => {
+        await result.current.copyNow();
+      });
+      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(renderFigurePageBlob).not.toHaveBeenCalled();
+      expect(useApp.getState().status).toMatch(/clipboard image unavailable/);
+    });
+
+    it("gives the same specific missing-source message export uses, not a generic failure", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      act(() => {
+        useApp.setState((s) => ({ plotWindows: s.plotWindows.filter((w) => w.id !== "w1") }));
+      });
+      await act(async () => {
+        await result.current.copyNow();
+      });
+      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(useApp.getState().status).toMatch(/panel's source is missing/);
+    });
+
+    it("gives the plain 'assign a panel' message when nothing is assigned", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      await act(async () => {
+        await result.current.copyNow();
+      });
+      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(useApp.getState().status).toBe("assign at least one panel to copy a figure page");
     });
   });
 });
