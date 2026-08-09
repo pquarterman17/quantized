@@ -60,6 +60,7 @@ naming the dataset's actual ``labels`` instead.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -72,6 +73,7 @@ __all__ = [
     "SPACES",
     "cut_result",
     "full_grids",
+    "require_finite",
     "require_q",
     "resolve_angular_axes",
     "scatter_columns",
@@ -79,6 +81,23 @@ __all__ = [
 ]
 
 SPACES = ("angular", "q")
+
+
+def require_finite(**params: float) -> None:
+    """Reject NaN/Inf geometry parameters at the public entry point.
+
+    Without this, a non-finite bound propagates into numpy and surfaces as
+    something that blames the wrong thing: ``x_max=inf`` reached
+    ``binned_statistic`` as ``cannot convert float NaN to integer``,
+    ``angle=inf`` as ``math domain error``, and ``x_min=nan`` masked every
+    point so the caller was told ``box selects no data`` — sending them
+    hunting for a data problem that does not exist. Named here, once, so
+    every cut family reports the offending PARAMETER instead
+    (RSM_CUTS_PLAN item 21; found by adversarial probing, not by a test).
+    """
+    bad = [f"{k}={v!r}" for k, v in params.items() if not math.isfinite(v)]
+    if bad:
+        raise ValueError(f"non-finite parameter(s): {', '.join(sorted(bad))}")
 
 
 def resolve_angular_axes(ds: DataStruct) -> tuple[str, str]:

@@ -170,6 +170,19 @@ class _SectorParams(CachedDatasetRequest):
         if center_given:
             if self.phi_center is None or self.phi_halfwidth is None:
                 raise ValueError("phi_center and phi_halfwidth must both be given")
+            # A zero/negative half-width collapses to phi_min == phi_max, which
+            # the rebase reads as span 360 -- i.e. the FULL circle, the exact
+            # opposite of "an infinitesimally narrow sector". calc keeps that
+            # behaviour for MATLAB parity and now says so in the cut label, but
+            # nobody types half-width 0 MEANING "integrate everything", so the
+            # centre/half-width spelling rejects it outright rather than
+            # silently returning the whole map (RSM_CUTS_PLAN item 21).
+            if self.phi_halfwidth <= 0:
+                raise ValueError(
+                    "phi_halfwidth must be > 0 — a zero-width sector is "
+                    "indistinguishable from a full circle (use phi_min/phi_max, "
+                    "or omit both pairs, if you want the full circle)"
+                )
             self.phi_min = self.phi_center - self.phi_halfwidth
             self.phi_max = self.phi_center + self.phi_halfwidth
         elif not minmax_given:

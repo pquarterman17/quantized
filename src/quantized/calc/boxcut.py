@@ -69,7 +69,14 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.stats import binned_statistic
 
-from quantized.calc._rsm_grid import SPACES, cut_result, full_grids, scatter_columns, wrap_mask
+from quantized.calc._rsm_grid import (
+    SPACES,
+    cut_result,
+    full_grids,
+    require_finite,
+    scatter_columns,
+    wrap_mask,
+)
 from quantized.datastruct import DataStruct
 
 __all__ = ["box_cut", "box_stats"]
@@ -87,6 +94,10 @@ def _validate_space_wrap(space: str, wrap: str | None) -> None:
         raise ValueError(f'wrap must be one of "x", "y", or None, got {wrap!r}')
 
 
+def _validate_angle(angle: float) -> None:
+    require_finite(angle=angle)
+
+
 def _validate_bounds(
     x_min: float, x_max: float, y_min: float, y_max: float, wrap: str | None
 ) -> None:
@@ -94,6 +105,7 @@ def _validate_bounds(
     axis's ``min > max`` is the normal wrapping case (crossing the 0/360
     seam), the same freedom ``sector_profile``'s ``phi_min``/``phi_max``
     already has (e.g. ``phi_min=170, phi_max=-170``)."""
+    require_finite(x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max)
     if wrap != "x" and x_max <= x_min:
         raise ValueError(f"require x_max > x_min, got x_min={x_min!r}, x_max={x_max!r}")
     if wrap != "y" and y_max <= y_min:
@@ -183,10 +195,7 @@ def _box_label(
     angle: float,
     wrap: str | None,
 ) -> str:
-    label = (
-        f"Box x=[{x_min:.4g}, {x_max:.4g}] y=[{y_min:.4g}, {y_max:.4g}] "
-        f"{reduce}→{collapse}"
-    )
+    label = f"Box x=[{x_min:.4g}, {x_max:.4g}] y=[{y_min:.4g}, {y_max:.4g}] {reduce}→{collapse}"
     if angle != 0.0:
         label += f" @{angle:.4g} deg"
     if wrap:
@@ -339,6 +348,7 @@ def box_cut(
     if n_bins is not None and n_bins < 2:
         raise ValueError("n_bins must be >= 2")
     _validate_space_wrap(space, wrap)
+    _validate_angle(angle)
     _validate_bounds(x_min, x_max, y_min, y_max, wrap)
 
     use_grid = (
@@ -416,6 +426,7 @@ def box_stats(
     ordering (on a non-wrapped axis), or when the box selects no data.
     """
     _validate_space_wrap(space, wrap)
+    _validate_angle(angle)
     _validate_bounds(x_min, x_max, y_min, y_max, wrap)
 
     xs, ys, intensity, _axis_unit, _intensity_unit, _x_name, _y_name = scatter_columns(ds, space)

@@ -62,7 +62,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc._rsm_grid import cut_result, scatter_columns, wrap_mask
+from quantized.calc._rsm_grid import cut_result, require_finite, scatter_columns, wrap_mask
 from quantized.datastruct import DataStruct
 
 __all__ = ["chi_profile", "sector_profile"]
@@ -85,7 +85,11 @@ _POLAR_REQUIRES_Q = (
 )
 
 
-def _validate_common(q_min: float, q_max: float, n_bins: int, mode: str) -> None:
+def _validate_common(
+    q_min: float, q_max: float, n_bins: int, mode: str,
+    phi_min: float = 0.0, phi_max: float = 0.0,
+) -> None:
+    require_finite(q_min=q_min, q_max=q_max, phi_min=phi_min, phi_max=phi_max)
     if mode not in _MODES:
         raise ValueError(f"mode must be one of {_MODES}, got {mode!r}")
     if n_bins < 2:
@@ -138,6 +142,17 @@ def _sector_label(kind: str, q_min: float, q_max: float, mode: str, phi_min: flo
     label = f"{kind} |Q|=[{q_min:.4g}, {q_max:.4g}] Ang^-1 ({mode})"
     if span < 360.0 - 1e-9:
         label += f" sector [{phi_min:.4g}, {phi_max:.4g}] deg"
+    elif phi_min != phi_max or phi_max - phi_min >= 360.0:
+        return label  # a genuine full circle, requested as such
+    else:
+        # phi_min == phi_max makes the rebase span 360 (MATLAB's branch does
+        # the same), so a ZERO-width sector silently integrates EVERYTHING.
+        # Harmless in MATLAB's min/max-only dialog; a live trap now that the
+        # ROI panel offers centre +/- half-width as its primary control, where
+        # half-width 0 is one keystroke away. calc keeps the parity behaviour
+        # but says what it actually did -- the route rejects the ambiguous
+        # centre/half-width spelling outright (RSM_CUTS_PLAN item 21).
+        label += f" FULL CIRCLE (phi_min == phi_max == {phi_min:.4g} deg)"
     return label
 
 
@@ -172,7 +187,7 @@ def sector_profile(
     ``q_min < 0``, if ``n_bins < 2``, for an unknown ``mode``, or if no
     point falls inside the requested q-range/sector.
     """
-    _validate_common(q_min, q_max, n_bins, mode)
+    _validate_common(q_min, q_max, n_bins, mode, phi_min, phi_max)
     qrad, phi, intensity, intensity_unit = _polar_columns(ds)
 
     sector_mask, span, _rebased = wrap_mask(phi, phi_min, phi_max)
@@ -245,7 +260,7 @@ def chi_profile(
     Raises the same ``ValueError``\\ s as :func:`sector_profile` (no Qx/Qz,
     bad q-range, ``n_bins < 2``, unknown ``mode``, empty selection).
     """
-    _validate_common(q_min, q_max, n_bins, mode)
+    _validate_common(q_min, q_max, n_bins, mode, phi_min, phi_max)
     qrad, phi, intensity, intensity_unit = _polar_columns(ds)
 
     sector_mask, span, rebased = wrap_mask(phi, phi_min, phi_max)
