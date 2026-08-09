@@ -21,6 +21,7 @@ from quantized import __version__
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
+    _datasetcache,
     aggregate,
     baseline,
     books,
@@ -135,11 +136,14 @@ _DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-    """App lifespan: clean up the executor pool on shutdown."""
+    """App lifespan: clean up the executor pool + dataset cache on shutdown."""
     # Startup: no-op
     yield
     # Shutdown: terminate the job executor with pending cancellation
     jobs._pool.shutdown(wait=False, cancel_futures=True)
+    # RSM_CUTS_PLAN item 18: drop every cached dataset (local-server-
+    # hardening -- lifespan hook, never atexit).
+    _datasetcache.clear_cache()
 
 
 def create_app() -> FastAPI:

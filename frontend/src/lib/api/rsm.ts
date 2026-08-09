@@ -11,6 +11,14 @@
 // touched) — deliberately NOT done here, and `api.ts` is not re-exporting
 // this file either (unlike plot.ts/stats.ts) until that migration lands, so
 // nothing here can accidentally push api.ts back toward its pin.
+//
+// The dataset-handle cache (item 18) needs NO changes here: every wrapper
+// below still always passes a full `dataset`, unchanged -- `postJSON`
+// itself (lib/api/http.ts) transparently swaps it for a remembered
+// `dataset_handle` on repeat calls for /api/rsm/* paths (see
+// lib/api/datasetCache.ts). That is also why the five OLDER rsm* wrappers
+// still in the pinned `lib/api.ts` get the same saving for free without
+// that file ever being touched.
 
 import { postJSON } from "./http";
 import type { DataStruct } from "../types";
