@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MapPayload } from "../../lib/mapdata";
 import type { RsmPeak } from "../../lib/types";
-import { buildHeatmapImage, dataToPx, draw, fmt, hitTest, minPositive, peakMarkerXY } from "./mapRender";
+import { buildHeatmapImage, dataToPx, draw, fmt, hitTest, minPositive, peakMarkerXY, plotRect } from "./mapRender";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -202,6 +202,71 @@ function countPainted(img: Uint8ClampedArray): number {
   }
   return n;
 }
+
+// ── plotRect aspect lock (RSM_CUTS_PLAN item 17) ────────────────────────────
+// Q-space fixture: xAxis span 1, yAxis span 4 (deliberately far from a 4:3-ish
+// pane so a wrong "still stretched" or "still square" rect would be caught).
+const QP: MapPayload = {
+  xAxis: [0, 1],
+  yAxis: [0, 1, 2, 3, 4],
+  zGrid: [
+    [0, 1],
+    [2, 3],
+    [4, 5],
+    [6, 7],
+    [8, 9],
+  ],
+  xLabel: "Qx", xUnit: "Ang^-1", yLabel: "Qz", yUnit: "Ang^-1", zLabel: "I", zUnit: "cts",
+  zMin: 0, zMax: 9,
+};
+
+describe("plotRect", () => {
+  it("keeps stretch-to-fill for angular axes (2Theta/Omega, both 'deg') — byte-\n" +
+    "identical to the pre-item-17 rect, proving non-Q maps cannot be affected", () => {
+    expect(plotRect(gradientPayload(24, 20), 600, 400)).toEqual({ x: 58, y: 14, w: 464, h: 344 });
+    expect(plotRect(gradientPayload(24, 20), 800, 500)).toEqual({ x: 58, y: 14, w: 664, h: 444 });
+  });
+
+  it("locks Q-space axes (Qx/Qz, both Ang^-1) to their own aspect, letterboxed and centred", () => {
+    // avail = {58,14,464,344}; data aspect = 1/4 = 0.25 < avail aspect (~1.35)
+    // -> height-limited: h stays 344, w shrinks to 344*0.25 = 86, x recentres.
+    expect(plotRect(QP, 600, 400)).toEqual({ x: 247, y: 14, w: 86, h: 344 });
+  });
+});
+
+// ── dataToPx / hitTest stay exact inverses under a LOCKED, letterboxed rect
+// (RSM_CUTS_PLAN item 17 -- plotRect, hitTest and dataToPx share one function,
+// so a Q-space letterboxed rect must round-trip exactly like the stretched one
+// does above). Mirrors the `describe("dataToPx", ...)` block's own coverage.
+describe("dataToPx / hitTest under a locked (letterboxed) rect", () => {
+  // rect = {x:247, y:14, w:86, h:344} (2x5 axis -> 1x4 cells).
+  it("hitTest -> dataToPx round-trips within half a cell, over interior probes", () => {
+    const probes: [number, number][] = [
+      [247 + 43, 14 + 172], // centre
+      [247 + 10, 14 + 20], // near top-left
+      [247 + 70, 14 + 300], // near bottom-right
+    ];
+    for (const [px, py] of probes) {
+      const hit = hitTest(QP, 600, 400, px, py);
+      expect(hit).not.toBeNull();
+      const back = dataToPx(QP, 600, 400, hit!.x, hit!.y);
+      expect(back).not.toBeNull();
+      expect(Math.abs(back![0] - px)).toBeLessThan(86 / (QP.xAxis.length - 1) / 2 + 1e-6);
+      expect(Math.abs(back![1] - py)).toBeLessThan(344 / (QP.yAxis.length - 1) / 2 + 1e-6);
+    }
+  });
+
+  it("dataToPx is the algebraic inverse at the letterboxed rect's own corners", () => {
+    expect(dataToPx(QP, 600, 400, 0, 4)).toEqual([247, 14]); // (xmin, ymax) -> top-left
+    expect(dataToPx(QP, 600, 400, 1, 0)).toEqual([247 + 86, 14 + 344]); // (xmax, ymin) -> bottom-right
+  });
+
+  it("hitTest is null just outside the letterboxed rect, even though it is still\n" +
+    "inside the wider available pane (the whole point of letterboxing)", () => {
+    expect(hitTest(QP, 600, 400, 247 - 5, 14 + 172)).toBeNull(); // left of the bar, inside avail
+    expect(hitTest(QP, 600, 400, 247 + 43, 14 + 172)).not.toBeNull(); // inside the bar
+  });
+});
 
 (CANVAS_OK ? describe : describe.skip)("draw (real raster)", () => {
   // 600×400 fallback (host clientWidth is 0 in jsdom) → plot rect {58,14,464,344}.

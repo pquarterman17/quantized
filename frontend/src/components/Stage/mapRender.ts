@@ -6,6 +6,7 @@
 
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
+import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdata";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
@@ -45,20 +46,32 @@ function cssVar(name: string, fallback: string): string {
 /** Plot-area rectangle (inside the axis/colorbar margins), in CSS px.
  *  Exported so `lib/roi.ts`-consuming callers (RSM_CUTS_PLAN item 4) can
  *  build their own data<->px projector off the SAME margins `hitTest`/
- *  `dataToPx` use, without duplicating the MARGIN constants. */
-export function plotRect(w: number, h: number) {
-  return {
+ *  `dataToPx` use, without duplicating the MARGIN constants.
+ *
+ *  Stretches to fill the available area by default; LOCKS to the data's own
+ *  aspect ratio (letterboxed, centred) when both displayed axes share a unit
+ *  for which that's physically meaningful (RSM_CUTS_PLAN item 17 -- see
+ *  `lib/mapAspect.ts` for why Qx/Qz locks but 2Theta/Omega, both nominally
+ *  "deg", does not). `hitTest`/`dataToPx`/`draw` all call this SAME function
+ *  so the pointer readout, ROI placement, and every draw pass agree on
+ *  exactly one rectangle. */
+export function plotRect(p: MapPayload, w: number, h: number) {
+  const avail = {
     x: MARGIN.left,
     y: MARGIN.top,
     w: Math.max(1, w - MARGIN.left - MARGIN.right),
     h: Math.max(1, h - MARGIN.top - MARGIN.bottom),
   };
+  if (!shouldLockAspect(p.xUnit, p.yUnit)) return avail;
+  const xSpan = Math.abs(p.xAxis[p.xAxis.length - 1] - p.xAxis[0]);
+  const ySpan = Math.abs(p.yAxis[p.yAxis.length - 1] - p.yAxis[0]);
+  return fitAspectRect(avail, xSpan, ySpan);
 }
 
 /** Map a pointer position to (x, y, z) at the nearest grid cell, or null if the
  *  pointer is outside the plot area. Pure (no canvas) so it is unit-testable. */
 export function hitTest(p: MapPayload, w: number, h: number, px: number, py: number): Readout | null {
-  const rect = plotRect(w, h);
+  const rect = plotRect(p, w, h);
   if (px < rect.x || px > rect.x + rect.w || py < rect.y || py > rect.y + rect.h) return null;
   const { xAxis, yAxis, zGrid } = p;
   const xmin = xAxis[0];
@@ -82,7 +95,7 @@ export function hitTest(p: MapPayload, w: number, h: number, px: number, py: num
  *  (x, y) falls outside the map's own axis range — nothing sane to draw
  *  off the edge of the data. */
 export function dataToPx(p: MapPayload, w: number, h: number, x: number, y: number): [number, number] | null {
-  const rect = plotRect(w, h);
+  const rect = plotRect(p, w, h);
   const { xAxis, yAxis } = p;
   const xmin = xAxis[0];
   const xmax = xAxis[xAxis.length - 1];
@@ -187,7 +200,7 @@ export function draw(
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
-  const rect = plotRect(W, H);
+  const rect = plotRect(p, W, H);
   // Log mode floors at the smallest positive cell (0/negative -> transparent).
   const lo = logZ ? minPositive(p.zGrid) : p.zMin;
   const hi = p.zMax;
