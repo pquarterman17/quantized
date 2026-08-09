@@ -267,5 +267,23 @@ def test_auto_qspace_map_builds_fast_on_real_corpus(corpus_dir: Path) -> None:
     elapsed = time.perf_counter() - t0
 
     n = ds.values.shape[0]
-    assert elapsed < 2.0, f"auto-selected method took {elapsed:.2f}s (want < 2s) on {n} pts"
+    # The load-INVARIANT half of the assertion, and the one that actually
+    # encodes the fix: "auto" must resolve to the fast path on this cloud. A
+    # regression that reinstates Sibson fails here deterministically, on any
+    # machine, at any load.
+    assert (
+        _resolve_auto_method(
+            "auto", ds.column("Qx"), ds.column("Qz"), ds.column("Intensity")
+        )
+        == "linear"
+    )
+    # The wall-clock half is a coarse backstop only. It is deliberately loose:
+    # measured ~0.3s ("linear") vs 18.7-19.3s (pre-fix "natural") on this file,
+    # so 8s still catches any regression to the slow path with ~25x headroom
+    # over the fast one. A 2s bound was tried first and flaked immediately when
+    # the suite ran alongside other load (passed in 2.22s standalone, failed
+    # under concurrent runs) -- and CI is a 6-way shared-runner matrix, which is
+    # strictly worse. Never tighten this into a performance benchmark; assert
+    # the CHOICE above, not the clock.
+    assert elapsed < 8.0, f"auto-selected method took {elapsed:.2f}s (want < 8s) on {n} pts"
     assert m.z_grid.shape == (200, 200)
