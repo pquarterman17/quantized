@@ -96,6 +96,9 @@ import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, pruneEditableFigureRefs, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
+// RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
+// header) to pay for this slice's own composition cost under the pin.
+import { createRoisSlice, type RoisSlice } from "./rois";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
@@ -138,7 +141,6 @@ import type {
   PeakOverlay,
   RefLine,
   RegionShade,
-  RsmPeak,
   SeriesStyle,
 } from "../lib/types";
 
@@ -313,7 +315,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -520,7 +522,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   peakWizardEdit: PeakWizardEditBridge | null;
   // Anchor-point baseline editing (GOTO #2) — see AnchorEditBridge.
   baselineAnchorEdit: AnchorEditBridge | null;
-  rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
+  // rsmPeaks/setRsmPeaks: see RoisSlice (store/rois.ts) — relocated there
+  // under the store-size ratchet (RSM_CUTS_PLAN item 4).
   mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
   mapRes: number; // 2D-map grid resolution (nx = ny)
   // Interactive contour overlay (ORIGIN_GAP_PLAN #17 remaining half). Mirrors
@@ -855,7 +858,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
   setPeakWizardEdit: (edit: PeakWizardEditBridge | null) => void;
   setBaselineAnchorEdit: (edit: AnchorEditBridge | null) => void;
-  setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
   setMapMethod: (method: string) => void;
   setMapRes: (res: number) => void;
   setContourOn: (on: boolean) => void;
@@ -928,6 +930,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createRecentsSlice(set),
   ...createFigureLifecycleSlice(set, get),
   ...createPageDocumentsSlice(set, get),
+  ...createRoisSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1057,7 +1060,6 @@ export const useApp = create<AppState>((set, get) => ({
   baselineOverlay: null,
   peakWizardEdit: null,
   baselineAnchorEdit: null,
-  rsmPeaks: null,
   // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
   // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
   // at 200²), so it's an opt-in quality choice, not the auto-open default.
@@ -2801,7 +2803,6 @@ export const useApp = create<AppState>((set, get) => ({
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
   setPeakWizardEdit: (peakWizardEdit) => set({ peakWizardEdit }),
   setBaselineAnchorEdit: (baselineAnchorEdit) => set({ baselineAnchorEdit }),
-  setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
   setMapMethod: (mapMethod) => set({ mapMethod }),
   setMapRes: (mapRes) => set({ mapRes }),
   setContourOn: (contourOn) => set({ contourOn }),

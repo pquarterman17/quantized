@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MapPayload } from "../../lib/mapdata";
 import type { RsmPeak } from "../../lib/types";
-import { buildHeatmapImage, draw, fmt, hitTest, minPositive, peakMarkerXY } from "./mapRender";
+import { buildHeatmapImage, dataToPx, draw, fmt, hitTest, minPositive, peakMarkerXY } from "./mapRender";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -87,6 +87,41 @@ describe("hitTest", () => {
   });
   it("returns null outside the plot area", () => {
     expect(hitTest(P, 600, 400, 10, 10)).toBeNull();
+  });
+});
+
+// ── dataToPx: the exact inverse of hitTest (RSM_CUTS_PLAN item 4) ──────────
+describe("dataToPx", () => {
+  it("round-trips with hitTest within half a cell, over a grid of probe points", () => {
+    // Cell size in px: rect is 464x344 over a 3x3 axis (2 cells each way)
+    // -> half a cell is ~116px in x, ~86px in y. Probe a handful of
+    // interior points, not just the centre, so the inverse is checked
+    // across the whole plot area.
+    const probes: [number, number][] = [
+      [58 + 232, 14 + 172], // centre
+      [58 + 50, 14 + 40], // near top-left
+      [58 + 400, 14 + 300], // near bottom-right
+      [58 + 10, 14 + 172], // near left edge
+    ];
+    for (const [px, py] of probes) {
+      const hit = hitTest(P, 600, 400, px, py);
+      expect(hit).not.toBeNull();
+      const back = dataToPx(P, 600, 400, hit!.x, hit!.y);
+      expect(back).not.toBeNull();
+      expect(Math.abs(back![0] - px)).toBeLessThan(464 / (P.xAxis.length - 1) / 2 + 1e-6);
+      expect(Math.abs(back![1] - py)).toBeLessThan(344 / (P.yAxis.length - 1) / 2 + 1e-6);
+    }
+  });
+  it("is the algebraic inverse of hitTest's linear mapping, including the y-flip", () => {
+    // hitTest maps the top-left plot corner (px) to (xmin, ymax) in data —
+    // dataToPx must map (xmin, ymax) back to that exact px corner.
+    expect(dataToPx(P, 600, 400, 0, 2)).toEqual([58, 14]);
+    // ...and the bottom-right corner to (xmax, ymin).
+    expect(dataToPx(P, 600, 400, 2, 0)).toEqual([58 + 464, 14 + 344]);
+  });
+  it("returns null outside the map's own axis range", () => {
+    expect(dataToPx(P, 600, 400, -1, 1)).toBeNull();
+    expect(dataToPx(P, 600, 400, 1, 5)).toBeNull();
   });
 });
 

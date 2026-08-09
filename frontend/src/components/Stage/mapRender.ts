@@ -42,8 +42,11 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
-/** Plot-area rectangle (inside the axis/colorbar margins), in CSS px. */
-function plotRect(w: number, h: number) {
+/** Plot-area rectangle (inside the axis/colorbar margins), in CSS px.
+ *  Exported so `lib/roi.ts`-consuming callers (RSM_CUTS_PLAN item 4) can
+ *  build their own data<->px projector off the SAME margins `hitTest`/
+ *  `dataToPx` use, without duplicating the MARGIN constants. */
+export function plotRect(w: number, h: number) {
   return {
     x: MARGIN.left,
     y: MARGIN.top,
@@ -69,6 +72,28 @@ export function hitTest(p: MapPayload, w: number, h: number, px: number, py: num
   const i = Math.max(0, Math.min(xAxis.length - 1, Math.round(fx * (xAxis.length - 1))));
   const j = Math.max(0, Math.min(yAxis.length - 1, Math.round((1 - fy) * (yAxis.length - 1))));
   return { x, y, z: zGrid[j]?.[i] ?? null };
+}
+
+/** The exact inverse of `hitTest`'s linear mapping, INCLUDING the y-flip —
+ *  kept directly beside `hitTest` and built off the SAME `plotRect` (RSM_CUTS_PLAN
+ *  item 4) so the forward and inverse mappings can never drift apart. Used
+ *  by `lib/roi.ts::rectToPx` (and, later, the ROI overlay's draw pass) to
+ *  place ROI geometry stored in DATA coords back onto the canvas. Null when
+ *  (x, y) falls outside the map's own axis range — nothing sane to draw
+ *  off the edge of the data. */
+export function dataToPx(p: MapPayload, w: number, h: number, x: number, y: number): [number, number] | null {
+  const rect = plotRect(w, h);
+  const { xAxis, yAxis } = p;
+  const xmin = xAxis[0];
+  const xmax = xAxis[xAxis.length - 1];
+  const ymin = yAxis[0];
+  const ymax = yAxis[yAxis.length - 1];
+  if (xmin == null || xmax == null || ymin == null || ymax == null) return null;
+  if (x < Math.min(xmin, xmax) || x > Math.max(xmin, xmax)) return null;
+  if (y < Math.min(ymin, ymax) || y > Math.max(ymin, ymax)) return null;
+  const fx = xmax === xmin ? 0 : (x - xmin) / (xmax - xmin);
+  const fy = ymax === ymin ? 0 : (ymax - y) / (ymax - ymin); // inverse of hitTest's screen-y flip
+  return [rect.x + fx * rect.w, rect.y + fy * rect.h];
 }
 
 /** Map an RSM peak to (x, y) in the map's *current* space (angular vs Q),
