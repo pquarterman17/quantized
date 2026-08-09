@@ -300,34 +300,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
-17. **Q-space equal-aspect lock — the actual cause of the reported
-    "plotting that way was a struggle"** (booked rev 4, 2026-08-09).
-    `mapRender.ts::plotRect` stretches data to fill the pane. Correct for
-    angular axes (2θ vs ω are different quantities); physically WRONG in
-    reciprocal space, where Qx and Qz share Å⁻¹ — peak shapes,
-    substrate/film separation, and any visual read of tilt or relaxation
-    are distorted. Measured against a 4:3 pane: `FAIRmat_rsm_mesh`
-    0.44:1 true → **squashed 3×**; `xrayutilities_rsm_pixcel` 2.10:1 →
-    stretched 1.6×; `test_area_panalytical` 0.89:1 → squashed 1.5×;
-    `epytaxy_rsm` 1.61:1 → stretched 1.2×. Varies per file, so nothing
-    looks consistently broken — it just never looks right.
-    - [ ] Lock 1:1 when both displayed axes share a UNIT (read
-      `DataStruct.units`, never a hardcoded `"Qx"` check — the general
-      rule is correct and future-proof); letterbox the slack; keep
-      stretch-to-fill otherwise. Owner decision: automatic, no toggle.
-    - [ ] `plotRect`, `hitTest` and `dataToPx` move together — they share
-      `plotRect` precisely so they cannot drift. Extend the existing
-      round-trip test to the letterboxed case; a wrong readout or
-      mis-landed cut gesture would be worse than the bug.
-    - [ ] Audit every `plotRect` consumer: heatmap blit, axis frame and
-      ticks, colorbar, contour overlay, RSM peak markers.
-    - [ ] Regression guard: the angular path's rect must be byte-identical
-      to today's, proving non-Q maps cannot be affected.
-    - NOT a bug, do not touch: the 33–44 % NaN coverage in Q (a
-      rectangular ω/2θ mesh is a curved fan in reciprocal space).
-    - Acceptance: `cd frontend && npx vitest run && npm run build`,
-      `architecture.test.ts` green with zero edits.
-
 18. **Dataset-handle cache — stop re-POSTing the whole DataStruct**
     (booked rev 4, 2026-08-09; owner chose "fix it now", which
     **supersedes Tier 3 item 15**). Every map fetch and every cut sends
@@ -348,50 +320,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
       per the rev-2 decision; this is for committed operations only.
     - Depends on items 2 and 3 (both own `routes/rsm.py` right now).
       Serialize after them.
-
-2. **Fix `line_cut(space="q")` — honest fixed-Qx/Qz cuts** ⚠ STRONGER
-   MODEL (rewrites shipped, golden-adjacent behaviour; the regression
-   test must be falsifiable against today's code).
-   Files: EDIT `src/quantized/calc/linecut.py`, EDIT
-   `tests/test_calc_linecut.py`, EDIT `tests/fixtures/synthetic_rsm.py`
-   (if the multi-peak/curvilinear knobs need extending). Depends on
-   item 1 (helper extraction lands first); parallel with item 3
-   (disjoint files).
-   - [ ] Q path rewrite, signature UNCHANGED: `direction="h"` at
-         Qz=value → mask `|Qz − value| ≤ w/2` over the scattered cloud,
-         where `w = width` if width>0 else an AUTO single-line band
-         `(Qz.max()−Qz.min())/n_frames` (recorded in metadata as
-         `cut_width_used`); bin Qx into the map's own resolution
-         (map_shape[1] bins; 200 when map_shape absent); mean per bin,
-         NaN where empty. `direction="v"` symmetric (|Qx−value|, bin
-         Qz, map_shape[0] bins). Output schema unchanged (single
-         Intensity column — consistency within line_cut). ANGULAR path
-         byte-identical; existing angular tests must pass with zero
-         edits.
-   - [ ] Falsifiable regression (must FAIL against today's
-         implementation): build a curvilinear fixture where detector
-         row r has mean Qz = qz_a but its cells sweep a wide Qz range,
-         and plant peak B intensity on cells of row r whose Qz is FAR
-         from qz_a. Old code returns row r → the profile shows B's
-         bump; new code's band mask excludes those cells → intensity at
-         B's Qx position stays at background. Plus: band-honesty test
-         (every fixture point inside the band is representable — the
-         profile equals a hand-computed mask+bin reference) and a
-         width>0 vs auto-width case.
-   - [ ] Update linecut.py's module docstring (the Q path is now
-         mask+bin, and why) and the H/V tool tooltips if they claim
-         "nearest line" for Q space (grep MapStage/MapToolbar titles).
-   - [ ] SIBLING REPORT (sibling-repo-first; report, don't fix):
-         `Quantized_matlab/+bosonPlotter/extract2DLineCut.m` carries the
-         identical defect (verified — see Resolved decisions). Record it
-         in `plans/PORT_CHECKLIST.md`'s notes column for the line-cut
-         row and in the task summary for the owner; a MATLAB fix is
-         deliberate separate work (branch + headless verify), never
-         silent.
-   - Acceptance: `uv run ruff check src tests && uv run mypy src &&
-     uv run pytest tests/test_calc_linecut.py -q` (and the new
-         regression demonstrably fails when run against the pre-fix
-         implementation — state this check in the task summary).
 
 3. **Backend box — bounded integration, rotation, periodic axis, stats**
    Files: NEW `src/quantized/calc/boxcut.py`, EDIT
@@ -668,6 +596,29 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#2 Fix `line_cut(space="q")`**~~ (2026-08-09) — Q path is now
+  mask-and-bin over a real perpendicular band instead of nearest-mean row
+  selection. Measured Qz spread of a "fixed-Qz" cut: epytaxy 98.1% → **0.93%**
+  of the map range, pixcel 98.8% → **0.25%**; verified independently after
+  merge. Q-space `width` is now a physical band half-width in Å⁻¹ (angular
+  keeps line-averaging semantics), with the band actually applied recorded in
+  `metadata.cut_width_used` and stated in the cut label. Regression test proven
+  falsifiable: 5 of 6 new tests fail against pre-fix code. Angular path
+  untouched. MATLAB origin recorded as bug #5 in `PORT_CHECKLIST.md`
+  (`extract2DLineCut.m:40-42`); sibling repo deliberately not modified.
+  **Follow-up for item 6/7:** `MapStage.tsx`'s width tooltip still says
+  "average all lines within ±width/2", now imprecise for Q space.
+- ~~**#17 Q-space equal-aspect lock**~~ (2026-08-09) — new pure
+  `lib/mapAspect.ts` (`shouldLockAspect`, `fitAspectRect`, 15 tests);
+  `plotRect` now takes the payload and letterboxes to the data's true aspect
+  when both axis units match. Caught during implementation: 2Theta and Omega
+  BOTH carry unit `"deg"`, so a naive same-unit rule would have locked the
+  angular path too — the rule carves out angular units, justified because a
+  degree of detector rotation and a degree of sample rotation are not the same
+  displacement, while Qx/Qz genuinely are. `hitTest`/`dataToPx`/`draw` all
+  share the one `plotRect` so they cannot drift; angular rect asserted
+  byte-identical to before.
 
 - ~~**#16 Q-space map render performance**~~ (2026-08-09) — `MapState.method`
   now defaults to `"auto"`, resolved in `build_map` via `_resolve_auto_method`
