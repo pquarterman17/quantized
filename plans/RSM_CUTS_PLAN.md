@@ -324,30 +324,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
       and make the label state what was actually integrated either way.
     - Depends on item 19 (owns the same calc modules). Serialize after it.
 
-19. **Pole-figure angular axes — `scatter_columns`/`full_grids` hardcode
-    `2Theta`** (booked rev 5, 2026-08-09; flagged by item 8's agent,
-    VERIFIED broken by the orchestrator). `calc/_rsm_grid.py:108` does
-    `ds.column("2Theta")` for `space="angular"`, but
-    `xrayutilities_polefig_point.xrdml` carries `['Phi','Psi','Intensity']`
-    (`is2D=True`, `map_shape=[91,1199]`, `axis1_name='Psi'`, Phi spanning
-    359.4°). So `box_cut(..., space="angular", wrap="x")` dies with
-    `ValueError: tuple.index(x): x not in tuple`. Item 8's pole-figure
-    branch routes correctly to an endpoint that then fails — pieces
-    present, workflow absent (the `deliverable-first` failure mode).
-    - [ ] Resolve the angular pair generically: `2Theta` when present,
-      otherwise the two non-Intensity columns, honouring `axis1_name` for
-      which is the secondary. Applies to BOTH `scatter_columns` and
-      `full_grids`.
-    - [ ] Replace the leaked `tuple.index` error with a domain message
-      naming the missing column and the dataset's actual labels.
-    - [ ] End-to-end test on the real pole figure: azimuthal profile with
-      `wrap="x"` over the 359.4° Phi axis returns a sane φ profile; assert
-      the seam is handled (a wedge crossing ±180° matches its unwrapped
-      equivalent).
-    - Acceptance: `uv run ruff check src tests && uv run mypy src &&
-      uv run pytest -q`, plus the pole-figure round trip through
-      `/api/rsm/box`.
-
 6. **Map interaction — box draw/move/resize, live preview, inline
    commit** ⚠ STRONGER MODEL (MapStage extraction churn + the gesture
    state machine + preview/commit/cut-tool interleaving on one canvas).
@@ -526,6 +502,19 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#19 Pole-figure angular axes**~~ (2026-08-09) — `_rsm_grid.py` now
+  resolves the angular pair through one shared helper: prefers
+  `("2Theta", axis1_name)` when present (every RSM mesh, so byte-identical),
+  else the dataset's own axis pair. Cuts carry the REAL axis names, so a pole
+  figure is labelled `Phi`/`Psi` instead of being mislabelled `2Theta`. The
+  leaked `tuple.index(x): x not in tuple` is replaced by a domain error naming
+  the dataset's actual labels. Verified on main:
+  `box_cut(space="angular", wrap="x")` over the 359.4° Phi axis of
+  `xrayutilities_polefig_point.xrdml` returns 200 finite bins,
+  `x_column_name="Phi"`. +290 test lines, ZERO deletions from existing test
+  files. Salvaged and validated by the orchestrator after the agent hit a
+  session limit mid-run with the work uncommitted.
 
 - ~~**#5 Preview math + parity harness**~~ (2026-08-09) — `lib/roiMath.ts`
   (663) mirrors BOTH of `box_cut`'s paths (exact grid + cloud mask/bin with
