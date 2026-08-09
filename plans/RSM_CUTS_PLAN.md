@@ -321,54 +321,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Depends on items 2 and 3 (both own `routes/rsm.py` right now).
       Serialize after them.
 
-3. **Backend box — bounded integration, rotation, periodic axis, stats**
-   Files: NEW `src/quantized/calc/boxcut.py`, EDIT
-   `src/quantized/routes/rsm.py`, NEW `tests/test_calc_boxcut.py`, EDIT
-   `tests/test_api_rsm.py`. Depends on item 1 (serialize on
-   routes/rsm.py + test_api_rsm.py); parallel with item 2.
-   - [ ] `box_cut(ds, *, x_min, x_max, y_min, y_max, space="angular",
-         collapse="x", reduce="sum", n_bins=None, angle=0.0,
-         wrap=None) -> DataStruct`.
-         Grid path (space=="angular" AND map_shape AND angle==0 AND
-         wrap is None): exact — line_cut's `sel` convention
-         (`sel_y = mean(sec, axis=1)`, `sel_x = mean(tt, axis=0)`),
-         boolean row/col masks, ValueError "box selects no data" when
-         empty, `np.nansum/nanmean/nanmax` along the perpendicular
-         axis, x = selected `sel` values, counts = finite cells per
-         line. Cloud path (everything else): coordinates from
-         `scatter_columns`; `angle≠0` rotates points about the ROI
-         centre BEFORE masking (2×2 rotation — the cut-ruler backend);
-         `wrap="x"|"y"` applies `_rsm_grid.wrap_mask`'s mod-360 rebase
-         to that axis's bounds (the pole-figure branch (ii));
-         `scipy.stats.binned_statistic` (sum|mean|max + count) over the
-         collapse coordinate, n_bins default 200. values
-         `column_stack([profile, counts])`; docstring carries the
-         corrected uncertainty statement; metadata `{cut_kind:"box",
-         roi, cut_space, reduce, collapse, angle, wrap,
-         n_bins_or_lines, source}`.
-   - [ ] `box_stats(ds, *, x_min, x_max, y_min, y_max, space="angular",
-         angle=0.0, wrap=None) -> dict[str, Any]`: n_points,
-         integrated_intensity, mean_intensity, max_intensity,
-         peak_x/peak_y, centroid_x/centroid_y (raw-I weights,
-         documented), echoed bounds. Dict, not DataStruct (scalars —
-         the `rsm_strain` precedent).
-   - [ ] Routes: `POST /api/rsm/box` → `datastruct_payload`;
-         `POST /api/rsm/box-stats` → `to_jsonable`. Models carry angle
-         (default 0) + wrap (default None). Re-verify the router's
-         final line count in the task summary (estimate ~266; ceiling
-         500 — if the estimate was wrong and it lands >400, propose the
-         split then, not pre-emptively).
-   - [ ] Tests: grid-path exactness on a hand-computed 4×5 grid;
-         planted-Gaussian recovery (collapse-x peak at qx0; centroid
-         within one grid spacing; integrated_intensity equals a direct
-         numpy sum over the same mask); ROTATION: a ruler along a
-         45°-planted ridge recovers it while an axis-aligned box
-         smears it; WRAP: a band straddling ±180° on a synthetic
-         pole-figure-like cloud selects both sides; collapse="y";
-         empty-box 422; map_shape-less fallback.
-   - Acceptance: `uv run ruff check src tests && uv run mypy src &&
-     uv run pytest tests/test_calc_boxcut.py tests/test_api_rsm.py -q`
-
 5. **Preview math + cross-boundary parity harness**
    Files: NEW `frontend/src/lib/roiMath.ts` + `roiMath.test.ts` +
    `roiMath.golden.test.ts`, NEW `tools/freeze_roi_preview_fixture.py`,
@@ -596,6 +548,18 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#3 Backend box ROI**~~ (2026-08-09) — `calc/boxcut.py` (453) with
+  `box_cut` + `box_stats`; grid path exact in angular space, cloud mask+bin
+  everywhere else (always in Q — the curvilinear-grid lesson from #2 applied
+  by construction). `angle` rotates points about the ROI centre before masking
+  (the cut-ruler primitive item 7 needs); `wrap="x"|"y"` reuses `_rsm_grid.
+  wrap_mask` for pole figures. Routes `/box` + `/box-stats`, `routes/rsm.py`
+  238→311. Verified after merge on `epytaxy_rsm`: box_stats centroid
+  (0.0007, 4.8265) lands on the brightest point (-0.0001, 4.8274);
+  `integrated_intensity` matches a direct numpy mask-sum exactly; provenance
+  metadata carries roi/space/reduce/collapse/angle/wrap/n_bins/source, which is
+  what makes the cut re-appliable and caption-able.
 
 - ~~**#2 Fix `line_cut(space="q")`**~~ (2026-08-09) — Q path is now
   mask-and-bin over a real perpendicular band instead of nearest-mean row
