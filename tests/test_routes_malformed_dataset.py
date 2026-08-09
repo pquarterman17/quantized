@@ -154,6 +154,16 @@ CASES = [
         lambda ds: {"dataset": ds, "q_min": 0.0, "q_max": 10.0},
         RSM_Q_GOOD,
     ),
+    (
+        "/api/rsm/box",
+        lambda ds: {"dataset": ds, "x_min": 20.0, "x_max": 21.0, "y_min": 9.5, "y_max": 10.5},
+        RSM_GOOD,
+    ),
+    (
+        "/api/rsm/box-stats",
+        lambda ds: {"dataset": ds, "x_min": 20.0, "x_max": 21.0, "y_min": 9.5, "y_max": 10.5},
+        RSM_GOOD,
+    ),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.

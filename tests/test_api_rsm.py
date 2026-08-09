@@ -213,3 +213,89 @@ def test_chi_profile_both_parameterizations_is_422() -> None:
         },
     )
     assert resp.status_code == 422
+
+
+# ── box / box-stats (item 3, calc.boxcut) ────────────────────────────────────
+#
+# The fixture is an angular mesh (2Theta ~= 60-62 deg, Omega ~= 30-31 deg) --
+# bounds below stay inside that so the grid path (exact, no map_shape/angle/
+# wrap override) applies by default.
+
+
+def test_box_roundtrip_grid_path() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box",
+        json={"dataset": ds, "x_min": 60.2, "x_max": 61.8, "y_min": 30.1, "y_max": 30.9},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["cut_kind"] == "box"
+    assert out["metadata"]["cut_space"] == "angular"
+
+
+def test_box_q_space_uses_cloud_path() -> None:
+    # Q cloud sits at Qx ~= 0 (phi ~= 89-91 deg, near-specular), Qz ~= 4.0-4.3
+    # (see the sector-test comment above) -- x bounds Qx, y bounds Qz.
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box",
+        json={
+            "dataset": ds, "x_min": -0.5, "x_max": 0.5, "y_min": 4.0, "y_max": 4.3,
+            "space": "q", "collapse": "x", "n_bins": 20,
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["metadata"]["cut_space"] == "q"
+    assert out["metadata"]["n_bins_or_lines"] == 20  # cloud path always bins
+
+
+def test_box_empty_selection_is_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box",
+        json={"dataset": ds, "x_min": 1000.0, "x_max": 1001.0, "y_min": 30.1, "y_max": 30.9},
+    )
+    assert resp.status_code == 422
+
+
+def test_box_stats_empty_selection_is_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box-stats",
+        json={"dataset": ds, "x_min": 1000.0, "x_max": 1001.0, "y_min": 30.1, "y_max": 30.9},
+    )
+    assert resp.status_code == 422
+
+
+def test_box_stats_roundtrip() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box-stats",
+        json={"dataset": ds, "x_min": 60.2, "x_max": 61.8, "y_min": 30.1, "y_max": 30.9},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    for key in (
+        "n_points", "integrated_intensity", "mean_intensity", "max_intensity",
+        "peak_x", "peak_y", "centroid_x", "centroid_y",
+        "x_min", "x_max", "y_min", "y_max", "space", "angle", "wrap",
+    ):
+        assert key in body
+    assert body["n_points"] > 0
+    assert body["wrap"] is None
+
+
+def test_box_angle_and_wrap_ride_as_fields() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/box",
+        json={
+            "dataset": ds, "x_min": -0.5, "x_max": 0.5, "y_min": 4.0, "y_max": 4.3,
+            "space": "q", "angle": 10.0,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["metadata"]["angle"] == 10.0

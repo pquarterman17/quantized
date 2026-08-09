@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from quantized.calc.boxcut import box_cut, box_stats
 from quantized.calc.linecut import cut_segment, line_cut, projection
 from quantized.calc.rsm import rsm_strain
 from quantized.calc.rsm_analyze import rsm_analyze, rsm_grids_from_datastruct
@@ -236,3 +237,75 @@ def chi_profile_route(req: ChiProfileRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(out)
+
+
+class BoxCutRequest(BaseModel):
+    """Bounded rectangular ROI (or rotated cut-ruler) -> see ``boxcut.box_cut``."""
+
+    dataset: dict[str, Any]
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    space: str = "angular"
+    collapse: str = "x"
+    reduce: str = "sum"
+    n_bins: int | None = Field(default=None, ge=2)
+    angle: float = 0.0
+    wrap: str | None = None
+
+
+@router.post("/box")
+def box(req: BoxCutRequest) -> dict[str, Any]:
+    """Bounded box (or rotated-ruler) integration -> a 2-column DataStruct."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        out = box_cut(
+            ds,
+            x_min=req.x_min,
+            x_max=req.x_max,
+            y_min=req.y_min,
+            y_max=req.y_max,
+            space=req.space,
+            collapse=req.collapse,
+            reduce=req.reduce,
+            n_bins=req.n_bins,
+            angle=req.angle,
+            wrap=req.wrap,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)
+
+
+class BoxStatsRequest(BaseModel):
+    """Scalar summary over a rectangular ROI -> see ``boxcut.box_stats``."""
+
+    dataset: dict[str, Any]
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    space: str = "angular"
+    angle: float = 0.0
+    wrap: str | None = None
+
+
+@router.post("/box-stats")
+def box_stats_route(req: BoxStatsRequest) -> dict[str, Any]:
+    """Scalar box summary (n points, integrated intensity, centroid, peak) -> a dict."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        result = box_stats(
+            ds,
+            x_min=req.x_min,
+            x_max=req.x_max,
+            y_min=req.y_min,
+            y_max=req.y_max,
+            space=req.space,
+            angle=req.angle,
+            wrap=req.wrap,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return to_jsonable(result)  # type: ignore[no-any-return]
