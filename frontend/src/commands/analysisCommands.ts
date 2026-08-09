@@ -92,6 +92,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       run: () => s().setRsmOpen(true),
     },
     {
+      id: "roi-cuts",
+      group: "Analyze",
+      section: "XRD & reflectivity",
+      label: "ROI cuts (box / sector)…",
+      description: "Integrate a box or annulus/azimuth region of a 2-D map into a 1-D cut, numerically — no drawing required.",
+      keywords: "reciprocal space map box sector annulus azimuth chi profile roi integrate",
+      run: () => s().setRoiCutsOpen(true),
+    },
+    {
       id: "digitizer",
       group: "Analyze",
       section: "Workflow",

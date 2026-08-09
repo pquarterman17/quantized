@@ -99,6 +99,8 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
 import { createRoisSlice, type RoisSlice } from "./rois";
+// RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
+import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
@@ -315,7 +317,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -931,6 +933,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createFigureLifecycleSlice(set, get),
   ...createPageDocumentsSlice(set, get),
   ...createRoisSlice(set, get),
+  ...createRoiCutsPanelSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
