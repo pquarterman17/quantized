@@ -14,12 +14,32 @@ or Q space. Extended here:
 
 Cuts work on the (frames × pixels) index grid via ``metadata.map_shape``, so
 they are exact detector-line extractions for all three mesh kinds (mesh /
-snapshot / coupled). Segment cuts interpolate the scattered cloud directly
-and need no grid. Every function returns a 1-D ``DataStruct`` ready for the
-library (plot, fit, export like any scan).
+snapshot / coupled) IN ANGULAR SPACE, where a row/column genuinely IS
+constant-omega / constant-2Theta. Segment cuts interpolate the scattered
+cloud directly and need no grid. Every function returns a 1-D ``DataStruct``
+ready for the library (plot, fit, export like any scan).
+
+**RSM_CUTS_PLAN item 2 fix (this revision):** :func:`line_cut`'s
+``space="q"`` path used to pick one whole grid row/column by nearest MEAN
+Qz/Qx and label it a "fixed Q" cut. That is wrong: the (2Theta, Omega) grid
+is curvilinear in reciprocal space (a rectangular angular mesh is a curved
+fan in Q), so one detector row's actual Qz sweeps 79-99% of the map's WHOLE
+Qz range, not a value near its mean (measured on the real corpus: epytaxy
+98.1%, xrayutilities pixcel 98.8%, test_area 79.1% -- see
+``tests/test_calc_linecut.py``). Whole-row/column selection is now used
+ONLY for ``space="angular"`` (unchanged, still exact). For ``space="q"``,
+:func:`line_cut` now masks a perpendicular BAND around the requested Qz/Qx
+over the scattered cloud and bins along the free coordinate -- the same
+mask-and-bin treatment ``calc.boxcut``'s Q-space path uses (item 3). See
+:func:`line_cut`'s docstring for the exact band-width semantics. This
+mirrors a latent, unfixed bug in the MATLAB reference
+(``+bosonPlotter/extract2DLineCut.m:40-42``: ``meanQz = mean(map.Qz, 2);
+[~, rowIdx] = min(abs(meanQz - clickY))``) that the original port
+replicated faithfully; per the sibling-repo-first rule the MATLAB side is
+REPORTED, not fixed, here -- see ``plans/PORT_CHECKLIST.md``.
 
 The shared (N, M) grid reshape, the space -> (x, y, Intensity) scattered-
-column selection, and the result-assembly helper used here now live in
+column selection, and the result-assembly helper used here live in
 ``calc/_rsm_grid.py`` (RSM_CUTS_PLAN item 1), so ``calc/sectorcut.py``
 (arc/chi profiles) and ``calc/boxcut.py`` (box integration) build on the
 exact same primitives instead of drifting copies — see that module's
@@ -27,6 +47,8 @@ docstring.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 
@@ -48,13 +70,52 @@ def line_cut(
     """Horizontal / vertical cut through the map at a fixed axis value.
 
     ``direction='h'``: intensity vs the horizontal axis (2Theta, or Qx in
-    Q-space) at the frame(s) nearest ``value`` on the vertical axis.
-    ``direction='v'``: intensity vs the vertical axis (secondary motor, or Qz)
-    at the pixel column(s) nearest ``value`` on the horizontal axis.
+    Q-space) at fixed ``value`` on the vertical axis (secondary motor, or
+    Qz). ``direction='v'``: intensity vs the vertical axis at fixed
+    ``value`` on the horizontal axis (2Theta, or Qx).
 
-    ``width=0`` reproduces MATLAB's single nearest-line cut; ``width>0``
-    averages every line whose axis value lies within ±width/2 of ``value``
-    (falls back to the nearest single line when none do).
+    **Angular space** (``space='angular'``, unchanged): the (frames x
+    pixels) grid is axis-aligned -- rows genuinely ARE constant-omega and
+    columns constant-2Theta -- so a cut is an EXACT grid-line selection.
+    ``width=0`` reproduces MATLAB ``extract2DLineCut``'s single
+    nearest-line cut; ``width>0`` averages every line whose axis value
+    lies within +-width/2 of ``value`` (falls back to the nearest single
+    line when none do).
+
+    **Q space** (``space='q'``, RSM_CUTS_PLAN item 2): the (2Theta, Omega)
+    grid is curvilinear in reciprocal space, so unlike angular space a
+    single detector row/column does NOT have a nearly-constant Qz/Qx --
+    selecting a whole grid line by nearest mean-Q (this function's
+    pre-fix behaviour, and the MATLAB reference's behaviour to this day;
+    see the module docstring) silently returns a profile that sweeps most
+    of the map's Q range instead of a fixed-Q line. Fixed here as an
+    honest perpendicular BAND MASK over the scattered (Qx, Qz) cloud,
+    binned along the free coordinate -- the same mask-and-bin treatment
+    ``calc.boxcut``'s Q-space path uses: ``direction='h'`` masks
+    ``|Qz - value| <= width/2`` and bins Qx into ``map_shape[1]`` bins
+    (mean per bin, NaN where a bin has no points); ``direction='v'``
+    mirrors it (mask Qx, bin Qz into ``map_shape[0]`` bins). ``width`` in
+    Q space is therefore a genuine BAND HALF-WIDTH IN Ang^-1 -- a physical
+    quantity, unlike angular space where it counts grid lines.
+    ``width=0`` cannot select a zero-thickness band (no point sits at an
+    exact Qz), so it auto-selects a single-detector-line-scale band
+    instead: ``(Qz.max() - Qz.min()) / n_frames`` for ``direction='h'``
+    (``(Qx.max() - Qx.min()) / n_pixels`` for ``'v'``) -- roughly the
+    Q-space footprint of one detector line. The band actually applied is
+    always recorded in the output metadata as ``cut_width_used`` (whether
+    it came from ``width`` or the auto default), so a caller never has to
+    guess it. Output is a single ``Intensity`` column in both spaces
+    (consistent with this function's existing shape -- unlike the
+    two-column ``[Intensity, "N points"]`` binned profiles in
+    ``calc.sectorcut``/``calc.boxcut``); no uncertainty column is emitted.
+    If Poisson error bars are needed, ``sigma = sqrt(sum(I))`` is
+    defensible ONLY when ``ds.units`` reports raw counts -- never for
+    counts-per-second (PANalytical XRDML often reports cps; scale by the
+    counting time first).
+
+    Raises ``ValueError`` for an unknown ``direction``/``space``, negative
+    ``width``, a non-2-D or gridless dataset, missing Qx/Qz columns in Q
+    space, or (Q space only) a fixed-Q band that selects no data.
     """
     if direction not in ("h", "v"):
         raise ValueError(f'direction must be "h" or "v", got "{direction}"')
@@ -65,31 +126,32 @@ def line_cut(
     g = full_grids(ds)
     if space == "q":
         require_q(g)
+        return _q_band_cut(ds, g, direction=direction, value=value, width=width)
 
     if direction == "h":
-        sel = np.mean(g["sec"] if space == "angular" else g["qz"], axis=1)
-        x_grid = g["tt"] if space == "angular" else g["qx"]
+        sel = np.mean(g["sec"], axis=1)
+        x_grid = g["tt"]
         pick = np.abs(sel - value) <= width / 2.0
         if not pick.any():
             pick = np.zeros(sel.size, dtype=bool)
             pick[int(np.argmin(np.abs(sel - value)))] = True
         x = np.mean(x_grid[pick, :], axis=0)
         y = np.mean(g["i"][pick, :], axis=0)
-        fixed_name = g["sec_name"] if space == "angular" else "Qz"
-        x_name = "2Theta" if space == "angular" else "Qx"
+        fixed_name = g["sec_name"]
+        x_name = "2Theta"
     else:
-        sel = np.mean(g["tt"] if space == "angular" else g["qx"], axis=0)
-        x_grid = g["sec"] if space == "angular" else g["qz"]
+        sel = np.mean(g["tt"], axis=0)
+        x_grid = g["sec"]
         pick = np.abs(sel - value) <= width / 2.0
         if not pick.any():
             pick = np.zeros(sel.size, dtype=bool)
             pick[int(np.argmin(np.abs(sel - value)))] = True
         x = np.mean(x_grid[:, pick], axis=1)
         y = np.mean(g["i"][:, pick], axis=1)
-        fixed_name = "2Theta" if space == "angular" else "Qx"
-        x_name = g["sec_name"] if space == "angular" else "Qz"
+        fixed_name = "2Theta"
+        x_name = g["sec_name"]
 
-    unit_ax = "deg" if space == "angular" else "Ang^-1"
+    unit_ax = "deg"
     centre = float(np.mean(sel[pick]))
     tag = "H-cut" if direction == "h" else "V-cut"
     label = f"{tag} {fixed_name}≈{centre:.6g} {unit_ax}"
@@ -99,6 +161,63 @@ def line_cut(
         x, y, label=label, x_name=x_name, x_unit=unit_ax, unit=g["unit"], ds=ds,
         extra={"cut_direction": direction, "cut_value": centre,
                "cut_width": width, "cut_space": space, "n_lines": int(pick.sum())},
+    )
+
+
+def _q_band_cut(
+    ds: DataStruct,
+    g: dict[str, Any],
+    *,
+    direction: str,
+    value: float,
+    width: float,
+) -> DataStruct:
+    """Fixed-Qx/Qz cut: perpendicular-band mask + bin over the scattered Q cloud.
+
+    The honest replacement for a curvilinear grid's nearest-mean-row/column
+    selection -- see :func:`line_cut`'s docstring for the full semantics.
+    """
+    qx, qz, intensity, _axis_unit, intensity_unit = scatter_columns(ds, "q")
+    n, m = g["qx"].shape
+
+    if direction == "h":
+        coord, free, n_bins, n_lines = qz, qx, m, n
+        fixed_name, free_name = "Qz", "Qx"
+    else:
+        coord, free, n_bins, n_lines = qx, qz, n, m
+        fixed_name, free_name = "Qx", "Qz"
+
+    span = float(np.nanmax(coord) - np.nanmin(coord))
+    w = width if width > 0 else (span / n_lines if n_lines > 0 else 0.0)
+    mask = (
+        (np.abs(coord - value) <= w / 2.0) & np.isfinite(coord) & np.isfinite(intensity)
+    )
+    if not mask.any():
+        raise ValueError(
+            f"no Q-space points within |{fixed_name} - {value:g}| <= {w / 2:g} Ang^-1 "
+            "of the requested fixed-Q value (fixed-Q band selects no data)"
+        )
+
+    edges = np.linspace(float(np.nanmin(free)), float(np.nanmax(free)), n_bins + 1)
+    sum_i, _ = np.histogram(free[mask], bins=edges, weights=intensity[mask])
+    counts, _ = np.histogram(free[mask], bins=edges)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        profile = np.asarray(np.where(counts > 0, sum_i / counts, np.nan), dtype=float)
+    centres = (edges[:-1] + edges[1:]) / 2.0
+
+    tag = "H-cut" if direction == "h" else "V-cut"
+    label = f"{tag} {fixed_name}≈{value:.6g} Ang^-1 (band ±{w / 2:.4g} Ang^-1)"
+    return cut_result(
+        centres, profile, label=label, x_name=free_name, x_unit="Ang^-1",
+        unit=intensity_unit, ds=ds,
+        extra={
+            "cut_direction": direction,
+            "cut_value": value,
+            "cut_width": width,
+            "cut_width_used": w,
+            "cut_space": "q",
+            "n_points": int(mask.sum()),
+        },
     )
 
 
