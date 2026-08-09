@@ -221,8 +221,7 @@ const QP: MapPayload = {
 };
 
 describe("plotRect", () => {
-  it("keeps stretch-to-fill for angular axes (2Theta/Omega, both 'deg') — byte-\n" +
-    "identical to the pre-item-17 rect, proving non-Q maps cannot be affected", () => {
+  it("keeps stretch-to-fill for angular axes (2Theta/Omega, both 'deg') — byte-identical to the pre-item-17 rect", () => {
     expect(plotRect(gradientPayload(24, 20), 600, 400)).toEqual({ x: 58, y: 14, w: 464, h: 344 });
     expect(plotRect(gradientPayload(24, 20), 800, 500)).toEqual({ x: 58, y: 14, w: 664, h: 444 });
   });
@@ -261,8 +260,7 @@ describe("dataToPx / hitTest under a locked (letterboxed) rect", () => {
     expect(dataToPx(QP, 600, 400, 1, 0)).toEqual([247 + 86, 14 + 344]); // (xmax, ymin) -> bottom-right
   });
 
-  it("hitTest is null just outside the letterboxed rect, even though it is still\n" +
-    "inside the wider available pane (the whole point of letterboxing)", () => {
+  it("hitTest is null just outside the letterboxed rect, though still inside the wider pane", () => {
     expect(hitTest(QP, 600, 400, 247 - 5, 14 + 172)).toBeNull(); // left of the bar, inside avail
     expect(hitTest(QP, 600, 400, 247 + 43, 14 + 172)).not.toBeNull(); // inside the bar
   });

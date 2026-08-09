@@ -7,9 +7,7 @@ describe("shouldLockAspect", () => {
     expect(shouldLockAspect("Ang^-1", "Ang^-1")).toBe(true);
   });
 
-  it("does NOT lock angular axes, even though 2Theta/Omega both carry 'deg' —\n" +
-    "a degree of detector rotation and a degree of sample rotation are not the\n" +
-    "same displacement (regression guard for the angular render path)", () => {
+  it("does not lock angular axes, even though 2Theta/Omega both carry 'deg' (regression guard)", () => {
     expect(shouldLockAspect("deg", "deg")).toBe(false);
   });
 
