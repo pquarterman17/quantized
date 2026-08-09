@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.decimate import decimate_columns, is_ascending, window_columns
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.datastruct import DataStruct
+from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._payload import jsonify, to_jsonable
 
 router = APIRouter(prefix="/api/plot", tags=["plot"])
@@ -109,10 +110,15 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
     }
 
 
-class MapRequest(BaseModel):
-    """Three channels of a (scattered) dataset -> a regular 2-D grid for heatmap."""
+class MapRequest(CachedDatasetRequest):
+    """Three channels of a (scattered) dataset -> a regular 2-D grid for heatmap.
 
-    dataset: dict[str, Any]
+    ``dataset``/``dataset_handle`` (RSM_CUTS_PLAN item 18): the map fetch is
+    the single largest repeat-payload offender (measured 45.5 MB on the
+    largest real corpus file, re-sent on every channel change and every
+    2theta/omega <-> Q toggle) -- see CachedDatasetRequest's own doc.
+    """
+
     x_key: int | str
     y_key: int | str
     z_key: int | str
@@ -131,10 +137,10 @@ class MapRequest(BaseModel):
 
 
 @router.post("/map")
-def plot_map(req: MapRequest) -> dict[str, Any]:
+def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
     """Regrid scattered (x, y, z) channels into a Canvas2D-ready heatmap grid."""
     try:
-        ds = DataStruct.from_dict(req.dataset)
+        ds, handle = resolve_or_409(req)
         state = MapState(
             method=req.method,
             nx=req.nx,
@@ -149,6 +155,7 @@ def plot_map(req: MapRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    response.headers["X-Dataset-Handle"] = handle
     # x_axis/y_axis are regular (finite by construction); z_grid has NaN gaps
     # outside the convex hull -> jsonify maps those to null (a heatmap gap).
     return {

@@ -49,7 +49,13 @@ export interface MapRequest {
  *  `signal` (RSM_CUTS_PLAN item 16) lets a caller abort mid-request -- the
  *  2θ/ω ⇄ Q toggle re-fetches on every keys/method/res change, and without
  *  this the superseded request just kept computing server-side after its
- *  result was discarded. Same pattern as `plotSeries`'s `signal`. */
+ *  result was discarded. Same pattern as `plotSeries`'s `signal`.
+ *
+ *  This is the single largest repeat-payload offender (item 18 measured
+ *  45.5 MB on the real corpus's largest map) -- `postJSON` transparently
+ *  caches `req.dataset` server-side and re-sends only a short handle on
+ *  every call after the first for the SAME dataset object, with no change
+ *  needed here (see lib/api/datasetCache.ts). */
 export function mapSeries(req: MapRequest, signal?: AbortSignal): Promise<MapResponse> {
   return postJSON<MapResponse>("/api/plot/map", req, signal);
 }

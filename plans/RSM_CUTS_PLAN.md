@@ -300,27 +300,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
-18. **Dataset-handle cache — stop re-POSTing the whole DataStruct**
-    (booked rev 4, 2026-08-09; owner chose "fix it now", which
-    **supersedes Tier 3 item 15**). Every map fetch and every cut sends
-    the entire dataset as JSON. Measured: `m3learning_rsm.xrdml`
-    **45.5 MB** (1.9 s server-side encode, 1.15 s decode, plus a
-    main-thread `JSON.stringify` in the browser on the way out);
-    `xrayutilities_rsm_pixcel` 8.1 MB; `epytaxy_rsm` 1.6 MB. Paid again
-    on every channel change and every 2θ/ω ⇄ Q toggle.
-    - [ ] Server-side dataset cache keyed by content hash; client POSTs a
-      handle after first upload, full payload only on a cache miss.
-      Precedents to follow, not reinvent: `routes/_uploadcache.py`,
-      `routes/_bookcache.py`.
-    - [ ] Must degrade safely: an unknown/evicted handle returns a
-      distinguishable status the client answers by re-sending the
-      dataset once — never a hard failure the user sees.
-    - [ ] Applies to `/api/plot/map` and every `/api/rsm/*` endpoint.
-      Do NOT extend it to the live drag preview — that stays client-side
-      per the rev-2 decision; this is for committed operations only.
-    - Depends on items 2 and 3 (both own `routes/rsm.py` right now).
-      Serialize after them.
-
 5. **Preview math + cross-boundary parity harness**
    Files: NEW `frontend/src/lib/roiMath.ts` + `roiMath.test.ts` +
    `roiMath.golden.test.ts`, NEW `tools/freeze_roi_preview_fixture.py`,
@@ -548,6 +527,42 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#18 Dataset-handle cache**~~ (2026-08-09) — `routes/_datasetcache.py`
+  (232, new): a bounded (16 entries / 256 MiB, LRU) in-memory
+  `OrderedDict[str, DataStruct]` keyed by a server-computed content hash
+  (blake2b over the decoded ndarray buffers, ~13ms measured on a 45 MB
+  payload vs. the ~1.15s already paid to decode it), following the
+  `_bookcache.py` precedent (in-memory LRU) over `_uploadcache.py`'s
+  disk-staged token precedent — there is no filesystem path or "book"
+  boundary here. One shared pydantic mixin `CachedDatasetRequest`
+  (`dataset`/`dataset_handle` + `.resolve()`) replaces the per-model
+  `dataset: dict[str, Any]` field on all 8 dataset-taking endpoints
+  (`/api/plot/map` + 7 of `/api/rsm/*`'s 8 — `strain` takes peak centres,
+  not a dataset); the handle rides as an `X-Dataset-Handle` RESPONSE
+  HEADER, never the body, so every existing response shape stayed
+  byte-identical (all pre-existing tests pass unmodified). An
+  unknown/evicted handle is a distinguishable HTTP 409
+  (`DatasetHandleMiss` -> `resolve_or_409`), never a 422 or 500. Frontend:
+  NEW `lib/api/datasetCache.ts` intercepts inside `lib/api/http.ts`'s
+  `postJSON` itself (not in each wrapper) — a WeakMap keyed on the
+  client's own `dataset` object reference remembers the server-issued
+  handle and swaps it in on repeat calls, retrying transparently once on
+  a 409. Because the interception lives in `postJSON`, the FIVE older
+  `rsm*` wrappers still in the pinned (1782) `lib/api.ts` get the same
+  saving for free with zero edits to that file. Client-side hashing was
+  measured and rejected (frontend `DataStruct.values` is plain
+  `number[][]`, not typed arrays — a JS hash pass would cost close to the
+  `JSON.stringify` this cache exists to avoid, for a cross-instance-dedup
+  benefit the real workflow never needs). Measured repeat-call payload on
+  a 6,144-point synthetic map: 660,995 B -> 114 B (99.983% smaller).
+  26 new backend tests (hashing, bounded eviction by count AND bytes,
+  concurrent races on both a write and a shared read all succeeding, full
+  route-level round trip + 409 miss-recovery for every cache-eligible
+  endpoint) + 14 new frontend tests (retry logic + `postJSON` dispatch,
+  including out-of-scope-path passthrough for `/api/plot/series`); full
+  gate green (3648 backend + 5842 frontend tests, ruff/mypy/tsc/build
+  clean).
 
 - ~~**#3 Backend box ROI**~~ (2026-08-09) — `calc/boxcut.py` (453) with
   `box_cut` + `box_stats`; grid path exact in angular space, cloud mask+bin
