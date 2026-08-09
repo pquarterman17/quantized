@@ -138,7 +138,7 @@ def line_cut(
         x = np.mean(x_grid[pick, :], axis=0)
         y = np.mean(g["i"][pick, :], axis=0)
         fixed_name = g["sec_name"]
-        x_name = "2Theta"
+        x_name = g["tt_name"]
     else:
         sel = np.mean(g["tt"], axis=0)
         x_grid = g["sec"]
@@ -148,7 +148,7 @@ def line_cut(
             pick[int(np.argmin(np.abs(sel - value)))] = True
         x = np.mean(x_grid[:, pick], axis=1)
         y = np.mean(g["i"][:, pick], axis=1)
-        fixed_name = "2Theta"
+        fixed_name = g["tt_name"]
         x_name = g["sec_name"]
 
     unit_ax = "deg"
@@ -177,7 +177,7 @@ def _q_band_cut(
     The honest replacement for a curvilinear grid's nearest-mean-row/column
     selection -- see :func:`line_cut`'s docstring for the full semantics.
     """
-    qx, qz, intensity, _axis_unit, intensity_unit = scatter_columns(ds, "q")
+    qx, qz, intensity, _axis_unit, intensity_unit, _x_name, _y_name = scatter_columns(ds, "q")
     n, m = g["qx"].shape
 
     if direction == "h":
@@ -232,7 +232,9 @@ def cut_segment(
 ) -> DataStruct:
     """Arbitrary straight cut from ``p0`` to ``p1`` through the scattered cloud.
 
-    Coordinates are ``(2Theta, <axis1>)`` for ``space='angular'`` or
+    Coordinates are ``_rsm_grid.scatter_columns``'s resolved pair for
+    ``space='angular'`` (``(2Theta, <axis1>)`` for a normal RSM mesh, or
+    e.g. ``(Phi, Psi)`` for a pole figure with no 2Theta column) or
     ``(Qx, Qz)`` for ``space='q'``. Samples ``n`` points along the segment by
     linear scattered interpolation; ``width>0`` additionally averages 7
     parallel lines spread over ±width/2 perpendicular to the cut (NaN outside
@@ -246,7 +248,7 @@ def cut_segment(
         raise ValueError("n must be >= 2")
     if width < 0:
         raise ValueError("width must be >= 0")
-    xs, ys, iv, unit_ax, unit = scatter_columns(ds, space)
+    xs, ys, iv, unit_ax, unit, _x_name, _y_name = scatter_columns(ds, space)
 
     d = np.asarray([p1[0] - p0[0], p1[1] - p0[1]], dtype=float)
     length = float(np.hypot(*d))
@@ -304,7 +306,7 @@ def projection(
     if axis == "pixels":
         x = np.mean(g["tt"] if space == "angular" else g["qx"], axis=0)
         y = np.sum(g["i"], axis=0)
-        x_name = "2Theta" if space == "angular" else "Qx"
+        x_name = g["tt_name"] if space == "angular" else "Qx"
     else:
         x = np.mean(g["sec"] if space == "angular" else g["qz"], axis=1)
         y = np.sum(g["i"], axis=1)

@@ -219,7 +219,7 @@ def _grid_box(
     if collapse == "x":
         profile, counts = _reduce_lines(sub, axis=0, reduce=reduce)
         x = sel_x[col_mask]
-        x_name, n_lines = "2Theta", int(row_mask.sum())
+        x_name, n_lines = str(g["tt_name"]), int(row_mask.sum())
     else:
         profile, counts = _reduce_lines(sub, axis=1, reduce=reduce)
         x = sel_y[row_mask]
@@ -244,8 +244,14 @@ def _cloud_box(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], str, str, str, int]:
     """Mask + bin the scattered cloud -- see the module docstring's "Cloud
     path". Returns ``(x, values, x_name, x_unit, intensity_unit, n_bins)``.
+    ``x_name`` is whichever of ``scatter_columns``'s resolved
+    ``(col_x_name, col_y_name)`` the ``collapse`` direction selects -- e.g.
+    ``Phi``/``Psi`` for a pole figure, never a hardcoded ``"2Theta"``
+    (RSM_CUTS_PLAN item 19).
     """
-    xs, ys, intensity, axis_unit, intensity_unit = scatter_columns(ds, space)
+    xs, ys, intensity, axis_unit, intensity_unit, col_x_name, col_y_name = scatter_columns(
+        ds, space
+    )
     xs = np.asarray(xs, dtype=float)
     ys = np.asarray(ys, dtype=float)
     intensity = np.asarray(intensity, dtype=float)
@@ -262,12 +268,12 @@ def _cloud_box(
         coord = x_coord[mask]
         edge_lo, edge_hi = (0.0, x_span) if wrap == "x" else (x_min, x_max)
         offset = x_min if wrap == "x" else 0.0
-        x_name = "2Theta" if space == "angular" else "Qx"
+        x_name = col_x_name
     else:
         coord = y_coord[mask]
         edge_lo, edge_hi = (0.0, y_span) if wrap == "y" else (y_min, y_max)
         offset = y_min if wrap == "y" else 0.0
-        x_name = str(ds.metadata.get("axis1_name", "Omega")) if space == "angular" else "Qz"
+        x_name = col_y_name
 
     edges = np.linspace(edge_lo, edge_hi, bins + 1)
     iv = intensity[mask]
@@ -412,7 +418,7 @@ def box_stats(
     _validate_space_wrap(space, wrap)
     _validate_bounds(x_min, x_max, y_min, y_max, wrap)
 
-    xs, ys, intensity, _axis_unit, _intensity_unit = scatter_columns(ds, space)
+    xs, ys, intensity, _axis_unit, _intensity_unit, _x_name, _y_name = scatter_columns(ds, space)
     xs = np.asarray(xs, dtype=float)
     ys = np.asarray(ys, dtype=float)
     intensity = np.asarray(intensity, dtype=float)

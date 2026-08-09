@@ -23,11 +23,24 @@ Oracle 4 (wrap): a periodic axis spanning the 0/360 seam, masked via
 ``wrap="y"``, must select exactly the same points (and sum to the same
 totals) as a hand-written "wrap-around" boolean mask built independently of
 ``box_cut``.
+
+Oracle 5 (pole figure, RSM_CUTS_PLAN item 19): a dataset with NO '2Theta'
+column (labels ``["Phi", "Psi", "Intensity"]``, matching the real
+``xrayutilities_polefig_point.xrdml`` corpus anchor's schema) used to crash
+``box_cut``/``box_stats`` with a leaked ``tuple.index(x): x not in tuple`` —
+``calc._rsm_grid.scatter_columns``/``full_grids`` hardcoded ``"2Theta"``. Now
+resolves to the dataset's own ``(Phi, Psi)`` pair (see
+``tests/test_calc_rsm_grid.py`` for the resolver's own unit tests) and labels
+the cut with the axis it actually came from, never a literal ``"2Theta"``.
+The real-corpus round trip additionally proves a wedge straddling the +-180
+deg Phi seam (``wrap="x"``) matches its unwrapped two-piece equivalent —
+the same seam property ``sectorcut.chi_profile`` asserts.
 """
 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -298,6 +311,109 @@ def test_wrap_selects_same_points_as_a_hand_written_wraparound_mask() -> None:
     assert stats["n_points"] == int(expected_mask.sum())
     assert stats["integrated_intensity"] == pytest.approx(float(intensity[expected_mask].sum()))
     assert stats["wrap"] == "y"
+
+
+# ── Pole figures: no '2Theta' column (RSM_CUTS_PLAN item 19) ───────────────
+
+
+@pytest.fixture
+def pole_figure_grid() -> DataStruct:
+    """Pole-figure-shaped dataset: labels ``(Phi, Psi, Intensity)``, no
+    '2Theta' column, ``axis1_name='Psi'`` — the real corpus anchor's schema
+    (``xrayutilities_polefig_point.xrdml``). Phi spans (almost) the full
+    circle, Psi a tilt range, exactly like the real file."""
+    n, m = 7, 37  # Psi steps x Phi points
+    phi_vec = np.linspace(-178.0, 178.0, m)
+    psi_vec = np.linspace(0.0, 60.0, n)
+    phi_grid, psi_grid = np.meshgrid(phi_vec, psi_vec)
+    intensity = np.arange(n * m, dtype=float).reshape(n, m)
+    values = np.column_stack([phi_grid.ravel(), psi_grid.ravel(), intensity.ravel()])
+    return DataStruct.create(
+        np.arange(n * m, dtype=float),
+        values,
+        labels=["Phi", "Psi", "Intensity"],
+        units=["deg", "deg", "cps"],
+        metadata={"is2D": True, "map_shape": [n, m], "axis1_name": "Psi", "source": "test"},
+    )
+
+
+def test_pole_figure_box_cut_labels_phi_not_2theta(pole_figure_grid: DataStruct) -> None:
+    """Before item 19: this call raised ``ValueError: tuple.index(x): x not
+    in tuple`` (a bare ``ds.column("2Theta")`` on a dataset with no such
+    column). Now it resolves ``(Phi, Psi)`` and labels the cut accordingly."""
+    out = box_cut(
+        pole_figure_grid, x_min=-180.0, x_max=180.0, y_min=0.0, y_max=30.0,
+        space="angular", collapse="x", reduce="sum", wrap="x",
+    )
+    assert out.metadata["x_column_name"] == "Phi"
+    assert out.metadata["x_column_unit"] == "deg"
+    assert out.metadata["cut_space"] == "angular"
+    assert np.all(np.isfinite(out.values[:, 0]))
+    assert out.values[:, 0].sum() > 0
+
+
+def test_pole_figure_box_cut_collapse_y_labels_psi(pole_figure_grid: DataStruct) -> None:
+    out = box_cut(
+        pole_figure_grid, x_min=-180.0, x_max=180.0, y_min=0.0, y_max=30.0,
+        space="angular", collapse="y", reduce="sum", wrap="x",
+    )
+    assert out.metadata["x_column_name"] == "Psi"
+
+
+def test_pole_figure_box_stats_no_2theta_needed(pole_figure_grid: DataStruct) -> None:
+    stats = box_stats(
+        pole_figure_grid, x_min=-180.0, x_max=180.0, y_min=0.0, y_max=30.0,
+        space="angular", wrap="x",
+    )
+    assert stats["n_points"] > 0
+    assert stats["space"] == "angular"
+
+
+@pytest.mark.realdata
+def test_pole_figure_real_corpus_azimuthal_profile_and_seam(corpus_dir: Path) -> None:
+    """End-to-end acceptance (RSM_CUTS_PLAN item 19): azimuthal ∫x profile
+    with ``wrap="x"`` over the real 359.4-deg Phi axis returns a sane, fully
+    finite profile labelled 'Phi' -- and a wedge straddling the +-180 deg
+    seam matches its unwrapped two-piece equivalent exactly (same property
+    ``sectorcut.chi_profile``'s seam test asserts), proving the wrap handling
+    is correct on the real data, not just the synthetic fixture above."""
+    from quantized.io.registry import import_auto
+
+    path = corpus_dir / "panalytical" / "xrd" / "xrayutilities_polefig_point.xrdml"
+    if not path.exists():
+        pytest.skip("pole-figure corpus file missing")
+    ds = import_auto(str(path))
+    assert "2Theta" not in ds.labels  # sanity: this IS the no-2Theta case
+
+    # Full-circle azimuthal profile: must not raise, must label 'Phi', must
+    # be a sane (fully finite, non-degenerate) profile.
+    profile = box_cut(
+        ds, x_min=-180.0, x_max=180.0, y_min=0.0, y_max=90.0,
+        space="angular", collapse="x", reduce="sum", wrap="x", n_bins=200,
+    )
+    assert profile.metadata["x_column_name"] == "Phi"
+    assert np.all(np.isfinite(profile.values[:, 0]))
+    assert profile.values[:, 0].sum() > 0
+    assert profile.time.min() >= -180.0 - 1e-6
+    assert profile.time.max() <= 180.0 + 1e-6
+
+    # Seam wedge: phi in [170, -170] wrapping through +-180 (span 20 deg)
+    # must equal the sum of its two non-wrapping pieces on either side of
+    # the seam.
+    wrapped = box_stats(
+        ds, x_min=170.0, x_max=-170.0, y_min=0.0, y_max=90.0,
+        space="angular", wrap="x",
+    )
+    piece_a = box_stats(
+        ds, x_min=170.0, x_max=180.0, y_min=0.0, y_max=90.0, space="angular"
+    )
+    piece_b = box_stats(
+        ds, x_min=-180.0, x_max=-170.0, y_min=0.0, y_max=90.0, space="angular"
+    )
+    assert wrapped["n_points"] == piece_a["n_points"] + piece_b["n_points"]
+    assert wrapped["integrated_intensity"] == pytest.approx(
+        piece_a["integrated_intensity"] + piece_b["integrated_intensity"]
+    )
 
 
 # ── Error paths ──────────────────────────────────────────────────────────────

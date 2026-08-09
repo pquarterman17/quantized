@@ -34,6 +34,28 @@ same way. ``wrap_mask`` is also NEW: it replaces MATLAB
 mask (full-circle / non-wrapping / wrapping — see that file) with a single
 rebase formula, used by the sector mask, the chi-profile binning domain,
 AND box's periodic (pole-figure) axis.
+
+``resolve_angular_axes`` (RSM_CUTS_PLAN item 19) is the ONE place
+``space="angular"``'s (primary, secondary) column PAIR is decided.
+``full_grids`` and ``scatter_columns`` both call it instead of each
+hardcoding ``"2Theta"`` — two copies of this rule would drift, which is
+the entire reason this module exists. It prefers the historical
+``("2Theta", axis1_name)`` pair whenever the dataset carries a ``"2Theta"``
+column (every 2Theta/omega-family RSM mesh does — byte-identical for
+every path that predates pole figures), and falls back to the dataset's
+own labels otherwise: a pole figure
+(``xrayutilities_polefig_point.xrdml``: labels
+``["Phi", "Psi", "Intensity"]``, ``axis1_name="Psi"``) has no ``"2Theta"``
+column, so ``axis1_name`` names the secondary (tilt) axis and the one
+remaining non-Intensity column is the primary (azimuth) axis. Both
+functions now also RETURN the resolved name(s) (``full_grids``'s
+``"tt_name"``; ``scatter_columns``'s trailing ``x_name, y_name``) so
+callers label a cut with the axis it actually came from instead of a
+literal ``"2Theta"`` — a pole-figure cut used to be mislabelled that way
+and, worse, crashed before it got that far
+(``ValueError: tuple.index(x): x not in tuple``, a leaked internal from
+``tuple.index``); ``resolve_angular_axes`` raises a domain ``ValueError``
+naming the dataset's actual ``labels`` instead.
 """
 
 from __future__ import annotations
@@ -46,9 +68,54 @@ from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["SPACES", "cut_result", "full_grids", "require_q", "scatter_columns", "wrap_mask"]
+__all__ = [
+    "SPACES",
+    "cut_result",
+    "full_grids",
+    "require_q",
+    "resolve_angular_axes",
+    "scatter_columns",
+    "wrap_mask",
+]
 
 SPACES = ("angular", "q")
+
+
+def resolve_angular_axes(ds: DataStruct) -> tuple[str, str]:
+    """Resolve the ``space="angular"`` (primary, secondary) column-name pair.
+
+    Prefers ``("2Theta", axis1_name)`` whenever the dataset carries a
+    ``"2Theta"`` column — every 2Theta/omega-family RSM mesh does, so this
+    branch is byte-identical to the pre-item-19 hardcoded lookup. Otherwise
+    falls back to the dataset's own labels: ``axis1_name`` (already set by
+    the parser, e.g. ``"Psi"`` for a pole figure's tilt axis) names the
+    SECONDARY axis, and the single remaining non-Intensity column (e.g.
+    ``"Phi"``) is the PRIMARY axis. See the module docstring for the full
+    rationale; this is the one place both :func:`full_grids` and
+    :func:`scatter_columns` resolve the pair, so they cannot drift.
+
+    Raises ``ValueError`` naming the dataset's actual ``labels`` when
+    neither branch resolves cleanly (no ``"2Theta"``, and either
+    ``axis1_name`` is not itself a column or there is not exactly one other
+    non-Intensity column left to call "primary") — the domain-specific
+    replacement for the ``tuple.index(x): x not in tuple`` internal error a
+    bare ``ds.column("2Theta")`` used to leak.
+    """
+    labels = list(ds.labels)
+    axis1_name = str(ds.metadata.get("axis1_name", "Omega"))
+    if "2Theta" in labels:
+        return "2Theta", axis1_name
+
+    others = [lbl for lbl in labels if lbl != "Intensity"]
+    primary_candidates = [lbl for lbl in others if lbl != axis1_name]
+    if axis1_name not in others or len(primary_candidates) != 1:
+        raise ValueError(
+            "cannot resolve an angular axis pair for this dataset: no "
+            f"'2Theta' column, and axis1_name={axis1_name!r} is not exactly "
+            "one of two non-Intensity columns among this dataset's labels "
+            f"{tuple(labels)}"
+        )
+    return primary_candidates[0], axis1_name
 
 
 def full_grids(ds: DataStruct) -> dict[str, Any]:
@@ -62,14 +129,15 @@ def full_grids(ds: DataStruct) -> dict[str, Any]:
             "use cut_segment, which works on the scattered cloud"
         )
     n, m = int(shape[0]), int(shape[1])
-    axis1_name = str(ds.metadata.get("axis1_name", "Omega"))
+    primary_name, axis1_name = resolve_angular_axes(ds)
     out: dict[str, Any] = {
-        "tt": ds.column("2Theta").reshape(n, m),
+        "tt": ds.column(primary_name).reshape(n, m),
         "sec": ds.column(axis1_name).reshape(n, m),
         "i": ds.column("Intensity").reshape(n, m),
         "qx": None,
         "qz": None,
         "sec_name": axis1_name,
+        "tt_name": primary_name,
         "unit": ds.units[list(ds.labels).index("Intensity")],
     }
     if "Qx" in ds.labels and "Qz" in ds.labels:
@@ -85,31 +153,42 @@ def require_q(g: dict[str, Any]) -> None:
 
 def scatter_columns(
     ds: DataStruct, space: str
-) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], str, str]:
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], str, str, str, str]:
     """Scattered (x, y, Intensity) columns for ``space`` — no grid reshape.
 
-    ``space='angular'`` -> ``(2Theta, <axis1_name>)``; ``space='q'`` ->
+    ``space='angular'`` -> :func:`resolve_angular_axes`'s pair (``(2Theta,
+    axis1_name)`` when the dataset has a 2Theta column, else the dataset's
+    own columns — e.g. ``(Phi, Psi)`` for a pole figure); ``space='q'`` ->
     ``(Qx, Qz)`` (raises if the dataset carries no Q columns). Returns
-    ``(xs, ys, intensity, axis_unit, intensity_unit)``. Works on ANY
-    scattered cloud, gridded or not — unlike ``full_grids`` it never
-    requires ``map_shape``, which is what makes it the right primitive for
-    ``cut_segment`` (interpolated, no grid needed) and the true-polar
-    sector/chi profiles (which only ever need the Q columns themselves).
+    ``(xs, ys, intensity, axis_unit, intensity_unit, x_name, y_name)`` —
+    the resolved column NAMES are returned alongside the arrays (item 19)
+    so a caller labels a cut with the axis it actually came from instead of
+    re-deriving or hardcoding it. ``axis_unit`` is read from ``ds.units``
+    for the resolved primary column rather than assumed — it happens to
+    always be ``"deg"`` for both the historical and pole-figure pairs, but
+    reading it keeps that an observed fact, not a hardcoded one (existing
+    RSM datasets: byte-identical, since their 2Theta column's unit already
+    is ``"deg"``). Works on ANY scattered cloud, gridded or not — unlike
+    ``full_grids`` it never requires ``map_shape``, which is what makes it
+    the right primitive for ``cut_segment`` (interpolated, no grid needed)
+    and the true-polar sector/chi profiles (which only ever need the Q
+    columns themselves).
     """
     if space not in SPACES:
         raise ValueError(f"space must be one of {SPACES}, got {space!r}")
-    axis1_name = str(ds.metadata.get("axis1_name", "Omega"))
     if space == "q":
         if "Qx" not in ds.labels:
             raise ValueError("dataset has no Qx/Qz columns — Q-space cut unavailable")
         xs, ys = ds.column("Qx"), ds.column("Qz")
+        x_name, y_name = "Qx", "Qz"
         axis_unit = "Ang^-1"
     else:
-        xs, ys = ds.column("2Theta"), ds.column(axis1_name)
-        axis_unit = "deg"
+        x_name, y_name = resolve_angular_axes(ds)
+        xs, ys = ds.column(x_name), ds.column(y_name)
+        axis_unit = str(ds.units[list(ds.labels).index(x_name)])
     intensity = ds.column("Intensity")
     intensity_unit = ds.units[list(ds.labels).index("Intensity")]
-    return xs, ys, intensity, axis_unit, intensity_unit
+    return xs, ys, intensity, axis_unit, intensity_unit, x_name, y_name
 
 
 def cut_result(
