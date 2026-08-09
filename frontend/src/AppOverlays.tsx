@@ -108,6 +108,7 @@ const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPan
 const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"));
 const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"));
 const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"));
+const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"));
 const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"));
 const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"));
 const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"));
@@ -136,6 +137,7 @@ export default function AppOverlays() {
   const baselineOpen = useApp((s) => s.baselineOpen);
   const calculatorsOpen = useApp((s) => s.calculatorsOpen);
   const rsmOpen = useApp((s) => s.rsmOpen);
+  const roiCutsOpen = useApp((s) => s.roiCutsOpen);
   const reductionsOpen = useApp((s) => s.reductionsOpen);
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
@@ -187,6 +189,7 @@ export default function AppOverlays() {
       {calculatorsOpen && <CalculatorsPanel />}
       {magToolsOpen && <MagToolsPanel />}
       {rsmOpen && <RsmPanel />}
+      {roiCutsOpen && <RoiCutsPanel />}
       {reductionsOpen && <ReductionsPanel />}
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
