@@ -300,6 +300,30 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
+19. **Pole-figure angular axes — `scatter_columns`/`full_grids` hardcode
+    `2Theta`** (booked rev 5, 2026-08-09; flagged by item 8's agent,
+    VERIFIED broken by the orchestrator). `calc/_rsm_grid.py:108` does
+    `ds.column("2Theta")` for `space="angular"`, but
+    `xrayutilities_polefig_point.xrdml` carries `['Phi','Psi','Intensity']`
+    (`is2D=True`, `map_shape=[91,1199]`, `axis1_name='Psi'`, Phi spanning
+    359.4°). So `box_cut(..., space="angular", wrap="x")` dies with
+    `ValueError: tuple.index(x): x not in tuple`. Item 8's pole-figure
+    branch routes correctly to an endpoint that then fails — pieces
+    present, workflow absent (the `deliverable-first` failure mode).
+    - [ ] Resolve the angular pair generically: `2Theta` when present,
+      otherwise the two non-Intensity columns, honouring `axis1_name` for
+      which is the secondary. Applies to BOTH `scatter_columns` and
+      `full_grids`.
+    - [ ] Replace the leaked `tuple.index` error with a domain message
+      naming the missing column and the dataset's actual labels.
+    - [ ] End-to-end test on the real pole figure: azimuthal profile with
+      `wrap="x"` over the 359.4° Phi axis returns a sane φ profile; assert
+      the seam is handled (a wedge crossing ±180° matches its unwrapped
+      equivalent).
+    - Acceptance: `uv run ruff check src tests && uv run mypy src &&
+      uv run pytest -q`, plus the pole-figure round trip through
+      `/api/rsm/box`.
+
 18. **Dataset-handle cache — stop re-POSTing the whole DataStruct**
     (booked rev 4, 2026-08-09; owner chose "fix it now", which
     **supersedes Tier 3 item 15**). Every map fetch and every cut sends
@@ -419,45 +443,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
          default and any peak marker clickable as the anchor.
    - Acceptance: `cd frontend && npx vitest run && npm run build`.
 
-8. **ROI cuts workshop — numeric setup, sector, saved ROIs,
-   registration**
-   Files: NEW `frontend/src/components/workshops/roicuts/RoiCutsPanel.tsx`
-   + `useRoiCuts.ts` + `useRoiCuts.test.ts`, EDIT
-   `frontend/src/AppOverlays.tsx`, EDIT
-   `frontend/src/commands/analysisCommands.ts`. Depends on item 4;
-   parallel with 6/7 (disjoint files). Sole owner of AppOverlays.tsx /
-   analysisCommands.ts; check both files' headroom before editing.
-   - [ ] `useRoiCuts.ts` (orchestration only): numeric bound edits →
-         `setMapRoi` (sync with the canvas is structural — same store
-         field); ruler numeric fields → `setMapRuler`; sector fields
-         (center±half primary / min-max secondary, q-range prefilled
-         from the data, bins via `defaultSectorBins`, mode) + wedge
-         preview exposure; POLAR ROUTING per the three-branch rule:
-         Q available → `/sector` + `/chi-profile`; `polefigAxes` hit →
-         the same buttons drive `/box` with wrap on the azimuthal axis
-         (mode pre-selected, visible, overridable); neither → the
-         buttons disabled with the branch-(iii) reason as tooltip.
-         Actions: runBox/runRuler/runStats/runSector/runChi,
-         saveCurrentRoi/applySaved/remove. All commits via
-         `useCutLanding`.
-   - [ ] `RoiCutsPanel.tsx` (≤400; ToolWindow like RsmPanel): Box card
-         (space indicator, bounds, collapse, reduce, bins, Run, stats
-         readout — copyable monospace), Ruler card (cx/cy/angle/length/
-         width + radial/transverse-about-peak buttons), Sector card
-         (parameterization toggle, q-range, bins, mode, Radial +
-         Azimuthal profile buttons, pole-figure mode indicator, "switch
-         to Q to preview" hint), Saved ROIs card (save/apply/delete).
-         The panel is NEVER required for a plain box cut — that is
-         item 6's inline bar; state this in the panel header comment.
-   - [ ] Register: AppOverlays.tsx beside RsmPanel (grep the `"rsm"`
-         tool-window id for the mechanism) + analysisCommands.ts entry
-         (id `"roi-cuts"`, "ROI cuts (box / sector / ruler)…") — the
-         numeric-only path must work without ever touching the canvas.
-   - [ ] Hook test (mocked api): numeric edit updates mapRoi; polar
-         routing picks /sector vs wrapped /box by fixture metadata;
-         save/apply round-trips.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`.
-
 9. **Batch across datasets — cuts + overlay figure + summary table**
    Files: EDIT `workshops/roicuts/useRoiCuts.ts` + `RoiCutsPanel.tsx`
    (+ tests). Depends on items 8 and 3. Reuses existing surfaces ONLY —
@@ -484,6 +469,28 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Tier 2 — Medium Impact
+
+20. **Frontend `.ts` size guard — the gap the owner's own rule predicted**
+    (booked rev 5, 2026-08-09). `size-ratchet-every-language.md` says:
+    *".tsx had a 400-line ceiling and the store .ts slices had pins, so
+    every OTHER .ts had neither — which is exactly how `lib/api.ts` reached
+    2,282 lines and a workshop hook 583, both invisible to a green suite."*
+    That gap is still open and just swallowed another file: item 8's
+    `useRoiCuts.ts` landed at **476 lines** through a fully green suite.
+    Measured census of `frontend/src/architecture.test.ts`: **7** pinned
+    entries total, and **16** unguarded `.ts` files over 500 lines —
+    `lib/uplotOpts.ts` 1445, `lib/uplotOverlays.ts` 1174, `lib/types.ts`
+    1084, `lib/plotspec.ts` 892, `lib/originFigures.ts` 792,
+    `Stage/useMultiPanelStage.ts` 790, and this plan's own `lib/roi.ts` 637.
+    - [ ] Add a general `.ts` ceiling beside the existing `.tsx` one, with
+      the current offenders pinned at their exact size (pins only ratchet
+      DOWN, never added afterwards) — the mechanics the rule already
+      specifies, not a new invention.
+    - [ ] Grep for an existing guard first; the rule warns that two
+      ratchets with different ceilings is drift by construction.
+    - Deliberately NOT done inside this plan's feature work: it is a
+      repo-wide policy change that will surface 16 files at once and
+      deserves its own reviewed change. Cross-reference from MAIN_PLAN.
 
 10. **Integration, realdata smoke, physics docs, bookkeeping** — serial,
     after 1–9.
@@ -548,6 +555,17 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#8 ROI cuts workshop**~~ (2026-08-09) — `workshops/roicuts/`
+  (`RoiCutsPanel` 47 + `BoxCard` 110 + `SectorCard` 94 + `SavedRoisCard` 73 +
+  `Field` 38 + `useRoiCuts` 476), `Stage/useCutLanding.ts` (55) extracted from
+  `useMapCuts` so one landing implementation serves every cut path. Registered
+  in `AppOverlays.tsx` + `analysisCommands.ts`. Three-branch polar routing
+  implemented as a pure exported `polarBranch()`. Interaction budget met:
+  numeric box cut = 3 actions, sector = 3, repeat on another dataset = 2.
+  `useApp.ts` 2860→2863 (pin 2868). Two follow-ups it surfaced are booked as
+  items 19 (pole-figure path verified BROKEN downstream) and 20 (its own
+  476-line hook is invisible to the ratchet).
 
 - ~~**#3 Backend box ROI**~~ (2026-08-09) — `calc/boxcut.py` (453) with
   `box_cut` + `box_stats`; grid path exact in angular space, cloud mask+bin
