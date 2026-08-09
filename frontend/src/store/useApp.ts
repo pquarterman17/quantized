@@ -927,7 +927,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
   ...createFigureLifecycleSlice(set, get),
-  ...createPageDocumentsSlice(),
+  ...createPageDocumentsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1607,7 +1607,7 @@ export const useApp = create<AppState>((set, get) => ({
         figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
         editableFigures: ws.editableFigures ?? [],
         pages: ws.pages ?? [],
-        figureDocSeed: null, figurePublicationSession: null,
+        figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         staleDatasets: [],

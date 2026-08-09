@@ -3,12 +3,23 @@
 // workflow). The grid is a flat row-major slot array (index i -> row
 // floor(i/cols), col i%cols); the backend route (/api/export/figure-page)
 // owns the real layout + label rendering — these helpers keep the UI's slot
-// state and preview labels consistent with it. Pure: no store imports.
+// state and preview labels consistent with it. Pure: no store imports (type-
+// only imports of PlotWindow/FigureDoc for the session-liveness resolver
+// below are fine — no store, no cycle).
 
-export type PanelSourceKind = "window" | "figdoc";
+import type { FigureDocument } from "./figureDocument";
+import type { FigureDoc } from "./figuredoc";
+import { docRenderable } from "./figuredoc";
+import type { PlotWindow } from "./plotview";
+
+export type PanelSourceKind = "window" | "figdoc" | "figure";
 
 /** Where a panel's plot comes from: an open plot window (live view + bound
- *  dataset) or a saved Library figure (FigureDoc). */
+ *  dataset), a legacy Publication figure (FigureDoc), or — F3.3 — a saved
+ *  canonical `editableFigures` entry picked directly (also how a reopened
+ *  PageDocument's persisted `figureId` panels re-enter this session model:
+ *  a saved page ONLY ever references a canonical id, so every one of its
+ *  panels hydrates to a "figure" source, never "window"/"figdoc"). */
 export interface PanelSource {
   kind: PanelSourceKind;
   id: string;
@@ -76,6 +87,50 @@ export function patchSlot(slots: PageSlot[], i: number, patch: Partial<PageSlot>
   return slots.map((s, j) => (j === i ? { ...s, ...patch } : s));
 }
 
+/** F3.5 manual rearrangement: swap the WHOLE slot record (source + label +
+ *  title) at `i` and `j` as one unit — a panel's caption travels WITH it,
+ *  not with the grid position it leaves behind. This is deliberately
+ *  DIFFERENT from `assignSlot`'s "move" semantics (dragging a source-list
+ *  item onto an already-occupied-elsewhere source only relocates the
+ *  `source` field, leaving each slot's own label/title override behind):
+ *  `assignSlot` is "put THIS source into this slot" (a fresh content pick,
+ *  where the position's own caption is a legitimate thing to keep);
+ *  `moveSlot` is "move this existing panel, caption included, to a new grid
+ *  position" (the panel IS the source+caption together — nothing meaningful
+ *  is left behind for the vacated slot to keep). No-op for an out-of-range
+ *  or identical index pair. */
+export function moveSlot(slots: PageSlot[], i: number, j: number): PageSlot[] {
+  if (i === j || i < 0 || j < 0 || i >= slots.length || j >= slots.length) return slots;
+  const next = slots.slice();
+  [next[i], next[j]] = [next[j], next[i]];
+  return next;
+}
+
+export type GridDirection = "up" | "down" | "left" | "right";
+
+/** The grid index adjacent to `index` in `direction` (row-major, `cols`-wide,
+ *  `rows`-tall) — `null` when that would leave the grid. Shared by
+ *  SlotGrid's Shift+Arrow rearrange handler (F3.5). */
+export function gridNeighborIndex(
+  index: number,
+  cols: number,
+  rows: number,
+  direction: GridDirection,
+): number | null {
+  const r = Math.floor(index / cols);
+  const c = index % cols;
+  const [nr, nc] =
+    direction === "up"
+      ? [r - 1, c]
+      : direction === "down"
+        ? [r + 1, c]
+        : direction === "left"
+          ? [r, c - 1]
+          : [r, c + 1];
+  if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return null;
+  return nr * cols + nc;
+}
+
 /** Mirror of the backend auto-label generator (calc/figure_page.panel_label):
  *  0 -> "(a)", 1 -> "(b)", … with spreadsheet-style rollover (26 -> "(aa)"). */
 export function panelLabel(index: number, fmt: PageLabelFormat): string {
@@ -108,4 +163,70 @@ export function slotLabels(slots: PageSlot[], fmt: PageLabelFormat): string[] {
 
 export function filledCount(slots: PageSlot[]): number {
   return slots.reduce((n, s) => n + (s.source ? 1 : 0), 0);
+}
+
+// ── live-session source resolution (FIGURE_AUTHORING_WORKFLOW_PLAN F3.2) ───
+//
+// The PERSISTED PageDocument model (lib/pageDocument.ts) resolves a panel's
+// canonical `figureId` against `editableFigures` and fails closed to
+// `{status:"missing"}` — never silently empty, never dropped. This session
+// model has its own, older reference shape (`PanelSource`: an open window OR
+// a legacy `figureDocs` entry, not yet unified with editableFigures — see
+// useFigurePage.ts's `resolveSlotFigureId`), and needed the SAME fail-closed
+// discipline: today a slot's cached `PanelSource` is displayed unconditionally
+// once assigned, even after its window closes or its figdoc is deleted, so the
+// grid kept showing a perfectly normal-looking tile for a dead reference until
+// the whole page's preview/export failed with one generic message. This
+// resolver is the fix's foundation: it re-checks LIVENESS on every render
+// using the exact same rules `windowSources`/`docSources` already use to
+// decide what is pickable in the first place (a window must still be a
+// dataset-bound plot; a figdoc must still be `docRenderable`), so "can I
+// assign it" and "is it still valid" can never drift apart.
+
+export type PanelLifecycle = "live" | "frozen";
+
+export type PanelSourceStatus =
+  | { status: "empty" }
+  | { status: "missing" }
+  | { status: "ok"; lifecycle: PanelLifecycle };
+
+/** Resolve one slot's assigned source against the CURRENT session state.
+ *  `missing` covers both "the window/figdoc/figure no longer exists" and "it
+ *  exists but can no longer render" (dataset unbound/removed, frozen snapshot
+ *  missing) — both leave the panel unable to produce a figure, and the
+ *  caller (SlotGrid) treats them identically: label it, keep it
+ *  selectable/clearable, never blank it.
+ *
+ *  `editableFigures` defaults to `[]` so every pre-F3.3 call site (this
+ *  session model predates the "figure" source kind) keeps compiling and
+ *  behaving identically — none of them ever assign a "figure"-kind source,
+ *  so an empty list can never wrongly report one as missing. */
+export function resolvePanelSource(
+  source: PanelSource | null,
+  plotWindows: readonly PlotWindow[],
+  figureDocs: readonly FigureDoc[],
+  datasetIds: ReadonlySet<string>,
+  editableFigures: readonly FigureDocument[] = [],
+): PanelSourceStatus {
+  if (!source) return { status: "empty" };
+  if (source.kind === "window") {
+    const win = plotWindows.find((w) => w.id === source.id);
+    if (!win || win.kind !== "plot" || win.datasetId === null) return { status: "missing" };
+    const lifecycle: PanelLifecycle = win.document?.data.mode === "frozen" ? "frozen" : "live";
+    return { status: "ok", lifecycle };
+  }
+  if (source.kind === "figure") {
+    const document = editableFigures.find((f) => f.id === source.id);
+    if (!document) return { status: "missing" };
+    if (document.data.mode === "live") {
+      if (!document.bindings.datasetId || !datasetIds.has(document.bindings.datasetId)) {
+        return { status: "missing" };
+      }
+      return { status: "ok", lifecycle: "live" };
+    }
+    return document.data.snapshot ? { status: "ok", lifecycle: "frozen" } : { status: "missing" };
+  }
+  const doc = figureDocs.find((d) => d.id === source.id);
+  if (!doc || !docRenderable(doc, datasetIds)) return { status: "missing" };
+  return { status: "ok", lifecycle: doc.live ? "live" : "frozen" };
 }

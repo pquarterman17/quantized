@@ -2,17 +2,24 @@
 
 import { describe, expect, it } from "vitest";
 
+import { createFigureDocument } from "./figureDocument";
+import type { FigureDoc } from "./figuredoc";
 import {
   assignSlot,
   clearSlot,
   emptySlots,
   filledCount,
+  gridNeighborIndex,
+  moveSlot,
   panelLabel,
   patchSlot,
   resizeSlots,
+  resolvePanelSource,
   slotLabels,
   type PanelSource,
 } from "./figurepage";
+import { defaultPlotView, type PlotWindow } from "./plotview";
+import type { DataStruct } from "./types";
 
 const winA: PanelSource = { kind: "window", id: "w1", name: "Graph 1" };
 const winB: PanelSource = { kind: "window", id: "w2", name: "Graph 2" };
@@ -90,6 +97,53 @@ describe("slot model", () => {
   });
 });
 
+describe("moveSlot (F3.5 manual rearrangement)", () => {
+  it("swaps the whole slot record (source + label + title) as one unit", () => {
+    let slots = emptySlots(2, 2);
+    slots = assignSlot(slots, 0, winA);
+    slots = patchSlot(slots, 0, { label: "(iv)", title: "Custom" });
+    slots = assignSlot(slots, 3, winB);
+    slots = moveSlot(slots, 0, 3);
+    // winA's caption travels WITH it to slot 3; slot 0 becomes winB with
+    // its OWN (unset) overrides, not winA's leftover caption.
+    expect(slots[3]).toEqual({ source: winA, label: "(iv)", title: "Custom" });
+    expect(slots[0]).toEqual({ source: winB, label: null, title: null });
+  });
+
+  it("moving onto an empty slot leaves the origin empty", () => {
+    let slots = emptySlots(1, 2);
+    slots = assignSlot(slots, 0, winA);
+    slots = moveSlot(slots, 0, 1);
+    expect(slots[0].source).toBeNull();
+    expect(slots[1].source).toEqual(winA);
+  });
+
+  it("is a no-op for identical or out-of-range indices", () => {
+    let slots = emptySlots(1, 2);
+    slots = assignSlot(slots, 0, winA);
+    expect(moveSlot(slots, 0, 0)).toBe(slots);
+    expect(moveSlot(slots, 0, -1)).toBe(slots);
+    expect(moveSlot(slots, 0, 2)).toBe(slots);
+  });
+});
+
+describe("gridNeighborIndex", () => {
+  it("computes the row-major neighbor in each direction", () => {
+    // 2x3 grid: index 4 = row 1, col 1.
+    expect(gridNeighborIndex(4, 3, 2, "up")).toBe(1);
+    expect(gridNeighborIndex(4, 3, 2, "left")).toBe(3);
+    expect(gridNeighborIndex(4, 3, 2, "right")).toBe(5);
+    expect(gridNeighborIndex(1, 3, 2, "down")).toBe(4);
+  });
+
+  it("returns null at every grid edge", () => {
+    expect(gridNeighborIndex(0, 2, 2, "up")).toBeNull();
+    expect(gridNeighborIndex(0, 2, 2, "left")).toBeNull();
+    expect(gridNeighborIndex(1, 2, 2, "right")).toBeNull();
+    expect(gridNeighborIndex(3, 2, 2, "down")).toBeNull();
+  });
+});
+
 describe("slotLabels", () => {
   it("auto-numbers only filled slots, in row-major order", () => {
     let slots = emptySlots(2, 2);
@@ -113,5 +167,153 @@ describe("slotLabels", () => {
     let slots = emptySlots(1, 2);
     slots = assignSlot(slots, 0, winA);
     expect(slotLabels(slots, "none")).toEqual(["", ""]);
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F3.2: live-session liveness/lifecycle
+// resolution for an assigned slot. Distinct from lib/pageDocument.ts's
+// resolvePagePanel (which resolves a PERSISTED figureId) — this checks the
+// SESSION reference (open window / legacy figdoc) using the exact same
+// renderability rules windowSources/docSources already use to decide what's
+// pickable, so "can I assign it" and "is it still valid" can never drift.
+describe("resolvePanelSource", () => {
+  const DATA: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
+
+  function win(over: Partial<PlotWindow> = {}): PlotWindow {
+    return {
+      id: "w1",
+      kind: "plot",
+      title: "",
+      datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 },
+      z: 0,
+      winState: "normal",
+      view: defaultPlotView(),
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      ...over,
+    };
+  }
+
+  function figDoc(over: Partial<FigureDoc> = {}): FigureDoc {
+    return {
+      id: "f1",
+      name: "MvsH fig",
+      datasetId: "d1",
+      live: true,
+      config: {
+        xKey: null,
+        yKeys: [0],
+        xScale: "linear",
+        yScale: "linear",
+        title: "",
+        xLabel: "",
+        yLabel: "",
+        style: "aps",
+        fmt: "pdf",
+        dpi: 300,
+        overrides: null,
+        seriesStyles: null,
+      },
+      ...over,
+    };
+  }
+
+  const noDatasets = new Set<string>();
+  const withD1 = new Set(["d1"]);
+
+  it("reports empty for a null source", () => {
+    expect(resolvePanelSource(null, [], [], noDatasets)).toEqual({ status: "empty" });
+  });
+
+  it("resolves a live, dataset-bound window as ok/live", () => {
+    expect(resolvePanelSource(winA, [win()], [], withD1)).toEqual({ status: "ok", lifecycle: "live" });
+  });
+
+  it("resolves a window carrying a FROZEN FigureDocument as ok/frozen — inherited, not a second mechanism", () => {
+    const frozen = createFigureDocument({
+      id: "fd1",
+      name: "frozen",
+      datasetId: null,
+      view: defaultPlotView(),
+      data: { mode: "frozen", snapshot: DATA },
+    });
+    expect(
+      resolvePanelSource(winA, [win({ document: frozen })], [], withD1),
+    ).toEqual({ status: "ok", lifecycle: "frozen" });
+  });
+
+  it("reports missing when the assigned window no longer exists (closed)", () => {
+    expect(resolvePanelSource(winA, [], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when the assigned window lost its dataset binding", () => {
+    expect(resolvePanelSource(winA, [win({ datasetId: null })], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when the assigned window is no longer a plot (e.g. became a worksheet)", () => {
+    expect(resolvePanelSource(winA, [win({ kind: "worksheet" })], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("resolves a live figdoc with its dataset present as ok/live", () => {
+    expect(resolvePanelSource(doc, [], [figDoc()], withD1)).toEqual({ status: "ok", lifecycle: "live" });
+  });
+
+  it("resolves a frozen figdoc with its snapshot present as ok/frozen", () => {
+    const frozen = figDoc({ live: false, datasetId: null, dataSnapshot: DATA });
+    expect(resolvePanelSource(doc, [], [frozen], noDatasets)).toEqual({ status: "ok", lifecycle: "frozen" });
+  });
+
+  it("reports missing when the assigned figdoc was deleted from the library", () => {
+    expect(resolvePanelSource(doc, [], [], withD1)).toEqual({ status: "missing" });
+  });
+
+  it("reports missing when a live figdoc's source dataset was removed (doc still exists, unrenderable)", () => {
+    expect(resolvePanelSource(doc, [], [figDoc()], noDatasets)).toEqual({ status: "missing" });
+  });
+
+  // F3.3: the "figure" source kind — a saved canonical editableFigures entry
+  // picked directly (or a reopened page's hydrated panel). `editableFigures`
+  // is the 5th, defaulted (`= []`) param — every call above omits it and
+  // keeps behaving identically, since none of them ever assign a "figure".
+  describe("figure source kind (F3.3)", () => {
+    const figureSrc: PanelSource = { kind: "figure", id: "fig1", name: "Loop A" };
+
+    it("defaults to missing when editableFigures is omitted entirely", () => {
+      expect(resolvePanelSource(figureSrc, [], [], withD1)).toEqual({ status: "missing" });
+    });
+
+    it("resolves a live figure with its dataset present as ok/live", () => {
+      const live = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      expect(resolvePanelSource(figureSrc, [], [], withD1, [live])).toEqual({
+        status: "ok",
+        lifecycle: "live",
+      });
+    });
+
+    it("resolves a frozen figure with its snapshot present as ok/frozen", () => {
+      const frozen = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: null, view: defaultPlotView(),
+        data: { mode: "frozen", snapshot: DATA },
+      });
+      expect(resolvePanelSource(figureSrc, [], [], noDatasets, [frozen])).toEqual({
+        status: "ok",
+        lifecycle: "frozen",
+      });
+    });
+
+    it("reports missing when the figure was deleted from editableFigures", () => {
+      expect(resolvePanelSource(figureSrc, [], [], withD1, [])).toEqual({ status: "missing" });
+    });
+
+    it("reports missing when a live figure's source dataset was removed", () => {
+      const live = createFigureDocument({
+        id: "fig1", name: "Loop A", datasetId: "d1", view: defaultPlotView(),
+      });
+      expect(resolvePanelSource(figureSrc, [], [], noDatasets, [live])).toEqual({ status: "missing" });
+    });
   });
 });

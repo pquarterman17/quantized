@@ -210,3 +210,47 @@ def test_page_filename_is_sanitized() -> None:
     cd = resp.headers["content-disposition"]
     assert ".." not in cd and "<" not in cd
     assert cd.endswith('.svg"')
+
+
+# ── F3.5 layout controls (gap / link / align / resize mode) ────────────────
+
+
+def test_page_layout_fields_render() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json=_page_2x2(
+            fmt="png", dpi=72, row_gap=0.3, col_gap=0.3,
+            link_x=True, link_y=True, align_labels=True, resize_mode="tight",
+        ),
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_page_unknown_resize_mode_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure-page", json=_page_2x2(resize_mode="auto")
+    )
+    assert resp.status_code == 422
+    assert "resize_mode" in resp.json()["detail"]
+
+
+def test_page_out_of_range_gap_is_422() -> None:
+    resp = client.post("/api/export/figure-page", json=_page_2x2(row_gap=-1.0))
+    assert resp.status_code == 422
+    assert "row_gap" in resp.json()["detail"]
+
+
+def test_page_omitted_layout_fields_default_to_todays_rendering() -> None:
+    # Byte-identical proof at the route level, mirroring
+    # test_calc_figure_page.py's calc-level version.
+    omitted = client.post("/api/export/figure-page", json=_page_2x2(fmt="png", dpi=72))
+    explicit = client.post(
+        "/api/export/figure-page",
+        json=_page_2x2(
+            fmt="png", dpi=72, row_gap=None, col_gap=None,
+            link_x=False, link_y=False, align_labels=False, resize_mode="constrained",
+        ),
+    )
+    assert omitted.status_code == 200 and explicit.status_code == 200
+    assert omitted.content == explicit.content

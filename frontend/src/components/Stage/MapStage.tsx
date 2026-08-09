@@ -48,6 +48,7 @@ export default function MapStage({ dataset }: MapStageProps) {
   const contourLevelCount = useApp((s) => s.contourLevelCount);
   const contourScale = useApp((s) => s.contourScale);
   const setContourOn = useApp((s) => s.setContourOn);
+  const setStatus = useApp((s) => s.setStatus);
   const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
@@ -82,20 +83,30 @@ export default function MapStage({ dataset }: MapStageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
-  // Fetch + regrid whenever the dataset or channel picks change.
+  // Fetch + regrid on dataset/channel changes. AbortController (item 16)
+  // cancels a SUPERSEDED request outright instead of only discarding its
+  // result, so the 2θ/ω ⇄ Q toggle stops racing itself; an abort never
+  // triggers the offline fallback/status (see fetchMap's doc).
   useEffect(() => {
     let cancelled = false;
     if (!active || !enoughChannels) {
       setPayload(null);
       return;
     }
-    fetchMap(active.data, keys[0], keys[1], keys[2], { method, nx: res, ny: res }).then((p) => {
-      if (!cancelled) setPayload(p);
-    });
+    const controller = new AbortController();
+    const opts = { method, nx: res, ny: res };
+    fetchMap(active.data, keys[0], keys[1], keys[2], opts, controller.signal)
+      .then((p) => {
+        if (cancelled) return;
+        setPayload(p);
+        if (p.fallback) setStatus(`backend unavailable — offline grid, ${p.fallback.nx}×${p.fallback.ny}`);
+      })
+      .catch(() => {}); // aborted (superseded) -- nothing to show
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [active, enoughChannels, keys, method, res]);
+  }, [active, enoughChannels, keys, method, res, setStatus]);
 
   // (Re)paint the canvas when the grid / colormap / theme / size change.
   useEffect(() => {

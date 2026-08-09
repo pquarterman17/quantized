@@ -10,10 +10,20 @@ the expected grid is known without a golden freeze.
 
 from __future__ import annotations
 
+import time
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from quantized.calc.map import MapData, MapState, build_map, map_from_datastruct
+from quantized.calc.map import (
+    _AUTO_LINEAR_MIN_POINTS,
+    MapData,
+    MapState,
+    _resolve_auto_method,
+    build_map,
+    map_from_datastruct,
+)
 from quantized.datastruct import DataStruct
 
 # Unit-square corners + centre: convex hull is exactly [0,1]×[0,1].
@@ -153,3 +163,109 @@ def test_map_from_datastruct_by_label() -> None:
     m = map_from_datastruct(ds, "Qx", "Qz", "Intensity", MapState(method="idw", nx=4, ny=4))
     assert (m.y_label, m.y_unit) == ("Qz", "1/A")
     assert m.z_label == "Intensity"
+
+
+# ── auto method selection (RSM_CUTS_PLAN item 16) ──────────────────────────
+# The "auto" default's job is picking the right ALGORITHM for the cloud size /
+# topology; the algorithms themselves (linear/natural numeric parity) are
+# covered by test_calc_interp2d.py, so these assert the CHOICE, not numbers.
+
+
+def test_mapstate_default_method_is_auto() -> None:
+    assert MapState().method == "auto"
+
+
+def test_auto_passes_through_an_explicit_method_unchanged() -> None:
+    x = np.array([0.0, 1.0, 0.0])
+    y = np.array([0.0, 0.0, 1.0])
+    z = np.array([1.0, 2.0, 3.0])
+    for explicit in ("natural", "linear", "nearest", "idw", "thinplate", "cubic"):
+        assert _resolve_auto_method(explicit, x, y, z) == explicit
+
+
+def test_auto_picks_natural_for_a_small_scattered_cloud() -> None:
+    rng = np.random.default_rng(0)
+    n = 50  # well under _AUTO_LINEAR_MIN_POINTS, and not on a grid
+    x, y, z = rng.uniform(0, 1, n), rng.uniform(0, 1, n), rng.uniform(0, 1, n)
+    assert _resolve_auto_method("auto", x, y, z) == "natural"
+
+
+def test_auto_picks_linear_for_a_large_scattered_cloud() -> None:
+    # Large-but-ungridded is exactly the Q-space case (item 16): a curvilinear
+    # (Qx, Qz) cloud that detect_regular_grid does NOT find gridded, so only
+    # the size clause routes it to the fast method.
+    rng = np.random.default_rng(0)
+    n = _AUTO_LINEAR_MIN_POINTS + 500
+    x, y, z = rng.uniform(0, 1, n), rng.uniform(0, 1, n), rng.uniform(0, 1, n)
+    assert _resolve_auto_method("auto", x, y, z) == "linear"
+
+
+def test_auto_picks_linear_for_a_small_regular_grid() -> None:
+    # A 10x10 regular grid is far under the size threshold but IS gridded --
+    # detect_regular_grid finds it, so "auto" takes the fast grid-lookup path
+    # (interp2d._query_grid_linear) even though the cloud itself is small.
+    xa, ya = np.meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10))
+    x, y = xa.ravel(), ya.ravel()
+    z = _plane(x, y)
+    assert _resolve_auto_method("auto", x, y, z) == "linear"
+
+
+def test_auto_ignores_nonfinite_points_when_thresholding() -> None:
+    # NaN dead-pixel rows shouldn't tip the size threshold (regrid2d/
+    # interpolate2d drop them before interpolating; the resolver should judge
+    # the cloud regrid2d will actually see, not the raw padded input).
+    rng = np.random.default_rng(1)
+    n = 50
+    x, y, z = rng.uniform(0, 1, n), rng.uniform(0, 1, n), rng.uniform(0, 1, n)
+    pad = np.full(_AUTO_LINEAR_MIN_POINTS, np.nan)
+    x_pad = np.concatenate([x, pad])
+    y_pad = np.concatenate([y, pad])
+    z_pad = np.concatenate([z, pad])
+    assert _resolve_auto_method("auto", x_pad, y_pad, z_pad) == "natural"
+
+
+def test_build_map_auto_default_end_to_end() -> None:
+    # The bare MapState() default (no method given) resolves and builds
+    # without raising -- small scattered cloud, so the "natural" path.
+    z = _plane(_X, _Y)
+    m = build_map(_X, _Y, z, MapState(nx=4, ny=4))
+    assert m.z_grid.shape == (4, 4)
+    assert np.all(np.isfinite(m.z_grid))
+
+
+@pytest.mark.realdata
+def test_auto_qspace_map_builds_fast_on_real_corpus(corpus_dir: Path) -> None:
+    """RSM_CUTS_PLAN item 16's acceptance bound: a real ~100k-point Q-space
+    (Qx, Qz) map -- the curvilinear cloud ``detect_regular_grid`` does NOT
+    find gridded, so this is the case that only the size clause of "auto"
+    catches -- must build in well under the pre-fix "natural" cost (measured
+    18.7-19.3s on this exact file). 2s is generous headroom over the
+    measured ~0.3s "linear" cost, not a tight bound; the point is confirming
+    "auto" actually reaches the fast path on real data, not shaving
+    milliseconds. Skips when the corpus or a big-enough Q-space RSM is
+    absent (local-only, like the rest of realdata)."""
+    from quantized.io.registry import import_auto
+
+    files = sorted((corpus_dir / "panalytical" / "xrd").glob("*.xrdml"))
+    if not files:
+        pytest.skip("no PANalytical corpus files present")
+    for f in files:
+        ds = import_auto(str(f))
+        if (
+            ds.metadata.get("is2D")
+            and "Qx" in ds.labels
+            and "Qz" in ds.labels
+            and ds.values.shape[0] >= 100_000
+        ):
+            break
+    else:
+        pytest.skip("no >=100k-point Q-space RSM in corpus")
+
+    xi, yi, zi = ds.labels.index("Qx"), ds.labels.index("Qz"), ds.labels.index("Intensity")
+    t0 = time.perf_counter()
+    m = map_from_datastruct(ds, xi, yi, zi, MapState(nx=200, ny=200))  # method="auto" default
+    elapsed = time.perf_counter() - t0
+
+    n = ds.values.shape[0]
+    assert elapsed < 2.0, f"auto-selected method took {elapsed:.2f}s (want < 2s) on {n} pts"
+    assert m.z_grid.shape == (200, 200)

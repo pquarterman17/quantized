@@ -116,7 +116,11 @@ class MapRequest(BaseModel):
     x_key: int | str
     y_key: int | str
     z_key: int | str
-    method: str = "natural"
+    # "auto" (RSM_CUTS_PLAN item 16) mirrors MapState's own default -- see
+    # calc/map.py's MapState docstring; a caller that omits `method` gets the
+    # size/grid-detection auto-select, not the (sometimes 57x slower) MATLAB-
+    # parity "natural" algorithm.
+    method: str = "auto"
     nx: int = Field(default=200, ge=2, le=2000)
     ny: int = Field(default=200, ge=2, le=2000)
     xlim: tuple[float, float] | None = None

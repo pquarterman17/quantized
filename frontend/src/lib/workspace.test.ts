@@ -750,10 +750,12 @@ describe("workspace pages (FIGURE_AUTHORING_WORKFLOW_PLAN F3.1)", () => {
   });
 
   it("drops malformed entries and skips a future schema version", () => {
+    // F3.5 bumped PAGE_DOCUMENT_VERSION 1 -> 2 (the new `layout` field
+    // changes render semantics) -- 2 is now CURRENT, so "future" is 3.
     const datasets = [makeDataset("a", "first")];
     const valid = createPageDocument({ id: "page-1", name: "Valid" });
     const raw = JSON.parse(serializeWorkspace({ datasets, pages: [valid] })) as Record<string, unknown>;
-    raw.pages = [valid, "junk", { ...valid, id: "page-2", version: 2 }];
+    raw.pages = [valid, "junk", { ...valid, id: "page-2", version: 3 }];
     const loaded = parseWorkspace(JSON.stringify(raw));
     expect(loaded.pages.map((p) => p.id)).toEqual(["page-1"]);
   });

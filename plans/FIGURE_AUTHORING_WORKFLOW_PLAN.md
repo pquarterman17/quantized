@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-05 — F3.1 PageDocument persistence + F2.4b direct-manipulation parity
+**Updated:** 2026-08-07 — F3.6 unified export from PageDocument; F3 complete
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -265,20 +265,26 @@ ownership; Terra high / Sonnet 5 for panel-editor slices.
 - [x] **F3.1 Define and persist PageDocument.** Store ID/name, page geometry,
       grid/free placement, panel references, panel labels, links, gaps,
       alignment, and output settings in `.dwk`.
-- [ ] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
+- [x] **F3.2 Reference FigureDocument IDs.** Do not flatten panels into lossy
       reduced configs. Define missing-source and frozen-snapshot behavior.
-- [ ] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
+- [x] **F3.3 Support save/reopen/edit.** Add Save, Save As, dirty state, recent
       access, duplicate, rename, and delete.
-- [ ] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
+- [x] **F3.4 Unify panel editing.** Double-click or context-menu a panel to edit
       the referenced figure; provide explicit unlink/duplicate-for-page actions.
-- [ ] **F3.5 Complete layout controls.** Preserve manual rearrangement,
+- [x] **F3.5 Complete layout controls.** Preserve manual rearrangement,
       adjustable spacing, shared/independent axes, link/unlink, alignment, and
       recommended resize modes.
-- [ ] **F3.6 Export from PageDocument.** Clipboard and file export must consume
+- [x] **F3.6 Export from PageDocument.** Clipboard and file export must consume
       the same reopened page model used by the internal preview.
 
 **F3 exit:** Page → save → close → reopen → edit → copy/export retains every
-panel, relationship, and visual setting.
+panel, relationship, and visual setting. **Coded-and-tested as of F3.6
+(2026-08-07):** a fail-before/pass-after characterization test plus a direct
+round-trip test (pre-save spec vs. post-reopen spec, byte-for-byte) prove
+this holds for the paths this campaign built. Still NOT owner-verified in the
+live desktop app — per this plan's own "Required acceptance journeys" rule,
+A6 (multi-panel) stays an unchecked owner acceptance journey, not implied
+complete by F3's checkboxes.
 
 ### F4 — Recipes and templates on top of the document contract
 
@@ -381,7 +387,729 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-07 — F3.6 unified export from PageDocument (Claude Sonnet 5)
+
+- **Survey first.** Read the F3.1–F3.5 logs plus the live code before writing
+  anything: `useFigurePage.ts`'s `buildSpec()` was ALREADY the one place that
+  turns `slots` into a `FigurePageSpec` — both the debounced preview
+  (`renderFigurePageBlob`) and file export (`exportFigurePage`) already called
+  it, so "preview vs file export disagree" was not a live bug. There was no
+  clipboard-copy action anywhere in the Figure Page workshop (`FigurePageView.tsx`
+  had only "Export {FMT}"); the app's existing 300-DPI clipboard convention
+  (A7) lives entirely in `lib/copyFigureCommand.ts` + `lib/clipboard.ts`,
+  wired to the STAGE plot toolbar only (`usePlotStageActions.ts`) — nothing
+  reused it for a composed page. Nothing let a SAVED page export without
+  first reopening it into the workshop session (`store/pageDocuments.ts`'s
+  `openPageDocument` only ever seeds a live session via `pageDocSeed`).
+- **The real divergence, found by reading `panelResolve.ts`'s `panelFigure`
+  line by line, not assumed from the plan text.** The "window" session-source
+  branch hand-assembled a REDUCED `FigureSpec` from ~10 `PlotView` fields
+  (x/y key, scale, fmt, step, title, labels, series styles) — while the
+  "figure" branch (a saved canonical figure picked directly) already routed
+  through F1.5's `buildFigureSpecFromDocument` adapter, which reads the FULL
+  `FigureDocument` (error bindings, secondary axis, grouping, x-axis breaks,
+  publication overrides, hidden/reordered series). Every `kind:"plot"` window
+  has carried a live canonical `FigureDocument` since F1
+  (`PlotWindow.document`, `store/windowDocuments.ts`'s `syncPlotWindow` keeps
+  it current) — the ad-hoc branch simply wasn't using it. Net effect: a page
+  panel sourced from an OPEN WINDOW silently dropped error bars, y2 state,
+  groups, x-breaks, and overrides that the SAME window would preserve once
+  saved and reopened as a "figure"-kind panel — a real, provable violation of
+  the F3 exit criterion ("retains every panel, relationship, and visual
+  setting"), and exactly the "parallel ad-hoc spec assembly" this item's own
+  text warns against. Fixed by routing the window branch through the SAME
+  `buildFigureSpecFromDocument(win.document, dataset, ...)` adapter the
+  "figure" branch uses — see `panelResolve.ts`'s module header for the full
+  before/after. The "figdoc" (legacy Publication figure) branch is
+  UNCHANGED and stays ad hoc: F1 never gave that kind a `FigureDocument`
+  counterpart at all (a pre-existing, already-documented gap from F3.1's own
+  log), so there is no canonical adapter to route it through.
+- **A real bug found while wiring the fix, not invented as scope creep: the
+  #8g preview-invalidation fingerprint for a FOCUSED window's document
+  infinite-loops React if built naively.** The first attempt fingerprinted
+  the window branch on `windowsForSave().find(...).document` (mirroring the
+  "figure" branch exactly) — this is safe when called from `panelFigure`
+  (an ordinary async function), but `panelRenderInputs` runs inside a
+  `useShallow` selector backing `useSyncExternalStore`, which React may call
+  several times per commit to verify a stable snapshot. `windowsForSave()`
+  reconstructs the FOCUSED window's document via `structuredClone` on every
+  call, so two calls in the same tick are never `===`, and two of the
+  existing `editSlot` tests failed with "Maximum update depth exceeded"
+  (caught by the existing suite, not a new test — proof the guard works).
+  Fixed by NOT calling `windowsForSave()` inside the selector: a non-focused
+  window's stable `.document` reference is used directly (safe — it only
+  changes via an actual store mutation that replaces it); the FOCUSED window
+  instead lists the live singleton fields directly (stable references),
+  extended from the pre-F3.6 field list to also cover error bindings,
+  hidden/reordered series, and secondary-axis state — the same fields the
+  fidelity fix newly makes visible. See `panelRenderInputs`'s doc comment for
+  the full account, including the acknowledged residual (some live-focused
+  fields, e.g. axis breaks/page-setup margins, are not in the tracked list —
+  a preview-freshness gap only, since `buildSpec` always re-reads fresh state
+  at export/copy time regardless).
+- **Clipboard copy (item 3) — reuses A7's mechanism, not a new one.** New
+  `copyNow` in the extracted `usePagePreviewExport.ts` calls the SAME
+  `buildSpec()` the preview/export already share, then
+  `copyImageAsync(renderFigurePageBlob({...spec, fmt:"png", dpi:300}))` —
+  the identical gesture-preserving pattern `copyFigureCommand.ts` established
+  (hand the PENDING render promise to the Clipboard API rather than awaiting
+  it first) and the identical 300 DPI floor (`COPY_PAGE_DPI`, matching
+  `COPY_FIGURE_DPI`). Checks `clipboardImageSupported()` BEFORE any render
+  work, exactly like the single-figure command. File export stays vector
+  (PDF) by default per the repo's export convention; copy is always raster
+  (Office pastes vector poorly) — the same split the single-figure copy/export
+  pair already makes. Wired as a new "Copy" button beside "Export" in
+  `FigurePageView.tsx`.
+- **Saved-page export (item 4) — shipped, not deferred; stayed cheap because
+  it composes existing pieces.** New `buildPageSpecFromDocument` in
+  `panelResolve.ts` walks a PERSISTED `PageDocument`'s panels through
+  `resolvePagePanel` (F3.2's fail-closed resolver) and
+  `buildFigureSpecFromDocument` (the SAME adapter the fidelity fix above
+  uses) — so the Library "Export…" (⤓) action on `PagesSection.tsx` produces
+  byte-identical output to reopening the page and exporting it, proven by a
+  dedicated test suite (`panelResolve.test.ts`) rather than asserted. A
+  dangling `figureId` or an adapter rejection (dataset gone, unsupported
+  grouped+secondary-axis combination) throws naming the panel's own
+  previewed label ("panel (b): ..."), never silently exports a smaller page.
+- **F3 exit criterion — coded-and-tested, not owner-verified.** Added a
+  direct round-trip test: build a window-sourced panel's spec, save the page,
+  simulate close (unmount the hook) and reopen (seed + fresh mount), rebuild
+  the spec, assert byte-for-byte equality. This is the strongest automated
+  proof available for "save → close → reopen → export retains every panel,
+  relationship, and visual setting" — but per this plan's own "Required
+  acceptance journeys" section, only an owner-visible desktop run can check
+  A6 (multi-panel journey). That box stays unchecked; this log states the
+  automated status honestly instead of implying A6 is done.
+- **Size discipline — `useFigurePage.ts` was at 483/500 (F3.5's own log
+  flagged it), so it was 0 lines from the ceiling before this slice added
+  anything.** Extracted the debounced preview effect, `buildSpec`, and
+  `exportNow` (plus the new `copyNow`) to a new sibling
+  `usePagePreviewExport.ts`, mirroring F3.4's "extract a cohesive slice"
+  precedent (`panelResolve.ts`/`usePageLifecycle.ts`). `useFigurePage.ts`:
+  483 → 336 lines (`wc -l`) before any F3.6 feature code density — the hook
+  now only owns grid/slot/source-list state and delegates preview/export/copy
+  to the new module. `calc/figure_page.py` needed NO backend change (stayed
+  at its existing 361 lines) — F3.5 already carries every layout field over
+  the wire, and the existing `/api/export/figure-page` route already renders
+  PNG at any requested DPI, which is all the 300-DPI clipboard copy needed.
+- **Tests:** `useFigurePage.test.ts` (+18: the fidelity-gap characterization
+  test — error bindings absent before the fix, present after; the round-trip
+  test; 4 `copyNow` tests — success via the shared `buildSpec`, capability
+  check before any render, the same missing-source message export uses,
+  the same plain "nothing assigned" message; plus 2 existing window-branch
+  tests updated for the new canonical-adapter output shape: `x_log` → `x_scale`,
+  and the "re-renders on view change" test now updates the window's
+  `.document` alongside `.view`, matching how a real committed edit keeps
+  both in sync); `panelResolve.test.ts` (new file, 5:
+  `buildPageSpecFromDocument` null-when-empty, multi-panel with layout/output
+  threading, dangling-figureId fails closed naming the panel, missing-dataset
+  fails closed, sparse panels keep their true grid position);
+  `PagesSection.test.tsx` (+3: exports using the page's own output settings,
+  the no-panels status message, the dangling-reference failure message).
+- **Gate:** Frontend — `npm run lint` clean (0 errors, 9 pre-existing
+  unrelated warnings, unchanged baseline); full `npx vitest run` **396 files /
+  5764 tests passed** (+1 file / +14 tests over F3.5's 395/5750); `npx tsc -b
+  --noEmit` clean; `npm run build` clean, bundle 874.9 kB eager / 903.3 kB
+  budget (28.4 kB headroom — the new modules land in the already-lazy-loaded
+  Figure Page/Library chunks). Backend untouched this slice — no backend gate
+  run (nothing to verify that the existing suite doesn't already cover).
+- **F3 is now COMPLETE (F3.1–F3.6 all checked).** F4 (recipes/templates) is
+  the only fully-open tier left in this plan besides F2's remaining broader-
+  parity items; A1–A10 acceptance journeys remain owner-gated as always.
+
+### 2026-08-07 — F3.5 complete layout controls (Claude Sonnet 5)
+
+- **Survey first — nothing in this item's scope existed yet.** Read
+  `SlotGrid.tsx`/`FigurePageView.tsx`/`useFigurePage.ts` (frontend) and
+  `calc/figure_page.py`/`routes/export_page.py` (backend) before writing
+  code: manual rearrangement did NOT exist (a filled `SlotGrid` tile had no
+  `draggable`/`onDragStart` — only the source-list items did; a slot could
+  only be reassigned by re-dragging a NEW source from the list, not by
+  moving an existing panel); no spacing control existed anywhere
+  (`SlotGrid`'s CSS grid used a hardcoded `gap: 6`, purely visual; the
+  backend's grid path always called `fig.add_gridspec(rows, cols)` with no
+  wspace/hspace); no link/unlink or shared-axis concept existed at either
+  layer; no alignment control; the backend's grid path always hardcoded
+  `layout="constrained"` with no alternative. This item is a from-scratch
+  build, not a completion of partial work — confirmed by reading, not
+  assumed from the plan text.
+- **Schema decision — bump `PAGE_DOCUMENT_VERSION` 1 -> 2, mirroring
+  `FigureDocument`'s own v1->v2 precedent (F2.1a), NOT F3.3's
+  additive-no-bump precedent.** F3.3's `createdAt`/`modifiedAt` were purely
+  informational (zero render-semantics impact), so they landed as additive
+  fields. `layout` is the opposite case explicitly flagged by this task:
+  `linkX`/`linkY`/`resizeMode`/gaps change what the exported page LOOKS
+  LIKE. The risk a version bump defends against is a genuinely OLDER,
+  already-shipped Quantized build silently loading a newer `.dwk` and
+  dropping the user's link/gap/resize choices with no warning — exactly
+  what `figureDocument.ts`'s F2.1a comment names as the reason for its own
+  bump ("older builds must reject, rather than silently strip, fields they
+  do not understand"). Implemented identically to that precedent:
+  `sanitizePageDocument` accepts `version === 1 || version === 2` (a v1
+  document migrates, reading `layout` only when `version === 2` — a v1
+  envelope that happens to carry a `layout`-shaped key, e.g. hand-edited or
+  corrupted, is never read, proven by a dedicated test), always WRITES
+  `version: 2` back out (auto-upgrades on next save), and rejects `version
+  >= 3` outright (`sanitizePageDocuments` skips it, keeping valid
+  siblings) — the existing "future version" tests in `pageDocument.test.ts`
+  and `workspace.test.ts` had hardcoded `version: 2` as the "future" probe
+  value from when 2 WAS future; both updated to `version: 3` (found by a
+  full-suite run, not anticipated in advance — the exact "verify before
+  trusting green" class).
+- **Link-group design — page-wide "link all" / "unlink all", NOT
+  arbitrary per-row/per-column groups.** The task explicitly offered this
+  choice; picked the minimal core because (a) it is exactly what A6 (the
+  plan's own acceptance journey: "Build a 2x2 page, link then unlink axes")
+  needs and nothing more, (b) matplotlib's native `sharex=`/`sharey=`
+  mechanism makes "link all" a ~10-line pure function
+  (`figure_page_layout.share_targets`: every panel after the first shares
+  with panel 0) with zero new schema shape, while per-row/col groups would
+  need a group-id-per-panel schema and a UI for assigning panels to groups
+  — real added complexity for a capability the acceptance journey doesn't
+  ask for. Residue named honestly below, not silently dropped.
+- **"Recommended resize modes" — researched, not guessed (the task's own
+  instruction).** The phrase has no prior use anywhere in this codebase or
+  plan. Delegated to `analysis-software-expert` to check OriginPro's Layout
+  Page vocabulary before implementing: Origin actually splits this across
+  TWO orthogonal concepts — layer/page **spacing** (`Layer Management`'s
+  Horizontal/Vertical Gap, `Fit Page to Layers`'s Margin Control
+  Border/Tight) and **element scaling** on resize (`Plot Details` Size
+  tab's "Scale With Layer Frame" vs "Fixed Factor" — whether fonts/line
+  widths grow with the panel or stay pixel-fixed). Implemented the first
+  (spacing/layout-engine choice) as `resizeMode: "constrained" | "tight" |
+  "none"`, mapped directly onto matplotlib's OWN real layout-engine
+  vocabulary (`Figure.set_layout_engine` accepts exactly these names) —
+  "constrained" (default/recommended: auto-avoids overlapping titles/labels
+  while still respecting an explicit gap, since gridspec wspace/hspace are
+  an ADDITIVE floor under constrained layout) / "tight" (recommended when
+  minimizing whitespace matters more — trims the bounding box post-layout;
+  an explicit gap is NOT honored in this mode, a named tradeoff, not a
+  silently dropped setting) / "none" (fixed manual spacing, what free
+  page-coordinate placement has always used implicitly). Origin's SECOND
+  concept — element scale-with-frame vs fixed-factor — is NOT built here:
+  it would require decoupling font/line-width size from the whole
+  publication-style pipeline (`calc/figure_styles.py`), a materially larger
+  feature the plan's own bullet list already separates from "adjustable
+  spacing" and "recommended resize modes" by listing them as distinct
+  items; named as residue, not conflated with what shipped.
+- **Manual rearrangement — does the label follow the panel or the slot
+  position? The panel.** New `lib/figurepage.ts` `moveSlot(slots, i, j)`
+  swaps the WHOLE `PageSlot` record (source + label + title) as one unit —
+  deliberately DIFFERENT from the existing `assignSlot`'s "move" semantics
+  (re-dragging a source-list item that's already assigned elsewhere only
+  relocates `source`, leaving each slot's own label/title override
+  behind). Justified from how auto-lettering already works: the letter
+  sequence ("(a)", "(b)", ...) is ENTIRELY a function of grid placement
+  order — a panel dragged from position 0 to position 3 automatically gets
+  whatever letter position 3 implies, nothing to decide there. The only
+  real question is the EXPLICIT override a user typed in ("(iv) Special
+  result"): that caption describes the PANEL'S CONTENT, not the grid cell
+  it happens to occupy, so it travels with the panel — matching how
+  PowerPoint/Word treat a moved object's own caption, and avoiding the
+  surprising alternative (moving panel A into panel B's old slot silently
+  inherits B's leftover caption on A's content). `assignSlot`'s different
+  behavior stays as-is: it is "put THIS source into this slot" (a content
+  pick, where the position's own caption is legitimate to keep), a
+  different interaction from "move this existing panel, caption included."
+- **Drag + keyboard, mirroring SlotGrid's existing F3.4 conventions.** A
+  filled tile is now `draggable`, writing its own index as a NEW
+  `PANEL_SLOT_MIME` payload; `onDrop` checks it FIRST, falling back to the
+  existing `PANEL_SOURCE_MIME` (source-list drag) so the two drag kinds can
+  never be confused — proven by a regression test asserting each MIME kind
+  calls only its own handler. Keyboard: Shift+Arrow (a spreadsheet
+  "move-selected-row" idiom) moves the FOCUSED panel one grid step in that
+  direction via the same `onMoveSlot`, no-ops on an empty slot or a grid
+  edge (`lib/figurepage.ts`'s new `gridNeighborIndex`), and follows DOM
+  focus to the panel's new tile so repeated presses keep moving the same
+  panel — chosen over inventing a separate "pick up / arrow / drop" grabbed
+  -mode (the react-beautiful-dnd keyboard-sensor pattern) as unnecessary
+  complexity once a direct swap-in-one-keypress does the same job. Plain
+  Arrow (no Shift) is deliberately inert — this slice doesn't add grid
+  focus navigation, only the move gesture the task asked for.
+- **Backend split — new sibling `calc/figure_page_layout.py`, NOT grown
+  inline.** `figure_page.py` was already at 449/500 lines. `validate_layout`
+  /`layout_engine_kwargs`/`share_targets` (the pure gap-validation,
+  matplotlib-layout-engine-kwarg, and axis-share-index math) moved to the
+  new module; `figure_page.py` itself only gained the signature threading,
+  the `sharex`/`sharey` wiring in its axes-construction loop, and the
+  `fig.align_labels()` call — landing at **492/500 lines** (8 headroom),
+  never approaching the ceiling despite the real feature surface. All five
+  new params (`row_gap`/`col_gap`/`link_x`/`link_y`/`align_labels`/
+  `resize_mode`) default to today's EXACT rendering — proven by a
+  byte-identical test at both the calc and route level (mirrors this
+  file's own `test_no_y2_mask_is_byte_identical_to_omitting_it` precedent).
+- **Frontend size ratchet — `lib/api.ts` was AT its 1828-line pin (zero
+  headroom); F3.5's 8 new `FigurePageSpec` fields would have pushed it to
+  1836.** Extracted the whole figure-page wrapper block (`PagePanelSpec`,
+  `FigurePageSpec`, `exportFigurePage`, `renderFigurePageBlob`) to a new
+  `lib/api/figurePage.ts`, re-exported from `api.ts` — the SAME template
+  `api/plot.ts`/`api/stats.ts` already established for this exact
+  situation. `FigureSpec` (defined in `api.ts` itself) is imported into the
+  new sibling as `import type` only — erased at compile time, so there is
+  no runtime circular dependency, verified by a clean `tsc -b --noEmit`.
+  Net result: `api.ts` DROPPED to 1782 lines (46 headroom, pin lowered to
+  match, `architecture.test.ts` updated) despite the net-new fields —
+  offsetting a pin overrun with a real extraction rather than trimming
+  comments to survive at the wire, per this repo's own ratchet discipline.
+- **`useFigurePage.ts` landed at 483/500 lines** (445 after F3.4) — under
+  the habit ceiling but the closest this file has been to it. Not split
+  this slice (the new surface — one `setLayout` patch-setter instead of six
+  field setters, one `moveSlot` wrapper — is already about as compact as it
+  can be without a new extraction); logged rather than silently left for a
+  future session to discover, per this plan's own discipline.
+- **Deliberately out of scope, named honestly:**
+  - F3.6 (export from PageDocument) remains fully open.
+  - Per-row/per-column (or arbitrary) axis link GROUPS — only page-wide
+    link-all/unlink-all shipped; see the link-group design note above.
+  - Origin's "Scale With Layer Frame vs Fixed Factor" element-scaling
+    behavior on resize — a different, larger concept than the spacing/
+    layout-engine `resizeMode` that shipped; see the resize-mode note above.
+  - The interactive `SlotGrid` assignment UI's own CSS `gap` was NOT wired
+    to `layout.rowGap`/`colGap` — that grid is a lightweight assignment
+    surface, not a pixel-accurate preview (the server-rendered PNG below it
+    already is); conflating the two would misrepresent the assignment UI as
+    WYSIWYG when it never has been.
+  - Explicit per-panel axis-limit overrides (`overrides.x_lim`/`y_lim`) can
+    still win over a page-wide link, since matplotlib's shared-axis state is
+    one underlying object per link group and `_apply_overrides` runs last,
+    per-panel, in placement order — a real, documented interaction (last
+    panel's explicit override wins for the whole group), not a bug, and not
+    solved here (solving it generally needs a link-vs-override precedence
+    rule this task didn't ask for).
+- **Tests:** backend — `test_calc_figure_page_layout.py` (new file, 15:
+  `validate_layout`/`layout_engine_kwargs`/`share_targets` pure-math
+  coverage); `test_calc_figure_page.py` (+10: byte-identical defaults,
+  explicit-gap changes the render, tight/none resize modes render, unknown
+  resize_mode and out-of-range gap raise, link_x/link_y actually share
+  `get_xlim()`/`get_ylim()` across panels via `_build_page_figure`, the
+  unlinked default is byte-identical, `align_labels` runs without error,
+  free placement ignores gap/resize_mode but still honors links);
+  `test_api_export_page.py` (+4: layout fields render at the route, unknown
+  resize_mode and out-of-range gap 422, route-level byte-identical
+  defaults). Frontend — `lib/pageDocument.test.ts` (+8: DEFAULT_LAYOUT on
+  create, partial-layout override, v1->v2 migration to DEFAULT_LAYOUT, a v1
+  envelope's layout-shaped junk is ignored not read, a valid v2 layout
+  passes through, a malformed v2 layout degrades field-by-field, explicit
+  `null` gap preserved as auto (not coerced to a fallback number), JSON
+  round trip of a non-default layout; 2 existing "future version" tests
+  updated 2->3); `lib/figurepage.test.ts` (+5: `moveSlot` swaps the whole
+  record/moves onto empty/no-ops out-of-range, `gridNeighborIndex` computes
+  every direction and returns null at every edge); `useFigurePage.test.ts`
+  (+5: `moveSlot` swaps + follows selection, DEFAULT_LAYOUT flows through
+  `buildSpec` as byte-identical defaults, `setLayout` patches only given
+  fields, a customized layout threads through `buildSpec`, a layout change
+  re-renders the debounced preview like a style change does; 1 existing
+  test's hardcoded `version: 1` updated to 2); `SlotGrid.test.tsx` (+8: a
+  filled slot is draggable/an empty one isn't, dragstart writes its own
+  index as `PANEL_SLOT_MIME`, dropping it elsewhere calls `onMoveSlot` not
+  `onDropSource`, a `PANEL_SOURCE_MIME` drop still calls `onDropSource` not
+  `onMoveSlot`, Shift+ArrowRight moves the focused panel, Shift+Arrow at a
+  grid edge and on an empty slot are no-ops, a plain Arrow key never
+  triggers a move); `workspace.test.ts` (1 existing "future version" test
+  updated 2->3, found by the full-suite run).
+- **Gate:** Backend — `uv run pytest -q`: **3851 collected, 3774 passed, 69
+  skipped, 8 xfailed, 0 failed** (no shrinkage from the pre-slice baseline);
+  `ruff check src tests` clean; `mypy src` clean (249 source files).
+  Frontend — `npm run lint` clean (0 errors, 9 pre-existing unrelated
+  warnings, unchanged from F3.3/F3.4's baseline); full `npx vitest run`
+  **395 files / 5750 tests passed**; `npx tsc -b --noEmit` clean; `npm run
+  build` clean, bundle 874.6 kB eager / 903.3 kB budget (28.7 kB headroom).
+- F3.5 is now checked. F3.6 (export from PageDocument) is the only item
+  left open in F3.
+
+### 2026-08-06 — F3.4 unified panel editing (Claude Sonnet 5)
+
+- **Size discipline first (separate commit).** `useFigurePage.ts` was 736
+  lines (flagged by F3.3's log, not acted on). Extracted, zero behavior
+  change: `panelResolve.ts` (panel-source id resolution + single-panel
+  FigureSpec building — `resolveSlotFigureId`, `stripPageIncompatibleOverrides`,
+  `panelFigure`, `panelRenderInputs`) and `usePageLifecycle.ts` (the save/
+  dirty/reopen half — `pageDocument` projection, F3.3's unresolved-slot
+  Save gate, dirty predicates, Save/Save As/close-confirm, the `pageDocSeed`
+  reopen effect). `useFigurePage.ts`: 736 -> 374 lines before any F3.4 code;
+  445 after. Full frontend gate green on both commits.
+- **The unification decision (the plan's own open question) — KEEP the
+  three-kind session-source model (window/figdoc/figure); do NOT collapse
+  pickable sources to "canonical figures only".** F3.1's log deliberately
+  deferred this to F3.4 "once a save/promote path exists" — F3.3 built that
+  path (Save blocks on an unresolved slot and names the exact fix). Having
+  the path available does not, on inspection, obligate REMOVING the
+  alternative sources: nothing in F3.4's stated scope (double-click edit,
+  unlink/duplicate-for-page) requires it, and doing so would drop a
+  currently-working capability F3.1's log explicitly warned against (open
+  windows and legacy Publication figures are still real, useful panel
+  sources — a plot doesn't stop being pickable just because it hasn't been
+  saved as a canonical figure yet). What genuinely unifies this slice is the
+  EDITING interaction, not the source list: every panel kind now gets
+  exactly ONE double-click/context-menu entry point (never a silent no-op),
+  and every kind's menu steers toward acquiring — or, for a "figure" kind,
+  already having — a durable canonical identity:
+  - **figure** kind: double-click/"Edit figure" opens the editable figure
+    for editing (`openEditableFigure`, F1.4) — already durable, nothing to
+    convert.
+  - **window** kind: double-click/"Focus window" raises (and un-minimizes)
+    its window; a new "Save as editable figure" menu entry runs the SAME
+    action its title-bar Save button does (`saveFigure`) directly from the
+    panel, so resolving F3.3's unresolved-slot Save block no longer requires
+    hunting for the window itself. The slot's kind stays "window" — no
+    reassignment needed, since `resolveSlotFigureId` already re-checks
+    `editableFigures` on every read (F3.1).
+  - **figdoc** kind: double-click/"Create editable copy" runs the existing
+    promotion (`promoteLegacyFigureDoc`, F2.1c) AND repoints THIS slot at
+    the new copy in one step (the Library's own "Editable" button performs
+    the same promotion with no slot to repoint) — converts the panel
+    straight from non-durable to durable without a second manual
+    reassignment.
+  - **missing** status (any kind): never a dead end, but also never an
+    invented edit target — the menu offers ONLY "Clear panel" (the existing
+    × chip's action), since there is nothing left at the far end of a
+    dangling reference to open/promote/duplicate.
+  - The tooltip on a window/figdoc-kind tile now also names its transient
+    (not-yet-durable) status directly ("— open window, not yet a saved
+    figure" / "— Publication figure (export-only); double-click to make it
+    editable"), so the distinction is visible on the grid itself, not only
+    surfaced lazily by F3.3's Save-time block message.
+- **Unlink / duplicate-for-page** (a `figure`-kind panel only — the only
+  kind with a real duplicable identity; a window has no saved copy to
+  duplicate, and a figdoc's "copy" IS what the promotion above performs):
+  "Duplicate for this page" calls `duplicateEditableFigure` (one undoable
+  store mutation, F1.4) and repoints THIS panel at the copy via the
+  existing `assign`, so editing the copy afterward no longer touches the
+  original or any OTHER page still referencing it — literal unlink-via-copy
+  semantics, named in the UI the way the plan states it.
+- **Preview invalidation (item 3) — verified, not fixed.** Traced whether
+  editing a referenced canonical ("figure"-kind) figure and re-saving it
+  reaches the page preview: `panelRenderInputs`'s existing "figure" branch
+  (`lib/figurepage`/now `panelResolve.ts`) already tracks the DOCUMENT
+  OBJECT itself (not just its id), and every store action that edits a
+  saved `editableFigures` entry (`saveFigure`, rename, `duplicateEditableFigure`,
+  `applyFigurePublicationEdit`'s "new-editable" target) replaces it with a
+  new reference via `.map()`/spread rather than mutating in place — so the
+  `useShallow`-compared render-input array already changes reference and
+  re-triggers the debounced preview fetch. This was true before this slice
+  but had ZERO test coverage (the existing #8g "re-renders when an assigned
+  saved figure (doc) is edited" test exercises the OLDER "figdoc" branch,
+  not the F3.3 "figure" one) — added the missing characterization test
+  rather than "fixing" a bug that, on inspection, doesn't exist. No
+  production code changed for this item.
+- **F3.3 residue (Library rename while open) — carried forward, NOT fixed
+  here.** F3.3's log flagged that renaming a page in the Library while that
+  SAME page is open in the workshop doesn't live-sync (the session's `name`
+  is local React state; the next Save from the stale session overwrites the
+  Library rename). This slice's editing unification touches panel SOURCES
+  (`slots`), not the page-level session identity/name, so the gap doesn't
+  fall out of anything built here — `usePageLifecycle.ts`'s `draft` state is
+  the exact same local-React-state model F3.3 left in place, just relocated
+  to its own module. Still narrow and low-frequency (requires renaming a
+  page from the Library while it is ALSO the one open in the workshop). Real
+  fix needs the session to read its name reactively from `store.pages`
+  instead of a local snapshot — deferred, named honestly rather than
+  silently dropped a second time.
+- **F3.5 (layout controls) and F3.6 (export from PageDocument) remain fully
+  open** — untouched by this slice.
+- **Tests:** `panelMenu.test.ts` (new file, 11: `primaryPanelAction`
+  null-for-empty/null-for-missing/dispatch-per-kind; `buildPanelMenuItems`
+  empty-for-unassigned, Clear-only-for-missing, full per-kind item lists +
+  their `run` wiring); `SlotGrid.test.tsx` (new file, 20: double-click
+  dispatch per kind incl. no-op for empty/missing, right-click menu
+  contents + item clicks incl. missing-shows-only-Clear and
+  empty-opens-no-menu, keyboard ContextMenu-key/Shift+F10/Enter/Delete/
+  Backspace incl. Enter-no-ops-when-missing and Delete-no-ops-when-empty,
+  the transient-tooltip cases including "frozen wins over transient" and a
+  durable figure-kind panel carrying no note); `useFigurePage.test.ts`
+  (+8: `editSlot` for figure/window/minimized-window kinds, `promoteSlot`
+  converting+repointing a figdoc slot, `duplicateForPage` duplicating+
+  repointing a figure slot and its no-op on window/figdoc kinds,
+  `saveSlotAsFigure` saving a window slot's document (auto-resolving next
+  read, no reassignment) and its no-op on figure/figdoc kinds, plus the
+  figure-kind preview-invalidation characterization test above).
+- **Gate, both commits:** `npm run lint` clean (0 errors, 9 pre-existing
+  unrelated warnings); full `npx vitest run` green — 393/5684 after the
+  refactor commit (unchanged from F3.3's baseline, confirming zero behavior
+  change), 395/5724 after the feature commit; `npm run build` clean, bundle
+  873.6 kB eager / 903.3 kB budget (unchanged — all F3.4 code lives in the
+  already-lazy-loaded Figure Page workshop chunk); `npx tsc -b --noEmit`
+  clean on both.
+- F3.4 is now checked.
+
+### 2026-08-06 — F3.3 page save/reopen lifecycle (Claude Sonnet 5)
+
+- **Unresolved-slot Save policy (the core design decision) — BLOCK, with a
+  specific per-slot message, never save-with-empty-panel.** A filled slot
+  whose session source has no canonical `figureId` yet (an open plot window
+  never saved as an editable figure, or a legacy Publication figure — F1
+  never gave that kind a FigureDocument counterpart at all) refuses Save
+  entirely rather than persisting `figureId: null` for that panel — silently
+  dropping it is exactly the F3.2 failure this item exists not to repeat.
+  Chose blocking over "save with a warning" because it matches every other
+  save-refusal precedent already in this codebase
+  (`applyFigurePublicationEdit`'s missing-dataset/missing-snapshot checks,
+  `promoteLegacyFigureDoc`'s source-unavailable check) — none of them save a
+  degraded document and warn after the fact. Investigated whether a "save
+  this window's figure into the Library" action already exists (F1.4): yes
+  (`saveFigure`/the title-bar Save button), and the block message for a
+  window-sourced slot names it directly ("save it (its title-bar Save
+  button, or File > Save Editable Figure), then Save this page again") —
+  once that figure is saved, the SAME slot assignment auto-resolves next
+  render (no reassignment needed, since `resolveSlotFigureId` re-checks
+  `editableFigures` on every recompute). A figdoc-sourced slot's message
+  instead points at F1.4's other existing action, "Create editable copy"
+  (SavedFiguresSection's "Editable" button), because a figdoc can NEVER
+  resolve on its own — the user must assign the resulting copy to the slot.
+  A "figure"-kind slot (a saved figure picked directly, or a reopened page's
+  hydrated panel) is NEVER blocking, even once its target is deleted: it
+  already carries a real canonical id, so Save persists that reference
+  as-is and it resolves through `resolvePagePanel` to `{status:"missing"}`
+  on its next read — F3.2's fail-closed contract, not a reason to block.
+- **Reopen source-model choice — one new session source kind, not full
+  unification (deferred to F3.4, per F3.1's own log).** `lib/figurepage.ts`'s
+  `PanelSourceKind` gained `"figure"` alongside the existing `"window"` and
+  `"figdoc"` — a saved `editableFigures` entry picked directly. A reopened
+  `PageDocument`'s panels ONLY ever reference a canonical `figureId` (F3.1/
+  F3.2), so every occupied panel hydrates to this new kind
+  (`store.openPageDocument` seeds `pageDocSeed`; `useFigurePage.ts`'s effect
+  consumes it once, mirroring `useFigureBuilder.ts`'s existing `figureDocSeed`
+  pattern exactly — including its "unconditionally overwrite the current
+  session" behavior on a new seed, not a new confirm surface). Rendering a
+  "figure"-kind panel reuses F1.5's `buildFigureSpecFromDocument` adapter
+  UNCHANGED — the same one Publication Preview's export/copy already uses —
+  so a page panel sourced from a saved figure renders identically to opening
+  that figure on its own. Its `x_breaks`/`margins` overrides are stripped
+  (page-incompatible, a 422 otherwise) via a new shared
+  `stripPageIncompatibleOverrides` helper, deduplicating what used to be a
+  figdoc-only inline destructure. `resolvePanelSource` gained a 5th,
+  DEFAULTED (`= []`) `editableFigures` parameter rather than being inserted
+  positionally, so every pre-F3.3 call site (including all of
+  `lib/figurepage.test.ts`'s existing cases) keeps compiling and behaving
+  identically without being touched.
+- **Dirty state — two predicates, mirroring `figureLifecycle.ts`'s corrected
+  convention, not its original one.** `pageDocumentDirty` (broad: true when
+  never saved OR a saved page has drifted) drives the Save affordance's name
+  + "•" cue in the ToolWindow title, matching `editableFigureDirty`.
+  `pageDocumentHasUnsavedEdits` (narrow: false for a page never saved at
+  all) gates the close-confirm — deliberately the CORRECTED convention the
+  2026-08-01 adversarial review arrived at for editable figures
+  (`editableFigureHasUnsavedEdits`, after finding the broader predicate
+  popped a confirm on every routine never-saved close), applied here from
+  the start rather than rediscovered. A fresh, never-saved page still
+  discards plainly on close — the pre-F3.3 "this composition is temporary"
+  note now shows CONDITIONALLY (only while `!everSaved`) instead of always,
+  since it stopped being universally true the moment Save existed.
+- **Schema addition — `createdAt`/`modifiedAt`, no version bump.** Purely
+  informational timestamps (recency sorting only, zero render-semantics
+  impact) are additive to `PageDocument` without bumping
+  `PAGE_DOCUMENT_VERSION` — unlike `FigureDocument`'s v1->v2 `publication`
+  field, which changes what a document RENDERS AS and so genuinely needed a
+  version fork. The sanitizer defaults an absent value to the Unix epoch
+  (not "now"), so a genuinely undated pre-F3.3 document — none has actually
+  been written yet; F3.1/F3.2 shipped the schema before any writer existed —
+  sorts LAST in a recency list rather than first. `modifiedAt` is stamped by
+  the store's save actions (`store/pageDocuments.ts`), never by the pure
+  `createPageDocument` constructor, mirroring `lib/plotspec.ts`'s
+  `SavedPlotSpec`/`store/graphBuilder.ts` split.
+- **A real bug found and fixed while building the fix, not just the intended
+  feature:** the session draft's id (`DRAFT_PAGE_ID`) was a SHARED LITERAL
+  constant ("figurepage-draft") reused by every never-saved session, on the
+  reasoning that "this hook has at most one page open at a time." But
+  `savePage` upserts `store.pages` BY ID — so saving a fresh page A, closing,
+  opening a SECOND fresh page B (same literal id), and saving B would
+  silently overwrite A's saved entry instead of creating a second one.
+  Fixed with a per-mount counter (`nextDraftId()`), the same pattern
+  `figureLifecycle.ts`'s `nextFigureId()` already uses for exactly this
+  reason.
+- **Library section:** new `components/Library/PagesSection.tsx`, mirroring
+  `EditableFiguresSection.tsx`'s list/rename/duplicate/delete pattern
+  (confirm + Undo via the existing history snapshot — `pages` already rides
+  it, F3.1), lazy-loaded the same way. Listed most-recently-modified first
+  (`modifiedAt` descending) — F3.3's minimal take on "recent access": a
+  plain sort by the new timestamp field, no separate recency index.
+- **Deferred, named honestly:**
+  - F3.4 (unify panel editing — double-click a panel to edit its referenced
+    figure, explicit unlink/duplicate-for-page) and F3.5 (layout controls)
+    remain fully open, as does F3.6 (export from PageDocument specifically —
+    export today still goes through the SESSION model's `buildSpec`, not a
+    reopened `PageDocument` directly; the two happen to agree today because
+    reopening fully hydrates the session, but F3.6 is the item that commits
+    to that path explicitly).
+  - Renaming a page via the Library while that SAME page happens to be open
+    in the Figure Page workshop does not live-sync into the open session —
+    the session's `name` is local React state (this hook's model predates a
+    store-backed session, and F3.3 deliberately did not restructure it into
+    one; that is F3.4/full-source-model-unification territory). The next
+    Save from that stale session would overwrite the Library rename with
+    the session's own (older) name. Narrow and low-frequency (requires
+    renaming a page from the Library while it is ALSO the one open in the
+    workshop), not fixed in this slice.
+  - `components/workshops/figurepage/useFigurePage.ts` is now 736 lines
+    (`wc -l`), unpinned by any ratchet (`MODULE_PINS` covers specific listed
+    `.ts` files only, not every workshop hook) but above the 500-line
+    habit — the SAME already-acknowledged-but-unaddressed class as
+    `useFigureBuilder.ts` (615) and `useGraphBuilder.ts` (662; flagged in
+    this plan's 2026-08-01 review log as a booked follow-up, not yet acted
+    on). Not fixed here — a rushed split at the end of an already large,
+    fully-green slice risked more than it saved — but logged rather than
+    left silently discovered later, per this plan's own discipline.
+- **Tests:** `lib/pageDocument.test.ts` (+9: createdAt/modifiedAt stamping/
+  sanitization/epoch-fallback, `pageDocumentDirty`/`pageDocumentHasUnsavedEdits`
+  across never-saved/clean/drifted); `lib/figurepage.test.ts` (+5:
+  `resolvePanelSource`'s new "figure" kind across omitted-param/live/frozen/
+  missing/dataset-removed); `store/pageDocuments.test.ts` (new file, 14:
+  save insert/update-in-place/undo, Save As new-id/blank-name-rejection,
+  rename/duplicate/delete/undo, `openPageDocument` seed/not-found/clear, and
+  a `.dwk` serialize/parse round trip); `components/workshops/figurepage/
+  useFigurePage.test.ts` (+14: figureSources enumeration, Save blocked for
+  an unsaved window and for a figdoc with the exact expected messages, Save
+  succeeding + clearing dirty, re-dirtying after a further edit, Save As
+  rebind, reopen restoring grid/output/panel references, reopen of a page
+  whose figure was since deleted surfacing as missing-not-dropped and
+  surviving a re-save, and `requestClose`'s three branches: never-saved
+  discards plainly, a saved-and-drifted page gates + respects cancel/
+  confirm, an unmodified reopened page closes plainly);
+  `components/Library/PagesSection.test.tsx` (new file, 7: empty state,
+  recency ordering, open/reopen, rename, duplicate, delete + cancel).
+- **Gate:** `npm run lint` clean (0 errors, 9 pre-existing unrelated
+  warnings); full `npx vitest run` 393 files / 5684 tests passed; `npm run
+  build` clean, bundle 873.5 kB eager / 903.3 kB budget (29.8 kB headroom;
+  +2.3 kB over the F3.2 baseline — only the store-composed
+  `pageDocuments.ts`/`pageDocument.ts`/`figurepage.ts` additions are eager,
+  everything else (the workshop hook/view/PagesSection) is already
+  lazy-loaded); `npm run typecheck` (`tsc -b --noEmit`) clean.
+- F3.3 is now checked. F3.4 (unify panel editing) and F3.5 (layout controls)
+  remain fully open; F3.6 (export from PageDocument) is open and now has a
+  reopened session to actually export from, which it didn't before this slice.
+
+### 2026-08-06 — F3.2 missing-source and frozen-snapshot panel semantics (Claude Sonnet 5)
+
+- **What F3.1 already covered (verified by reading it, not re-done):** the
+  "reference by id, never flatten" contract itself. `PagePanel.figureId` is
+  ID-only; `resolvePagePanel` was already the fail-closed resolver for a
+  PERSISTED panel, returning `{status:"missing"}` for a dangling id (never
+  silently "empty", never dropped) — that data-level contract needed no
+  changes. What F3.1 explicitly left open was surfacing that behavior
+  anywhere a person could see it, plus the session-level (pre-F3.3) model
+  that the actual running Figure Page workshop uses today.
+- **The real remaining gap, found by reading the live workshop, not the
+  schema:** nothing yet loads a persisted `PageDocument` back into an editable
+  workshop session (`store.pages` has no Save/reopen UI — that is F3.3, and no
+  double-click/reassign panel editor — that is F3.4, both correctly out of
+  this slice's scope). So `resolvePagePanel`'s "missing" status has no live
+  caller in the app yet. The workshop that DOES run today (`useFigurePage.ts`)
+  uses an OLDER, separate session model — `PanelSource` (an open plot window
+  or a legacy `figureDocs` entry) assigned into `PageSlot`s — and THAT model
+  had the exact bug class F3.2 exists to prevent, live and reachable:
+  `SlotGrid` rendered `slot.source.name` unconditionally once assigned, with
+  no check that the window/figdoc it pointed at still existed. Closing the
+  window or deleting the figdoc left the tile looking like a perfectly normal
+  panel until the whole page's preview/export failed.
+- **Two real bugs found and fixed while building the fix, not just the
+  intended surfacing:**
+  1. The preview `useEffect` unconditionally called `setError(null)`
+     immediately after `buildSpec()` had already called `setError(<specific
+     "slot N: source ... no longer exists" message>)` for a dead source — so
+     the message was set and then clobbered back to null in the same tick,
+     and the preview pane silently fell back to the plain "assign plots to
+     grid slots" empty-state text. Exactly the "render a hole without
+     explanation" failure mode this item rules out. Fixed by only clearing
+     `preview`, not `error`, in that branch (see the comment at the fix site,
+     `useFigurePage.ts`).
+  2. `exportNow()` reported the same "assign at least one panel to export a
+     figure page" status whether NOTHING was assigned or something WAS
+     assigned but had gone missing — actively misleading in the second case.
+     Fixed by checking `filledCount(slots) === 0` first and giving a distinct,
+     accurate message when `buildSpec()` fails for a different reason.
+- **Missing-source, surfaced (item 1):** new `resolvePanelSource` in
+  `lib/figurepage.ts` re-checks a slot's assigned `PanelSource` every render
+  using the EXACT SAME renderability rules `windowSources`/`docSources`
+  already use to decide what's pickable (a window must still be a
+  dataset-bound plot; a figdoc must still be `docRenderable`) — "can I assign
+  it" and "is it still valid" can't drift apart. `useFigurePage.ts` exposes
+  the per-slot result as `sourceStatuses`; `SlotGrid.tsx` renders a `missing`
+  status as a labeled, danger-colored warning tile ("⚠ missing: <stale
+  name>") instead of a normal-looking panel, keeps the existing × clear
+  affordance reachable, and the page-level failure (preview/export) now
+  surfaces the SAME specific message instead of a generic one (the two bugs
+  above).
+- **Frozen-snapshot, defined and surfaced (item 2):** decided the contract —
+  a panel's live/frozen cue is inherited ENTIRELY from whatever it currently
+  resolves to; the page layer defines no second freeze mechanism (per the
+  plan's explicit instruction). Implemented at BOTH layers this slice
+  touches: `resolvePanelSource`'s `lifecycle: "live" | "frozen"` for the live
+  session (`window.document.data.mode`, or a legacy figdoc's `.live` flag),
+  surfaced in `SlotGrid` as a small "❄" glyph + tooltip; and
+  `pagePanelLifecycle(resolution)` in `lib/pageDocument.ts` for the PERSISTED
+  layer, reading `FigureDocument.data.mode` straight off whatever
+  `resolvePagePanel` resolved — ready for F3.3/F3.4 to surface without
+  redefining the contract, though nothing calls it live yet (same "no UI path
+  exists yet" gap as the missing-source persisted case above).
+- **Referential integrity at the delete site (item 3):** new
+  `pagesReferencingFigure(pages, figureId)` in `lib/pageDocument.ts` finds
+  every persisted page and panel (by previewed label, e.g. "(a)") that
+  references a figure. Wired into `EditableFiguresSection.tsx`'s existing
+  delete confirm (mirroring its established pattern — this is the ONE place
+  in the codebase that already confirms before an unrecoverable-without-undo
+  removal): the confirm message now names the affected page(s)/panel(s) when
+  any exist. The delete itself still never cascades — `deleteEditableFigure`
+  is unchanged; a referencing panel's `figureId` simply dangles and resolves
+  to `{status:"missing"}` on its next read, exactly like any other stale
+  reference (fail closed, not dropped).
+  - **Deliberately NOT extended to the active in-session workshop draft:**
+    the plan text asks to warn on "the active page draft (or any stored page
+    in store.pages)". Traced why the ACTIVE draft needs no equivalent check
+    for `editableFigures` deletion specifically: a "window"-sourced slot in
+    the live session renders from the window's OWN live view, never through
+    the `editableFigures` id (`resolveSlotFigureId`, F3.1) — deleting the
+    saved copy does not touch the open window's rendering at all, only
+    silently changes what a FUTURE save-as-page-panel would reference (a
+    pre-existing, already-null-safe resolution, not a new break). There is
+    nothing live to warn about there. The workshop's session state
+    (`useFigurePage`'s slots) is also plain React-local state with no store
+    presence a `deleteEditableFigure` caller could inspect even if there were.
+  - **Deliberately out of scope, named honestly:** the legacy `figureDocs`
+    ("Publication figures") delete site (`SavedFiguresSection.tsx`) has no
+    equivalent warning, even though a "figdoc" session source IS the kind
+    that can actually go missing live in today's workshop (confirmed by the
+    new `resolvePanelSource` tests). `PageDocument.panels` deliberately never
+    modeled figdoc references at all (F3.1: "F1 never gave it a
+    FigureDocument counterpart") — extending referential-integrity warnings
+    to that older, separate collection is a different, pre-F1 gap the plan
+    doesn't ask this item to close, and doing it would have meant touching a
+    file this slice has no other reason to change.
+- **Tests:** `lib/figurepage.test.ts` (+11: `resolvePanelSource` for every
+  empty/ok-live/ok-frozen/missing combination across both source kinds,
+  including a live figdoc whose dataset alone was removed);
+  `lib/pageDocument.test.ts` (+9: `pagePanelLifecycle`,
+  `pagesReferencingFigure` across zero/one/multiple pages and non-matching
+  ids); `useFigurePage.test.ts` (+6: `sourceStatuses` wiring, missing-on-
+  window-close, missing-on-figdoc-delete, a fail-before/pass-after test for
+  the error-clobbering bug with the fix reverted as the falsifying check, and
+  both branches of the corrected `exportNow` status message);
+  `EditableFiguresSection.test.tsx` (new file, 5 tests: plain delete, a
+  referencing page named in the confirm message, delete-still-proceeds
+  without cascading, cancel leaves the figure, empty-state render).
+- **Gate:** `npm run lint` clean (0 errors, pre-existing unrelated warnings
+  only); full `npx vitest run` 391 files / 5639 tests passed (one flaky,
+  order-dependent failure in `useFigureBuilder.test.ts` on the first full run
+  — unrelated to this slice, passed standalone and on a clean rerun);
+  `npm run build` clean, bundle 871.2 kB eager / 903.3 kB budget (32.1 kB
+  headroom, essentially unchanged — all new logic is in already-lazy-loaded
+  workshop code plus small pure `lib/` additions).
+- F3.2 is now checked. F3.3 (Save/Save As/dirty/library UI for pages) and F3.4
+  (unify panel editing, double-click/unlink) remain fully open and are what
+  would give the PERSISTED-layer missing/frozen contracts (`resolvePagePanel`,
+  `pagePanelLifecycle`) their first live caller.
+
 ### 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft (Claude Sonnet 5)
+
+> **KNOWN FLAKE (booked 2026-08-07, two sightings):** the "Apply commits
+> legend drag …" test in `useFigureBuilder.test.ts` is order-dependent —
+> it fails intermittently in a FULL suite run (`expected undefined to
+> match { loc: 'custom' }`, i.e. the legend-drag pendingEdit is missing
+> at Apply) while passing standalone and on rerun. Seen 2026-08-06 in the
+> F3.3 session's local full run and 2026-08-07 in CI's
+> `frontend-node-current` lane on `504b6b6` (a backend-only commit; the
+> identical frontend tree passed the same lane an hour earlier).
+> Root-cause the inter-test state leak (store or module state shared with
+> an earlier test in the file) rather than retry-masking it.
 
 - Gap-analysis matrix for the three EXISTING `PreviewOverlay` gestures in
   CANONICAL mode, each traced through `useFigureBuilder.ts` to its write

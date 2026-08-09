@@ -6,6 +6,28 @@
 import { mapSeries } from "./api";
 import type { DataStruct, MapResponse } from "./types";
 
+// RSM_CUTS_PLAN item 16: regridNearest is documented O(nx·ny·N) brute force
+// (see its doc below) -- the small fallback grid is the ONLY thing bounding
+// that cost, so naively honouring a user's `mapRes` here would be a NEW
+// freeze, not a fix. 200×200 over m3learning_rsm.xrdml's 465,885 points is
+// ~1.9e10 operations in single-threaded JS -- a hard tab freeze strictly
+// worse than the 19s backend "natural" bug this item fixes. 120 keeps the
+// fallback usable (matches the coarsest backend resolution preset, see
+// Inspector/MapCard.tsx's RESOLUTIONS) while still respecting a LOWER
+// `mapRes` request (a user who explicitly picked 100 gets 100, not 120).
+const OFFLINE_FALLBACK_MAX_RES = 120;
+
+/** Present only when `fetchMap` degraded to the client-side regrid (backend
+ *  unreachable) -- names the resolution actually used so the caller can
+ *  announce the degradation instead of silently swapping in a coarser grid
+ *  (RSM_CUTS_PLAN item 16). Never set on an aborted request -- an abort is
+ *  intentional (a superseded fetch), not a failure worth surfacing. */
+export interface MapFallback {
+  reason: string;
+  nx: number;
+  ny: number;
+}
+
 export interface MapPayload {
   xAxis: number[];
   yAxis: number[];
@@ -19,6 +41,9 @@ export interface MapPayload {
   zUnit: string;
   zMin: number | null;
   zMax: number | null;
+  /** Set when this payload came from the offline client regrid, not the
+   *  backend -- see `MapFallback`. */
+  fallback?: MapFallback;
 }
 
 /** Resolve a channel index from an int index or a label string. */
@@ -179,27 +204,54 @@ export function rsmAxisKeys(
   return tt < 0 || a1 < 0 ? null : [tt, a1, z];
 }
 
-/** Fetch a heatmap grid from the backend; fall back to client regrid offline. */
+/** Fetch a heatmap grid from the backend; fall back to client regrid offline.
+ *  `signal` (RSM_CUTS_PLAN item 16) lets a caller abort a superseded request
+ *  -- an abort propagates as a rejection (mirrors `plotdata.ts::fetchPlot`)
+ *  rather than degrading to the offline grid, which would otherwise paint a
+ *  stale/wrong map over whatever the newer, still-in-flight request will
+ *  supply. Any OTHER failure (backend genuinely unreachable) degrades to
+ *  `buildMapColumns`, capped at `OFFLINE_FALLBACK_MAX_RES` regardless of the
+ *  requested `opts.nx`/`opts.ny` (see that constant), with `fallback` set on
+ *  the result so the caller can tell the difference -- this function is
+ *  pure-ish (no store import), so it reports the degradation in its return
+ *  value instead of dispatching a status message itself. */
 export async function fetchMap(
   ds: DataStruct,
   xKey: number | string,
   yKey: number | string,
   zKey: number | string,
   opts: { method?: string; nx?: number; ny?: number } = {},
+  signal?: AbortSignal,
 ): Promise<MapPayload> {
   try {
-    const r = await mapSeries({
-      dataset: ds,
-      x_key: xKey,
-      y_key: yKey,
-      z_key: zKey,
-      method: opts.method,
-      nx: opts.nx,
-      ny: opts.ny,
-    });
+    const r = await mapSeries(
+      {
+        dataset: ds,
+        x_key: xKey,
+        y_key: yKey,
+        z_key: zKey,
+        method: opts.method,
+        nx: opts.nx,
+        ny: opts.ny,
+      },
+      signal,
+    );
     return fromResponse(r);
-  } catch {
-    return buildMapColumns(ds, xKey, yKey, zKey, opts.nx, opts.ny);
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    // Honour a LOWER requested resolution as-is (buildMapColumns's own 60
+    // default applies when unset); only clamp DOWN past the freeze-risk cap.
+    const nx = opts.nx != null ? Math.min(opts.nx, OFFLINE_FALLBACK_MAX_RES) : undefined;
+    const ny = opts.ny != null ? Math.min(opts.ny, OFFLINE_FALLBACK_MAX_RES) : undefined;
+    const payload = buildMapColumns(ds, xKey, yKey, zKey, nx, ny);
+    return {
+      ...payload,
+      fallback: {
+        reason: "backend unavailable",
+        nx: payload.xAxis.length,
+        ny: payload.yAxis.length,
+      },
+    };
   }
 }
 

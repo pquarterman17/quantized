@@ -51,6 +51,7 @@ export * from "./api/exportMultivar"; // multivar /api/export/* figure wrappers 
 export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, not here.
 export * from "./api/crystallography"; // /api/crystallography/* wrappers. New ones go THERE, not here.
 export * from "./api/xray"; // /api/xray/* wrappers. New ones go THERE, not here.
+export * from "./api/figurePage"; // GOTO #4 figure-page wrappers. New fields go THERE, not here.
 
 export interface SqliteQueryRequest {
   path: string;
@@ -1236,53 +1237,6 @@ export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
  *  preview (the figure builder), as opposed to exportFigure which downloads. */
 export function renderFigureBlob(body: FigureSpec): Promise<Blob> {
   return postBlob("/api/export/figure", body);
-}
-
-/** One figure-page panel (GOTO #4): a single-figure payload + its grid cell.
- *  The nested figure's own fmt/style/dpi/filename are ignored (page-level). */
-export interface PagePanelSpec {
-  figure: FigureSpec;
-  row: number;
-  col: number;
-  row_span?: number;
-  col_span?: number;
-  /** Explicit label; omit = auto "(a)", "(b)", … in placement order; "" = none. */
-  label?: string;
-  /** Per-panel title override; omit = the nested figure payload's title. */
-  title?: string;
-  /** #54 residual: page-normalized [x, y, w, h], TOP-LEFT origin (the
-   *  frontend's NormalizedFrameRect convention). When EVERY panel on the
-   *  page sets this, the composer places panels at their true page
-   *  coordinates instead of row/col (see calc.figure_page). Omit (the
-   *  default) for the ordinary grid path; row/col are still required by
-   *  this schema but unused when every panel sets page_rect. */
-  page_rect?: [number, number, number, number];
-}
-
-/** Multi-panel figure page request (GOTO #4): N plots -> ONE exported page. */
-export interface FigurePageSpec {
-  rows: number;
-  cols: number;
-  panels: PagePanelSpec[];
-  fmt?: string; // pdf (default) / svg vector; png / tiff raster — vector-first
-  style?: string;
-  dpi?: number;
-  width_in?: number;
-  height_in?: number;
-  label_format?: string; // (a) | a) | a. | (A) | A) | A. | none
-  label_pos?: string; // nw | ne | outside
-  filename?: string;
-}
-
-/** Compose N plots onto one publication page server-side and download it. */
-export function exportFigurePage(body: FigurePageSpec): Promise<void> {
-  return postDownload("/api/export/figure-page", body, `figure_page.${body.fmt ?? "pdf"}`);
-}
-
-/** Render the page and return the raw image bytes — the composer UI's
- *  low-DPI PNG preview (same pattern as renderFigureBlob above). */
-export function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
-  return postBlob("/api/export/figure-page", body);
 }
 
 /** Posted joint-parameter samples for a corner (pairs) plot — e.g.

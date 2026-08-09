@@ -97,6 +97,37 @@ describe("fetchMap", () => {
     expect(p.zMin).toBe(1);
     expect(p.zMax).toBe(4);
   });
+
+  // RSM_CUTS_PLAN item 16.
+  it("marks a degraded payload with the resolution actually used", async () => {
+    const p = await fetchMap(_ds(), 0, 1, 2, { nx: 2, ny: 2 });
+    expect(p.fallback).toEqual({ reason: "backend unavailable", nx: 2, ny: 2 });
+  });
+
+  it("caps the fallback grid at 120 even when a much larger mapRes was requested", async () => {
+    // Naively honouring a large mapRes here would be a NEW freeze (the
+    // fallback is O(nx*ny*N) brute force) -- see OFFLINE_FALLBACK_MAX_RES.
+    const p = await fetchMap(_ds(), 0, 1, 2, { nx: 400, ny: 400 });
+    expect(p.fallback).toEqual({ reason: "backend unavailable", nx: 120, ny: 120 });
+    expect(p.zGrid.length).toBe(120);
+    expect(p.zGrid[0].length).toBe(120);
+  });
+
+  it("honours a requested resolution below the cap exactly", async () => {
+    const p = await fetchMap(_ds(), 0, 1, 2, { nx: 40, ny: 40 });
+    expect(p.fallback).toEqual({ reason: "backend unavailable", nx: 40, ny: 40 });
+  });
+
+  it("does NOT degrade to the offline grid on an aborted request", async () => {
+    // An abort is intentional (a superseded fetch, e.g. the 2θ/ω <-> Q
+    // toggle) -- it must propagate as a rejection, never a silent, possibly
+    // stale offline grid with no `fallback` marker (see fetchMap's doc).
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      fetchMap(_ds(), 0, 1, 2, { nx: 2, ny: 2 }, controller.signal),
+    ).rejects.toThrow();
+  });
 });
 
 // An RSM DataStruct from import_xrdml: [2Theta, Omega, Intensity, Qx, Qz].
