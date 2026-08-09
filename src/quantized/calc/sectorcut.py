@@ -99,7 +99,9 @@ def _polar_columns(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], str]:
     """Scattered (qrad, phi_deg, Intensity, intensity_unit) — see module docstring."""
     try:
-        qx, qz, intensity, _axis_unit, intensity_unit = scatter_columns(ds, "q")
+        qx, qz, intensity, _axis_unit, intensity_unit, _x_name, _y_name = scatter_columns(
+            ds, "q"
+        )
     except ValueError as exc:
         raise ValueError(_POLAR_REQUIRES_Q.format(exc)) from exc
     qrad = np.asarray(np.hypot(qx, qz), dtype=float)
