@@ -300,30 +300,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
-21. **Input hardening — non-finite bounds leak library errors** (booked
-    rev 6, 2026-08-09; found by the orchestrator's adversarial probe of the
-    merged calc surface, not by any test). Most degenerate inputs already
-    raise clean domain `ValueError`s — the probe confirmed good coverage of
-    inverted bounds, bad enums, empty selections and zero-area boxes. Four
-    gaps remain, all "garbage in → confusing error out":
-    - `box_cut(x_max=inf)` → `cannot convert float NaN to integer` (numpy
-      internal); `box_cut(angle=inf)` → `math domain error`.
-    - `box_cut(x_min=nan)` and `angle=nan` → `box selects no data`, which
-      sends the reader hunting for a data problem that does not exist.
-    - `sector_profile(q_min=nan)` passes NaN straight into the message text
-      instead of rejecting it.
-    - numpy `RuntimeWarning`s escape to stderr on non-finite input.
-    - [ ] Validate finiteness at each public entry point with a message
-      naming the offending parameter. One shared validator, not five copies.
-    - [ ] **Zero-width sector silently means FULL CIRCLE.** `phi_min ==
-      phi_max` makes the rebase `span = (0 mod 360) or 360` → 360°. MATLAB's
-      branch does the same, so it is not a port defect — but item 8 shipped
-      a centre ± half-width control as the PRIMARY sector input, so a user
-      typing half-width 0 now gets the entire map instead of nothing. Decide
-      deliberately (reject, or return empty, or keep + warn in the label)
-      and make the label state what was actually integrated either way.
-    - Depends on item 19 (owns the same calc modules). Serialize after it.
-
 6. **Map interaction — box draw/move/resize, live preview, inline
    commit** ⚠ STRONGER MODEL (MapStage extraction churn + the gesture
    state machine + preview/commit/cut-tool interleaving on one canvas).
@@ -502,6 +478,20 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#21 Input hardening**~~ (2026-08-09) — one shared
+  `_rsm_grid.require_finite(**params)` called from every public entry point, so
+  all seven leaks now name the offending PARAMETER instead of blaming numpy or
+  the data: `x_max=inf` no longer reports `cannot convert float NaN to integer`,
+  `angle=inf` no longer `math domain error`, and NaN bounds no longer claim
+  `box selects no data`. Zero-width sector keeps MATLAB's full-circle parity but
+  the label now reads `FULL CIRCLE (phi_min == phi_max == 45 deg)`, and the
+  route REJECTS `phi_halfwidth <= 0` outright — nobody types half-width 0
+  meaning "integrate everything", and that spelling only became reachable when
+  item 8 shipped centre ± half-width as the primary control. 13 new tests in
+  `tests/test_calc_cut_hardening.py`, including a guard that wrapping sectors
+  and rotated boxes still pass. Done by the orchestrator directly after the
+  delegated agents hit the account session limit.
 
 - ~~**#19 Pole-figure angular axes**~~ (2026-08-09) — `_rsm_grid.py` now
   resolves the angular pair through one shared helper: prefers
