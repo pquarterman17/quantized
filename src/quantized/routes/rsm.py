@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.linecut import cut_segment, line_cut, projection
 from quantized.calc.rsm import rsm_strain
 from quantized.calc.rsm_analyze import rsm_analyze, rsm_grids_from_datastruct
+from quantized.calc.sectorcut import chi_profile, sector_profile
 from quantized.datastruct import DataStruct
 from quantized.routes._payload import datastruct_payload, to_jsonable
 
@@ -131,6 +132,107 @@ def projection_route(req: ProjectionRequest) -> dict[str, Any]:
     try:
         ds = DataStruct.from_dict(req.dataset)
         out = projection(ds, axis=req.axis, space=req.space)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)
+
+
+class _SectorParams(BaseModel):
+    """Shared azimuthal-sector fields for /sector and /chi-profile.
+
+    Users think in one of two idioms ("give me phi in [min, max)" or "the
+    [002] direction +-5 deg"), so both are accepted -- EITHER
+    ``phi_min``/``phi_max`` OR ``phi_center``/``phi_halfwidth``, never
+    both, normalized here to the canonical min/max calc.sectorcut expects.
+    Neither given -> full circle (calc's own default). Range/mode
+    validation (q_max>q_min>=0, n_bins>=2, mode) stays in calc -- routes
+    only resolve which parameterization was used.
+    """
+
+    q_min: float
+    q_max: float
+    phi_min: float | None = None
+    phi_max: float | None = None
+    phi_center: float | None = None
+    phi_halfwidth: float | None = None
+    mode: str = "sum"
+
+    @model_validator(mode="after")
+    def _normalize_sector(self) -> _SectorParams:
+        minmax_given = self.phi_min is not None or self.phi_max is not None
+        center_given = self.phi_center is not None or self.phi_halfwidth is not None
+        if minmax_given and center_given:
+            raise ValueError(
+                "specify EITHER phi_min/phi_max OR phi_center/phi_halfwidth, not both"
+            )
+        if center_given:
+            if self.phi_center is None or self.phi_halfwidth is None:
+                raise ValueError("phi_center and phi_halfwidth must both be given")
+            self.phi_min = self.phi_center - self.phi_halfwidth
+            self.phi_max = self.phi_center + self.phi_halfwidth
+        elif not minmax_given:
+            self.phi_min = -180.0
+            self.phi_max = 180.0
+        elif self.phi_min is None or self.phi_max is None:
+            raise ValueError("phi_min and phi_max must both be given")
+        return self
+
+    def resolved_sector(self) -> tuple[float, float]:
+        """``(phi_min, phi_max)`` after ``_normalize_sector`` has run (never None)."""
+        assert self.phi_min is not None and self.phi_max is not None
+        return self.phi_min, self.phi_max
+
+
+class SectorRequest(_SectorParams):
+    """Radial |Q| profile within an azimuthal sector -> see ``sector_profile``."""
+
+    dataset: dict[str, Any]
+    n_bins: int = Field(default=100, ge=2)
+
+
+@router.post("/sector")
+def sector(req: SectorRequest) -> dict[str, Any]:
+    """Radial (|Q|) profile within an azimuthal sector -> a 2-column DataStruct."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        phi_min, phi_max = req.resolved_sector()
+        out = sector_profile(
+            ds,
+            q_min=req.q_min,
+            q_max=req.q_max,
+            n_bins=req.n_bins,
+            phi_min=phi_min,
+            phi_max=phi_max,
+            mode=req.mode,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)
+
+
+class ChiProfileRequest(_SectorParams):
+    """Azimuthal profile within a |Q| annulus -> see ``chi_profile``."""
+
+    dataset: dict[str, Any]
+    n_bins: int = Field(default=90, ge=2)
+    mode: str = "mean"
+
+
+@router.post("/chi-profile")
+def chi_profile_route(req: ChiProfileRequest) -> dict[str, Any]:
+    """Azimuthal ("chi") profile within a |Q| annulus -> a 2-column DataStruct."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        phi_min, phi_max = req.resolved_sector()
+        out = chi_profile(
+            ds,
+            q_min=req.q_min,
+            q_max=req.q_max,
+            n_bins=req.n_bins,
+            phi_min=phi_min,
+            phi_max=phi_max,
+            mode=req.mode,
+        )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(out)

@@ -17,84 +17,24 @@ they are exact detector-line extractions for all three mesh kinds (mesh /
 snapshot / coupled). Segment cuts interpolate the scattered cloud directly
 and need no grid. Every function returns a 1-D ``DataStruct`` ready for the
 library (plot, fit, export like any scan).
+
+The shared (N, M) grid reshape, the space -> (x, y, Intensity) scattered-
+column selection, and the result-assembly helper used here now live in
+``calc/_rsm_grid.py`` (RSM_CUTS_PLAN item 1), so ``calc/sectorcut.py``
+(arc/chi profiles) and ``calc/boxcut.py`` (box integration) build on the
+exact same primitives instead of drifting copies — see that module's
+docstring.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
-from numpy.typing import NDArray
 
+from quantized.calc._rsm_grid import SPACES, cut_result, full_grids, require_q, scatter_columns
 from quantized.calc.interp2d import interpolate2d
 from quantized.datastruct import DataStruct
 
 __all__ = ["cut_segment", "line_cut", "projection"]
-
-_SPACES = ("angular", "q")
-
-
-def _full_grids(ds: DataStruct) -> dict[str, Any]:
-    """Reshape the scattered 2-D DataStruct to full (N, M) per-point grids."""
-    if not ds.metadata.get("is2D"):
-        raise ValueError("dataset is not a 2-D map (metadata.is2D not set)")
-    shape = ds.metadata.get("map_shape")
-    if not shape or len(shape) != 2:
-        raise ValueError(
-            "dataset has no regular (frames x pixels) grid (map_shape missing) — "
-            "use cut_segment, which works on the scattered cloud"
-        )
-    n, m = int(shape[0]), int(shape[1])
-    axis1_name = str(ds.metadata.get("axis1_name", "Omega"))
-    out: dict[str, Any] = {
-        "tt": ds.column("2Theta").reshape(n, m),
-        "sec": ds.column(axis1_name).reshape(n, m),
-        "i": ds.column("Intensity").reshape(n, m),
-        "qx": None,
-        "qz": None,
-        "sec_name": axis1_name,
-        "unit": ds.units[list(ds.labels).index("Intensity")],
-    }
-    if "Qx" in ds.labels and "Qz" in ds.labels:
-        out["qx"] = ds.column("Qx").reshape(n, m)
-        out["qz"] = ds.column("Qz").reshape(n, m)
-    return out
-
-
-def _require_q(g: dict[str, Any]) -> None:
-    if g["qx"] is None:
-        raise ValueError("dataset has no Qx/Qz columns — Q-space cut unavailable")
-
-
-def _cut_result(
-    x: NDArray[np.float64],
-    y: NDArray[np.float64],
-    *,
-    label: str,
-    x_name: str,
-    x_unit: str,
-    unit: str,
-    ds: DataStruct,
-    extra: dict[str, Any] | None = None,
-) -> DataStruct:
-    """Assemble the 1-D cut DataStruct (ascending x for the plot stage)."""
-    order = np.argsort(x, kind="stable")
-    metadata: dict[str, Any] = {
-        "source": ds.metadata.get("source", ""),
-        "parser_name": "line_cut",
-        "x_column_name": x_name,
-        "x_column_unit": x_unit,
-        "cut_label": label,
-        "is2D": False,
-        **(extra or {}),
-    }
-    return DataStruct.create(
-        np.asarray(x, dtype=float)[order],
-        np.asarray(y, dtype=float)[order],
-        labels=["Intensity"],
-        units=[unit],
-        metadata=metadata,
-    )
 
 
 def line_cut(
@@ -118,13 +58,13 @@ def line_cut(
     """
     if direction not in ("h", "v"):
         raise ValueError(f'direction must be "h" or "v", got "{direction}"')
-    if space not in _SPACES:
-        raise ValueError(f"space must be one of {_SPACES}, got {space!r}")
+    if space not in SPACES:
+        raise ValueError(f"space must be one of {SPACES}, got {space!r}")
     if width < 0:
         raise ValueError("width must be >= 0")
-    g = _full_grids(ds)
+    g = full_grids(ds)
     if space == "q":
-        _require_q(g)
+        require_q(g)
 
     if direction == "h":
         sel = np.mean(g["sec"] if space == "angular" else g["qz"], axis=1)
@@ -155,7 +95,7 @@ def line_cut(
     label = f"{tag} {fixed_name}≈{centre:.6g} {unit_ax}"
     if width > 0:
         label += f" ±{width / 2:.4g}"
-    return _cut_result(
+    return cut_result(
         x, y, label=label, x_name=x_name, x_unit=unit_ax, unit=g["unit"], ds=ds,
         extra={"cut_direction": direction, "cut_value": centre,
                "cut_width": width, "cut_space": space, "n_lines": int(pick.sum())},
@@ -179,24 +119,15 @@ def cut_segment(
     parallel lines spread over ±width/2 perpendicular to the cut (NaN outside
     the data hull is ignored). x = distance from ``p0``.
     """
-    if space not in _SPACES:
-        raise ValueError(f"space must be one of {_SPACES}, got {space!r}")
+    if space not in SPACES:
+        raise ValueError(f"space must be one of {SPACES}, got {space!r}")
     if not ds.metadata.get("is2D"):
         raise ValueError("dataset is not a 2-D map (metadata.is2D not set)")
     if n < 2:
         raise ValueError("n must be >= 2")
     if width < 0:
         raise ValueError("width must be >= 0")
-    axis1_name = str(ds.metadata.get("axis1_name", "Omega"))
-    if space == "q":
-        if "Qx" not in ds.labels:
-            raise ValueError("dataset has no Qx/Qz columns — Q-space cut unavailable")
-        xs, ys = ds.column("Qx"), ds.column("Qz")
-        unit_ax = "Ang^-1"
-    else:
-        xs, ys = ds.column("2Theta"), ds.column(axis1_name)
-        unit_ax = "deg"
-    iv = ds.column("Intensity")
+    xs, ys, iv, unit_ax, unit = scatter_columns(ds, space)
 
     d = np.asarray([p1[0] - p0[0], p1[1] - p0[1]], dtype=float)
     length = float(np.hypot(*d))
@@ -217,14 +148,13 @@ def cut_segment(
     with np.errstate(invalid="ignore"):
         y = np.nanmean(zq, axis=0)
 
-    unit = ds.units[list(ds.labels).index("Intensity")]
     label = (
         f"Cut ({p0[0]:.5g}, {p0[1]:.5g})→({p1[0]:.5g}, {p1[1]:.5g}) "
         f"[{'Q' if space == 'q' else 'angular'}]"
     )
     if width > 0:
         label += f" ±{width / 2:.4g}"
-    return _cut_result(
+    return cut_result(
         t, y, label=label, x_name="Distance", x_unit=unit_ax, unit=unit, ds=ds,
         extra={"cut_p0": list(p0), "cut_p1": list(p1), "cut_width": width,
                "cut_space": space, "cut_samples": int(n)},
@@ -246,11 +176,11 @@ def projection(
     """
     if axis not in ("pixels", "frames"):
         raise ValueError(f'axis must be "pixels" or "frames", got "{axis}"')
-    if space not in _SPACES:
-        raise ValueError(f"space must be one of {_SPACES}, got {space!r}")
-    g = _full_grids(ds)
+    if space not in SPACES:
+        raise ValueError(f"space must be one of {SPACES}, got {space!r}")
+    g = full_grids(ds)
     if space == "q":
-        _require_q(g)
+        require_q(g)
 
     if axis == "pixels":
         x = np.mean(g["tt"] if space == "angular" else g["qx"], axis=0)
@@ -263,7 +193,7 @@ def projection(
 
     unit_ax = "deg" if space == "angular" else "Ang^-1"
     label = f"Projection Σ{'frames' if axis == 'pixels' else 'pixels'} → I vs {x_name}"
-    return _cut_result(
+    return cut_result(
         x, y, label=label, x_name=x_name, x_unit=unit_ax, unit=g["unit"], ds=ds,
         extra={"cut_axis": axis, "cut_space": space},
     )
