@@ -300,6 +300,30 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
+21. **Input hardening — non-finite bounds leak library errors** (booked
+    rev 6, 2026-08-09; found by the orchestrator's adversarial probe of the
+    merged calc surface, not by any test). Most degenerate inputs already
+    raise clean domain `ValueError`s — the probe confirmed good coverage of
+    inverted bounds, bad enums, empty selections and zero-area boxes. Four
+    gaps remain, all "garbage in → confusing error out":
+    - `box_cut(x_max=inf)` → `cannot convert float NaN to integer` (numpy
+      internal); `box_cut(angle=inf)` → `math domain error`.
+    - `box_cut(x_min=nan)` and `angle=nan` → `box selects no data`, which
+      sends the reader hunting for a data problem that does not exist.
+    - `sector_profile(q_min=nan)` passes NaN straight into the message text
+      instead of rejecting it.
+    - numpy `RuntimeWarning`s escape to stderr on non-finite input.
+    - [ ] Validate finiteness at each public entry point with a message
+      naming the offending parameter. One shared validator, not five copies.
+    - [ ] **Zero-width sector silently means FULL CIRCLE.** `phi_min ==
+      phi_max` makes the rebase `span = (0 mod 360) or 360` → 360°. MATLAB's
+      branch does the same, so it is not a port defect — but item 8 shipped
+      a centre ± half-width control as the PRIMARY sector input, so a user
+      typing half-width 0 now gets the entire map instead of nothing. Decide
+      deliberately (reject, or return empty, or keep + warn in the label)
+      and make the label state what was actually integrated either way.
+    - Depends on item 19 (owns the same calc modules). Serialize after it.
+
 19. **Pole-figure angular axes — `scatter_columns`/`full_grids` hardcode
     `2Theta`** (booked rev 5, 2026-08-09; flagged by item 8's agent,
     VERIFIED broken by the orchestrator). `calc/_rsm_grid.py:108` does
@@ -323,59 +347,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Acceptance: `uv run ruff check src tests && uv run mypy src &&
       uv run pytest -q`, plus the pole-figure round trip through
       `/api/rsm/box`.
-
-18. **Dataset-handle cache — stop re-POSTing the whole DataStruct**
-    (booked rev 4, 2026-08-09; owner chose "fix it now", which
-    **supersedes Tier 3 item 15**). Every map fetch and every cut sends
-    the entire dataset as JSON. Measured: `m3learning_rsm.xrdml`
-    **45.5 MB** (1.9 s server-side encode, 1.15 s decode, plus a
-    main-thread `JSON.stringify` in the browser on the way out);
-    `xrayutilities_rsm_pixcel` 8.1 MB; `epytaxy_rsm` 1.6 MB. Paid again
-    on every channel change and every 2θ/ω ⇄ Q toggle.
-    - [ ] Server-side dataset cache keyed by content hash; client POSTs a
-      handle after first upload, full payload only on a cache miss.
-      Precedents to follow, not reinvent: `routes/_uploadcache.py`,
-      `routes/_bookcache.py`.
-    - [ ] Must degrade safely: an unknown/evicted handle returns a
-      distinguishable status the client answers by re-sending the
-      dataset once — never a hard failure the user sees.
-    - [ ] Applies to `/api/plot/map` and every `/api/rsm/*` endpoint.
-      Do NOT extend it to the live drag preview — that stays client-side
-      per the rev-2 decision; this is for committed operations only.
-    - Depends on items 2 and 3 (both own `routes/rsm.py` right now).
-      Serialize after them.
-
-5. **Preview math + cross-boundary parity harness**
-   Files: NEW `frontend/src/lib/roiMath.ts` + `roiMath.test.ts` +
-   `roiMath.golden.test.ts`, NEW `tools/freeze_roi_preview_fixture.py`,
-   NEW committed `frontend/src/lib/roiMath.golden.json`, NEW
-   `tests/test_roi_preview_fixture.py`. Depends on items 3 (semantics
-   frozen in code) and 4 (types).
-   - [ ] `roiMath.ts` — pure, typed-array-friendly mirrors of the
-         COMMIT semantics, and the ONLY client implementation:
-         `boxProfileLocal(cols, rect, {collapse, reduce, nBins, angle?,
-         wrap?})`, `boxStatsLocal(cols, rect, {angle?, wrap?})`,
-         `sectorProfileLocal(cols, {qMin,qMax,phiMin,phiMax,nBins,mode})`,
-         `chiProfileLocal(...)`, plus the same mod-360 rebase helper
-         (mirroring `_rsm_grid.wrap_mask`). `cols` = the caller-picked
-         coordinate/intensity columns (mirrors `scatter_columns`).
-         Behavioural unit tests independent of the fixture (wrap, empty
-         bin → NaN, rotation).
-   - [ ] `tools/freeze_roi_preview_fixture.py`: builds a SMALL synthetic
-         map (~24×32) via `tests/fixtures/synthetic_rsm.py`, runs the
-         backend calc for a case matrix (box grid/cloud × sum/mean/max,
-         rotated ruler, wrapped band, sector, chi), writes
-         `roiMath.golden.json` containing the INPUT COLUMNS and the
-         outputs (inputs inside the fixture = both sides consume
-         identical arrays; backend is the truth).
-   - [ ] Parity assertions BOTH sides: pytest rebuilds the DataStruct
-         from the fixture's inputs and asserts calc reproduces the
-         frozen outputs (staleness guard — fails when semantics change
-         without re-freezing); vitest feeds the same arrays to roiMath
-         and asserts rtol 1e-9.
-   - Acceptance: `uv run pytest tests/test_roi_preview_fixture.py -q &&
-     cd frontend && npx vitest run src/lib/roiMath.test.ts
-     src/lib/roiMath.golden.test.ts`
 
 6. **Map interaction — box draw/move/resize, live preview, inline
    commit** ⚠ STRONGER MODEL (MapStage extraction churn + the gesture
@@ -555,6 +526,27 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#5 Preview math + parity harness**~~ (2026-08-09) — `lib/roiMath.ts`
+  (663) mirrors BOTH of `box_cut`'s paths (exact grid + cloud mask/bin with
+  rotation and wrap), plus sector/chi. `tools/freeze_roi_preview_fixture.py`
+  emits `roiMath.golden.json` (12 cases) asserted by BOTH pytest and vitest at
+  **rtol 1e-9** — no loosened tolerance was needed. Red-then-green proven: a
+  +1 bin-index shift reddened exactly the 4 cloud-path cases and left grid/stats
+  green. Measured interactive at 465,885 points: box profile ~2.1 ms, stats
+  ~2.7 ms (inside a 16 ms frame); sector/chi ~13.6/16.0 ms, documented honestly
+  as not drag-driven in this design.
+- ~~**#18 Dataset-handle cache**~~ (2026-08-09) — `routes/_datasetcache.py`
+  (232) following the `_bookcache.py` precedent; handle rides in an
+  `X-Dataset-Handle` response header so every existing response shape stays
+  byte-identical. Hashing is server-side over decoded ndarray buffers (13.5 ms
+  against the 1.15 s decode already paid); client-side hashing was measured and
+  rejected because the frontend holds `number[][]`, not typed arrays. Client
+  remembers handles in a `WeakMap` on the dataset object — zero hashing,
+  self-evicting. **Measured: 660,995 B → 114 B on a repeat call (99.983%).**
+  Bounded 16 entries / 256 MiB, LRU on either bound, lock-guarded, teardown on
+  the FastAPI lifespan shutdown (never `atexit`). Eviction returns a clean 409
+  the client transparently recovers from — proven on both sides.
 
 - ~~**#8 ROI cuts workshop**~~ (2026-08-09) — `workshops/roicuts/`
   (`RoiCutsPanel` 47 + `BoxCard` 110 + `SectorCard` 94 + `SavedRoisCard` 73 +
