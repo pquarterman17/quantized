@@ -45,7 +45,11 @@ export interface MapRequest {
   ny?: number;
 }
 
-/** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid. */
-export function mapSeries(req: MapRequest): Promise<MapResponse> {
-  return postJSON<MapResponse>("/api/plot/map", req);
+/** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid.
+ *  `signal` (RSM_CUTS_PLAN item 16) lets a caller abort mid-request -- the
+ *  2θ/ω ⇄ Q toggle re-fetches on every keys/method/res change, and without
+ *  this the superseded request just kept computing server-side after its
+ *  result was discarded. Same pattern as `plotSeries`'s `signal`. */
+export function mapSeries(req: MapRequest, signal?: AbortSignal): Promise<MapResponse> {
+  return postJSON<MapResponse>("/api/plot/map", req, signal);
 }

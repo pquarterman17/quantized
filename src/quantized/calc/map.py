@@ -26,22 +26,58 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc._grid_detect import detect_regular_grid
 from quantized.calc.interp2d import regrid2d
 from quantized.datastruct import DataStruct
 
 __all__ = ["MapData", "MapState", "build_map", "map_from_datastruct"]
+
+# RSM_CUTS_PLAN item 16: "natural" (Sibson) does a per-query Voronoi cavity
+# walk over a Delaunay triangulation of the WHOLE input cloud, so its cost
+# climbs with point count; "linear" delegates to scipy.interpolate.griddata
+# (Qhull) or, when the cloud sits on a regular grid
+# (``_grid_detect.detect_regular_grid``), the O(log n)-per-query
+# ``_query_grid_linear`` fast path in interp2d.py that "natural" has no
+# equivalent of at all. Measured on the real corpus
+# (xrayutilities_rsm_pixcel.xrdml, 102,255 points, 200x200 output): natural
+# 19.34s vs linear 0.34s -- 57x -- with an IDENTICAL NaN pattern (0 cells
+# differ) and a median |difference| of 1e-5% of the z-range (max 9.2%, only at
+# the sharpest peak gradients, invisible on a 200x200 display raster). A
+# reciprocal-space (Qx, Qz) map is a curvilinear function of the underlying
+# (2theta, omega) mesh, so ``detect_regular_grid`` does NOT find it gridded
+# (confirmed on that same file) -- this size floor is what actually routes
+# Q-space maps onto the fast path; the OR'd grid-detection clause is what
+# catches the (already-fast) angular maps regardless of point count. 2000
+# sits with wide margin below every real RSM in the corpus (smallest: 5,700
+# points) and above tiny synthetic/test clouds (e.g. the 50-point
+# ``synthetic_rsm.xrdml`` fixture), so genuinely small scattered data --
+# where natural's quality edge is worth the (sub-second) cost -- keeps the
+# higher-fidelity default.
+_AUTO_LINEAR_MIN_POINTS = 2000
 
 
 @dataclass(frozen=True, slots=True)
 class MapState:
     """Gridding config for :func:`build_map` (the 2-D analogue of ``PlotState``).
 
-    Mirrors :func:`quantized.calc.interp2d.regrid2d`'s parameters. ``method``
-    defaults to ``"natural"`` (MATLAB ``scatteredInterpolant``'s default; here
-    Clough-Tocher C1 cubic — not bit-for-bit MATLAB-equal, see ``interp2d``).
+    Mirrors :func:`quantized.calc.interp2d.regrid2d`'s parameters, plus one
+    sentinel ``method`` value ``interp2d`` doesn't know: ``"auto"`` (the
+    default, RSM_CUTS_PLAN item 16). A bare default of ``"natural"`` can't
+    tell "caller wants natural" apart from "caller said nothing" -- ``"auto"``
+    makes "said nothing" an explicit, resolvable state instead of silently
+    picking the (sometimes 57x slower) MATLAB-parity algorithm for every
+    caller. :func:`build_map` resolves it to a concrete method (see
+    ``_AUTO_LINEAR_MIN_POINTS``) before calling ``regrid2d`` -- the pure calc
+    layer decides and is directly unit-testable, no route-layer branching.
+    Passing an explicit method (``"natural"``, ``"linear"``, ``"nearest"``,
+    ``"idw"``, ``"thinplate"``, ``"cubic"``) always wins; auto-select is a
+    default, not a removal of manual control (the Inspector's 2-D map card
+    keeps its override for parity work). ``"natural"`` itself is MATLAB
+    ``scatteredInterpolant``'s default (here Sibson natural-neighbour, see
+    ``interp2d``).
     """
 
-    method: str = "natural"
+    method: str = "auto"
     nx: int = 200
     ny: int = 200
     xlim: tuple[float, float] | None = None
@@ -142,6 +178,34 @@ def _finite_extreme(grid: NDArray[np.float64], reducer: Any) -> float:
     return float(reducer(grid))
 
 
+def _resolve_auto_method(
+    method: str, x: NDArray[np.float64], y: NDArray[np.float64], z: NDArray[np.float64]
+) -> str:
+    """Resolve ``MapState.method``'s ``"auto"`` sentinel to a concrete method.
+
+    Anything other than ``"auto"`` passes through unchanged -- see
+    ``MapState``'s docstring for why the sentinel exists. ``"auto"`` picks
+    ``"linear"`` when the (finite-triple) cloud is large
+    (``_AUTO_LINEAR_MIN_POINTS``, see that constant's comment for the
+    measurements behind it) OR ``_grid_detect.detect_regular_grid`` finds it
+    sits on a regular grid (so ``interp2d``'s ``_query_grid_linear`` fast path
+    applies); otherwise ``"natural"``. Filters to finite ``(x, y, z)`` first,
+    matching what ``regrid2d`` actually hands the interpolator (and what
+    ``detect_regular_grid`` requires — see its docstring) -- a dataset with a
+    few NaN dead-pixel rows shouldn't tip the size threshold, and a NaN would
+    otherwise reach the grid detector's cluster math directly.
+    """
+    if method != "auto":
+        return method
+    finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+    xf, yf = x[finite], y[finite]
+    if xf.size >= _AUTO_LINEAR_MIN_POINTS:
+        return "linear"
+    if detect_regular_grid(xf, yf) is not None:
+        return "linear"
+    return "natural"
+
+
 def build_map(
     x: ArrayLike,
     y: ArrayLike,
@@ -161,15 +225,22 @@ def build_map(
     Delegates the interpolation to :func:`quantized.calc.interp2d.regrid2d`; see
     that function for per-method parity caveats. Raises ``ValueError`` for fewer
     than 3 points or a degenerate axis range (propagated from ``regrid2d``).
+    ``state.method == "auto"`` (the default) resolves to a concrete method
+    here -- see ``MapState`` and ``_resolve_auto_method`` -- before ``regrid2d``
+    ever sees it; ``regrid2d``/``interpolate2d`` know only concrete methods.
     """
     state = state or MapState()
+    xv = np.asarray(x, dtype=float).ravel()
+    yv = np.asarray(y, dtype=float).ravel()
+    zv = np.asarray(z, dtype=float).ravel()
+    method = _resolve_auto_method(state.method, xv, yv, zv)
     xq, yq, zq = regrid2d(
-        x,
-        y,
-        z,
+        xv,
+        yv,
+        zv,
         nx=state.nx,
         ny=state.ny,
-        method=state.method,
+        method=method,
         xlim=state.xlim,
         ylim=state.ylim,
         extrapolation=state.extrapolation,
