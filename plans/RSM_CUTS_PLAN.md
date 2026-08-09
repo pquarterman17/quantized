@@ -16,8 +16,10 @@ additionally yields a summary table and a single overlaid figure.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09 (rev 3 — adds item 16, the Q-space map render
-performance fix, which lands first; rev 2 — owner scoping answers + the Q-space
+**Updated:** 2026-08-09 (rev 4 — items 1/4/16 shipped and struck; adds
+item 17, the aspect-ratio defect that turned out to be the real cause of the
+owner's reported plotting problem, and item 18, the dataset-handle cache,
+which supersedes Tier 3 item 15; rev 3 — added item 16; rev 2 — owner scoping answers + the Q-space
 line-cut bug folded in BEFORE execution started; item numbering was
 rebuilt in this revision, nothing had shipped)
 
@@ -298,126 +300,54 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
-16. **Q-space map render performance — LAND FIRST** (numbered 16 because it
-    was booked in rev 3, after items 1–15; it is nevertheless the FIRST
-    item to merge — item 6's live-preview box is unbuildable over a map
-    that takes 19 s to repaint). Owner-reported: "the Qx and Qz selection
-    did not work great, seemed like plotting that way was a struggle."
-    Files: EDIT `src/quantized/calc/map.py`, EDIT
-    `src/quantized/routes/plot.py`, EDIT `frontend/src/lib/mapdata.ts`,
-    EDIT `frontend/src/components/Stage/MapStage.tsx` (abort wiring only —
-    coordinate with item 6, which owns this file), tests both sides.
-    - Measured cause (`xrayutilities_rsm_pixcel.xrdml`, 102,255 pts,
-      200×200 grid): `MapState.method` defaults to `"natural"` (hand-rolled
-      Sibson, chosen for MATLAB `scatteredInterpolant` parity). Q-space
-      render `natural` **19.34 s** vs `linear` **0.34 s** — 57×, with an
-      IDENTICAL NaN pattern (0 cells differ) and a median difference of
-      1e-5 % of the z-range (max 9.2 %, only at the sharpest peak
-      gradients, invisible in a 200×200 display raster). Angular is
-      3.1–3.9 s on the same files, which is why Q specifically feels
-      broken. `m3learning_rsm.xrdml` (465,885 pts) is 4.5× larger again.
-    - [ ] **Auto-select the gridding method** (owner decision, 2026-08-09):
-      use `linear` when the cloud is large OR `_grid_detect` finds a
-      regular grid (both true for every RSM in the corpus — `linear` then
-      takes the `_query_grid_linear` fast path that `natural` cannot);
-      keep `natural` for small clouds where the difference could matter.
-      The Inspector's 2-D map card keeps the manual override for
-      parity work. Put the threshold + rationale in ONE named constant
-      with the measurements above in its comment.
-    - [ ] **Golden parity is NOT affected** — verified: the frozen case is
-      `interpolate2d(method="natural")` (`tests/golden/calc_interp2d_natural.json`,
-      manifest line 224), which pins the ALGORITHM, not the viewer default.
-      Add a test asserting the auto-selector's choice, not the numbers.
-    - [ ] **Honour `mapRes` in the client fallback — BUT CAP IT (~120).**
-      `lib/mapdata.ts` hardcodes 60×60 and ignores the setting; naively
-      honouring it is a NEW freeze, not a fix: the fallback is documented
-      `O(nx·ny·N)` brute force (mapdata.ts:51) and its small grid is the
-      only thing bounding it — 200×200 over 465,885 points is ~1.9e10 ops
-      in single-threaded JS. Cap, and report the resolution actually used.
-    - [ ] **Stop degrading silently.** `fetchMap`'s bare `catch` turns ANY
-      backend failure into a coarse local grid with no signal. Post a
-      status ("backend unavailable — offline grid, 120×120"); keep the
-      fallback (it is the documented offline model, `lib/plotdata.ts`
-      precedent), just make it announce itself.
-    - [ ] **Cancel superseded requests, don't add a deadline.** A short
-      hard timeout would abort a slow-but-working backend; with
-      auto-select, deadlines stop being the problem. The real defect is
-      that MapStage's effect `cancelled` flag only discards the RESULT
-      while the request runs on and the server computes a map nobody
-      wants. Thread an `AbortController` through `fetchMap` →
-      `postJSON(path, body, signal)` (the signal parameter already exists,
-      `lib/api/http.ts:17`) and abort in the effect cleanup, so the
-      2θ/ω ⇄ Q toggle stops racing itself.
-    - [ ] NOT a bug, do not "fix": 33–44 % of the Q grid is NaN because a
-      rectangular ω/2θ mesh maps to a curved fan in reciprocal space.
-      That coverage is identical under every method. Leave the gaps
-      transparent; only the 19 s wait made them read as breakage.
-    - Acceptance: `uv run pytest tests/test_calc_map.py tests/test_calc_interp2d.py -q
-      && uv run ruff check src tests && uv run mypy src && cd frontend &&
-      npx vitest run && npm run build`; plus a timing assertion that a
-      100k-point Q-space map builds in < 2 s.
-    - Blocks item 6. Parallel-safe with items 1–5 EXCEPT the MapStage.tsx
-      abort wiring — hand that hunk to item 6 if 6 starts first.
+17. **Q-space equal-aspect lock — the actual cause of the reported
+    "plotting that way was a struggle"** (booked rev 4, 2026-08-09).
+    `mapRender.ts::plotRect` stretches data to fill the pane. Correct for
+    angular axes (2θ vs ω are different quantities); physically WRONG in
+    reciprocal space, where Qx and Qz share Å⁻¹ — peak shapes,
+    substrate/film separation, and any visual read of tilt or relaxation
+    are distorted. Measured against a 4:3 pane: `FAIRmat_rsm_mesh`
+    0.44:1 true → **squashed 3×**; `xrayutilities_rsm_pixcel` 2.10:1 →
+    stretched 1.6×; `test_area_panalytical` 0.89:1 → squashed 1.5×;
+    `epytaxy_rsm` 1.61:1 → stretched 1.2×. Varies per file, so nothing
+    looks consistently broken — it just never looks right.
+    - [ ] Lock 1:1 when both displayed axes share a UNIT (read
+      `DataStruct.units`, never a hardcoded `"Qx"` check — the general
+      rule is correct and future-proof); letterbox the slack; keep
+      stretch-to-fill otherwise. Owner decision: automatic, no toggle.
+    - [ ] `plotRect`, `hitTest` and `dataToPx` move together — they share
+      `plotRect` precisely so they cannot drift. Extend the existing
+      round-trip test to the letterboxed case; a wrong readout or
+      mis-landed cut gesture would be worse than the bug.
+    - [ ] Audit every `plotRect` consumer: heatmap blit, axis frame and
+      ticks, colorbar, contour overlay, RSM peak markers.
+    - [ ] Regression guard: the angular path's rect must be byte-identical
+      to today's, proving non-Q maps cannot be affected.
+    - NOT a bug, do not touch: the 33–44 % NaN coverage in Q (a
+      rectangular ω/2θ mesh is a curved fan in reciprocal space).
+    - Acceptance: `cd frontend && npx vitest run && npm run build`,
+      `architecture.test.ts` green with zero edits.
 
-1. **Backend polar core — shared grid module + sector & chi profiles**
-   Files: NEW `src/quantized/calc/_rsm_grid.py`, NEW
-   `src/quantized/calc/sectorcut.py`, EDIT `src/quantized/calc/linecut.py`
-   (helper extraction ONLY — behaviour untouched), EDIT
-   `src/quantized/routes/rsm.py`, NEW `tests/test_calc_sectorcut.py`,
-   NEW `tests/fixtures/synthetic_rsm.py`, EDIT `tests/test_api_rsm.py`.
-   - [ ] `_rsm_grid.py`: move `_full_grids`→`full_grids`,
-         `_require_q`→`require_q`, `_cut_result`→`cut_result`,
-         `_SPACES`→`SPACES` verbatim; hoist `cut_segment`'s inline
-         column/unit selection into `scatter_columns(ds, space)`; add the
-         shared rebase helper `wrap_mask(angles_deg, lo, hi) ->
-         tuple[mask, span, rebased]` (the one formula from Resolved
-         decisions — sector masks, chi domains, AND item 3's periodic
-         axis all call it). linecut.py imports these; public API and
-         behaviour UNCHANGED — `tests/test_calc_linecut.py` passes
-         untouched.
-   - [ ] `sectorcut.py` (match linecut.py's docstring voice; cite
-         `extract2DArcIntegral.m` and the improvements):
-         `sector_profile(ds, *, q_min, q_max, n_bins=100,
-         phi_min=-180.0, phi_max=180.0, mode="sum") -> DataStruct` —
-         qrad=hypot(Qx,Qz), phi=atan2 degrees (0°=+Qx, CCW, MATLAB's
-         convention, documented), `wrap_mask` sector selection, radial
-         binning via two `np.histogram` calls (weights=I + unweighted
-         counts; right-inclusive last edge matches MATLAB's clamp),
-         mean = sum/count with NaN where count==0.
-         `chi_profile(ds, *, q_min, q_max, n_bins=90, phi_min=-180.0,
-         phi_max=180.0, mode="mean") -> DataStruct` — annulus mask, bin
-         the REBASED azimuth over [0, span), x = phi_min + centre
-         (monotonic across the ±180° seam; may exceed 180 for wrap
-         sectors — documented). Both: TRUE-POLAR branch (i) of the
-         polar-space rule — require Qx/Qz, with the branch-(iii) reason
-         in the error text; validate q_max>q_min≥0, n_bins≥2,
-         mode∈{sum,mean}; values `column_stack([profile, counts])`,
-         labels `["Intensity","N points"]`; docstrings carry the
-         CORRECTED uncertainty statement (σ=√(ΣI) for raw counts only;
-         cps caveat; N is for normalization + under-sampling, NOT √N);
-         self-describing `cut_label`; metadata `{cut_kind, q_range,
-         sector, mode, n_bins, cut_space:"q", source}`.
-   - [ ] Routes: `POST /api/rsm/sector` (dual φ parameterization via
-         `model_validator` — both pairs → 422, neither → full circle)
-         and `POST /api/rsm/chi-profile`; same try/except-422 idiom;
-         range/mode validation stays in calc.
-   - [ ] `tests/fixtures/synthetic_rsm.py`:
-         `make_synthetic_rsm(n=64, m=96, *, peaks=[(qx,qz,amp,sigma)],
-         curvilinear=True) -> DataStruct` — regular (2θ,ω) mesh with Q
-         columns built by the SAME wavelength convention `io/xrdml.py`
-         uses (fixtures-derive-from-production); multi-peak support and
-         the curvilinear flag exist for item 2's regression; ground
-         truth returned beside the data, never transcribed.
-   - [ ] Tests: planted-peak recovery (sector argmax within one bin of
-         hypot(qx0,qz0); chi argmax within one bin of atan2d(qz0,qx0));
-         wrap equivalence vs the MATLAB branches (φ=±175° points,
-         sectors 170→−170 vs −170→170); mean/sum + counts (empty bin →
-         NaN, count 0); error paths; route tests incl. dual
-         parameterization.
-   - Acceptance: `uv run ruff check src tests && uv run mypy src &&
-     uv run pytest tests/test_calc_linecut.py tests/test_calc_sectorcut.py
-     tests/test_api_rsm.py -q`
-   - Worktree: Lane A start; parallel with item 4. Blocks 2 and 3.
+18. **Dataset-handle cache — stop re-POSTing the whole DataStruct**
+    (booked rev 4, 2026-08-09; owner chose "fix it now", which
+    **supersedes Tier 3 item 15**). Every map fetch and every cut sends
+    the entire dataset as JSON. Measured: `m3learning_rsm.xrdml`
+    **45.5 MB** (1.9 s server-side encode, 1.15 s decode, plus a
+    main-thread `JSON.stringify` in the browser on the way out);
+    `xrayutilities_rsm_pixcel` 8.1 MB; `epytaxy_rsm` 1.6 MB. Paid again
+    on every channel change and every 2θ/ω ⇄ Q toggle.
+    - [ ] Server-side dataset cache keyed by content hash; client POSTs a
+      handle after first upload, full payload only on a cache miss.
+      Precedents to follow, not reinvent: `routes/_uploadcache.py`,
+      `routes/_bookcache.py`.
+    - [ ] Must degrade safely: an unknown/evicted handle returns a
+      distinguishable status the client answers by re-sending the
+      dataset once — never a hard failure the user sees.
+    - [ ] Applies to `/api/plot/map` and every `/api/rsm/*` endpoint.
+      Do NOT extend it to the live drag preview — that stays client-side
+      per the rev-2 decision; this is for committed operations only.
+    - Depends on items 2 and 3 (both own `routes/rsm.py` right now).
+      Serialize after them.
 
 2. **Fix `line_cut(space="q")` — honest fixed-Qx/Qz cuts** ⚠ STRONGER
    MODEL (rewrites shipped, golden-adjacent behaviour; the regression
@@ -510,57 +440,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
          empty-box 422; map_shape-less fallback.
    - Acceptance: `uv run ruff check src tests && uv run mypy src &&
      uv run pytest tests/test_calc_boxcut.py tests/test_api_rsm.py -q`
-
-4. **Frontend foundations — geometry, wrappers, store slice** ⚠ STRONGER
-   MODEL for the `useApp.ts` portion (pin surgery at zero slack).
-   Files: NEW `frontend/src/lib/roi.ts` + `roi.test.ts`, NEW
-   `frontend/src/lib/api/rsm.ts`, EDIT
-   `frontend/src/components/Stage/mapRender.ts` (+ test), NEW
-   `frontend/src/store/rois.ts`, EDIT `frontend/src/store/useApp.ts`.
-   Parallel with items 1–3 (wrappers compile against this plan's API
-   contract). The ONLY task allowed to touch useApp.ts.
-   - [ ] `lib/roi.ts` (pure, DOM-free; reuse shapeHit primitives):
-         types `RoiRect {space; x0; x1; y0; y1}` (normalized),
-         `RoiRuler {space; cx; cy; angle; length; width}`,
-         `RoiSector {qMin; qMax; phiMin; phiMax}`,
-         `RoiDef = {id; name} & ({kind:"rect"} | {kind:"ruler"} |
-         {kind:"sector"})`, `RoiHit` (inside | edge n/s/e/w | handle
-         0–7 | ruler-end 0/1 | ruler-width 0/1 | null). Functions:
-         `normalizeRect`, `rectToPx(rect, project)`,
-         `rulerCorners(ruler)` (the 4 rotated corners, shared by draw +
-         hit), `handlePositions` (8: corners + edge midpoints),
-         `classifyRoiHit(rectPx, p, tolHandle=7, tolEdge=6)` and
-         `classifyRulerHit(cornersPx, p, ...)` (handle > edge >
-         interior — shapeHit's precision order), `roiCursor(hit)`,
-         `applyRoiDrag(rect, hit, dx, dy, minW, minH)` (translate /
-         resize, renormalize on crossover), `applyRulerDrag`,
-         `nudgeRoi(rect, dir, step)`, request shapers `roiBoxBody` /
-         `rulerBoxBody` (ruler → bounds+angle about centre) /
-         `roiStatsBody`, `sectorFromCenter(center, halfWidth)` (no
-         wrapping — backend rebase is convention-free; test asserts
-         pass-through), `defaultSectorBins(mapShape)` =
-         clamp(round(max/2), 20, 200), `polefigAxes(labels, metadata)`
-         (branch-(ii) detection: axis named Phi/Psi/Chi AND span ≥350°;
-         returns which axis is azimuthal, or null),
-         `radialRulerForPeak(peak, kind: "radial"|"transverse")` (angle
-         from atan2(qz,qx) ± 90°, defaults per Resolved decisions).
-   - [ ] `lib/api/rsm.ts`: `rsmSector`, `rsmChiProfile`, `rsmBoxCut`,
-         `rsmBoxStats` (+ local `BoxStats` interface) — the
-         `lib/api/plot.ts` transport idiom. api.ts untouched.
-   - [ ] `mapRender.ts`: export `plotRect`; add `dataToPx(p, w, h, x, y):
-         [number, number] | null` beside `hitTest` (shared plotRect —
-         can't drift); vitest round-trips within half a cell.
-   - [ ] `store/rois.ts` slice: `rsmPeaks`/`setRsmPeaks` RELOCATED from
-         useApp.ts (decl ~523, action type ~858, initial ~1060, impl
-         ~2804 — all existing selectors and windows.ts's Partial
-         patches keep working); `mapRoi: RoiRect | null`,
-         `mapRuler: RoiRuler | null`, setters, `savedRois: RoiDef[]`,
-         `saveRoi(name)`, `applySavedRoi(id)`, `removeSavedRoi(id)`.
-         Header documents why mapRoi/mapRuler are NOT in
-         focusTransientReset. useApp.ts final size MUST be ≤ 2868 — if
-         over, the relocation was incomplete, not the pin wrong.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`
-     (architecture.test.ts green with ZERO edits).
 
 5. **Preview math + cross-boundary parity harness**
    Files: NEW `frontend/src/lib/roiMath.ts` + `roiMath.test.ts` +
@@ -779,7 +658,8 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     `lib/api/rsm.ts`** with re-exports (the api/stats.ts template) —
     lowers the 1828 pin; do when next touching those wrappers.
 
-15. **Commit-path dataset-handle cache** — only if committing cuts on
+15. ~~**Commit-path dataset-handle cache**~~ — SUPERSEDED by Tier 1 item 18
+    (owner promoted it, 2026-08-09). Original text: only if committing cuts on
     ≳400k-point maps proves painfully slow in practice: extend the
     `_uploadcache.py` pattern so commits send a handle instead of the
     full DataStruct. The preview stays client-side regardless (Resolved
@@ -789,4 +669,29 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Completed
 
-(nothing yet)
+- ~~**#16 Q-space map render performance**~~ (2026-08-09) — `MapState.method`
+  now defaults to `"auto"`, resolved in `build_map` via `_resolve_auto_method`
+  (linear when ≥2000 points or `detect_regular_grid` fires, else natural):
+  18.7 s → 0.34 s on the 102k-point pixcel file. Offline fallback capped at
+  120×120 and no longer silent (returns `fallback:{reason,nx,ny}`);
+  `AbortController` threaded through `fetchMap`→`mapSeries`→`postJSON` so
+  channel switches cancel instead of racing. Golden untouched (155 passed).
+  **Caveat recorded:** the store already set `mapMethod:"linear"` (88f052e4,
+  2026-06-29), so the GUI was never on the 19 s path — this fixed the backend
+  default for every other caller, NOT the owner-reported symptom. That symptom
+  traced to the aspect-ratio defect, booked as #17.
+- ~~**#1 Backend polar core**~~ (2026-08-09) — `calc/_rsm_grid.py` (191, shared
+  `full_grids`/`require_q`/`cut_result`/`scatter_columns`/`wrap_mask`) +
+  `calc/sectorcut.py` (281, `sector_profile` ports `extract2DArcIntegral.m`,
+  `chi_profile` is new). `linecut.py` 269→199 with `tests/test_calc_linecut.py`
+  untouched — proof the extraction was behaviour-neutral. Routes `/sector` and
+  `/chi-profile` with dual φ parameterization. Planted-peak round-trip recovers
+  |Q| and φ within one bin. Verified on real data post-merge: `epytaxy_rsm`
+  peaks at |Q| 4.827 Å⁻¹, φ 88°.
+- ~~**#4 Frontend foundations**~~ (2026-08-09) — `lib/roi.ts` (468, 58 tests:
+  rect + ruler geometry, hit classification, cursors, drag/nudge, request
+  shapers, `polefigAxes`, `radialRulerForPeak`), `lib/api/rsm.ts`,
+  `mapRender.ts` gains exported `plotRect` + `dataToPx` with a round-trip test,
+  `store/rois.ts` slice with `rsmPeaks` relocated out of `useApp.ts`
+  (2859→2860, pin 2868). `architecture.test.ts` untouched. A required
+  crossover test caught a real sign error in `applyRulerDrag` before commit.
