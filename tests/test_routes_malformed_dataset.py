@@ -32,6 +32,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from fixtures.synthetic_rsm import make_synthetic_rsm
 from quantized.app import app
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -85,6 +86,18 @@ def _rsm_good() -> dict[str, Any]:
 
 RSM_GOOD = _rsm_good()
 
+
+def _rsm_q_good() -> dict[str, Any]:
+    """A minimal valid Q-space RSM dataset (Qx/Qz present) for the sector/
+    chi-profile routes, which require reciprocal-space columns RSM_GOOD
+    doesn't carry -- built via the same synthetic-RSM generator the
+    sectorcut tests use, not a hand-rolled dict."""
+    ds, _peaks = make_synthetic_rsm(n=8, m=8)
+    return ds.to_dict()
+
+
+RSM_Q_GOOD = _rsm_q_good()
+
 # (route, body-builder, good-payload) triples. The builder plants the given
 # dataset dict wherever the route's schema carries it (top level, nested item
 # list, or a nested figure payload); the third element is the dataset the
@@ -135,6 +148,12 @@ CASES = [
         RSM_GOOD,
     ),
     ("/api/rsm/projection", lambda ds: {"dataset": ds}, RSM_GOOD),
+    ("/api/rsm/sector", lambda ds: {"dataset": ds, "q_min": 0.0, "q_max": 10.0}, RSM_Q_GOOD),
+    (
+        "/api/rsm/chi-profile",
+        lambda ds: {"dataset": ds, "q_min": 0.0, "q_max": 10.0},
+        RSM_Q_GOOD,
+    ),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.

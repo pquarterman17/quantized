@@ -124,3 +124,92 @@ def test_projection_roundtrip() -> None:
     assert resp.status_code == 200
     out = resp.json()
     assert len(out["time"]) == ds["metadata"]["map_shape"][0]
+
+
+# The fixture's Q cloud sits at |Q| ~= 4.08-4.20 Ang^-1, phi ~= 89-91 deg
+# (near-specular: Qz >> Qx). q_min/q_max/phi bounds below are chosen to
+# bracket that with margin, not transcribed from a separate computation.
+
+
+def test_sector_roundtrip_full_circle_default() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/sector",
+        json={"dataset": ds, "q_min": 4.0, "q_max": 4.3, "n_bins": 10},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["cut_kind"] == "sector"
+    assert out["metadata"]["sector"] == [-180.0, 180.0]  # neither pair given -> full circle
+
+
+def test_sector_dual_parameterization_equivalent() -> None:
+    ds = _rsm_dataset()
+    minmax = client.post(
+        "/api/rsm/sector",
+        json={
+            "dataset": ds, "q_min": 4.0, "q_max": 4.3, "n_bins": 8,
+            "phi_min": 85.0, "phi_max": 95.0,
+        },
+    )
+    center = client.post(
+        "/api/rsm/sector",
+        json={
+            "dataset": ds, "q_min": 4.0, "q_max": 4.3, "n_bins": 8,
+            "phi_center": 90.0, "phi_halfwidth": 5.0,
+        },
+    )
+    assert minmax.status_code == center.status_code == 200
+    assert minmax.json()["values"] == center.json()["values"]
+
+
+def test_sector_both_parameterizations_is_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/sector",
+        json={
+            "dataset": ds, "q_min": 4.0, "q_max": 4.3,
+            "phi_min": 85.0, "phi_max": 95.0,
+            "phi_center": 90.0, "phi_halfwidth": 5.0,
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_sector_empty_selection_is_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/sector",
+        json={
+            "dataset": ds, "q_min": 0.0, "q_max": 100.0,
+            "phi_center": 0.0, "phi_halfwidth": 1.0,  # far from the data's phi~90
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_chi_profile_roundtrip() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/chi-profile",
+        json={"dataset": ds, "q_min": 4.0, "q_max": 4.3, "n_bins": 12},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["labels"] == ["Intensity", "N points"]
+    assert out["metadata"]["cut_kind"] == "chi"
+    assert out["metadata"]["mode"] == "mean"  # chi-profile's own default (unlike sector's sum)
+
+
+def test_chi_profile_both_parameterizations_is_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/chi-profile",
+        json={
+            "dataset": ds, "q_min": 4.0, "q_max": 4.3,
+            "phi_min": 85.0, "phi_max": 95.0,
+            "phi_center": 90.0, "phi_halfwidth": 5.0,
+        },
+    )
+    assert resp.status_code == 422
