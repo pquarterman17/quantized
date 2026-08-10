@@ -370,6 +370,26 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 2 — Medium Impact
 
+22. **Intermittent frontend flake: `useFigureBuilder` F2.4b parity**
+    (booked rev 7, 2026-08-09; found by the orchestrator's post-merge gate,
+    NOT caused by this plan's work). `useFigureBuilder.test.ts > direct
+    manipulation parity (F2.4b) > Apply commits legend drag, annotation
+    drag, and title/xlabel/ylabel edits...` failed once in a full
+    `npx vitest run` (1 of 5898), then passed on an immediate re-run of the
+    identical tree, and passed 3/3 when run together with the roicuts
+    suites that merged alongside it. So: not deterministic, not an
+    ordering conflict with the new tests — an intermittent failure under
+    full-suite parallel worker load.
+    - Provenance: the test belongs to `feat(figure): F2.4b
+      direct-manipulation parity` (2026-08-05), predating this plan.
+    - [ ] Reproduce with `--no-file-parallelism` and with a repeat count to
+      establish the rate before changing anything; a flake diagnosed from
+      one observation usually gets "fixed" by hiding it.
+    - [ ] Suspect shared module/store state that survives between workers,
+      or a timing assumption in the Apply→document commit path.
+    - Not blocking this plan; recorded so it is not rediscovered as "the
+      RSM work broke the figure builder".
+
 20. **Frontend `.ts` size guard — the gap the owner's own rule predicted**
     (booked rev 5, 2026-08-09). `size-ratchet-every-language.md` says:
     *".tsx had a 400-line ceiling and the store .ts slices had pins, so
