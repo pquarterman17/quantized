@@ -298,38 +298,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ---
 
-## Tier 1 — High Impact
-
-23. **`rsm_strain` returns nonsense on symmetric reflections, silently**
-    (booked rev 8, 2026-08-09; flagged by the docs agent while verifying
-    formulas, CONFIRMED by the orchestrator on real data). On
-    `epytaxy_rsm.xrdml` the fitted peaks are substrate Qx=0.00080,
-    film Qx=0.00044 — a **symmetric (00L) reflection**, where in-plane
-    strain is physically unmeasurable. `rsm_strain` returns
-    `eps_parallel = 0.8087` — **80.9 % in-plane strain**, past any real
-    material's fracture limit — with no warning. It guards `Qx == 0`
-    exactly (-> NaN) but nothing near it, and symmetric scans are the most
-    common RSM measurement, so the guard misses the case that occurs.
-    `relaxation` correctly returns NaN on the same call, which makes the
-    pairing worse: one field admits it cannot answer while its neighbour
-    fabricates one, and the RSM panel renders both as equals.
-    - [ ] Guard on |Qx| being small RELATIVE to |Qz| (and/or relative to
-      the fitted peak FWHM in Qx — a splitting far below the peak width is
-      not a measurement). Pick the criterion on physical grounds and state
-      the reasoning in the docstring; do not invent a bare magic number.
-    - [ ] Return NaN for `eps_parallel` (matching `relaxation`'s existing
-      honesty) plus a machine-readable reason the UI can surface, so the
-      panel can say WHY rather than printing a blank.
-    - [ ] Surface it in `workshops/rsm/RsmPanel.tsx`: a symmetric-reflection
-      note beats an empty cell. An asymmetric reflection is required for
-      in-plane strain — say so where the user is standing.
-    - [ ] Regression test using the real file's fitted peaks: assert
-      `eps_parallel` is NaN with a reason, and that a genuinely asymmetric
-      pair still computes normally (guard against over-triggering).
-    - Found by validation, not by any test — the docs are already written
-      to describe the CORRECT behaviour, so this closes the gap between
-      them and the code.
-
 ## Tier 2 — Medium Impact
 
 22. **Intermittent frontend flake: `useFigureBuilder` F2.4b parity**
@@ -437,6 +405,33 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#23 `rsm_strain` returns nonsense on symmetric reflections, silently**~~
+  (2026-08-09) — `calc/rsm.py` now guards `eps_parallel` on
+  `|Qx|/|Qz| < tan(0.1°) ≈ 1.745e-3` for EITHER peak, not only exact
+  `Qx == 0`: ~10x above the fit-noise floor measured on
+  `epytaxy_rsm.xrdml` (~1e-4), ~5–7x below the repo's own golden
+  asymmetric-reflection fixture (~0.9–1.3%) — chosen on physical grounds
+  (a genuinely asymmetric reflection sits several tenths of a degree or
+  more off-normal), not reverse-engineered from either dataset, and
+  confirmed to leave `pytest -m golden -q` fully green (155 passed).
+  `epytaxy_rsm.xrdml`'s substrate/film pair now returns `eps_parallel =
+  NaN` (was the fabricated 80.9%) plus a new `warnings: list[str]` field
+  (matches the `magnetometry.py` convention) explaining why. Confirmed
+  the MATLAB sibling (`+fitting/rsmStrain.m`) has the identical
+  unguarded `Qx == 0`-only check — a latent bug there too, left
+  untouched per policy (fix `quantized_matlab` only deliberately, never
+  as a side effect). `RsmPanel.tsx`: `eps_parallel` shows "not
+  measurable" instead of a bare dash, with the reason on `title` —
+  reused item 7's disabled-with-reason-on-hover idiom (landed on `main`
+  mid-task) rather than adding a second way of explaining a blank/
+  disabled value. Regression test against the real fitted peaks
+  (`@pytest.mark.realdata`, `corpus_dir` fixture), a synthetic
+  near-degenerate case mirroring the real numbers, and a genuinely
+  asymmetric case proving the guard doesn't over-trigger. Theory doc and
+  tutorial's worked example updated to the corrected output. Full gate
+  green: ruff, mypy (255 files), 3692 backend tests + 155 golden, 5952
+  frontend tests, build clean.
 
 - ~~**#7 Cut ruler — radial/transverse cuts about a peak**~~ (2026-08-09) — the
   epitaxial pair, at **1 click** from a found peak (target was ≤2). New
