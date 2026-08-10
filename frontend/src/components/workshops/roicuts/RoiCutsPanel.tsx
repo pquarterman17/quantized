@@ -15,6 +15,7 @@ import { useRoiCuts } from "./useRoiCuts";
 import BoxCard from "./BoxCard";
 import SectorCard from "./SectorCard";
 import SavedRoisCard from "./SavedRoisCard";
+import BatchCard from "./BatchCard";
 
 export default function RoiCutsPanel() {
   const setOpen = useApp((s) => s.setRoiCutsOpen);
@@ -31,6 +32,7 @@ export default function RoiCutsPanel() {
         <>
           <BoxCard roi={roi} />
           <SectorCard roi={roi} />
+          <BatchCard roi={roi} />
         </>
       )}
       <SavedRoisCard roi={roi} />
