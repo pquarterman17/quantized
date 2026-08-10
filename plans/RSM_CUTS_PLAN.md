@@ -320,28 +320,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Not blocking this plan; recorded so it is not rediscovered as "the
       RSM work broke the figure builder".
 
-20. **Frontend `.ts` size guard — the gap the owner's own rule predicted**
-    (booked rev 5, 2026-08-09). `size-ratchet-every-language.md` says:
-    *".tsx had a 400-line ceiling and the store .ts slices had pins, so
-    every OTHER .ts had neither — which is exactly how `lib/api.ts` reached
-    2,282 lines and a workshop hook 583, both invisible to a green suite."*
-    That gap is still open and just swallowed another file: item 8's
-    `useRoiCuts.ts` landed at **476 lines** through a fully green suite.
-    Measured census of `frontend/src/architecture.test.ts`: **7** pinned
-    entries total, and **16** unguarded `.ts` files over 500 lines —
-    `lib/uplotOpts.ts` 1445, `lib/uplotOverlays.ts` 1174, `lib/types.ts`
-    1084, `lib/plotspec.ts` 892, `lib/originFigures.ts` 792,
-    `Stage/useMultiPanelStage.ts` 790, and this plan's own `lib/roi.ts` 637.
-    - [ ] Add a general `.ts` ceiling beside the existing `.tsx` one, with
-      the current offenders pinned at their exact size (pins only ratchet
-      DOWN, never added afterwards) — the mechanics the rule already
-      specifies, not a new invention.
-    - [ ] Grep for an existing guard first; the rule warns that two
-      ratchets with different ceilings is drift by construction.
-    - Deliberately NOT done inside this plan's feature work: it is a
-      repo-wide policy change that will surface 16 files at once and
-      deserves its own reviewed change. Cross-reference from MAIN_PLAN.
-
 10. **Integration, realdata smoke, physics docs, bookkeeping** — serial,
     after 1–9.
     - [ ] Realdata smoke (existing conftest corpus fixture — grep
@@ -405,6 +383,20 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#20 Frontend `.ts` size ratchet**~~ (2026-08-09) — closes the gap the
+  owner's own `size-ratchet-every-language` rule named and predicted. A general
+  500-line `.ts` ceiling (matching the backend's) now sits beside the 400-line
+  `.tsx` one in `architecture.test.ts`, with **17** current offenders pinned at
+  exact size — `uplotOpts.ts` 1446 down to `statRender.ts` 527 — plus the
+  graduation test that deletes a pin once a file drops under. No source file was
+  touched: the mechanic is to RECORD today's reality, not improve it. Guard
+  independently verified by the orchestrator, not just by the agent: appending
+  520 lines to `lib/inset.ts` produced
+  `./lib/inset.ts: 534 > 500 — extract a cohesive sibling (lib/api/http.ts,
+  lib/api/stats.ts are templates); do NOT raise the pin`, and it went green again
+  on revert. Implemented on Haiku (~78k tokens vs 250-380k for the Sonnet
+  items) — a census plus a pin list is the shape that tier handles well.
 
 - ~~**#23 `rsm_strain` symmetric-reflection guard**~~ (2026-08-09) — on
   `epytaxy_rsm.xrdml` `eps_parallel` went from a fabricated **0.8087 (80.9 %)**
