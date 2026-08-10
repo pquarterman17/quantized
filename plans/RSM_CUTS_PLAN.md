@@ -16,7 +16,13 @@ additionally yields a summary table and a single overlaid figure.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09 (rev 4 — items 1/4/16 shipped and struck; adds
+**Updated:** 2026-08-09 (rev 5 — item 10 closed: realdata smoke test
+(`tests/test_api_rsm_realdata.py`) + physics docs + bookkeeping
+(registered in MAIN_PLAN.md's plan tree + BACKLOG.md; PORT_CHECKLIST.md
+gains MATLAB bug #6, `+fitting/rsmStrain.m`'s near-degenerate-Qx guard
+gap). Build phase complete: every item except the owner-gated #11 and the
+Tier 3 #12–14 residuals is now struck. Prior revisions: rev 4 — items
+1/4/16 shipped and struck; adds
 item 17, the aspect-ratio defect that turned out to be the real cause of the
 owner's reported plotting problem, and item 18, the dataset-handle cache,
 which supersedes Tier 3 item 15; rev 3 — added item 16; rev 2 — owner scoping answers + the Q-space
@@ -320,35 +326,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Not blocking this plan; recorded so it is not rediscovered as "the
       RSM work broke the figure builder".
 
-10. **Integration, realdata smoke, physics docs, bookkeeping** — serial,
-    after 1–9.
-    - [ ] Realdata smoke (existing conftest corpus fixture — grep
-          `realdata`; never hardcode the path): parse
-          `panalytical/xrd/synthetic_rsm.xrdml` AND
-          `xrayutilities_polefig_point.xrdml` through `io/registry`;
-          run sector/chi/box/box-stats on the RSM and the wrapped-box
-          azimuthal profile on the pole figure; assert non-degenerate
-          outputs + provenance metadata. Verify the fixed
-          `/api/rsm/linecut` q-space cut on `epytaxy_rsm.xrdml` returns
-          a band, not a row (spread check vs `cut_width_used`).
-    - [ ] Deliverable check (deliverable-first rule) from ALL entry
-          points: inline bar commit, panel numeric-only, peak-anchored
-          ruler, batch floor (cuts + plot together) — each lands
-          library datasets that plot, fit, export, and carry enough
-          provenance to caption a figure and re-apply the ROI.
-    - [ ] Physics docs (docs-after-physics-feature, via
-          `physics-docs-expert`): docstrings shipped in items 1–3;
-          append sector/chi/box/ruler math, the polar-space rule, and
-          the counting-statistics caveat to `docs/theory/xrd.md`
-          (create if absent); tutorial only if none covers RSM cuts.
-    - [ ] Bookkeeping (plan-hygiene, one commit per closure): strike
-          items with dates; register this plan in MAIN_PLAN.md's plan
-          tree + BACKLOG.md; tick PORT_CHECKLIST rows (arc integral;
-          note the line-cut fix + the sibling MATLAB defect report
-          there per item 2).
-    - Acceptance: `uv run pytest -q && uv run ruff check src tests &&
-      uv run mypy src && cd frontend && npx vitest run && npm run build`.
-
 11. **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral`**
     — OWNER-GATED (needs a local MATLAB run). Freeze case in
     `tools/matlab/freeze_calc_values.m` (small Q grid; wrap + non-wrap
@@ -383,6 +360,42 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#10 Integration, realdata smoke, physics docs, bookkeeping**~~
+  (2026-08-09) — the plan's serial closing item, delivered in two halves.
+  **Physics docs** (already shipped, prior session): `docs/theory/xrd.md`
+  gained the sector/chi/box math, the polar-space rule, and the counting-
+  statistics caveat; `docs/tutorials/rsm-analysis-workflow.md` walks the
+  full workflow. **This pass ships the rest.** Realdata smoke: new
+  `tests/test_api_rsm_realdata.py` (`@pytest.mark.realdata`, skips cleanly
+  without `../test-data`, uses conftest's worktree-depth-safe
+  `_resolve_test_data_corpus`/`corpus_dir`) drives the real HTTP layer via
+  `TestClient` on `epytaxy_rsm.xrdml` (sector full-annulus + phi-center/
+  half-width + zero-half-width 422; chi-profile; box around the bright Q
+  peak plain + rotated; box-stats; the item-2 Q-space linecut band) and
+  `xrayutilities_polefig_point.xrdml` (box `wrap="x"` labelling Phi; sector
+  422 naming the missing Qx/Qz). Assertions check MEANING, not just status:
+  the sector profile's binned peak matches the raw brightest pixel's own
+  |Q| (~4.827 Ang^-1) within 2 bins, the chi profile's peak azimuth matches
+  its own phi (~90 deg) within 2 bins, box_stats' centroid lands within 3
+  grid spacings of its own peak, and the Q-space linecut band stays <10% of
+  the map's Qz range (item 2's own acceptance check, repeated here on the
+  real corpus) — every expected numeric value is derived from the parsed
+  corpus file at test time, never transcribed. 10 new tests, all green;
+  full gate clean (`ruff check src tests`, `mypy src`, `pytest -q` 3702
+  passed/184 skipped/9 xfailed). Deliverable check: not re-run fresh in
+  this pass (out of this session's backend-only scope) — already covered
+  by items 6/7/8/9's own Completed entries, each of which independently
+  verified its entry point (inline-bar commit, peak-anchored ruler, panel
+  numeric-only, batch floor) lands a plottable/fittable/exportable library
+  dataset carrying re-applicable ROI/sector provenance. Bookkeeping: this
+  plan registered in `MAIN_PLAN.md`'s plan tree and `BACKLOG.md` (rows for
+  open items #11, #12–14, #22); `PORT_CHECKLIST.md`'s RSM row gains
+  **MATLAB bug #6** — `+fitting/rsmStrain.m` has the identical unguarded
+  near-degenerate-Qx defect item 23 already fixed on the Python side
+  (fabricated `eps_parallel = 80.9%` on `epytaxy_rsm.xrdml`'s near-
+  symmetric pair) — reported only, per sibling-repo-first;
+  `Quantized_matlab` was not touched.
 
 - ~~**#20 Frontend `.ts` size ratchet**~~ (2026-08-09) — closes the gap the
   owner's own `size-ratchet-every-language` rule named and predicted. A general

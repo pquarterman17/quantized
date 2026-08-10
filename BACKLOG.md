@@ -6,7 +6,28 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-08-05 (eighteenth pass). Two stale cells fixed
+**Last reconciled:** 2026-08-09 (nineteenth pass). `plans/RSM_CUTS_PLAN.md`
+(sector/annulus, azimuthal-chi, and box-ROI cuts for 3-axis XRD reciprocal-
+space maps) is registered in the plan tree below for the first time — it
+was built and merged item-by-item across several sessions without ever
+being added to the dashboard. Items 1–9, 16–21, 23 are ALL shipped; item 10
+(realdata HTTP smoke test against the real corpus + physics docs + this
+bookkeeping pass) is the plan's last build-phase item and is CLOSED this
+pass, struck in the plan's own Completed section. Three rows added below:
+**#11** (owner-gated MATLAB golden-parity freeze for `sector_profile` vs
+`extract2DArcIntegral.m`, needs a local MATLAB run) joins Owner actions;
+**#12–14** (Tier 3: draggable sector wedge, named-ROI `.dwk` persistence,
+`lib/api.ts` wrapper migration — none scheduled, each has its own revisit
+condition) joins Deliberate deferrals; **#22** (an intermittent
+`useFigureBuilder` F2.4b vitest flake the plan's own post-merge gate
+surfaced — NOT caused by this plan's work, still unbooked anywhere) joins
+Actionable dev work. A second MATLAB defect was found while closing item
+10: `+fitting/rsmStrain.m` (see `PORT_CHECKLIST.md`'s RSM row, "MATLAB bug
+#6") has the same unguarded-near-degenerate-Qx defect the Python port's
+item 23 already fixed on its own side; reported only, per sibling-repo-
+first — `Quantized_matlab` was not touched.
+
+Prior (eighteenth pass, 2026-08-05). Two stale cells fixed
 against the plans and git: the PRIMARY row still listed the P3.4
 zoom-refetch residual as "actionable now" although it shipped 2026-08-01
 (`232cf4f`, booked `cb8e9d2` — the 17th-pass header already said so; the
@@ -360,6 +381,7 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining Stage property bridge, direct-manipulation parity, render-path unification), F3 COMPLETE (F3.1–F3.6 shipped 2026-08-05/06/07 — see the F3 exit-criterion note in the plan's 2026-08-07 log), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2, F4 |
+| Intermittent `useFigureBuilder` F2.4b vitest flake — found by the RSM_CUTS_PLAN orchestrator's post-merge gate (1 failure in 5,898 tests under full-suite parallel load, then green on an immediate re-run and 3/3 alongside the merging RSM suites); pre-existing (the test belongs to the 2026-08-05 F2.4b direct-manipulation-parity feature), not caused by RSM_CUTS_PLAN. Reproduce with `--no-file-parallelism` + a repeat count to establish the rate before touching anything; suspect shared module/store state surviving between workers or a timing assumption in the Apply→document commit path | RSM_CUTS_PLAN #22 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -455,6 +477,7 @@ re-sweep periodically.
 | **First dated timed-workflow runs** — follow `docs/timed_workflow_baselines.md` (8 journey checklists, results template at the bottom); the gesture/confusion/discoverability fields need the owner's hands. Fixtures + protocol SHIPPED 2026-07-26 | PRIMARY SOFTWARE P0.3 residue |
 | **Gate J: JMP usage census + JMP switch trial** — list the JMP platforms actually opened in the last ~6 months (ranks JMP Tier 2, decides census-gated clustering/SPC/MSA/DOE), then run one real JMP-shaped deliverable under the P0.1 protocol with JMP closed. Can share a session with P0.1/Q9 | JMP_GAP Gate J |
 | **Real-GPU F1 interaction acceptance** — the automated headless run is 112 ms p95, 12 ms over target under software rendering; close only after a visible hardware-accelerated run on the owner workstation confirms or refutes it | PRIMARY SOFTWARE P0.4 acceptance |
+| **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral.m`** — needs a local MATLAB run to add the freeze case (small Q grid; wrap + non-wrap sectors; Sum and Mean) to `tools/matlab/freeze_calc_values.m`. Chi/box/ruler have no MATLAB counterpart (their planted-Gaussian tests are the ground truth); do NOT golden-freeze the MATLAB Q line cut — it is the known-bad behaviour (PORT_CHECKLIST "MATLAB bug #5") | RSM_CUTS_PLAN #11 |
 | **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
@@ -572,6 +595,7 @@ impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
 - **Worksheet designation editing** (MAIN deferral, was WORKSHEET D2) — read-only in v1, deferred unless requested.
 - **Stat-stage residuals** (archived GAP_PLOTTYPES, accepted): horizontal bar orientation; in-canvas legend for the bar view; `payloadToTSV` exports ordinal positions, not category labels; `statRender.ts` (539) / `useStatStage.ts` (416) split candidates (non-`.tsx`, no guard fails).
 - **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates. (The reductions-frontend tail was refiled as actionable MAIN #11 by the 2026-07-11 audit.)
+- **RSM Tier 3 (RSM_CUTS_PLAN #12–14)**: **#12** draggable sector wedge (radial + angular handles on the arc/wedge) — revisit only once the numeric fields + live preview prove insufficient in practice. **#13** named-ROI `.dwk` persistence — blocked on paying `lib/workspace.ts`'s pin (754, zero slack); (de)serialization would live in `store/rois.ts`. **#14** migrate the five `rsm*` wrappers from the pinned `lib/api.ts` (1828) to `lib/api/rsm.ts` with re-exports (the `api/stats.ts` template) — opportunistic, do when next touching those wrappers.
 - **CI golden-test host** — de facto resolved as committed frozen values (option a); formalize or drop the open question (PORT_PLAN "still to decide").
 
 ## Plans dashboard
@@ -589,4 +613,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/JMP_GAP_PLAN.md` | Active | **Every census-independent register item is SHIPPED** — campaign 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend) + the 2026-07-31 residual wave (J8 UI, J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon table verified) + #14 module splits w/ `MODULE_PINS` ratchet (2026-07-29). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5) — all Gate-A-sequenced; Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
+| `plans/RSM_CUTS_PLAN.md` | Active | Items #1–9, #16–21, #23 SHIPPED 2026-08-09 (shared polar/box grid core, the Q-space line-cut band fix, sector/chi/box/box-stats endpoints + cut-ruler radial/transverse cuts, live client-side preview with a frozen parity fixture, the dataset-handle cache, pole-figure periodic-axis support, input hardening, batch-across-datasets, the Q-space map-render performance + aspect-lock fixes, and the `rsm_strain` near-degenerate-Qx guard); **#10 CLOSED 2026-08-09** (realdata HTTP smoke test `tests/test_api_rsm_realdata.py` + physics docs `docs/theory/xrd.md`/`docs/tutorials/rsm-analysis-workflow.md` + this bookkeeping pass) — the plan's build phase is complete. Open: #11 owner-gated MATLAB golden-parity freeze, #12–14 Tier 3 (all in Deliberate deferrals above). Tier 2 #22 (an unrelated pre-existing vitest flake this plan's merge gate surfaced) is tracked in Actionable dev work, not blocking |
 | `plans/archive/` | Complete | 14 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP), PLOT_WORKFLOW (Complete 2026-08-01 — all 4 owner design decisions shipped in ~24 h; #6 interface note folded into PRIMARY P1.3), and ROBUSTNESS (Complete 2026-08-01 — Tiers 1+2 and #7/#9 shipped, #10 decided NO, owner-parked #8 folded to MAIN Owner gates) |
