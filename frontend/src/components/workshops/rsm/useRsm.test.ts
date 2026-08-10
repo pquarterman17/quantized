@@ -111,6 +111,7 @@ describe("useRsm", () => {
       a_film_parallel: 15.7,
       a_film_perp: 1.65,
       relaxation: null,
+      warnings: [],
     });
     const { result } = renderHook(() => useRsm());
 

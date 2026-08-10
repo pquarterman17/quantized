@@ -308,7 +308,11 @@ export interface RsmAnalysisResponse {
   used_q_space: boolean;
 }
 
-/** Response of POST /api/rsm/strain (NaN fields serialize as null). */
+/** Response of POST /api/rsm/strain (NaN fields serialize as null).
+ *  `warnings` explains a null `eps_parallel`: near-symmetric reflections
+ *  (|Qx|/|Qz| below the degeneracy threshold — see calc/rsm.py) carry no
+ *  in-plane information, so eps_parallel is refused rather than fabricated
+ *  from noise. Empty when nothing was degenerate. */
 export interface RsmStrainResponse {
   eps_parallel: number | null;
   eps_perp: number | null;
@@ -317,6 +321,7 @@ export interface RsmStrainResponse {
   a_film_parallel: number;
   a_film_perp: number;
   relaxation: number | null;
+  warnings: string[];
 }
 
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.

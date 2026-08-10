@@ -339,20 +339,26 @@ $\varepsilon_\perp=Q_{z,\rm sub}/Q_{z,\rm film}-1$,
 $R=(Q_{x,\rm film}-Q_{x,\rm sub})/(Q_{x,\rm bulk}-Q_{x,\rm sub})$), not
 repeated here.
 
-**Pitfall found while verifying this doc, worth stating explicitly:**
-$\varepsilon_\parallel$ needs a reflection with a meaningfully nonzero
-$Q_x$ — an asymmetric reflection. Running `rsm_strain` on the near-symmetric
+**Degeneracy guard (RSM_CUTS_PLAN #23):** $\varepsilon_\parallel$ needs a
+reflection with a meaningfully nonzero $Q_x$ — an asymmetric reflection.
+Naively running $Q_{x,\rm sub}/Q_{x,\rm film}-1$ on the near-symmetric
 substrate/film pair above ($Q_x\approx4$–$8\times10^{-4}$ Å⁻¹ for both)
-returns $\varepsilon_\parallel\approx0.81$ (81%), which is not a physical
-strain — it is the ratio of two numbers each barely distinguishable from
-zero, dominated by fit noise in the vanishing in-plane component.
-`rsm_strain` guards the exactly-degenerate case ($Q_x=0$ exactly returns
-NaN, per its docstring), but a *near*-symmetric reflection is numerically
-the same failure without tripping that guard. $\varepsilon_\perp$ from the
-same pair is well-conditioned (4.03%, both $Q_z$ values $\mathcal O(1)$) —
-only the in-plane strain needs the asymmetric measurement. **When to use:**
-a full strain+relaxation determination needs at least one genuinely
-asymmetric reflection (e.g. an off-normal $\{hkl\}$ reachable in
+gives $\approx0.81$ (81%), which is not a physical strain — it is the ratio
+of two numbers each barely distinguishable from zero, dominated by fit
+noise in the vanishing in-plane component. `rsm_strain` guards against
+this: it treats $Q_x$ as degenerate (indistinguishable from zero) whenever
+$\lvert Q_x\rvert/\lvert Q_z\rvert$ falls below $\tan(0.1°)\approx1.7\times
+10^{-3}$ for *either* peak — about $10\times$ above the fit-noise floor
+observed on this file ($\lvert Q_x\rvert/\lvert Q_z\rvert\sim10^{-4}$) and
+about $5$–$7\times$ below a deliberately asymmetric reflection (typically
+offset from the surface normal by several tenths of a degree or more).
+Below that threshold `eps_parallel` is `NaN` and a plain-language reason is
+appended to the result's `warnings` list — the exact case above returns
+`eps_parallel = NaN`, not $0.81$. $\varepsilon_\perp$ from the same pair is
+unaffected and well-conditioned (4.03%, both $Q_z$ values $\mathcal
+O(1)$) — only the in-plane strain needs the asymmetric measurement.
+**When to use:** a full strain+relaxation determination needs at least one
+genuinely asymmetric reflection (e.g. an off-normal $\{hkl\}$ reachable in
 grazing-incidence/grazing-exit geometry); a symmetric-reflection RSM alone
 constrains only $\varepsilon_\perp$.
 

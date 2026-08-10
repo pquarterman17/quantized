@@ -245,18 +245,27 @@ print(strain)
 ```
 
 ```
-{'eps_parallel': 0.8086545917986643, 'eps_perp': 0.04028086088822014,
+{'eps_parallel': nan, 'eps_perp': 0.04028086088822014,
  'a_sub_parallel': 7854.14, 'a_sub_perp': 1.301681, 'a_film_parallel': 14205.42,
- 'a_film_perp': 1.354114, 'relaxation': nan}
+ 'a_film_perp': 1.354114, 'relaxation': nan,
+ 'warnings': ['eps_parallel: substrate/film reflection is symmetric or '
+              'near-symmetric (|Qx|/|Qz| below tan(0.1 deg) ~= 1.75e-03 for '
+              'at least one peak) -- in-plane strain is not measurable from '
+              'this reflection. Use a genuinely asymmetric reflection '
+              '(substantial Qx) for eps_parallel.']}
 ```
 
 **Read `eps_perp`, not `eps_parallel`, here.** $\varepsilon_\perp=4.03\%$
 is a well-conditioned number: both $Q_z$ values are $\mathcal O(1)$
-Å⁻¹. $\varepsilon_\parallel=81\%$ is **not** a physical strain — it is the
-ratio of two $Q_x$ values that are each barely above zero ($8\times10^{-4}$
-and $4\times10^{-4}$ Å⁻¹), so the ratio is dominated by fit noise in the
-vanishing in-plane component of this near-symmetric reflection. See the
-theory doc's "Strain and relaxation" section for why: $\varepsilon_\parallel$
+Å⁻¹. `eps_parallel` is `nan`: both $Q_x$ values are barely above zero
+($8\times10^{-4}$ and $4\times10^{-4}$ Å⁻¹, i.e. $\lvert Q_x\rvert/\lvert
+Q_z\rvert\sim10^{-4}$), well below `rsm_strain`'s degeneracy threshold
+($\tan(0.1°)\approx1.7\times10^{-3}$) — a ratio of two numbers that close
+to zero is dominated by fit noise in the vanishing in-plane component of
+this near-symmetric reflection, not a physical strain, so `rsm_strain`
+refuses it and explains why in `warnings` rather than returning a number
+(see the theory doc's "Strain and relaxation" section for the full
+reasoning and the threshold's justification). $\varepsilon_\parallel$
 needs a genuinely *asymmetric* reflection (substantial $Q_x$), which this
 particular scan is not. `relaxation` is `nan` because no `bulk` position
 was supplied — pass the film's expected fully-relaxed $(Q_x,Q_z)$ (its bulk
@@ -303,10 +312,12 @@ For **this** measurement:
   `box_cut(..., space="q")`, or the sector/chi tools, never a raw grid
   index, for anything you want to call "fixed-Q".
 - **$\varepsilon_\parallel$ from a near-symmetric reflection.** As in Step
-  7 — a near-zero $Q_x$ ratio is numerically unstable long before it's
-  exactly zero (where `rsm_strain` would at least return `NaN`). If both
-  peaks have $\lvert Q_x\rvert\ll\lvert Q_z\rvert$, don't report
-  $\varepsilon_\parallel$; get an asymmetric-reflection RSM instead.
+  7 — `rsm_strain` refuses this case itself now (`eps_parallel = NaN` plus
+  a reason in `warnings` whenever $\lvert Q_x\rvert/\lvert Q_z\rvert$ is
+  below its degeneracy threshold for either peak, not only when $Q_x$ is
+  exactly zero), so a fabricated value should never reach you. If you see
+  a `warnings` entry mentioning `eps_parallel`, don't report the number
+  (there isn't one) — get an asymmetric-reflection RSM instead.
 - **$\sqrt{\sum I}$ on a cps map.** `epytaxy_rsm.xrdml`'s `Intensity` is in
   cps (`ds.units[2] == "cps"`), the parser's default. A Poisson error bar
   on a `sector_profile`/`box_cut` sum needs the intensity in raw counts
