@@ -1100,16 +1100,21 @@ Before starting a slice:
 
 ### 2026-08-05 — F2.4b direct-manipulation parity on the canonical draft (Claude Sonnet 5)
 
-> **KNOWN FLAKE (booked 2026-08-07, two sightings):** the "Apply commits
-> legend drag …" test in `useFigureBuilder.test.ts` is order-dependent —
-> it fails intermittently in a FULL suite run (`expected undefined to
-> match { loc: 'custom' }`, i.e. the legend-drag pendingEdit is missing
-> at Apply) while passing standalone and on rerun. Seen 2026-08-06 in the
-> F3.3 session's local full run and 2026-08-07 in CI's
-> `frontend-node-current` lane on `504b6b6` (a backend-only commit; the
-> identical frontend tree passed the same lane an hour earlier).
-> Root-cause the inter-test state leak (store or module state shared with
-> an earlier test in the file) rather than retry-masking it.
+> **KNOWN FLAKE — RESOLVED 2026-08-09 (RSM_CUTS_PLAN #22).** Booked
+> 2026-08-07 after two sightings: the "Apply commits legend drag …" test
+> in `useFigureBuilder.test.ts` failed intermittently (`expected undefined
+> to match { loc: 'custom' }`, i.e. the legend-drag pendingEdit missing at
+> Apply) while passing standalone and on rerun. NOT an inter-test state
+> leak as suspected here — reproduced directly with
+> `--no-file-parallelism` (single file, no cross-worker contention: 1/30),
+> so it was a race purely within the test: `await waitFor(() =>
+> expect(renderFigureHitmap).toHaveBeenCalled())` only proves the debounced
+> preview fetch STARTED, not that its resolved `hitmap` reached
+> `result.current` — `dragElement` no-ops on a still-null hitmap. Fixed by
+> adding the second, stronger wait (`await waitFor(() =>
+> expect(result.current.hitmap).not.toBeNull())`) this file already used
+> elsewhere, to the three tests missing it. Verified 0/90 at the same repro
+> method post-fix. No production code changed.
 
 - Gap-analysis matrix for the three EXISTING `PreviewOverlay` gestures in
   CANONICAL mode, each traced through `useFigureBuilder.ts` to its write
