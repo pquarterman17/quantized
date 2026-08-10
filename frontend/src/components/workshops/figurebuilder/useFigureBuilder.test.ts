@@ -745,6 +745,13 @@ describe("useFigureBuilder", () => {
       it("dragElement writes straight into the local overrides object, no session involved", async () => {
         const { result } = renderHook(() => useFigureBuilder());
         await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        // dragElement no-ops until the hitmap it maps pixels against has
+        // landed on `result.current` -- "the mock was called" only proves the
+        // debounced fetch STARTED, not that its resolved hitmap has reached
+        // this render (see the F2.4b Apply test below for the flake this
+        // gap caused). This file's established fix is the second, stronger
+        // wait already used by the axis-breaks/annotations tests above.
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
         act(() => result.current.setOverrides({
           ...result.current.overrides,
           annotations: [{ x: 1, y: 2, text: "Hello" }],
@@ -805,6 +812,17 @@ describe("useFigureBuilder", () => {
         });
         const { result } = renderHook(() => useFigureBuilder());
         await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        // KNOWN FLAKE, root-caused: "toHaveBeenCalled" only proves the
+        // debounced fetch started, not that its resolved hitmap has reached
+        // this render -- dragElement no-ops on a still-null hitmap. Under
+        // normal load the state update lands before this line runs; under
+        // full-suite parallel worker contention it sometimes doesn't, and
+        // the legend drag below silently no-ops, leaving
+        // `appliedDoc.publication.overrides.legend` undefined (booked
+        // 2026-08-07, reproduced directly with --no-file-parallelism,
+        // 1/21 local runs). This second wait is the same fix the
+        // axis-breaks/annotations tests above already use.
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
         // One act() per gesture, mirroring separate real pointer/keyboard
         // events (and this file's own legacy-mode pattern above) rather than
         // batching five state-changing calls into one synchronous callback.
@@ -856,6 +874,11 @@ describe("useFigureBuilder", () => {
         const before = structuredClone(useApp.getState().plotWindows);
         const { result } = renderHook(() => useFigureBuilder());
         await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        // Same hitmap-readiness wait as the Apply test above -- this test's
+        // own assertions don't depend on the drag having registered (Cancel
+        // discards the draft either way), but keeping it consistent means a
+        // future assertion here won't inherit the same race silently.
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
         act(() => result.current.dragElement("legend", 300, 200));
         act(() => result.current.dragElement("ann:0", 350, 150));
         act(() => result.current.editElementText("title", "Should not persist"));
