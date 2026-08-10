@@ -16,12 +16,16 @@ additionally yields a summary table and a single overlaid figure.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09 (rev 5 — item 10 closed: realdata smoke test
+**Updated:** 2026-08-09 (rev 6 — item 22 closed: the `useFigureBuilder`
+F2.4b vitest flake this plan's merge gate surfaced was root-caused to a
+test-harness synchronization gap (unrelated to RSM), fixed, and verified;
+Tier 2 is now empty and its header removed. Prior revisions: rev 5 — item
+10 closed: realdata smoke test
 (`tests/test_api_rsm_realdata.py`) + physics docs + bookkeeping
 (registered in MAIN_PLAN.md's plan tree + BACKLOG.md; PORT_CHECKLIST.md
 gains MATLAB bug #6, `+fitting/rsmStrain.m`'s near-degenerate-Qx guard
 gap). Build phase complete: every item except the owner-gated #11 and the
-Tier 3 #12–14 residuals is now struck. Prior revisions: rev 4 — items
+Tier 3 #12–14 residuals is now struck. rev 4 — items
 1/4/16 shipped and struck; adds
 item 17, the aspect-ratio defect that turned out to be the real cause of the
 owner's reported plotting problem, and item 18, the dataset-handle cache,
@@ -304,28 +308,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ---
 
-## Tier 2 — Medium Impact
-
-22. **Intermittent frontend flake: `useFigureBuilder` F2.4b parity**
-    (booked rev 7, 2026-08-09; found by the orchestrator's post-merge gate,
-    NOT caused by this plan's work). `useFigureBuilder.test.ts > direct
-    manipulation parity (F2.4b) > Apply commits legend drag, annotation
-    drag, and title/xlabel/ylabel edits...` failed once in a full
-    `npx vitest run` (1 of 5898), then passed on an immediate re-run of the
-    identical tree, and passed 3/3 when run together with the roicuts
-    suites that merged alongside it. So: not deterministic, not an
-    ordering conflict with the new tests — an intermittent failure under
-    full-suite parallel worker load.
-    - Provenance: the test belongs to `feat(figure): F2.4b
-      direct-manipulation parity` (2026-08-05), predating this plan.
-    - [ ] Reproduce with `--no-file-parallelism` and with a repeat count to
-      establish the rate before changing anything; a flake diagnosed from
-      one observation usually gets "fixed" by hiding it.
-    - [ ] Suspect shared module/store state that survives between workers,
-      or a timing assumption in the Apply→document commit path.
-    - Not blocking this plan; recorded so it is not rediscovered as "the
-      RSM work broke the figure builder".
-
 ## Tier 3 — Nice-to-Have
 
 12. **Draggable sector wedge** — radial handles on the qMin/qMax arcs +
@@ -352,6 +334,36 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Completed
 
+- ~~**#22 Intermittent frontend flake: `useFigureBuilder` F2.4b parity**~~
+  (2026-08-09) — root-caused and fixed, not a race in the Apply path itself:
+  `useFigureBuilder.test.ts`'s `await waitFor(() => expect(renderFigureHitmap)
+  .toHaveBeenCalled())` only proves the debounced preview fetch STARTED, not
+  that its resolved `hitmap` has reached `result.current` — `dragElement`
+  no-ops on a still-null hitmap, so a `dragElement("legend", ...)` called
+  immediately after that wait can silently drop the gesture. Reproduced
+  directly with `--no-file-parallelism` (single file, no cross-worker
+  contention): **1/30 failed**, with the exact error text of the 2026-08-07
+  sighting (`expected undefined to match { loc: 'custom' }`) — so the
+  original "under full-suite parallel worker load" framing was too narrow;
+  the race reproduces standalone at roughly this rate regardless of
+  contention. `--no-file-parallelism` run together with the heaviest
+  Stage/window/perf files (GridViewport, StatStage, WindowCanvas, et al.)
+  for contention: 0/15 figurebuilder failures (the OTHER, unrelated
+  `GridViewport.perf.test.tsx` timing budget flaked instead — Stage-owned,
+  out of scope, unaffected by this fix). Fix: this file already has the
+  correct, stronger synchronization idiom in two other tests (`await
+  waitFor(() => expect(result.current.hitmap).not.toBeNull())`, used for the
+  x-breaks/annotations tests) — added the same second wait to the three
+  tests missing it (`dragElement` legacy-mode characterization, the F2.4b
+  Apply test, the F2.4b Cancel test). Verified: 0/90 failures post-fix at
+  the same repro method (30 then a further 60, same `--no-file-parallelism`
+  single-file harness) vs 1/30 pre-fix; full `npx vitest run` 408 files /
+  5954 tests green; `npm run build` clean (877.4 kB eager, 25.9 kB under
+  budget). No production code touched — `useFigureBuilder.ts` is unchanged;
+  this was a test-harness synchronization gap, not a real user-facing race
+  (a real drag gesture can't reach the legend before the preview it's
+  dragging on has rendered once, so the same ordering is enforced for free
+  in the actual UI).
 - ~~**#11 Golden parity for `sector_profile`**~~ (2026-08-09) — **SKIPPED by
   owner decision**, not completed. Would need a local MATLAB run to freeze
   reference values from `extract2DArcIntegral.m`. The port's correctness rests
