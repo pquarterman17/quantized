@@ -29,7 +29,10 @@ const pct = (v: number | null | undefined): string =>
 
 /** eps_parallel specifically: a null value here always means the backend
  *  refused it as degenerate (see RsmStrainResponse.warnings), never "not
- *  computed yet" — say so instead of a bare dash that reads as pending. */
+ *  computed yet" — say so instead of a bare dash that reads as pending. The
+ *  detailed reason goes on the value's `title` (RsmStrainResponse.warnings[0]),
+ *  same disabled-with-reason-on-hover idiom item 7 already established for
+ *  the peak-cut buttons in this panel — one idiom, not two. */
 const epsParallel = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) ? "not measurable" : `${(v * 100).toFixed(3)} %`;
 
@@ -141,7 +144,7 @@ export default function RsmPanel() {
               style={{ marginTop: 12, display: "grid", gridTemplateColumns: "auto auto", gap: "4px 16px" }}
             >
               <span>ε∥ (in-plane)</span>
-              <strong>{epsParallel(strain.eps_parallel)}</strong>
+              <strong title={strain.warnings[0]}>{epsParallel(strain.eps_parallel)}</strong>
               <span>ε⊥ (out-of-plane)</span>
               <strong>{pct(strain.eps_perp)}</strong>
               <span>Relaxation R</span>
@@ -154,14 +157,6 @@ export default function RsmPanel() {
               <strong>
                 {fmt(strain.a_film_perp)} / {fmt(strain.a_sub_perp)}
               </strong>
-            </div>
-          )}
-
-          {strain && strain.warnings.length > 0 && (
-            <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
-              {strain.warnings.map((w) => (
-                <div key={w}>{w}</div>
-              ))}
             </div>
           )}
         </>

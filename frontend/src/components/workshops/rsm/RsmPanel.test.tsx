@@ -96,22 +96,27 @@ async function findPeaksAndComputeStrain(): Promise<void> {
 }
 
 describe("RsmPanel — degenerate eps_parallel (RSM_CUTS_PLAN #23)", () => {
-  it("renders the degeneracy reason instead of a bare dash", async () => {
+  it("renders 'not measurable' (not a bare dash) with the reason as a hover title", async () => {
     rsmStrainMock.mockResolvedValue(DEGENERATE_STRAIN);
     await findPeaksAndComputeStrain();
 
-    expect(await screen.findByText("not measurable")).toBeInTheDocument();
-    expect(screen.getByText(/in-plane strain is not measurable from this reflection/)).toBeInTheDocument();
+    const value = await screen.findByText("not measurable");
+    expect(value).toBeInTheDocument();
+    // Detailed reason on hover — the same disabled-with-reason-via-title
+    // idiom RSM_CUTS_PLAN item 7 established for the peak-cut buttons in
+    // this panel, reused here rather than a second way of explaining it.
+    expect(value).toHaveAttribute("title", expect.stringContaining("in-plane strain is not measurable from this reflection"));
     // eps_perp stays a real number — only the degenerate field is affected.
     expect(screen.getByText("4.030 %")).toBeInTheDocument();
   });
 
-  it("does not over-trigger: a genuinely asymmetric reflection shows a real value and no warning", async () => {
+  it("does not over-trigger: a genuinely asymmetric reflection shows a real value and no title", async () => {
     rsmStrainMock.mockResolvedValue(NORMAL_STRAIN);
     await findPeaksAndComputeStrain();
 
-    expect(await screen.findByText("4.170 %")).toBeInTheDocument();
+    const value = await screen.findByText("4.170 %");
+    expect(value).toBeInTheDocument();
+    expect(value).not.toHaveAttribute("title");
     expect(screen.queryByText("not measurable")).not.toBeInTheDocument();
-    expect(screen.queryByText(/not measurable from this reflection/)).not.toBeInTheDocument();
   });
 });
