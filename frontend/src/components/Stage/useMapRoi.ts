@@ -51,16 +51,19 @@ import { useCutLanding } from "./useCutLanding";
 
 /** One payload grid cell along an axis — the nudge step AND the drag/click
  *  minimum rect size both key off it (a box smaller than a cell selects
- *  nothing meaningful anyway). */
-function cellSize(axis: number[]): number {
+ *  nothing meaningful anyway). Exported: `useMapRuler.ts` (item 7) needs the
+ *  identical cell-size math for its own nudge step and default ruler width —
+ *  one implementation, not a second copy. */
+export function cellSize(axis: number[]): number {
   return axis.length >= 2 ? Math.abs(axis[1]! - axis[0]!) : 1;
 }
 
 /** px -> data, clamped to the plot rect so a drag that strays past the map's
  *  border (still inside the canvas) keeps tracking instead of losing the
  *  gesture — built from the SAME exported `plotRect`/`hitTest` the canvas
- *  paint and pointer readout already share. */
-function pxToData(payload: MapPayload, w: number, h: number, px: number, py: number): { x: number; y: number } | null {
+ *  paint and pointer readout already share. Exported for `useMapRuler.ts`
+ *  (same reasoning as `cellSize`). */
+export function pxToData(payload: MapPayload, w: number, h: number, px: number, py: number): { x: number; y: number } | null {
   const rect = plotRect(payload, w, h);
   const cx = Math.min(rect.x + rect.w, Math.max(rect.x, px));
   const cy = Math.min(rect.y + rect.h, Math.max(rect.y, py));
@@ -72,8 +75,10 @@ function pxToData(payload: MapPayload, w: number, h: number, px: number, py: num
  *  (2Theta/axis1 for "angular", Qx/Qz for "q") — the caller-picked column set
  *  `roiMath.ts` documents itself as expecting. `map_shape` rides along
  *  unconditionally; `boxProfileLocal` only consults it on the angular,
- *  unrotated, unwrapped path, so passing it for a Q rect is harmless. */
-function boxColsFor(ds: DataStruct, space: CutSpace, axis1Name: string): BoxCols | null {
+ *  unrotated, unwrapped path, so passing it for a Q rect is harmless.
+ *  Exported for `useMapRuler.ts` (same column shape, same reasoning as
+ *  `cellSize`/`pxToData`). */
+export function boxColsFor(ds: DataStruct, space: CutSpace, axis1Name: string): BoxCols | null {
   const keys = rsmAxisKeys(ds.labels, axis1Name, space);
   if (!keys) return null;
   const [xi, yi, zi] = keys;
@@ -149,6 +154,10 @@ export interface UseMapRoiState {
 export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): UseMapRoiState {
   const storeRect = useApp((s) => s.mapRoi);
   const setMapRoi = useApp((s) => s.setMapRoi);
+  // Box and ruler are mutually exclusive WORKING SHAPES (RSM_CUTS_PLAN item
+  // 7) — starting a fresh box draw retires any live ruler so the map never
+  // shows both at once; the mirror image lives in useMapRuler.ts.
+  const setMapRuler = useApp((s) => s.setMapRuler);
   const { busy: landingBusy, land } = useCutLanding();
 
   const [mode, setMode] = useState<RoiMode>("off");
@@ -230,6 +239,7 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
       hit = { kind: "handle", index: 4 }; // SE corner: anchors x0/y0, follows x1/y1
       baseRect = { space: cutSpace, x0: dataPt.x, x1: dataPt.x, y0: dataPt.y, y1: dataPt.y };
       setMapRoi(baseRect);
+      setMapRuler(null); // a fresh box draw retires any live ruler
     }
 
     dragRef.current = { kind, hit, startPx: px, startData: dataPt, baseRect, preGesture: storeRect };
