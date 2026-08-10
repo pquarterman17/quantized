@@ -366,29 +366,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
          default and any peak marker clickable as the anchor.
    - Acceptance: `cd frontend && npx vitest run && npm run build`.
 
-9. **Batch across datasets — cuts + overlay figure + summary table**
-   Files: EDIT `workshops/roicuts/useRoiCuts.ts` + `RoiCutsPanel.tsx`
-   (+ tests). Depends on items 8 and 3. Reuses existing surfaces ONLY —
-   any new table widget or plotting path here is scope failure.
-   - [ ] `applyToSelected(opts)`: sequential loop over `selectedIds`,
-         skip non-2D and space-ineligible datasets ("applied N, skipped
-         M"), land each cut `"<dataset>: "`-prefixed, collect new ids.
-         FLOOR (always on): the cuts land and plot.
-   - [ ] "Plot results together" (checkbox, default ON) → pass the
-         collected ids to `lib/plotSelectedTogether.ts::
-         plotSelectedTogether(ids)` — the same function the Plot menu /
-         context actions use; legend and axes come free.
-   - [ ] "Summary table" (checkbox) → one `rsmBoxStats` per dataset,
-         rows rendered with `workshops/tabulate/TabulateTable.tsx`
-         (presentational reuse) in a batch-results card; "Export CSV"
-         builds the CSV string and saves via
-         `lib/download.ts::saveBlob`. Columns: dataset, ∫I, centroid
-         x/y, peak x/y, max, N.
-   - [ ] Hook test: skips + prefixes; ids forwarded to a mocked
-         plotSelectedTogether; stats rows accumulate and CSV string is
-         well-formed.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`.
-
 ---
 
 ## Tier 2 — Medium Impact
@@ -478,6 +455,37 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#9 Batch across datasets**~~ (2026-08-09) — new `useRoiBatch.ts`
+  (287) + `BatchCard.tsx` (145), kept OUT of `useRoiCuts.ts` (still 476,
+  unguarded — item 20) per the size-ratchet habit. `applyToSelected`
+  sequentially applies the Box card's current ROI (+ its collapse/reduce/
+  bins settings) to every `store.selectedIds` dataset, landing each
+  `"<dataset>: "`-prefixed cut through the SAME `useCutLanding` path (the
+  floor — always on, independent of either checkbox). "Plot together"
+  (default ON) calls `lib/plotSelectedTogether.ts::plotSelectedTogether`
+  with exactly the new ids (skipped below its own 2-dataset minimum, so a
+  1-dataset batch never triggers a confusing toast). "Summary table"
+  (default ON) runs one `/box-stats` per eligible dataset and builds a
+  cross-dataset summary as its own `DataStruct` (data-contract rule, not an
+  ad-hoc table) — dataset names carried via `metadata.origin_text_columns`
+  (the same per-row-text convention `lib/barlayout.ts` already reads for
+  category labels), landed in the library like any other dataset. The live
+  preview reuses `TabulateTable.tsx` presentationally (not
+  `lib/tabulate.ts`'s grouping engine — wrong tool, groups within one
+  dataset): every metric is its own "group" column via `levelLabel`, never
+  a value/StatKey pair, so no invented "mean"/"sum" sub-header appears over
+  a number that isn't a statistic. Skip/error reasons are per-dataset and
+  always named (never a bare count). A `useRef`-backed re-entrancy guard
+  (not `useState` alone — a `useState` guard is stale until the next
+  render, so two synchronous calls both pass it) makes "one batch at a
+  time" actually hold, not just look like it holds from the disabled
+  button. `land()` (`Stage/useCutLanding.ts`) widened to return the landed
+  id (was `Promise<void>`) — backward compatible, existing `void land(...)`
+  callers unaffected — so the batch can collect ids for
+  `plotSelectedTogether` without a second landing implementation. 15 new
+  tests in `useRoiBatch.test.ts`. `architecture.test.ts` untouched;
+  `npx vitest run` (5898 passed) and `npm run build` both green.
 
 - ~~**#21 Input hardening**~~ (2026-08-09) — one shared
   `_rsm_grid.require_finite(**params)` called from every public entry point, so
