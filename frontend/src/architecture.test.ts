@@ -248,13 +248,15 @@ const MODULE_PINS: Record<string, number> = {
   // general ceiling without a pin. They are intentionally pinned at their
   // exact discovered sizes; future document/persistence work must extract a
   // cohesive sibling instead of quietly extending either catch-all.
-  // 754 -> 616 (RSM_CUTS_PLAN #13 prep): the fully self-contained "Append a
-  // second workspace" section (`mergeWorkspace` + `WorkspaceMergeResult`, one
-  // external caller) moved verbatim to the new lib/workspaceMerge.ts,
-  // re-exported via `export * from "./workspaceMerge"` so store/
-  // workspaceIO.ts's import needed no change — funding the named-ROI .dwk
-  // hook-in that follows.
-  "/lib/workspace.ts": 616,
+  // 754 -> 633 (RSM_CUTS_PLAN #13, named-ROI .dwk persistence): the fully
+  // self-contained "Append a second workspace" section (`mergeWorkspace` +
+  // `WorkspaceMergeResult`, one external caller) moved verbatim to the new
+  // lib/workspaceMerge.ts, re-exported via `export * from "./workspaceMerge"`
+  // so store/workspaceIO.ts's import needed no change — funding both the
+  // extraction's own re-export line and the savedRois hook-in (field +
+  // serialize call + parse call; the actual (de)serialize logic lives in
+  // store/rois.ts, not here).
+  "/lib/workspace.ts": 633,
   "/lib/plotview.ts": 978,
 };
 

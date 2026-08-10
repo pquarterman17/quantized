@@ -19,6 +19,8 @@ import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import type { PlotWindow } from "./plotview";
+import type { RoiDef } from "./roi";
+import { deserializeRois, serializeRois } from "../store/rois";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
@@ -86,6 +88,12 @@ export interface WorkspaceState {
   /** PLOT_WORKFLOW_PLAN item 5 — per-technique last-used view. Additive; a
    *  caller (or a pre-item-5 .dwk) with no field loads as `{}`. */
   techniqueViewMemory?: TechniqueViewMemoryMap;
+  /** RSM_CUTS_PLAN item 13 — every named saved ROI (box/ruler/sector; store/
+   *  rois.ts's `savedRois`). Additive-optional, so a pre-item-13 .dwk loads
+   *  with an empty list. Deliberately NOT the working `mapRoi`/`mapRuler` —
+   *  see store/rois.ts's header for why only the NAMED, saved definitions
+   *  round-trip through a restart. */
+  savedRois?: RoiDef[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -112,6 +120,7 @@ export interface LoadedWorkspace {
   toolWindowLayout: Record<string, ToolWindowLayout>;
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
+  savedRois: RoiDef[];
 }
 
 interface WorkspaceDoc {
@@ -137,6 +146,7 @@ interface WorkspaceDoc {
   toolWindowLayout: Record<string, ToolWindowLayout>;
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
+  savedRois: RoiDef[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -170,6 +180,9 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     // `plotWindows` above — the caller (windowsForSave()'s save-time-freshen
     // sibling, `captureTechniqueView` applied to the live view) owns the fold.
     techniqueViewMemory: ws.techniqueViewMemory ?? {},
+    // RSM_CUTS_PLAN item 13: named ROIs only (see WorkspaceState's doc) — the
+    // actual (de)serialize logic lives in store/rois.ts, this module just calls it.
+    savedRois: serializeRois(ws.savedRois ?? []),
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -583,6 +596,9 @@ export function parseWorkspace(
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
+  // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
+  // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
+  const savedRois = deserializeRois(o.savedRois, migrationWarnings);
   return {
     datasets,
     folders,
@@ -604,6 +620,7 @@ export function parseWorkspace(
     toolWindowLayout,
     savedPlotSpecs,
     techniqueViewMemory,
+    savedRois,
   };
 }
 
@@ -611,5 +628,5 @@ export function parseWorkspace(
 // `WorkspaceMergeResult` — lives in ./workspaceMerge.ts (moved out under the
 // RSM_CUTS_PLAN item 13 size ratchet: it was already fully self-contained,
 // with store/workspaceIO.ts as its only external caller, so extracting it
-// funds the upcoming named-ROI hook-in without that caller needing to change).
+// funds the named-ROI hook-in below without that caller needing to change).
 export * from "./workspaceMerge";

@@ -17,9 +17,21 @@
 // `savedRois` (item 8's Saved ROIs card) follows the exact CRUD shape
 // `store/graphBuilder.ts`'s `savedPlotSpecs` already established (save /
 // duplicate-by-apply / delete, each wrapped in `recordHistory` so it's
-// undoable) — deliberately NOT persisted to `.dwk` yet (Tier 3 item 13 is
-// blocked on `lib/workspace.ts`'s own zero-slack pin); in-memory only until
-// that lands.
+// undoable). It now ALSO round-trips through `.dwk` (item 13): `serializeRois`/
+// `deserializeRois` below are lib/workspace.ts's ONLY hook into this slice —
+// that module extracted `mergeWorkspace` to `lib/workspaceMerge.ts` to fund
+// the few lines this hook-in costs (its own pin dropped from 754 accordingly;
+// see workspace.test.ts's "workspace saved-ROI persistence" suite for the
+// round-trip + back-compat + corrupt-entry coverage). Deliberately NOT
+// `mapRoi`/`mapRuler` — those are the WORKING/in-progress box or ruler, the
+// ROI analogue of an unsaved Graph Builder spec-in-progress (which also
+// doesn't survive a `.dwk`, only a named `savedPlotSpec` does): they carry no
+// name/identity to validate against on reload, and restoring one after a
+// restart onto whatever dataset happens to be active could show a box drawn
+// against a completely different map's axes. Surviving a dataset SWITCH
+// within a session (this file's next comment block) is a different, narrower
+// guarantee than surviving an app RESTART — only the named, saved definitions
+// get the latter.
 //
 // WHY mapRoi/mapRuler are NOT in `focusTransientReset` (windows.ts) — this
 // is the one deliberate exception every other transient tool/gadget field in
@@ -35,8 +47,9 @@
 // `focusTransientReset`) — markers belong to the analysis run that produced
 // them, not to a box the user is actively reusing.
 
+import type { CutSpace } from "../lib/mapcuts";
 import type { RsmPeak } from "../lib/types";
-import type { RoiDef, RoiRect, RoiRuler } from "../lib/roi";
+import type { RoiDef, RoiRect, RoiRuler, RoiSector } from "../lib/roi";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -124,4 +137,85 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
       set((st) => ({ savedRois: st.savedRois.filter((r) => r.id !== id) }));
     },
   };
+}
+
+// ── `.dwk` persistence (RSM_CUTS_PLAN item 13) ──────────────────────────────
+// lib/workspace.ts's ONLY hook into this slice — it calls these two
+// functions and never touches RoiDef's shape itself, mirroring how
+// lib/plotspec.ts owns `sanitizeSavedPlotSpecs` for `savedPlotSpecs`.
+
+/** Serialize `savedRois` for the .dwk doc. A defensive shallow copy — RoiDef
+ *  is already plain JSON-safe data (no dataset references, no undefined-vs-
+ *  absent optionals to trim, unlike Dataset's own serialize in workspace.ts). */
+export function serializeRois(rois: RoiDef[]): RoiDef[] {
+  return rois.map((r) => ({ ...r }));
+}
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function isCutSpace(v: unknown): v is CutSpace {
+  return v === "angular" || v === "q";
+}
+
+function isRoiRectShape(v: unknown): v is RoiRect {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    isCutSpace(o.space) &&
+    isFiniteNumber(o.x0) &&
+    isFiniteNumber(o.x1) &&
+    isFiniteNumber(o.y0) &&
+    isFiniteNumber(o.y1)
+  );
+}
+
+function isRoiRulerShape(v: unknown): v is RoiRuler {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    isCutSpace(o.space) &&
+    isFiniteNumber(o.cx) &&
+    isFiniteNumber(o.cy) &&
+    isFiniteNumber(o.angle) &&
+    isFiniteNumber(o.length) &&
+    isFiniteNumber(o.width)
+  );
+}
+
+function isRoiSectorShape(v: unknown): v is RoiSector {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    isFiniteNumber(o.qMin) &&
+    isFiniteNumber(o.qMax) &&
+    isFiniteNumber(o.phiMin) &&
+    isFiniteNumber(o.phiMax)
+  );
+}
+
+/** Validate persisted `savedRois` entries from a .dwk. A hand-edited or
+ *  otherwise malformed entry is skipped (named in `warnings`, lib/workspace.ts's
+ *  `migrationWarnings`) rather than throwing or poisoning the rest of the
+ *  list — mirrors lib/plotspec.sanitizeSavedPlotSpecs' shape. Absent/non-array
+ *  input (a pre-item-13 .dwk) degrades to an empty list, no warning. */
+export function deserializeRois(v: unknown, warnings: string[]): RoiDef[] {
+  if (!Array.isArray(v)) return [];
+  const out: RoiDef[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.name !== "string") continue;
+    if (o.kind === "rect" && isRoiRectShape(o.rect)) {
+      out.push({ id: o.id, name: o.name, kind: "rect", rect: o.rect });
+    } else if (o.kind === "ruler" && isRoiRulerShape(o.ruler)) {
+      out.push({ id: o.id, name: o.name, kind: "ruler", ruler: o.ruler });
+    } else if (o.kind === "sector" && isRoiSectorShape(o.sector)) {
+      out.push({ id: o.id, name: o.name, kind: "sector", sector: o.sector });
+    } else {
+      warnings.push(`skipped saved ROI "${o.name}" with an invalid or unknown shape`);
+    }
+  }
+  return out;
 }

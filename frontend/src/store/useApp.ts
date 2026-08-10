@@ -1614,6 +1614,7 @@ export const useApp = create<AppState>((set, get) => ({
         pages: ws.pages ?? [],
         figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
+        savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         staleDatasets: [],
         staleFits: [],

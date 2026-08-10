@@ -9,6 +9,7 @@ import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
+import type { RoiDef } from "./roi";
 import type { Dataset, OriginFigure } from "./types";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
@@ -1208,6 +1209,80 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
     );
     expect(loaded.savedPlotSpecs).toHaveLength(1);
     expect(loaded.savedPlotSpecs[0].spec).toEqual(emptySpec());
+  });
+});
+
+describe("workspace saved-ROI persistence (RSM_CUTS_PLAN item 13)", () => {
+  const savedRect: RoiDef = {
+    id: "roi-1",
+    name: "Film peak box",
+    kind: "rect",
+    rect: { space: "q", x0: -0.1, x1: 0.1, y0: 4.7, y1: 4.9 },
+  };
+  const savedRuler: RoiDef = {
+    id: "roi-2",
+    name: "Radial cut — substrate",
+    kind: "ruler",
+    ruler: { space: "q", cx: 0, cy: 4.8, angle: 88, length: 0.6, width: 0.02 },
+  };
+  const savedSector: RoiDef = {
+    id: "roi-3",
+    name: "Full annulus",
+    kind: "sector",
+    sector: { qMin: 4.5, qMax: 5.0, phiMin: 0, phiMax: 360 },
+  };
+
+  it("round-trips a mix of rect/ruler/sector saved ROIs exactly", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, savedRois: [savedRect, savedRuler, savedSector] }),
+    );
+    expect(loaded.savedRois).toEqual([savedRect, savedRuler, savedSector]);
+  });
+
+  it("defaults to an empty list for a legacy doc with no savedRois field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.savedRois).toEqual([]);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc, and warns", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect] }),
+    ) as Record<string, unknown>;
+    doc.savedRois = [
+      (doc.savedRois as unknown[])[0],
+      { id: "bad" }, // missing name/kind entirely
+      { id: "bad2", name: "n", kind: "rect", rect: { space: "q", x0: 1 } }, // incomplete rect
+      { id: "bad3", name: "n", kind: "ruler", ruler: { space: "bogus", cx: 0, cy: 0, angle: 0, length: 1, width: 1 } }, // bad space
+      { id: "bad4", name: "n", kind: "sector", sector: { qMin: 1, qMax: NaN, phiMin: 0, phiMax: 10 } }, // non-finite
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.savedRois).toEqual([savedRect]);
+    // "bad" (no id/name at all) drops silently — nothing nameable to warn
+    // about, same degrade as every other structurally-impossible entry in
+    // this module. The other three all have a name and warn by it.
+    expect(loaded.migrationWarnings.length).toBe(3);
+  });
+
+  it("never throws on a hand-edited non-array savedRois", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.savedRois = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).savedRois).toEqual([]);
+  });
+
+  it("does not restore the working mapRoi/mapRuler — only named savedRois round-trip", () => {
+    // WorkspaceState carries no mapRoi/mapRuler field at all (see workspace.ts's
+    // doc); this asserts the doc a real save produces has nothing to restore
+    // one from, byte for byte.
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect] }),
+    ) as Record<string, unknown>;
+    expect(doc.mapRoi).toBeUndefined();
+    expect(doc.mapRuler).toBeUndefined();
   });
 });
 

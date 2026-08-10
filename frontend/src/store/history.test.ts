@@ -289,6 +289,7 @@ describe("per-action-class undo/redo coverage", () => {
       toolWindowLayout: {},
       savedPlotSpecs: [],
       techniqueViewMemory: {},
+      savedRois: [],
     };
 
     useApp.getState().appendWorkspace(incoming);

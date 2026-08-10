@@ -47,6 +47,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       toolWindowLayout: {},
       savedPlotSpecs: [],
       techniqueViewMemory: {},
+      savedRois: [],
     };
   }
 
