@@ -7,16 +7,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
-import { cutSpaceForKeys, type CutMode } from "../../lib/mapcuts";
+import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import MapRoiOverlay from "./MapRoiOverlay";
 import MapToolbar from "./MapToolbar";
+import { armExclusively } from "./mapToolArming";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
 import { useMapRoi } from "./useMapRoi";
+import { useMapRuler } from "./useMapRuler";
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -82,6 +84,10 @@ export default function MapStage({ dataset }: MapStageProps) {
   // exclusive with them (arming one disarms the other; see setCutMode/
   // toggleRoi below) since both drive the same canvas pointer gestures.
   const roi = useMapRoi(active, cutSpace);
+  // Cut ruler: radial/transverse-about-a-peak + free-hand draw/move/resize
+  // (RSM_CUTS_PLAN item 7) — same cutSpace-gated group, mutually exclusive
+  // with both the box and H/V/seg (see toggleRoi/toggleRuler/setCutMode).
+  const ruler = useMapRuler(active, cutSpace);
   // Segment-drag state in canvas pixels (for the SVG preview line).
   const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
   // Host box size in CSS px, kept in sync by the paint effect below (the
@@ -166,9 +172,11 @@ export default function MapStage({ dataset }: MapStageProps) {
     return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
   }
 
-  // ROI handlers take precedence over the cut tool while armed — both drive
-  // the same canvas pointer gestures, so only one may own them at a time.
+  // ROI/ruler handlers take precedence over the cut tool while armed — all
+  // three drive the same canvas pointer gestures, so only one may own them
+  // at a time.
   const roiArmed = roi.mode === "roi" && cutSpace != null;
+  const rulerArmed = ruler.mode === "ruler" && cutSpace != null;
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     const { r, px } = hitAt(ev);
@@ -177,11 +185,15 @@ export default function MapStage({ dataset }: MapStageProps) {
       roi.onMove(payload, hostSize.w, hostSize.h, px);
       return;
     }
+    if (rulerArmed && payload) {
+      ruler.onMove(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (dragPx) setDragPx({ a: dragPx.a, b: px });
   }
 
   function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (roiArmed) return;
+    if (roiArmed || rulerArmed) return;
     if (cuts.mode !== "h" && cuts.mode !== "v") return;
     const { r } = hitAt(ev);
     if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
@@ -193,6 +205,11 @@ export default function MapStage({ dataset }: MapStageProps) {
       roi.onDown(payload, hostSize.w, hostSize.h, px);
       return;
     }
+    if (rulerArmed && payload) {
+      const { px } = hitAt(ev);
+      ruler.onDown(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (cuts.mode !== "seg") return;
     const { r, px } = hitAt(ev);
     if (r) setDragPx({ a: px, b: px });
@@ -202,6 +219,11 @@ export default function MapStage({ dataset }: MapStageProps) {
     if (roiArmed) {
       const { px } = hitAt(ev);
       roi.onUp(px);
+      return;
+    }
+    if (rulerArmed) {
+      const { px } = hitAt(ev);
+      ruler.onUp(px);
       return;
     }
     if (cuts.mode !== "seg" || !dragPx) return;
@@ -221,44 +243,36 @@ export default function MapStage({ dataset }: MapStageProps) {
     exportCanvasPng(canvas, `${stem}_map.png`);
   }
 
-  // Box ROI and the H/V/seg cut tool are mutually exclusive (same canvas
-  // gestures) — arming one disarms the other.
-  function setCutMode(m: CutMode) {
-    if (m !== "off") roi.setMode("off");
-    cuts.setMode(m);
-  }
-  function toggleRoi() {
-    if (roi.mode === "roi") {
-      roi.setMode("off");
-    } else {
-      cuts.setMode("off");
-      roi.setMode("roi");
-    }
-  }
+  // Box ROI, cut ruler, and the H/V/seg cut tool are mutually exclusive
+  // (same canvas gestures) — arming one disarms the other two.
+  const { setCutMode, toggleRoi, toggleRuler } = armExclusively(roi, ruler, cuts);
 
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
         <canvas
           ref={canvasRef}
-          tabIndex={roi.rect ? 0 : -1}
+          tabIndex={roi.rect || ruler.ruler ? 0 : -1}
           style={{
             width: "100%",
             height: "100%",
             display: "block",
-            cursor: roiArmed ? roi.cursor : cuts.mode === "off" ? "default" : "crosshair",
+            cursor: roiArmed ? roi.cursor : rulerArmed ? ruler.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
           onMouseMove={onMove}
           onMouseLeave={() => {
             setReadout(null);
             setDragPx(null);
             roi.onLeave();
+            ruler.onLeave();
           }}
           onClick={onClick}
           onMouseDown={onDown}
           onMouseUp={onUp}
           onKeyDown={(ev) => {
-            if (payload) roi.onKeyDown(ev, payload);
+            if (!payload) return;
+            roi.onKeyDown(ev, payload);
+            ruler.onKeyDown(ev, payload);
           }}
         />
         {dragPx && (
@@ -292,6 +306,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             apiStats={roi.apiStats}
             statsError={roi.statsError}
             onClearStats={roi.clearStats}
+            rulerState={ruler}
           />
         )}
       </div>
@@ -336,6 +351,8 @@ export default function MapStage({ dataset }: MapStageProps) {
           onProjection={cuts.runProjection}
           roiMode={roi.mode}
           onToggleRoi={toggleRoi}
+          rulerMode={ruler.mode}
+          onToggleRuler={toggleRuler}
           onSavePng={savePng}
         />
       )}

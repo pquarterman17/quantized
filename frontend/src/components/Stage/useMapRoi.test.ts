@@ -247,6 +247,14 @@ describe("useMapRoi — gesture state machine", () => {
     expect(useApp.getState().mapRoi).toBeNull();
   });
 
+  it("a fresh box draw retires any live ruler (mutually exclusive working shapes)", () => {
+    useApp.setState({ mapRuler: { space: "angular", cx: 12, cy: 1, angle: 0, length: 1, width: 1 } });
+    const { result } = renderHook(() => useMapRoi(ACTIVE, "angular"));
+    act(() => result.current.setMode("roi"));
+    act(() => result.current.onDown(PAYLOAD, W, H, px(12, 1)));
+    expect(useApp.getState().mapRuler).toBeNull();
+  });
+
   it("a rect drawn in a hidden (mismatched) space still restores correctly on a discarded click", () => {
     // A box exists in "q" space but the map is currently displaying angular
     // axes — rect is hidden (mismatch), so a click starts a fresh "draw"
