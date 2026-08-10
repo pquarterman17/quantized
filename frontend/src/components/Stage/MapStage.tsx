@@ -14,11 +14,12 @@ import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import MapRoiOverlay from "./MapRoiOverlay";
 import MapToolbar from "./MapToolbar";
-import { armExclusively } from "./mapToolArming";
+import { armExclusively, routedTool } from "./mapToolArming";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
 import { useMapRoi } from "./useMapRoi";
 import { useMapRuler } from "./useMapRuler";
+import { useMapSectorWedge } from "./useMapSectorWedge";
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -88,6 +89,12 @@ export default function MapStage({ dataset }: MapStageProps) {
   // (RSM_CUTS_PLAN item 7) — same cutSpace-gated group, mutually exclusive
   // with both the box and H/V/seg (see toggleRoi/toggleRuler/setCutMode).
   const ruler = useMapRuler(active, cutSpace);
+  // Sector wedge: drag the qMin/qMax/phiMin/phiMax handles or rotate from
+  // the interior (RSM_CUTS_PLAN item 12) — same cutSpace-gated group,
+  // mutually exclusive with box/ruler/H/V/seg; Q-space only (its own `mode`
+  // arms regardless, but `wedge.sector`/dragging both go inert off a Q
+  // view — see useMapSectorWedge.ts's header).
+  const wedge = useMapSectorWedge(active, cutSpace);
   // Segment-drag state in canvas pixels (for the SVG preview line).
   const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
   // Host box size in CSS px, kept in sync by the paint effect below (the
@@ -172,42 +179,41 @@ export default function MapStage({ dataset }: MapStageProps) {
     return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
   }
 
-  // ROI/ruler handlers take precedence over the cut tool while armed — all
-  // three drive the same canvas pointer gestures, so only one may own them
-  // at a time.
+  // Box, ruler, and the sector wedge take precedence over the cut tool while
+  // armed — all four drive the same canvas pointer gestures, so only one may
+  // own them at a time (armExclusively's invariant). `routedTool` picks
+  // whichever ONE is armed so onMove/onClick/onDown/onUp need one dispatch
+  // point instead of an if-block per tool (mapToolArming.ts's own doc).
   const roiArmed = roi.mode === "roi" && cutSpace != null;
   const rulerArmed = ruler.mode === "ruler" && cutSpace != null;
+  const wedgeArmed = wedge.mode === "sector" && cutSpace === "q";
+  const routed = routedTool([
+    { armed: roiArmed, ...roi },
+    { armed: rulerArmed, ...ruler },
+    { armed: wedgeArmed, ...wedge },
+  ]);
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     const { r, px } = hitAt(ev);
     setReadout(r);
-    if (roiArmed && payload) {
-      roi.onMove(payload, hostSize.w, hostSize.h, px);
-      return;
-    }
-    if (rulerArmed && payload) {
-      ruler.onMove(payload, hostSize.w, hostSize.h, px);
+    if (routed && payload) {
+      routed.onMove(payload, hostSize.w, hostSize.h, px);
       return;
     }
     if (dragPx) setDragPx({ a: dragPx.a, b: px });
   }
 
   function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (roiArmed || rulerArmed) return;
+    if (routed) return;
     if (cuts.mode !== "h" && cuts.mode !== "v") return;
     const { r } = hitAt(ev);
     if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
   }
 
   function onDown(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (roiArmed && payload) {
+    if (routed && payload) {
       const { px } = hitAt(ev);
-      roi.onDown(payload, hostSize.w, hostSize.h, px);
-      return;
-    }
-    if (rulerArmed && payload) {
-      const { px } = hitAt(ev);
-      ruler.onDown(payload, hostSize.w, hostSize.h, px);
+      routed.onDown(payload, hostSize.w, hostSize.h, px);
       return;
     }
     if (cuts.mode !== "seg") return;
@@ -216,14 +222,9 @@ export default function MapStage({ dataset }: MapStageProps) {
   }
 
   function onUp(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (roiArmed) {
+    if (routed) {
       const { px } = hitAt(ev);
-      roi.onUp(px);
-      return;
-    }
-    if (rulerArmed) {
-      const { px } = hitAt(ev);
-      ruler.onUp(px);
+      routed.onUp(px);
       return;
     }
     if (cuts.mode !== "seg" || !dragPx) return;
@@ -243,9 +244,9 @@ export default function MapStage({ dataset }: MapStageProps) {
     exportCanvasPng(canvas, `${stem}_map.png`);
   }
 
-  // Box ROI, cut ruler, and the H/V/seg cut tool are mutually exclusive
-  // (same canvas gestures) — arming one disarms the other two.
-  const { setCutMode, toggleRoi, toggleRuler } = armExclusively(roi, ruler, cuts);
+  // Box ROI, cut ruler, the sector wedge, and the H/V/seg cut tool are
+  // mutually exclusive (same canvas gestures) — arming one disarms the rest.
+  const { setCutMode, toggleRoi, toggleRuler, toggleWedge } = armExclusively(roi, ruler, wedge, cuts);
 
   return (
     <div className="qzk-stage">
@@ -257,7 +258,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             width: "100%",
             height: "100%",
             display: "block",
-            cursor: roiArmed ? roi.cursor : rulerArmed ? ruler.cursor : cuts.mode === "off" ? "default" : "crosshair",
+            cursor: routed ? routed.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
           onMouseMove={onMove}
           onMouseLeave={() => {
@@ -265,6 +266,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             setDragPx(null);
             roi.onLeave();
             ruler.onLeave();
+            wedge.onLeave();
           }}
           onClick={onClick}
           onMouseDown={onDown}
@@ -293,7 +295,6 @@ export default function MapStage({ dataset }: MapStageProps) {
             payload={payload}
             w={hostSize.w}
             h={hostSize.h}
-            cutSpace={cutSpace}
             rect={roi.rect}
             preview={roi.preview}
             previewAxis={roi.previewAxis}
@@ -307,6 +308,7 @@ export default function MapStage({ dataset }: MapStageProps) {
             statsError={roi.statsError}
             onClearStats={roi.clearStats}
             rulerState={ruler}
+            wedgeState={wedge}
           />
         )}
       </div>
@@ -353,6 +355,8 @@ export default function MapStage({ dataset }: MapStageProps) {
           onToggleRoi={toggleRoi}
           rulerMode={ruler.mode}
           onToggleRuler={toggleRuler}
+          wedgeMode={wedge.mode}
+          onToggleWedge={toggleWedge}
           onSavePng={savePng}
         />
       )}
