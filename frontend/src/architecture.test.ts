@@ -248,9 +248,13 @@ const MODULE_PINS: Record<string, number> = {
   // general ceiling without a pin. They are intentionally pinned at their
   // exact discovered sizes; future document/persistence work must extract a
   // cohesive sibling instead of quietly extending either catch-all.
-  // `sources()` counts its trailing newline, so the 753 editor-visible lines
-  // are 754 under this guard's `split("\\n")` convention.
-  "/lib/workspace.ts": 754,
+  // 754 -> 616 (RSM_CUTS_PLAN #13 prep): the fully self-contained "Append a
+  // second workspace" section (`mergeWorkspace` + `WorkspaceMergeResult`, one
+  // external caller) moved verbatim to the new lib/workspaceMerge.ts,
+  // re-exported via `export * from "./workspaceMerge"` so store/
+  // workspaceIO.ts's import needed no change — funding the named-ROI .dwk
+  // hook-in that follows.
+  "/lib/workspace.ts": 616,
   "/lib/plotview.ts": 978,
 };
 
