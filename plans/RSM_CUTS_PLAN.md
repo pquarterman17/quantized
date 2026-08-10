@@ -16,12 +16,16 @@ additionally yields a summary table and a single overlaid figure.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09 (rev 5 — item 10 closed: realdata smoke test
+**Updated:** 2026-08-09 (rev 6 — item 12 closed: draggable sector wedge
+(four field handles + interior rotate), an addition to the numeric +
+live-preview flow, not a replacement — the panel's Sector card stays the
+authoritative entry point. Open: #11 owner-gated MATLAB golden-parity
+freeze, Tier 3 #13–14. Prior revisions: rev 5 — item 10 closed: realdata smoke test
 (`tests/test_api_rsm_realdata.py`) + physics docs + bookkeeping
 (registered in MAIN_PLAN.md's plan tree + BACKLOG.md; PORT_CHECKLIST.md
 gains MATLAB bug #6, `+fitting/rsmStrain.m`'s near-degenerate-Qx guard
 gap). Build phase complete: every item except the owner-gated #11 and the
-Tier 3 #12–14 residuals is now struck. Prior revisions: rev 4 — items
+Tier 3 #12–14 residuals was struck at that point; rev 4 — items
 1/4/16 shipped and struck; adds
 item 17, the aspect-ratio defect that turned out to be the real cause of the
 owner's reported plotting problem, and item 18, the dataset-handle cache,
@@ -328,10 +332,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 3 — Nice-to-Have
 
-12. **Draggable sector wedge** — radial handles on the qMin/qMax arcs +
-    angular handles on the wedge edges, same gesture machine. Numeric +
-    live preview must prove insufficient first.
-
 13. **Named-ROI workspace persistence** — serialize `savedRois` into
     `.dwk`. BLOCKED on paying `lib/workspace.ts`'s pin (754, zero
     slack): (de)serialization lives in `store/rois.ts`; workspace.ts
@@ -352,6 +352,44 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Completed
 
+- ~~**#12 Draggable sector wedge**~~ (2026-08-09) — four field handles
+  (qMin/qMax radial arcs, phiMin/phiMax angular edges) + an interior
+  rotate, on top of the numeric + live-preview flow that shipped with items
+  6/8 — an ADDITION, not a replacement; the panel's Sector card stays the
+  authoritative input for exact values and repeating a cut across datasets.
+  New pure `lib/roiSector.ts` (polar hit-testing about the reciprocal
+  origin, `classifySectorHit`/`applySectorDrag`, both unit-tested
+  independently of the hook — 29 tests) kept OUT of `lib/roi.ts`, which is
+  pinned at 638 with zero slack. `components/Stage/useMapSectorWedge.ts`
+  mirrors `useMapRoi.ts`/`useMapRuler.ts`'s gesture-machine shape (Esc-abort,
+  rAF-coalesced client preview via `lib/roiMath.ts` that never touches the
+  backend, sub-3px drags discarded as clicks) but is parameterized over a
+  `useRoiCuts()` instance rather than store state: the sector's
+  authoritative fields are `workshops/roicuts/useRoiCuts.ts`'s own
+  component-local `useState` (not `store/rois.ts`, owned by other
+  concurrent work this session), so dragging writes back through that
+  hook's phiParam-aware setters (`writeSector`, correctly deriving
+  `phiCenter`/`phiHalfWidth` from the dragged bounds' own SPAN so a
+  wrap-crossing result never produces a negative half-width). Wrapping
+  survives dragging by construction: `phiMin`/`phiMax` are never
+  renormalized, so a seam-crossing sector (`phiMin > phiMax` numerically)
+  stays exactly seam-crossing after a rotate — covered by both the pure
+  geometry tests and an 11-test hook-level integration suite (each handle
+  isolated, interior rotate preserving span, the seam case, Esc revert,
+  preview/commit separation, angular-axes disable). `MapRoiOverlay.tsx`
+  (383/400, no slack) was extracted FIRST as its own commit — the wedge's
+  read-only path + `sparklinePoints`/`barPosition`/`boundsOfPoints` moved to
+  `MapSectorWedge.tsx`/`roiBarLayout.ts` with zero behaviour change — before
+  the drag feature landed in a second commit, same "extract before add"
+  convention item 6 used for `MapToolbar.tsx`. `mapToolArming.ts` gained
+  `routedTool()`, collapsing box/ruler/wedge's onDown/onMove/onUp dispatch
+  in `MapStage.tsx` to one lookup instead of one if-block per tool — without
+  it, adding a 4th mutually-exclusive canvas tool would have pushed
+  `MapStage.tsx` (385/400 after) over its own ceiling. The wedge is Q-space
+  only: hidden entirely off a Q view (the hook's `sector` field derives to
+  null), with the toolbar's arm button disabled-with-reason (not hidden)
+  when the displayed axes are angular. `architecture.test.ts` zero-line
+  diff; full suite green (5994 passed), tsc/eslint/build clean.
 - ~~**#11 Golden parity for `sector_profile`**~~ (2026-08-09) — **SKIPPED by
   owner decision**, not completed. Would need a local MATLAB run to freeze
   reference values from `extract2DArcIntegral.m`. The port's correctness rests
