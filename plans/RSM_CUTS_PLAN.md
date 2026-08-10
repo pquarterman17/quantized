@@ -330,28 +330,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
       to describe the CORRECT behaviour, so this closes the gap between
       them and the code.
 
-7. **Cut ruler — radial/transverse cuts about a peak**
-   Files: EDIT `Stage/MapRoiOverlay.tsx`, EDIT `Stage/useMapRoi.ts` (+
-   tests), EDIT `Stage/MapToolbar.tsx` (ruler arm button), possibly a
-   small `Stage/rulerGestures.ts` if useMapRoi nears ~400. Depends on
-   item 6 (same files — serialize after it).
-   - [ ] Render the ruler (rotated outline via `rulerCorners`, endpoint
-         + width handles) in the SVG; inline bar reuses item 6's
-         (profile = along the ruler axis; preview via
-         `boxProfileLocal` with angle).
-   - [ ] Gestures: drag-to-draw along the cut direction (angle from the
-         drag), endpoint handles adjust length/angle, width handles
-         symmetric width, interior translates; same cancel/nudge
-         contract as the box.
-   - [ ] Peak-anchored actions: when `rsmPeaks` exist for the active
-         dataset, "Radial cut" / "Transverse cut" (toolbar split-button
-         or panel card — implementer picks the cheaper, both ≤2 clicks)
-         build the ruler via `radialRulerForPeak` with the film peak as
-         default and any peak marker clickable as the anchor.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`.
-
----
-
 ## Tier 2 — Medium Impact
 
 22. **Intermittent frontend flake: `useFigureBuilder` F2.4b parity**
@@ -459,6 +437,24 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#7 Cut ruler — radial/transverse cuts about a peak**~~ (2026-08-09) — the
+  epitaxial pair, at **1 click** from a found peak (target was ≤2). New
+  `Stage/useMapRuler.ts` (346) mirrors the box gesture machine; endpoint handles
+  are the sole rotate affordance (drag lengthens + rotates), width handles
+  resize symmetrically, Esc aborts through the shared `gestureCancel` registry.
+  Box and ruler are mutually exclusive working shapes — drawing either retires
+  the other. Peak-anchored actions live in `workshops/rsm/RsmPanel.tsx` (not the
+  ROI panel) because that panel already lists every fitted peak with its
+  classification, so the action needs no canvas machinery — a Q-centre plus the
+  new pure `lib/rsmPeakCut.ts` shapes the request directly. Labels distinguish
+  the physics: `"Radial cut — film peak (rank 2)"` /
+  `"Transverse cut — substrate peak (rank 1)"`. Disabled-with-reason when there
+  are no Q columns, no peaks, or no finite Q centre. Reused
+  `cellSize`/`pxToData`/`boxColsFor` from `useMapRoi.ts` rather than
+  duplicating. `MapStage.tsx` hit 404 mid-work and was brought back under the
+  ceiling by extracting `mapToolArming.ts` (63) — the ratchet doing its job
+  again. 407 files / 5950 tests green, `architecture.test.ts` zero-diff.
 
 - ~~**#6 Map interaction — draw / drag / resize / live preview / inline commit**~~
   (2026-08-09) — THE owner's original ask, delivered. Ceiling paid first as its
