@@ -1,11 +1,9 @@
 // Box-ROI + cut-ruler overlay for the 2-D map (RSM_CUTS_PLAN items 6 + 7) —
 // two layers over the canvas:
 //  (a) a pointer-transparent SVG: the box (accent rect + 8 six-px handles +
-//      a JetBrains-Mono bounds readout), the cut ruler (rotated outline +
+//      a JetBrains-Mono bounds readout), and the cut ruler (rotated outline +
 //      4 six-px handles [2 ends, 2 width] + a JetBrains-Mono angle/length/
-//      width readout — item 7), and, when the displayed axes are Q and a
-//      sector is configured in the ROI cuts panel, the true-polar sector as
-//      an annular wedge outline.
+//      width readout — item 7).
 //  (b) the INTERACTIVE inline commit bar — a `qzk-glass` div positioned
 //      with `rectToPx`/`rulerCorners`+`dataToPx` (the SAME projector the
 //      canvas and the SVG layer use, never re-derived): a "preview"-labelled
@@ -18,35 +16,27 @@
 //      preview/N/∫I/∫x/∫y/Stats vocabulary, box_cut vs its rotated
 //      (rulerBoxBody) form only.
 //
-// The sector-wedge preview reads `workshops/roicuts/useRoiCuts` purely for
-// its exported `sectorPreview` (a read-only consumption of an already-built
-// hook — this file never imports/edits anything else from that workshop).
-// KNOWN v1 WART: that hook keeps its sector fields as its own component-
-// local state, so a second call here does not see edits made in an actually
-// OPEN RoiCutsPanel — it echoes that hook's own dataset-derived defaults.
-// Same category of wart as MapStageProps' documented "two map windows share
-// singleton state" note; not a functional problem for the wedge's purpose
-// (a rough visual of "this is roughly the sector shape"), just not
-// live-synced to a second, independent instance of the same hook.
+// The sector wedge (item 12: draggable true-polar sector, shown when the
+// displayed axes are Q) is its OWN component, `MapSectorWedge.tsx`, driven
+// by its OWN gesture hook (`useMapSectorWedge.ts`) rather than this file
+// reading `useRoiCuts()` directly — that hook now owns the `cutSpace==="q"`
+// gate and the sector-vs-null derivation internally, so this file only needs
+// to thread the hook's grouped state through as a prop (`wedgeState`, same
+// convention as `rulerState`). `sparklinePoints`/`barPosition`/
+// `boundsOfPoints` (the bar-layout math both files need) live in
+// `roiBarLayout.ts`, extracted in the prior commit alongside the wedge's
+// own split so neither file re-derives them.
 
 import { Button } from "../primitives";
-import { useRoiCuts } from "../workshops/roicuts/useRoiCuts";
-import type { CutSpace } from "../../lib/mapcuts";
 import type { MapPayload } from "../../lib/mapdata";
-import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler, type RoiSector } from "../../lib/roi";
+import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler } from "../../lib/roi";
 import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";
 import { dataToPx, fmt, plotRect } from "./mapRender";
+import MapSectorWedge from "./MapSectorWedge";
+import { barPosition, boundsOfPoints, sparklinePoints, SPARK_H, SPARK_W } from "./roiBarLayout";
 import type { UseMapRulerState } from "./useMapRuler";
-
-const SPARK_W = 176;
-const SPARK_H = 30;
-// Matches `.qzk-roi-bar`'s fixed CSS width (shell.css) and an estimate of its
-// no-stats-shown height — the clamp below only needs to be close (the Stats
-// readout, when it appears, is allowed to run slightly past this estimate;
-// it still stays inside the plot rect on the axis that matters, horizontal).
-const BAR_W = 216;
-const BAR_H = 140;
+import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
 
 function fmtBounds(rect: RoiRect): string {
   return `${fmt(rect.x0)}…${fmt(rect.x1)}, ${fmt(rect.y0)}…${fmt(rect.y1)}`;
@@ -57,58 +47,6 @@ function fmtBounds(rect: RoiRect): string {
  *  needs to reproduce the cut numerically. */
 function fmtRuler(ruler: RoiRuler): string {
   return `${fmt(ruler.angle)}° L=${fmt(ruler.length)} W=${fmt(ruler.width)}`;
-}
-
-function sparklinePoints(profile: RoiProfile, w: number, h: number): string {
-  const n = profile.intensity.length;
-  if (n < 2) return "";
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const v = profile.intensity[i]!;
-    if (Number.isFinite(v)) {
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
-  }
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return "";
-  const span = hi - lo || 1;
-  const pts: string[] = [];
-  for (let i = 0; i < n; i++) {
-    const v = profile.intensity[i]!;
-    const x = (i / (n - 1)) * w;
-    const y = Number.isFinite(v) ? h - ((v - lo) / span) * h : h;
-    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-  }
-  return pts.join(" ");
-}
-
-/** Annular-wedge outline (qMin..qMax radii, phiMin..phiMax azimuth) as an
- *  SVG path, sampled at 3° steps and projected through `project` — no trig
- *  shortcut for the rotation an affine px projection introduces (same
- *  reasoning `lib/roi.ts::rulerCorners`'s doc gives for the cut ruler). */
-function sectorWedgePath(sector: RoiSector, project: (x: number, y: number) => [number, number] | null): string | null {
-  const span = (((sector.phiMax - sector.phiMin) % 360) + 360) % 360 || 360;
-  const steps = Math.max(2, Math.min(120, Math.round(span / 3)));
-  const outer: [number, number][] = [];
-  const inner: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
-    const rad = ((sector.phiMin + (span * i) / steps) * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const s = Math.sin(rad);
-    const po = project(sector.qMax * c, sector.qMax * s);
-    const pi = project(sector.qMin * c, sector.qMin * s);
-    if (po) outer.push(po);
-    if (pi) inner.push(pi);
-  }
-  if (outer.length < 2 || inner.length < 2) return null;
-  const d = [
-    `M ${outer[0]![0]} ${outer[0]![1]}`,
-    ...outer.slice(1).map((p) => `L ${p[0]} ${p[1]}`),
-    ...inner.reverse().map((p) => `L ${p[0]} ${p[1]}`),
-    "Z",
-  ];
-  return d.join(" ");
 }
 
 /** `rulerCorners(ruler)` projected to px, or null if any corner falls
@@ -131,24 +69,6 @@ function rulerHandlePositions(cornersPx: readonly { x: number; y: number }[]): {
   if (!c0 || !c1 || !c2 || !c3) return [];
   const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
   return [mid(c0, c1), mid(c2, c3), mid(c1, c2), mid(c3, c0)];
-}
-
-function boundsOfPoints(pts: readonly { x: number; y: number }[]): { x0: number; y0: number; x1: number; y1: number } {
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
-}
-
-/** Keep the inline bar clear of the box/ruler (below it, or above when that
- *  would run off the bottom) and inside the plot rect on both axes. */
-function barPosition(
-  rectPx: { x0: number; y0: number; x1: number; y1: number },
-  plot: { x: number; y: number; w: number; h: number },
-): { left: number; top: number } {
-  let top = rectPx.y1 + 8;
-  if (top + BAR_H > plot.y + plot.h) top = rectPx.y0 - BAR_H - 8;
-  const left = Math.min(Math.max(rectPx.x0, plot.x), plot.x + Math.max(0, plot.w - BAR_W));
-  return { left, top: Math.min(Math.max(top, plot.y), plot.y + Math.max(0, plot.h - BAR_H)) };
 }
 
 interface CommitBarProps {
@@ -233,7 +153,6 @@ export interface MapRoiOverlayProps {
   payload: MapPayload;
   w: number;
   h: number;
-  cutSpace: CutSpace | null;
   rect: RoiRect | null;
   preview: RoiProfile | null;
   previewAxis: "x" | "y";
@@ -251,6 +170,9 @@ export interface MapRoiOverlayProps {
    *  only needs one line to wire it, buying back headroom on its own
    *  400-line ceiling for the gesture-routing code that item needed. */
   rulerState: UseMapRulerState;
+  /** The sector-wedge hook's full state (RSM_CUTS_PLAN item 12) — same
+   *  grouped-object convention as `rulerState`, for the same reason. */
+  wedgeState: UseMapSectorWedgeState;
 }
 
 export default function MapRoiOverlay(props: MapRoiOverlayProps) {
@@ -258,7 +180,6 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     payload,
     w,
     h,
-    cutSpace,
     rect,
     preview,
     previewAxis,
@@ -272,23 +193,18 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     statsError,
     onClearStats,
     rulerState,
+    wedgeState,
   } = props;
-  // Read-only echo of the panel's sector card — see this file's header wart note.
-  const sectorPreview = useRoiCuts().sectorPreview;
 
   const project = (x: number, y: number) => dataToPx(payload, w, h, x, y);
   const rectPx = rect ? rectToPx(rect, project) : null;
-  const wedgeD = cutSpace === "q" && sectorPreview ? sectorWedgePath(sectorPreview, project) : null;
   const ruler = rulerState.ruler;
   const rulerPx = ruler ? rulerCornersPx(ruler, project) : null;
 
   return (
     <>
-      {(rectPx || wedgeD || rulerPx) && (
+      {(rectPx || rulerPx) && (
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
-          {wedgeD && (
-            <path d={wedgeD} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 3" />
-          )}
           {rectPx && rect && (
             <g>
               <rect
@@ -332,6 +248,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           )}
         </svg>
       )}
+
+      <MapSectorWedge payload={payload} w={w} h={h} wedge={wedgeState} />
 
       {rect && rectPx && (
         <div

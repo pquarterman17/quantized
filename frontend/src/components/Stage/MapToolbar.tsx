@@ -23,6 +23,12 @@ export type RoiMode = "off" | "roi";
  *  armed at a time. */
 export type RulerMode = "off" | "ruler";
 
+/** Sector-wedge arm/disarm state (RSM_CUTS_PLAN item 12) — same reasoning as
+ *  `RoiMode`/`RulerMode`: lives here so useMapSectorWedge.ts imports the
+ *  type, not the reverse. Mutually exclusive with box/ruler/cuts (same
+ *  canvas pointer gestures). */
+export type WedgeMode = "off" | "sector";
+
 export interface MapToolbarProps {
   /** Angular ⇄ Q axis toggle (only shown when the dataset carries both). */
   qAvailable: boolean;
@@ -66,6 +72,14 @@ export interface MapToolbarProps {
   rulerMode: RulerMode;
   onToggleRuler: () => void;
 
+  /** Sector-wedge arm/disarm (RSM_CUTS_PLAN item 12) — visible only when
+   *  `qAvailable` (the wedge is meaningless without Q columns at all);
+   *  disabled with a reason, not hidden, when `cutSpace` isn't currently
+   *  "q" (the wedge needs the Q view on screen — see `useMapSectorWedge.ts`'s
+   *  header). */
+  wedgeMode: WedgeMode;
+  onToggleWedge: () => void;
+
   onSavePng: () => void;
 }
 
@@ -98,6 +112,8 @@ export default function MapToolbar(props: MapToolbarProps) {
     onToggleRoi,
     rulerMode,
     onToggleRuler,
+    wedgeMode,
+    onToggleWedge,
     onSavePng,
   } = props;
 
@@ -190,6 +206,20 @@ export default function MapToolbar(props: MapToolbarProps) {
           >
             ▱
           </button>
+          {qAvailable && (
+            <button
+              className={`qzk-tool-btn${wedgeMode === "sector" ? " active" : ""}`}
+              disabled={cutSpace !== "q"}
+              title={
+                cutSpace !== "q"
+                  ? "Sector wedge needs the Q-space view — switch to Q first"
+                  : "Sector wedge: drag the q/φ handles to resize, drag inside to rotate — Radial/Azimuthal commit from the floating bar; the panel's Sector card is still the exact-value entry point"
+              }
+              onClick={onToggleWedge}
+            >
+              ◔
+            </button>
+          )}
           {gridable && (
             <button
               className="qzk-tool-btn"
