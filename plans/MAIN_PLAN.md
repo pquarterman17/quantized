@@ -622,6 +622,22 @@ in git history @ `e4f6590`.)*
 
 ~~16. **Append/merge workspace**~~ COMPLETED 2026-07-11 (see Completed).
 
+41. **Sector ROI state is component-local, not store-backed** (folded up
+    2026-08-10 from `RSM_CUTS_PLAN.md` #25, archived same day — the plan's
+    campaign completed with this as its only residue). The box tool uses
+    `store.mapRoi`, so canvas and panel stay structurally in sync; the
+    SECTOR tool's fields instead live as local state inside
+    `workshops/roicuts/useRoiCuts.ts`, so a second, independently-mounted
+    `RoiCutsPanel` will not see a live drag from the first — "one value, two
+    entry points" only within a single mounted `MapStage`. Pre-existing
+    (`MapRoiOverlay.tsx`'s header already documented this for the old
+    read-only preview); not worsened by any RSM_CUTS_PLAN work.
+    - [ ] Move the sector fields into `store/rois.ts` beside `mapRoi`/
+      `mapRuler`, which is where they belonged from the start, then delete
+      the cross-instance caveat from both headers.
+    - Low priority: two simultaneously-mounted ROI panels is not a common
+      configuration. Do next time `store/rois.ts` is open anyway.
+
 *(further candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*
 
 ---

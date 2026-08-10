@@ -13,15 +13,21 @@ library (plots, fits, exports like any scan) plus the summary scalars
 (∫I, centroid, peak position) a user pastes into a paper; batch apply
 additionally yields a summary table and a single overlaid figure.
 
-**Status:** Active
+**Status:** Complete (folded up 2026-08-10 — see below)
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09 (rev 5 — item 10 closed: realdata smoke test
+**Updated:** 2026-08-10 (plan-hygiene fold-up: after rev 5, items #11–14
+also closed same day (2026-08-09, commits `47c34e0b`/`6d9bd111`/`81504a6a`/
+`0d935b4e`) without this header being refreshed — #11 skipped by owner
+decision, #12–14 shipped — leaving only item #25 (booked by #12's agent,
+component-local sector state) open. That is ≤3 open items on a completed
+campaign, so per the fold-up rule item #25 is folded UP into
+`MAIN_PLAN.md` Tier 3 #41 (with provenance) and this plan is archived.
+Prior: rev 5 — item 10 closed: realdata smoke test
 (`tests/test_api_rsm_realdata.py`) + physics docs + bookkeeping
 (registered in MAIN_PLAN.md's plan tree + BACKLOG.md; PORT_CHECKLIST.md
 gains MATLAB bug #6, `+fitting/rsmStrain.m`'s near-degenerate-Qx guard
-gap). Build phase complete: every item except the owner-gated #11 and the
-Tier 3 #12–14 residuals is now struck. Prior revisions: rev 4 — items
+gap). Prior revisions: rev 4 — items
 1/4/16 shipped and struck; adds
 item 17, the aspect-ratio defect that turned out to be the real cause of the
 owner's reported plotting problem, and item 18, the dataset-handle cache,
@@ -308,21 +314,12 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 3 — Nice-to-Have
 
-25. **Sector state is component-local, so two mounted panels can diverge**
-    (booked rev 10, 2026-08-09; **flagged honestly by item 12's agent rather
-    than worked around silently**). The box uses `store.mapRoi`, so canvas and
-    panel are structurally in sync. The SECTOR's fields instead live as local
-    state inside `workshops/roicuts/useRoiCuts.ts`, so item 12's wedge drag
-    writes back through the same hook instance — "one value, two entry points"
-    only WITHIN a mounted `MapStage`. A second, independently-mounted
-    `RoiCutsPanel` will not see a live drag.
-    - Pre-existing: `MapRoiOverlay.tsx`'s header already documented this for
-      the old read-only preview. Item 12 did not worsen it.
-    - [ ] Fix by moving the sector fields into `store/rois.ts` beside
-      `mapRoi`/`mapRuler`, which is where they belonged from the start —
-      then delete the cross-instance caveat from both headers.
-    - Low priority: two simultaneously-mounted ROI panels is not a common
-      configuration. Do it next time `store/rois.ts` is open anyway.
+~~25. **Sector state is component-local, so two mounted panels can
+    diverge**~~ FOLDED UP 2026-08-10 into `MAIN_PLAN.md` Tier 3 #41 (see
+    that plan's Completed-adjacent entry for the full text) — this was the
+    plan's only open item once #11–14 closed, so per the fold-up rule it
+    moved to the main plan rather than keeping this file alive for one
+    residual line.
 
 ## Completed
 
