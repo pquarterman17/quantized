@@ -7,14 +7,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
-import { cutSpaceForKeys } from "../../lib/mapcuts";
+import { cutSpaceForKeys, type CutMode } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import MapRoiOverlay from "./MapRoiOverlay";
 import MapToolbar from "./MapToolbar";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
+import { useMapRoi } from "./useMapRoi";
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -75,8 +77,18 @@ export default function MapStage({ dataset }: MapStageProps) {
   // segment cuts interpolate the scattered cloud and work regardless.
   const gridable = Array.isArray(active?.data.metadata?.map_shape);
   const cuts = useMapCuts(active, cutSpace);
+  // Box ROI: draw/move/resize + live preview + inline commit (RSM_CUTS_PLAN
+  // item 6) — the SAME cutSpace-gated tool group as H/V/seg, mutually
+  // exclusive with them (arming one disarms the other; see setCutMode/
+  // toggleRoi below) since both drive the same canvas pointer gestures.
+  const roi = useMapRoi(active, cutSpace);
   // Segment-drag state in canvas pixels (for the SVG preview line).
   const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
+  // Host box size in CSS px, kept in sync by the paint effect below (the
+  // SAME ResizeObserver that already exists for the canvas) — the ROI
+  // overlay needs it to convert data<->px through the SAME plotRect the
+  // canvas paints with, and refs aren't a reliable read during render.
+  const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -117,7 +129,12 @@ export default function MapStage({ dataset }: MapStageProps) {
     // Show peak markers only when they belong to the active dataset.
     const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
     const contour = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
-    const paint = () => draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
+    const paint = () => {
+      draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
+      const w = host.clientWidth;
+      const h = host.clientHeight;
+      setHostSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
@@ -149,25 +166,44 @@ export default function MapStage({ dataset }: MapStageProps) {
     return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
   }
 
+  // ROI handlers take precedence over the cut tool while armed — both drive
+  // the same canvas pointer gestures, so only one may own them at a time.
+  const roiArmed = roi.mode === "roi" && cutSpace != null;
+
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     const { r, px } = hitAt(ev);
     setReadout(r);
+    if (roiArmed && payload) {
+      roi.onMove(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (dragPx) setDragPx({ a: dragPx.a, b: px });
   }
 
   function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed) return;
     if (cuts.mode !== "h" && cuts.mode !== "v") return;
     const { r } = hitAt(ev);
     if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
   }
 
   function onDown(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed && payload) {
+      const { px } = hitAt(ev);
+      roi.onDown(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (cuts.mode !== "seg") return;
     const { r, px } = hitAt(ev);
     if (r) setDragPx({ a: px, b: px });
   }
 
   function onUp(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed) {
+      const { px } = hitAt(ev);
+      roi.onUp(px);
+      return;
+    }
     if (cuts.mode !== "seg" || !dragPx) return;
     const canvas = canvasRef.current;
     const host = hostRef.current;
@@ -185,25 +221,45 @@ export default function MapStage({ dataset }: MapStageProps) {
     exportCanvasPng(canvas, `${stem}_map.png`);
   }
 
+  // Box ROI and the H/V/seg cut tool are mutually exclusive (same canvas
+  // gestures) — arming one disarms the other.
+  function setCutMode(m: CutMode) {
+    if (m !== "off") roi.setMode("off");
+    cuts.setMode(m);
+  }
+  function toggleRoi() {
+    if (roi.mode === "roi") {
+      roi.setMode("off");
+    } else {
+      cuts.setMode("off");
+      roi.setMode("roi");
+    }
+  }
+
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
         <canvas
           ref={canvasRef}
+          tabIndex={roi.rect ? 0 : -1}
           style={{
             width: "100%",
             height: "100%",
             display: "block",
-            cursor: cuts.mode === "off" ? "default" : "crosshair",
+            cursor: roiArmed ? roi.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
           onMouseMove={onMove}
           onMouseLeave={() => {
             setReadout(null);
             setDragPx(null);
+            roi.onLeave();
           }}
           onClick={onClick}
           onMouseDown={onDown}
           onMouseUp={onUp}
+          onKeyDown={(ev) => {
+            if (payload) roi.onKeyDown(ev, payload);
+          }}
         />
         {dragPx && (
           <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
@@ -217,6 +273,26 @@ export default function MapStage({ dataset }: MapStageProps) {
               strokeDasharray="5 4"
             />
           </svg>
+        )}
+        {payload && cutSpace != null && hostSize.w > 0 && hostSize.h > 0 && (
+          <MapRoiOverlay
+            payload={payload}
+            w={hostSize.w}
+            h={hostSize.h}
+            cutSpace={cutSpace}
+            rect={roi.rect}
+            preview={roi.preview}
+            previewAxis={roi.previewAxis}
+            onPreviewAxisChange={roi.setPreviewAxis}
+            previewStats={roi.previewStats}
+            onIntegrate={roi.commitIntegrate}
+            landingBusy={roi.landingBusy}
+            onStats={roi.commitStats}
+            statsBusy={roi.statsBusy}
+            apiStats={roi.apiStats}
+            statsError={roi.statsError}
+            onClearStats={roi.clearStats}
+          />
         )}
       </div>
 
@@ -246,13 +322,20 @@ export default function MapStage({ dataset }: MapStageProps) {
           cutSpace={cutSpace}
           gridable={gridable}
           cutMode={cuts.mode}
-          onSetCutMode={cuts.setMode}
+          onSetCutMode={setCutMode}
           cutWidth={cuts.width}
           onSetCutWidth={cuts.setWidth}
-          cutWidthTooltip="Cut width: average all lines within ±width/2 (0 = single line)"
+          cutWidthTooltip={
+            // Since item 2, Q-space `width` is a physical perpendicular band
+            // half-width in Å⁻¹ (mask + bin over the curvilinear cloud);
+            // angular keeps the original line-averaging semantics.
+            cutSpace === "q"
+              ? "Cut width: perpendicular band half-width in Å⁻¹ around the line (0 = nearest points only)"
+              : "Cut width: average all lines within ±width/2 (0 = single line)"
+          }
           onProjection={cuts.runProjection}
-          roiMode="off"
-          onToggleRoi={() => {}}
+          roiMode={roi.mode}
+          onToggleRoi={toggleRoi}
           onSavePng={savePng}
         />
       )}
