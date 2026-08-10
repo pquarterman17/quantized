@@ -133,12 +133,13 @@ rule in task 4.
    `tests/test_io_origin_fuzz.py`.
    - [ ] For EACH site: identify what the test is really protecting (an
      algorithm choice? a complexity class? a vectorised path vs a Python
-     loop?) and assert THAT. Then keep the clock only as a loose backstop, at
-     least 5x the observed runtime on an idle machine.
+     loop?) and assert THAT. Then set the clock to
+     `max(old_budget, 5x measured)` — see the budget rule in Context;
+     **never lower an existing bound**.
    - [ ] `test_calc_unitconvert.py:100` (0.5 s) is the priority — it is the
      tightest and has the least headroom. If no load-invariant claim exists
-     (i.e. the test only ever meant "this is fast"), widen the budget to 5x
-     measured and add a comment saying it is a smoke bound, not a benchmark.
+     (i.e. the test only ever meant "this is fast"), KEEP the existing budget
+     and add a comment saying it is a smoke bound, not a benchmark.
    - [ ] Copy the comment style from `tests/test_calc_map.py:280-292`, which
      explains WHY the bound is loose and warns against tightening it.
    - Acceptance: `uv run pytest tests/test_calc_unitconvert.py tests/test_calc_peaks.py tests/test_io_origin_fuzz.py -q && uv run ruff check src tests`
