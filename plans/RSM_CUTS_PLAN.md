@@ -357,25 +357,28 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     angular handles on the wedge edges, same gesture machine. Numeric +
     live preview must prove insufficient first.
 
-13. **Named-ROI workspace persistence** — serialize `savedRois` into
-    `.dwk`. BLOCKED on paying `lib/workspace.ts`'s pin (754, zero
-    slack): (de)serialization lives in `store/rois.ts`; workspace.ts
-    must shed at least what the hook-in costs.
-
-14. **Migrate the five existing `rsm*` wrappers from `lib/api.ts` to
-    `lib/api/rsm.ts`** with re-exports (the api/stats.ts template) —
-    lowers the 1828 pin; do when next touching those wrappers.
-
-15. ~~**Commit-path dataset-handle cache**~~ — SUPERSEDED by Tier 1 item 18
-    (owner promoted it, 2026-08-09). Original text: only if committing cuts on
-    ≳400k-point maps proves painfully slow in practice: extend the
-    `_uploadcache.py` pattern so commits send a handle instead of the
-    full DataStruct. The preview stays client-side regardless (Resolved
-    decisions, rev 2).
-
----
-
 ## Completed
+
+- ~~**#13 Named-ROI workspace persistence**~~ (2026-08-09) — precondition met
+  the honest way: `workspace.ts` was at 753/754 (one line of slack), so
+  `mergeWorkspace` + `WorkspaceMergeResult` (~144 lines, one caller) were
+  extracted verbatim to `lib/workspaceMerge.ts` and re-exported, dropping it
+  754 → 616 BEFORE any feature code, as its own commit with the pin lowered in
+  the same change. Feature then took it to 632 — still 120 under the original.
+  `serializeRois`/`deserializeRois` live in `store/rois.ts`, mirroring
+  `lib/plotspec.ts::sanitizeSavedPlotSpecs`. A corrupt entry is skipped and
+  named in `migrationWarnings`, never throws; a pre-item-13 `.dwk` loads to an
+  empty list (both proven by test). **Decision:** only NAMED `savedRois`
+  persist — `mapRoi`/`mapRuler` are working scratch with no dataset binding to
+  validate on reload, so restoring raw geometry onto whatever map happened to
+  be active risked showing a box drawn against different axes. Same reasoning
+  the Graph Builder already applies to unsaved specs.
+- ~~**#14 Migrate `rsm*` wrappers to `lib/api/rsm.ts`**~~ (2026-08-09) — five
+  moved (`analyzeRsm`, `rsmStrain`, `rsmLinecut`, `rsmCutSegment`,
+  `rsmProjection`); `lib/api.ts` 1782 → 1724 with the pin ratcheted to 1725,
+  `lib/api/rsm.ts` 132 → 187 (under the 500 ceiling). **No compatibility
+  re-exports left** — those would have kept the pin high and defeated the
+  point. 4 import sites updated including two `vi.mock` paths. Done on Haiku.
 
 - ~~**#11 Golden parity for `sector_profile`**~~ (2026-08-09) — **SKIPPED by
   owner decision**, not completed. Would need a local MATLAB run to freeze
