@@ -331,26 +331,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Not blocking; these are green on CI today (which runs less
       concurrently than this session did).
 
-22. **Intermittent frontend flake: `useFigureBuilder` F2.4b parity**
-    (booked rev 7, 2026-08-09; found by the orchestrator's post-merge gate,
-    NOT caused by this plan's work). `useFigureBuilder.test.ts > direct
-    manipulation parity (F2.4b) > Apply commits legend drag, annotation
-    drag, and title/xlabel/ylabel edits...` failed once in a full
-    `npx vitest run` (1 of 5898), then passed on an immediate re-run of the
-    identical tree, and passed 3/3 when run together with the roicuts
-    suites that merged alongside it. So: not deterministic, not an
-    ordering conflict with the new tests — an intermittent failure under
-    full-suite parallel worker load.
-    - Provenance: the test belongs to `feat(figure): F2.4b
-      direct-manipulation parity` (2026-08-05), predating this plan.
-    - [ ] Reproduce with `--no-file-parallelism` and with a repeat count to
-      establish the rate before changing anything; a flake diagnosed from
-      one observation usually gets "fixed" by hiding it.
-    - [ ] Suspect shared module/store state that survives between workers,
-      or a timing assumption in the Apply→document commit path.
-    - Not blocking this plan; recorded so it is not rediscovered as "the
-      RSM work broke the figure builder".
-
 ## Tier 3 — Nice-to-Have
 
 25. **Sector state is component-local, so two mounted panels can diverge**
@@ -370,6 +350,25 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
       configuration. Do it next time `store/rois.ts` is open anyway.
 
 ## Completed
+
+- ~~**#22 `useFigureBuilder` F2.4b flake**~~ (2026-08-09) — measured before
+  fixed, as required. **Baseline 1/30** standalone, single-file,
+  `--no-file-parallelism`. That immediately refuted two hypotheses: it is NOT
+  full-suite worker contention (my framing when I booked it) and NOT the
+  inter-test state leak recorded in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` from
+  the 2026-08-07 sighting — that stale note was corrected in the same change.
+  **Root cause:** the test synchronised on
+  `waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled())`, which proves
+  only that the debounced preview mock was INVOKED — not that its resolved
+  hitmap reached `result.current`. `dragElement` early-returns on `!hitmap`
+  (`useFigureBuilder.ts:494`), so on a lost race the first gesture silently
+  no-ops and `publication.overrides.legend` is `undefined` at Apply. **Fix
+  reused the file's OWN existing idiom** —
+  `await waitFor(() => expect(result.current.hitmap).not.toBeNull())`, already
+  used by the axis-breaks and annotations tests, just missing from the three
+  that call `dragElement`. No production code touched: a real pointer gesture
+  cannot reach the legend before the preview it targets has rendered once.
+  Agent measured 0/90 after; orchestrator independently re-verified **0/30**.
 
 - ~~**#12 Draggable sector wedge**~~ (2026-08-09) — four handles (qMin/qMax
   arcs, phiMin/phiMax edges) plus interior-drag rotation. Extraction landed
