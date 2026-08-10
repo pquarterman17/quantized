@@ -406,6 +406,20 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Completed
 
+- ~~**#23 `rsm_strain` symmetric-reflection guard**~~ (2026-08-09) — on
+  `epytaxy_rsm.xrdml` `eps_parallel` went from a fabricated **0.8087 (80.9 %)**
+  to `nan` plus a machine-readable warning. Criterion is a RATIO guard,
+  `|Qx|/|Qz| < tan(0.1 deg) ~= 1.745e-3` on either peak — chosen over an
+  FWHM criterion because `rsm_strain` takes only centres and widths would
+  ripple into routes + frontend. The threshold was bounded numerically before
+  being picked, not reverse-engineered: ~10x above the real-data noise floor
+  (~1e-4) and ~5-7x below the repo's own golden asymmetric fixtures
+  (0.88-1.3 %), so golden stayed green (155). **The MATLAB sibling
+  `+fitting/rsmStrain.m` carries the identical `Qx == 0`-only check** — same
+  latent bug, reported not fixed, per sibling-repo policy. Panel now shows
+  "not measurable" with the reason on hover, reusing the disabled-with-reason
+  idiom item 7 established in the same panel rather than inventing a second.
+
 - ~~**#23 `rsm_strain` returns nonsense on symmetric reflections, silently**~~
   (2026-08-09) — `calc/rsm.py` now guards `eps_parallel` on
   `|Qx|/|Qz| < tan(0.1°) ≈ 1.745e-3` for EITHER peak, not only exact
