@@ -1,5 +1,5 @@
 import type { ErrorBinding } from "./errorRoles";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
@@ -9,14 +9,9 @@ import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
+import type { RoiDef } from "./roi";
 import type { Dataset, OriginFigure } from "./types";
-import {
-  mergeWorkspace,
-  parseWorkspace,
-  serializeWorkspace,
-  WORKSPACE_FORMAT,
-  type LoadedWorkspace,
-} from "./workspace";
+import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
 function makeDataset(id: string, name: string): Dataset {
   return {
@@ -1217,6 +1212,80 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
   });
 });
 
+describe("workspace saved-ROI persistence (RSM_CUTS_PLAN item 13)", () => {
+  const savedRect: RoiDef = {
+    id: "roi-1",
+    name: "Film peak box",
+    kind: "rect",
+    rect: { space: "q", x0: -0.1, x1: 0.1, y0: 4.7, y1: 4.9 },
+  };
+  const savedRuler: RoiDef = {
+    id: "roi-2",
+    name: "Radial cut — substrate",
+    kind: "ruler",
+    ruler: { space: "q", cx: 0, cy: 4.8, angle: 88, length: 0.6, width: 0.02 },
+  };
+  const savedSector: RoiDef = {
+    id: "roi-3",
+    name: "Full annulus",
+    kind: "sector",
+    sector: { qMin: 4.5, qMax: 5.0, phiMin: 0, phiMax: 360 },
+  };
+
+  it("round-trips a mix of rect/ruler/sector saved ROIs exactly", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, savedRois: [savedRect, savedRuler, savedSector] }),
+    );
+    expect(loaded.savedRois).toEqual([savedRect, savedRuler, savedSector]);
+  });
+
+  it("defaults to an empty list for a legacy doc with no savedRois field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.savedRois).toEqual([]);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc, and warns", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect] }),
+    ) as Record<string, unknown>;
+    doc.savedRois = [
+      (doc.savedRois as unknown[])[0],
+      { id: "bad" }, // missing name/kind entirely
+      { id: "bad2", name: "n", kind: "rect", rect: { space: "q", x0: 1 } }, // incomplete rect
+      { id: "bad3", name: "n", kind: "ruler", ruler: { space: "bogus", cx: 0, cy: 0, angle: 0, length: 1, width: 1 } }, // bad space
+      { id: "bad4", name: "n", kind: "sector", sector: { qMin: 1, qMax: NaN, phiMin: 0, phiMax: 10 } }, // non-finite
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.savedRois).toEqual([savedRect]);
+    // "bad" (no id/name at all) drops silently — nothing nameable to warn
+    // about, same degrade as every other structurally-impossible entry in
+    // this module. The other three all have a name and warn by it.
+    expect(loaded.migrationWarnings.length).toBe(3);
+  });
+
+  it("never throws on a hand-edited non-array savedRois", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.savedRois = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).savedRois).toEqual([]);
+  });
+
+  it("does not restore the working mapRoi/mapRuler — only named savedRois round-trip", () => {
+    // WorkspaceState carries no mapRoi/mapRuler field at all (see workspace.ts's
+    // doc); this asserts the doc a real save produces has nothing to restore
+    // one from, byte for byte.
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedRois: [savedRect] }),
+    ) as Record<string, unknown>;
+    expect(doc.mapRoi).toBeUndefined();
+    expect(doc.mapRuler).toBeUndefined();
+  });
+});
+
 describe("workspace per-technique view memory (PLOT_WORKFLOW_PLAN item 5)", () => {
   const memory = {
     "xrd.powder": {
@@ -1271,154 +1340,8 @@ describe("workspace per-technique view memory (PLOT_WORKFLOW_PLAN item 5)", () =
   });
 });
 
-describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
-  // A minimal LoadedWorkspace wrapper — mergeWorkspace only ever reads
-  // `.datasets` (see its doc for why every other field is ignored).
-  function asLoaded(datasets: Dataset[]): LoadedWorkspace {
-    return {
-      datasets,
-      folders: [],
-      activeId: null,
-      selectedIds: [],
-      expandedFolders: [],
-      originFigures: [],
-      originFidelity: [],
-      smartFolders: [],
-      reports: [],
-      macroSteps: [],
-      recalcMode: "auto",
-      figureDocs: [],
-      editableFigures: [],
-      pages: [],
-      migrationWarnings: [],
-      plotWindows: [],
-      focusedWindowId: null,
-      toolWindowLayout: {},
-      savedPlotSpecs: [],
-      techniqueViewMemory: {},
-    };
-  }
-
-  let idSeq = 0;
-  const genId = () => `merged-${++idSeq}`;
-  beforeEach(() => {
-    idSeq = 0;
-  });
-
-  it("appends with no collisions: ids/names untouched, per-dataset fields ride along", () => {
-    const current = [makeDataset("a", "first")];
-    const incoming = makeDataset("b", "second");
-    incoming.tags = ["MvsH"];
-    incoming.notes = "sample notes";
-    incoming.formulas = [{ name: "ratio", expr: "A/B" }];
-
-    const result = mergeWorkspace(current, asLoaded([incoming]), genId);
-
-    expect(result.datasets).toHaveLength(2);
-    expect(result.datasets[0]).toBe(current[0]); // current is reused, not cloned
-    expect(result.datasets[1].id).toBe("b");
-    expect(result.datasets[1].name).toBe("second");
-    expect(result.datasets[1].tags).toEqual(["MvsH"]);
-    expect(result.datasets[1].notes).toBe("sample notes");
-    expect(result.datasets[1].formulas).toEqual([{ name: "ratio", expr: "A/B" }]);
-    expect(result.remapped).toBe(0);
-    expect(result.renamed).toBe(0);
-    expect(result.droppedBgRefs).toBe(0);
-    expect(result.droppedFolderRefs).toBe(0);
-  });
-
-  it("remaps an incoming dataset id that collides with a CURRENT id (existing dataset untouched)", () => {
-    const current = [makeDataset("a", "first")];
-    const incoming = makeDataset("a", "duplicate-id");
-
-    const result = mergeWorkspace(current, asLoaded([incoming]), genId);
-
-    expect(result.datasets[0]).toBe(current[0]); // existing "a" is untouched
-    expect(result.datasets[1].id).toBe("merged-1"); // incoming "a" got a fresh id
-    expect(result.datasets[1].name).toBe("duplicate-id");
-    expect(result.remapped).toBe(1);
-  });
-
-  it("remaps incoming-vs-incoming id collisions too (a hand-edited/duplicated .dwk)", () => {
-    const dup1 = makeDataset("x", "first-x");
-    const dup2 = makeDataset("x", "second-x");
-
-    const result = mergeWorkspace([], asLoaded([dup1, dup2]), genId);
-
-    expect(result.datasets[0].id).toBe("x"); // first keeps the original id
-    expect(result.datasets[1].id).toBe("merged-1"); // second gets remapped
-    expect(result.remapped).toBe(1);
-  });
-
-  it("suffixes an incoming NAME collision Origin-style: ' (2)', ' (3)', …", () => {
-    const current = [makeDataset("a", "sample")];
-    const incoming = [makeDataset("b", "sample"), makeDataset("c", "sample")];
-
-    const result = mergeWorkspace(current, asLoaded(incoming), genId);
-
-    expect(result.datasets.map((d) => d.name)).toEqual(["sample", "sample (2)", "sample (3)"]);
-    expect(result.renamed).toBe(2);
-  });
-
-  it("remaps a bgRef pointing at ANOTHER incoming dataset, including a forward reference", () => {
-    // "data" (index 0) references "bg" (index 1) — a forward reference, the
-    // case the two-pass id assignment exists to handle.
-    const data = { ...makeDataset("data", "sample"), bgRef: { datasetId: "bg", interp: "pchip" } };
-    const bg = makeDataset("bg", "background");
-
-    const result = mergeWorkspace([], asLoaded([data, bg]), genId);
-
-    const dataDs = result.datasets.find((d) => d.name === "sample")!;
-    const bgDs = result.datasets.find((d) => d.name === "background")!;
-    expect(dataDs.bgRef).toEqual({ datasetId: bgDs.id, interp: "pchip" });
-    expect(result.droppedBgRefs).toBe(0);
-  });
-
-  it("remaps a bgRef to the target's REMAPPED id when the target's original id collides", () => {
-    const current = [makeDataset("bg", "existing background")]; // occupies id "bg"
-    const data = { ...makeDataset("data", "sample"), bgRef: { datasetId: "bg", interp: "linear" } };
-    const bg = makeDataset("bg", "incoming background"); // collides -> remapped
-
-    const result = mergeWorkspace(current, asLoaded([data, bg]), genId);
-
-    const dataDs = result.datasets.find((d) => d.name === "sample")!;
-    const bgDs = result.datasets.find((d) => d.name === "incoming background")!;
-    expect(bgDs.id).not.toBe("bg");
-    expect(dataDs.bgRef?.datasetId).toBe(bgDs.id);
-    expect(result.remapped).toBe(1);
-    expect(result.droppedBgRefs).toBe(0);
-  });
-
-  it("drops a bgRef targeting an id outside the incoming batch (counted, never crashes)", () => {
-    const incoming = {
-      ...makeDataset("a", "sample"),
-      bgRef: { datasetId: "does-not-exist", interp: "linear" },
-    };
-
-    const result = mergeWorkspace([], asLoaded([incoming]), genId);
-
-    expect(result.datasets[0].bgRef).toBeUndefined();
-    expect(result.droppedBgRefs).toBe(1);
-  });
-
-  it("drops folderId on every incoming dataset — no folder tree is merged in (non-reference fields like order ride along)", () => {
-    const incoming = { ...makeDataset("a", "in-folder"), folderId: "f1", order: 3 };
-
-    const result = mergeWorkspace([], asLoaded([incoming]), genId);
-
-    expect(result.datasets[0].folderId).toBeUndefined();
-    expect(result.datasets[0].order).toBe(3);
-    expect(result.droppedFolderRefs).toBe(1);
-  });
-
-  it("appending an empty incoming workspace is a no-op over current", () => {
-    const current = [makeDataset("a", "first")];
-    const result = mergeWorkspace(current, asLoaded([]), genId);
-    expect(result.datasets).toEqual(current);
-    expect(result.remapped).toBe(0);
-    expect(result.renamed).toBe(0);
-  });
-});
+// mergeWorkspace's own tests moved to lib/workspaceMerge.test.ts alongside its
+// RSM_CUTS_PLAN item 13 extraction out of this module.
 
 describe("error roles survive save/reapply (MAIN #33)", () => {
   // Typed rather than `unknown`: the helper builds a real Dataset, and an
