@@ -353,11 +353,39 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 3 — Nice-to-Have
 
-12. **Draggable sector wedge** — radial handles on the qMin/qMax arcs +
-    angular handles on the wedge edges, same gesture machine. Numeric +
-    live preview must prove insufficient first.
+25. **Sector state is component-local, so two mounted panels can diverge**
+    (booked rev 10, 2026-08-09; **flagged honestly by item 12's agent rather
+    than worked around silently**). The box uses `store.mapRoi`, so canvas and
+    panel are structurally in sync. The SECTOR's fields instead live as local
+    state inside `workshops/roicuts/useRoiCuts.ts`, so item 12's wedge drag
+    writes back through the same hook instance — "one value, two entry points"
+    only WITHIN a mounted `MapStage`. A second, independently-mounted
+    `RoiCutsPanel` will not see a live drag.
+    - Pre-existing: `MapRoiOverlay.tsx`'s header already documented this for
+      the old read-only preview. Item 12 did not worsen it.
+    - [ ] Fix by moving the sector fields into `store/rois.ts` beside
+      `mapRoi`/`mapRuler`, which is where they belonged from the start —
+      then delete the cross-instance caveat from both headers.
+    - Low priority: two simultaneously-mounted ROI panels is not a common
+      configuration. Do it next time `store/rois.ts` is open anyway.
 
 ## Completed
+
+- ~~**#12 Draggable sector wedge**~~ (2026-08-09) — four handles (qMin/qMax
+  arcs, phiMin/phiMax edges) plus interior-drag rotation. Extraction landed
+  first as its own no-behaviour-change commit: the wedge SVG → `MapSectorWedge.tsx`
+  (175) and the bar/sparkline layout → `roiBarLayout.ts` (69), which took
+  `MapRoiOverlay.tsx` **383 → 301** — it ended smaller than it started despite
+  gaining a feature. New pure `lib/roiSector.ts` (222) kept separate from the
+  zero-slack `lib/roi.ts` (638 pin). Polar hit-test measures true distance to
+  the nearest point on each of the four boundary elements — reusing
+  `shapeHit.ts::pointToSegmentDistance` for the edges — and scales by a uniform
+  `pxPerUnit`, valid precisely because item 17 locked Q-space to equal aspect.
+  **Seam preserved by construction**: phi bounds are never renormalized, so a
+  `{170, -170}` sector rotated +10° becomes `{180, -160}` and stays
+  seam-crossing; tested in both the pure module and through the gesture hook.
+  Numeric path untouched (zero diff to `workshops/roicuts/*`). One honest
+  limitation surfaced rather than hidden — booked as item 25.
 
 - ~~**#13 Named-ROI workspace persistence**~~ (2026-08-09) — precondition met
   the honest way: `workspace.ts` was at 753/754 (one line of slack), so
