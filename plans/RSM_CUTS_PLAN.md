@@ -326,15 +326,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
     - Not blocking this plan; recorded so it is not rediscovered as "the
       RSM work broke the figure builder".
 
-11. **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral`**
-    — OWNER-GATED (needs a local MATLAB run). Freeze case in
-    `tools/matlab/freeze_calc_values.m` (small Q grid; wrap + non-wrap
-    sectors; Sum and Mean), `golden`-marked pytest. Chi/box/ruler have
-    no MATLAB counterpart; their planted-Gaussian tests are the ground
-    truth. Do NOT golden-freeze the MATLAB Q line cut — it is the bug.
-
----
-
 ## Tier 3 — Nice-to-Have
 
 12. **Draggable sector wedge** — radial handles on the qMin/qMax arcs +
@@ -360,6 +351,21 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#11 Golden parity for `sector_profile`**~~ (2026-08-09) — **SKIPPED by
+  owner decision**, not completed. Would need a local MATLAB run to freeze
+  reference values from `extract2DArcIntegral.m`. The port's correctness rests
+  instead on the planted-Gaussian round-trip (recovers |Q| and phi within one
+  bin) plus the hand-derived wrap-equivalence truth table asserting the single
+  rebase formula matches MATLAB's three branches. Reopen only if a sector
+  discrepancy ever surfaces; do not freeze late/tired, since a bad reference
+  value silently becomes the thing everything downstream "passes" against.
+- ~~**MATLAB sibling `rsmStrain.m` guard**~~ (2026-08-09) — merged to
+  `Quantized_matlab` main: same `|Qx|/|Qz| < tan(0.1 deg)` criterion as the
+  Python fix (#23), `.warnings` string array added, docstring updated. Freeze
+  case verified unaffected (substrate 1.28%, film 0.88% — clearing by 7.3x and
+  5.1x), so a future re-freeze stays consistent across the two repos. All 11
+  tests in `test_rsmAnalyze.m` pass headless.
 
 - ~~**#10 Integration, realdata smoke, physics docs, bookkeeping**~~
   (2026-08-09) — the plan's serial closing item, delivered in two halves.
