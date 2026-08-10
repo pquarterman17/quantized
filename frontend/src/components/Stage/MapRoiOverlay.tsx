@@ -1,16 +1,22 @@
-// Box-ROI overlay for the 2-D map (RSM_CUTS_PLAN item 6) — two layers over
-// the canvas:
-//  (a) a pointer-transparent SVG: the box itself (accent rect + 8 six-px
-//      handles + a JetBrains-Mono bounds readout) and, when the displayed
-//      axes are Q and a sector is configured in the ROI cuts panel, the
-//      true-polar sector as an annular wedge outline.
+// Box-ROI + cut-ruler overlay for the 2-D map (RSM_CUTS_PLAN items 6 + 7) —
+// two layers over the canvas:
+//  (a) a pointer-transparent SVG: the box (accent rect + 8 six-px handles +
+//      a JetBrains-Mono bounds readout), the cut ruler (rotated outline +
+//      4 six-px handles [2 ends, 2 width] + a JetBrains-Mono angle/length/
+//      width readout — item 7), and, when the displayed axes are Q and a
+//      sector is configured in the ROI cuts panel, the true-polar sector as
+//      an annular wedge outline.
 //  (b) the INTERACTIVE inline commit bar — a `qzk-glass` div positioned
-//      with `rectToPx`/`dataToPx` (the SAME projector the canvas and the
-//      SVG layer use, never re-derived): a "preview"-labelled sparkline
-//      (client-only, lib/roiMath.ts), a live N/∫I readout, and the ∫x / ∫y
-//      / Stats buttons that turn one drag + one click into a library
-//      dataset. This is the deliverable the ROI panel is explicitly NOT
-//      required for.
+//      with `rectToPx`/`rulerCorners`+`dataToPx` (the SAME projector the
+//      canvas and the SVG layer use, never re-derived): a "preview"-labelled
+//      sparkline (client-only, lib/roiMath.ts), a live N/∫I readout, and the
+//      ∫x / ∫y / Stats buttons that turn one drag + one click into a
+//      library dataset. This is the deliverable the ROI panel is explicitly
+//      NOT required for. The box and the ruler each get their own bar
+//      (positioned off their own bounds), sharing ONE `CommitBar` body
+//      component — the two tools commit through the identical
+//      preview/N/∫I/∫x/∫y/Stats vocabulary, box_cut vs its rotated
+//      (rulerBoxBody) form only.
 //
 // The sector-wedge preview reads `workshops/roicuts/useRoiCuts` purely for
 // its exported `sectorPreview` (a read-only consumption of an already-built
@@ -27,10 +33,11 @@ import { Button } from "../primitives";
 import { useRoiCuts } from "../workshops/roicuts/useRoiCuts";
 import type { CutSpace } from "../../lib/mapcuts";
 import type { MapPayload } from "../../lib/mapdata";
-import { handlePositions, rectToPx, type RoiRect, type RoiSector } from "../../lib/roi";
+import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler, type RoiSector } from "../../lib/roi";
 import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";
 import { dataToPx, fmt, plotRect } from "./mapRender";
+import type { UseMapRulerState } from "./useMapRuler";
 
 const SPARK_W = 176;
 const SPARK_H = 30;
@@ -43,6 +50,13 @@ const BAR_H = 140;
 
 function fmtBounds(rect: RoiRect): string {
   return `${fmt(rect.x0)}…${fmt(rect.x1)}, ${fmt(rect.y0)}…${fmt(rect.y1)}`;
+}
+
+/** Angle/length/width readout for the ruler — the "angle readout in
+ *  JetBrains Mono" item 7 asks for, extended with the length/width a user
+ *  needs to reproduce the cut numerically. */
+function fmtRuler(ruler: RoiRuler): string {
+  return `${fmt(ruler.angle)}° L=${fmt(ruler.length)} W=${fmt(ruler.width)}`;
 }
 
 function sparklinePoints(profile: RoiProfile, w: number, h: number): string {
@@ -97,8 +111,36 @@ function sectorWedgePath(sector: RoiSector, project: (x: number, y: number) => [
   return d.join(" ");
 }
 
-/** Keep the inline bar clear of the box (below it, or above when that would
- *  run off the bottom) and inside the plot rect on both axes. */
+/** `rulerCorners(ruler)` projected to px, or null if any corner falls
+ *  outside the plot area — mirrors `useMapRuler.ts`'s own private helper
+ *  (kept separate: that one drives hit-testing, this one only draws). */
+function rulerCornersPx(
+  ruler: RoiRuler,
+  project: (x: number, y: number) => [number, number] | null,
+): { x: number; y: number }[] | null {
+  const pts = rulerCorners(ruler).map((c) => project(c.x, c.y));
+  if (pts.some((p) => !p)) return null;
+  return pts.map((p) => ({ x: p![0], y: p![1] }));
+}
+
+/** The ruler's 4 named-handle positions (end 0/1, width 0/1) as consecutive-
+ *  corner midpoints — same derivation `lib/roi.ts::classifyRulerHit` uses
+ *  for hit-testing, mirrored here purely for drawing the handle glyphs. */
+function rulerHandlePositions(cornersPx: readonly { x: number; y: number }[]): { x: number; y: number }[] {
+  const [c0, c1, c2, c3] = cornersPx;
+  if (!c0 || !c1 || !c2 || !c3) return [];
+  const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  return [mid(c0, c1), mid(c2, c3), mid(c1, c2), mid(c3, c0)];
+}
+
+function boundsOfPoints(pts: readonly { x: number; y: number }[]): { x0: number; y0: number; x1: number; y1: number } {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+}
+
+/** Keep the inline bar clear of the box/ruler (below it, or above when that
+ *  would run off the bottom) and inside the plot rect on both axes. */
 function barPosition(
   rectPx: { x0: number; y0: number; x1: number; y1: number },
   plot: { x: number; y: number; w: number; h: number },
@@ -107,6 +149,84 @@ function barPosition(
   if (top + BAR_H > plot.y + plot.h) top = rectPx.y0 - BAR_H - 8;
   const left = Math.min(Math.max(rectPx.x0, plot.x), plot.x + Math.max(0, plot.w - BAR_W));
   return { left, top: Math.min(Math.max(top, plot.y), plot.y + Math.max(0, plot.h - BAR_H)) };
+}
+
+interface CommitBarProps {
+  preview: RoiProfile | null;
+  previewAxis: "x" | "y";
+  onPreviewAxisChange: (axis: "x" | "y") => void;
+  previewStats: RoiBoxStats | null;
+  onIntegrate: (axis: "x" | "y") => void;
+  landingBusy: boolean;
+  onStats: () => void;
+  statsBusy: boolean;
+  apiStats: BoxStats | null;
+  statsError: string | null;
+  onClearStats: () => void;
+}
+
+/** Shared inline-bar body for both the box and the ruler — same preview/N/
+ *  ∫I/∫x/∫y/Stats vocabulary, only the positioning (caller) and the request
+ *  shape underneath `onIntegrate`/`onStats` (box_cut vs rulerBoxBody) differ. */
+function CommitBar(props: CommitBarProps) {
+  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats } = props;
+  return (
+    <>
+      <div className="qzk-roi-bar-row">
+        <span className="qzk-roi-bar-label">preview</span>
+        <div className="qzk-roi-axis-toggle">
+          <button className={previewAxis === "x" ? "active" : ""} onClick={() => onPreviewAxisChange("x")}>
+            x
+          </button>
+          <button className={previewAxis === "y" ? "active" : ""} onClick={() => onPreviewAxisChange("y")}>
+            y
+          </button>
+        </div>
+      </div>
+      <svg className="qzk-roi-sparkline" width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
+        {preview && preview.x.length > 1 && (
+          <polyline points={sparklinePoints(preview, SPARK_W, SPARK_H)} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
+        )}
+      </svg>
+      <div className="qzk-roi-bar-row qzk-roi-bar-readout">
+        <span>N</span>
+        <span>{previewStats ? previewStats.n_points : "—"}</span>
+        <span>∫I</span>
+        <span>{previewStats ? fmt(previewStats.integrated_intensity) : "—"}</span>
+      </div>
+      <div className="qzk-roi-bar-row">
+        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("x")} title="Integrate onto x, land as a new dataset">
+          ∫x
+        </Button>
+        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("y")} title="Integrate onto y, land as a new dataset">
+          ∫y
+        </Button>
+        <Button size="sm" disabled={statsBusy} onClick={onStats} title="Fetch box_stats from the backend">
+          {statsBusy ? "Stats…" : "Stats"}
+        </Button>
+      </div>
+      {apiStats && (
+        <div className="qzk-roi-bar-stats">
+          <span>∫I</span>
+          <strong>{fmt(apiStats.integrated_intensity)}</strong>
+          <span>centroid</span>
+          <strong>
+            {fmt(apiStats.centroid_x)}, {fmt(apiStats.centroid_y)}
+          </strong>
+          <span>peak</span>
+          <strong>
+            {fmt(apiStats.peak_x)}, {fmt(apiStats.peak_y)}
+          </strong>
+          <span>N</span>
+          <strong>{apiStats.n_points}</strong>
+          <button className="qzk-chip-reset" title="Clear" onClick={onClearStats}>
+            ×
+          </button>
+        </div>
+      )}
+      {statsError && <div className="qzk-roi-bar-error">{statsError}</div>}
+    </>
+  );
 }
 
 export interface MapRoiOverlayProps {
@@ -126,6 +246,11 @@ export interface MapRoiOverlayProps {
   apiStats: BoxStats | null;
   statsError: string | null;
   onClearStats: () => void;
+  /** The cut-ruler hook's full state (RSM_CUTS_PLAN item 7) — passed as one
+   *  grouped object (unlike the box's flattened props above) so MapStage.tsx
+   *  only needs one line to wire it, buying back headroom on its own
+   *  400-line ceiling for the gesture-routing code that item needed. */
+  rulerState: UseMapRulerState;
 }
 
 export default function MapRoiOverlay(props: MapRoiOverlayProps) {
@@ -146,6 +271,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     apiStats,
     statsError,
     onClearStats,
+    rulerState,
   } = props;
   // Read-only echo of the panel's sector card — see this file's header wart note.
   const sectorPreview = useRoiCuts().sectorPreview;
@@ -153,10 +279,12 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
   const project = (x: number, y: number) => dataToPx(payload, w, h, x, y);
   const rectPx = rect ? rectToPx(rect, project) : null;
   const wedgeD = cutSpace === "q" && sectorPreview ? sectorWedgePath(sectorPreview, project) : null;
+  const ruler = rulerState.ruler;
+  const rulerPx = ruler ? rulerCornersPx(ruler, project) : null;
 
   return (
     <>
-      {(rectPx || wedgeD) && (
+      {(rectPx || wedgeD || rulerPx) && (
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
           {wedgeD && (
             <path d={wedgeD} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 3" />
@@ -180,6 +308,28 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
               </text>
             </g>
           )}
+          {rulerPx && ruler && (
+            <g>
+              <polygon
+                points={rulerPx.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="var(--accent-soft)"
+                stroke="var(--accent)"
+                strokeWidth={1.5}
+              />
+              {rulerHandlePositions(rulerPx).map((p, i) => (
+                <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
+              ))}
+              <text
+                x={rulerPx[0]!.x}
+                y={Math.max(10, rulerPx[0]!.y - 6)}
+                fontFamily="var(--font-mono)"
+                fontSize={10}
+                fill="var(--text-dim)"
+              >
+                {fmtRuler(ruler)}
+              </text>
+            </g>
+          )}
         </svg>
       )}
 
@@ -190,59 +340,42 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="qzk-roi-bar-row">
-            <span className="qzk-roi-bar-label">preview</span>
-            <div className="qzk-roi-axis-toggle">
-              <button className={previewAxis === "x" ? "active" : ""} onClick={() => onPreviewAxisChange("x")}>
-                x
-              </button>
-              <button className={previewAxis === "y" ? "active" : ""} onClick={() => onPreviewAxisChange("y")}>
-                y
-              </button>
-            </div>
-          </div>
-          <svg className="qzk-roi-sparkline" width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
-            {preview && preview.x.length > 1 && (
-              <polyline points={sparklinePoints(preview, SPARK_W, SPARK_H)} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
-            )}
-          </svg>
-          <div className="qzk-roi-bar-row qzk-roi-bar-readout">
-            <span>N</span>
-            <span>{previewStats ? previewStats.n_points : "—"}</span>
-            <span>∫I</span>
-            <span>{previewStats ? fmt(previewStats.integrated_intensity) : "—"}</span>
-          </div>
-          <div className="qzk-roi-bar-row">
-            <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("x")} title="Integrate onto x, land as a new dataset">
-              ∫x
-            </Button>
-            <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("y")} title="Integrate onto y, land as a new dataset">
-              ∫y
-            </Button>
-            <Button size="sm" disabled={statsBusy} onClick={onStats} title="Fetch box_stats from the backend">
-              {statsBusy ? "Stats…" : "Stats"}
-            </Button>
-          </div>
-          {apiStats && (
-            <div className="qzk-roi-bar-stats">
-              <span>∫I</span>
-              <strong>{fmt(apiStats.integrated_intensity)}</strong>
-              <span>centroid</span>
-              <strong>
-                {fmt(apiStats.centroid_x)}, {fmt(apiStats.centroid_y)}
-              </strong>
-              <span>peak</span>
-              <strong>
-                {fmt(apiStats.peak_x)}, {fmt(apiStats.peak_y)}
-              </strong>
-              <span>N</span>
-              <strong>{apiStats.n_points}</strong>
-              <button className="qzk-chip-reset" title="Clear" onClick={onClearStats}>
-                ×
-              </button>
-            </div>
-          )}
-          {statsError && <div className="qzk-roi-bar-error">{statsError}</div>}
+          <CommitBar
+            preview={preview}
+            previewAxis={previewAxis}
+            onPreviewAxisChange={onPreviewAxisChange}
+            previewStats={previewStats}
+            onIntegrate={onIntegrate}
+            landingBusy={landingBusy}
+            onStats={onStats}
+            statsBusy={statsBusy}
+            apiStats={apiStats}
+            statsError={statsError}
+            onClearStats={onClearStats}
+          />
+        </div>
+      )}
+
+      {ruler && rulerPx && (
+        <div
+          className="qzk-glass qzk-roi-bar"
+          style={barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h))}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CommitBar
+            preview={rulerState.preview}
+            previewAxis={rulerState.previewAxis}
+            onPreviewAxisChange={rulerState.setPreviewAxis}
+            previewStats={rulerState.previewStats}
+            onIntegrate={rulerState.commitIntegrate}
+            landingBusy={rulerState.landingBusy}
+            onStats={rulerState.commitStats}
+            statsBusy={rulerState.statsBusy}
+            apiStats={rulerState.apiStats}
+            statsError={rulerState.statsError}
+            onClearStats={rulerState.clearStats}
+          />
         </div>
       )}
     </>
