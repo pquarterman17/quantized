@@ -285,6 +285,77 @@ describe("module-size ratchet (JMP_GAP #14)", () => {
   });
 });
 
+// General .ts source-file ceiling (RSM_CUTS_PLAN item 20, 2026-08-09). The gap in
+// the prior guards: `.tsx` had a 400-line ceiling and store `.ts` slices had pins,
+// so every OTHER `.ts` had neither — which is exactly how `lib/api.ts` reached 2,282
+// lines and `useDistribution.ts` 583 in the JMP campaign, both invisible to a green
+// suite. This guard closes the gap. Ceiling: 500 lines (matching the backend's Python
+// module ceiling in `tests/test_repo_integrity.py` — the two languages now agree).
+// Files that already exceed it are pinned at their exact current size (verified with
+// `wc -l` on 2026-08-09); they can only SHRINK, never grow. New .ts files must stay
+// under 500, or earn an extraction like lib/api/http.ts and lib/api/stats.ts did.
+const TS_CEILING = 500;
+// path-suffix -> pinned max (exact current line count at pin time). RATCHET DOWN ONLY.
+// These 16 files are the discovered overage set from the RSM/ROI campaigns. Future
+// growth in any of them must fund an extraction, not a ceiling bump.
+const TS_MODULE_PINS: Record<string, number> = {
+  "/lib/uplotOpts.ts": 1446,
+  "/lib/uplotOverlays.ts": 1175,
+  "/lib/types.ts": 1090,
+  "/lib/plotspec.ts": 893,
+  "/lib/originFigures.ts": 793,
+  "/components/Stage/useMultiPanelStage.ts": 791,
+  "/components/Stage/useStatStage.ts": 704,
+  "/components/workshops/calculators/useCalculators.ts": 681,
+  "/lib/roiMath.ts": 664,
+  "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
+  "/lib/plotdata.ts": 658,
+  "/components/Stage/worksheet/useWorksheetView.ts": 649,
+  "/lib/roi.ts": 638,
+  "/lib/plotspec2.ts": 637,
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 616,
+  "/lib/uplotShapes.ts": 593,
+  "/components/Stage/statRender.ts": 527,
+};
+
+describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {
+  const ts = sources().filter(([p]) => p.endsWith(".ts"));
+
+  it("no .ts module exceeds its ceiling (500, or its pin if already over)", () => {
+    const over: string[] = [];
+    for (const [p, src] of ts) {
+      const lines = src.split("\n").length;
+      // Check if this file is already in store or module pins (skip those, they have their own guards)
+      const inStorePin = Object.keys(STORE_PINS).some((k) => p.endsWith(k));
+      const inModulePin = Object.keys(MODULE_PINS).some((k) => p.endsWith(k));
+      if (inStorePin || inModulePin) continue;
+
+      const pinKey = Object.keys(TS_MODULE_PINS).find((k) => p.endsWith(k));
+      const ceiling = pinKey ? TS_MODULE_PINS[pinKey] : TS_CEILING;
+      if (lines > ceiling) over.push(`${p}: ${lines} > ${ceiling}`);
+    }
+    expect(
+      over,
+      "extract a cohesive sibling (lib/api/http.ts, lib/api/stats.ts are templates); do NOT raise the pin",
+    ).toEqual([]);
+  });
+
+  it("grandfathered .ts pins stay honest — a file that dropped under 500 must lose its pin", () => {
+    const stale: string[] = [];
+    for (const key of Object.keys(TS_MODULE_PINS)) {
+      const entry = ts.find(([p]) => p.endsWith(key));
+      if (!entry) {
+        stale.push(`${key}: no longer exists — remove its pin`);
+        continue;
+      }
+      if (entry[1].split("\n").length <= TS_CEILING) {
+        stale.push(`${key}: now <=${TS_CEILING} — remove its pin (ratchet down)`);
+      }
+    }
+    expect(stale, "the pin list must shrink as files are extracted").toEqual([]);
+  });
+});
+
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
