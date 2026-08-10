@@ -16,6 +16,13 @@ import type { CutMode, CutSpace } from "../../lib/mapcuts";
  *  after it; useMapRoi.ts imports this type instead of the reverse. */
 export type RoiMode = "off" | "roi";
 
+/** Cut-ruler arm/disarm state (RSM_CUTS_PLAN item 7) — same reasoning as
+ *  `RoiMode`: lives here so useMapRuler.ts imports the type, not the
+ *  reverse. Box and ruler are mutually exclusive; MapStage.tsx's
+ *  toggleRoi/toggleRuler/setCutMode keep only one of {roi, ruler, cuts}
+ *  armed at a time. */
+export type RulerMode = "off" | "ruler";
+
 export interface MapToolbarProps {
   /** Angular ⇄ Q axis toggle (only shown when the dataset carries both). */
   qAvailable: boolean;
@@ -54,6 +61,11 @@ export interface MapToolbarProps {
   roiMode: RoiMode;
   onToggleRoi: () => void;
 
+  /** Cut-ruler arm/disarm (RSM_CUTS_PLAN item 7) — same group, mutually
+   *  exclusive with both `roiMode` and `cutMode`. */
+  rulerMode: RulerMode;
+  onToggleRuler: () => void;
+
   onSavePng: () => void;
 }
 
@@ -84,6 +96,8 @@ export default function MapToolbar(props: MapToolbarProps) {
     onProjection,
     roiMode,
     onToggleRoi,
+    rulerMode,
+    onToggleRuler,
     onSavePng,
   } = props;
 
@@ -168,6 +182,13 @@ export default function MapToolbar(props: MapToolbarProps) {
             onClick={onToggleRoi}
           >
             ▭
+          </button>
+          <button
+            className={`qzk-tool-btn${rulerMode === "ruler" ? " active" : ""}`}
+            title="Cut ruler: drag along the cut direction to draw — endpoint handles set length/angle, width handles set width; radial/transverse-about-a-peak actions live in the RSM panel"
+            onClick={onToggleRuler}
+          >
+            ▱
           </button>
           {gridable && (
             <button
