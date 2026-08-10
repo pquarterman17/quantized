@@ -11,7 +11,7 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-09 (registered `RSM_CUTS_PLAN.md` in the plan tree —
+**Updated:** 2026-08-09 (registered `TEST_DETERMINISM_PLAN.md`; registered `RSM_CUTS_PLAN.md` in the plan tree —
 its item 10, the last mechanical item (realdata smoke test + physics docs
 + bookkeeping), closed the campaign's build phase; items 11 (owner-gated
 MATLAB golden-parity freeze) and 12–14 (Tier 3) remain open, tracked in
@@ -61,6 +61,7 @@ Sol audit docs as items 29–30)
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
 | `RSM_CUTS_PLAN.md` | Sector/annulus, azimuthal (chi), and box-ROI integration cuts for 3-axis XRD reciprocal-space maps, plus the Q-space line-cut fix and map-render performance/aspect defects that blocked them | Self-contained feature build with its own resolved-decisions log (wrap-handling rebase formula, live-preview-vs-cache tradeoff, polar-space routing rule) and an owner-gated MATLAB golden-parity item |
+| `TEST_DETERMINISM_PLAN.md` | Replace probabilistic test assertions with deterministic ones: wall-clock budgets that flake under load, and `waitFor(mock called)` weak waits that synchronise on a call rather than the state it produces (110 sites censused, most benign) | Cross-cutting test-infrastructure campaign spanning both languages and every workshop — not owned by any feature plan; structured as small mechanical chunks with stated stop conditions so cheap agents can execute it piecemeal |
 Six residue plans were folded up into this doc and archived on
 2026-07-10 (fold-up rule): MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION,
 GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP — each was ≤3 open items. Their

@@ -306,31 +306,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 2 — Medium Impact
 
-24. **Wall-clock test assertions flake under load — a CLASS, not two
-    incidents** (booked rev 9, 2026-08-09). Three separate timing-based
-    frontend/backend tests went red during this session's merges, every one
-    of them passing in isolation immediately after:
-    - `test_calc_map.py::test_auto_qspace_map_builds_fast_on_real_corpus`
-      — MY fault, I specified a 2 s wall-clock bound in item 16. Already
-      fixed: it now asserts the RESOLVED METHOD (deterministic at any load)
-      and keeps the clock only as a loose 8 s backstop.
-    - `useFigureBuilder.test.ts` F2.4b parity (item 22, being diagnosed).
-    - `GridViewport.perf.test.tsx` "bounded DOM node count and a generous
-      time budget" (from `feat(ci)`, 2026-07-25) — failed under three
-      concurrent agents, passed 4/4 alone 30 s later.
-    The common shape: a wall-clock budget calibrated on an idle machine,
-    then run on a 6-way shared-runner CI matrix or a loaded dev box. Each
-    looks like a one-off; together they are a habit.
-    - [ ] Sweep for wall-clock assertions across both suites (grep
-      `perf_counter`, `Date.now`, `performance.now`, `elapsed`, `budget`).
-    - [ ] For each, split the load-INVARIANT claim from the timing one and
-      assert the invariant: node counts, chosen algorithm, complexity
-      class. Keep a clock only as a loose backstop against a
-      order-of-magnitude regression, never as a benchmark.
-    - [ ] The item-16 fix is the worked example of the pattern — copy it.
-    - Not blocking; these are green on CI today (which runs less
-      concurrently than this session did).
-
 ## Tier 3 — Nice-to-Have
 
 25. **Sector state is component-local, so two mounted panels can diverge**
@@ -350,6 +325,13 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
       configuration. Do it next time `store/rois.ts` is open anyway.
 
 ## Completed
+
+- ~~**#24 Wall-clock flake class**~~ (2026-08-09) — **MOVED, not done.**
+  Absorbed into the new `plans/TEST_DETERMINISM_PLAN.md`, which scopes it
+  properly: the census found this is repo-wide (4 remaining Python budgets, one
+  TS perf file) and that a SECOND defect class sits alongside it — 110 sites
+  using `waitFor(mock called)` instead of waiting on state, the exact pattern
+  behind item 22. That is its own campaign, not an RSM appendix.
 
 - ~~**#22 `useFigureBuilder` F2.4b flake**~~ (2026-08-09) — measured before
   fixed, as required. **Baseline 1/30** standalone, single-file,
