@@ -11,7 +11,14 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-09 (registered `TEST_DETERMINISM_PLAN.md`; registered `RSM_CUTS_PLAN.md` in the plan tree —
+**Updated:** 2026-08-10 (plan-hygiene reconciliation sweep — three items:
+`RSM_CUTS_PLAN.md` folded up and archived, its item 25 becoming Tier 3
+#41 below and its owner-skipped item 11 becoming a Deferral below; the
+stale Apache-2.0 copyright-holder-line owner gate was removed from the
+table below (resolved since the repo's first commit — see PORT_PLAN's
+Resolved decisions, verified against `NOTICE`'s git history); GOTO_PLAN
+and PRIMARY_SOFTWARE_AUDIT_PLAN were evaluated for the same fold-up and
+correctly left standing (neither is finished residue).) Prior: 2026-08-09 (registered `TEST_DETERMINISM_PLAN.md`; registered `RSM_CUTS_PLAN.md` in the plan tree —
 its item 10, the last mechanical item (realdata smoke test + physics docs
 + bookkeeping), closed the campaign's build phase; items 11 (owner-gated
 MATLAB golden-parity freeze) and 12–14 (Tier 3) remain open, tracked in
@@ -60,9 +67,12 @@ Sol audit docs as items 29–30)
 | `JMP_GAP_PLAN.md` | The JMP half of the daily-driver mission: code-grounded gap register (J1–J17) vs the owner's JMP surface, tiered closure work, Gate J usage census | Own gap register + owner gate; layers on PRIMARY P1.4/P1.5/P2.6 without duplicating them |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
-| `RSM_CUTS_PLAN.md` | Sector/annulus, azimuthal (chi), and box-ROI integration cuts for 3-axis XRD reciprocal-space maps, plus the Q-space line-cut fix and map-render performance/aspect defects that blocked them | Self-contained feature build with its own resolved-decisions log (wrap-handling rebase formula, live-preview-vs-cache tradeoff, polar-space routing rule) and an owner-gated MATLAB golden-parity item |
 | `TEST_DETERMINISM_PLAN.md` | Replace probabilistic test assertions with deterministic ones: wall-clock budgets that flake under load, and `waitFor(mock called)` weak waits that synchronise on a call rather than the state it produces (110 sites censused, most benign) | Cross-cutting test-infrastructure campaign spanning both languages and every workshop — not owned by any feature plan; structured as small mechanical chunks with stated stop conditions so cheap agents can execute it piecemeal |
-Six residue plans were folded up into this doc and archived on
+`RSM_CUTS_PLAN.md` (sector/annulus, azimuthal-chi, and box-ROI integration
+cuts for 3-axis XRD reciprocal-space maps) completed its build phase
+2026-08-09 and was folded up/archived 2026-08-10 (fold-up rule — its only
+open item, #25, is now Tier 3 #41 below; its owner-skipped #11 is now a
+Deferral below). Six residue plans were folded up into this doc and archived on
 2026-07-10 (fold-up rule): MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION,
 GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP — each was ≤3 open items. Their
 `## Completed` histories live in `plans/archive/`. Provenance is kept on
@@ -674,8 +684,6 @@ in git history @ `e4f6590`.)*
   flagged public files.
 - **Defaults-audit eyeball** (was GAP_TIER3 #2) — rule on the taste
   calls in `plans/design/DEFAULTS_AUDIT.md`.
-- **Apache-2.0 copyright holder line** for LICENSE/NOTICE (PORT_PLAN
-  #1 residue — lives with its sub-plan, listed here for visibility).
 - **Code-signing certificate + auto-update E2E** (PORT_PLAN #47/#49
   residue, reconciled 2026-07-11): obtain a cert, sign a release, then
   verify updater end-to-end across two consecutive signed releases.
@@ -710,6 +718,14 @@ in git history @ `e4f6590`.)*
 - **Stat-stage residuals** (archived GAP_PLOTTYPES, accepted) — bar
   orientation, in-canvas legend, `payloadToTSV` ordinals,
   `statRender.ts`/`useStatStage.ts` split candidates.
+- **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral.m`**
+  (was RSM_CUTS_PLAN #11, folded up 2026-08-10) — SKIPPED by owner
+  decision, not merely postponed: would need a local MATLAB run to freeze
+  reference values, and the port's correctness already rests on a
+  planted-Gaussian round-trip plus a hand-derived wrap-equivalence truth
+  table. Revisit only if a sector discrepancy ever surfaces; do not freeze
+  late/tired, since a bad reference value silently becomes the thing
+  everything downstream "passes" against.
 
 ## Completed
 

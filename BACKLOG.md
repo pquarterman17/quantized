@@ -6,7 +6,42 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-08-09 (nineteenth pass). `plans/RSM_CUTS_PLAN.md`
+**Last reconciled:** 2026-08-10 (twentieth pass — plan-hygiene
+reconciliation sweep). Three-part pass, one commit each:
+
+1. **`PORT_PLAN.md` drift fixed.** W0 #1/#2/#5 (repo scaffold, enforcement
+   tests, CI workflow) shipped 2026-06-21 with every sub-box checked but
+   were never struck or moved to the plan's Completed section — verified
+   against git history (`8a017e62`/`84cbd519`/`b26d1d00`/`a700c44c`, plus
+   the frontend enforcement half `f41180af` 2026-07-08) and fixed. #48's
+   claim that PyPI Trusted Publisher registration + first tagged publish
+   were still open was stale — both were done 2026-07-12; only the
+   fresh-machine acceptance run remains. Both "still to decide" items (CI
+   golden-test host, Apache-2.0 copyright line) were already resolved in
+   practice — the copyright line has been in `NOTICE` since the first
+   commit, never a placeholder — moved to Resolved decisions. #10/#12/#15/
+   #47/#49/#50 verified still genuinely open/blocked/owner-gated.
+2. **`RSM_CUTS_PLAN.md` folded up and archived.** Its build phase completed
+   2026-08-09 but the header was never refreshed after items #11–14 closed
+   same day, leaving only item #25 (component-local sector ROI state) open
+   — ≤3 open items on a finished campaign, so #25 folded up into
+   `MAIN_PLAN.md` Tier 3 #41 with provenance, #11 (owner-skipped) folded
+   into MAIN_PLAN's Deferrals, and the plan archived. `GOTO_PLAN.md` and
+   `PRIMARY_SOFTWARE_AUDIT_PLAN.md` were also evaluated and **rejected**
+   for fold-up: GOTO_PLAN reads as the initiative's standing mission doc
+   (its Tier 3 is deliberately empty pending the Q4/Q8/Q9 gates, and Q9 is
+   duplicate-tracked as PRIMARY's own Gate A item); PRIMARY_SOFTWARE_AUDIT
+   has 188 open checklist items across five acceptance gates — nowhere
+   near residue.
+3. **This file reconciled against both plan edits** (below) plus a stray
+   pre-existing drift catch: `RSM_CUTS_PLAN #11`'s Owner-actions row and
+   the `PORT_PLAN #1` Apache-2.0 owner-gate row (also stale in MAIN_PLAN's
+   own owner-gates table, fixed there too) both removed as resolved/moot
+   rather than pending. `TEST_DETERMINISM_PLAN.md` (created 2026-08-09,
+   absorbed two items from RSM_CUTS_PLAN) added to the dashboard — it was
+   never added when created.
+
+Prior (nineteenth pass, 2026-08-09). `plans/RSM_CUTS_PLAN.md`
 (sector/annulus, azimuthal-chi, and box-ROI cuts for 3-axis XRD reciprocal-
 space maps) is registered in the plan tree below for the first time — it
 was built and merged item-by-item across several sessions without ever
@@ -25,7 +60,10 @@ Actionable dev work. A second MATLAB defect was found while closing item
 10: `+fitting/rsmStrain.m` (see `PORT_CHECKLIST.md`'s RSM row, "MATLAB bug
 #6") has the same unguarded-near-degenerate-Qx defect the Python port's
 item 23 already fixed on its own side; reported only, per sibling-repo-
-first — `Quantized_matlab` was not touched.
+first — `Quantized_matlab` was not touched. (Note, 2026-08-10: #11 and
+#12–14 both closed the same day this paragraph describes and are now
+folded up/archived per the twentieth-pass note above — this paragraph is
+kept for history, not current state.)
 
 Prior (eighteenth pass, 2026-08-05). Two stale cells fixed
 against the plans and git: the PRIMARY row still listed the P3.4
@@ -381,6 +419,7 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining Stage property bridge, direct-manipulation parity, render-path unification), F3 COMPLETE (F3.1–F3.6 shipped 2026-08-05/06/07 — see the F3 exit-criterion note in the plan's 2026-08-07 log), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2, F4 |
+| Sector ROI state is component-local (`workshops/roicuts/useRoiCuts.ts`), not store-backed — a second independently-mounted `RoiCutsPanel` won't see a live drag from the first. Low priority: two simultaneously-mounted ROI panels isn't a common configuration; fix by moving the fields into `store/rois.ts` beside `mapRoi`/`mapRuler` next time that file is open anyway | MAIN #41 (was RSM_CUTS_PLAN #25, folded up 2026-08-10) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -476,14 +515,12 @@ re-sweep periodically.
 | **First dated timed-workflow runs** — follow `docs/timed_workflow_baselines.md` (8 journey checklists, results template at the bottom); the gesture/confusion/discoverability fields need the owner's hands. Fixtures + protocol SHIPPED 2026-07-26 | PRIMARY SOFTWARE P0.3 residue |
 | **Gate J: JMP usage census + JMP switch trial** — list the JMP platforms actually opened in the last ~6 months (ranks JMP Tier 2, decides census-gated clustering/SPC/MSA/DOE), then run one real JMP-shaped deliverable under the P0.1 protocol with JMP closed. Can share a session with P0.1/Q9 | JMP_GAP Gate J |
 | **Real-GPU F1 interaction acceptance** — the automated headless run is 112 ms p95, 12 ms over target under software rendering; close only after a visible hardware-accelerated run on the owner workstation confirms or refutes it | PRIMARY SOFTWARE P0.4 acceptance |
-| **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral.m`** — needs a local MATLAB run to add the freeze case (small Q grid; wrap + non-wrap sectors; Sum and Mean) to `tools/matlab/freeze_calc_values.m`. Chi/box/ruler have no MATLAB counterpart (their planted-Gaussian tests are the ground truth); do NOT golden-freeze the MATLAB Q line cut — it is the known-bad behaviour (PORT_CHECKLIST "MATLAB bug #5") | RSM_CUTS_PLAN #11 |
 | **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
 | **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate = PRIMARY SOFTWARE **P0.2** |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MAIN gate (was MULTI_PLOT #19) |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | MAIN gate (was WORKSHEET #14) |
-| **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
 | **Node version-manager standardization** — Volta (fermiviewer) vs `.nvmrc` (quantized); fix the machine-level cause first (fnm precedes `~/.volta/bin` in PATH, so neither pin takes effect). Comfort, not correctness — CI is already authoritative via `node-version-file` | MAIN gate (was ROBUSTNESS #8, folded 2026-08-01) |
 | **GOTO owner gates** — 3-D (Q4), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context — Q9 is the same task as PRIMARY SOFTWARE **P0.1**, whose friction log gates that plan's Gate A). ~~Q6 worksheet reshape~~ and ~~Q7 date-time axes~~ were DECIDED YES and SHIPPED 2026-07-19 (Codex PRs #67/#68) — struck here 2026-07-24 | GOTO_PLAN Owner gates |
@@ -594,8 +631,7 @@ impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
 - **Worksheet designation editing** (MAIN deferral, was WORKSHEET D2) — read-only in v1, deferred unless requested.
 - **Stat-stage residuals** (archived GAP_PLOTTYPES, accepted): horizontal bar orientation; in-canvas legend for the bar view; `payloadToTSV` exports ordinal positions, not category labels; `statRender.ts` (539) / `useStatStage.ts` (416) split candidates (non-`.tsx`, no guard fails).
 - **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates. (The reductions-frontend tail was refiled as actionable MAIN #11 by the 2026-07-11 audit.)
-- **RSM Tier 3 (RSM_CUTS_PLAN #12–14)**: **#12** draggable sector wedge (radial + angular handles on the arc/wedge) — revisit only once the numeric fields + live preview prove insufficient in practice. **#13** named-ROI `.dwk` persistence — blocked on paying `lib/workspace.ts`'s pin (754, zero slack); (de)serialization would live in `store/rois.ts`. **#14** migrate the five `rsm*` wrappers from the pinned `lib/api.ts` (1828) to `lib/api/rsm.ts` with re-exports (the `api/stats.ts` template) — opportunistic, do when next touching those wrappers.
-- **CI golden-test host** — de facto resolved as committed frozen values (option a); formalize or drop the open question (PORT_PLAN "still to decide").
+- **Golden parity: `sector_profile` vs MATLAB `extract2DArcIntegral.m`** (MAIN deferral, was RSM_CUTS_PLAN #11, folded up 2026-08-10 when the plan archived) — SKIPPED by owner decision, not a task; revisit only if a sector discrepancy ever surfaces.
 
 ## Plans dashboard
 
@@ -604,13 +640,13 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#40 are shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard); remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
-| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
-| `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#41 are shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard); **#41 open** (was RSM_CUTS_PLAN #25, folded up 2026-08-10 — sector ROI state should move into `store/rois.ts`); the Apache-2.0 copyright-holder owner gate was REMOVED 2026-08-10 — resolved since the first commit, never actually open; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
+| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47 (owner cert), #48 (owner acceptance-run residual only — its Trusted Publisher claim was stale, corrected 2026-08-10), #49 (owner, gated on #47), #50 (continuous); **#1/#2/#5 (W0 repo scaffold/enforcement/CI) drift-fixed 2026-08-10** — shipped since 2026-06-21 with sub-boxes checked but never struck; **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
+| `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19. **Considered for fold-up 2026-08-10, rejected**: reads as the standing mission doc for the whole initiative (the switch-trigger acceptance protocol IS the go/no-go test), Tier 3 is deliberately empty pending these very gates, and Q9 is duplicate-tracked as PRIMARY SOFTWARE's own Gate A item — not finished residue |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. **Considered for fold-up 2026-08-10, rejected**: 188 open `- [ ]` items across P0–P4 and five acceptance gates (A–E) as of this pass — nowhere near the fold-up threshold |
+| `plans/TEST_DETERMINISM_PLAN.md` | Active | Created 2026-08-09. 2 of 9 items shipped (the worked-example wall-clock fix in `test_calc_map.py`, and the `useFigureBuilder` weak-wait fix — both originated as RSM_CUTS_PLAN items 16/22 and were absorbed here). Open: item 1 (forced-race regression test), item 2 (4 remaining Python wall-clock budgets), item 3 (`GridViewport.perf.test.tsx`), item 4 (triage 110 weak-wait call sites), item 5 (fix the SUSPECT sites), item 6 (lint guard), item 7 (Tier 3 documentation note) |
 | `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md` | Active | **F0 + F1 COMPLETE** (honest transitions; versioned FigureDocument with lifecycle, reversible conversions, migration). F2 mid-campaign: seven bounded slices shipped 2026-08-02 (canonical Publication Preview session PR #111, F2.1a–d/F2.2a–c/F2.3a/F2.4a/F2.5a); F2.1–F2.5 stay open for legacy/Graph-Builder convergence, the remaining Stage property bridge, direct-manipulation parity, and render-path unification. **F3 COMPLETE 2026-08-07** (F3.1–F3.6: versioned PageDocument + persistence, missing/frozen panel semantics, Save/Save As/dirty/reopen lifecycle, unified panel editing, complete layout controls, unified export — one `buildSpec` path for preview/file-export/clipboard-copy, a real window-panel fidelity fix (error bars/y2/groups/breaks/overrides now render from the window's own canonical document instead of a reduced ad-hoc spec), and Library "export a saved page without reopening it"); the plan's own F3 exit criterion is coded-and-tested (round-trip test proves save→close→reopen→export byte-identical) but NOT owner-verified in the live app — A6 stays an owner acceptance check, not ticked here. F4 open except F4.2a (plot type + error designations, with the Graph Builder error-bar wells + step/Line+Symbol marks, v0.16.0). A1–A10 acceptance journeys unchecked. Authored by ChatGPT-Sol, not Claude. |
 | `plans/JMP_GAP_PLAN.md` | Active | **Every census-independent register item is SHIPPED** — campaign 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend) + the 2026-07-31 residual wave (J8 UI, J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon table verified) + #14 module splits w/ `MODULE_PINS` ratchet (2026-07-29). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5) — all Gate-A-sequenced; Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
-| `plans/RSM_CUTS_PLAN.md` | Active | Items #1–9, #16–21, #23 SHIPPED 2026-08-09 (shared polar/box grid core, the Q-space line-cut band fix, sector/chi/box/box-stats endpoints + cut-ruler radial/transverse cuts, live client-side preview with a frozen parity fixture, the dataset-handle cache, pole-figure periodic-axis support, input hardening, batch-across-datasets, the Q-space map-render performance + aspect-lock fixes, and the `rsm_strain` near-degenerate-Qx guard); **#10 CLOSED 2026-08-09** (realdata HTTP smoke test `tests/test_api_rsm_realdata.py` + physics docs `docs/theory/xrd.md`/`docs/tutorials/rsm-analysis-workflow.md` + this bookkeeping pass) — the plan's build phase is complete. **#22 CLOSED 2026-08-09** (the `useFigureBuilder` F2.4b vitest flake this plan's merge gate surfaced, unrelated to RSM — root-caused to a test-harness wait gap, fixed, verified 0/90 at the repro rate that gave 1/30 pre-fix). Open: #11 owner-gated MATLAB golden-parity freeze, #12–14 Tier 3 (all in Deliberate deferrals above) |
-| `plans/archive/` | Complete | 14 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP), PLOT_WORKFLOW (Complete 2026-08-01 — all 4 owner design decisions shipped in ~24 h; #6 interface note folded into PRIMARY P1.3), and ROBUSTNESS (Complete 2026-08-01 — Tiers 1+2 and #7/#9 shipped, #10 decided NO, owner-parked #8 folded to MAIN Owner gates) |
+| `plans/archive/` | Complete | 15 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP), PLOT_WORKFLOW (Complete 2026-08-01 — all 4 owner design decisions shipped in ~24 h; #6 interface note folded into PRIMARY P1.3), ROBUSTNESS (Complete 2026-08-01 — Tiers 1+2 and #7/#9 shipped, #10 decided NO, owner-parked #8 folded to MAIN Owner gates), and RSM_CUTS_PLAN (Complete, folded up 2026-08-10 — items #1–10, #16–23 SHIPPED, #11 skipped by owner decision (folded to MAIN Deferrals), #25 was its only genuinely open residue (folded to MAIN #41)) |
