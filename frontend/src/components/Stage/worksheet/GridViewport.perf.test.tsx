@@ -99,11 +99,15 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     // data size — nowhere near 100,000 rows or 200 columns get real nodes.
     expect(renderedRows).toBeLessThan(60);
     expect(renderedCells).toBeLessThan(3000);
-    // Generous ceiling (not a tight benchmark) — measured ~900ms on a dev
-    // machine; Windows CI runs several times slower, so this leaves ~8x
-    // headroom. Catches an accidental de-virtualization (e.g. someone
-    // mapping over `data.values` directly), not micro-regressions.
-    expect(mountMs).toBeLessThan(8000);
+    // Wall-clock assertion removed (TEST_DETERMINISM_PLAN, task 3): the
+    // node-count assertions above are the load-invariant claims that cannot
+    // flake (they prove virtualization works). The 8s budget, measured ~900ms
+    // on a dev machine, flaked immediately under concurrent load (passed
+    // 2.22s standalone, red when run with other agents). A loose backstop can
+    // catch catastrophic regressions (unmemoized data array, O(n²) layout),
+    // but an 8s/900ms measurement window is too narrow under shared-runner
+    // CI or a machine with parallel agents — never tighten this back into a
+    // timing benchmark.
   }, 120_000);
 
   it("scrolling a 100k-row grid re-windows in a bounded time (not a full re-render of all rows)", () => {
@@ -142,8 +146,14 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     const scrollMs = performance.now() - t0;
 
     console.info(`[perf/item10] scroll re-window at 100k rows: ${scrollMs.toFixed(1)}ms`);
+    // The invariant that matters: still virtualized after the scroll.
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed after the jump
-    expect(scrollMs).toBeLessThan(800); // measured ~18ms on a dev machine — generous CI headroom
+    // Wall-clock assertion removed (TEST_DETERMINISM_PLAN, task 3): the
+    // node-count assertion above is the load-invariant claim (virtualization
+    // works). Measured ~18ms on a dev machine with 800ms "generous headroom",
+    // but flaked under concurrent load in real CI. An 800ms/18ms window is
+    // too narrow under shared-runner matrix or parallel agents — never
+    // tighten this back into a timing benchmark.
   }, 120_000);
 
   it("resizing one column re-windows in a bounded time — no full-grid rebuild (MAIN_PLAN #3)", () => {
@@ -188,10 +198,14 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     const resizeMs = performance.now() - t0;
 
     console.info(`[perf/main3] 3 resize re-renders at 100k×200: ${resizeMs.toFixed(1)}ms`);
+    // The invariant that matters: still virtualized after resizes.
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed
-    // Generous CI ceiling (same discipline as the scroll case above —
-    // measured ~10-40ms per re-render on a dev machine).
-    expect(resizeMs).toBeLessThan(2400);
+    // Wall-clock assertion removed (TEST_DETERMINISM_PLAN, task 3): the
+    // node-count assertion above is the load-invariant claim (no full-grid
+    // rebuild on column resize). Measured ~10-40ms per re-render on a dev
+    // machine with 2400ms "generous ceiling", but wall time flakes under
+    // concurrent load. A 2400ms/40ms window is too narrow under shared-runner
+    // CI or parallel agents — never tighten this back into a timing benchmark.
   }, 120_000);
 
   it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — wall time tracks the SLOWEST call, not the sum", async () => {

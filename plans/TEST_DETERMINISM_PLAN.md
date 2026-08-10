@@ -43,6 +43,19 @@ The invariant assertion is what actually encodes the fix and cannot flake. The
 clock survives only to catch an order-of-magnitude regression, never as a
 benchmark.
 
+**Budget rule — corrected 2026-08-10, after task 2 got this wrong:**
+`new_budget = max(old_budget, 5 x measured)`. **Never lower an existing bound.**
+"5x the runtime measured on an idle machine" is NOT a safe margin by itself:
+`GridViewport.perf` measured ~0.3-1.2 s against an **8 s** budget (~8x headroom)
+and still flaked under three concurrent agents. Load does not scale runtime by
+5x — it can stall a worker for whole seconds. An old bound that has never failed
+is evidence that bound is survivable; keep it.
+
+Safe precisely because these guards are **order-of-magnitude, not marginal**: a
+ReDoS regression on a 200k-char input takes minutes, not 0.3 s; a sparse-table
+to naive regression is quadratic. A loose ceiling catches those as reliably as a
+tight one and never flakes.
+
 **Class B — weak wait.** `await waitFor(() => expect(someMock).toHaveBeenCalled())`
 proves the mock was *invoked*. It does NOT prove the resolved value reached
 component state. Item 22's flake: `dragElement` early-returns on `!hitmap`, so
@@ -120,12 +133,13 @@ rule in task 4.
    `tests/test_io_origin_fuzz.py`.
    - [ ] For EACH site: identify what the test is really protecting (an
      algorithm choice? a complexity class? a vectorised path vs a Python
-     loop?) and assert THAT. Then keep the clock only as a loose backstop, at
-     least 5x the observed runtime on an idle machine.
+     loop?) and assert THAT. Then set the clock to
+     `max(old_budget, 5x measured)` — see the budget rule in Context;
+     **never lower an existing bound**.
    - [ ] `test_calc_unitconvert.py:100` (0.5 s) is the priority — it is the
      tightest and has the least headroom. If no load-invariant claim exists
-     (i.e. the test only ever meant "this is fast"), widen the budget to 5x
-     measured and add a comment saying it is a smoke bound, not a benchmark.
+     (i.e. the test only ever meant "this is fast"), KEEP the existing budget
+     and add a comment saying it is a smoke bound, not a benchmark.
    - [ ] Copy the comment style from `tests/test_calc_map.py:280-292`, which
      explains WHY the bound is loose and warns against tightening it.
    - Acceptance: `uv run pytest tests/test_calc_unitconvert.py tests/test_calc_peaks.py tests/test_io_origin_fuzz.py -q && uv run ruff check src tests`
