@@ -1,19 +1,15 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { analyzeRsm, rsmStrain } from "../../../lib/api";
-import { rsmBoxCut } from "../../../lib/api/rsm";
+import { analyzeRsm, rsmBoxCut, rsmStrain } from "../../../lib/api/rsm";
 import type { DataStruct, RsmPeak } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { cutTarget, isRsmDataset, strainPair, useRsm } from "./useRsm";
 
-vi.mock("../../../lib/api", () => ({
-  analyzeRsm: vi.fn(),
-  rsmStrain: vi.fn(),
-}));
-
 vi.mock("../../../lib/api/rsm", () => ({
+  analyzeRsm: vi.fn(),
   rsmBoxCut: vi.fn(),
+  rsmStrain: vi.fn(),
 }));
 
 const RSM: DataStruct = {

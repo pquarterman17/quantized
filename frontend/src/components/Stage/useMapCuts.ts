@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 
-import { rsmCutSegment, rsmLinecut, rsmProjection } from "../../lib/api";
+import { rsmCutSegment, rsmLinecut, rsmProjection } from "../../lib/api/rsm";
 import { lineCutBody, segCutBody, type CutMode, type CutPoint, type CutSpace } from "../../lib/mapcuts";
 import type { Dataset } from "../../lib/types";
 import { useCutLanding } from "./useCutLanding";

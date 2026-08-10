@@ -238,7 +238,13 @@ const MODULE_PINS: Record<string, number> = {
   // api/figurePage.ts — F3.5's new row_gap/col_gap/link_x/link_y/
   // align_labels/resize_mode fields would otherwise have pushed this back
   // over its pin. New figure-page fields/wrappers belong there, not here.
-  "/lib/api.ts": 1782,
+  // 1782 -> 1725 (RSM_CUTS_PLAN item 14): analyzeRsm/rsmStrain/rsmLinecut/
+  // rsmCutSegment/rsmProjection migrated to lib/api/rsm.ts (no re-exports
+  // in this file — consumers import directly). These five legacy wrappers
+  // belonged in the new domain module from their first use; moving them now
+  // lowers the pin (55 function lines + 2 type imports = 57 lines removed).
+  // New /api/rsm/* wrappers belong in lib/api/rsm.ts.
+  "/lib/api.ts": 1725,
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

@@ -21,7 +21,7 @@
 // that file ever being touched.
 
 import { postJSON } from "./http";
-import type { DataStruct } from "../types";
+import type { DataStruct, RsmAnalysisResponse, RsmStrainResponse } from "../types";
 
 // ── Sector / chi profile (item 1, calc/sectorcut.py) ────────────────────
 
@@ -128,4 +128,60 @@ export interface BoxStats {
 
 export function rsmBoxStats(req: BoxStatsRequest): Promise<BoxStats> {
   return postJSON<BoxStats>("/api/rsm/box-stats", req);
+}
+
+// ── Legacy wrappers (item 14) ───────────────────────────────────────────────
+
+/** Find + fit peaks in a 2D RSM dataset (centres/FWHM in angle + Q-space). */
+export function analyzeRsm(body: {
+  dataset: DataStruct;
+  n_peaks?: number;
+  threshold?: number;
+  smooth_sigma?: number;
+  min_separation?: number;
+  fit_window?: number;
+  fit_model?: string;
+}): Promise<RsmAnalysisResponse> {
+  return postJSON("/api/rsm/analyze", body);
+}
+
+/** Strain + relaxation from substrate/film reciprocal-space peak centres. */
+export function rsmStrain(body: {
+  q_sub: [number, number];
+  q_film: [number, number];
+  bulk?: [number, number] | null;
+}): Promise<RsmStrainResponse> {
+  return postJSON("/api/rsm/strain", body);
+}
+
+/** H/V line cut through a 2-D map → a 1-D DataStruct (calc.linecut). */
+export function rsmLinecut(body: {
+  dataset: DataStruct;
+  direction: "h" | "v";
+  value: number;
+  space?: string;
+  width?: number;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/linecut", body);
+}
+
+/** Arbitrary segment cut p0→p1 through the scattered 2-D cloud. */
+export function rsmCutSegment(body: {
+  dataset: DataStruct;
+  p0: [number, number];
+  p1: [number, number];
+  n?: number;
+  width?: number;
+  space?: string;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/cut-segment", body);
+}
+
+/** Integrate the whole map onto one axis (Σframes → I vs 2θ, or Σpixels). */
+export function rsmProjection(body: {
+  dataset: DataStruct;
+  axis?: "pixels" | "frames";
+  space?: string;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/projection", body);
 }

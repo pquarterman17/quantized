@@ -16,8 +16,7 @@
 
 import { useEffect, useState } from "react";
 
-import { rsmBoxCut, type BoxCutRequest } from "../../../lib/api/rsm";
-import { analyzeRsm, rsmStrain } from "../../../lib/api";
+import { analyzeRsm, rsmBoxCut, rsmStrain, type BoxCutRequest } from "../../../lib/api/rsm";
 import { rulerBoxBody } from "../../../lib/roi";
 import { buildPeakRuler, defaultPeakForCut, peakHasQCentre, withPeakCutLabel, type PeakCutKind } from "../../../lib/rsmPeakCut";
 import type { Dataset, RsmPeak, RsmStrainResponse } from "../../../lib/types";

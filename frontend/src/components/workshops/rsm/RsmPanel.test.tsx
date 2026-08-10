@@ -14,7 +14,7 @@ const { analyzeRsmMock, rsmStrainMock } = vi.hoisted(() => ({
   rsmStrainMock: vi.fn(),
 }));
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/rsm", () => ({
   analyzeRsm: analyzeRsmMock,
   rsmStrain: rsmStrainMock,
 }));
