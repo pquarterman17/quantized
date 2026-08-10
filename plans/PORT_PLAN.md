@@ -8,7 +8,14 @@ the codebase never accretes the god-scripts the MATLAB original did.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-06-21
-**Updated:** 2026-07-25 (#54 SPC/JCAMP corpus gaps closed same-day; prior: 2026-07-10 full W0–W9 reconciliation against
+**Updated:** 2026-08-10 (plan-hygiene reconciliation sweep: W0 #1/#2/#5
+were shipped since 2026-06-21 with every sub-box checked but were never
+struck or moved to Completed — pure drift, fixed below with git-verified
+evidence. #48's "Trusted Publisher registration + first tagged publish"
+sub-claim was stale — those shipped 2026-07-12; only the fresh-machine
+acceptance run remains, matching MAIN_PLAN's owner-gates table. Both
+"Still to decide" items were already resolved in practice and moved to
+Resolved decisions.) Prior: 2026-07-25 (#54 SPC/JCAMP corpus gaps closed same-day; prior: 2026-07-10 full W0–W9 reconciliation against
 `PORT_CHECKLIST.md` + the code: every shipped item is now struck below
 with a pointer to the checklist section that records it. Genuinely open
 after this pass: #3 run-model residue (auto-shutdown / `--dev` /
@@ -142,13 +149,16 @@ MATLAB."**
 ## W0 — Foundation & enforcement
 
 ### Tier 1 — High Impact
-1. **Repo scaffold** — `src/quantized/{datastruct.py,io,calc,routes,assets}`,
+~~1. **Repo scaffold**~~ ✅ shipped (M1 PR1, `8a017e62`, 2026-06-21; see
+   Completed) — `src/quantized/{datastruct.py,io,calc,routes,assets}`,
    `frontend/`, `tests/`, `tools/`, `pyproject.toml` (package `quantized`,
    CLI `qz`), `uv` env, Apache-2.0 LICENSE/NOTICE.
    - [x] Python package skeleton + `pyproject.toml` (deps, scripts, ruff/mypy config)
    - [x] `frontend/` Vite+React+TS skeleton (mirror fermiviewer `package.json`)
    - [x] `tools/matlab/` for the freeze script
-2. **Enforcement tests** — port `fermiviewer/tests/test_repo_integrity.py`:
+~~2. **Enforcement tests**~~ ✅ shipped (backend M1 PR2, `84cbd519`,
+   2026-06-21; frontend `f41180af`, 2026-07-08; see Completed) — port of
+   `fermiviewer/tests/test_repo_integrity.py`:
    no-GPL-runtime-deps, 500-line god-module ceiling, pure-layer import guard.
    - [x] Backend `test_repo_integrity.py`
    - [x] Frontend component-size test (~400-line `.tsx` ceiling) — built
@@ -161,8 +171,10 @@ MATLAB."**
    `--dev`, `--desktop` (pywebview; Tauri stays the W8 packaging path).
 ~~4. **Golden-test harness**~~ ✅ shipped (M1 PR4, `fb3efe2`) — harness +
    manifest + markers live; every checklist "golden" tag runs through it.
-5. **CI workflow** — pytest + ruff + mypy + frontend vitest + build +
-   integrity gates. Self-hosted runner for golden tests that need MATLAB.
+~~5. **CI workflow**~~ ✅ shipped (M1 PR1/PR2, `b26d1d00`/`a700c44c`,
+   2026-06-21; Node-current matrix job added `ea30cf76`, 2026-07-31; see
+   Completed) — pytest + ruff + mypy + frontend vitest + build + integrity
+   gates, all on GitHub-hosted `ubuntu-latest` runners.
    - [x] Backend CI — `.github/workflows/ci.yml` (ubuntu, uv sync, ruff +
      mypy + pytest). Goldens/fixtures committed → no MATLAB needed; the
      repo-integrity guard (pure-layer + 500-line) runs in pytest.
@@ -356,11 +368,18 @@ MATLAB."**
     signing certificate; moved to the MAIN_PLAN owner-gates table
     2026-07-11).
 48. **Distribution** — `uv tool install` path / PyPI; versioning.
-    **LARGELY SHIPPED** via ORIGIN_GAP #41 (PyPI publish workflow, SPA
-    bundled in the wheel, versioned releases — v0.6.0 tagged
-    2026-07-10). Open: the OWNER one-time PyPI Trusted Publisher
-    registration + first tagged publish, and the fresh-machine
-    acceptance run (both tracked at ORIGIN_GAP #41).
+    **SHIPPED** except one owner-gated residual, via ORIGIN_GAP #41 (PyPI
+    publish workflow with Trusted Publishing/OIDC, SPA bundled in the
+    wheel, versioned releases — v0.6.0 tagged 2026-07-10; repo is at
+    v0.18.0 with many tagged releases since, verified 2026-08-10).
+    **Reconciliation catch (2026-08-10):** this item's "Open: the OWNER
+    one-time PyPI Trusted Publisher registration + first tagged publish"
+    was stale — both were DONE 2026-07-12 (trusted publisher registered
+    on pypi.org + test.pypi.org, `quantized-lab` 0.8.1 live), matching
+    MAIN_PLAN's owner-gates table which already had this right. Genuinely
+    open: the fresh-machine acceptance run (`pipx install quantized-lab` →
+    import a CSV within 2 minutes, on a machine without dev tools) —
+    owner-only, tracked at MAIN_PLAN's owner-gates table (was ORIGIN_GAP #41).
 
 ### Tier 3 — Nice-to-Have
 49. **Auto-update / release workflow.** Workflow + updater config
@@ -413,11 +432,18 @@ MATLAB."**
   XRD reciprocal-space maps demand it.
 - **`plans/` tracking** → **tracked** (founding doc). Revisit the sibling
   convention (gitignore `plans/`, track `BACKLOG.md`) if it starts to churn.
-
-### Still to decide (later, scoped)
-- CI golden-test host: self-hosted MATLAB runner vs committing a broad
-  frozen-value set so CI needs no MATLAB. (W0 #5 / W9 #50.)
-- Apache-2.0 copyright holder line for LICENSE/NOTICE. (W0 #1.)
+- **CI golden-test host** (W0 #5 / W9 #50) → **committed frozen fixtures**,
+  not a self-hosted MATLAB runner. `tests/golden/` has held committed
+  fixtures since M1 PR4 (`fb3efe24`, 2026-06-21); CI runs entirely on
+  GitHub-hosted `ubuntu-latest` (verified 2026-08-10: no `self-hosted`
+  label anywhere in `.github/workflows/`). De facto since day one —
+  reconciliation makes it official (was listed under "Still to decide").
+- **Apache-2.0 copyright holder line** (W0 #1) → resolved since the very
+  first commit: `NOTICE` has carried "Copyright 2026 Paige Quarterman"
+  since `8a017e62` (2026-06-21, M1 PR1) — never a placeholder. Verified
+  2026-08-10 (was listed under "Still to decide" and in MAIN_PLAN's/
+  BACKLOG's owner-gates tables as though still open; those are being
+  corrected in the same reconciliation pass).
 
 ---
 
@@ -441,6 +467,32 @@ MATLAB."**
 > Note: W1–W3 backend parity (parsers, corrections, baselines, processing,
 > stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
+
+- ~~**#1 Repo scaffold**~~ (2026-06-21, M1 PR1 `8a017e62`) — plan-hygiene
+  reconciliation catch (2026-08-10), not new work: all three sub-boxes had
+  been checked since day one but the item itself was never struck or moved
+  here. Verified in-tree 2026-08-10: `pyproject.toml`, `frontend/` (Vite+
+  React+TS), `tools/matlab/` (5 freeze scripts) all present; `LICENSE` +
+  `NOTICE` both Apache-2.0 with a real copyright line (see the Apache-2.0
+  Resolved-decisions entry below — that gate was also stale).
+- ~~**#2 Enforcement tests**~~ (backend 2026-06-21, M1 PR2 `84cbd519`;
+  frontend 2026-07-08, `f41180af`) — same drift as #1: sub-boxes checked,
+  item never struck. Verified in-tree 2026-08-10: `tests/test_repo_integrity.py`
+  (196 lines, no-GPL + 500-line + pure-layer guards) and
+  `frontend/src/architecture.test.ts`'s "component-ceiling ratchet (#7)"
+  describe block (400-line `.tsx` ceiling + grandfathered pins) both active
+  and running in CI.
+- ~~**#5 CI workflow**~~ (M1 PR1/PR2, `b26d1d00`/`a700c44c`, 2026-06-21;
+  Node-current matrix job `ea30cf76`, 2026-07-31) — same drift as #1/#2.
+  Verified in-tree 2026-08-10: `.github/workflows/ci.yml` runs backend
+  (`ruff check src tests` + `mypy src` + `pytest -q`) and frontend
+  (`npm test` + `npm run build`) jobs, all on `${{ matrix.os }}`/
+  `ubuntu-latest` — no self-hosted runner anywhere in `.github/workflows/`.
+  The original sub-text "self-hosted runner for golden tests that need
+  MATLAB" was an aspiration that was superseded by committing frozen
+  golden fixtures instead (see Resolved decisions); the sub-checkboxes
+  never claimed a self-hosted runner and don't need correcting, only the
+  parent item's strike-through did.
 
 - ~~**`.spc` extension disambiguation**~~ (2026-08-01) — the shared corpus
   gained EDAX EDS `.spc` files (a different vendor format on the same
