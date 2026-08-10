@@ -300,52 +300,6 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
-6. **Map interaction — box draw/move/resize, live preview, inline
-   commit** ⚠ STRONGER MODEL (MapStage extraction churn + the gesture
-   state machine + preview/commit/cut-tool interleaving on one canvas).
-   Files: EDIT `frontend/src/components/Stage/MapStage.tsx`, NEW
-   `Stage/MapToolbar.tsx`, NEW `Stage/MapRoiOverlay.tsx`, NEW
-   `Stage/useMapRoi.ts` (+ test), NEW `Stage/useCutLanding.ts`, EDIT
-   `Stage/useMapCuts.ts`. Depends on items 4 + 5. Sole owner of
-   MapStage.tsx until item 7; parallel with item 8.
-   - [ ] PAY FIRST: extract the float toolbar (~lines 211–334) + the
-         `Picker` helper into `MapToolbar.tsx` (grouped props, dumb
-         view). MapStage → ~250 BEFORE ROI wiring (~+40 → ~290 final).
-   - [ ] `useCutLanding.ts`: extract useMapCuts' private `land()`/`busy`
-         into `useCutLanding(): {busy, land(promise, namePrefix?)}`;
-         refactor useMapCuts onto it (one landing implementation for
-         line cuts, ROI commits, and the workshop).
-   - [ ] `useMapRoi.ts`: mode "off"|"roi"; gesture machine
-         idle→(draw|move|resize)→idle in data coords; writes
-         `store.mapRoi` (space = cutSpace at draw time); per-rAF
-         preview via roiMath (coalesced, latest rect wins, ≤200 bins) —
-         preview state stays LOCAL to the hook (never the store, never
-         the library); handlers `onDown/onMove/onUp/onLeave`, hover
-         hit + cursor; `setActiveGestureCancel` registered at
-         drag-start / cleared on mouseup (true abort — restores the
-         pre-gesture rect); arrows nudge one payload cell, ×10 Shift,
-         Delete clears; <3 px drag = click, discarded.
-   - [ ] `MapRoiOverlay.tsx`: fragment of (a) the pointer-transparent
-         SVG (accent rect, 8 six-px handles, bounds readout in
-         JetBrains Mono, sector wedge when Q axes displayed) and (b)
-         the INTERACTIVE inline bar — an absolutely-positioned
-         `qzk-glass` div pinned near the ROI via `rectToPx`: sparkline
-         (SVG polyline, "preview" label, x/y toggle), live N/∫I
-         readout, and ∫x / ∫y / Stats buttons (stopPropagation; commit
-         through `useCutLanding`; Stats opens/updates the panel
-         readout). Design tokens only. Hides on axis-space mismatch.
-   - [ ] MapStage wiring: mount hook + overlay; ROI handlers take
-         precedence while armed; cursor from hook; container
-         tabIndex + onKeyDown; MapToolbar gains ▭ ("Box ROI: drag to
-         draw, drag inside to move, edges/corners to resize; ∫ and
-         stats commit from the floating bar").
-   - [ ] Hook test (mocked api + roiMath spy): draw commits normalized
-         rect; move/resize/crossover; Esc mid-drag restores; preview
-         called at most once per frame; inline ∫x posts the shaped
-         body and lands.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`
-     (MapStage ≤400 via architecture.test.ts, zero edits to the guard).
-
 7. **Cut ruler — radial/transverse cuts about a peak**
    Files: EDIT `Stage/MapRoiOverlay.tsx`, EDIT `Stage/useMapRoi.ts` (+
    tests), EDIT `Stage/MapToolbar.tsx` (ruler arm button), possibly a
@@ -475,6 +429,21 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 ---
 
 ## Completed
+
+- ~~**#6 Map interaction — draw / drag / resize / live preview / inline commit**~~
+  (2026-08-09) — THE owner's original ask, delivered. Ceiling paid first as its
+  own commit: toolbar extracted to `MapToolbar.tsx` (239), `MapStage.tsx`
+  396→281 BEFORE any ROI code, 364 after. `useMapRoi.ts` (349, 15 tests) holds
+  the gesture machine; `MapRoiOverlay.tsx` (250) draws rect + 8 handles +
+  sparkline + inline bar. **Draw→cut is 2 steady-state actions** (drag, then
+  click ∫x/∫y); arming ▭ is once per session, not per box. Esc restores the
+  exact pre-gesture rect via `gestureCancel` (3 tests, incl. a hidden-space
+  rect). Preview is rAF-coalesced — a test asserts 3 rapid rect updates produce
+  exactly ONE `boxProfileLocal` call, with the final not the stale rect. A test
+  performs a full draw/drag/release and asserts the backend wrappers are never
+  called, so the client preview provably cannot commit. Cut-width tooltip
+  corrected for the Q-space band semantics item 2 introduced.
+  `architecture.test.ts` zero-line diff.
 
 - ~~**#9 Batch across datasets**~~ (2026-08-09) — new `useRoiBatch.ts`
   (287) + `BatchCard.tsx` (145), kept OUT of `useRoiCuts.ts` (still 476,
