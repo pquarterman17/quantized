@@ -23,12 +23,15 @@ export interface CutLandingState {
    *  prefixed with `namePrefix` when given — item 9's batch tool needs
    *  "<dataset>: " ahead of each cut's own label so N results stay
    *  distinguishable in the library list), and report status via
-   *  `setStatus`. A no-op while a PREVIOUS `land()` on this same hook
-   *  instance is still in flight (mirrors useMapCuts' original single-
-   *  flight guard — one cut in the air per mounted tool at a time); a
-   *  sequential caller (item 9's batch loop) awaits each call in turn, so
-   *  `busy` has already cleared before the next one starts. */
-  land: (promise: Promise<DataStruct>, namePrefix?: string) => Promise<void>;
+   *  `setStatus`. Resolves to the new dataset's id on success, or null on
+   *  failure/reentrancy (item 9's batch loop collects the ids it needs for
+   *  `plotSelectedTogether` from this return value — existing callers that
+   *  `void land(...)` are unaffected). A no-op while a PREVIOUS `land()` on
+   *  this same hook instance is still in flight (mirrors useMapCuts'
+   *  original single-flight guard — one cut in the air per mounted tool at
+   *  a time); a sequential caller (item 9's batch loop) awaits each call in
+   *  turn, so `busy` has already cleared before the next one starts. */
+  land: (promise: Promise<DataStruct>, namePrefix?: string) => Promise<string | null>;
 }
 
 export function useCutLanding(): CutLandingState {
@@ -36,16 +39,19 @@ export function useCutLanding(): CutLandingState {
   const setStatus = useApp((s) => s.setStatus);
   const [busy, setBusy] = useState(false);
 
-  async function land(promise: Promise<DataStruct>, namePrefix?: string): Promise<void> {
-    if (busy) return;
+  async function land(promise: Promise<DataStruct>, namePrefix?: string): Promise<string | null> {
+    if (busy) return null;
     setBusy(true);
     try {
       const data = await promise;
       const name = namePrefix ? `${namePrefix}${cutName(data)}` : cutName(data);
-      addDataset({ id: `cut-${++_seq}`, name, data });
+      const id = `cut-${++_seq}`;
+      addDataset({ id, name, data });
       setStatus(`cut added: ${name}`);
+      return id;
     } catch (e) {
       setStatus(e instanceof Error ? `cut failed: ${e.message}` : "cut failed");
+      return null;
     } finally {
       setBusy(false);
     }
