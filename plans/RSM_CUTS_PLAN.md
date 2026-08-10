@@ -300,6 +300,36 @@ Revised 2026-08-09 (rev 3 — owner-reported Q-space plotting defect):
 
 ## Tier 1 — High Impact
 
+23. **`rsm_strain` returns nonsense on symmetric reflections, silently**
+    (booked rev 8, 2026-08-09; flagged by the docs agent while verifying
+    formulas, CONFIRMED by the orchestrator on real data). On
+    `epytaxy_rsm.xrdml` the fitted peaks are substrate Qx=0.00080,
+    film Qx=0.00044 — a **symmetric (00L) reflection**, where in-plane
+    strain is physically unmeasurable. `rsm_strain` returns
+    `eps_parallel = 0.8087` — **80.9 % in-plane strain**, past any real
+    material's fracture limit — with no warning. It guards `Qx == 0`
+    exactly (-> NaN) but nothing near it, and symmetric scans are the most
+    common RSM measurement, so the guard misses the case that occurs.
+    `relaxation` correctly returns NaN on the same call, which makes the
+    pairing worse: one field admits it cannot answer while its neighbour
+    fabricates one, and the RSM panel renders both as equals.
+    - [ ] Guard on |Qx| being small RELATIVE to |Qz| (and/or relative to
+      the fitted peak FWHM in Qx — a splitting far below the peak width is
+      not a measurement). Pick the criterion on physical grounds and state
+      the reasoning in the docstring; do not invent a bare magic number.
+    - [ ] Return NaN for `eps_parallel` (matching `relaxation`'s existing
+      honesty) plus a machine-readable reason the UI can surface, so the
+      panel can say WHY rather than printing a blank.
+    - [ ] Surface it in `workshops/rsm/RsmPanel.tsx`: a symmetric-reflection
+      note beats an empty cell. An asymmetric reflection is required for
+      in-plane strain — say so where the user is standing.
+    - [ ] Regression test using the real file's fitted peaks: assert
+      `eps_parallel` is NaN with a reason, and that a genuinely asymmetric
+      pair still computes normally (guard against over-triggering).
+    - Found by validation, not by any test — the docs are already written
+      to describe the CORRECT behaviour, so this closes the gap between
+      them and the code.
+
 7. **Cut ruler — radial/transverse cuts about a peak**
    Files: EDIT `Stage/MapRoiOverlay.tsx`, EDIT `Stage/useMapRoi.ts` (+
    tests), EDIT `Stage/MapToolbar.tsx` (ruler arm button), possibly a
