@@ -12,6 +12,7 @@ import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/map
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import MapToolbar from "./MapToolbar";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
 
@@ -220,128 +221,40 @@ export default function MapStage({ dataset }: MapStageProps) {
       </div>
 
       {active && enoughChannels && (
-        <div className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
-          {qAvailable && (
-            <>
-              <button
-                className={`qzk-tool-btn${keysAre(angularKeys) ? " active" : ""}`}
-                title="Angular axes (2θ / ω)"
-                onClick={() => angularKeys && setKeys(angularKeys)}
-              >
-                2θ/ω
-              </button>
-              <button
-                className={`qzk-tool-btn${keysAre(qKeys) ? " active" : ""}`}
-                title="Reciprocal-space axes (Qx / Qz)"
-                onClick={() => qKeys && setKeys(qKeys)}
-              >
-                Q
-              </button>
-              <span className="qzk-tool-sep" />
-            </>
-          )}
-          {(["X", "Y", "Z"] as const).map((axis, slot) => (
-            <Picker
-              key={axis}
-              label={axis}
-              value={keys[slot]}
-              options={labels.map((lab, i) => ({ v: i, text: lab }))}
-              onChange={(v) =>
-                setKeys((k) => {
-                  const next = [...k] as [number, number, number];
-                  next[slot] = Number(v);
-                  return next;
-                })
-              }
-            />
-          ))}
-          <span className="qzk-tool-sep" />
-          <Picker
-            label="map"
-            value={cmap}
-            options={Object.keys(COLORMAPS).map((n) => ({ v: n, text: n }))}
-            onChange={(v) => setCmap(v as ColormapName)}
-          />
-          <button
-            className={`qzk-tool-btn${logZ ? " active" : ""}`}
-            title="Log intensity scale (for high-dynamic-range data like RSM)"
-            onClick={() => setLogZ((v) => !v)}
-          >
-            log
-          </button>
-          <button
-            className={`qzk-tool-btn${contourOn ? " active" : ""}`}
-            title="Contour lines (level count + lin/log spacing live in the Inspector's 2-D map card)"
-            onClick={() => setContourOn(!contourOn)}
-          >
-            ∿
-          </button>
-          {cutSpace != null && (
-            <>
-              <span className="qzk-tool-sep" />
-              {gridable && (
-                <button
-                  className={`qzk-tool-btn${cuts.mode === "h" ? " active" : ""}`}
-                  title="H-cut: click the map → intensity vs the horizontal axis at that height (width averages a swath)"
-                  onClick={() => cuts.setMode(cuts.mode === "h" ? "off" : "h")}
-                >
-                  ─
-                </button>
-              )}
-              {gridable && (
-                <button
-                  className={`qzk-tool-btn${cuts.mode === "v" ? " active" : ""}`}
-                  title="V-cut: click the map → intensity vs the vertical axis at that position"
-                  onClick={() => cuts.setMode(cuts.mode === "v" ? "off" : "v")}
-                >
-                  │
-                </button>
-              )}
-              <button
-                className={`qzk-tool-btn${cuts.mode === "seg" ? " active" : ""}`}
-                title="Segment cut: drag any line across the map → distance-parametrized linescan"
-                onClick={() => cuts.setMode(cuts.mode === "seg" ? "off" : "seg")}
-              >
-                ∕
-              </button>
-              {gridable && (
-                <button
-                  className="qzk-tool-btn"
-                  title="Project the whole map onto the horizontal axis (Σ over frames)"
-                  onClick={() => cuts.runProjection("pixels")}
-                >
-                  Σx
-                </button>
-              )}
-              {gridable && (
-                <button
-                  className="qzk-tool-btn"
-                  title="Project the whole map onto the vertical axis (Σ over pixels — rocking-curve profile)"
-                  onClick={() => cuts.runProjection("frames")}
-                >
-                  Σy
-                </button>
-              )}
-              {cuts.mode !== "off" && (
-                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title="Cut width: average all lines within ±width/2 (0 = single line)">
-                  w
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={cuts.width}
-                    onChange={(e) => cuts.setWidth(Math.max(0, Number(e.target.value) || 0))}
-                    style={{ width: 52 }}
-                  />
-                </label>
-              )}
-            </>
-          )}
-          <span className="qzk-tool-sep" />
-          <button className="qzk-tool-btn" title="Save map as PNG" onClick={savePng}>
-            ⤓
-          </button>
-        </div>
+        <MapToolbar
+          qAvailable={qAvailable}
+          isAngular={keysAre(angularKeys)}
+          isQ={keysAre(qKeys)}
+          onAngular={() => angularKeys && setKeys(angularKeys)}
+          onQ={() => qKeys && setKeys(qKeys)}
+          labels={labels}
+          keys={keys}
+          onKeyChange={(slot, v) =>
+            setKeys((k) => {
+              const next = [...k] as [number, number, number];
+              next[slot] = v;
+              return next;
+            })
+          }
+          cmap={cmap}
+          cmapOptions={Object.keys(COLORMAPS)}
+          onCmapChange={setCmap}
+          logZ={logZ}
+          onToggleLogZ={() => setLogZ((v) => !v)}
+          contourOn={contourOn}
+          onToggleContour={() => setContourOn(!contourOn)}
+          cutSpace={cutSpace}
+          gridable={gridable}
+          cutMode={cuts.mode}
+          onSetCutMode={cuts.setMode}
+          cutWidth={cuts.width}
+          onSetCutWidth={cuts.setWidth}
+          cutWidthTooltip="Cut width: average all lines within ±width/2 (0 = single line)"
+          onProjection={cuts.runProjection}
+          roiMode="off"
+          onToggleRoi={() => {}}
+          onSavePng={savePng}
+        />
       )}
 
       {!active && (
@@ -363,34 +276,6 @@ export default function MapStage({ dataset }: MapStageProps) {
         </div>
       )}
     </div>
-  );
-}
-
-// A compact labeled <select> for the float toolbar (channel / colormap / grid).
-function Picker({
-  label,
-  value,
-  options,
-  onChange,
-  title,
-}: {
-  label: string;
-  value: string | number;
-  options: { v: string | number; text: string }[];
-  onChange: (v: string) => void;
-  title?: string;
-}) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title={title}>
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={String(o.v)} value={o.v}>
-            {o.text}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
