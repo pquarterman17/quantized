@@ -7,13 +7,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
-import { cutSpaceForKeys } from "../../lib/mapcuts";
+import { cutSpaceForKeys, type CutMode } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import MapRoiOverlay from "./MapRoiOverlay";
+import MapToolbar from "./MapToolbar";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
+import { useMapRoi } from "./useMapRoi";
 
 export interface MapStageProps {
   /** Bind the map to an EXPLICIT dataset instead of the Library-active one
@@ -74,8 +77,18 @@ export default function MapStage({ dataset }: MapStageProps) {
   // segment cuts interpolate the scattered cloud and work regardless.
   const gridable = Array.isArray(active?.data.metadata?.map_shape);
   const cuts = useMapCuts(active, cutSpace);
+  // Box ROI: draw/move/resize + live preview + inline commit (RSM_CUTS_PLAN
+  // item 6) — the SAME cutSpace-gated tool group as H/V/seg, mutually
+  // exclusive with them (arming one disarms the other; see setCutMode/
+  // toggleRoi below) since both drive the same canvas pointer gestures.
+  const roi = useMapRoi(active, cutSpace);
   // Segment-drag state in canvas pixels (for the SVG preview line).
   const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
+  // Host box size in CSS px, kept in sync by the paint effect below (the
+  // SAME ResizeObserver that already exists for the canvas) — the ROI
+  // overlay needs it to convert data<->px through the SAME plotRect the
+  // canvas paints with, and refs aren't a reliable read during render.
+  const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -116,7 +129,12 @@ export default function MapStage({ dataset }: MapStageProps) {
     // Show peak markers only when they belong to the active dataset.
     const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
     const contour = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
-    const paint = () => draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
+    const paint = () => {
+      draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
+      const w = host.clientWidth;
+      const h = host.clientHeight;
+      setHostSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
@@ -148,25 +166,44 @@ export default function MapStage({ dataset }: MapStageProps) {
     return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
   }
 
+  // ROI handlers take precedence over the cut tool while armed — both drive
+  // the same canvas pointer gestures, so only one may own them at a time.
+  const roiArmed = roi.mode === "roi" && cutSpace != null;
+
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     const { r, px } = hitAt(ev);
     setReadout(r);
+    if (roiArmed && payload) {
+      roi.onMove(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (dragPx) setDragPx({ a: dragPx.a, b: px });
   }
 
   function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed) return;
     if (cuts.mode !== "h" && cuts.mode !== "v") return;
     const { r } = hitAt(ev);
     if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
   }
 
   function onDown(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed && payload) {
+      const { px } = hitAt(ev);
+      roi.onDown(payload, hostSize.w, hostSize.h, px);
+      return;
+    }
     if (cuts.mode !== "seg") return;
     const { r, px } = hitAt(ev);
     if (r) setDragPx({ a: px, b: px });
   }
 
   function onUp(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (roiArmed) {
+      const { px } = hitAt(ev);
+      roi.onUp(px);
+      return;
+    }
     if (cuts.mode !== "seg" || !dragPx) return;
     const canvas = canvasRef.current;
     const host = hostRef.current;
@@ -184,25 +221,45 @@ export default function MapStage({ dataset }: MapStageProps) {
     exportCanvasPng(canvas, `${stem}_map.png`);
   }
 
+  // Box ROI and the H/V/seg cut tool are mutually exclusive (same canvas
+  // gestures) — arming one disarms the other.
+  function setCutMode(m: CutMode) {
+    if (m !== "off") roi.setMode("off");
+    cuts.setMode(m);
+  }
+  function toggleRoi() {
+    if (roi.mode === "roi") {
+      roi.setMode("off");
+    } else {
+      cuts.setMode("off");
+      roi.setMode("roi");
+    }
+  }
+
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
         <canvas
           ref={canvasRef}
+          tabIndex={roi.rect ? 0 : -1}
           style={{
             width: "100%",
             height: "100%",
             display: "block",
-            cursor: cuts.mode === "off" ? "default" : "crosshair",
+            cursor: roiArmed ? roi.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
           onMouseMove={onMove}
           onMouseLeave={() => {
             setReadout(null);
             setDragPx(null);
+            roi.onLeave();
           }}
           onClick={onClick}
           onMouseDown={onDown}
           onMouseUp={onUp}
+          onKeyDown={(ev) => {
+            if (payload) roi.onKeyDown(ev, payload);
+          }}
         />
         {dragPx && (
           <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
@@ -217,131 +274,70 @@ export default function MapStage({ dataset }: MapStageProps) {
             />
           </svg>
         )}
+        {payload && cutSpace != null && hostSize.w > 0 && hostSize.h > 0 && (
+          <MapRoiOverlay
+            payload={payload}
+            w={hostSize.w}
+            h={hostSize.h}
+            cutSpace={cutSpace}
+            rect={roi.rect}
+            preview={roi.preview}
+            previewAxis={roi.previewAxis}
+            onPreviewAxisChange={roi.setPreviewAxis}
+            previewStats={roi.previewStats}
+            onIntegrate={roi.commitIntegrate}
+            landingBusy={roi.landingBusy}
+            onStats={roi.commitStats}
+            statsBusy={roi.statsBusy}
+            apiStats={roi.apiStats}
+            statsError={roi.statsError}
+            onClearStats={roi.clearStats}
+          />
+        )}
       </div>
 
       {active && enoughChannels && (
-        <div className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
-          {qAvailable && (
-            <>
-              <button
-                className={`qzk-tool-btn${keysAre(angularKeys) ? " active" : ""}`}
-                title="Angular axes (2θ / ω)"
-                onClick={() => angularKeys && setKeys(angularKeys)}
-              >
-                2θ/ω
-              </button>
-              <button
-                className={`qzk-tool-btn${keysAre(qKeys) ? " active" : ""}`}
-                title="Reciprocal-space axes (Qx / Qz)"
-                onClick={() => qKeys && setKeys(qKeys)}
-              >
-                Q
-              </button>
-              <span className="qzk-tool-sep" />
-            </>
-          )}
-          {(["X", "Y", "Z"] as const).map((axis, slot) => (
-            <Picker
-              key={axis}
-              label={axis}
-              value={keys[slot]}
-              options={labels.map((lab, i) => ({ v: i, text: lab }))}
-              onChange={(v) =>
-                setKeys((k) => {
-                  const next = [...k] as [number, number, number];
-                  next[slot] = Number(v);
-                  return next;
-                })
-              }
-            />
-          ))}
-          <span className="qzk-tool-sep" />
-          <Picker
-            label="map"
-            value={cmap}
-            options={Object.keys(COLORMAPS).map((n) => ({ v: n, text: n }))}
-            onChange={(v) => setCmap(v as ColormapName)}
-          />
-          <button
-            className={`qzk-tool-btn${logZ ? " active" : ""}`}
-            title="Log intensity scale (for high-dynamic-range data like RSM)"
-            onClick={() => setLogZ((v) => !v)}
-          >
-            log
-          </button>
-          <button
-            className={`qzk-tool-btn${contourOn ? " active" : ""}`}
-            title="Contour lines (level count + lin/log spacing live in the Inspector's 2-D map card)"
-            onClick={() => setContourOn(!contourOn)}
-          >
-            ∿
-          </button>
-          {cutSpace != null && (
-            <>
-              <span className="qzk-tool-sep" />
-              {gridable && (
-                <button
-                  className={`qzk-tool-btn${cuts.mode === "h" ? " active" : ""}`}
-                  title="H-cut: click the map → intensity vs the horizontal axis at that height (width averages a swath)"
-                  onClick={() => cuts.setMode(cuts.mode === "h" ? "off" : "h")}
-                >
-                  ─
-                </button>
-              )}
-              {gridable && (
-                <button
-                  className={`qzk-tool-btn${cuts.mode === "v" ? " active" : ""}`}
-                  title="V-cut: click the map → intensity vs the vertical axis at that position"
-                  onClick={() => cuts.setMode(cuts.mode === "v" ? "off" : "v")}
-                >
-                  │
-                </button>
-              )}
-              <button
-                className={`qzk-tool-btn${cuts.mode === "seg" ? " active" : ""}`}
-                title="Segment cut: drag any line across the map → distance-parametrized linescan"
-                onClick={() => cuts.setMode(cuts.mode === "seg" ? "off" : "seg")}
-              >
-                ∕
-              </button>
-              {gridable && (
-                <button
-                  className="qzk-tool-btn"
-                  title="Project the whole map onto the horizontal axis (Σ over frames)"
-                  onClick={() => cuts.runProjection("pixels")}
-                >
-                  Σx
-                </button>
-              )}
-              {gridable && (
-                <button
-                  className="qzk-tool-btn"
-                  title="Project the whole map onto the vertical axis (Σ over pixels — rocking-curve profile)"
-                  onClick={() => cuts.runProjection("frames")}
-                >
-                  Σy
-                </button>
-              )}
-              {cuts.mode !== "off" && (
-                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title="Cut width: average all lines within ±width/2 (0 = single line)">
-                  w
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={cuts.width}
-                    onChange={(e) => cuts.setWidth(Math.max(0, Number(e.target.value) || 0))}
-                    style={{ width: 52 }}
-                  />
-                </label>
-              )}
-            </>
-          )}
-          <span className="qzk-tool-sep" />
-          <button className="qzk-tool-btn" title="Save map as PNG" onClick={savePng}>
-            ⤓
-          </button>
-        </div>
+        <MapToolbar
+          qAvailable={qAvailable}
+          isAngular={keysAre(angularKeys)}
+          isQ={keysAre(qKeys)}
+          onAngular={() => angularKeys && setKeys(angularKeys)}
+          onQ={() => qKeys && setKeys(qKeys)}
+          labels={labels}
+          keys={keys}
+          onKeyChange={(slot, v) =>
+            setKeys((k) => {
+              const next = [...k] as [number, number, number];
+              next[slot] = v;
+              return next;
+            })
+          }
+          cmap={cmap}
+          cmapOptions={Object.keys(COLORMAPS)}
+          onCmapChange={setCmap}
+          logZ={logZ}
+          onToggleLogZ={() => setLogZ((v) => !v)}
+          contourOn={contourOn}
+          onToggleContour={() => setContourOn(!contourOn)}
+          cutSpace={cutSpace}
+          gridable={gridable}
+          cutMode={cuts.mode}
+          onSetCutMode={setCutMode}
+          cutWidth={cuts.width}
+          onSetCutWidth={cuts.setWidth}
+          cutWidthTooltip={
+            // Since item 2, Q-space `width` is a physical perpendicular band
+            // half-width in Å⁻¹ (mask + bin over the curvilinear cloud);
+            // angular keeps the original line-averaging semantics.
+            cutSpace === "q"
+              ? "Cut width: perpendicular band half-width in Å⁻¹ around the line (0 = nearest points only)"
+              : "Cut width: average all lines within ±width/2 (0 = single line)"
+          }
+          onProjection={cuts.runProjection}
+          roiMode={roi.mode}
+          onToggleRoi={toggleRoi}
+          onSavePng={savePng}
+        />
       )}
 
       {!active && (
@@ -363,34 +359,6 @@ export default function MapStage({ dataset }: MapStageProps) {
         </div>
       )}
     </div>
-  );
-}
-
-// A compact labeled <select> for the float toolbar (channel / colormap / grid).
-function Picker({
-  label,
-  value,
-  options,
-  onChange,
-  title,
-}: {
-  label: string;
-  value: string | number;
-  options: { v: string | number; text: string }[];
-  onChange: (v: string) => void;
-  title?: string;
-}) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title={title}>
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={String(o.v)} value={o.v}>
-            {o.text}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
