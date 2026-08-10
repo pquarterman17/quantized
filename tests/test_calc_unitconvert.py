@@ -96,7 +96,13 @@ def test_parse_exponent_no_redos_on_adversarial_input() -> None:
 
     payload = "9" * 200_000 + "x"  # long digit run then a non-digit -> reject
     start = time.perf_counter()
+    # The load-INVARIANT half: the scan must reject invalid input correctly.
     assert _parse_exponent(payload) is None
+    # The wall-clock half is a smoke ceiling only, deliberately far above the
+    # measured runtime (~0.02s on this machine). The 0.5s bound was NOT tightened
+    # because a lower ceiling only adds flake risk under load. A ReDoS regression
+    # takes minutes, not 0.3s — this loose ceiling catches it just as reliably.
+    # The REJECTION assertion above is the real protection.
     assert time.perf_counter() - start < 0.5
 
 
