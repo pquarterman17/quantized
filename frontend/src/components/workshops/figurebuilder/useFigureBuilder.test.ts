@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
 import { createFigureDocument } from "../../../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
-import { pxToData } from "../../../lib/previewmap";
+import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
@@ -768,6 +768,73 @@ describe("useFigureBuilder", () => {
         expect(result.current.overrides.legend).toMatchObject({ loc: "custom" });
         expect(result.current.overrides.annotations?.[0]).toMatchObject({ text: "Hello" });
         expect(useApp.getState().figurePublicationSession).toBeNull();
+      });
+
+      // TEST_DETERMINISM_PLAN task 1: the test above (and its F2.4b Apply/
+      // Cancel siblings) synchronised on `waitFor(result.current.hitmap)`
+      // because the WEAK wait -- `waitFor(renderFigureHitmap toHaveBeenCalled)`
+      // -- only proves the debounced fetch STARTED, not that its resolved
+      // hitmap reached `result.current`. That fix was verified by 0/90
+      // repetitions against a 1/30 baseline, which the rule of three shows is
+      // statistically indistinguishable from "unchanged" (0/90 bounds the
+      // post-fix rate at 3/90 = 3.3%, identical to the baseline). This test
+      // replaces that probabilistic evidence: it takes manual control of
+      // WHEN the hitmap promise resolves, so the drag is dispatched during
+      // the race window on every single run, deterministically, rather than
+      // hoping real scheduling loses the race the way the repro method did.
+      //
+      // What "correct" means here (useFigureBuilder.ts:494's
+      // `if (!hitmap) return;`): a drag dispatched before the hitmap lands
+      // must be SAFELY DROPPED, not deferred or queued. The hitmap IS the
+      // pixel<->data/figure-fraction calibration the drag needs (see
+      // pxToFigureFraction/pxToData) -- there is no meaningful position to
+      // apply before it exists, and no production change (a pending-gesture
+      // queue) is warranted for a window a real user cannot even reach: the
+      // draggable elements are themselves painted from the hitmap, so
+      // nothing is on screen to grab until it has landed. The guard is
+      // correct as written; this test pins that and proves it holds even
+      // when the race is forced instead of merely possible.
+      it("forces the item-22 race: a drag dispatched before the hitmap lands is safely dropped, and the same gesture succeeds once it resolves", async () => {
+        // Take manual control of resolution instead of the module-level
+        // auto-resolving mock, so the hitmap is GUARANTEED still null when
+        // the drag below fires -- not merely likely, as under real scheduling.
+        let resolveHitmap!: (value: FigureHitmap) => void;
+        const deferred = new Promise<FigureHitmap>((resolve) => {
+          resolveHitmap = resolve;
+        });
+        vi.mocked(renderFigureHitmap).mockReturnValueOnce(deferred);
+
+        const { result } = renderHook(() => useFigureBuilder());
+
+        // The weak signal item 22's original (buggy) wait relied on: the
+        // debounced fetch has started. `deferred` is still unresolved, so
+        // the hitmap is provably null here -- this is the forced race window.
+        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalledTimes(1));
+        expect(result.current.hitmap).toBeNull();
+
+        act(() => result.current.dragElement("legend", 300, 200));
+        expect(result.current.overrides.legend).toBeUndefined();
+
+        // Let the preview land -- deliberately a BARE resolve, not wrapped in
+        // an (async) act(): resolving the promise only schedules its `.then()`
+        // as a microtask, it does not force React to flush it. The very next
+        // statement runs in the same synchronous turn, so without an explicit
+        // yield/wait, `result.current.hitmap` is not yet guaranteed to see it
+        // -- this is what makes the `waitFor` below load-bearing rather than
+        // decorative (see the revert proof in the task report).
+        resolveHitmap({
+          image: "cGln",
+          width: 600,
+          height: 400,
+          elements: [{ id: "title", x0: 1, y0: 1, x1: 2, y1: 2 }],
+          axes: { x0: 0, y0: 0, x1: 600, y1: 400, xlim: [0, 1], ylim: [0, 1], xlog: false, ylog: false },
+        });
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+
+        // Confirm the SAME gesture succeeds once the hitmap it depends on
+        // has actually reached `result.current`.
+        act(() => result.current.dragElement("legend", 300, 200));
+        expect(result.current.overrides.legend).toMatchObject({ loc: "custom" });
       });
     });
 
