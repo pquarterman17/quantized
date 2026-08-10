@@ -43,6 +43,19 @@ The invariant assertion is what actually encodes the fix and cannot flake. The
 clock survives only to catch an order-of-magnitude regression, never as a
 benchmark.
 
+**Budget rule — corrected 2026-08-10, after task 2 got this wrong:**
+`new_budget = max(old_budget, 5 x measured)`. **Never lower an existing bound.**
+"5x the runtime measured on an idle machine" is NOT a safe margin by itself:
+`GridViewport.perf` measured ~0.3-1.2 s against an **8 s** budget (~8x headroom)
+and still flaked under three concurrent agents. Load does not scale runtime by
+5x — it can stall a worker for whole seconds. An old bound that has never failed
+is evidence that bound is survivable; keep it.
+
+Safe precisely because these guards are **order-of-magnitude, not marginal**: a
+ReDoS regression on a 200k-char input takes minutes, not 0.3 s; a sparse-table
+to naive regression is quadratic. A loose ceiling catches those as reliably as a
+tight one and never flakes.
+
 **Class B — weak wait.** `await waitFor(() => expect(someMock).toHaveBeenCalled())`
 proves the mock was *invoked*. It does NOT prove the resolved value reached
 component state. Item 22's flake: `dragElement` early-returns on `!hitmap`, so
