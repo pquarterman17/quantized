@@ -201,18 +201,25 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
 
     Per plan-hygiene rules, when an item finishes, it's moved to the
     ## Completed section with strike-through (~~**Item**~~). Items that claim
-    completion in tier sections without being struck are drift.
+    completion or have all sub-boxes checked, in tier sections without being
+    struck, are drift.
+
+    DRIFT DETECTION (flagged as errors):
+    1. **Text claims completion:** Item text contains CLOSED, SHIPPED, COMPLETE,
+       or DONE (unless qualified by except/BLOCKED/pending/residual/etc).
+    2. **All sub-boxes checked:** Item has [x] sub-items and ALL are marked
+       with [x] — indicates completed work not moved to Completed.
 
     EXCEPTIONS (not flagged as drift):
     1. **Partial completions:** Claims containing "except", "apart from",
-       "BLOCKED", "owner-gated", "awaiting", "pending", "residual", "partially".
-    2. **Checkbox-based tracking:** JMP_GAP_PLAN pattern — items with [x] and
-       ALL sub-items [x] are using checkbox convention, not strike-through.
-    3. **Already struck:** Items starting with ~~text~~ formatting.
-    4. **In/past Completed:** Items at or after the ## Completed section line.
+       "BLOCKED", "blocked on", "owner-gated", "awaiting", "pending",
+       "residual", or "partially".
+    2. **Already struck:** Items starting with ~~text~~ formatting.
+    3. **In/past Completed:** Items at or after ## Completed section line.
 
-    Reference: GUI_INTERACTION_PLAN #8/#11/#12 (fixed 2026-08-10 — items
-    claimed "CLOSED 2026-07-18 (see Completed)" in tiers but never struck).
+    Reference: PORT_PLAN #1/2/5 (2026-08-10) — items with all [x] sub-boxes
+    never claimed text completion, yet were drift. GUI_INTERACTION_PLAN
+    #8/#11/#12 — items claimed "CLOSED" but weren't moved.
     """
     import re
 
@@ -223,7 +230,6 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
         "apart from",
         "BLOCKED",
         "blocked on",
-        "OWNER",
         "owner-gated",
         "awaiting",
         "pending",
@@ -256,40 +262,62 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
                 break
 
             # Match numbered items: "N. **[x] Item**" or "N. **Item**"
-            if not re.match(r"^(\d+)\.\s+(?:\*\*\[.\]\s+)?\*\*(.+?)\*\*", line):
+            item_match = re.match(
+                r"^(\d+)\.\s+(?:\*\*\[(.)\]\s+)?\*\*(.+?)\*\*", line
+            )
+            if not item_match:
                 continue
+
+            item_num, checkbox_char, item_text = item_match.groups()
 
             # Is already struck? Skip.
             if line.strip().startswith("~~"):
                 continue
 
-            # Collect context (item line + next 2)
-            context = "\n".join([line] + lines[i + 1 : min(i + 3, len(lines))])
+            # Collect context (item line + next few lines)
+            context = "\n".join([line] + lines[i + 1 : min(i + 4, len(lines))])
 
-            # Does claim have a qualifier? (partial work) Skip if so.
-            if any(q in context for q in PARTIAL_QUALIFIERS):
-                continue
+            # DRIFT DETECTOR #1: Text claims completion (unqualified)
+            text_claims_completion = any(word in context for word in COMPLETION_WORDS)
+            if text_claims_completion:
+                # But skip if claim has a qualifier (partial work)
+                if not any(q in context for q in PARTIAL_QUALIFIERS):
+                    drift_found.append(
+                        f"{plan_file.name}:{item_num} claims completion "
+                        "but not struck"
+                    )
+                    continue
 
-            # Does item claim completion?
-            if not any(word in context for word in COMPLETION_WORDS):
-                continue
+            # DRIFT DETECTOR #2: All sub-items are [x] (even without text claim)
+            # This catches completed work that never claimed CLOSED/SHIPPED/etc.
+            sub_items = []
+            for j in range(i + 1, len(lines)):
+                next_line = lines[j]
+                # Stop at next top-level item. Also matches an ALREADY-STRUCK
+                # item ("N. ~~**Title**~~ **STATUS**" — the number stays
+                # unstruck, only the title is wrapped). Without the optional
+                # `~~`, a struck item never registers as a boundary, so the
+                # scan for the PRECEDING open item's sub-boxes runs straight
+                # through it and vacuums up unrelated checked boxes from
+                # whatever numbered item comes after it (see
+                # ORIGIN_FILE_DECODE_PLAN #4, a prose goal statement with no
+                # sub-items of its own that inherited #48-#52's checked boxes
+                # this way).
+                if re.match(r"^\d+\.\s+(?:~~)?\*\*", next_line):
+                    break
+                # Collect sub-items (indented checkboxes)
+                if re.match(r"^\s+- \[", next_line):
+                    sub_items.append(next_line)
 
-            # CHECKBOX EXCEPTION: JMP_GAP_PLAN and similar plans use checkbox-
-            # based completion tracking: items marked [x] are considered tracked
-            # when they claim completion, whether they reference "Completed" or
-            # not. This is a legitimate convention distinct from strike-through.
-            if "[x]" in line:
-                # Item with [x] checkbox claiming completion = checkbox convention
-                continue
-
-            # Genuine drift: unqualified completion claim, not struck.
-            match = re.match(r"^(\d+)\.\s+", line)
-            item_num = match.group(1) if match else "?"
-            drift_found.append(
-                f"{plan_file.name}:{item_num} claims completion but not struck"
-            )
+            # If there are sub-items and ALL are [x], it's drift
+            if sub_items and all("- [x]" in s for s in sub_items):
+                drift_found.append(
+                    f"{plan_file.name}:{item_num} has all sub-items checked "
+                    "but not struck"
+                )
 
     assert not drift_found, (
         "Plan items must be moved to ## Completed when finished (see docstring "
-        "for exceptions). Drift found:\n  " + "\n  ".join(drift_found)
+        "for detection rules and exceptions). Drift found:\n  "
+        + "\n  ".join(drift_found)
     )

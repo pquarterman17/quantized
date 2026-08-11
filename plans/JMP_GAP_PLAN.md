@@ -3,7 +3,12 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-07-31 (residual wave SHIPPED, one agent, 5 commits merged
+**Updated:** 2026-08-10 (plan-hygiene reconciliation: tier-section items
+3/6/7/8/9/10/11/12/13/14 — J3, J6, J7, J8, J9, J10, J11, J12, J17, and the
+Module-size follow-ups — were struck "SHIPPED (see Completed)" in their own
+text but the tier-section copies were never deleted; removed as duplicates,
+content already recorded in Completed. Open work is unchanged: J1/J2/J4 in
+Tier 1, Tier 3 census-gated, Gate J. Prior: 2026-07-31 (residual wave SHIPPED, one agent, 5 commits merged
 `060c11c`: J8 variability-chart UI → J8 COMPLETE; J10 `figure_multivar`
 export parity → J10 COMPLETE; J3 mosaic plot + prediction-band toggle →
 J3 fully closed; J7 curve-fit By → J7 fully closed; J9's Dixon n>20
@@ -184,32 +189,6 @@ replacements and its priority case is now stronger, not different.
    provenance recorded; mapping saveable/reapplicable. Includes plain
    find-replace over text cells.
 
-3. **[x] J3 — Fit Y by X workbench.** SHIPPED 2026-07-28/29 (see
-   Completed). One Analyze command; dispatch on (X, Y) modeling types:
-   - [x] categorical X × continuous Y → oneway: grouped points +
-     stats, one-way ANOVA + Levene warning (no Welch endpoint exists —
-     documented fallback), Tukey when >2 levels, `recommend_test`
-     hint; report-sheet emission.
-   - [x] continuous × continuous → bivariate: scatter + linear/poly
-     fit (order 1–3), R²/F/p table. Residual: confidence/prediction
-     band (needs a new backend return — booked below).
-   - [x] categorical × categorical → contingency cross-tab +
-     chi-square independence + Fisher exact (2×2) — new backend
-     `calc/stats_contingency.py` + routes, pinned to Fisher's 1935
-     lady-tasting-tea reference values; `low_expected` warning honest.
-   - [x] Honors the row-state chokepoint (guard #11 verified).
-   - [x] ~~Residual: bivariate confidence bands~~ SHIPPED 2026-07-29
-     (residual sweep): opt-in `band_x` on `/api/stats/regression`
-     (byte-identical response when omitted — pinned by test;
-     cross-checked vs statsmodels to 1e-8), SVG ribbon in the
-     bivariate view.
-   - [x] ~~Residual: mosaic plot + prediction band~~ SHIPPED 2026-07-31
-     (`20a13de`): client-side `MosaicPlot.tsx` in ContingencyView (no
-     backend call needed); `polynomial_confidence_band` gained an
-     `interval` param (extraction to `calc/stats_band.py` kept
-     `stats.py` under the 500-line ceiling, 409/112) + a
-     Confidence/Prediction toggle in BivariateView. J3 fully closed.
-
 4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
    the Group well, editable after Send, parity across
@@ -222,89 +201,7 @@ replacements and its priority case is now stronger, not different.
    reading: connect-means gates on the stage's one grouping axis
    (`groupCol`), the JMP oneway reading.
 
-6. **[x] J6 — Tabulate v2.** SHIPPED 2026-07-29 (see Completed): up to
-   3 nested group columns, multiple value columns, 10-stat catalog
-   (count/mean/sd/sem/min/max/median/sum/q1/q3), grand-total toggle,
-   label-true TSV (resolves Origin text labels, never ordinal codes);
-   dataset export + report emission kept. Noted deviations recorded in
-   Completed (grand-total excluded from dataset export; q1/q3 use
-   linear interpolation, exact JMP quantile parity deferred to J12).
-
 ## Tier 2 — Medium Impact
-
-7. **[x] J7 — "By" grouping on analysis platforms.** SHIPPED
-   2026-07-29 (see Completed): Distribution + Fit Y by X gain a By
-   column (shared `lib/byPartition.ts` — index partitioning after the
-   guard-#11 view, no dataset minting); per-level sections, honest
-   small-n lines, per-level report concatenation. Tabulate's By is its
-   own nested grouping (J6). ~~Residual: By on the curve-fit
-   workshop~~ SHIPPED 2026-07-31 (`0f242ea`): `useCurveFitByLevel.ts`
-   mirrors `useDistributionByLevels.ts`; display-only by design (never
-   touches the plot overlay, macro step, or FitSpec; every level fits
-   unweighted, disclosed in the UI). J7 fully closed.
-
-8. **[x] J8 — Variability chart + variance components.** COMPLETE
-   2026-07-31. Backend SHIPPED 2026-07-29 (see Completed):
-   `calc/stats_varcomp.py` (nested ANOVA, EMS variance components with
-   n0/Satterthwaite unbalanced handling + clamping flags,
-   `variability_summary` chart contract) + `/api/stats/{nested-anova,
-   variance-components,variability-summary}`. ~~Residual: the
-   variability-chart UI~~ SHIPPED 2026-07-31 (`08d6fec`): lazy-loaded
-   `workshops/variability/` (panel + chart + variance-components view +
-   `useVariability` hook, own Suspense chunk, wrappers in
-   `lib/api/stats.ts` as #14 prescribed), Analyze command wired.
-   Note: EMS pinned to a hand-derived fixture, not Montgomery's table
-   (unreachable without web access — disclosed in the module).
-
-9. **[x] J9 — Outlier screening.** COMPLETE 2026-07-29: backend
-   (Grubbs, Dixon Q n=3–30, Rosner ESD pinned to the NIST n=54
-   example, MAD) + the Outlier screening workshop ("Select flagged
-   rows" writes the shared row selection; never auto-excludes; maps
-   flagged indices back through the analysis view's pruning).
-   ~~Standing caveat: Dixon critical table above n≈20 transcribed
-   without web access~~ VERIFIED 2026-07-31 (`8fa0413`): cross-checked
-   against three independent sources (Kanji *100 Statistical Tests*
-   1993 exact match n=8–25 after one-sided/two-sided alpha
-   reconciliation; NIST Dataplot Monte Carlo n=8; Harvey n=3–7) —
-   table was already correct, zero numeric changes; citation trail +
-   18 regression tests added.
-
-10. **[x] J10 — Multivariate workbench.** COMPLETE 2026-07-31.
-    SHIPPED 2026-07-29 (see Completed): correlation heatmap
-    (pearson/spearman, r+p), SPLOM canvas with per-panel downsampling,
-    PCA (scree/scores/loadings), TSV copy; standalone
-    `store/multivar.ts` after the first attempt tripped the useApp
-    store-size ratchet. ~~Residual: matplotlib export parity~~ SHIPPED
-    2026-07-31 (`f1c7c98`): `calc/figure_multivar.py` (heatmap, full
-    n×n SPLOM, PCA scores/loadings/biplot, scree — matches the
-    interactive canvases' layout math) + 4 thin routes in
-    `routes/export_multivar.py`, export buttons in all three views;
-    34 backend + 3 frontend tests.
-
-11. **[x] J11 — Formula language v2.** SHIPPED 2026-07-29 (see
-    Completed): comparisons, word-style logicals (`and`/`or`/`not`,
-    1/0, NaN-safe), `if(cond,a,b)`, column aggregates (`mean(A)` etc.;
-    `min`/`max` keep 2-arg row behavior), `row()` (1-based, matches
-    the grid), `lag(A,k)`/`diff(A)`; parser split into sibling
-    modules; v1 corpus green unchanged; help updated.
-
-12. **[x] J12 — Distribution platform depth.** SHIPPED 2026-07-29
-    (see Completed): compare-distributions mode (fit-all + ranked
-    table, honest ranking label, winner highlighted), generalized PDF
-    overlay, percentile readout for the fitted winner. Capability
-    indices remain Gate-J-gated (J14).
-
-13. **[x] J17 — JSL → quantized mapping doc.** SHIPPED 2026-07-28 (see
-    Completed): "From JMP" Help tab with 11 idiom mappings
-    (`lib/jmpTips.ts`, reuses the Origin-tips architecture — no
-    parallel catalog), JMP keywords on 10 commands, vocabulary guard
-    extended so "jmp"/"jsl"/"local data filter"/"by group"/"tabulate"
-    cannot regress; help stays in the lazy chunk.
-
-14. **[x] Module-size follow-ups** — SHIPPED 2026-07-29 (see Completed).
-    All three splits landed plus the guard that was missing under them:
-    a new `MODULE_PINS` ratchet in `architecture.test.ts` now covers
-    non-store `.ts`, closing the gap that let both files grow unseen.
 
 ## Tier 3 — Census-gated (do NOT build speculatively)
 
