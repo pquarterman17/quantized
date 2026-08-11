@@ -221,7 +221,9 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
     drift_found = []
 
     for plan_file in sorted(plans_dir.glob("*.md")):
-        if "archive" in plan_file.parts or plan_file.name.endswith(("_DRAFT.md", "_SURVEY.md", "_NOTES.md")):
+        # Skip archived/draft/survey/notes files
+        excludes = ("_DRAFT.md", "_SURVEY.md", "_NOTES.md")
+        if "archive" in plan_file.parts or plan_file.name.endswith(excludes):
             continue
 
         text = plan_file.read_text(encoding="utf-8")
@@ -235,10 +237,8 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
                 break
 
         # Scan tier sections (between "## Tier" and "## Completed" or EOF)
-        in_completed = False
         for i, line in enumerate(lines):
             if completed_idx is not None and i >= completed_idx:
-                in_completed = True
                 break
 
             # Look for numbered items: "N. **Title**" (with or without checkbox)
@@ -267,12 +267,14 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
             # Heuristic: if the second line starts with whitespace + [ ], it's a sub-item.
             is_self_claim = True
             if i + 1 < len(lines) and re.match(r"^\s+- \[", lines[i + 1]):
-                # This is a top-level item with sub-boxes; only flag if the ITEM line itself claims done
-                is_self_claim = COMPLETION_WORDS.intersection(line.split())
+                # Top-level item with sub-boxes: only flag if the ITEM line
+                # itself claims done (not a sub-item's claim)
+                is_self_claim = bool(COMPLETION_WORDS.intersection(line.split()))
 
             if is_self_claim:
+                claims = list(COMPLETION_WORDS & set(context.split()))
                 drift_found.append(
-                    f"{plan_file.name}: {item_num}. — claims {list(COMPLETION_WORDS & set(context.split()))} "
+                    f"{plan_file.name}: {item_num}. — claims {claims} "
                     f"but not struck"
                 )
 
