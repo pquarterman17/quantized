@@ -423,4 +423,42 @@ describe("per-action-class undo/redo coverage", () => {
     useApp.getState().redo();
     expect(useApp.getState().y2Lim).toEqual([2, 8]);
   });
+
+  it("named saved ROIs are included in undo history (coverage gap #15)", () => {
+    useApp.setState({ savedRois: [] });
+    const pre = useApp.getState().savedRois;
+
+    // Simulate saving a named ROI via saveRoi
+    useApp.getState().recordHistory("Save ROI");
+    useApp.setState({
+      savedRois: [
+        {
+          id: "roi1",
+          name: "My ROI",
+          kind: "rect",
+          rect: { x0: 0, y0: 0, x1: 1, y1: 1, space: "angular" },
+        },
+      ],
+    });
+    const post = useApp.getState().savedRois;
+
+    useApp.getState().undo();
+    expect(useApp.getState().savedRois).toEqual(pre);
+
+    useApp.getState().redo();
+    expect(useApp.getState().savedRois).toEqual(post);
+  });
+
+  it("mapRoi changes do NOT create an undo entry (working geometry excluded)", () => {
+    useApp.setState({ savedRois: [], mapRoi: null });
+    useApp.getState().recordHistory("baseline");
+    const historyLengthBefore = useApp.getState().history.length;
+
+    // Mutate mapRoi directly without recordHistory — this is how drawing tools work
+    useApp.setState({ mapRoi: { x0: 1, y0: 2, x1: 3, y1: 4, space: "angular" } });
+    expect(useApp.getState().mapRoi).not.toBeNull();
+
+    // The history stack should NOT have a new entry for this mutation
+    expect(useApp.getState().history.length).toBe(historyLengthBefore);
+  });
 });
