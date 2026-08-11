@@ -14,7 +14,15 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-24 (#54's generalized page/layer MODEL is now COMPLETE:
+**Updated:** 2026-08-10 (plan-hygiene reconciliation: #21's frontend hook-in,
+deferred here to `GAP_ECOSYSTEM_PLAN.md` item 5, actually shipped
+2026-07-11 (`07e9d4fa`) and is recorded in `MAIN_PLAN.md`'s Completed
+section — this item's own text was never updated, so it sat unstruck
+claiming a partial "BACKEND SHIPPED" status; struck and moved. #55's
+"TOOLING COMPLETE; OWNER VISUAL-REVIEW GATE OPEN" status is unchanged and
+deliberately left open — the owner screenshot review it names is still
+outstanding (0/353 reviewed) and is not something a docs-only pass can
+close. Prior: 2026-07-24 (#54's generalized page/layer MODEL is now COMPLETE:
 pass B — the y2 singleton — shipped `50b4c9c`, joining passes A and C from
 2026-07-19. One pure `lib/axisspec.ts` replaces the y2 derivation each
 consumer used to hand-copy, and the pass found a real screen-vs-export
@@ -994,16 +1002,6 @@ the shipped contract)
 
 ### Tier 3 — Nice-to-Have
 
-21. **Templates (`.otp`/`.otpu`)** — same CPY family; a graph template
-    could import as a quantized style preset
-    *Model: sonnet · needs 1 + 11.*
-    **BACKEND SHIPPED 2026-07-07** via `plans/GAP_ECOSYSTEM_PLAN.md`
-    item 5 (`io/origin_project/templates.py` + `routes/import_template.py`,
-    21+10 tests). Remaining (tracked THERE, not here): the frontend
-    hook-in — `api.ts` client method + an "Import Origin template…"
-    open-file branch landing the result in the saved graph-templates
-    store.
-
 ---
 
 ## W6 — Export to Origin (quantized → Origin)
@@ -1040,6 +1038,17 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**21. Templates (`.otp`/`.otpu`)**~~ (2026-07-11) — same CPY family; a
+  graph template imports as a quantized style preset. Backend shipped
+  2026-07-07 via the (now-archived) `GAP_ECOSYSTEM_PLAN.md` item 5
+  (`io/origin_project/templates.py` + `routes/import_template.py`, 21+10
+  tests). The frontend hook-in this item deferred — `lib/originTemplate.ts`'s
+  upload client, the "Import Origin template…" command in `fileCommands.ts`,
+  landing results in the saved graph-templates store with never-clobber
+  naming — shipped `07e9d4fa` (2026-07-11) and is separately recorded in
+  `MAIN_PLAN.md`'s Completed section. This item's own text was never updated
+  to reflect it; closing the drift here.
 
 - ~~**52. Curve and axis fidelity campaign**~~ (2026-07-16)
   — comprehensive Origin graphics parity: line/scatter/line+symbol verified
