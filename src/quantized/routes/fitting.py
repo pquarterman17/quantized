@@ -296,7 +296,8 @@ def scan(req: ScanRequest) -> dict[str, Any]:
     # as a per-candidate `error` string (calc/fit_scan._run_candidate) so the
     # ranking table can show why a model ranked last. Curated diagnostics, not
     # tracebacks -- see SECURITY.md.
-    return to_jsonable(result)  # type: ignore[no-any-return]  # NOTE(codeql py/stack-trace-exposure)
+    # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
+    return to_jsonable(result)  # type: ignore[no-any-return]
 
 
 @router.post("/scan/job")

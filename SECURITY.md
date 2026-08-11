@@ -45,11 +45,17 @@ Out of scope:
 ## Reviewed static-analysis findings
 
 CodeQL runs on every PR (`.github/workflows/codeql.yml`). A handful of its
-findings are deliberate design decisions rather than defects. Each carries an
-inline `# NOTE(codeql <rule>)` marker at the exact line so the reasoning sits
-next to the code and stays greppable, and each is listed here so the set stays
-reviewable — **anything not on this list is a real finding and must be fixed,
-not explained away.**
+findings are deliberate design decisions rather than defects. Each carries a
+`# NOTE(codeql <rule>)` marker on the line immediately **above** the reported
+line, so the reasoning sits next to the code and stays greppable, and each is
+listed here so the set stays reviewable — **anything not on this list is a real
+finding and must be fixed, not explained away.**
+
+The marker deliberately does not share a line with the alert itself. Code
+scanning reports any alert sitting on a line a pull request touches as a *new*
+alert for that PR, so annotating the reported line turns the `CodeQL` check red
+on the very change that documents why the alert is acceptable. Keep the
+annotation on its own line above.
 
 The marker is documentation, not a directive: CodeQL has no source-suppression
 mechanism (`# codeql[...]`/`# lgtm[...]` comments were an LGTM.com feature and

@@ -176,7 +176,8 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
         # the data range" and friends) so the user can see WHICH spectrum went
         # wrong and why. Curated ValueError text, not a traceback -- see
         # SECURITY.md.
-        return to_jsonable(  # type: ignore[no-any-return]  # NOTE(codeql py/stack-trace-exposure)
+        # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
+        return to_jsonable(  # type: ignore[no-any-return]
             batch_integrate_peaks(
                 np.asarray(req.x, dtype=float),
                 [np.asarray(s, dtype=float) for s in req.spectra],

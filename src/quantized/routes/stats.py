@@ -394,7 +394,8 @@ def fit_distribution_route(req: FitDistRequest) -> dict[str, Any]:
             # `skipped[].reason` ("data must be positive for lognormal") rather
             # than silently dropped -- that reason is the useful half of the
             # answer. Curated text, not a traceback -- see SECURITY.md.
-            return _wrap(fit_distributions(x))  # NOTE(codeql py/stack-trace-exposure)
+            # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
+            return _wrap(fit_distributions(x))
         return _wrap(fit_distribution(x, req.dist))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

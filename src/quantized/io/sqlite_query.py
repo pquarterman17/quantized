@@ -121,7 +121,8 @@ def query_sqlite(
         # `Connection.execute` refuses more than one statement, and the
         # progress handler bounds runtime. The reader and the data belong to
         # the same local user, so there is no privilege boundary to cross.
-        cursor = connection.execute(sql)  # NOTE(codeql py/sql-injection): by design
+        # NOTE(codeql py/sql-injection): reviewed, by design -- SECURITY.md.
+        cursor = connection.execute(sql)
         raw_names = [
             str(item[0] or f"Column {i + 1}")
             for i, item in enumerate(cursor.description or [])
