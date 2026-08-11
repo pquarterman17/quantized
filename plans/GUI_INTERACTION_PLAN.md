@@ -118,22 +118,14 @@ feature checklist.
 
 ## Tier 1 — High Impact
 
-1. **Undoable mouse-driven visual edits** — every committed visual/layout/
-   organization edit becomes one named, coalesced history transaction.
-   - [x] Decide the undo **scopes** first — Owner APPROVED the shipped model on
-         2026-07-19 during the Codex-stack adversarial review (the 2026-07-12
-         Sol audit pointed this direction but did not settle the flat-vs-scoped
-         gate; the accepted model is one flat current-session EDIT history
-         covering data + visual/layout + organization edits, with a separate
-         Back/Forward VIEW history for zoom/pan/autoscale). Undo does not
-         persist across restart.
-   - [x] Coalesce a drag into ONE step (`Move annotation`, not 80 pointer moves).
-   - [x] Cover: axis-title drag/format, annotation/shape move/resize/delete, curve
-         colour/marker/width/order/visibility/Y-axis, ref-line move, window
-         move/resize/close/rebind, folder/dataset reparent, graph-spec changes.
-   - [x] Show the action name in Edit▸Undo + a brief toast; keep navigation-only
-         zoom/pan as a SEPARATE Back/Forward view history (resolve the "one Ctrl+Z
-         restores exactly the previous state" vs. separate-view-history tension).
+21. **Coverage of new gesture systems in the edit history** — `HistorySnapshot` 
+    is an explicit field list, so any new store slice is silently outside undo 
+    until added to both the interface and `snapshotOf()`. `savedRois` was missing 
+    for a day (2026-08-09–2026-08-10, fixed 2026-08-10). Add a comment on 
+    `HistorySnapshot` and a check to prevent the next slice from repeating it.
+    - [ ] Document the explicit-field-list pattern and future-proofing notes
+    - [ ] Add a test asserting `mapRoi`/`mapRuler` stay outside undo (working geometry)
+    - [ ] Consider a runtime guard if new slices make this recurrent
 
 2. **Unified "select object → edit it" model (Plot Objects tree)** — one
    synchronized tree (Inspector mode) exposing curves/axes/layers/legends/
@@ -476,6 +468,8 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
 
 - ~~**#20 database/query connector foundation**~~ (2026-07-19, Codex PR #69;
   **owner-ratified 2026-07-20**, see the provenance note below — was the MAIN
