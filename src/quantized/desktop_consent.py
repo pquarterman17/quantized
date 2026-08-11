@@ -32,15 +32,24 @@ import os
 from collections import OrderedDict
 from collections.abc import Iterable
 
-__all__ = ["clear_consent", "consent_count", "grant_paths", "is_consented"]
+__all__ = [
+    "clear_consent",
+    "consent_count",
+    "consented_path",
+    "grant_paths",
+    "is_consented",
+]
 
 # Bounded so a very long session cannot grow this without limit. Comfortably
 # above any realistic number of files picked by hand in one sitting; the oldest
 # entry is evicted first, which at worst costs a re-pick.
 _MAX_ENTRIES = 512
 
-# Exact realpath -> None, insertion-ordered so eviction is oldest-first.
-_granted: OrderedDict[str, None] = OrderedDict()
+# Exact realpath -> that same realpath, insertion-ordered so eviction is
+# oldest-first. The value is not redundant: `consented_path` hands the STORED
+# string back to the caller so an accepted import reads the path this module
+# recorded, never the one the request supplied (see its docstring).
+_granted: OrderedDict[str, str] = OrderedDict()
 
 
 def _normalize(path: str) -> str | None:
@@ -66,7 +75,7 @@ def grant_paths(paths: Iterable[str]) -> list[str]:
         if resolved is None or not os.path.isfile(resolved):
             continue  # a directory or an unreadable entry grants nothing
         _granted.pop(resolved, None)  # re-picking refreshes recency
-        _granted[resolved] = None
+        _granted[resolved] = resolved
         accepted.append(resolved)
     while len(_granted) > _MAX_ENTRIES:
         _granted.popitem(last=False)
@@ -77,6 +86,22 @@ def is_consented(resolved_path: str) -> bool:
     """True when this EXACT resolved path was granted. Callers must pass an
     already-``realpath``-normalized string (the import route does)."""
     return resolved_path in _granted
+
+
+def consented_path(resolved_path: str) -> str | None:
+    """The GRANTED string for an exact consented path, or ``None``.
+
+    Prefer this over ``is_consented`` anywhere the path is about to be opened.
+    The difference is which string the caller then uses: ``is_consented`` is a
+    yes/no on the request's own string, so the caller goes on to open the value
+    it was handed; this returns the path *this module* recorded when the user
+    picked it in the native dialog, so the bytes read are the bytes consented
+    to. The two are equal whenever the lookup hits -- that is the point. It
+    means the check and the open cannot drift apart, and it keeps the opened
+    path out of the request's control entirely, which is also what lets static
+    analysis see that no request-controlled string reaches the filesystem.
+    """
+    return _granted.get(resolved_path)
 
 
 def consent_count() -> int:

@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from quantized.datastruct import DataStruct
-from quantized.desktop_consent import is_consented
+from quantized.desktop_consent import consented_path
 from quantized.io import import_auto
 from quantized.io.origin_project import (
     drop_empty_library_books,
@@ -68,6 +68,27 @@ def _allowed_roots() -> tuple[str, ...]:
         except OSError:
             continue
     return tuple(roots)
+
+
+def _allowed_prefixes() -> tuple[str, ...]:
+    """``_allowed_roots`` as separator-terminated prefixes, so containment can
+    be tested as ``resolved.startswith(_allowed_prefixes())``.
+
+    Terminating each root with ``os.sep`` is what makes a prefix test a real
+    containment test: bare ``startswith("/data")`` would also accept
+    ``/data-other/secrets``, while ``startswith("/data/")`` accepts only true
+    descendants. Roots are directories and every caller separately requires the
+    resolved path to be a FILE, so ``resolved == root`` cannot arise and is
+    deliberately not accepted.
+
+    This computes the same containment ``os.path.commonpath`` did, in the form
+    the static analyzer can actually verify: CodeQL's path-injection barrier
+    (``Path::SafeAccessCheck``) models ``str.startswith`` and does not model
+    ``commonpath``, so the old spelling left every downstream ``open`` reported
+    as a reachable traversal sink. Being able to prove the guard is the point —
+    a guard no tool can check is a guard nobody notices the loss of.
+    """
+    return tuple(root.rstrip(os.sep) + os.sep for root in _allowed_roots())
 
 
 def _origin_book_id(ds: DataStruct) -> str:
@@ -247,9 +268,9 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     ``/import`` reads a path the server can already see (local desktop / CLI
     use). The path is ``os.path.realpath``-normalized (collapsing ``..`` and
     symlinks) and confined to an allowed root (home / cwd / temp, widen via
-    ``QZ_DATA_ROOTS``) via ``os.path.commonpath`` before any filesystem access,
-    so the localhost API cannot be used to read system files (e.g.
-    ``/etc/passwd``) through path traversal.
+    ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API
+    cannot be used to read system files (e.g. ``/etc/passwd``) through path
+    traversal.
     """
     try:
         resolved = os.path.realpath(req.path)
@@ -257,32 +278,34 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="invalid path") from exc
     # Inline containment guard (kept in this function so the static analyzer can
     # see the path-traversal barrier sits between the taint and the sink).
-    within_allowed = False
-    for root in _allowed_roots():
-        try:
-            if os.path.commonpath((root, resolved)) == root:
-                within_allowed = True
-                break
-        except ValueError:
-            continue  # different drives (Windows) -> not under this root
-    # MAIN_PLAN #31: a path the user physically picked in a NATIVE OS dialog is
-    # explicitly consented, exactly as a browser file-picker upload is, so it
-    # passes even from outside the roots. This is what makes a network share or
-    # a second drive importable at all — the plan's headline pain point. The
-    # containment check above still runs first and is unchanged; consent is a
-    # narrow, additive second gate, never a replacement. Consent is per EXACT
-    # resolved path, is only ever granted by the in-process desktop bridge after
-    # a modal dialog returns, and has no HTTP route — a page pointed at this
-    # server cannot self-authorize. See quantized/desktop_consent.py.
-    if not within_allowed and not is_consented(resolved):
-        raise HTTPException(
-            status_code=403,
-            detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
-        )
-    if not os.path.isfile(resolved):
+    if resolved.startswith(_allowed_prefixes()):
+        safe_path = resolved
+    else:
+        # MAIN_PLAN #31: a path the user physically picked in a NATIVE OS dialog
+        # is explicitly consented, exactly as a browser file-picker upload is, so
+        # it passes even from outside the roots. This is what makes a network
+        # share or a second drive importable at all — the plan's headline pain
+        # point. The containment check above still runs first and is unchanged;
+        # consent is a narrow, additive second gate, never a replacement. Consent
+        # is per EXACT resolved path, is only ever granted by the in-process
+        # desktop bridge after a modal dialog returns, and has no HTTP route — a
+        # page pointed at this server cannot self-authorize. See
+        # quantized/desktop_consent.py.
+        #
+        # `consented_path`, not `is_consented`: the value opened below is the one
+        # desktop_consent recorded when the dialog returned, so the request's own
+        # string never reaches the filesystem on this branch.
+        granted = consented_path(resolved)
+        if granted is None:
+            raise HTTPException(
+                status_code=403,
+                detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
+            )
+        safe_path = granted
+    if not os.path.isfile(safe_path):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
-        return _import_with_books(Path(resolved), full_books=req.full_books)
+        return _import_with_books(Path(safe_path), full_books=req.full_books)
     except (ValueError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

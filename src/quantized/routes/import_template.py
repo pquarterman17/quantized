@@ -48,6 +48,13 @@ def _allowed_roots() -> tuple[str, ...]:
     return tuple(roots)
 
 
+def _allowed_prefixes() -> tuple[str, ...]:
+    """``_allowed_roots`` as separator-terminated prefixes -- see
+    ``routes/parsers.py``'s ``_allowed_prefixes`` for why containment is
+    spelled as a ``startswith`` test rather than ``os.path.commonpath``."""
+    return tuple(root.rstrip(os.sep) + os.sep for root in _allowed_roots())
+
+
 @router.get("")
 def import_template(path: str) -> dict[str, Any]:
     """Read a server-visible Origin graph template (``.otp``/``.otpu``) by
@@ -62,15 +69,7 @@ def import_template(path: str) -> dict[str, Any]:
         resolved = os.path.realpath(path)
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
-    within_allowed = False
-    for root in _allowed_roots():
-        try:
-            if os.path.commonpath((root, resolved)) == root:
-                within_allowed = True
-                break
-        except ValueError:
-            continue  # different drives (Windows) -> not under this root
-    if not within_allowed:
+    if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",

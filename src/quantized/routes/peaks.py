@@ -171,6 +171,12 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
     Returns per-spectrum results + area/centroid/FWHM matrices for trend
     plotting; a failing spectrum is flagged, not fatal."""
     try:
+        # A failing spectrum is flagged per row rather than aborting the batch,
+        # and the row carries the reason (calc/peak_batch: "region lies outside
+        # the data range" and friends) so the user can see WHICH spectrum went
+        # wrong and why. Curated ValueError text, not a traceback -- see
+        # SECURITY.md.
+        # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
         return to_jsonable(  # type: ignore[no-any-return]
             batch_integrate_peaks(
                 np.asarray(req.x, dtype=float),

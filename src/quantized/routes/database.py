@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.io.sqlite_query import query_sqlite
-from quantized.routes.parsers import _allowed_roots
+from quantized.routes.parsers import _allowed_prefixes
 
 router = APIRouter(prefix="/api/database", tags=["database"])
 
@@ -20,9 +20,9 @@ class SqliteQueryRequest(BaseModel):
 
 
 def _resolve_db_path(raw_path: str) -> Path:
-    """The SAME realpath+commonpath containment guard the file-import routes
-    use (``routes.parsers.import_file`` / ``routes.books._resolve_book_path``),
-    reusing their ``_allowed_roots``. Without it, this localhost API is a
+    """The SAME realpath + prefix containment guard the file-import routes use
+    (``routes.parsers.import_file`` / ``routes.books._resolve_book_path``),
+    reusing their ``_allowed_prefixes``. Without it, this localhost API is a
     read-any-local-SQLite-file primitive — a client could point it at a
     browser's ``Login Data`` store, another app's database, or any readable
     file, and exfiltrate rows through an arbitrary SELECT. Kept INLINE (not
@@ -33,15 +33,7 @@ def _resolve_db_path(raw_path: str) -> Path:
         resolved = os.path.realpath(raw_path)
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
-    within_allowed = False
-    for root in _allowed_roots():
-        try:
-            if os.path.commonpath((root, resolved)) == root:
-                within_allowed = True
-                break
-        except ValueError:
-            continue  # different drives (Windows) -> not under this root
-    if not within_allowed:
+    if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",

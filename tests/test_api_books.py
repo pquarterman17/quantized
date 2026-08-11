@@ -212,11 +212,13 @@ def test_book_data_route_rejects_path_outside_allowed_roots(
     outside.mkdir()
     target = outside / "two.opj"
     target.write_bytes(opj_bytes([_book("A", n=5), _book("B", n=5)]))
-    # `books.py` imports `_allowed_roots` via `from ... import` (a fresh
+    # `books.py` imports `_allowed_prefixes` via `from ... import` (a fresh
     # binding in ITS OWN namespace), so the guard must be patched there --
-    # patching quantized.routes.parsers._allowed_roots would rebind the name
+    # patching quantized.routes.parsers._allowed_prefixes would rebind the name
     # only in that module, not in books.py's already-bound reference.
-    monkeypatch.setattr(books_mod, "_allowed_roots", lambda: (os.path.realpath(allowed),))
+    monkeypatch.setattr(
+        books_mod, "_allowed_prefixes", lambda: (os.path.realpath(allowed) + os.sep,)
+    )
     resp = client.post(
         "/api/parsers/books/data", json={"book_id": "A", "path": str(target)}
     )

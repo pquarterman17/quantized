@@ -390,6 +390,11 @@ def fit_distribution_route(req: FitDistRequest) -> dict[str, Any]:
     try:
         x = np.asarray(req.x, dtype=float)
         if req.dist is None:
+            # Families whose support the data violates are reported under
+            # `skipped[].reason` ("data must be positive for lognormal") rather
+            # than silently dropped -- that reason is the useful half of the
+            # answer. Curated text, not a traceback -- see SECURITY.md.
+            # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
             return _wrap(fit_distributions(x))
         return _wrap(fit_distribution(x, req.dist))
     except (ValueError, IndexError) as exc:
