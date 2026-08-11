@@ -194,3 +194,90 @@ def test_every_data_file_has_a_pinned_loader() -> None:
         "pinned data file(s) missing from disk (stale DATA_FILE_LOADERS "
         "entry?):\n  " + "\n  ".join(str(p.relative_to(ROOT)) for p in sorted(missing))
     )
+
+
+def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
+    """Plan drift guard: items claiming CLOSED/SHIPPED/COMPLETE must be struck.
+
+    Per plan-hygiene rules (plans/MAIN_PLAN.md context), when an item finishes,
+    it is moved to the ## Completed section with strike-through formatting
+    (~~**Item title**~~). Items that claim completion but remain unstr uck in tier
+    sections are drift: the tier shows them as open while the text claims they're
+    done.
+
+    Three recent cases (GUI_INTERACTION_PLAN #8/#11/#12, fixed 2026-08-10):
+    items were marked "CLOSED 2026-07-18 (see Completed)" in Tier 2 but never
+    struck, so they rendered as open while Completed had them struck separately.
+
+    False positives ruled out: only flags items whose FIRST two lines contain
+    the completion claim in the item's own text, not context (e.g., "item 14
+    CLOSED" in a sub-item description). Allows "superseded" in context alone.
+    """
+    import re
+
+    COMPLETION_WORDS = {"CLOSED", "SHIPPED", "COMPLETE", "DONE"}
+    plans_dir = ROOT / "plans"
+
+    drift_found = []
+
+    for plan_file in sorted(plans_dir.glob("*.md")):
+        if "archive" in plan_file.parts or plan_file.name.endswith(("_DRAFT.md", "_SURVEY.md", "_NOTES.md")):
+            continue
+
+        text = plan_file.read_text(encoding="utf-8")
+        lines = text.splitlines()
+
+        # Find the ## Completed section line number (if it exists)
+        completed_idx = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("## Completed"):
+                completed_idx = i
+                break
+
+        # Scan tier sections (between "## Tier" and "## Completed" or EOF)
+        in_completed = False
+        for i, line in enumerate(lines):
+            if completed_idx is not None and i >= completed_idx:
+                in_completed = True
+                break
+
+            # Look for numbered items: "N. **Title**" (with or without checkbox)
+            # Match: 1. **Item** or 3. **[x] Item** or 7. **[ ] Item**
+            item_match = re.match(r"^(\d+)\.\s+(?:\*\*\[.\]\s+)?\*\*(.+?)\*\*", line)
+            if not item_match:
+                continue
+
+            item_num, item_text = item_match.groups()
+
+            # Is the item struck? (starts with ~~)
+            if line.strip().startswith("~~"):
+                continue  # Already correctly struck
+
+            # Check if item or next 2 lines claim completion in the item's own text
+            context = "\n".join([line] + lines[i + 1 : min(i + 3, len(lines))])
+            has_completion_claim = any(word in context for word in COMPLETION_WORDS)
+
+            if not has_completion_claim:
+                continue
+
+            # Is the claim about THIS item, not a sub-item or context?
+            # Rule: the completion word must appear in the first line or in a
+            # continuation line that's part of the item's own description
+            # (not a [ ]/[x] sub-box or a separate context paragraph).
+            # Heuristic: if the second line starts with whitespace + [ ], it's a sub-item.
+            is_self_claim = True
+            if i + 1 < len(lines) and re.match(r"^\s+- \[", lines[i + 1]):
+                # This is a top-level item with sub-boxes; only flag if the ITEM line itself claims done
+                is_self_claim = COMPLETION_WORDS.intersection(line.split())
+
+            if is_self_claim:
+                drift_found.append(
+                    f"{plan_file.name}: {item_num}. — claims {list(COMPLETION_WORDS & set(context.split()))} "
+                    f"but not struck"
+                )
+
+    assert not drift_found, (
+        "Plan items claiming completion must be moved to ## Completed with "
+        "strike-through. Fix by removing from tier sections OR add individual "
+        "struck entries to Completed:\n  " + "\n  ".join(drift_found)
+    )
