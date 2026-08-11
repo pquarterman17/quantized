@@ -59,11 +59,34 @@ annotation on its own line above.
 
 The marker is documentation, not a directive: CodeQL has no source-suppression
 mechanism (`# codeql[...]`/`# lgtm[...]` comments were an LGTM.com feature and
-the CLI has no flag for them today), so these alerts must be **dismissed once
-in the repository's Security tab** — *Alerts → Dismiss → "Used safely"* — with
-this file cited as the rationale. They will otherwise sit open forever. If a
-future CodeQL release does honour source suppressions, upgrading the markers is
-a mechanical change.
+the CLI has no flag for them today). What actually stops these being reported
+is a `query-filters` exclusion in
+[`.github/codeql/codeql-config.yml`](.github/codeql/codeql-config.yml), wired
+into the analysis via `config-file:` in `codeql.yml`.
+
+Both queries were investigated as ordinary bugs first and found to be
+**unfixable by construction**, which is the bar for being excluded rather than
+repaired:
+
+- `py/sql-injection` accepts exactly two barriers — a comparison of the query
+  text against a constant, or a models-as-data barrier node. The first means an
+  allowlist of literal queries, i.e. deleting the feature rather than securing
+  it.
+- `py/stack-trace-exposure` treats the name bound by `except … as exc` as the
+  source, so *any* value derived from a caught exception is reported however it
+  is plumbed. There is no spelling of "tell the user why their equation did not
+  parse" that the query accepts.
+
+A `query-filters` exclusion is **repo-wide** — it also hides a genuine future
+occurrence — so each one is fenced by a guard in
+`tests/test_repo_integrity.py` that fails the build when a new site appears:
+the excluded set must match its register, the annotated sites must match
+theirs, and `sqlite3` must stay confined to the one reviewed connector. Adding
+an exclusion without extending those guards defeats the whole arrangement.
+
+Prefer this to dismissing alerts in the Security tab: a dismissal lives in
+repository settings, where it cannot be reviewed in a pull request, diffed, or
+reverted alongside the code it excuses.
 
 | Rule | Where | Why it stays |
 |------|-------|--------------|

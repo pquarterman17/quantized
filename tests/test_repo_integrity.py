@@ -24,6 +24,7 @@ See .claude/rules/architecture-guards.md for the full rationale.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -327,4 +328,130 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
         "Plan items must be moved to ## Completed when finished (see docstring "
         "for detection rules and exceptions). Drift found:\n  "
         + "\n  ".join(drift_found)
+    )
+
+
+# ── 5. CODEQL EXCLUSION GUARD ────────────────────────────────────────────────
+# .github/codeql/codeql-config.yml drops two queries from the default suite
+# because their threat model does not describe this program (read that file for
+# the reasoning, and SECURITY.md for the per-site rationale). A query-filter is
+# repo-WIDE: it silences the query everywhere, including in code written after
+# the decision by someone who never saw it.
+#
+# These guards are what make that acceptable. They pin the exclusion to the
+# exact sites it was granted for, so the day a new SQL sink or a new
+# exception-text-returning route appears, the build fails and the decision gets
+# made again deliberately instead of by default. Extend the registers below
+# ONLY together with the review that justifies the new site.
+
+CODEQL_CONFIG = ROOT / ".github" / "codeql" / "codeql-config.yml"
+
+# The complete set of queries the config may exclude.
+EXCLUDED_QUERIES = {"py/sql-injection", "py/stack-trace-exposure"}
+
+# Every site the excluded queries would have flagged, keyed by path relative to
+# src/quantized. Marked in the source with a `NOTE(codeql <rule>)` comment on
+# the line ABOVE the reported line -- above, because code scanning counts an
+# alert sitting on a line a PR touches as NEW for that PR, so annotating the
+# reported line reddens the very change that documents it.
+CODEQL_NOTE_SITES = {
+    "io/sqlite_query.py": {"py/sql-injection"},
+    "routes/fitting.py": {"py/stack-trace-exposure"},
+    "routes/peaks.py": {"py/stack-trace-exposure"},
+    "routes/stats.py": {"py/stack-trace-exposure"},
+}
+
+# The one module allowed to execute SQL. `py/sql-injection` is excluded
+# repo-wide, so a second connector would inherit that silence for free.
+SQL_EXECUTING_MODULES = {"io/sqlite_query.py"}
+
+
+def _excluded_query_ids() -> set[str]:
+    """Query ids under `query-filters:` in the CodeQL config.
+
+    Parsed with a regex rather than PyYAML: pyyaml is only present here as a
+    transitive of a dev dependency, and a structural guard must not be the
+    thing that breaks when an unrelated package drops it. The file is ours,
+    single-purpose, and its shape is asserted below.
+    """
+    text = CODEQL_CONFIG.read_text(encoding="utf-8")
+    body = text.split("query-filters:", 1)[1] if "query-filters:" in text else ""
+    return set(re.findall(r"^\s+id:\s*(\S+)\s*$", body, flags=re.MULTILINE))
+
+
+def test_codeql_config_is_wired_into_the_workflow() -> None:
+    """An unreferenced config silently grants nothing — or silently everything."""
+    assert CODEQL_CONFIG.is_file(), f"missing {CODEQL_CONFIG.relative_to(ROOT)}"
+    workflow = (ROOT / ".github" / "workflows" / "codeql.yml").read_text(encoding="utf-8")
+    assert "config-file: ./.github/codeql/codeql-config.yml" in workflow, (
+        "codeql.yml must pass config-file: ./.github/codeql/codeql-config.yml "
+        "to github/codeql-action/init, or the exclusions below do nothing and "
+        "the alerts they cover reappear."
+    )
+
+
+def test_codeql_exclusions_match_the_register() -> None:
+    """The config may exclude exactly the reviewed queries — no more."""
+    excluded = _excluded_query_ids()
+    assert excluded == EXCLUDED_QUERIES, (
+        f"CodeQL exclusions drifted.\n  config: {sorted(excluded)}\n  "
+        f"register: {sorted(EXCLUDED_QUERIES)}\nA query-filter silences a query "
+        "for the WHOLE repository. Adding one needs a written rationale in "
+        ".github/codeql/codeql-config.yml, an entry in SECURITY.md, and a guard "
+        "here pinning the sites it covers."
+    )
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    for query in EXCLUDED_QUERIES:
+        assert query in security, (
+            f"'{query}' is excluded from CodeQL but absent from SECURITY.md — "
+            "every exclusion must be reviewable without reading CI config."
+        )
+
+
+def test_codeql_note_markers_match_the_register() -> None:
+    """The annotated sites are exactly the ones the exclusions were granted for.
+
+    Fails both ways on purpose: an unregistered marker means new code is
+    leaning on an exclusion nobody re-reviewed, and a missing marker means a
+    registered site lost its explanation (or moved) and the register is stale.
+    """
+    found: dict[str, set[str]] = {}
+    for path in sorted(SRC.rglob("*.py")):
+        hits = set(re.findall(r"NOTE\(codeql\s+(\S+?)\)", path.read_text(encoding="utf-8")))
+        if hits:
+            found[path.relative_to(SRC).as_posix()] = hits
+    assert found == CODEQL_NOTE_SITES, (
+        f"CodeQL NOTE markers drifted.\n  found:    {found}\n  "
+        f"register: {CODEQL_NOTE_SITES}\nEvery site relying on an excluded "
+        "query must carry a NOTE(codeql <rule>) marker and appear in "
+        "SECURITY.md. If this is genuinely new by-design code, review it, "
+        "document it, then add it here."
+    )
+    for path, queries in CODEQL_NOTE_SITES.items():
+        assert queries <= EXCLUDED_QUERIES, (
+            f"{path} is annotated for {sorted(queries - EXCLUDED_QUERIES)}, which "
+            "no longer appears in the CodeQL config — drop the marker instead."
+        )
+
+
+def test_sql_execution_stays_in_the_reviewed_connector() -> None:
+    """Only the reviewed connector may import sqlite3.
+
+    `py/sql-injection` is excluded repo-wide, so a second SQL connector would
+    be born unmonitored. Confining the import is the cheap, robust proxy: the
+    query text has to reach a cursor somehow, and in this codebase that means
+    the stdlib driver.
+    """
+    pattern = re.compile(r"^\s*(?:import sqlite3|from sqlite3 import)", re.MULTILINE)
+    importers = {
+        path.relative_to(SRC).as_posix()
+        for path in SRC.rglob("*.py")
+        if pattern.search(path.read_text(encoding="utf-8"))
+    }
+    assert importers == SQL_EXECUTING_MODULES, (
+        f"sqlite3 importers drifted.\n  found:    {sorted(importers)}\n  "
+        f"register: {sorted(SQL_EXECUTING_MODULES)}\nCodeQL's py/sql-injection "
+        "is excluded repo-wide for the reviewed connector, so a new one gets "
+        "that silence for free. Review the new module's query handling, then "
+        "register it here."
     )

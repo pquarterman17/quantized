@@ -39,7 +39,11 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # default query suite — matches fermiviewer's query_suite: default
+          # Default query suite (matches fermiviewer's query_suite: default),
+          # minus the two queries excluded in the config below. The config
+          # carries the rationale; SECURITY.md carries the register of sites,
+          # and tests/test_repo_integrity.py fails the build if either drifts.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4.37.4
