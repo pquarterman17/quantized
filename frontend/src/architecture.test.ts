@@ -435,3 +435,133 @@ describe("FigureDocument write chokepoint (F1)", () => {
     ).toEqual([]);
   });
 });
+
+// Weak-wait ratchet — TEST_DETERMINISM_PLAN task 6. The pattern
+// `await waitFor(() => expect(someMock).toHaveBeenCalled())` proves the mock
+// was INVOKED but does NOT prove its resolved value reached component state.
+// Class-B flake: on a lost race, the early-return (`if (!hitmap) return;`)
+// silently no-ops, and the next assertion sees undefined. The fix is to wait
+// on STATE, not the call:
+//
+//   // weak (race-prone):
+//   await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+//   expect(result.current.hitmap).not.toBeNull();  // can fail after a lost race
+//
+//   // strong (deterministic):
+//   await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+//
+// IMPORTANT: A bare `expect(mockFn).toHaveBeenCalled();` is fine and NOT
+// matched by this guard — it is the standard, correct way to assert "we hit
+// the API." The defect only exists when the call is used as a SYNCHRONISATION
+// BARRIER: `await waitFor(...)` that returns as soon as the mock is invoked,
+// while the code under test needs its RESOLVED VALUE.
+//
+// This guard caps the count instead of classifying sites — the semantic
+// distinction (which sites are truly risky) was attempted three times and
+// produced mutually inconsistent inventories. The ratchet follows the repo's
+// existing size-ratchet idiom: flag EVERY waitFor-wrapped site, allowlist the
+// 112 that exist today, fail on new ones, and ratchet down as sites are fixed
+// (waiting on state instead). A pinned entry is NOT an assertion the site is
+// buggy, only that it predates the guard. Pins are per FILE (line numbers
+// churn on unrelated edits). TEST_DETERMINISM_PLAN #4 triage and #5 fixes
+// follow this per-file inventory; #6 prevents new sites from landing.
+const WEAK_WAIT_PINS: Record<string, number> = {
+  "/components/workshops/figurebuilder/useFigureBuilder.test.ts": 22,
+  "/components/workshops/figurepage/useFigurePage.test.ts": 12,
+  "/components/workshops/multivar/MultivarPanel.test.tsx": 13,
+  "/components/workshops/fityx/FitYByXPanel.test.tsx": 8,
+  "/components/Inspector/CorrectionsCard.test.tsx": 9,
+  "/components/workshops/graphbuilder/PlotSpecBar.test.tsx": 3,
+  "/components/workshops/outliers/OutlierScreeningPanel.test.tsx": 5,
+  "/components/workshops/distribution/useDistribution.test.ts": 5,
+  "/components/workshops/variability/VariabilityChartPanel.test.tsx": 4,
+  "/components/workshops/peakwizard/PeakWizardPanel.test.tsx": 3,
+  "/components/workshops/outliers/useOutlierScreening.test.ts": 3,
+  "/components/workshops/fityx/useFitYByX.test.ts": 3,
+  "/components/workshops/distribution/DistributionPanel.test.tsx": 3,
+  "/components/Stage/Worksheet.test.tsx": 3,
+  "/store/useApp.test.ts": 2,
+  "/components/workshops/rsm/RsmPanel.test.tsx": 2,
+  "/components/workshops/multivar/useMultivar.test.ts": 2,
+  "/components/Stage/worksheet/useWorksheetBlockOps.test.tsx": 2,
+  "/components/Stage/usePlotPayload.test.ts": 2,
+  "/components/Library/MultiSelectBar.test.tsx": 2,
+  "/components/workshops/variability/useVariability.test.ts": 1,
+  "/components/workshops/tabulate/TabulatePanel.test.tsx": 1,
+  "/components/workshops/peaks/usePeaks.test.ts": 1,
+  "/components/workshops/curvefit/useModelScan.test.ts": 1,
+  "/components/workshops/curvefit/useCurveFit.test.ts": 2,
+  "/components/workshops/calculators/UnitsTab.test.tsx": 1,
+  "/components/workshops/baseline/useBaseline.test.ts": 1,
+  "/components/windows/WindowCanvas.test.tsx": 1,
+  "/components/Stage/worksheet/GridViewport.perf.test.tsx": 1,
+  "/components/Stage/useShapeDraw.test.ts": 1,
+  "/components/Library/PagesSection.test.tsx": 1,
+  "/components/workshops/importwizard/ImportWizardPanel.test.tsx": 3,
+  "/components/workshops/importwizard/useImportWizard.test.ts": 1,
+};
+
+describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
+  /** Load test files only (*.test.ts, *.test.tsx). */
+  function testSources(): [string, string][] {
+    return Object.entries(modules).filter(([p]) => /\.test\.(ts|tsx)$/.test(p));
+  }
+
+  it("no test file exceeds its weak-wait pin — fix the site by waiting on state, not the mock", () => {
+    // Pattern: waitFor(() => expect(...).toHaveBeenCalled()) — the synchronisation barrier form.
+    // Matches across line breaks; does NOT match bare expect(...).toHaveBeenCalled() which is correct.
+    // The defect: waitFor returns as soon as the mock is invoked, not when its value reaches state.
+    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    const over: string[] = [];
+
+    for (const [p, src] of testSources()) {
+      const pinKey = Object.keys(WEAK_WAIT_PINS).find((k) => p.endsWith(k));
+      if (!pinKey) {
+        // This test file is not in the allowlist. Check if it has any weak waits.
+        if (weakWaitPattern.test(src)) {
+          over.push(`${p}: unlisted file contains weak wait (move to allowlist and count sites)`);
+        }
+        continue;
+      }
+
+      // Count weak-wait sites in this file
+      const matches = src.match(new RegExp(weakWaitPattern.source, "g"));
+      const count = matches ? matches.length : 0;
+      const pinned = WEAK_WAIT_PINS[pinKey];
+
+      if (count > pinned) {
+        over.push(`${p}: ${count} weak waits > ${pinned} pinned`);
+      }
+    }
+
+    expect(
+      over,
+      "replace `await waitFor(() => expect(mock).toHaveBeenCalled())` with `await waitFor(() => expect(state).not.toBeNull())` — wait on resolved state, not the call",
+    ).toEqual([]);
+  });
+
+  it("weak-wait pins stay honest — a file that dropped below its pin must lose it", () => {
+    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    const stale: string[] = [];
+
+    for (const key of Object.keys(WEAK_WAIT_PINS)) {
+      const entry = testSources().find(([p]) => p.endsWith(key));
+      if (!entry) {
+        stale.push(`${key}: no longer exists — remove its pin`);
+        continue;
+      }
+
+      const matches = entry[1].match(new RegExp(weakWaitPattern.source, "g"));
+      const count = matches ? matches.length : 0;
+      const pinned = WEAK_WAIT_PINS[key];
+
+      if (count === 0 && pinned > 0) {
+        stale.push(`${key}: now 0 sites — remove its pin (ratchet down)`);
+      } else if (count < pinned) {
+        stale.push(`${key}: ${count} < ${pinned} pinned — lower the pin (ratchet down)`);
+      }
+    }
+
+    expect(stale, "every pinned count must match the current site count in that file").toEqual([]);
+  });
+});
