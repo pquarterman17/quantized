@@ -111,75 +111,7 @@ rule in task 4.
 
 ## Tier 1 — High Impact
 
-1. **Deterministic test for the item-22 race** — the task that motivated this plan.
-   Files: `frontend/src/components/workshops/figurebuilder/useFigureBuilder.test.ts`.
-   - [ ] Add ONE new test that **forces** the race rather than hoping for it:
-     make the preview/hitmap promise resolve only *after* a drag gesture has
-     been dispatched, then assert the guarded path behaves correctly (the drag
-     is either correctly deferred or correctly applied — decide which is right
-     by reading `useFigureBuilder.ts:494`'s `if (!hitmap) return;` and say
-     which in the test name).
-   - [ ] The new test must FAIL if the `waitFor(result.current.hitmap)` fix is
-     reverted. Prove it: revert the fix, run, show red; restore, show green.
-     A determinism test that never saw the bug proves nothing.
-   - [ ] Leave the existing repetition-based confidence alone; this test
-     replaces the NEED for it, it does not delete history.
-   - Acceptance: `cd frontend && npx vitest run src/components/workshops/figurebuilder`
-   - Stop if: forcing the race requires changing `useFigureBuilder.ts`. That
-     would mean it is a production race, not a test-sync gap — report instead.
-
-2. **Class A, Python — 4 remaining budgets.**
-   Files: `tests/test_calc_unitconvert.py`, `tests/test_calc_peaks.py`,
-   `tests/test_io_origin_fuzz.py`.
-   - [ ] For EACH site: identify what the test is really protecting (an
-     algorithm choice? a complexity class? a vectorised path vs a Python
-     loop?) and assert THAT. Then set the clock to
-     `max(old_budget, 5x measured)` — see the budget rule in Context;
-     **never lower an existing bound**.
-   - [ ] `test_calc_unitconvert.py:100` (0.5 s) is the priority — it is the
-     tightest and has the least headroom. If no load-invariant claim exists
-     (i.e. the test only ever meant "this is fast"), KEEP the existing budget
-     and add a comment saying it is a smoke bound, not a benchmark.
-   - [ ] Copy the comment style from `tests/test_calc_map.py:280-292`, which
-     explains WHY the bound is loose and warns against tightening it.
-   - Acceptance: `uv run pytest tests/test_calc_unitconvert.py tests/test_calc_peaks.py tests/test_io_origin_fuzz.py -q && uv run ruff check src tests`
-   - Stop if: a site's only meaningful assertion is the time. Report it; do not
-     delete the test.
-
-3. **Class A, TypeScript — `GridViewport.perf.test.tsx`.**
-   Files: `frontend/src/components/Stage/worksheet/GridViewport.perf.test.tsx`.
-   - [ ] The test already asserts a **bounded DOM node count** alongside the
-     time budget. The node count is the load-invariant claim and is the real
-     protection (it proves virtualisation works). Keep it; loosen or drop the
-     wall-clock half per the task-2 recipe.
-   - [ ] Verified flaky under concurrent load, green 4/4 alone.
-   - Acceptance: `cd frontend && npx vitest run src/components/Stage/worksheet`
-   - Stop if: removing the time bound leaves the test asserting nothing new.
-
----
-
 ## Tier 2 — Medium Impact
-
-4. **Triage the 110 Class-B sites — produce an inventory, change nothing.**
-   Output: `plans/weak-waits-inventory.md` (a scratch inventory, deleted by
-   task 5's completion per the plan-consolidation rule).
-   - [ ] Enumerate every match of
-     `waitFor\(\(\) => *expect\([a-zA-Z]+\)\.toHaveBeenCalled`
-     in `frontend/src/**/*.test.ts{,x}`.
-   - [ ] Classify each by this MECHANICAL rule, no judgement required:
-     - **SAFE** — the `waitFor` is the test's final assertion, or every
-       following line is another `expect(...)` on a mock. The test's purpose
-       IS "we called it".
-     - **SUSPECT** — after the `waitFor`, the test performs an action
-       (`fireEvent`, `userEvent`, `act(`, a hook method call) or asserts on
-       component/hook STATE (`result.current.*`, `screen.getBy*`). Anything
-       that could depend on the call's resolved value.
-   - [ ] For each SUSPECT, record file:line, the mock name, and the first
-     dependent line. Group by directory so task 5 can be chunked.
-   - Acceptance: the inventory exists, counts SAFE + SUSPECT = 110, and 5
-     spot-checked entries classify correctly on manual read.
-   - Stop if: SUSPECT exceeds ~40 — that is a bigger campaign than this plan
-     scoped, so report the count and let the owner decide the appetite.
 
 5. **Fix SUSPECT sites OPPORTUNISTICALLY — not as a campaign**
    (owner decision, 2026-08-10). `plans/weak-waits-inventory.md` stays as a
@@ -209,6 +141,33 @@ rule in task 4.
 ---
 
 ## Completed
+
+- ~~**#1 Forced-race test**~~ (2026-08-10) — replaces the 0/90 probabilistic
+  argument with a test that reproduces the race on EVERY run: the hitmap
+  promise is held unresolved via `mockReturnValueOnce(deferred)`, a drag is
+  dispatched into that guaranteed-null window, then it resolves and the same
+  gesture succeeds. Concluded no production fix was needed — `if (!hitmap)
+  return;` is correct, since the hitmap IS the px/data calibration and the
+  draggable elements render from it, so a real user has nothing to grab first.
+  The agent **refused my proposed proof** (revert the historical fix and show
+  red) on the grounds that it only reddens ~1/30 — the same statistical trap
+  this plan exists to escape — and instead made its own `waitFor` load-bearing.
+  Independently verified: 15/15 deterministic, and removing that one line
+  yields `expected undefined to match object { loc: 'custom' }`, the exact
+  item-22 signature, on a single run.
+- ~~**#2 Python wall-clock budgets**~~ (2026-08-10) — all four sites now assert
+  a load-invariant property (ReDoS rejection on 200k chars; sparse-table result
+  shape; vectorised return type; 127 MB decode success) with the clock demoted
+  to a smoke ceiling. **Required one round back:** the first pass TIGHTENED
+  three budgets (0.5→0.25 s, 30→5 s, 30→1 s) following my own flawed "5x
+  measured on idle" instruction. Final: 0.5 / 30 / 30 kept, origin-fuzz
+  120→600 s. Headroom now 25x / 36x / 150x / 5x.
+- ~~**#3 GridViewport wall-clock**~~ (2026-08-10) — dropped the three time
+  budgets, kept every bounded-DOM-node-count assertion (the real proof that
+  virtualisation works). Notably KEPT test 4's timing assertion, which is a
+  genuine invariant: it separates parallel (~15 ms) from serialised (~3015 ms)
+  execution, a 200x algorithmic discriminator rather than a benchmark.
+  Independently re-verified 10/10.
 
 - ~~**#6 Weak-wait ratchet guard**~~ (2026-08-10) — extends
   `architecture.test.ts`'s existing ratchet idiom rather than adding a second
