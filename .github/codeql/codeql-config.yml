@@ -1,0 +1,53 @@
+# CodeQL configuration for the advanced-setup workflow
+# (.github/workflows/codeql.yml). Everything not named here keeps the default
+# query suite, unchanged.
+#
+# `query-filters` drops two queries whose threat model does not describe this
+# program. Both were first investigated as ordinary bugs and found to be
+# unfixable-by-construction rather than merely awkward, which is the bar for
+# appearing here:
+#
+#   * py/sql-injection accepts exactly two barriers -- a comparison of the
+#     query text against a constant, or a models-as-data barrier node. The
+#     first means an allowlist of literal queries, which is the deletion of the
+#     feature, not a fix for it.
+#   * py/stack-trace-exposure treats the name bound by `except ... as exc` as
+#     the source itself, so ANY value derived from a caught exception is
+#     reported. There is no spelling of "show the user why their equation did
+#     not parse" that the query accepts.
+#
+# The per-finding rationale -- what the code does, and which controls make it
+# safe -- lives in SECURITY.md under "Reviewed static-analysis findings", next
+# to the register of sites. Read that before changing anything here.
+#
+# Why a config file rather than dismissing the alerts in the Security tab: a
+# dismissal lives in repository settings, where it cannot be reviewed in a pull
+# request, diffed, or reverted alongside the code it excuses. This file travels
+# with the tree, and `git log` explains it. The cost is that an exclusion is
+# repo-WIDE -- it would also hide a genuine future occurrence -- so each one is
+# fenced by a guard in tests/test_repo_integrity.py that fails the build if a
+# new site appears. Adding an exclusion without extending those guards defeats
+# the entire arrangement.
+
+name: quantized CodeQL config
+
+query-filters:
+  # io/sqlite_query.py. Safety comes from the surrounding controls, not from
+  # escaping: route-level path confinement, a `mode=ro` connection, an
+  # authorizer denying every write/DDL/ATTACH/transaction action, a
+  # SELECT/WITH prefix check, single-statement execution, and a bounded
+  # progress handler. Reader and data are the same local user.
+  # Fenced by: test_sql_execution_stays_in_the_reviewed_connector.
+  - exclude:
+      id: py/sql-injection
+
+  # routes/fitting.py (x2), routes/peaks.py, routes/stats.py. These responses
+  # carry the app's own curated ValueError text -- "unknown function 'expp'",
+  # "data must be positive for lognormal" -- which is the useful half of the
+  # answer for a validate endpoint or a per-row batch result. No traceback,
+  # frame, or path is included, and the server binds to 127.0.0.1, so the
+  # "external user" in the query's model is the operator reading their own
+  # diagnostics.
+  # Fenced by: test_codeql_note_markers_match_the_register.
+  - exclude:
+      id: py/stack-trace-exposure
