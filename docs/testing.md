@@ -7,8 +7,8 @@ the **rule of three** as a reality check: zero failures in *n* runs bounds the
 true failure rate at only **3/n** with 95% confidence. So 0/90 runs bounds it
 at 3.3%.
 
-A worked case from this repo: an item-22 race measured **1/30 (3.3%)** on a
-single run, single-threaded. After the fix was applied, it passed 0/90. If the
+A worked case from this repo: an item-22 race failed **1 time in 30 runs
+(3.3%)** standalone, single-file, single-threaded. After the fix was applied, it passed 0/90. If the
 bug had been fully intact, the chance of seeing 0/90 by luck is ~4.7%. The
 post-fix 95% upper bound (3.3%) is **identical to the baseline** — the
 repetitions could not distinguish "fixed" from "unchanged". Ruling out 3.3%

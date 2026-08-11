@@ -164,6 +164,19 @@ Practical conventions discovered while porting — follow them to stay green.
 - Hoist `Any | None` to a narrowed typed local before numpy calls.
 - Don't reuse a return-variable's name for a `floating[Any]` loop intermediate.
 
+### Test determinism
+- **Evidence standard for flake fixes: `docs/testing.md`.** "It passed N times"
+  is weak — 0 failures in n runs bounds the rate at only 3/n, so the 0/90 that
+  "verified" one fix could not be told apart from no fix at all. Force the race
+  instead; the worked example is the test named "forces the item-22 race" in
+  `useFigureBuilder.test.ts`.
+- Wall-clock budgets: assert the load-invariant property (which algorithm ran,
+  DOM node count), keep the clock as a loose backstop, and **never lower an
+  existing bound** — `GridViewport.perf` flaked with ~8x headroom.
+- `architecture.test.ts` carries a **weak-wait ratchet**: new
+  `waitFor(() => expect(mock).toHaveBeenCalled())` sites fail the build. Wait on
+  STATE, not on the call. A bare `expect(mock).toHaveBeenCalled()` is fine.
+
 ### Lint / CI
 - Always lint **`ruff check src tests`** (CI does) — not just `src`; a
   tests-only import-sort slipped past a `src`-only local run and reddened CI.
