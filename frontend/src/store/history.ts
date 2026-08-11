@@ -32,6 +32,12 @@
 // never shows a dangling reference, only the existing "no dataset" empty
 // state.
 //
+// Deliberately excluded: `mapRoi` and `mapRuler` — these are in-progress
+// working geometry, not committed edits. They survive across dataset switches
+// by design (the "repeat this cut on the next dataset" workflow), but they
+// should never participate in the edit history; only named saved ROIs
+// (`savedRois`) are persistent edits. See `store/rois.ts` for details.
+//
 // Known limitation (by design, not a bug): undo does not cancel an
 // in-flight recalc/fit job — the job resolves against whatever state exists
 // when its promise settles, exactly like any other external mutation racing
@@ -63,6 +69,7 @@ export interface HistorySnapshot {
   smartFolders: AppState["smartFolders"];
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
+  savedRois: AppState["savedRois"];
   plotWindows: AppState["plotWindows"];
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
@@ -100,6 +107,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,
+    savedRois: s.savedRois,
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),
