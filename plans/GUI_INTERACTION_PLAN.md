@@ -156,21 +156,6 @@ feature checklist.
 
 ## Tier 2 — Medium Impact
 
-8. **Context menus as a complete system** — CLOSED 2026-07-18 (see Completed).
-   The one remaining consumer — the Plot Objects tree — rides the owner-gated
-   #2 itself; the registry's `run(target)` shape is ready for it.
-
-11. **Graph Builder → durable artifact** — CLOSED 2026-07-18 (see Completed;
-    core + every sub-box shipped 2026-07-17/18). Faceting-adjacent export
-    gaps ride #12's canonical-spec work.
-
-12. **One canonical plot specification** across Stage / Graph Builder / Figure
-    Builder / export — CLOSED 2026-07-18 (see Completed). Deliberately still
-    open, but NOT part of this item: the `page` block (panel/facet/layer
-    geometry) is tracked at ORIGIN_FILE_DECODE_PLAN #54; spec-level parity
-    upgrades (new adapters/consumers reading `display`/`axes`/`decor`) land
-    opportunistically as those surfaces evolve, not as a standing item here.
-
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
     - [x] Playwright harness (`frontend/e2e/`) — own `playwright.config.ts`,
