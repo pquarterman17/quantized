@@ -231,6 +231,13 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
         "BLOCKED",
         "blocked on",
         "owner-gated",
+        # An item stating its own gate is OPEN is by definition not complete.
+        # ORIGIN_FILE_DECODE #55 reads "TOOLING COMPLETE; OWNER VISUAL-REVIEW
+        # GATE OPEN" with review at 0/353 -- a scoped claim about the tooling,
+        # not the item. Chosen over a bare "OWNER" match, which would exclude
+        # any item merely mentioning the owner (2026-08-10, orchestrator call
+        # on an escalation the sweeping agent correctly declined to make).
+        "GATE OPEN",
         "awaiting",
         "pending",
         "residual",
