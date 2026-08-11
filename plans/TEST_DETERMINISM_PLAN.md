@@ -181,37 +181,38 @@ rule in task 4.
    - Stop if: SUSPECT exceeds ~40 — that is a bigger campaign than this plan
      scoped, so report the count and let the owner decide the appetite.
 
-5. **Fix the SUSPECT sites — one chunk per directory.**
-   Files: as scheduled by task 4; each chunk owns exactly one directory under
-   `frontend/src/components/workshops/` or `frontend/src/components/Stage/`.
-   - [ ] Replace the weak wait with a wait on the state the test actually
-     depends on, following `useFigureBuilder.test.ts`'s idiom
-     (`await waitFor(() => expect(result.current.<field>).not.toBeNull())`).
-   - [ ] Do NOT change production code. Do NOT add retries, extend timeouts,
-     or loosen assertions.
-   - [ ] Each chunk is independently mergeable and gets its own branch.
-   - Acceptance per chunk: `cd frontend && npx vitest run <that directory>`
-     then the full `npx vitest run`.
-   - Stop if: a site cannot be fixed without touching production code —
-     that is a real race, report it as its own finding.
+5. **Fix SUSPECT sites OPPORTUNISTICALLY — not as a campaign**
+   (owner decision, 2026-08-10). `plans/weak-waits-inventory.md` stays as a
+   standing reference; it is NOT deleted, and task 5 is never "done".
+   - Rationale: the classification is **semantic, not syntactic** — whether a
+     site is a real flake depends on whether that mock's *resolved value* feeds
+     the state read afterwards, which no grep can determine. Three attempts at
+     counting gave 110, then 124/98, then 57; the third was disproved by its
+     own output (it flagged `expect(props.onSaveAs).not.toHaveBeenCalled()`,
+     a mock assertion, as risky). An empirical ranking by observed flake rate
+     was attempted and timed out without data.
+   - 98 speculative edits to currently-passing tests is a bad trade: each
+     carries its own risk of breaking a working test to prevent a flake that
+     may not exist.
+   - [ ] Standing rule: when you are editing a test file for any other reason
+     and it appears in the inventory, fix its weak waits then. Wait on STATE
+     (`await waitFor(() => expect(result.current.x).not.toBeNull())`), never on
+     the mock. Lower the task-6 allowlist in the same commit.
+   - The bound on this problem is task 6, not task 5.
 
-6. **Lint guard so new weak waits cannot land** — do LAST.
-   Files: the frontend ESLint config; possibly `frontend/src/architecture.test.ts`.
-   - [ ] A rule (custom ESLint rule, or a test that greps, matching whichever
-     mechanism the repo already uses — **grep for an existing guard first**,
-     per the owner's standing "two ratchets is drift by construction" rule)
-     that flags `waitFor(() => expect(<mock>).toHaveBeenCalled())` when
-     followed by a state-dependent line.
-   - [ ] Allowlist the SAFE sites task 4 identified, pinned exactly, so the
-     guard starts green and only new violations fail.
-   - Acceptance: `cd frontend && npx vitest run && npm run build`; plus plant
-     a violation, show it fails, revert.
-   - Stop if: the false-positive rate makes the allowlist unmanageable
-     (> ~60 entries) — report rather than shipping a guard people will disable.
-
----
-
-## Tier 3 — Nice-to-Have
+6. **Lint guard — the load-bearing item.** Do this NEXT, not last.
+   - [ ] Cap the count instead of classifying. **Do NOT build a rule that
+     tries to decide SAFE vs SUSPECT** — that classification is exactly what
+     was proven unreliable above. Flag EVERY
+     `waitFor(() => expect(<mock>).toHaveBeenCalled...)` that is not in a
+     pinned allowlist of the 124 sites that exist today.
+   - [ ] Allowlist pins **ratchet DOWN only**, matching the repo's existing
+     size-ratchet idiom: a new site fails the build; a fixed site must be
+     removed from the allowlist or the test complains it is stale.
+   - [ ] Grep for an existing guard mechanism before adding one — the owner's
+     rule is that two ratchets with different lists is drift by construction.
+   - Acceptance: full suite green; plant a new weak wait, show it fails,
+     revert.
 
 7. **Statistical honesty note in the contributing docs** — a short paragraph on
    why "N clean runs" is weak evidence for a flake fix (rule of three: 0 in n
