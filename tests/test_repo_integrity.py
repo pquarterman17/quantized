@@ -293,8 +293,17 @@ def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
             sub_items = []
             for j in range(i + 1, len(lines)):
                 next_line = lines[j]
-                # Stop at next top-level item
-                if re.match(r"^\d+\.\s+\*\*", next_line):
+                # Stop at next top-level item. Also matches an ALREADY-STRUCK
+                # item ("N. ~~**Title**~~ **STATUS**" — the number stays
+                # unstruck, only the title is wrapped). Without the optional
+                # `~~`, a struck item never registers as a boundary, so the
+                # scan for the PRECEDING open item's sub-boxes runs straight
+                # through it and vacuums up unrelated checked boxes from
+                # whatever numbered item comes after it (see
+                # ORIGIN_FILE_DECODE_PLAN #4, a prose goal statement with no
+                # sub-items of its own that inherited #48-#52's checked boxes
+                # this way).
+                if re.match(r"^\d+\.\s+(?:~~)?\*\*", next_line):
                     break
                 # Collect sub-items (indented checkboxes)
                 if re.match(r"^\s+- \[", next_line):
