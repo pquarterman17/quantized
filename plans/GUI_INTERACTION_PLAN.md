@@ -11,11 +11,13 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-24 (reconciliation: the #2 Plot Objects tree owner gate
-is struck as MOOT — the large bet was taken and delivered by PR #66 on
-2026-07-19, but the gate above it was never closed. With #1/#2/#5 shipped and
-#17 complete, the ONLY unchecked box left in this plan is #16's `.opju`
-migration edges, which is owner-dependent. Prior: 2026-07-19 19:49 EDT, secure
+**Updated:** 2026-08-10 (plan-hygiene reconciliation: #2, #5, #15, #17 had
+every sub-box checked in their tier sections but were never struck/moved —
+moved to Completed with their evidence dates. The only unchecked box left in
+this plan is #16's `.opju` migration edges, which is owner-dependent. Prior:
+2026-07-24 reconciliation: the #2 Plot Objects tree owner gate was struck as
+MOOT — the large bet was taken and delivered by PR #66 on 2026-07-19, but the
+gate above it was never closed. Before that: 2026-07-19 19:49 EDT, secure
 read-only SQLite query connector added as the first database integration in
 the stacked feature series.)
 **Parent:** MAIN_PLAN.md
@@ -127,110 +129,7 @@ feature checklist.
     - [ ] Add a test asserting `mapRoi`/`mapRuler` stay outside undo (working geometry)
     - [ ] Consider a runtime guard if new slices make this recurrent
 
-2. **Unified "select object → edit it" model (Plot Objects tree)** — one
-   synchronized tree (Inspector mode) exposing curves/axes/layers/legends/
-   annotations/shapes.
-   - [x] Two-way selection sync for editable graphic objects (annotation/shape
-         canvas selection ↔ tree row); curve rows expose the active plot model.
-   - [x] Row actions: visibility, reorder, delete, duplicate, Properties — map
-         these onto the channel model (a "curve" = a dataset channel; settle what
-         "duplicate"/"delete" mean per object type before building). Curve
-         delete is intentionally non-destructive Hide; annotations/shapes use
-         duplicate/delete; every Properties action routes to its editor.
-   - [x] Multi-select: align, distribute, group, shared styling for graphic objects.
-   - [x] Large bet completed as a bounded Inspector extension: additive-optional
-         persistent group IDs, fail-closed mixed coordinate spaces, and one
-         named undo transaction per bulk command.
-
-5. **Baseline analysis honors the plotted X/Y channels** — the baseline workshop
-   still computes on `time`/`values[0]` and subtracts into `values[0]`, diverging
-   from the displayed channels. (Correctness trap.)
-   - [x] Bind baseline to the plotted X + selected primary Y, show those names in
-         the workshop, store them in provenance, subtract into that same channel.
-   - [x] OWNER GATE: the OriginPro audit frames baseline as a BACKEND corrections/
-         recalc-DAG change (`bgAnchors`/`applyCorrections`), not a frontend read —
-         scope which before starting (see Owner gates). Resolution: preserve the
-         established correction DAG for default time/value-0 data; arbitrary
-         plotted channels subtract into a derived dataset with explicit X/Y
-         provenance, never silently writing the wrong DAG channel.
-
 ## Tier 2 — Medium Impact
-
-15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
-    targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
-    - [x] Playwright harness (`frontend/e2e/`) — own `playwright.config.ts`,
-          separate `npm run e2e` script (never runs inside `npm test`/vitest),
-          synthetic CSV fixtures only (never `../test-data`), 100/125/200%
-          zoom-matrix projects.
-    - [x] File-drop import
-    - [x] Folder create/nest/reorder + drag a dataset into one via its grip
-          handle (3-zone drop)
-    - [x] Right-click curve restyle (colour + marker)
-    - [x] Axis title + limits edit
-    - [x] Graph build/save/reopen (PlotSpecBar)
-    - [x] Each analysis drag + Esc-cancel (region-tool arm/cancel + ToolHud)
-    - [x] The same essential journey keyboard-only (Command Palette import,
-          Shift+F10 context menu, Enter activates)
-    - [x] Folder reorder/nest **undo** — the browser journey now reverses dataset
-          reparent, folder nesting, rename, creation, and reorder step-by-step.
-    - [x] channel→X/Y/Y2 drag (2026-07-18, `channel-axis-drag.spec.ts` @core —
-          hand-built `DataTransfer` + dispatched drag events, since the axis
-          bands only mount mid-drag and `dragTo` can't resolve them upfront)
-    - [x] annotation/shape move/edit/delete (2026-07-18,
-          `annotation-shape-lifecycle.spec.ts` @core, 3 tests: create via
-          Annotations card → dblclick-edit → canvas drag-move → menu delete;
-          mini-toolbar delete; shape draw/Dashed/delete. Undo halves stay
-          gated on #1.)
-    - [x] window arrange/restore (2026-07-18, `window-arrange.spec.ts`,
-          100%-only: New Graph Window ×2, Tile, Cascade, maximize/restore,
-          close via the #8 title-bar menu)
-    - [x] Export round-trip — a real-browser journey now carries ordered
-          Graph Builder XY/scatter intent into Figure Builder, downloads real
-          FastAPI/matplotlib PDF/SVG/PNG artifacts, validates MIME types,
-          filenames, and file signatures, then saves/reopens the FigureDoc and
-          proves the publication request is identical. A companion regression
-          keeps connected line and line+marker series connected.
-    - [x] Palette-race hardening (2026-07-18, `46669e7`): the one observed
-          window-arrange flake reproduced as CommandPalette's open-effect
-          `setQuery("")` clobbering automation-typed input (test-timing
-          artifact, not a production bug — humans can't type inside React's
-          effect-flush gap). Shared `e2e/utils/palette.ts` `runPaletteCommand`
-          (exact-text row click + Esc-reopen retry) adopted by
-          window-arrange/graph-builder/export-roundtrip; keyboard-only keeps
-          its own sequence (filechooser arming). 30× repeat + 2 full suites
-          clean.
-    - [x] CI workflow — `.github/workflows/e2e.yml` VERIFIED LIVE 2026-07-17:
-          first push-run failed 4 menu tests (spec `role="button"` locators vs
-          the #8 registry's explicit `role="menuitem"`; local runs had masked
-          it via `reuseExistingServer` against a STALE server), fixed in
-          `a2fb74a` — second live run green 18/18 (run 29610916988).
-
-    _Progress (2026-07-18):_ core harness + 8 journeys shipped. Server under
-    test: `uv run qz --no-browser --port 8934` (cwd = repo root), Playwright's
-    `webServer.url` polls `/api/health`; `--no-browser` means
-    `QZ_AUTO_SHUTDOWN` never arms, so the server survives the browser
-    contexts' `/api/ws` presence-socket churn between tests. Prerequisite is
-    `npm run build` (documented in `frontend/e2e/README.md`) — the backend
-    serves the built SPA from `src/quantized/web/`, exactly the `qz` run
-    model. State assertions read the `?harness` seam already used by
-    `tools/visual` (`window.__qz.useApp.getState()`) for store fields a DOM
-    query can't reach cleanly (series style, axis label/limits,
-    `savedPlotSpecs`, folder tree). Zoom matrix: `chromium-100` runs all 10
-    tests (8 spec files; `region-tool-escape.spec.ts` and
-    `export-roundtrip.spec.ts` each have 2); `chromium-125`/
-    `chromium-200` run only the 4 `@core`-tagged specs (import-drop,
-    folder-organize, curve-restyle, region-tool-escape) — the ones touching
-    canvas hit-testing/pointer capture/native drag-drop, the actual gaps this
-    plan item names; axis-limits/graph-builder/keyboard-only are plain DOM
-    form/keyboard interactions, not DPI-sensitive, so they run at the 100%
-    baseline only. 20 tests total (10+5+5), all green in the current full-suite
-    run. Zero `frontend/src` changes — the `?harness` seam
-    (`main.tsx`) already existed for `tools/visual`; no new testability seam
-    was needed. Menu-dependent selectors (context-menu items, the
-    concurrently-refactored `ContextMenu.tsx`/`PlotContextMenu.tsx`) are
-    located by accessible name/text, never DOM structure, so they survive
-    that refactor. `npm test` (3671 tests) and `npm run build` both still
-    green.
 
 ## Tier 3 — Nice-to-Have
 
@@ -258,172 +157,6 @@ feature checklist.
     - [ ] `.opju` migration edges (matrix books, some 2-D instrument data, richer
           graphic-object/callout fidelity). Protected by the Origin recovery
           evidence gate; never infer new binary semantics from this UX plan.
-
-17. **Buttons / labels / menus / tooltips polish**
-    - [x] Split button for the existing shape-tool family: the main button repeats
-          the last drawing tool while its arrow opens the chooser. Broader toolbar
-          grouping remains fixed until owner use justifies customization.
-          **High-consequence-action audit
-          DONE 2026-07-19** — and it found two REAL DEFECTS, not polish:
-      - [x] **Unconfirmed dataset delete** (`320df6f`). The Library row's
-            footer "✕" called `removeDataset()` straight on the store, while
-            the SAME deletion via the row's context menu was confirm-gated
-            (`dataset.remove`, `destructive: true`). One irreversible action,
-            two paths, one confirm. Fixed at the mechanism: the button routes
-            through the same registry action (looked up BY ID, never by array
-            index), so the confirm is structural. Adversarially verified —
-            restoring the direct call fails the new tests.
-      - [x] **Unconfirmed calculator-history wipe** (`9593165`). A one-click
-            ghost button labelled bare "Clear" irrecoverably wiped accumulated
-            work. History is not in the "cheap to recreate" category
-            `contextActions.ts` carves out for canvas objects, so it gets a
-            confirm; the label now names what it clears and the confirm counts
-            the results and states favourites survive.
-      - [x] **Class hunt (`c09befc`)** — rather than stop at the two reported
-            instances, swept every destroying/overwriting store action for
-            the same shape ("reachable on a path that skips the confirm an
-            equivalent path applies"). Found THREE more, all fixed:
-            **Open workspace (.dwk)…** silently discarded the entire session
-            (datasets, folders, reports, figure docs, specs, macro steps,
-            windows) with no confirm AND no undo entry — while the strictly
-            LESS destructive "Remove all…" in the same menu did both; the
-            800ms autosave debounce then overwrote the discarded session's
-            autosave record, so recovery was gone within a second. Plus
-            **removeFigureDoc** and **removeReport**, one-click "×"/"Delete"
-            on saved authoring work, neither wired into the contextActions
-            registry so neither inherited its confirm policy.
-            NOTE the fix LOCATION differs from the earlier ones: the guard
-            went on the open-workspace COMMAND, not inside `loadWorkspace`,
-            because that action has two legitimate non-interactive callers
-            (`clearAll`, already confirmed at its own call site, and the
-            startup autosave restore, which must never prompt). "Guard inside
-            the action" is the better default but has to be checked against
-            the caller set. A test pins the restore path for that reason.
-            Left alone deliberately: `deletePlotSpec` (already confirms
-            locally) and the individual canvas-object "×" buttons (documented
-            exception). OPEN JUDGMENT CALL for the owner: `clearShapes`
-            ("Clear all" in ShapesCard) is a one-click, un-undoable BULK wipe
-            of N hand-placed shapes riding on a policy written for deleting
-            them one at a time — arguably in the spirit of the exception,
-            arguably not.
-      - [x] Audit outcome for the rest: every other high-consequence control
-            already carries text or `title`+`aria-label`, and the five
-            annotation/shape/ref-line/table-row "✕" buttons are a DOCUMENTED
-            deliberate exception (`contextActions.ts` — cheap-to-recreate
-            canvas objects, undo is the eventual answer under the #1 gate),
-            not a silent gap. `CorrectionsCard`'s bare "Apply"/"Reset" was
-            considered and deliberately LEFT: it sits inside a Card titled
-            "Corrections", and widening button text in the fixed 296px
-            Inspector column without visual verification risks exactly the
-            truncation this item complains about elsewhere.
-      - [x] **Dialog button order DONE 2026-07-19** (`2bb2b04`): an audit found the order already
-          correct everywhere (secondary first, primary last, hand-copied from
-          ParamDialog/ConfirmDialog across all 8 backdrop dialogs) — the gap
-          was the "destructive separated" half. `.qz-btn-row` is a plain
-          equal-width flex row, so a destructive Confirm sat flush against
-          Cancel as its identical-width twin, distinguished by colour alone.
-          A danger confirm now gets `.qz-btn-row--danger`: buttons size to
-          content and a flexible gap pushes them apart. Order deliberately
-          unchanged (moving the destructive button would contradict the same
-          convention); non-destructive dialogs render byte-identically, pinned
-          from both sides.
-    - [x] Two real-browser findings from the 2026-07-18 e2e work (fixed
-          2026-07-18): the selection mini-toolbar's rightmost buttons could
-          sit under the floating plot toolbar at common viewports — fixed
-          by offsetting `.qzk-mini-toolbar` below the toolbar's row
-          (`shell.css`), since the toolbar can span nearly the full stage
-          width and z-index would only relocate the obstruction; and the
-          Channels card's checkbox visually overflowed into its sibling
-          select in the Inspector's fixed 296px column — fixed by giving
-          the checkbox `flex-shrink: 0` + a small min-width floor on its
-          label so the squeeze falls on the (truncating) text and the
-          right-hand selects instead. Both e2e workarounds (a synthetic
-          `.click()` in annotation-shape-lifecycle.spec.ts, a left-edge
-          `position` click in channel-axis-drag.spec.ts) were removed in
-          favor of real center clicks, verified passing at all three DPI
-          scales.
-    - [x] **Menu regrouping — SUB-TOPIC HEADERS + HELP DONE 2026-07-19**
-          (`a13e273`, `3947d8d`, `f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`),
-          followed by the cross-menu ownership move recorded below.
-      - [x] Analyze (17 flat items) -> Fit / Peaks & baseline / Magnetometry /
-            XRD & reflectivity / Transform & signal / Statistics / Workflow;
-            Data (14) -> Combine & split / Rows & summary / Recalculation /
-            Composite windows; Plot (14) -> Axes / Display / Layout. New
-            OPTIONAL `Action.section` field + pure `lib/menuSections.ts`,
-            reusing the `.qzk-menu-sep`/`.qzk-menu-label` markup the File
-            menu's "Recent" block established. Grouping is STABLE, not
-            contiguous (a contiguous run emits a duplicate header the first
-            time a command is added in the "wrong" place — the exact
-            maintenance trap this item removes). Unsectioned menus render
-            byte-identically. The palette ignores `section` — it is searched,
-            not browsed. Guarded by a `describe.each` over all three menus:
-            every command filed, vocabulary restricted, non-vacuous floor.
-      - [x] Cross-menu OWNERSHIP move (Plot owns builders/plot-types/layers/
-            themes/templates/export; Data owns worksheet/row-col/filter/
-            reshape/merge/correction/metadata). This REVERSES the earlier
-            "deliberately NOT done — breaks muscle memory, deserves a deliberate
-            call" deferral; the owner approved the move on 2026-07-19 during the
-            Codex-stack review. Graph/figure/page builders, export, and
-            composite-panel commands moved to Plot; Data now stays focused on
-            data operations.
-      - [x] Fill out Help — **ALL FIVE sub-items DONE 2026-07-19**
-            (`f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`). A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
-            with tabs: **Topics** (fuzzy search over a catalog of all 17
-            analysis tools — name, one-liner, and where to find it, folded
-            together with formats + Origin tips into one search), **Keyboard &
-            mouse** (reuses the existing shortcut data, no duplication),
-            **Importing data** (every supported format grouped by category),
-            and **From Origin** (twelve "in Origin X → here Y" migration tips,
-            authored net-new). Three design guards keep the content honest: a
-            coverage test asserts every Analyze command has a tool entry; the
-            format catalog is asserted ⊆ the file-dialog filter (which caught
-            + fixed the missing-.opj/.opju drift, `315d31a`); and Origin tips
-            that name a tool are cross-checked against the tool catalog so a
-            rename breaks the test. Content lives in pure lib/ modules; the
-            open state is a standalone store/help slice (useApp is at its pin).
-            The fifth sub-item, `What is this?` inspect mode (`6af84e9`),
-            reuses the existing [data-tip] tooltip layer rather than a
-            per-element data-help scatter: toggling it outlines every
-            DOCUMENTED control and reveals its help instantly, so an
-            undocumented control simply isn't highlighted (dodging the
-            "feels broken when under-populated" trap). Its [data-tip]
-            coverage grows incrementally. The only Help-adjacent item still
-            open is the shortcuts sub-item's optional "first-run interaction
-            hints" below.
-    - [x] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
-          `8b66988`), including first-run interaction hints.
-      - [x] Shortcuts were already RENDERED in menus and the palette, but only
-            the Shortcuts DIALOG localized them: `Action.shortcut` bakes in the
-            macOS glyphs and the translation lived inside `shortcutGroupsFor`,
-            so on Windows the File menu showed the Cmd glyph + O while Help ▸
-            Keyboard shortcuts showed Ctrl+O — one app, two answers for one
-            key. Translation is now an exported `formatShortcut(keys, isMac)`
-            every surface runs. Also de-duplicated `IS_MAC` (two copies of the
-            same regex over the DEPRECATED `navigator.platform`).
-      - [x] Palette/menu label parity: "open the command palette" is reachable
-            from four surfaces and three hard-coded three DIFFERENT strings.
-            Now one exported `PALETTE_LABEL`/`PALETTE_SHORTCUT`. Note
-            `MenuBar.test.tsx` had been DOCUMENTING the divergence (fixture
-            said "Command palette…", assertion clicked "Command palette"), so
-            it was rewritten to assert the parity it previously encoded as
-            expected.
-      - [x] Cheat-sheet drift: the Help sheet and the registry are two
-            independently-authored lists whose spacing conventions differ
-            ("Cmd Z" vs "CmdZ"), hiding that undo, redo, paste and Preferences
-            were registered commands MISSING from the sheet — a user pressing
-            `?` was told undo has no shortcut. Added, and guarded by a
-            normalizing cross-check that was adversarially verified (removing
-            an entry fails it) rather than assumed.
-      - [x] All of the above pinned at the CLASS level by
-            `src/shortcutDisplay.test.ts`, which scans raw module text: no
-            module may interpolate `.shortcut` outside `formatShortcut`, no
-            component may hard-code a modifier glyph in `qz-shortcut` markup,
-            and only `store/commands.ts` may spell the palette label. The
-            glyph scan immediately caught a THIRD offender the manual audit
-            had missed (AppearanceMenu's "All preferences…").
-      - [x] Optional first-run "show interaction hints" mode — a small,
-            dismissible, non-modal card teaches the three core mouse gestures,
-            persists dismissal locally, and can be reopened from Help.
 
 ---
 
@@ -455,6 +188,47 @@ feature checklist.
 ## Completed
 
 - ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
+
+- ~~**#2 Plot Objects tree — closing slice**~~ (2026-07-24) — the item's last
+  open box: multi-select align/distribute/group with shared styling for
+  graphic objects, plus the "large bet" closure (additive-optional persistent
+  group IDs, fail-closed mixed coordinate spaces, one named undo transaction
+  per bulk command). Combined with the two-way selection sync and row-action
+  mapping recorded under the 2026-07-19 entries below, every #2 sub-item is
+  now checked; the owner gate above was resolved the same reconciliation pass
+  but the tier-section checklist itself was never struck until now.
+
+- ~~**#17 Buttons / labels / menus / tooltips polish**~~ (2026-07-19) — the
+  high-consequence-action audit found and fixed 5 real confirm-gate gaps
+  (dataset delete, calculator-history wipe, workspace-open discard,
+  removeFigureDoc, removeReport); dialog button order/danger-row spacing
+  audited and fixed; Analyze/Data/Plot menus regrouped into stable sub-topic
+  headers with a cross-menu ownership move (owner-approved); a searchable
+  Help hub (Topics/Keyboard & mouse/Importing data/From Origin) plus a
+  `What is this?` inspect mode shipped; shortcut label rendering unified
+  across menu/palette/dialog surfaces and pinned at the class level by
+  `shortcutDisplay.test.ts`; optional first-run interaction hints shipped.
+  All sub-items checked; left open only by omission from this section.
+
+- ~~**#5 Baseline analysis honors the plotted X/Y channels**~~ (2026-07-19) —
+  the baseline workshop now binds to the plotted X + selected primary Y,
+  displays and records both channel names in provenance, and subtracts into
+  that same channel. Owner gate resolved: the established correction DAG
+  stays authoritative for the default time/value-0 channel; arbitrary
+  plotted-channel baselines subtract into a derived dataset with explicit
+  X/Y provenance instead of silently writing the wrong DAG channel.
+
+- ~~**#15 Real-browser interaction coverage**~~ (2026-07-18) — Playwright
+  harness (`frontend/e2e/`, own config, never runs inside vitest) covering
+  file-drop import, folder create/nest/reorder + grip-handle drag, curve
+  restyle, axis edit, Graph Builder build/save/reopen, each analysis-drag +
+  Esc-cancel, the same journey keyboard-only, folder-organization undo,
+  channel→axis drag, annotation/shape lifecycle, window arrange/restore, and
+  an export round-trip that downloads and validates real PDF/SVG/PNG
+  artifacts — 10 spec files at a 100/125/200% DPI zoom matrix (core specs at
+  all three, DOM-only specs at 100% only), CI-verified live
+  (run 29610916988), 20 tests total, all green alongside the full `npm test`
+  suite and production build.
 
 - ~~**#20 database/query connector foundation**~~ (2026-07-19, Codex PR #69;
   **owner-ratified 2026-07-20**, see the provenance note below — was the MAIN
