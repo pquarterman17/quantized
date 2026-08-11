@@ -25,15 +25,15 @@
 //         inline request shape).
 //   (iii) neither -> both buttons stay disabled; `polar.reason` is the
 //         tooltip text the panel shows, never a silent no-op.
-// `mapRoi`/`mapRuler` are read from store/rois.ts (not owned/edited here
-// beyond mapRoi's bounds — mapRuler is read only to gate "Save").
-//
-// SEAM for item 6 (not built by this item, per RSM_CUTS_PLAN's file-
-// ownership rule — no useMapRoi.ts/MapRoiOverlay.tsx here): `sectorPreview`
-// is exposed purely so a future map overlay can render the true-polar wedge
-// this card's fields describe; it is null outside branch (i) since branch
-// (ii)/(iii) have no wedge to draw (branch (ii)'s preview, if any, is just
-// `mapRoi`-shaped and would reuse the box overlay item 6 already builds).
+// `mapRoi`/`mapRuler`/`mapSector` are read from store/rois.ts (mapRuler only
+// to gate "Save"). `mapSector` (MAIN_PLAN item 41, moved out of local
+// useState) gets the same treatment as `mapRoi`: setters below are thin
+// wrappers over `store.setMapSector`, so a value typed here and a drag on
+// the map's wedge (`Stage/useMapSectorWedge.ts`) are the same field — see
+// store/rois.ts's header for why. `effectivePhiBounds`/`sectorPreviewFor`
+// are exported so that hook derives the identical true-polar bounds without
+// re-deriving the center/bounds mode-select (SEAM for item 6/12, no
+// useMapRoi.ts/MapRoiOverlay.tsx/useMapSectorWedge.ts in this file).
 
 import { useEffect, useState } from "react";
 
@@ -53,6 +53,7 @@ import {
 } from "../../../lib/roi";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import type { MapSectorState } from "../../../store/rois";
 import { useCutLanding } from "../../Stage/useCutLanding";
 
 // ── Pure helpers (column extents, polar-branch detection) ──────────────────
@@ -147,6 +148,20 @@ export function polarBranch(ds: DataStruct): PolarBranch {
   };
 }
 
+/** Bounds actually in effect — bounds mode is already canonical;
+ *  center/half-width resolves through `sectorFromCenter`. */
+export function effectivePhiBounds(s: MapSectorState): { phiMin: number; phiMax: number } {
+  return s.phiParam === "bounds" ? { phiMin: s.phiMin, phiMax: s.phiMax } : sectorFromCenter(s.phiCenter, s.phiHalfWidth);
+}
+
+/** `mapSector` reduced to the canonical `RoiSector` — null off the
+ *  true-polar branch. Shared by this hook and `useMapSectorWedge.ts`. */
+export function sectorPreviewFor(s: MapSectorState, polar: PolarBranch): RoiSector | null {
+  if (polar.kind !== "q") return null;
+  const { phiMin, phiMax } = effectivePhiBounds(s);
+  return { qMin: Math.min(s.secMin, s.secMax), qMax: Math.max(s.secMin, s.secMax), phiMin, phiMax };
+}
+
 /** Build the periodic-axis box (branch ii) from the sector card's own
  *  phi/secondary fields, reusing `roiBoxBody` — never a third inline
  *  request shape. `phiLo`/`phiHi` are passed through UNSORTED on purpose:
@@ -239,6 +254,8 @@ export function useRoiCuts(): RoiCutsState {
   const mapRoi = useApp((s) => s.mapRoi);
   const setMapRoi = useApp((s) => s.setMapRoi);
   const mapRuler = useApp((s) => s.mapRuler);
+  const mapSector = useApp((s) => s.mapSector);
+  const setMapSector = useApp((s) => s.setMapSector);
   const savedRois = useApp((s) => s.savedRois);
   const saveRoi = useApp((s) => s.saveRoi);
   const applySavedRoi = useApp((s) => s.applySavedRoi);
@@ -261,50 +278,40 @@ export function useRoiCuts(): RoiCutsState {
   const [statsError, setStatsError] = useState<string | null>(null);
   const boxSpace: CutSpace = mapRoi?.space ?? boxSpaceDefault;
 
-  // Sector card local state.
-  const [phiParam, setPhiParam] = useState<"center" | "bounds">("bounds");
-  const [phiCenter, setPhiCenter] = useState(0);
-  const [phiHalfWidth, setPhiHalfWidth] = useState(180);
-  const [phiMin, setPhiMin] = useState(0);
-  const [phiMax, setPhiMax] = useState(360);
-  const [secMin, setSecMin] = useState(0);
-  const [secMax, setSecMax] = useState(1);
-  const [sectorBins, setSectorBins] = useState(100);
-  const [sectorMode, setSectorMode] = useState<"sum" | "mean">("sum");
-
   // A new active dataset re-primes the sector card's defaults (full circle,
   // q-range/secondary-range from the data, bins from map_shape) — mirrors
   // useRsm.ts's "a new active dataset invalidates the current analysis".
+  // `sectorMode` is deliberately left out of the patch (mirrors the old
+  // local-state version, which never reset it here either) — the merge
+  // setter means omitting a field simply carries its current value forward.
+  // Guarded by `primedFor` (store/rois.ts) so a SECOND mount for the SAME
+  // dataset — e.g. opening this panel after the wedge already primed/dragged
+  // it — is a no-op, not a silent reset of a live drag; see that field's doc.
   useEffect(() => {
-    if (!active) return;
+    if (!active || mapSector.primedFor === active.id) return;
     const ds = active.data;
-    setSectorBins(defaultSectorBins(mapShapeOf(ds)));
-    setPhiParam("bounds");
-    setPhiMin(0);
-    setPhiMax(360);
-    setPhiCenter(0);
-    setPhiHalfWidth(180);
     const branch = polarBranch(ds);
-    if (branch.kind === "q") {
-      const [lo, hi] = qMagnitudeExtent(ds);
-      setSecMin(lo);
-      setSecMax(hi);
-    } else if (branch.kind === "pole") {
-      const [lo, hi] = columnExtentIdx(ds, branch.axis === "x" ? 1 : 0);
-      setSecMin(lo);
-      setSecMax(hi);
-    } else {
-      setSecMin(0);
-      setSecMax(1);
-    }
+    const [secMin, secMax] =
+      branch.kind === "q"
+        ? qMagnitudeExtent(ds)
+        : branch.kind === "pole"
+          ? columnExtentIdx(ds, branch.axis === "x" ? 1 : 0)
+          : ([0, 1] as [number, number]);
+    setMapSector({
+      phiParam: "bounds",
+      phiCenter: 0,
+      phiHalfWidth: 180,
+      phiMin: 0,
+      phiMax: 360,
+      secMin,
+      secMax,
+      sectorBins: defaultSectorBins(mapShapeOf(ds)),
+      primedFor: active.id,
+    });
     setBoxStats(null);
     setStatsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
-
-  function effectivePhiBounds(): { phiMin: number; phiMax: number } {
-    return phiParam === "bounds" ? { phiMin, phiMax } : sectorFromCenter(phiCenter, phiHalfWidth);
-  }
 
   // ── Box card actions ──────────────────────────────────────────────────
 
@@ -366,7 +373,8 @@ export function useRoiCuts(): RoiCutsState {
   function runProfile(kind: "radial" | "azimuthal"): void {
     if (!active) return;
     const branch = polarBranch(active.data);
-    const { phiMin: lo, phiMax: hi } = effectivePhiBounds();
+    const { phiMin: lo, phiMax: hi } = effectivePhiBounds(mapSector);
+    const { secMin, secMax, sectorBins, sectorMode } = mapSector;
     if (branch.kind === "q") {
       const req = {
         dataset: active.data,
@@ -393,16 +401,7 @@ export function useRoiCuts(): RoiCutsState {
   const runSector = (): void => runProfile("radial");
   const runChi = (): void => runProfile("azimuthal");
 
-  const { phiMin: previewPhiMin, phiMax: previewPhiMax } = effectivePhiBounds();
-  const sectorPreview: RoiSector | null =
-    polar.kind === "q"
-      ? {
-          qMin: Math.min(secMin, secMax),
-          qMax: Math.max(secMin, secMax),
-          phiMin: previewPhiMin,
-          phiMax: previewPhiMax,
-        }
-      : null;
+  const sectorPreview = sectorPreviewFor(mapSector, polar);
 
   // ── Saved ROIs ────────────────────────────────────────────────────────
 
@@ -443,24 +442,24 @@ export function useRoiCuts(): RoiCutsState {
     statsBusy,
     statsError,
 
-    phiParam,
-    setPhiParam,
-    phiCenter,
-    setPhiCenter,
-    phiHalfWidth,
-    setPhiHalfWidth,
-    phiMin,
-    setPhiMin,
-    phiMax,
-    setPhiMax,
-    secMin,
-    setSecMin,
-    secMax,
-    setSecMax,
-    sectorBins,
-    setSectorBins,
-    sectorMode,
-    setSectorMode,
+    phiParam: mapSector.phiParam,
+    setPhiParam: (phiParam) => setMapSector({ phiParam }),
+    phiCenter: mapSector.phiCenter,
+    setPhiCenter: (phiCenter) => setMapSector({ phiCenter }),
+    phiHalfWidth: mapSector.phiHalfWidth,
+    setPhiHalfWidth: (phiHalfWidth) => setMapSector({ phiHalfWidth }),
+    phiMin: mapSector.phiMin,
+    setPhiMin: (phiMin) => setMapSector({ phiMin }),
+    phiMax: mapSector.phiMax,
+    setPhiMax: (phiMax) => setMapSector({ phiMax }),
+    secMin: mapSector.secMin,
+    setSecMin: (secMin) => setMapSector({ secMin }),
+    secMax: mapSector.secMax,
+    setSecMax: (secMax) => setMapSector({ secMax }),
+    sectorBins: mapSector.sectorBins,
+    setSectorBins: (sectorBins) => setMapSector({ sectorBins }),
+    sectorMode: mapSector.sectorMode,
+    setSectorMode: (sectorMode) => setMapSector({ sectorMode }),
     sectorPreview,
     runSector,
     runChi,

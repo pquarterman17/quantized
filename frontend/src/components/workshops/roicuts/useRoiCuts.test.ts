@@ -84,6 +84,10 @@ async function flush(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ mapRoi: null, mapRuler: null, savedRois: [], selectedIds: [] });
+  // `mapSector` is shared store state (MAIN_PLAN item 41) — clear its
+  // `primedFor` marker so every test starts from a freshly re-primed sector
+  // instead of inheriting a prior test's leftover values for the same "d1".
+  useApp.getState().setMapSector({ primedFor: null });
   setActive("d1", Q_DS);
 });
 

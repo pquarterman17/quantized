@@ -12,34 +12,18 @@
 // coalesced client preview via lib/roiMath.ts (never the commit path), and
 // a sub-3px release discarded as a click.
 //
-// STATE OWNERSHIP — why this hook is parameterized differently from its
-// siblings: the box/ruler's authoritative state is `store.mapRoi`/
-// `store.mapRuler` (RoisSlice, store/rois.ts), so useMapRoi.ts/
-// useMapRuler.ts read/write the store directly and stay in sync with the
-// panel "for free". The sector's authoritative fields (phiMin/phiMax OR
-// phiCenter/phiHalfWidth, secMin/secMax) are NOT in the store — they are
-// component-local `useState` inside `workshops/roicuts/useRoiCuts.ts` (see
-// that hook's own "Sector card local state" section). This item's file
-// ownership is `components/Stage/*` + `lib/roi.ts`/`roiMath.ts` only —
-// `store/rois.ts` and `workshops/roicuts/` belong to other concurrent work,
-// so moving the sector into the store (the store.mapRoi pattern, literally)
-// is out of scope here; the plan's own instructions are explicit that
-// touching `store/rois.ts` means stopping and reporting, not working around
-// it. This hook therefore calls `useRoiCuts()` ITSELF (one instance, same
-// as any other mounted consumer of that hook) and drives its setters
-// directly: `writeSector` below is the one place a dragged `RoiSector`
-// round-trips back into `phiMin`/`phiMax` (bounds mode) or `phiCenter`/
-// `phiHalfWidth` (centre mode, re-derived from the dragged bounds so a
-// handle drag or a rotate is correct regardless of which entry mode the
-// panel is in). Because the drag and this hook's OWN preview both read from
-// that SAME instance's `sectorPreview`, they stay structurally in sync with
-// no extra syncing effect — the same "one value, two entry points" property
-// `store.mapRoi` gives the box, just parameterized through a hook instance
-// instead of a store field. The known cross-instance limitation
-// MapRoiOverlay.tsx's header already documents (a SECOND mounted
-// `useRoiCuts()` — e.g. an actually open `RoiCutsPanel` — keeps its own
-// separate local state, so it will not see a drag made here, and vice
-// versa) applies identically; this item does not change or worsen it.
+// STATE OWNERSHIP (MAIN_PLAN item 41): the sector's authoritative fields
+// live in `store.mapSector` (RoisSlice, store/rois.ts) — the box/ruler's
+// own `store.mapRoi`/`store.mapRuler` pattern, now applied here too.
+// `writeSector` below reads/writes it directly via `useApp`, so a drag here
+// and a numeric edit in a separately-mounted `RoiCutsPanel` are the SAME
+// store field, in sync for free — no second `useRoiCuts()` instance is
+// needed to reach the state anymore (that indirection, and the cross-
+// instance gap it left, only existed while the state was local; see
+// store/rois.ts's header for the fix this replaces). `rc = useRoiCuts()`
+// below is kept for exactly one thing: `runSector`/`runChi`/`busy`, the SAME
+// request-shaping + landing logic the panel's own buttons call — not for
+// its state, which this hook no longer reads.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -50,7 +34,9 @@ import type { RoiSector } from "../../lib/roi";
 import { applySectorDrag, classifySectorHit, pymod, sectorCursor, type SectorHit } from "../../lib/roiSector";
 import { chiProfileLocal, sectorProfileLocal, type PolarCols, type RoiProfile } from "../../lib/roiMath";
 import type { Dataset, DataStruct } from "../../lib/types";
-import { useRoiCuts, type RoiCutsState } from "../workshops/roicuts/useRoiCuts";
+import { useApp } from "../../store/useApp";
+import type { MapSectorState } from "../../store/rois";
+import { sectorPreviewFor, useRoiCuts } from "../workshops/roicuts/useRoiCuts";
 import type { WedgeMode } from "./MapToolbar";
 import { plotRect } from "./mapRender";
 import { pxToData } from "./useMapRoi";
@@ -91,24 +77,19 @@ function qPxScale(payload: MapPayload, w: number, h: number): number {
   return xSpan > 0 ? rect.w / xSpan : 1;
 }
 
-/** Write a dragged `RoiSector` back into whichever of `useRoiCuts`'s own
- *  fields is authoritative right now — `secMin`/`secMax` always directly;
- *  `phiMin`/`phiMax` directly in "bounds" mode, or re-derived into
- *  `phiCenter`/`phiHalfWidth` in "center" mode via the sector's own SPAN
- *  (not a naive `(max-min)/2`, which goes negative the instant `phiMax` is
- *  stored numerically less than `phiMin` — e.g. right after a phiMax-handle
- *  drag past the seam) so a wrap-crossing result still derives a correct,
- *  non-negative half-width. */
-function writeSector(rc: RoiCutsState, next: RoiSector): void {
-  rc.setSecMin(next.qMin);
-  rc.setSecMax(next.qMax);
-  if (rc.phiParam === "bounds") {
-    rc.setPhiMin(next.phiMin);
-    rc.setPhiMax(next.phiMax);
+/** Write a dragged `RoiSector` back into `store.mapSector` — `secMin`/
+ *  `secMax` always directly; `phiMin`/`phiMax` directly in "bounds" mode, or
+ *  re-derived into `phiCenter`/`phiHalfWidth` in "center" mode via the
+ *  sector's own SPAN (not a naive `(max-min)/2`, which goes negative the
+ *  instant `phiMax` is stored numerically less than `phiMin` — e.g. right
+ *  after a phiMax-handle drag past the seam) so a wrap-crossing result still
+ *  derives a correct, non-negative half-width. */
+function writeSector(current: MapSectorState, setMapSector: (patch: Partial<MapSectorState>) => void, next: RoiSector): void {
+  if (current.phiParam === "bounds") {
+    setMapSector({ secMin: next.qMin, secMax: next.qMax, phiMin: next.phiMin, phiMax: next.phiMax });
   } else {
     const span = pymod(next.phiMax - next.phiMin, 360) || 360;
-    rc.setPhiCenter(next.phiMin + span / 2);
-    rc.setPhiHalfWidth(span / 2);
+    setMapSector({ secMin: next.qMin, secMax: next.qMax, phiCenter: next.phiMin + span / 2, phiHalfWidth: span / 2 });
   }
 }
 
@@ -158,6 +139,8 @@ export interface UseMapSectorWedgeState {
 
 export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | null): UseMapSectorWedgeState {
   const rc = useRoiCuts();
+  const mapSector = useApp((s) => s.mapSector);
+  const setMapSector = useApp((s) => s.setMapSector);
 
   const [mode, setModeState] = useState<WedgeMode>("off");
   const [hover, setHover] = useState<SectorHit>(null);
@@ -166,11 +149,13 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
   const [previewAxis, setPreviewAxis] = useState<"q" | "phi">("q");
   const [preview, setPreview] = useState<RoiProfile | null>(null);
 
-  // Only shown/draggable over the CURRENTLY DISPLAYED Q axes — `rc.sectorPreview`
+  // Only shown/draggable over the CURRENTLY DISPLAYED Q axes — `rc.polar`
   // is about the ACTIVE DATASET's capability (Qx/Qz present at all), not
   // which axes are on screen right now (mirrors useMapRoi.ts's `rect`
-  // space-mismatch gate).
-  const sector: RoiSector | null = cutSpace === "q" ? rc.sectorPreview : null;
+  // space-mismatch gate). Read from `rc`, not re-derived from this hook's
+  // own `active` param, so a bound-panel dataset (MapStage's `dataset`
+  // prop) can never disagree with the panel's own polar-branch gate.
+  const sector: RoiSector | null = cutSpace === "q" ? sectorPreviewFor(mapSector, rc.polar) : null;
 
   const cols = useMemo(() => (active ? polarColsFor(active.data) : null), [active]);
 
@@ -187,21 +172,21 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
       qMax: sector.qMax,
       phiMin: sector.phiMin,
       phiMax: sector.phiMax,
-      nBins: rc.sectorBins,
-      mode: rc.sectorMode,
+      nBins: mapSector.sectorBins,
+      mode: mapSector.sectorMode,
     };
     const raf = requestAnimationFrame(() => {
       setPreview(previewAxis === "q" ? sectorProfileLocal(cols, opts) : chiProfileLocal(cols, opts));
     });
     return () => cancelAnimationFrame(raf);
-  }, [sector, cols, previewAxis, rc.sectorBins, rc.sectorMode]);
+  }, [sector, cols, previewAxis, mapSector.sectorBins, mapSector.sectorMode]);
 
   function cancelDrag(): void {
     const d = dragRef.current;
     dragRef.current = null;
     setDragging(false);
     setActiveGestureCancel(null);
-    if (d) writeSector(rc, d.preGesture);
+    if (d) writeSector(mapSector, setMapSector, d.preGesture);
   }
 
   function onDown(payload: MapPayload, w: number, h: number, px: [number, number]): void {
@@ -235,7 +220,7 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
     // A tiny non-zero minimum gap (not 0) keeps qMin/qMax from ever landing
     // EXACTLY on top of each other mid-drag, which would select nothing.
     const next = applySectorDrag(d.baseSector, d.hit, dataPt.x, dataPt.y, { startPhi: d.startPhi, minRadialGap: 1e-6 });
-    writeSector(rc, next);
+    writeSector(mapSector, setMapSector, next);
   }
 
   function onUp(px: [number, number]): void {
@@ -247,7 +232,7 @@ export function useMapSectorWedge(active: Dataset | null, cutSpace: CutSpace | n
     // A drag under ~3px is a click, not a gesture — discard it, same
     // convention as useMapRoi.ts's/useMapRuler.ts's own onUp.
     const dist = Math.hypot(px[0] - d.startPx[0], px[1] - d.startPx[1]);
-    if (dist < 3) writeSector(rc, d.preGesture);
+    if (dist < 3) writeSector(mapSector, setMapSector, d.preGesture);
   }
 
   function onLeave(): void {

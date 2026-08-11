@@ -46,6 +46,28 @@
 // its historical clear-on-switch behavior (still routed through
 // `focusTransientReset`) — markers belong to the analysis run that produced
 // them, not to a box the user is actively reusing.
+//
+// `mapSector` (MAIN_PLAN item 41, folded up from RSM_CUTS_PLAN #25) joins
+// mapRoi/mapRuler here for the identical reason: it is the SECTOR tool's
+// working geometry (annulus bounds, the center/bounds entry-mode toggle,
+// and the profile bins/reduce-mode config) — `workshops/roicuts/
+// useRoiCuts.ts` now reads/writes it exactly like it already does `mapRoi`,
+// so a value typed into the panel and a drag on `Stage/useMapSectorWedge.ts`'s
+// wedge are the SAME store field, in sync for free. It used to be
+// component-local `useState` inside `useRoiCuts.ts`, which is why the wedge
+// had to mount a SECOND `useRoiCuts()` instance and drive its setters
+// directly to reach it — a second, independently-mounted `RoiCutsPanel`
+// never saw a live drag from the first. Moving it here is that fix, not a
+// new feature. Same non-`.dwk`, non-undo treatment as mapRoi/mapRuler and
+// for the same reason: in-progress scratch, not a committed/named edit —
+// `serializeRois` below stays `savedRois`-only, and `store/history.ts`'s
+// `HistorySnapshot` is an inclusion allowlist `mapSector` is deliberately
+// left off, exactly how mapRoi/mapRuler are already excluded from it.
+// Unlike mapRoi/mapRuler it is NOT nullable — the Sector card always shows
+// values (a full-circle default), so there is no "nothing drawn yet" state
+// to represent; `useRoiCuts.ts`'s per-active-dataset effect re-primes it
+// from the new dataset's own extents, unchanged from when that reset lived
+// in local state.
 
 import type { CutSpace } from "../lib/mapcuts";
 import type { RsmPeak } from "../lib/types";
@@ -57,6 +79,54 @@ type SliceGet = () => AppState;
 
 let _roiSeq = 0;
 const nextRoiId = (): string => `roi-${Date.now().toString(36)}-${++_roiSeq}`;
+
+/** The Sector card's working fields (MAIN_PLAN item 41) — an annulus in
+ *  `phiMin..phiMax` / `secMin..secMax` (the latter is q-magnitude on the
+ *  true-polar branch, a secondary axis extent on the pole-figure branch —
+ *  see `useRoiCuts.ts::polarBranch`), the center/half-width vs min/max entry
+ *  toggle (`phiParam`), and the profile request's bins/reduce mode. Raw
+ *  fields only — which of `phiMin/phiMax` vs `phiCenter/phiHalfWidth` is
+ *  CANONICAL right now depends on `phiParam`; `useRoiCuts.ts::
+ *  effectivePhiBounds` resolves that, same division of labour as this
+ *  file's other pure-data-in-here / derivation-in-the-hook slices. */
+export interface MapSectorState {
+  phiParam: "center" | "bounds";
+  phiCenter: number;
+  phiHalfWidth: number;
+  phiMin: number;
+  phiMax: number;
+  secMin: number;
+  secMax: number;
+  sectorBins: number;
+  sectorMode: "sum" | "mean";
+  /** Internal bookkeeping, not shown by either card: the dataset id
+   *  `useRoiCuts.ts`'s per-active-dataset effect last (re-)primed these
+   *  fields for. Now that the fields are SHARED (this file's whole point),
+   *  that effect fires from every mounted consumer — the wedge AND the
+   *  panel, independently — and a naive "reset every mount" would let a
+   *  panel opened AFTER a wedge drag silently discard it the instant it
+   *  mounts. Matching `primedFor` against the active id lets a second
+   *  mount for the SAME dataset no-op instead, while a REAL dataset switch
+   *  (the id actually changing) still re-primes exactly as before. */
+  primedFor: string | null;
+}
+
+/** Full-circle, q-range-yet-to-be-primed defaults — `useRoiCuts.ts`'s
+ *  per-active-dataset effect immediately overwrites `secMin`/`secMax`/
+ *  `sectorBins` from the dataset's own extents, exactly as it did when
+ *  these were local `useState` initializers. */
+const DEFAULT_MAP_SECTOR: MapSectorState = {
+  phiParam: "bounds",
+  phiCenter: 0,
+  phiHalfWidth: 180,
+  phiMin: 0,
+  phiMax: 360,
+  secMin: 0,
+  secMax: 1,
+  sectorBins: 100,
+  sectorMode: "sum",
+  primedFor: null,
+};
 
 export interface RoisSlice {
   // Relocated verbatim from useApp.ts — see this file's header.
@@ -74,6 +144,15 @@ export interface RoisSlice {
    *  survive-a-dataset-switch contract as `mapRoi`. */
   mapRuler: RoiRuler | null;
   setMapRuler: (mapRuler: RoiRuler | null) => void;
+
+  /** The live/working sector/annulus — see this file's header. Both the
+   *  Sector card's numeric fields (`useRoiCuts.ts`) and the draggable wedge
+   *  (`Stage/useMapSectorWedge.ts`) read/write this ONE field, mirroring
+   *  `mapRoi`'s "same field = in sync" contract. Never null (see header);
+   *  always a MERGE patch, not a whole-value replace — every writer touches
+   *  one or two fields at a time, unlike `mapRoi`'s cohesive single rect. */
+  mapSector: MapSectorState;
+  setMapSector: (patch: Partial<MapSectorState>) => void;
 
   /** Every named saved ROI (item 8's Saved ROIs card): box, ruler, or
    *  sector. In-memory only until item 13 pays `lib/workspace.ts`'s pin for
@@ -108,6 +187,9 @@ export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
     setMapRoi: (mapRoi) => set({ mapRoi }),
     mapRuler: null,
     setMapRuler: (mapRuler) => set({ mapRuler }),
+
+    mapSector: DEFAULT_MAP_SECTOR,
+    setMapSector: (patch) => set((st) => ({ mapSector: { ...st.mapSector, ...patch } })),
 
     savedRois: [],
     saveRoi: (name) => {
