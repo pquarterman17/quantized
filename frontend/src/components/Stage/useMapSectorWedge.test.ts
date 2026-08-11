@@ -3,19 +3,20 @@
 // wrappers, drive the hook's own onDown/onMove/onUp directly (px inputs
 // derived from the SAME dataToPx the hook uses via pxToData).
 //
-// Because the sector's authoritative fields are useRoiCuts.ts's own local
-// state (not a store field — see useMapSectorWedge.ts's header on why), the
-// hook always starts from that hook's dataset-derived DEFAULT (full circle,
-// q-range from the data). Each test "primes" the sector with one
-// unambiguous drag (moving phiMin away from the coincident phiMin===phiMax
-// point at the full circle's seam) before exercising the handle under test —
-// this is exactly the kind of interactive shaping a real user does with the
-// mouse, not a test-only shortcut. The underlying PURE geometry
-// (classifySectorHit/applySectorDrag precedence, wrap survival) already has
-// its own exhaustive unit tests in lib/roiSector.test.ts; this file's job is
-// the hook's integration behaviour: isolated field changes through the real
-// gesture machine, Esc revert, preview/commit separation, and the
-// angular-axes disable.
+// The sector's authoritative fields live in `store.mapSector` (MAIN_PLAN
+// item 41 — see useMapSectorWedge.ts's header), re-primed to a dataset-
+// derived DEFAULT (full circle, q-range from the data) by useRoiCuts.ts's
+// per-active-dataset effect, which this hook still mounts internally. Each
+// test "primes" the sector with one unambiguous drag (moving phiMin away
+// from the coincident phiMin===phiMax point at the full circle's seam)
+// before exercising the handle under test — this is exactly the kind of
+// interactive shaping a real user does with the mouse, not a test-only
+// shortcut. The underlying PURE geometry (classifySectorHit/applySectorDrag
+// precedence, wrap survival) already has its own exhaustive unit tests in
+// lib/roiSector.test.ts; this file's job is the hook's integration
+// behaviour: isolated field changes through the real gesture machine, Esc
+// revert, preview/commit separation, the angular-axes disable, and (below)
+// that a drag here is visible to a separately-mounted `useRoiCuts()`.
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +26,7 @@ import { cancelActiveGesture } from "../../lib/gestureCancel";
 import type { MapPayload } from "../../lib/mapdata";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { useRoiCuts } from "../workshops/roicuts/useRoiCuts";
 import { dataToPx } from "./mapRender";
 import { useMapSectorWedge } from "./useMapSectorWedge";
 
@@ -106,6 +108,11 @@ let rafCb: FrameRequestCallback | null = null;
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ mapRoi: null, mapRuler: null, savedRois: [], selectedIds: [] });
+  // `mapSector` is shared store state now (MAIN_PLAN item 41) — clear its
+  // `primedFor` marker so useRoiCuts.ts's per-active-dataset effect re-primes
+  // fresh for every test instead of skipping (already primed for "d1" by a
+  // PRIOR test) and leaking that test's dragged values into this one.
+  useApp.getState().setMapSector({ primedFor: null });
   setActive();
   rafCb = null;
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
@@ -309,5 +316,35 @@ describe("useMapSectorWedge — angular axes disable the interaction", () => {
     act(() => result.current.onDown(PAYLOAD, W, H, px(...polar(3, 0))));
     expect(result.current.dragging).toBe(false);
     expect(result.current.sector).toBeNull();
+  });
+});
+
+// MAIN_PLAN item 41: the sector's fields moved out of useRoiCuts.ts's own
+// local useState into store.mapSector, specifically so a SECOND,
+// independently-mounted useRoiCuts() (e.g. an actually open RoiCutsPanel)
+// sees a drag made on this wedge, and vice versa — that was the bug this
+// item fixes (RSM_CUTS_PLAN #25/MAIN_PLAN #41's own description). Both
+// hooks are mounted here as two SEPARATE instances, exactly like the real
+// app would (wedge inside MapStage, panel inside its own ToolWindow).
+describe("useMapSectorWedge — cross-instance sync (MAIN_PLAN item 41)", () => {
+  it("a wedge drag is visible to a separately-mounted useRoiCuts() instance", () => {
+    const wedge = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+    const panel = renderHook(() => useRoiCuts());
+
+    primeToQuarter(wedge.result);
+
+    expect(panel.result.current.phiMin).toBeCloseTo(90);
+    expect(panel.result.current.phiMax).toBe(360);
+    expect(panel.result.current.secMin).toBe(2);
+    expect(panel.result.current.secMax).toBe(4);
+  });
+
+  it("a numeric edit from useRoiCuts() is visible on the wedge's own derived sector", () => {
+    const wedge = renderHook(() => useMapSectorWedge(ACTIVE, "q"));
+    const panel = renderHook(() => useRoiCuts());
+
+    act(() => panel.result.current.setPhiMax(200));
+
+    expect(wedge.result.current.sector?.phiMax).toBeCloseTo(200);
   });
 });
