@@ -644,6 +644,9 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // ROI slices: in-progress working geometry (see store/rois.ts docstring)
   mapRoi: "in-progress ROI box geometry; survives dataset switch but not undo",
   mapRuler: "in-progress ruler geometry; survives dataset switch but not undo",
+  mapSector:
+    "in-progress sector/wedge geometry; same working-scratch class as mapRoi/mapRuler " +
+    "(MAIN_PLAN #41 moved it here from useRoiCuts local state so both panels share it)",
   rsmPeaks: "RSM peak markers from analysis; cleared on dataset change or analysis reset",
 
   // Windows slice: computed from plot DOM
