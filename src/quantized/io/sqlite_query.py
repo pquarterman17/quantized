@@ -109,7 +109,19 @@ def query_sqlite(
             )
         )
         connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 1_000)
-        cursor = connection.execute(sql)
+        # Running the caller's own SQL is what this connector IS -- a
+        # "type a SELECT against your own local database" import path -- so the
+        # text is a parameter here, not a value interpolated into a statement
+        # this module wrote, and there is no parameterized form to switch to.
+        # What keeps that safe is enforced above and around this line rather
+        # than by escaping: the file has already been confined to the allowed
+        # roots by the route (routes/database.py), the connection is opened
+        # `mode=ro`, `set_authorizer` DENIES every write, DDL, ATTACH and
+        # transaction action, the statement must begin SELECT or WITH,
+        # `Connection.execute` refuses more than one statement, and the
+        # progress handler bounds runtime. The reader and the data belong to
+        # the same local user, so there is no privilege boundary to cross.
+        cursor = connection.execute(sql)  # NOTE(codeql py/sql-injection): by design
         raw_names = [
             str(item[0] or f"Column {i + 1}")
             for i, item in enumerate(cursor.description or [])

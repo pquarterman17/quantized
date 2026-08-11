@@ -203,6 +203,13 @@ def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
     try:
         _, names = equation_model(req.equation)
     except (ValueError, IndexError) as exc:
+        # Telling the user WHY their equation is rejected ("unknown function
+        # 'expp'", "unbalanced parenthesis") is the whole point of a validate
+        # endpoint -- an opaque "invalid" here would make the live editor
+        # useless. The text is `equation_model`'s own curated ValueError, not a
+        # traceback: no frames, no file paths, no interpreter state. See the
+        # note on stack-trace exposure in SECURITY.md.
+        # NOTE(codeql py/stack-trace-exposure)
         return {"ok": False, "params": [], "error": str(exc)}
     return {"ok": True, "params": names}
 
@@ -285,7 +292,11 @@ def scan(req: ScanRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return to_jsonable(result)  # type: ignore[no-any-return]
+    # A scan deliberately fits implausible candidates and reports each failure
+    # as a per-candidate `error` string (calc/fit_scan._run_candidate) so the
+    # ranking table can show why a model ranked last. Curated diagnostics, not
+    # tracebacks -- see SECURITY.md.
+    return to_jsonable(result)  # type: ignore[no-any-return]  # NOTE(codeql py/stack-trace-exposure)
 
 
 @router.post("/scan/job")

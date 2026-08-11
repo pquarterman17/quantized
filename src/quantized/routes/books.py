@@ -29,7 +29,7 @@ from quantized.io.origin_project import (
 )
 from quantized.routes._bookcache import cache_project_books, get_cached_book
 from quantized.routes._uploadcache import resolve_upload_token
-from quantized.routes.parsers import _allowed_roots, _book_payload
+from quantized.routes.parsers import _allowed_prefixes, _book_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
 
@@ -44,26 +44,22 @@ class BookDataRequest(BaseModel):
 
 
 def _resolve_book_path(raw_path: str) -> Path:
-    """The SAME realpath+commonpath containment guard as
-    ``routes.parsers.import_file`` (reusing its ``_allowed_roots``), kept
+    """The SAME realpath + prefix containment guard as
+    ``routes.parsers.import_file`` (reusing its ``_allowed_prefixes``), kept
     inline here rather than factored into a shared function that both routes
     call: that function's own docstring notes the guard is deliberately
     inline so static analysis (CodeQL) can see the taint→sink path sit
     entirely within one function body — the same reasoning applies here.
+
+    Unlike ``/import`` this route has NO desktop-consent carve-out: a book is
+    always fetched from a project the caller already imported, so a path
+    outside the roots can only arrive here by being made up.
     """
     try:
         resolved = os.path.realpath(raw_path)
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
-    within_allowed = False
-    for root in _allowed_roots():
-        try:
-            if os.path.commonpath((root, resolved)) == root:
-                within_allowed = True
-                break
-        except ValueError:
-            continue  # different drives (Windows) -> not under this root
-    if not within_allowed:
+    if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
