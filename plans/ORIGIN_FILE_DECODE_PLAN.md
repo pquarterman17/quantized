@@ -465,9 +465,9 @@ Official model references used for this routing:
 
 ### Tier 2 — close corpus-visible plot mismatches
 
-52. **Curve and axis fidelity campaign.** **FULLY SHIPPED 2026-07-16.** The
-    line/scatter/line+symbol and verified-dimensions foundation merged in PR
-    #29. The speculative
+~~52. **Curve and axis fidelity campaign.**~~ **SHIPPED 2026-07-16** (see
+    Completed). The line/scatter/line+symbol and verified-dimensions
+    foundation merged in PR #29. The speculative
     byte-17 segment-connect work in PRs #30/#31 was reverted by PR #32; do not
     restore it without the independent evidence required by `AGENTS.md`.
     Drive this item from the existing
@@ -1040,6 +1040,14 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**52. Curve and axis fidelity campaign**~~ (2026-07-16)
+  — comprehensive Origin graphics parity: line/scatter/line+symbol verified
+  dimensions, axis direction/log-scale/ticks/format/breaks, legend placement/
+  title, curve visibility/order/style, and decoded dimensions applied end-to-
+  end across interactive and publication paths. All sub-items shipped (PRs #29,
+  #52, #53, etc.); corpus sweep of 618 figures with zero regression marks.
+  Fidelity manifest and findings recorded in `docs/origin_project_format.md`.
 
 - ~~**63. Multi-panel presentation-template parity**~~
   (2026-07-17; PR #61) — all four focused

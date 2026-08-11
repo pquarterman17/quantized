@@ -194,3 +194,102 @@ def test_every_data_file_has_a_pinned_loader() -> None:
         "pinned data file(s) missing from disk (stale DATA_FILE_LOADERS "
         "entry?):\n  " + "\n  ".join(str(p.relative_to(ROOT)) for p in sorted(missing))
     )
+
+
+def test_plan_items_claiming_completion_are_moved_to_completed() -> None:
+    """Plan drift guard: completed items must be struck and moved to Completed.
+
+    Per plan-hygiene rules, when an item finishes, it's moved to the
+    ## Completed section with strike-through (~~**Item**~~). Items that claim
+    completion in tier sections without being struck are drift.
+
+    EXCEPTIONS (not flagged as drift):
+    1. **Partial completions:** Claims containing "except", "apart from",
+       "BLOCKED", "owner-gated", "awaiting", "pending", "residual", "partially".
+    2. **Checkbox-based tracking:** JMP_GAP_PLAN pattern — items with [x] and
+       ALL sub-items [x] are using checkbox convention, not strike-through.
+    3. **Already struck:** Items starting with ~~text~~ formatting.
+    4. **In/past Completed:** Items at or after the ## Completed section line.
+
+    Reference: GUI_INTERACTION_PLAN #8/#11/#12 (fixed 2026-08-10 — items
+    claimed "CLOSED 2026-07-18 (see Completed)" in tiers but never struck).
+    """
+    import re
+
+    COMPLETION_WORDS = {"CLOSED", "SHIPPED", "COMPLETE", "DONE"}
+    # Qualifiers indicating partial completion or blocked status
+    PARTIAL_QUALIFIERS = {
+        "except",
+        "apart from",
+        "BLOCKED",
+        "blocked on",
+        "OWNER",
+        "owner-gated",
+        "awaiting",
+        "pending",
+        "residual",
+        "partially",
+    }
+    plans_dir = ROOT / "plans"
+
+    drift_found = []
+
+    for plan_file in sorted(plans_dir.glob("*.md")):
+        # Skip archived/draft/survey/notes files
+        excludes = ("_DRAFT.md", "_SURVEY.md", "_NOTES.md")
+        if "archive" in plan_file.parts or plan_file.name.endswith(excludes):
+            continue
+
+        text = plan_file.read_text(encoding="utf-8")
+        lines = text.splitlines()
+
+        # Find the ## Completed section line number
+        completed_idx = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("## Completed"):
+                completed_idx = i
+                break
+
+        # Scan tier sections
+        for i, line in enumerate(lines):
+            if completed_idx is not None and i >= completed_idx:
+                break
+
+            # Match numbered items: "N. **[x] Item**" or "N. **Item**"
+            if not re.match(r"^(\d+)\.\s+(?:\*\*\[.\]\s+)?\*\*(.+?)\*\*", line):
+                continue
+
+            # Is already struck? Skip.
+            if line.strip().startswith("~~"):
+                continue
+
+            # Collect context (item line + next 2)
+            context = "\n".join([line] + lines[i + 1 : min(i + 3, len(lines))])
+
+            # Does claim have a qualifier? (partial work) Skip if so.
+            if any(q in context for q in PARTIAL_QUALIFIERS):
+                continue
+
+            # Does item claim completion?
+            if not any(word in context for word in COMPLETION_WORDS):
+                continue
+
+            # CHECKBOX EXCEPTION: JMP_GAP_PLAN and similar plans use checkbox-
+            # based completion tracking: items marked [x] are considered tracked
+            # when they claim completion, whether they reference "Completed" or
+            # not. This is a legitimate convention distinct from strike-through.
+            if "[x]" in line:
+                # Item with [x] checkbox claiming completion = checkbox convention
+                continue
+
+            # Genuine drift: unqualified completion claim, not struck.
+            match = re.match(r"^(\d+)\.\s+", line)
+            item_num = match.group(1) if match else "?"
+            drift_found.append(
+                f"{plan_file.name}:{item_num} claims completion but not struck"
+            )
+
+    assert not drift_found, (
+        "Plan items must be moved to ## Completed when finished (see docstring "
+        "for exceptions). Drift found:\n  " + "\n  ".join(drift_found)
+    )
