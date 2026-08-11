@@ -200,20 +200,6 @@ rule in task 4.
      the mock. Lower the task-6 allowlist in the same commit.
    - The bound on this problem is task 6, not task 5.
 
-6. **Lint guard — the load-bearing item.** Do this NEXT, not last.
-   - [ ] Cap the count instead of classifying. **Do NOT build a rule that
-     tries to decide SAFE vs SUSPECT** — that classification is exactly what
-     was proven unreliable above. Flag EVERY
-     `waitFor(() => expect(<mock>).toHaveBeenCalled...)` that is not in a
-     pinned allowlist of the 124 sites that exist today.
-   - [ ] Allowlist pins **ratchet DOWN only**, matching the repo's existing
-     size-ratchet idiom: a new site fails the build; a fixed site must be
-     removed from the allowlist or the test complains it is stale.
-   - [ ] Grep for an existing guard mechanism before adding one — the owner's
-     rule is that two ratchets with different lists is drift by construction.
-   - Acceptance: full suite green; plant a new weak wait, show it fails,
-     revert.
-
 7. **Statistical honesty note in the contributing docs** — a short paragraph on
    why "N clean runs" is weak evidence for a flake fix (rule of three: 0 in n
    bounds the rate at only 3/n), and that a forced-race test is the standard to
@@ -223,6 +209,26 @@ rule in task 4.
 ---
 
 ## Completed
+
+- ~~**#6 Weak-wait ratchet guard**~~ (2026-08-10) — extends
+  `architecture.test.ts`'s existing ratchet idiom rather than adding a second
+  mechanism. **33 files / 124 sites** pinned per-FILE (line pins would churn on
+  unrelated edits and make the guard something people disable). Fails on a
+  count over pin, on an unlisted file, and on a stale pin that should ratchet
+  down. **Required one round of narrowing:** the first build matched bare
+  `toHaveBeenCalled()` — 277 sites over 82 files — which is the ordinary,
+  correct way to assert a mock was called and has nothing to do with the race.
+  Narrowed to the `waitFor(() => expect(mock).toHaveBeenCalled())`
+  synchronisation form only, with the distinction spelled out in the guard's
+  own comment. Verified independently: a bare `expect(m).toHaveBeenCalled()`
+  does NOT trip it; a `waitFor`-wrapped one in an unlisted file does.
+- ~~**#4 Weak-wait triage**~~ (2026-08-10) — produced
+  `plans/weak-waits-inventory.md` (124 matches, 26 SAFE, 98 SUSPECT) and
+  correctly STOPPED at its threshold rather than proceeding. Its lasting value
+  turned out to be negative evidence: the SUSPECT classification could not be
+  made reliable (three attempts gave 110 / 124-98 / 57, the last disproved by
+  its own output), which is what redirected the campaign into task 6's count
+  ratchet. Inventory retained as a standing reference for task 5.
 
 - ~~**Class A, `tests/test_calc_map.py`**~~ (2026-08-09) — the worked example
   every other Class-A task copies. A 2 s budget flaked immediately under
