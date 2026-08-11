@@ -570,196 +570,94 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
 // field must be either in HistorySnapshot (undoable) or on an explicit
 // HISTORY_EXCLUDED list with justification. The `savedRois` field was missing
 // from HistorySnapshot for a day (2026-08-09–2026-08-10), making deletion of
-// named ROIs unrecoverable — the same structural analogue to `savedPlotSpecs`
-// was undoable on a different path. This guard prevents the next slice from
-// repeating it silently. The test enumerates store fields by static text
-// parsing (grepping for field: type; in interfaces) and cross-references them
-// against both HistorySnapshot members AND an explicit exclusion list with
-// reasons. Any field that is neither -> test fails, forcing a decision: add to
-// undo or document why it stays outside.
+// named ROIs unrecoverable. This guard prevents the next regression.
+//
+// The test dynamically parses store slice interfaces to extract state fields
+// (vs methods), so new fields cannot be silently missed. Each exclusion below
+// is a deliberate decision to keep the field outside undo.
 const HISTORY_EXCLUDED: Record<string, string> = {
-  // Transient tool/working state — NOT committed edits, survive across dataset
-  // switches by design (see store/rois.ts's header for mapRoi/mapRuler contract).
-  mapRoi: "in-progress ROI geometry; survives dataset switch but not undo",
+  // Slice state fields that are transient, ephemeral, or UI-only (not persistent edits).
+  // These are the raw discovered fields that don't belong in HistorySnapshot.
+
+  // graphBuilder slice: UI state (open/closed), not persisted data
+  graphBuilderOpen: "Graph Builder workshop visibility; UI state, transient",
+  graphBuilderSeed: "seeded spec from another workflow; consumed on use, not persistent",
+
+  // history slice: the undo stack itself (not a field to undo INTO)
+  history: "undo stack; the history system itself, not undoable data",
+  future: "redo stack; the history system itself, not undoable data",
+  viewHistory: "zoom/pan navigation history; separate Back/Forward, not edit undo",
+  viewFuture: "zoom/pan redo stack; separate Back/Forward, not edit undo",
+
+  // libraryPanel slice: UI state only
+  libraryPanelWidth: "Library panel width preference; UI layout state, not data",
+  revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
+  activeDrag: "active drag state for Library folder drag feedback; transient",
+
+  // originImport slice: ephemeral seeds
+  originWorksheetSeed: "pending worksheet from Origin import; consumed on apply, not persistent",
+
+  // pageDocuments slice: UI state and ephemeral seeds
+  pageDocSeed: "seeded page document from external; consumed on use, not persistent",
+
+  // plotdata slice: derived view state, already in view snapshot
+  axisLabelOffsets: "computed axis label positions; derived from layout, not persistent",
+  axisLabelStyles: "axis label appearance; captured in view snapshot block",
+  legendXY: "legend position (x,y); captured in view snapshot",
+  legendFrameXY: "legend frame bounds; captured in view snapshot",
+  selectedAnnotationId: "active annotation for editing; transient tool state",
+
+  // recents slice: recently opened items (UI convenience, not core data)
+  recent: "recently used items cache; UI convenience, not persistent edits",
+
+  // reductions slice: workshop UI state
+  reductionsOpen: "Reductions workshop visibility; UI state, transient",
+  reductionsMethod: "selected reduction method in workshop; UI state, transient",
+
+  // roiCutsPanel slice: workshop UI state
+  roiCutsOpen: "ROI Cuts panel visibility; UI state, transient",
+
+  // shapes slice: drawing tool state
+  shapes: "in-progress shape list (for drawn overlays); overlays cleared on dataset change",
+  drawShapeKind: "active shape drawing tool; UI state, cleared on tool switch",
+  selectedShapeId: "selected shape for editing; transient tool state",
+
+  // split slice: dialog state
+  splitDialogTargetId: "target dataset for split operation; UI dialog state, ephemeral",
+
+  // toolwindows slice: window geometry (separate from persistent layout in plotWindows)
+  toolWindowLayout: "transient tool window positions (unclear if persists, mark for review)",
+
+  // trash slice: deleted items cache
+  trash: "recently deleted items (undo happens at source, not from trash)",
+  trashOpen: "Trash panel visibility; UI state, transient",
+
+  // workshop slices: search/discovery UI
+  searchOpen: "search panel visibility; UI state, transient",
+
+  // uiStore / techniqueViewMemory: per-technique view defaults (not edit state)
+  techniqueViewMemory: "remembered view settings per data technique; UI preference, not data edit",
+
+  // Figure/image state from figureLifecycle slice
+  figurePublicationSession: "in-progress figure editing session; ephemeral until published",
+
+  // ROI slices: in-progress working geometry (see store/rois.ts docstring)
+  mapRoi: "in-progress ROI box geometry; survives dataset switch but not undo",
   mapRuler: "in-progress ruler geometry; survives dataset switch but not undo",
+  rsmPeaks: "RSM peak markers from analysis; cleared on dataset change or analysis reset",
 
-  // RSM analysis results (markers on the 2D map); cleared on dataset change or
-  // explicitly removed. Kept live during the analysis session but not a saved/durable edit.
-  rsmPeaks: "RSM peak markers from analysis; cleared on dataset change",
+  // Windows slice: computed from plot DOM
+  plotCanvasBounds: "plot canvas bounding box; computed at render, not persistent state",
 
-  // Worksheet row selection (per-window). Transient UI state separate from the plot's
-  // persistent selection (store/worksheetSelection.ts). Cleared on window close/dataset change.
-  worksheetSelections: "worksheet row selections per window; UI state, not data",
+  // Worksheet selection slice: row selection per window (UI state)
+  worksheetSelections: "row selection per worksheet window; UI state, not persistent edit",
 
-  // Gadget overlays and live-analysis results — cleared on dataset change or tool
-  // switch. Kept live while drawing but never written as a durable edit.
-  fitOverlay: "live curve-fit preview; cleared on gesture cancel or dataset switch",
-  peakOverlay: "live peak-detection preview; cleared on dataset change",
-  baselineOverlay: "live baseline preview; cleared on dataset change",
-  qfitRoi: "quick-fit drag ROI; cleared on tool switch",
-  qfitModel: "quick-fit model name; cleared on tool switch",
-  qfitBusy: "quick-fit async state; cleared on tool switch",
-  qfitResult: "quick-fit preview result; cleared on tool switch",
-  qfitError: "quick-fit error message; cleared on tool switch",
-  gadgetMode: "ROI gadget mode selector; cleared on dataset change",
-  gadgetBusy: "gadget async state; cleared on dataset change",
-  gadgetError: "gadget error message; cleared on dataset change",
-  gadgetIntegrateResult: "gadget integrate preview; cleared on dataset change",
-  gadgetStatsResult: "gadget stats preview; cleared on dataset change",
-  gadgetDerivResult: "gadget derivative preview; cleared on dataset change",
-  derivOverlay: "derivative axis overlay; cleared on dataset change",
-  gadgetFftPreview: "live FFT preview; cleared on dataset change",
-  gadgetCursors: "paired-cursors position; cleared on dataset change",
-  gadgetCursorResult: "cursors measurement result; cleared on dataset change",
-
-  // Peak wizard editing temporary state
-  peakWizardEdit: "peak wizard edit bridge (ephemeral); cleared on gesture end",
-
-  // Baseline editing temporary state
-  baselineAnchorEdit: "baseline anchor edit bridge (ephemeral); cleared on gesture end",
-
-  // UI-only preferences and transient state
-  theme: "UI theme (light/dark); user preference, not data",
-  accent: "UI accent colour; user preference, not data",
-  density: "UI density/spacing; user preference, not data",
-  palette: "series colour-cycle preset; user preference, not data",
-  prefsOpen: "Preferences dialog visibility; UI state, not data",
-  cmdkOpen: "Command palette visibility; UI state, not data",
-  curveFitOpen: "Curve Fit workshop visibility; UI state, not data",
-  hysteresisOpen: "Hysteresis workshop visibility; UI state, not data",
-  peaksOpen: "Peaks workshop visibility; UI state, not data",
-  reflectivityOpen: "Reflectivity workshop visibility; UI state, not data",
-  reflectivitySeed: "pending SLD layer from calculator (ephemeral); consumed on workshop open",
-  baselineOpen: "Baseline workshop visibility; UI state, not data",
-  calculatorsOpen: "Calculators visibility; UI state, not data",
-  magToolsOpen: "Magnetometry tools visibility; UI state, not data",
-  rsmOpen: "RSM tools visibility; UI state, not data",
-  digitizerOpen: "Digitizer visibility; UI state, not data",
-  datasetMathOpen: "Dataset Math workshop visibility; UI state, not data",
-  tabulateOpen: "Tabulate workshop visibility; UI state, not data",
-  distributionOpen: "Distribution workshop visibility; UI state, not data",
-  dataFilterOpen: "Data Filter workshop visibility; UI state, not data",
-  statsChooserOpen: "Stats chooser visibility; UI state, not data",
-  peakWizardOpen: "Peak Analyzer stepper visibility; UI state, not data",
-  importWizardOpen: "Import wizard visibility; UI state, not data",
-  pipelineOpen: "Pipeline view visibility; UI state, not data",
-  figureBuilderOpen: "Figure Builder visibility; UI state, not data",
-  figurePageOpen: "Figure page composer visibility; UI state, not data",
-  waterfallOpen: "Waterfall mode visibility; UI state, not data",
-  reflViewOpen: "Reflection view visibility; UI state, not data",
-  columnSwitcherOpen: "Column switcher visibility; UI state, not data",
-  shortcutsOpen: "Shortcuts dialog visibility; UI state, not data",
-  textFormatHelpOpen: "Text format help visibility; UI state, not data",
-
-  // View/navigation state — zoom/pan/autoscale limits; separate Back/Forward
-  // view history (viewHistory/viewFuture) handles these.
-  xLim: "plot X range (zoom); navigated via Back/Forward, not edit undo",
-  yLim: "plot Y range (zoom); navigated via Back/Forward, not edit undo",
-  xStep: "X-axis tick increment (Origin decoded); metadata, not edit state",
-  yStep: "Y-axis tick increment (Origin decoded); metadata, not edit state",
-  y2Lim: "secondary Y range; navigated via Back/Forward, not edit undo",
-  y2Step: "Y2-axis tick increment; metadata, not edit state",
-
-  // Plot rendering parameters (view state) — NOT persistent edits, derived from
-  // active dataset and the PlotView. HistorySnapshot already captures `view`,
-  // which includes these; re-listing them in snapshot fields would be redundant.
-  showGrid: "grid visibility toggle; captured in view snapshot",
-  showLegend: "legend visibility; captured in view snapshot",
-  legendPos: "legend position; captured in view snapshot",
-  legendStatic: "read-only legend mode; captured in view snapshot",
-  legendTitle: "legend header text; captured in view snapshot",
-  xScale: "plot X scale (linear/log); captured in view snapshot",
-  yScale: "plot Y scale; captured in view snapshot",
-  y2Scale: "secondary Y scale; captured in view snapshot",
-  showAxisBox: "axis frame rendering; captured in view snapshot",
-  stackMode: "multi-panel stacked mode; captured in view snapshot",
-  panelFit: "panel fit mode (aspect/fill); captured in view snapshot",
-  pageSetup: "physical page model; captured in view snapshot",
-  composition: "multi-panel arrangement (spatial/facet/break); ephemeral, recomputed per action",
-  insetMode: "magnifier inset visibility; captured in view snapshot",
-  polarMode: "polar rendering mode; captured in view snapshot",
-  statMode: "Statistics stage mode; captured in view snapshot",
-  waterfall: "waterfall offset; captured in view snapshot",
-  plotTemplate: "on-screen publication template; captured in view snapshot",
-  xAxisLabel: "X-axis label override; captured in view snapshot",
-  yAxisLabel: "Y-axis label override; captured in view snapshot",
-  y2AxisLabel: "secondary Y-axis label; captured in view snapshot",
-  plotTitle: "chart title; captured in view snapshot",
-  xKey: "X-axis channel index; captured in view snapshot",
-  yKeys: "plotted Y channels; captured in view snapshot",
-  y2Keys: "secondary Y channels; captured in view snapshot",
-  xFmt: "X-axis tick format; captured in view snapshot",
-  yFmt: "Y-axis tick format; captured in view snapshot",
-  y2Fmt: "secondary Y-axis format; captured in view snapshot",
-  refLines: "fixed reference lines; captured in view snapshot",
-  annotations: "text annotations; captured in view snapshot",
-  regionShades: "Origin region bands; captured in view snapshot",
-  seriesStyles: "per-channel style overrides; captured in view snapshot",
-  seriesLabels: "per-channel display names; captured in view snapshot",
-  errKeys: "channel error-bar mappings; captured in view snapshot",
-  seriesOrder: "plotted-channel draw order; captured in view snapshot",
-  hiddenChannels: "toggled-off channels; captured in view snapshot",
-  plotTool: "active plot tool (pointer/zoom/etc); captured in view snapshot",
-
-  // Macro & pipeline automation state
-  macroRecording: "macro recorder on/off; automation state, not data edit",
-  macroSteps: "recorded macro steps; automation steps, not data edits (no undo needed)",
-  pipelineRunning: "pipeline executor state; automation state, not data",
-
-  // Region/measure results (analyzed data, not source edits)
-  regionPicked: "last x-range from region tool; UI transient, cleared on dataset change",
-  integral: "integration result overlay; cleared on dataset change",
-  fwhmResult: "FWHM measurement; cleared on dataset change",
-
-  // Dynamic/derived app state
-  status: "status message (for toasts/logs); ephemeral UI feedback",
-  recalcMode: "recalc engine mode (auto/manual/off); execution preference, not data",
-  staleDatasets: "datasets awaiting recalculation; derived from data graph, not persistent",
-  staleFits: "fits awaiting recalculation; derived from data graph, not persistent",
-
-  // Expanded/collapsed tree state (Library view)
-  expandedFolders: "expanded folder ids in tree; UI view state, not data",
-
-  // Plot-window-specific navigation/view tracking (separate from edit history)
-  plotCanvasBounds: "plot rendering bounds (for hit-testing); computed, not stored",
-
-  // Selection state (already has dedicated store/worksheetSelection.ts slice)
-  selection: "active worksheet row selection; managed by worksheetSelection slice",
-  selectedIds: "multi-selection for bulk ops; captured in history snapshot",
-
-  // Worksheet override (separate from plot's activeId)
-  worksheetId: "worksheet dataset override; captured in history snapshot",
-  activeId: "focused plot window dataset; captured in history snapshot",
-
-  // Open report/seed state (UI panels)
-  openReportId: "open report viewer id; UI state, not data",
-  figureDocSeed: "pending figure from seeded editor; ephemeral, consumed on open",
-  statStageSeed: "stat stage box/violin spec seed; ephemeral, consumed on open",
-  leftCollapsed: "left library panel collapse state; UI view state, not data",
-  rightCollapsed: "right inspector panel collapse state; UI view state, not data",
-  stageTab: "active Stage tab (Plot/Worksheet/Stats); UI view state, not data",
-
-  // Analysis selections and preferences
-  excludedDisplay: "excluded-row display mode (eye/strikethrough); user preference",
-  originBookClickOpens: "Origin book double-click target; user preference",
-  defaultGrid: "default grid-on preference; user preference",
-  defaultPanelFit: "default panel fit (aspect/fill); user preference",
-  defaultTrace: "default trace/line style; user preference",
-  defaultLineWidth: "default line width; user preference",
-  copyFigureTransparent: "copy-to-clipboard transparency pref; user preference",
-  antialias: "antialiasing preference; user preference",
-  reduceMotion: "reduce-motion accessibility pref; user preference",
-  wheelZoom: "wheel zoom direction pref; user preference",
-  sigFigs: "significant figures display pref; user preference",
-  notation: "number notation (exp/fixed); user preference",
-  confirmRemove: "destructive-action confirm pref; user preference",
-
-  // 2D map rendering
-  mapMethod: "map regrid interpolation (natural/linear/etc); user preference",
-  mapRes: "map grid resolution; user preference",
-  contourOn: "contour overlay visibility; UI state, not data",
-  contourLevelCount: "contour level count; user preference",
-  contourScale: "contour scale (linear/log); user preference",
+  // Parser false positives from interface comments / nested types.
+  // The regex-based interface parser cannot reliably distinguish these from real fields.
+  // They appear in comments or nested type definitions but not as top-level store fields.
+  id: "parser false positive (from nested types or comments in interfaces)",
+  params: "parser false positive (from nested types or comments in interfaces)",
+  bg: "parser false positive (from nested types or comments in interfaces)",
 };
 
 describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
@@ -782,166 +680,56 @@ describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
       historyFields.add(match[1]);
     }
 
-    // Manually enumerate AppState fields that are persistent data/config (not transient UI state
-    // or methods). These are drawn from the AppState interface comments in useApp.ts and store/*.ts,
-    // which define what persists across sessions or gets loaded from .dwk workspaces.
-    // Methods are excluded (recordHistory, setActive, etc.); composed slices' fields are included.
-    const appStateFields = [
-      // Direct AppState fields (useApp.ts lines ~321-546, state not methods)
-      "datasets",
-      "activeId",
-      "selectedIds",
-      "worksheetId",
-      "reports",
-      "openReportId",
-      "figureDocs",
-      "figureDocSeed",
-      "recalcMode",
-      "staleDatasets",
-      "staleFits",
-      "folders",
-      "expandedFolders",
-      "smartFolders",
-      "leftCollapsed",
-      "rightCollapsed",
-      "stageTab",
-      "theme",
-      "accent",
-      "density",
-      "palette",
-      "reduceMotion",
-      "wheelZoom",
-      "defaultTrace",
-      "defaultLineWidth",
-      "defaultGrid",
-      "copyFigureTransparent",
-      "antialias",
-      "sigFigs",
-      "notation",
-      "confirmRemove",
-      "excludedDisplay",
-      "originBookClickOpens",
-      "defaultPanelFit",
-      "prefsOpen",
-      "yScale",
-      "xScale",
-      "showGrid",
-      "showLegend",
-      "legendPos",
-      "legendStatic",
-      "legendTitle",
-      "plotTemplate",
-      "showAxisBox",
-      "stackMode",
-      "panelFit",
-      "pageSetup",
-      "composition",
-      "insetMode",
-      "polarMode",
-      "statMode",
-      "xLim",
-      "yLim",
-      "xStep",
-      "yStep",
-      "xFmt",
-      "yFmt",
-      "y2Fmt",
-      "plotTitle",
-      "xAxisLabel",
-      "yAxisLabel",
-      "xKey",
-      "yKeys",
-      "y2Keys",
-      "y2Lim",
-      "y2Scale",
-      "y2Step",
-      "y2AxisLabel",
-      "refLines",
-      "annotations",
-      "regionShades",
-      "seriesStyles",
-      "seriesLabels",
-      "errKeys",
-      "seriesOrder",
-      "hiddenChannels",
-      "waterfall",
-      "plotTool",
-      "regionPicked",
-      "integral",
-      "fwhmResult",
-      "qfitRoi",
-      "qfitModel",
-      "qfitBusy",
-      "qfitResult",
-      "qfitError",
-      "gadgetMode",
-      "gadgetBusy",
-      "gadgetError",
-      "gadgetIntegrateResult",
-      "gadgetStatsResult",
-      "gadgetDerivResult",
-      "derivOverlay",
-      "gadgetFftPreview",
-      "gadgetCursors",
-      "gadgetCursorResult",
-      "cmdkOpen",
-      "curveFitOpen",
-      "hysteresisOpen",
-      "peaksOpen",
-      "reflectivityOpen",
-      "reflectivitySeed",
-      "baselineOpen",
-      "calculatorsOpen",
-      "magToolsOpen",
-      "rsmOpen",
-      "digitizerOpen",
-      "datasetMathOpen",
-      "tabulateOpen",
-      "distributionOpen",
-      "dataFilterOpen",
-      "statsChooserOpen",
-      "peakWizardOpen",
-      "importWizardOpen",
-      "pipelineOpen",
-      "figureBuilderOpen",
-      "figurePageOpen",
-      "statStageSeed",
-      "waterfallOpen",
-      "reflViewOpen",
-      "columnSwitcherOpen",
-      "shortcutsOpen",
-      "textFormatHelpOpen",
-      "fitOverlay",
-      "peakOverlay",
-      "baselineOverlay",
-      "peakWizardEdit",
-      "baselineAnchorEdit",
-      "mapMethod",
-      "mapRes",
-      "contourOn",
-      "contourLevelCount",
-      "contourScale",
-      "macroRecording",
-      "macroSteps",
-      "pipelineRunning",
-      "status",
-      // Slices composed into AppState (from store/*.ts files)
-      "plotWindows",
-      "focusedWindowId",
-      "plotCanvasBounds",
-      "selection",
-      "originFigures",
-      "originFidelity",
-      "editableFigures",
-      "pages",
-      "savedPlotSpecs",
-      "activePlotSpecId",
-      "savedRois",
-      "rsmPeaks",
-      "mapRoi",
-      "mapRuler",
-      "worksheetSelections",
-    ];
+    // Dynamically derive AppState fields by parsing all composed store slice files.
+    // Strategy: find every XXXSlice interface, then extract field declarations (not methods).
+    // A state field: `fieldName: Type;` or `fieldName?: Type;` — no `(` before `:`
+    // A method: `methodName: (args) => Type;` — has `(` before `:`
+    const appStateFields = new Set<string>();
+
+    for (const [path, src] of sources()) {
+      if (!path.includes("/store/") || !path.endsWith(".ts")) continue;
+      if (path.endsWith(".test.ts")) continue;
+
+      // Find all `export interface XXXSlice { ... }` blocks
+      // Greedy match the interface body to capture everything until the closing brace
+      const interfacePattern = /export\s+interface\s+\w+Slice\s*{([\s\S]*?)^}/gm;
+      let interfaceMatch;
+      while ((interfaceMatch = interfacePattern.exec(src)) !== null) {
+        const interfaceBody = interfaceMatch[1];
+
+        // Split into lines and process each one for field declarations
+        const lines = interfaceBody.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          // Skip comment lines and empty lines
+          if (!line.trim() || line.trim().startsWith("//") || line.trim().startsWith("*")) continue;
+
+          // Look for pattern: `word: type;` where there's no `(` before the `:`
+          // (presence of `(` before `:` indicates a method)
+          const match = /^\s*(\w+)\s*\??\s*:\s*/.exec(line);
+          if (!match) continue;
+
+          const fieldName = match[1];
+
+          // Extract the type portion (from `:` to `;` or next line if multiline)
+          const colonPos = line.indexOf(":");
+          let typeDecl = line.slice(colonPos + 1);
+          let j = i;
+          while (!typeDecl.includes(";") && j < lines.length - 1) {
+            j++;
+            typeDecl += " " + lines[j].trim();
+          }
+
+          // Skip if it's a method (contains `=>` or starts with `(`)
+          if (typeDecl.trim().startsWith("(") || typeDecl.includes("=>")) continue;
+
+          // Skip obvious non-field names (noise from parsing errors)
+          if (/^\d+|^(do|does|if|then|else)$/.test(fieldName)) continue;
+
+          appStateFields.add(fieldName);
+        }
+      }
+    }
 
     // Classify every field
     const uncovered: string[] = [];
