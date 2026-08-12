@@ -63,3 +63,31 @@ export function patchShapeList(
 export function removeShapeFromList(shapes: readonly Shape[], id: string): Shape[] {
   return shapes.filter((shape) => shape.id !== id);
 }
+
+/** Which draft shape a preview hit element (`shape:N`) refers to, or null.
+ *
+ *  N is the RENDER REQUEST's array position, not the draft's:
+ *  `figureSpec.ts`'s `viewOverrides` builds `overrides.shapes` as
+ *  `st.shapes.filter((s) => [s.x1, s.y1, s.x2, s.y2].every(Number.isFinite))`,
+ *  so a draft holding a shape with any non-finite coordinate shifts every
+ *  later index by one. Applying the SAME filter here is the whole mapping;
+ *  indexing `shapes[n]` directly would silently drag the wrong shape.
+ *  Mirrors `canonicalRefLines.ts`'s `refLineIdForHit` exactly -- see its doc
+ *  for the full rationale (kept next to the filter's meaning for the same
+ *  reason: if `viewOverrides` ever drops a different set, this is the one
+ *  place to follow it). */
+export function shapeIdForHit(shapes: readonly Shape[], hitIndex: number): string | null {
+  if (!Number.isInteger(hitIndex) || hitIndex < 0) return null;
+  return shapes.filter((s) => [s.x1, s.y1, s.x2, s.y2].every(Number.isFinite))[hitIndex]?.id ?? null;
+}
+
+/** Translate a shape's four coordinates by one (dx, dy) -- the delta a drag
+ *  moved, in whichever space the caller resolved it (data units for the
+ *  default anchor, canvas fractions for `anchor: "page"`; see
+ *  useFigureBuilder.ts's `dragElement` F2.4e branch). Null when the result
+ *  isn't fully finite, so a caller can drop the commit rather than write a
+ *  broken shape -- same discipline `refLineIdForHit`'s caller applies. */
+export function translateShape(shape: Shape, dx: number, dy: number): Partial<Omit<Shape, "id">> | null {
+  const patch = { x1: shape.x1 + dx, y1: shape.y1 + dy, x2: shape.x2 + dx, y2: shape.y2 + dy };
+  return Object.values(patch).every(Number.isFinite) ? patch : null;
+}

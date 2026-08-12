@@ -186,7 +186,39 @@ describe("PreviewOverlay", () => {
     expect(onEditText).not.toHaveBeenCalled();
     fireEvent.pointerDown(ann, { clientX: 210, clientY: 208, pointerId: 2 });
     fireEvent.pointerUp(ann, { clientX: 260, clientY: 250, pointerId: 2 });
-    expect(onDragEnd).toHaveBeenCalledWith("ann:0", expect.any(Number), expect.any(Number));
+    // F2.4e: onDragEnd now also reports the press origin (2 more numbers),
+    // for shapes' delta-translation — every caller receives it, annotations
+    // included, even though only the shape branch reads it.
+    expect(onDragEnd).toHaveBeenCalledWith(
+      "ann:0",
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
+
+  // F2.4e: shapes join the draggable set (F2.4d already added reference
+  // lines the same way) -- the tooltip drops its old "right-click only"
+  // wording, and a drag reports the drop point AND the press origin so the
+  // hook can translate by the pointer's delta.
+  it("shapes are draggable and report both the drop point and press origin (F2.4e)", () => {
+    const shapeMap = { ...MAP, elements: [...MAP.elements, { id: "shape:0", x0: 300, y0: 250, x1: 340, y1: 280 }] };
+    const onDragEnd = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={shapeMap} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={onDragEnd} />,
+    );
+    const shapeEl = document.querySelector<HTMLElement>('[data-element="shape:0"]')!;
+    expect(shapeEl).toHaveAttribute("title", "Shape — drag to move; right-click for properties");
+    fireEvent.pointerDown(shapeEl, { clientX: 310, clientY: 260, pointerId: 3 });
+    fireEvent.pointerUp(shapeEl, { clientX: 330, clientY: 270, pointerId: 3 });
+    expect(onDragEnd).toHaveBeenCalledWith(
+      "shape:0",
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number),
+    );
   });
 
   it("right-click during an in-progress drag clears the armed drag state", () => {
