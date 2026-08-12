@@ -11,10 +11,10 @@ agents that do not need to hold the whole picture.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-11 (worked-example backstop recalibrated 8 → 90 s
-after a five-for-five deterministic failure that was initially mistaken
-for a load flake — see the dated addendum in Completed; open residue is
-#7 plus the #5 standing rule)
+**Updated:** 2026-08-12 (#7 closed — `CONTRIBUTING.md` added as the
+contributor-facing home for the flake-fix evidence standard. The only
+remaining item is **#5, a standing opportunistic rule that is never
+"done"**; every scheduled item in this campaign has shipped.)
 
 ---
 
@@ -135,15 +135,24 @@ rule in task 4.
      the mock. Lower the task-6 allowlist in the same commit.
    - The bound on this problem is task 6, not task 5.
 
-7. **Statistical honesty note in the contributing docs** — a short paragraph on
-   why "N clean runs" is weak evidence for a flake fix (rule of three: 0 in n
-   bounds the rate at only 3/n), and that a forced-race test is the standard to
-   aim for. Cite the item-22 case: 0/90 could not distinguish fixed from
-   unchanged.
-
 ---
 
 ## Completed
+
+- ~~**#7 Statistical honesty note in the contributing docs**~~ (2026-08-12) —
+  the *substance* already existed in `docs/testing.md` (written 2026-08-09 with
+  this campaign, including the rule of three, the 3/n bound, and the item-22
+  arithmetic). What did not exist was a **contributor-facing** home for it: the
+  repo had no `CONTRIBUTING.md` at all, and `docs/testing.md` was linked only
+  from `CLAUDE.md`/`AGENTS.md` — agent-facing files a human contributor has no
+  reason to open. Closed by adding `CONTRIBUTING.md` (the gate commands, the
+  flake-fix evidence section, and the two corollaries this campaign proved:
+  wait on STATE not on a call, per #6's ratchet; never lower a wall-clock
+  budget, per #2/#3), linked from README's "Architecture (for contributors)"
+  section. GitHub surfaces `CONTRIBUTING.md` on every new issue and PR, which
+  is the discoverability the item was actually asking for. The full arithmetic
+  stays in `docs/testing.md` — the new file states the rule and links there
+  rather than forking a second copy that can drift.
 
 - ~~**#1 Forced-race test**~~ (2026-08-10) — replaces the 0/90 probabilistic
   argument with a test that reproduces the race on EVERY run: the hitmap

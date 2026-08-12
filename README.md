@@ -137,7 +137,10 @@ Pure `io/` + `calc/` libraries (data in → results out, no web imports),
 thin FastAPI `routes/`, a 500-line per-module ceiling, ~400-line React
 component ceiling, and **golden tests** that freeze MATLAB outputs as the
 parity oracle — enforced by tests, not convention. See
-[`CLAUDE.md`](https://github.com/pquarterman17/quantized/blob/main/CLAUDE.md).
+[`CLAUDE.md`](https://github.com/pquarterman17/quantized/blob/main/CLAUDE.md)
+for the rules and
+[`CONTRIBUTING.md`](https://github.com/pquarterman17/quantized/blob/main/CONTRIBUTING.md)
+for the gate and the flake-fix evidence standard.
 
 ```bash
 uv sync --group dev          # backend deps
