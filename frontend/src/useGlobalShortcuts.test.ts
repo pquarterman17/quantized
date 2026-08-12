@@ -121,3 +121,58 @@ describe("useGlobalShortcuts — persistentTool preference", () => {
     expect(useApp.getState().plotTool).toBe("pointer");
   });
 });
+
+// Reported from a real session: "trouble hitting delete of the box and I
+// ended up deleting the dataset". This window listener fires on the way out
+// of every element handler, and `preventDefault()` does not stop propagation
+// — so a component that deleted its own focused object (map ROI box, cut
+// ruler, worksheet block, Figure Page slot: all four preventDefault) had the
+// same keystroke continue on to here and remove the DATASET too. With
+// `confirmRemove` false by default there was no prompt, and `mapRoi` is
+// excluded from undo, so nothing to undo either.
+describe("useGlobalShortcuts — Delete does not steal a consumed keystroke", () => {
+  const withDataset = () =>
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      confirmRemove: false,
+    });
+
+  it("removes the selected dataset when nothing else handled the key", () => {
+    withDataset();
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(useApp.getState().datasets).toHaveLength(0);
+  });
+
+  /** Dispatch Delete from an element whose own handler consumes it — the real
+   *  shape of the bug: the keystroke arrives at this window listener already
+   *  `defaultPrevented`, because `preventDefault()` never stops propagation.
+   *  (`defaultPrevented` is read-only, so it cannot be faked via event init.) */
+  const consumedKeyDown = (key: string) => {
+    const inner = document.createElement("div");
+    document.body.appendChild(inner);
+    const consume = (e: KeyboardEvent) => {
+      if (e.key === key) e.preventDefault();
+    };
+    inner.addEventListener("keydown", consume);
+    fireEvent.keyDown(inner, { key, bubbles: true, cancelable: true });
+    inner.removeEventListener("keydown", consume);
+    inner.remove();
+  };
+
+  it("leaves the dataset alone when a closer handler already preventDefaulted", () => {
+    withDataset();
+    renderHook(() => useGlobalShortcuts());
+    consumedKeyDown("Delete");
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("applies to Backspace too — the key that also triggers browser Back", () => {
+    withDataset();
+    renderHook(() => useGlobalShortcuts());
+    consumedKeyDown("Backspace");
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+});

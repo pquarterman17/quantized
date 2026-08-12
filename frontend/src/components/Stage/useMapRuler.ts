@@ -116,6 +116,9 @@ export interface UseMapRulerState {
   onUp: (px: [number, number]) => void;
   onLeave: () => void;
   onKeyDown: (ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload) => void;
+  /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
+   *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
+  remove: () => void;
 
   /** Client preview (lib/roiMath.ts), rAF-coalesced — LOCAL to this hook,
    *  never written to the store, never landed. */
@@ -331,6 +334,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
     onUp,
     onLeave,
     onKeyDown,
+    remove: () => setMapRuler(null),
     preview,
     previewAxis,
     setPreviewAxis,

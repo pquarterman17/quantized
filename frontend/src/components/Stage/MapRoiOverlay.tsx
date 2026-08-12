@@ -38,6 +38,26 @@ import { barPosition, boundsOfPoints, sparklinePoints, SPARK_H, SPARK_W } from "
 import type { UseMapRulerState } from "./useMapRuler";
 import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
 
+/** The commit bar must not take the pointer while its own shape is being
+ *  dragged.
+ *
+ *  The bar is a sibling DIV positioned over the canvas, and it appears the
+ *  instant a zero-size box exists — i.e. right under the cursor at mouse-down.
+ *  A canvas cannot have DOM children, so the moment the pointer crosses onto
+ *  the bar the canvas fires `onMouseLeave`, which routes to the tool's
+ *  `onLeave` → `cancelDrag()` → the shape reverts to its pre-gesture value.
+ *  Measured: drawing from (560, 390) put the bar at x 560..776, y 398..518 —
+ *  directly across the drag path — so the box vanished mid-drag and both
+ *  drawing and resizing "did not work" for any gesture heading its way.
+ *  Reported from a real session as exactly that.
+ *
+ *  Going pointer-transparent for the duration keeps the pointer logically on
+ *  the canvas, so no spurious leave fires. The bar has nothing to click
+ *  mid-drag anyway; it becomes interactive again the moment the drag ends. */
+function barPointerEvents(dragging: boolean): "none" | undefined {
+  return dragging ? "none" : undefined;
+}
+
 function fmtBounds(rect: RoiRect): string {
   return `${fmt(rect.x0)}…${fmt(rect.x1)}, ${fmt(rect.y0)}…${fmt(rect.y1)}`;
 }
@@ -83,13 +103,23 @@ interface CommitBarProps {
   apiStats: BoxStats | null;
   statsError: string | null;
   onClearStats: () => void;
+  /** Remove this ROI outright. Until this button existed, Delete/Backspace on
+   *  a FOCUSED map was the only way — and the map is only focusable once a
+   *  shape exists, so if focus sat anywhere else (a Library row, say) the
+   *  keystroke fell through to the global shortcut and removed the DATASET
+   *  instead. Reported from a real session. The keystroke still works; this
+   *  is the discoverable path that does not depend on where focus happens to
+   *  be. Sits in the header row, deliberately away from the ∫/Stats buttons,
+   *  so it is not mis-hit while committing. */
+  onRemove: () => void;
+  removeLabel: string;
 }
 
 /** Shared inline-bar body for both the box and the ruler — same preview/N/
  *  ∫I/∫x/∫y/Stats vocabulary, only the positioning (caller) and the request
  *  shape underneath `onIntegrate`/`onStats` (box_cut vs rulerBoxBody) differ. */
 function CommitBar(props: CommitBarProps) {
-  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats } = props;
+  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats, onRemove, removeLabel } = props;
   return (
     <>
       <div className="qzk-roi-bar-row">
@@ -102,6 +132,9 @@ function CommitBar(props: CommitBarProps) {
             y
           </button>
         </div>
+        <button className="qzk-chip-reset" title={removeLabel} aria-label={removeLabel} onClick={onRemove}>
+          ✕
+        </button>
       </div>
       <svg className="qzk-roi-sparkline" width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
         {preview && preview.x.length > 1 && (
@@ -165,6 +198,11 @@ export interface MapRoiOverlayProps {
   apiStats: BoxStats | null;
   statsError: string | null;
   onClearStats: () => void;
+  /** Remove the box — see CommitBarProps.onRemove for why a button exists. */
+  onRemove: () => void;
+  /** Is a box gesture in flight? The bar goes pointer-transparent while it is
+   *  — see the `barPointerEvents` note below. */
+  dragging: boolean;
   /** The cut-ruler hook's full state (RSM_CUTS_PLAN item 7) — passed as one
    *  grouped object (unlike the box's flattened props above) so MapStage.tsx
    *  only needs one line to wire it, buying back headroom on its own
@@ -192,6 +230,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
     apiStats,
     statsError,
     onClearStats,
+    onRemove,
+    dragging,
     rulerState,
     wedgeState,
   } = props;
@@ -254,7 +294,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
       {rect && rectPx && (
         <div
           className="qzk-glass qzk-roi-bar"
-          style={barPosition(rectPx, plotRect(payload, w, h))}
+          style={{ ...barPosition(rectPx, plotRect(payload, w, h)), pointerEvents: barPointerEvents(dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -270,6 +310,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             apiStats={apiStats}
             statsError={statsError}
             onClearStats={onClearStats}
+            onRemove={onRemove}
+            removeLabel="Remove this box"
           />
         </div>
       )}
@@ -277,7 +319,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
       {ruler && rulerPx && (
         <div
           className="qzk-glass qzk-roi-bar"
-          style={barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h))}
+          style={{ ...barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h)), pointerEvents: barPointerEvents(rulerState.dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -293,6 +335,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             apiStats={rulerState.apiStats}
             statsError={rulerState.statsError}
             onClearStats={rulerState.clearStats}
+            onRemove={rulerState.remove}
+            removeLabel="Remove this ruler"
           />
         </div>
       )}

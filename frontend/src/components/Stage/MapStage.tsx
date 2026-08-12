@@ -307,6 +307,8 @@ export default function MapStage({ dataset }: MapStageProps) {
             apiStats={roi.apiStats}
             statsError={roi.statsError}
             onClearStats={roi.clearStats}
+            onRemove={roi.remove}
+            dragging={roi.dragging}
             rulerState={ruler}
             wedgeState={wedge}
           />

@@ -187,6 +187,44 @@ feature checklist.
 
 ## Completed
 
+- ~~**Map ROI safety + drag: three defects from a real release test**~~
+  (2026-08-12, owner-reported). Testing 3-D XRD (pixel4d) integration boxes
+  surfaced four complaints; three are fixed here, the rest are booked in
+  BACKLOG's actionable table.
+  1. **"Resizing the integration box did not work" — root-caused to the box
+     eating its own drag.** The commit bar is a sibling `div` over the canvas,
+     and it appears the instant a zero-size box exists, i.e. under the cursor
+     at mouse-down. A canvas cannot have DOM children, so the pointer crossing
+     onto the bar fires the canvas's `onMouseLeave` → the tool's `onLeave` →
+     `cancelDrag()` → the shape reverts to its pre-gesture value. **Measured in
+     the running app:** drawing from (560, 390) put the bar at x 560..776,
+     y 398..518, directly across the drag path — the box existed after
+     mouse-down and was null one move later. Any draw or resize heading its way
+     silently failed. Fixed by making both bars pointer-transparent for the
+     duration of their own shape's drag; verified in the same live run (box now
+     survives mid-drag and lands). This broke DRAWING as well as resizing.
+  2. **"Ended up deleting the dataset" — a real double-fire, not a mis-hit.**
+     `useGlobalShortcuts` binds Delete/Backspace at the WINDOW level to
+     `removeSelected()`. `preventDefault()` does not stop propagation and the
+     global handler never checked `defaultPrevented`, so a component deleting
+     its OWN focused object had the same keystroke continue on and remove the
+     DATASET too. Four handlers were exposed to this: map ROI box, cut ruler,
+     worksheet block, Figure Page slot. One `defaultPrevented` guard fixes the
+     class. With `confirmRemove` defaulting to false there was no prompt, and
+     `mapRoi` is excluded from undo (see #1's own note above), so nothing to
+     undo either. Verified live: Delete on a focused map now removes the box
+     and leaves the dataset intact.
+  3. **No mouse path to remove a shape.** Delete/Backspace on a FOCUSED map was
+     the only way, and the map is only focusable once a shape exists — so with
+     focus anywhere else the keystroke went straight to the global handler.
+     Both bars now carry a ✕, in the header row deliberately away from the
+     ∫/Stats buttons they sit beside.
+  Deferred, booked in BACKLOG: the `x`/`y` control labels should read the
+  data's real axes (`MapPayload` already carries `xLabel`/`yLabel`/units —
+  the bar simply never asks); the box `▭` and ruler `▱` glyphs are too alike;
+  and a near-miss on a handle still starts a NEW box rather than resizing,
+  which is unrecoverable while `mapRoi` stays out of undo.
+
 - ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
 
 - ~~**#2 Plot Objects tree — closing slice**~~ (2026-07-24) — the item's last

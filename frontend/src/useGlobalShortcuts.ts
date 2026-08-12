@@ -24,8 +24,24 @@ export function useGlobalShortcuts(): void {
     };
     const onKey = (e: KeyboardEvent) => {
       // Delete / Backspace removes the selected dataset(s) — but never while the
-      // user is typing in a field (rename, tag, filter, formula, dialog input).
-      if ((e.key === "Delete" || e.key === "Backspace") && !isEditing(e.target)) {
+      // user is typing in a field (rename, tag, filter, formula, dialog input),
+      // and never when a closer handler already consumed the keystroke.
+      //
+      // `defaultPrevented` is load-bearing, not defensive. This is a WINDOW
+      // listener, so it fires on the way out of every element handler; React
+      // attaches its own at the root container, which is still inside window.
+      // `preventDefault()` does not stop propagation, so a component that
+      // deletes its OWN focused object — the map's ROI box and cut ruler, the
+      // worksheet's selected block, a Figure Page slot, all four of which
+      // preventDefault — used to have that same keystroke continue on to here
+      // and silently remove the DATASET as well. Reported from a real session:
+      // "trouble hitting delete of the box and I ended up deleting the
+      // dataset". With `confirmRemove` defaulting to false there was no prompt
+      // to catch it, and `mapRoi` is excluded from undo, so nothing to undo
+      // either. Any future component that handles Delete for its own selection
+      // gets this protection by calling preventDefault(), which it must do
+      // anyway to stop the browser's Back navigation on Backspace.
+      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditing(e.target)) {
         const s = useApp.getState();
         if (s.datasets.length === 0) return;
         e.preventDefault();
