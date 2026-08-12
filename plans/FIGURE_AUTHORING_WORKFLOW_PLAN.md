@@ -3,7 +3,8 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — F2.4e shape drag in the preview; F2.4 complete
+**Updated:** 2026-08-12 — F2.4e shape drag (F2.4 complete) + F2.3f editable
+error-column bindings in the preview
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -254,6 +255,17 @@ decisions are merged.
         (`x_fmt`/`y_fmt`/`secondaryAxisWire`) — the panel was the only
         missing piece. Vocabulary shared with `Inspector/TickFormat.tsx` via
         the new `lib/tickFormat.ts` so the two surfaces cannot drift.
+  - [x] **F2.3f Editable error-column bindings (Claude Sonnet 5).** The
+        Error columns group closes the gap F2.3b deliberately left as
+        read-only summary text: per-binding target/axis/side, remove, an Add
+        form, half-pair warning, and "Detect from names" (pure
+        `inferErrorBindings`, writing into the DRAFT — never the dataset's
+        own `errorRoles`). Vocabulary matches `Inspector/ErrorRolesCard.tsx`.
+        Subtlety: `bindings.errors` lives on `document.bindings`, not the
+        PlotView, so edits patch the document directly rather than routing
+        through `setCanonicalView`. A real latent bug surfaced en route —
+        see the 2026-08-12 F2.3f log entry. Remaining F2.3 panels: channels
+        reassignment and grouping/faceting.
 - [x] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
       **COMPLETE 2026-08-12** — the named gesture set (legend drag, annotation
@@ -468,6 +480,40 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.3f editable error-column bindings in the preview (Claude Sonnet 5)
+
+- Closes the gap F2.3b deliberately shipped as read-only designation text.
+  `bindings.errors` already reached the render request via `figureSpec.ts`'s
+  `exportErrorSpans` (`error_spans`, asymmetric halves included) — like
+  F2.3e, the panel was the only missing piece.
+- Vocabulary matches `Inspector/ErrorRolesCard.tsx`: target/axis/side
+  selects, half-pair warning (an asymmetric binding without its partner
+  draws nothing, so say so), remove, an Add form (channel from the canonical
+  dataset's labels — no live canvas needed, so the group renders even
+  empty), and "Detect from names" via the pure `inferErrorBindings`, which
+  writes into the draft and never touches the dataset's own `errorRoles`.
+  Channel is read-only per row, like a reference line's axis.
+- **A real latent bug surfaced en route**: `figureDocument.ts`'s
+  `legacyErrorBindings` built `ErrorBinding` literals in a different key
+  order (`{target, channel, …}`) than every other constructor
+  (`{channel, target, …}`), and `figureLifecycle.ts`'s stale-baseline check
+  compares documents via `JSON.stringify`, which is key-order-sensitive — so
+  any document with a symmetric-Y binding could see a legitimate Apply
+  spuriously flagged stale. Fixed at the source (literal reordered), with
+  the reasoning documented at the constructor.
+- **Merge note (the pin story):** F2.4e and F2.3f were built in parallel and
+  each funded itself by extracting the same output format/style/DPI
+  constants, so the merged hook went 21 lines over its 522 pin. Resolved by
+  keeping ONE constants module (`figureOutputConstants.ts`) and additionally
+  extracting the drag-to-place dispatch whole to `previewDrag.ts` (pure
+  logic over injected state; the hook keeps a thin binding wrapper) — which
+  dropped `useFigureBuilder.ts` to 497 and GRADUATED it off the pin list
+  under the ratchet's own shrink-below-ceiling rule. The pin was never
+  raised.
+- Gate on the merged tree: lint 0 errors, 6,262 frontend tests green
+  (424 files), build + bundle budget green (880.0 kB eager, 23.3 kB
+  headroom).
 
 ### 2026-08-12 — F2.4e shape drag in the preview (Claude Sonnet 5)
 
