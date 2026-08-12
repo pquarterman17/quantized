@@ -96,6 +96,33 @@ describe("RefLinePropertiesPanel", () => {
     expect(screen.queryByText("enter a value")).not.toBeInTheDocument();
   });
 
+  it("commits on Enter, matching the Stage card's own keyboard affordance", () => {
+    // Inspector/RefLinesCard has `onKeyDown={(e) => e.key === "Enter" && add()}`;
+    // without it here, adding several lines means a mouse trip per line.
+    const { onAdd } = renderPanel([]);
+    const field = screen.getByLabelText("new reference line value");
+    fireEvent.change(field, { target: { value: "300" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onAdd).toHaveBeenCalledWith("x", 300);
+    expect(field).toHaveValue("0");
+  });
+
+  it("ignores Enter when the value is not addable", () => {
+    const { onAdd } = renderPanel([]);
+    const field = screen.getByLabelText("new reference line value");
+    fireEvent.change(field, { target: { value: "abc" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("ignores other keys", () => {
+    const { onAdd } = renderPanel([]);
+    const field = screen.getByLabelText("new reference line value");
+    fireEvent.change(field, { target: { value: "300" } });
+    fireEvent.keyDown(field, { key: "a" });
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it("resets the Add field after a successful add, so the next one starts clean", () => {
     renderPanel([]);
     const field = screen.getByLabelText("new reference line value");

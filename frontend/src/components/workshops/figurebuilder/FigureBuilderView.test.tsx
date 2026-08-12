@@ -142,6 +142,24 @@ describe("Publication Preview role cues", () => {
     expect(figureState.cancel).not.toHaveBeenCalled();
   });
 
+  it("keeps Export/Apply/Cancel in a sticky row, not scrolled away with the settings", () => {
+    // Measured in the running app before this was added: with the property
+    // groups expanded, the settings column is ~2,400 px tall inside a ~900 px
+    // viewport, which put the buttons that COMMIT the work ~200 px below the
+    // fold. jsdom has no layout, so the assertion is on the mechanism (the
+    // sticky container) rather than on a pixel position.
+    vi.mocked(useFigureBuilder).mockReturnValue({
+      ...figureState, canonical: true, documentName: "Device figure",
+      publicationTarget: "window", dirty: true, canApply: true,
+    } as unknown as ReturnType<typeof useFigureBuilder>);
+    render(<FigureBuilderView />);
+    const actions = screen.getByRole("button", { name: "Apply" }).closest("[style*='sticky']");
+    expect(actions).not.toBeNull();
+    // Export shares the row, so a long panel list cannot strand it either.
+    expect(actions).toContainElement(screen.getByRole("button", { name: /^Export/ }));
+    expect(actions).toContainElement(screen.getByRole("button", { name: "Cancel" }));
+  });
+
   // F2.3b: the view builds a `series` prop for PropertyPanels only once
   // canonical AND something is plotted; PropertyPanels itself is mocked here
   // (its own tests cover the group's content), so this just pins that the

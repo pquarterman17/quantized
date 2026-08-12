@@ -54,6 +54,11 @@ export default function RefLinePropertiesPanel({
         ? "value must be a number"
         : null;
   const rows = deriveRefLineRows(refLines);
+  const commitAdd = () => {
+    if (addReason !== null) return;
+    onAdd(axis, parsed);
+    setDraft("0");
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
@@ -96,18 +101,20 @@ export default function RefLinePropertiesPanel({
         </span>
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">new value</label>
-          <NumberField aria-label="new reference line value" value={draft} width={72} onChange={setDraft} />
+          {/* Enter commits, matching Inspector/RefLinesCard's own
+              `onKeyDown={(e) => e.key === "Enter" && add()}`. Without it,
+              adding several lines in a row means a mouse trip to the button
+              between every one — and the Stage card sets the expectation. */}
+          <NumberField
+            aria-label="new reference line value"
+            value={draft}
+            width={72}
+            onChange={setDraft}
+            onKeyDown={(event) => event.key === "Enter" && commitAdd()}
+          />
         </span>
         <span title={addReason ?? `Draw a reference line across the figure at this ${axis.toUpperCase()} value`}>
-          <Button
-            size="sm"
-            disabled={addReason !== null}
-            onClick={() => {
-              if (addReason !== null) return;
-              onAdd(axis, parsed);
-              setDraft("0");
-            }}
-          >
+          <Button size="sm" disabled={addReason !== null} onClick={commitAdd}>
             Add
           </Button>
         </span>

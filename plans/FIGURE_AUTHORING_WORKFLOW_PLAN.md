@@ -431,6 +431,37 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-12 — Publication Preview usability sweep (Claude Opus 5)
+
+A deliberate hunt for more defects of the drift-bug class: drive the real
+preview in a browser and measure, rather than read the code. Nine checks over
+a 3-channel dataset with a secondary axis. **Six confirmed the design already
+holds** — Apply is correctly disabled with zero edits; the y2 limit fields and
+the Y2 tick row appear only with a y2 channel plotted; unticking "inherits Y"
+seeds the current Y format; Cancel on a dirty draft raises the discard confirm
+and then discards; a reopened session starts clean; Export from the preview
+produces the PDF; zero console errors throughout. **Two were real and are
+fixed here:**
+
+1. **Export/Apply/Cancel scrolled away with the settings.** Measured: with the
+   property groups expanded the settings column is ~2,400 px tall inside an
+   ~890 px scrollport, which put Apply at y≈1163 in a 950 px viewport — the
+   buttons that COMMIT the work sat below the fold and had to be hunted for,
+   and every panel added since F2.3b made it worse. They are now a sticky
+   footer row (y≈909 after the fix, comfortably in view) pinned inside the
+   same scroller, so no ToolWindow structure changed. A second pass was needed
+   on the styling: `bottom: 0` parks the row one `--pad-lg` ABOVE the
+   scrollport edge, so scrolling content showed through the gap beneath it —
+   fixed by sticking past the padding and adding it back inside.
+2. **The F2.3d Add field ignored Enter**, while `Inspector/RefLinesCard`'s
+   identical field commits on it. Adding several lines meant a mouse trip per
+   line. Now matches the Stage.
+
+The jsdom test for #1 asserts the MECHANISM (the sticky container holds all
+three buttons), not a pixel position — jsdom has no layout, so a coordinate
+assertion there would be theatre. The measurement that justifies it is
+recorded above instead.
+
 ### 2026-08-12 — F2.4c decor hit targets: right-click a reference line or shape (Claude Opus 5)
 
 - **Closes a gap this plan had already written down as impossible.** F2.3c's
