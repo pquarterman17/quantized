@@ -99,7 +99,7 @@ describe("MapRoiOverlay remove affordance", () => {
     // control sharing it invites exactly the mis-hit this fix is about.
     renderOverlay();
     const remove = screen.getByLabelText("Remove this box");
-    const commitRow = screen.getByRole("button", { name: "∫x" }).parentElement;
+    const commitRow = screen.getByRole("button", { name: "∫ Qx" }).parentElement;
     expect(commitRow).not.toContainElement(remove);
   });
 
@@ -115,6 +115,76 @@ describe("MapRoiOverlay remove affordance", () => {
 // shape reverts. Measured in the running app: drawing from (560, 390) put the
 // bar at x 560..776, y 398..518, straight across the drag path, so the box
 // vanished mid-drag. Reported as "resizing the integration box did not work".
+// The bar's controls used to read "x" and "y" — the code's collapse axis, not
+// the user's data. Reported from a real session: "the control inputs were x
+// and y, not the actual axes of the data". `roiAxisNames.test.ts` pins the
+// naming rules themselves; these check the bar actually wears them, and that
+// the box and the ruler get the DIFFERENT names their different frames earn.
+describe("MapRoiOverlay names its collapse axes after the data", () => {
+  it("labels the box's preview toggle with the map's own axes", () => {
+    renderOverlay();
+    expect(screen.getByRole("button", { name: "Qx" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Qz" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "x" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "y" })).not.toBeInTheDocument();
+  });
+
+  it("labels the box's ∫ buttons the same way, and still wires them to x/y", () => {
+    const onIntegrate = vi.fn();
+    renderOverlay({ onIntegrate });
+    fireEvent.click(screen.getByRole("button", { name: "∫ Qz" }));
+    // The label changed; the collapse axis the hook receives must not have.
+    expect(onIntegrate).toHaveBeenCalledWith("y");
+  });
+
+  it("puts the unit in the ∫ tooltip and names what gets summed away", () => {
+    renderOverlay();
+    expect(screen.getByRole("button", { name: "∫ Qx" })).toHaveAttribute(
+      "title",
+      "Integrate onto Qx (1/Å), summing over Qz (1/Å) — lands as a new dataset",
+    );
+  });
+
+  it("prefixes the bounds readout with the axis each range belongs to", () => {
+    renderOverlay();
+    expect(screen.getByText(/^Qx 0\.2…1\.8\s+Qz 0\.2…1\.8$/)).toBeInTheDocument();
+  });
+
+  it("paints that readout with the haloed class, not bare --text-dim", () => {
+    // It sits directly on the heatmap. At --text-dim it was unreadable over
+    // viridis' bright centre (checked in the running app); `.qzk-roi-readout`
+    // is full-strength ink over a surface-coloured halo. jsdom applies no
+    // stylesheet, so the class is the only thing a unit test can hold onto —
+    // the contrast itself was verified visually in both themes.
+    renderOverlay({ rulerState: rulerState({ ruler: RULER }) });
+    expect(screen.getByText(/^Qx 0\.2…1\.8/)).toHaveClass("qzk-roi-readout");
+    expect(screen.getByText(/^30° L=/)).toHaveClass("qzk-roi-readout");
+  });
+
+  it("gives the ROTATED ruler along/across, never the data axis names", () => {
+    // The ruler integrates in its own frame (useMapRuler passes the angle), so
+    // borrowing "Qx"/"Qz" here would be false at every angle but zero.
+    renderOverlay({ rect: null, rulerState: rulerState({ ruler: RULER }) });
+    expect(screen.getByRole("button", { name: "∫ along" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "∫ across" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "∫ Qx" })).not.toBeInTheDocument();
+  });
+
+  it("spells the ruler's angle out in its tooltip", () => {
+    renderOverlay({ rect: null, rulerState: rulerState({ ruler: RULER }) });
+    expect(screen.getByRole("button", { name: "∫ along" })).toHaveAttribute(
+      "title",
+      "Integrate onto the ruler's length (30° from Qx), summing over its width — lands as a new dataset",
+    );
+  });
+
+  it("falls back to x/y only when a channel genuinely has no label", () => {
+    renderOverlay({ payload: { ...PAYLOAD, xLabel: "", yLabel: "" } });
+    expect(screen.getByRole("button", { name: "∫ x" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "∫ y" })).toBeInTheDocument();
+  });
+});
+
 describe("MapRoiOverlay does not eat its own drag", () => {
   const barOf = (label: string) => screen.getByLabelText(label).closest(".qzk-roi-bar");
 

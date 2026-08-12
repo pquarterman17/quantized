@@ -102,13 +102,7 @@ export default function MapSectorWedge({ payload, w, h, wedge }: MapSectorWedgeP
             <rect key={p.field} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
           ))}
           {handles[0] && (
-            <text
-              x={handles[0].x}
-              y={Math.max(10, bounds.y0 - 6)}
-              fontFamily="var(--font-mono)"
-              fontSize={10}
-              fill="var(--text-dim)"
-            >
+            <text className="qzk-roi-readout" x={handles[0].x} y={Math.max(10, bounds.y0 - 6)}>
               {fmtSector(sector)}
             </text>
           )}

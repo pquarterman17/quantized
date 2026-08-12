@@ -8,13 +8,14 @@
 //      with `rectToPx`/`rulerCorners`+`dataToPx` (the SAME projector the
 //      canvas and the SVG layer use, never re-derived): a "preview"-labelled
 //      sparkline (client-only, lib/roiMath.ts), a live N/∫I readout, and the
-//      ∫x / ∫y / Stats buttons that turn one drag + one click into a
-//      library dataset. This is the deliverable the ROI panel is explicitly
-//      NOT required for. The box and the ruler each get their own bar
-//      (positioned off their own bounds), sharing ONE `CommitBar` body
-//      component — the two tools commit through the identical
-//      preview/N/∫I/∫x/∫y/Stats vocabulary, box_cut vs its rotated
-//      (rulerBoxBody) form only.
+//      two ∫ buttons + Stats that turn one drag + one click into a library
+//      dataset. This is the deliverable the ROI panel is explicitly NOT
+//      required for. The box and the ruler each get their own bar (positioned
+//      off their own bounds), sharing ONE `CommitBar` body component — the two
+//      tools commit through the identical preview/N/∫I/∫/Stats vocabulary,
+//      box_cut vs its rotated (rulerBoxBody) form only. What the two ∫ and
+//      toggle buttons are LABELLED differs, though, and that difference is
+//      real: see `roiAxisNames.ts`.
 //
 // The sector wedge (item 12: draggable true-polar sector, shown when the
 // displayed axes are Q) is its OWN component, `MapSectorWedge.tsx`, driven
@@ -34,6 +35,13 @@ import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";
 import { dataToPx, fmt, plotRect } from "./mapRender";
 import MapSectorWedge from "./MapSectorWedge";
+import {
+  boxAxes,
+  integrateTitle,
+  previewTitle,
+  rulerAxes,
+  type CollapseAxes,
+} from "./roiAxisNames";
 import { barPosition, boundsOfPoints, sparklinePoints, SPARK_H, SPARK_W } from "./roiBarLayout";
 import type { UseMapRulerState } from "./useMapRuler";
 import type { UseMapSectorWedgeState } from "./useMapSectorWedge";
@@ -58,8 +66,13 @@ function barPointerEvents(dragging: boolean): "none" | undefined {
   return dragging ? "none" : undefined;
 }
 
-function fmtBounds(rect: RoiRect): string {
-  return `${fmt(rect.x0)}…${fmt(rect.x1)}, ${fmt(rect.y0)}…${fmt(rect.y1)}`;
+/** The box's extent, each range prefixed with the axis it belongs to. The
+ *  unnamed "0.20…1.80, 0.20…1.80" it replaces made the reader map position to
+ *  meaning by eye; the names come from `boxAxes`, so this readout, the bar's
+ *  controls and the canvas axis titles all say the same word. Units are left
+ *  to the tooltips — this text sits over the data and has no box to wrap in. */
+function fmtBounds(rect: RoiRect, axes: CollapseAxes): string {
+  return `${axes.x.name} ${fmt(rect.x0)}…${fmt(rect.x1)}   ${axes.y.name} ${fmt(rect.y0)}…${fmt(rect.y1)}`;
 }
 
 /** Angle/length/width readout for the ruler — the "angle readout in
@@ -113,23 +126,28 @@ interface CommitBarProps {
    *  so it is not mis-hit while committing. */
   onRemove: () => void;
   removeLabel: string;
+  /** What this shape's two collapse axes are actually called — the map's own
+   *  axes for the box, the ruler's own frame for the ruler. See
+   *  `roiAxisNames.ts` for why those are not the same thing. */
+  axes: CollapseAxes;
 }
 
 /** Shared inline-bar body for both the box and the ruler — same preview/N/
- *  ∫I/∫x/∫y/Stats vocabulary, only the positioning (caller) and the request
- *  shape underneath `onIntegrate`/`onStats` (box_cut vs rulerBoxBody) differ. */
+ *  ∫I/∫/Stats vocabulary, only the positioning (caller), the axis NAMES
+ *  (`axes`, see roiAxisNames.ts) and the request shape underneath
+ *  `onIntegrate`/`onStats` (box_cut vs rulerBoxBody) differ. */
 function CommitBar(props: CommitBarProps) {
-  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats, onRemove, removeLabel } = props;
+  const { preview, previewAxis, onPreviewAxisChange, previewStats, onIntegrate, landingBusy, onStats, statsBusy, apiStats, statsError, onClearStats, onRemove, removeLabel, axes } = props;
   return (
     <>
       <div className="qzk-roi-bar-row">
         <span className="qzk-roi-bar-label">preview</span>
         <div className="qzk-roi-axis-toggle">
-          <button className={previewAxis === "x" ? "active" : ""} onClick={() => onPreviewAxisChange("x")}>
-            x
+          <button className={previewAxis === "x" ? "active" : ""} title={previewTitle(axes.x)} onClick={() => onPreviewAxisChange("x")}>
+            {axes.x.name}
           </button>
-          <button className={previewAxis === "y" ? "active" : ""} onClick={() => onPreviewAxisChange("y")}>
-            y
+          <button className={previewAxis === "y" ? "active" : ""} title={previewTitle(axes.y)} onClick={() => onPreviewAxisChange("y")}>
+            {axes.y.name}
           </button>
         </div>
         <button className="qzk-chip-reset" title={removeLabel} aria-label={removeLabel} onClick={onRemove}>
@@ -147,13 +165,18 @@ function CommitBar(props: CommitBarProps) {
         <span>∫I</span>
         <span>{previewStats ? fmt(previewStats.integrated_intensity) : "—"}</span>
       </div>
+      {/* The two ∫ buttons get a row to themselves: named axes ("∫ 2Theta")
+          do not fit three-to-a-row in a 216 px bar the way "∫x" did, and the
+          name is the whole point of the change. */}
       <div className="qzk-roi-bar-row">
-        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("x")} title="Integrate onto x, land as a new dataset">
-          ∫x
+        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("x")} title={integrateTitle(axes.x)}>
+          {`∫ ${axes.x.name}`}
         </Button>
-        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("y")} title="Integrate onto y, land as a new dataset">
-          ∫y
+        <Button size="sm" disabled={landingBusy} onClick={() => onIntegrate("y")} title={integrateTitle(axes.y)}>
+          {`∫ ${axes.y.name}`}
         </Button>
+      </div>
+      <div className="qzk-roi-bar-row">
         <Button size="sm" disabled={statsBusy} onClick={onStats} title="Fetch box_stats from the backend">
           {statsBusy ? "Stats…" : "Stats"}
         </Button>
@@ -240,6 +263,11 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
   const rectPx = rect ? rectToPx(rect, project) : null;
   const ruler = rulerState.ruler;
   const rulerPx = ruler ? rulerCornersPx(ruler, project) : null;
+  // Derived here rather than threaded in from MapStage: both inputs (the
+  // payload and the ruler's angle) are already in hand, so naming stays a
+  // presentation detail of the bar instead of another prop to keep in sync.
+  const boxNames = boxAxes(payload);
+  const rulerNames = rulerAxes(payload, ruler?.angle ?? 0);
 
   return (
     <>
@@ -259,8 +287,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
               {handlePositions(rectPx).map((p, i) => (
                 <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
               ))}
-              <text x={rectPx.x0} y={Math.max(10, rectPx.y0 - 6)} fontFamily="var(--font-mono)" fontSize={10} fill="var(--text-dim)">
-                {fmtBounds(rect)}
+              <text className="qzk-roi-readout" x={rectPx.x0} y={Math.max(10, rectPx.y0 - 6)}>
+                {fmtBounds(rect, boxNames)}
               </text>
             </g>
           )}
@@ -275,13 +303,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
               {rulerHandlePositions(rulerPx).map((p, i) => (
                 <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} fill="var(--accent)" stroke="var(--surface-0)" />
               ))}
-              <text
-                x={rulerPx[0]!.x}
-                y={Math.max(10, rulerPx[0]!.y - 6)}
-                fontFamily="var(--font-mono)"
-                fontSize={10}
-                fill="var(--text-dim)"
-              >
+              <text className="qzk-roi-readout" x={rulerPx[0]!.x} y={Math.max(10, rulerPx[0]!.y - 6)}>
                 {fmtRuler(ruler)}
               </text>
             </g>
@@ -312,6 +334,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             onClearStats={onClearStats}
             onRemove={onRemove}
             removeLabel="Remove this box"
+            axes={boxNames}
           />
         </div>
       )}
@@ -337,6 +360,7 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             onClearStats={rulerState.clearStats}
             onRemove={rulerState.remove}
             removeLabel="Remove this ruler"
+            axes={rulerNames}
           />
         </div>
       )}

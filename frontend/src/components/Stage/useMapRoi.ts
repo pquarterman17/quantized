@@ -12,7 +12,7 @@
 // the thin wiring layer over it PLUS the two things that belong beside a
 // live gesture: the rAF-coalesced client preview (lib/roiMath.ts — NEVER the
 // commit path, see that module's header) and the inline bar's backend
-// actions (∫x/∫y land a dataset via useCutLanding; Stats fetches box_stats
+// actions (the two ∫ buttons land a dataset via useCutLanding; Stats fetches box_stats
 // directly — neither of those two APIs is on the drag path, only on a click).
 //
 // px<->data conversion reuses `mapRender.ts`'s own exported `plotRect`/
@@ -141,7 +141,9 @@ export interface UseMapRoiState {
   setPreviewAxis: (axis: "x" | "y") => void;
   previewStats: RoiBoxStats | null;
 
-  /** ∫x / ∫y — POST /api/rsm/box, landed via useCutLanding. */
+  /** The bar's two ∫ buttons — POST /api/rsm/box, landed via useCutLanding.
+   *  Still keyed "x"/"y" (the collapse axis); what the buttons are LABELLED
+   *  is the map's own axis names, derived in `roiAxisNames.ts`. */
   commitIntegrate: (axis: "x" | "y") => void;
   landingBusy: boolean;
 

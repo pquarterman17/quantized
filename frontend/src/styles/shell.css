@@ -420,12 +420,25 @@ body {
    NOT inside the pointer-transparent SVG the box outline lives in, so its
    buttons stay clickable. Fixed width (see MapRoiOverlay.tsx's BAR_W/BAR_H)
    so the clamp-inside-the-plot-rect math has a stable size to reason about. */
+/* The box/ruler/sector readouts are SVG text painted directly ON the heatmap,
+   where --text-dim all but vanishes against a bright colormap cell (measured
+   on viridis: the bounds line over the peak was unreadable). Full-strength ink
+   plus a surface-coloured halo painted UNDER the glyphs (paint-order: stroke)
+   keeps them legible over the bright centre and the dark corners alike, in
+   both themes — the two tokens are defined to contrast with each other. */
+.qzk-roi-readout {
+  font-family: var(--font-mono); font-size: 10px; fill: var(--text);
+  paint-order: stroke; stroke: var(--surface-0); stroke-width: 3px; stroke-linejoin: round;
+}
 .qzk-roi-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px; width: 216px; cursor: default; }
 .qzk-roi-bar-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-roi-bar-row .qz-btn { flex: 1; }
 .qzk-roi-bar-label { font-size: var(--type-nano); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
 .qzk-roi-axis-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.qzk-roi-axis-toggle button { border: none; background: transparent; color: var(--text-dim); font-size: var(--font-size-sm); padding: 1px 7px; cursor: default; }
+/* max-width/ellipsis is the backstop for the axis names the toggle now shows
+   (Stage/roiAxisNames.ts): that module already ellipsizes at 6 chars, and this
+   guarantees an unforeseen label still cannot push the ✕ out of the 216px bar. */
+.qzk-roi-axis-toggle button { border: none; background: transparent; color: var(--text-dim); font-size: var(--font-size-sm); padding: 1px 7px; cursor: default; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-roi-axis-toggle button.active { background: var(--accent-soft); color: var(--accent-text); }
 .qzk-roi-sparkline { width: 100%; height: 30px; display: block; }
 .qzk-roi-bar-readout { font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); justify-content: flex-start; gap: 10px; }

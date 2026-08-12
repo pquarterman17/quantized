@@ -219,11 +219,38 @@ feature checklist.
      focus anywhere else the keystroke went straight to the global handler.
      Both bars now carry a ✕, in the header row deliberately away from the
      ∫/Stats buttons they sit beside.
-  Deferred, booked in BACKLOG: the `x`/`y` control labels should read the
-  data's real axes (`MapPayload` already carries `xLabel`/`yLabel`/units —
-  the bar simply never asks); the box `▭` and ruler `▱` glyphs are too alike;
-  and a near-miss on a handle still starts a NEW box rather than resizing,
-  which is unrecoverable while `mapRoi` stays out of undo.
+  Deferred to the entry below / BACKLOG: the `x`/`y` control labels (fixed
+  next); the box `▭` and ruler `▱` glyphs are too alike; and a near-miss on a
+  handle still starts a NEW box rather than resizing, which is unrecoverable
+  while `mapRoi` stays out of undo.
+
+- ~~**Map ROI commit bar names the data's own axes**~~ (2026-08-12,
+  owner-reported — the fourth complaint from the same release test: "the
+  control inputs were x and y, not the actual axes of the data"). The bar's
+  preview toggle and its two ∫ buttons showed the CODE's collapse axis, so
+  someone reading canvas axes titled "2Theta (deg)" and "Omega (deg)" had to
+  guess which of `∫x`/`∫y` produced which profile.
+  - New pure `Stage/roiAxisNames.ts` derives the names, because the box and
+    the ruler do NOT collapse in the same frame and "just show the data axes"
+    would be **wrong** for the ruler. The box is axis-aligned, so its collapse
+    axes are the map's own — composed exactly the way `mapRender.ts` composes
+    the canvas axis title, so the bar and the axis agree word for word
+    ("∫ 2Theta", "∫ Qx", unit in the tooltip). The ruler passes
+    `angle: ruler.angle` and `rulerToRect` puts local x along its LENGTH, so
+    it gets "along"/"across" with the angle quoted against the map's x axis
+    ("the ruler's length (23.8° from 2Theta)"). Both tooltips also name the
+    axis being summed AWAY, which the old ones never did.
+  - The two ∫ buttons moved to their own row (named axes do not fit
+    three-to-a-row beside Stats in a 216 px bar); `BAR_H` 140 → 166 to match,
+    measured at 148 px live.
+  - The bounds readout gained the same names ("2Theta 60.67…61.26   Omega
+    30.37…30.64"), and all three map readouts (box/ruler/sector) moved onto a
+    shared `.qzk-roi-readout` — at `--text-dim` they were **invisible** over
+    viridis' bright centre; now full-strength ink over a surface-coloured
+    halo, checked in both themes.
+  - Names ellipsize at 6 chars with a CSS max-width backstop. Verified live at
+    every density: 0 overflowing rows, ✕ never pushed out (worst case
+    "2Theta"/"Omega" at comfy/12 px = 51/53 px against a 66 px cap).
 
 - ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
 
