@@ -340,6 +340,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // state moved to usePreviewRender.ts, funding the reference-line drag. 41
   // freed, 11 spent. Three slices, three extractions, pin 598 -> 522 — the
   // ratchet has paid for every one of them and never been raised.
+  // 522 -> 522 (2026-08-12, F2.3f): the FIGURE_FORMATS/FIGURE_STYLES/
+  // FIGURE_STYLE_DPI vocabulary (pure data, re-exported so every existing
+  // `from "./useFigureBuilder"` import stays untouched) moved to the new
+  // figurePresets.ts, funding the error-binding wiring (errorBindings/
+  // patchErrorBinding/addErrorBinding/removeErrorBinding/detectErrorBindings)
+  // exactly: 24 freed, 24 spent. Net zero — the pin holds, still never raised.
   "/components/workshops/figurebuilder/useFigureBuilder.ts": 522,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,

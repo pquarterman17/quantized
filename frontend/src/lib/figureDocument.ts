@@ -115,8 +115,16 @@ function clone<T>(value: T): T {
 function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBinding[] {
   return Object.entries(errKeys).flatMap(([target, channel]) => {
     const targetKey = Number(target);
+    // Field order matches the ErrorBinding interface (channel, target, axis,
+    // side) -- every other constructor (sanitizeFigureDocument's validator,
+    // errorRoles.ts's inferErrorBindings, canonicalErrors.ts's
+    // appendErrorBinding) already agrees on it. `applyFigurePublicationEdit`'s
+    // stale-baseline check compares a reconstruction built from THIS function
+    // against the original document via JSON.stringify, which is sensitive to
+    // object key insertion order even when every field value is identical --
+    // a mismatched order here silently rejected a legitimate Apply.
     return Number.isInteger(targetKey) && Number.isInteger(channel)
-      ? [{ target: targetKey, channel, axis: "y" as const, side: "both" as const }]
+      ? [{ channel, target: targetKey, axis: "y" as const, side: "both" as const }]
       : [];
   });
 }

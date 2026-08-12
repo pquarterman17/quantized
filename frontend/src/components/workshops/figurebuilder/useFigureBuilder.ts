@@ -7,11 +7,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { exportFigure, type FigureSpec } from "../../../lib/api";
+import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { appendRefLine, patchRefLineList, refLineIdForHit, removeRefLineFromList } from "./canonicalRefLines";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
+import { FIGURE_FORMATS, FIGURE_STYLES, FIGURE_STYLE_DPI } from "./figurePresets";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
@@ -19,6 +21,7 @@ import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
+import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { effectiveChannels } from "../../../lib/plotdata";
 import { groupForElement, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
@@ -28,31 +31,9 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
 
-export const FIGURE_FORMATS = ["pdf", "svg", "png", "tiff"];
-export const FIGURE_STYLES = [
-  "default",
-  "aps",
-  "nature",
-  "thesis",
-  "report",
-  "web",
-  "presentation",
-  "poster",
-];
-// Calibrated raster DPI per preset, mirrored from
-// src/quantized/calc/figure_styles.py's FIGURE_STYLES table (no styles-list
-// endpoint exists to fetch this live — keep in sync by hand if the backend
-// table changes; tests/test_calc_figure_styles.py guards the source values).
-export const FIGURE_STYLE_DPI: Record<string, number> = {
-  default: 200,
-  aps: 600,
-  nature: 600,
-  thesis: 300,
-  report: 300,
-  web: 150,
-  presentation: 150,
-  poster: 150,
-};
+// F2.3f: preset vocabulary moved to figurePresets.ts, funding the
+// error-binding wiring below; re-exported so existing imports keep working.
+export { FIGURE_FORMATS, FIGURE_STYLES, FIGURE_STYLE_DPI };
 
 export function useFigureBuilder() {
   const active = useActiveDataset();
@@ -199,10 +180,8 @@ export function useFigureBuilder() {
   // legend/annotations/breaks above, they write straight through
   // setCanonicalView instead of the publication-overrides delta bridge, the
   // same way editElementText's title/xLabel/yLabel already do. Error-bar
-  // DESIGNATIONS (document.bindings.errors) are canonical too but stay
-  // display-only here -- reassigning them needs the same channel-picker
-  // "well" Graph Builder already owns (useGraphBuilder.ts), not a per-row
-  // toggle; see canonicalSeries.ts's doc and the F2.3b decision log.
+  // DESIGNATIONS stay a read-only summary here -- editing them is the
+  // separate Error columns group below (F2.3f).
   const seriesChannels = canonical && canonicalData && canonicalDocument
     ? effectiveChannels(
         canonicalData,
@@ -269,6 +248,21 @@ export function useFigureBuilder() {
   const setXFmtCanonical = (next: AxisFormat) => setCanonicalView({ xFmt: next });
   const setYFmtCanonical = (next: AxisFormat) => setCanonicalView({ yFmt: next });
   const setY2FmtCanonical = (next: AxisFormat | null) => setCanonicalView({ y2Fmt: next });
+
+  // F2.3f: error-column bindings live on `document.bindings.errors`, not
+  // the PlotView, so edits patch the document directly instead of routing
+  // through setCanonicalView. Index is a binding's whole identity (no `id`
+  // field -- canonicalErrors.ts's doc explains why).
+  const errorBindings: readonly ErrorBinding[] = canonicalDocument?.bindings.errors ?? [];
+  const setErrorBindings = (next: ErrorBinding[]) =>
+    patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, errors: next } }));
+  const patchErrorBinding = (index: number, patch: Partial<Omit<ErrorBinding, "channel">>) =>
+    setErrorBindings(patchErrorBindingList(errorBindings, index, patch));
+  const addErrorBinding = (channel: number, target: number, axis: ErrorBinding["axis"], side: ErrorSide) =>
+    setErrorBindings(appendErrorBinding(errorBindings, channel, target, axis, side));
+  const removeErrorBinding = (index: number) =>
+    setErrorBindings(removeErrorBindingFromList(errorBindings, index));
+  const detectErrorBindings = () => canonicalData && setErrorBindings(inferErrorBindings(canonicalData));
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -498,6 +492,12 @@ export function useFigureBuilder() {
     setXFmtCanonical,
     setYFmtCanonical,
     setY2FmtCanonical,
+    // F2.3f: canonical-only (empty/no-op in legacy mode — see the field doc above).
+    errorBindings,
+    patchErrorBinding,
+    addErrorBinding,
+    removeErrorBinding,
+    detectErrorBindings,
     data,
     hitmap,
     focusGroup,

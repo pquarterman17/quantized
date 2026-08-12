@@ -4,8 +4,8 @@
 // `Inspector/SeriesStyleCard.tsx` and `Inspector/PlotObjectsCard.tsx` already
 // edit, now reachable on the detached draft without touching the Stage (F2.4a
 // deliberately left this Stage-owned; this slice reaches parity on the
-// canonical document). Error-bar DESIGNATIONS are read-only here -- see
-// canonicalSeries.ts's doc for why reassigning them stays Graph Builder's job.
+// canonical document). Error-bar DESIGNATIONS stay a read-only summary here --
+// editing them is the separate Error columns group (F2.3f's ErrorColumnsPanel).
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import type { SeriesStyle, StepMode } from "../../../lib/types";
