@@ -235,15 +235,21 @@ def test_build_map_auto_default_end_to_end() -> None:
 
 @pytest.mark.realdata
 def test_auto_qspace_map_builds_fast_on_real_corpus(corpus_dir: Path) -> None:
-    """RSM_CUTS_PLAN item 16's acceptance bound: a real ~100k-point Q-space
+    """RSM_CUTS_PLAN item 16's acceptance bound: a real large Q-space
     (Qx, Qz) map -- the curvilinear cloud ``detect_regular_grid`` does NOT
     find gridded, so this is the case that only the size clause of "auto"
-    catches -- must build in well under the pre-fix "natural" cost (measured
-    18.7-19.3s on this exact file). 2s is generous headroom over the
-    measured ~0.3s "linear" cost, not a tight bound; the point is confirming
-    "auto" actually reaches the fast path on real data, not shaving
-    milliseconds. Skips when the corpus or a big-enough Q-space RSM is
-    absent (local-only, like the rest of realdata)."""
+    catches -- must reach the fast path. The file this loop actually selects
+    is m3learning_rsm.xrdml at 465,885 points (sorted() puts capitals first,
+    so it is the first >=100k qualifier), NOT the ~100k-point file the
+    original docstring described -- "linear" on this cloud measures 13-16s
+    warm / ~27s cold on the dev machine (2026-08-11 recalibration, verified
+    at the original calibration commit too: no product regression, the
+    original budget was simply calibrated against a premise that never
+    matched the selected file). The point is confirming "auto" actually
+    reaches the fast path on real data -- the method assertion below does
+    that deterministically; the clock is only a catastrophic-regression
+    backstop. Skips when the corpus or a big-enough Q-space RSM is absent
+    (local-only, like the rest of realdata)."""
     from quantized.io.registry import import_auto
 
     files = sorted((corpus_dir / "panalytical" / "xrd").glob("*.xrdml"))
@@ -277,13 +283,15 @@ def test_auto_qspace_map_builds_fast_on_real_corpus(corpus_dir: Path) -> None:
         )
         == "linear"
     )
-    # The wall-clock half is a coarse backstop only. It is deliberately loose:
-    # measured ~0.3s ("linear") vs 18.7-19.3s (pre-fix "natural") on this file,
-    # so 8s still catches any regression to the slow path with ~25x headroom
-    # over the fast one. A 2s bound was tried first and flaked immediately when
-    # the suite ran alongside other load (passed in 2.22s standalone, failed
-    # under concurrent runs) -- and CI is a 6-way shared-runner matrix, which is
-    # strictly worse. Never tighten this into a performance benchmark; assert
-    # the CHOICE above, not the clock.
-    assert elapsed < 8.0, f"auto-selected method took {elapsed:.2f}s (want < 8s) on {n} pts"
+    # The wall-clock half is a coarse backstop only. Recalibrated 2026-08-11
+    # against the file this loop ACTUALLY selects (465,885 pts): "linear"
+    # measures 13-16s warm on the dev machine (max observed 16.1s across five
+    # runs, incl. standalone; ~27s cold in a fresh venv), and the same input
+    # at the original calibration commit took 26.7s -- so the old 2s/8s
+    # budgets were never achievable here and failed deterministically, not as
+    # load flakes. 90s = TEST_DETERMINISM's max(old, 5x measured) rule with
+    # cold-start slack; a regression to Sibson "natural" on a 466k cloud is
+    # minutes-class and still trips it. The method assertion above is the
+    # real guard -- never tighten this into a performance benchmark.
+    assert elapsed < 90.0, f"auto-selected method took {elapsed:.2f}s (want < 90s) on {n} pts"
     assert m.z_grid.shape == (200, 200)
