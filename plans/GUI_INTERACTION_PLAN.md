@@ -252,6 +252,25 @@ feature checklist.
     every density: 0 overflowing rows, ✕ never pushed out (worst case
     "2Theta"/"Omega" at comfy/12 px = 51/53 px against a 66 px cap).
 
+- ~~**Map drawing tools get their own icons**~~ (2026-08-12, owner-reported —
+  the last part of the same release-test message: "the controls were
+  confusing (the icon wasn't super clear)"). Two problems behind one
+  complaint, both now test-pinned in `MapToolbar.test.tsx`:
+  1. The box and the ruler wore `▭` and `▱` — a rectangle and a
+     near-rectangle, the same silhouette at 13 px (confirmed by rendering the
+     candidates at real size).
+  2. Both glyphs were **already spoken for**: `▭` is the Rectangle shape tool
+     *and* the Background Region tool in `plotToolbarDefs`, `▱` is the plot
+     toolbar's shape-dock button. The map's two tools were wearing two other
+     tools' icons.
+  Now `▣` (a region with content selected) and `▨` (diagonal fill = the
+  rotated swath a ruler is), which also makes `▣ ▨ ◔` read as one family — the
+  three shape-with-a-floating-bar tools — against the thin-line one-shot cuts
+  `─ │ ∕` beside them. Titles lead with what the tool PRODUCES ("Integration
+  box", "Angled line cut (ruler)") rather than with its shape ("Box ROI",
+  "Cut ruler"). The collision test is the durable half: one glyph, one
+  meaning, enforced against `SHAPE_TOOLS` + `TOOL_DEFS`.
+
 - ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
 
 - ~~**#2 Plot Objects tree — closing slice**~~ (2026-07-24) — the item's last

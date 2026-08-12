@@ -192,19 +192,30 @@ export default function MapToolbar(props: MapToolbarProps) {
           >
             ∕
           </button>
+          {/* ▣ / ▨ rather than the ▭ / ▱ these carried until 2026-08-12
+              ("the controls were confusing, the icon wasn't super clear",
+              owner, from a real release test). Two problems, one fix:
+              ▭ and ▱ are a rectangle and a near-rectangle, indistinguishable
+              at this size — AND both are already spoken for elsewhere in the
+              app (▭ is the Rectangle SHAPE tool in plotToolbarDefs, ▱ is the
+              plot toolbar's shapes-dock button), so the map's two tools were
+              wearing two other tools' icons. ▣ reads as a region with content
+              selected; ▨'s diagonal fill reads as the rotated swath the ruler
+              actually is. The titles lead with what the tool PRODUCES, not
+              with its shape. */}
           <button
             className={`qzk-tool-btn${roiMode === "roi" ? " active" : ""}`}
-            title="Box ROI: drag to draw, drag inside to move, edges/corners to resize — ∫ and stats commit from the floating bar"
+            title="Integration box — drag on the map to draw one; drag inside to move it, edges/corners to resize. Its own floating bar previews the profile and commits ∫ / Stats"
             onClick={onToggleRoi}
           >
-            ▭
+            ▣
           </button>
           <button
             className={`qzk-tool-btn${rulerMode === "ruler" ? " active" : ""}`}
-            title="Cut ruler: drag along the cut direction to draw — endpoint handles set length/angle, width handles set width; radial/transverse-about-a-peak actions live in the RSM panel"
+            title="Angled line cut (ruler) — drag along the cut direction to draw; endpoint handles set length and angle, side handles set width. Radial / transverse-about-a-peak actions live in the RSM panel"
             onClick={onToggleRuler}
           >
-            ▱
+            ▨
           </button>
           {qAvailable && (
             <button
