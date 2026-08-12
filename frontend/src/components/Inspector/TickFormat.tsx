@@ -9,17 +9,20 @@
 // axes[].values. Lives in the Axes card next to AxisLimits. Command-palette
 // "Cycle X/Y tick format" (appCommands.ts) steps through all four (X/Y only).
 
+// The mode lists + date gating are shared with the canonical Publication
+// Preview's TickFormatPanel (F2.3e) via lib/tickFormat.ts -- both surfaces
+// must offer the same four modes or a figure's ticks change meaning
+// depending on which panel the user reached for.
+import {
+  isDateTickMode,
+  normalizeTickDigits,
+  TICK_DATE_OPTIONS,
+  TICK_MODE_OPTIONS as MODES,
+  xAxisIsDate,
+} from "../../lib/tickFormat";
 import type { AxisFormat, TickMode } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox, NumberField, SegmentedControl } from "../primitives";
-
-const MODES: { value: TickMode; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "fixed", label: "Fixed" },
-  { value: "sci", label: "Sci" },
-  { value: "eng", label: "Eng" },
-];
-const DATE_MODES = new Set<TickMode>(["date", "time", "datetime"]);
 
 export default function TickFormat() {
   const xFmt = useApp((s) => s.xFmt);
@@ -41,24 +44,22 @@ export default function TickFormat() {
         <select
           className="qz-select"
           aria-label="X date/time format"
-          value={DATE_MODES.has(fmt.mode) ? fmt.mode : "numeric"}
+          value={isDateTickMode(fmt.mode) ? fmt.mode : "numeric"}
           onChange={(event) => set({ ...fmt, mode: event.target.value === "numeric" ? "auto" : event.target.value as TickMode })}
         >
-          <option value="numeric">Numeric</option>
-          <option value="date">Date (UTC)</option>
-          <option value="time">Time (UTC)</option>
-          <option value="datetime">Date + time (UTC)</option>
+          {TICK_DATE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       )}
-      {fmt.mode !== "auto" && !DATE_MODES.has(fmt.mode) && (
+      {fmt.mode !== "auto" && !isDateTickMode(fmt.mode) && (
         <NumberField
           value={String(fmt.digits)}
           width={44}
           title="Decimal / mantissa digits"
           onChange={(v) => {
-            if (v.trim() === "") return;
-            const n = Number(v);
-            if (Number.isFinite(n)) set({ ...fmt, digits: Math.max(0, Math.min(20, Math.round(n))) });
+            const digits = normalizeTickDigits(v);
+            if (digits !== null) set({ ...fmt, digits });
           }}
         />
       )}
@@ -83,7 +84,7 @@ export default function TickFormat() {
   // degrades safely as a backstop). Stays available if a saved spec already
   // selected a date mode, so it can be switched back.
   const active = useActiveDataset();
-  const xIsDate = active?.data.metadata?.time_is_datetime === true || DATE_MODES.has(xFmt.mode);
+  const xIsDate = xAxisIsDate(active?.data.metadata, xFmt.mode);
 
   return (
     <div style={{ marginTop: 8 }}>

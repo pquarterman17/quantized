@@ -998,6 +998,127 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3e: axis tick formats (xFmt/yFmt/y2Fmt) live straight on
+  // document.plot.view -- the same canonical-only fields as the three slices
+  // above, and unlike them they ALREADY reached the renderer, so the panel
+  // was the only missing piece. Same coverage contract: setters, the
+  // Apply/Cancel pin, and proof the edit reaches the render request.
+  describe("canonical tick formats (F2.3e)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const fmtDocument = (id: string, view: Partial<ReturnType<typeof defaultPlotView>> = {}) =>
+      createFigureDocument({ id, name: "Fmt doc", datasetId: "d1", view: { ...defaultPlotView(), ...view } });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("falls back to the live singletons in legacy (non-canonical) mode", () => {
+      useApp.setState({ xFmt: { mode: "sci", digits: 1 }, yFmt: { mode: "eng", digits: 2 } });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.canonicalXFmt).toEqual({ mode: "sci", digits: 1 });
+      expect(result.current.canonicalYFmt).toEqual({ mode: "eng", digits: 2 });
+    });
+
+    it("exposes the draft's own formats once canonical, not the live plot's", () => {
+      useApp.setState({
+        xFmt: { mode: "sci", digits: 1 },
+        figurePublicationSession: session(fmtDocument("figure-fmt-a", { xFmt: { mode: "fixed", digits: 3 } })),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.canonicalXFmt).toEqual({ mode: "fixed", digits: 3 });
+    });
+
+    it("writes each axis format into the draft independently", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-b")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setXFmtCanonical({ mode: "sci", digits: 3 }));
+      act(() => result.current.setYFmtCanonical({ mode: "fixed", digits: 1 }));
+      const view = useApp.getState().figurePublicationSession!.draft.plot.view;
+      expect(view.xFmt).toEqual({ mode: "sci", digits: 3 });
+      expect(view.yFmt).toEqual({ mode: "fixed", digits: 1 });
+      expect(view.y2Fmt).toBeNull();
+    });
+
+    it("round-trips y2 inheritance through null, the renderer's own sentinel", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-c")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setY2FmtCanonical({ mode: "eng", digits: 2 }));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.y2Fmt).toEqual({ mode: "eng", digits: 2 });
+      act(() => result.current.setY2FmtCanonical(null));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.y2Fmt).toBeNull();
+    });
+
+    it("offers date modes only when the bound data's X column is timestamps", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-d")) });
+      const plain = renderHook(() => useFigureBuilder());
+      expect(plain.result.current.xIsDate).toBe(false);
+
+      useApp.setState({
+        datasets: [{ id: "d1", name: "log.csv", data: { ...DATA, metadata: { time_is_datetime: true } } }],
+        figurePublicationSession: session(fmtDocument("figure-fmt-d2")),
+      });
+      const dated = renderHook(() => useFigureBuilder());
+      expect(dated.result.current.xIsDate).toBe(true);
+    });
+
+    it("Apply commits format edits into the window document and the legacy facade", async () => {
+      const document = fmtDocument("figure-fmt-e");
+      useApp.setState({
+        ...defaultPlotView(),
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.setYFmtCanonical({ mode: "sci", digits: 3 }));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view.yFmt).toEqual({ mode: "sci", digits: 3 });
+      // The same field Inspector/TickFormat reads on the Stage.
+      expect(state.yFmt).toEqual({ mode: "sci", digits: 3 });
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = fmtDocument("figure-fmt-f");
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setXFmtCanonical({ mode: "eng", digits: 4 }));
+      act(() => result.current.cancel());
+      expect(useApp.getState().plotWindows).toEqual(before);
+    });
+
+    it("reaches the render request, so the preview shows the notation the panel picks", async () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-g")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.setYFmtCanonical({ mode: "sci", digits: 3 }));
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_fmt)
+          .toEqual({ mode: "sci", digits: 3 }),
+      );
+    });
+
+    it("omits the format from the request while an axis is auto (MAIN #24's lean-request rule)", async () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-h")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_fmt).toBeUndefined();
+    });
+  });
+
   // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
   // double-click text (title/xlabel/ylabel) gestures already branched on
   // `canonical` from the initial canonical session (a6c809c), and commit

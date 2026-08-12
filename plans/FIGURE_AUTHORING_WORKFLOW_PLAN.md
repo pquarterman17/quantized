@@ -246,6 +246,14 @@ decisions are merged.
         `document.plot.view`. **Region shades are deliberately NOT in this
         slice** — see the 2026-08-12 log entry for why they need an owner
         call first.
+  - [x] **F2.3e Axis tick-format panel (Claude Opus 5).** Canonical draft now
+        exposes the X/Y/Y2 number formats (Auto/Fixed/Sci/Eng + digits, the
+        X-only date modes gated on `time_is_datetime`, and Y2's inherit-Y
+        rule). No schema change and no render change: `xFmt`/`yFmt`/`y2Fmt`
+        already lived on `document.plot.view` AND already reached the wire
+        (`x_fmt`/`y_fmt`/`secondaryAxisWire`) — the panel was the only
+        missing piece. Vocabulary shared with `Inspector/TickFormat.tsx` via
+        the new `lib/tickFormat.ts` so the two surfaces cannot drift.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
@@ -415,6 +423,49 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.3e axis tick-format panel in Publication Preview (Claude Opus 5)
+
+- **The narrowest gap of the F2.3 set, and the one with the most direct
+  publication value.** `xFmt`/`yFmt`/`y2Fmt` were already canonical
+  `document.plot.view` fields AND already reached the renderer —
+  `lib/figureSpec.ts` sends `x_fmt`/`y_fmt` through `axisFmtParam` and the
+  secondary format through `secondaryAxisWire`. So the *only* thing missing
+  was a control: a figure's tick notation ("2 decimals", "scientific") could
+  be changed on the Stage alone, i.e. only by the action that invalidates an
+  open preview session. Nothing in the render path changed for this slice.
+- **Shared vocabulary instead of a second copy.** The mode list, the date-mode
+  set, the `time_is_datetime` gate, and the 0..20 digit clamp moved to a new
+  pure `lib/tickFormat.ts` that BOTH `Inspector/TickFormat.tsx` and the new
+  panel import. Two surfaces editing the same `AxisFormat` must offer the same
+  four modes in the same order, or a figure's ticks change meaning depending
+  on which panel the user reached for. The Inspector refactor is import-only:
+  its 99 tests pass untouched.
+- **Placed inside the existing "Axes & ticks" group**, under a `tick format`
+  caption, rather than as a seventh top-level group. Tick notation IS an axis
+  property; a separate group would have split the axis controls in two.
+- **Two behaviours kept verbatim from the Stage, both deliberate:** Y2 renders
+  only when the draft actually plots a secondary axis (without one
+  `resolveSecondaryAxis` returns null and no `y2_fmt` is ever sent — the field
+  would be a placebo, the same reasoning as F2.3a's `hasY2` gate on y2 limits);
+  and unticking "inherits Y" seeds Y2 from the CURRENT Y format rather than a
+  fresh default, so turning inheritance off shows what the axis is already
+  rendering instead of silently resetting it to Auto.
+- A date mode displays as "Auto" in the numeric segmented control with the
+  date select beside it carrying the truth — the four numeric modes cannot
+  represent "datetime", and showing no selection at all would read as broken.
+- Verified in the real app: Y → Sci/3 re-renders the preview's Y ticks as
+  `4.000e+0`; the live store's `yFmt` stays untouched while the draft
+  diverges; Apply commits to both the window document and the legacy facade;
+  the date select correctly stays hidden on a physics (Field/Oe) X axis.
+- **Funded by extraction again, pin DOWN again.** The #15 graph-template block
+  moved to `useGraphTemplates.ts` (legacy-mode-only by nature — its UI renders
+  only when `!f.canonical`). 37 lines freed, 19 spent; pin 570 → 552. Across
+  F2.3d and F2.3e: 598 → 552, two slices added, zero bumps.
+- Gate: 419 files / 6151 tests, tsc clean, eslint 0 on every touched file,
+  build green (879.9 kB eager, 23.4 kB under budget).
+- F2.3 remains open: channels/errors reassignment, grouping/faceting, and
+  region shades (owner-gated) are still unreached by the canonical preview.
 
 ### 2026-08-12 — F2.3d reference-line property panel in Publication Preview (Claude Opus 5)
 

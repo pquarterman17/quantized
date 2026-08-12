@@ -333,7 +333,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // reference-line wiring — the same extract-first discipline canonicalReadiness.ts
   // used for F2.3c. Note the net is DOWN even after the new slice: 47 lines
   // freed, 28 spent. The next canonical slice extracts again; it does not bump.
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 570,
+  // 570 -> 552 (2026-08-12, F2.3e): the #15 graph-template block moved to
+  // useGraphTemplates.ts, funding the tick-format wiring. Net down again: 37
+  // freed, 19 spent. Two slices, two extractions, pin 598 -> 552.
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 552,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };

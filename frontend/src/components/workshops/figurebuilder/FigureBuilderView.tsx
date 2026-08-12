@@ -129,6 +129,19 @@ export default function FigureBuilderView() {
                 onAdd: f.addRefLine,
                 onRemove: f.removeRefLine,
               } : undefined}
+              // F2.3e: canonical-only. Legacy Publication Preview renders from
+              // the LIVE store's xFmt/yFmt, which the Stage's own Inspector
+              // card already owns — a second editor for the same singleton
+              // would be a confusing duplicate, not a feature.
+              tickFormats={f.canonical ? {
+                xFmt: f.canonicalXFmt,
+                yFmt: f.canonicalYFmt,
+                y2Fmt: f.canonicalY2Fmt,
+                xIsDate: f.xIsDate,
+                onXFmt: f.setXFmtCanonical,
+                onYFmt: f.setYFmtCanonical,
+                onY2Fmt: f.setY2FmtCanonical,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />
