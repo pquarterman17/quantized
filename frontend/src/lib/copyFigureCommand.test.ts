@@ -88,6 +88,8 @@ function fakeGet(over: Record<string, unknown> = {}) {
     legendTitle: "",
     annotations: [],
     shapes: [],
+    refLines: [],
+    regionShades: [],
     pageSetup: null,
     copyFigureTransparent: false,
     focusedWindowId: null as string | null,

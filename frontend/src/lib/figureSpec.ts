@@ -348,7 +348,11 @@ export function buildStageFigureSpec(
  *  and log minor-tick state through fields the backend already supports.
  *  A live secondary-axis range (`y2Lim`) rides `y2_lim` through this SAME
  *  override mechanism (only meaningful alongside a request that also sets
- *  `y2_keys`); error-bar/region/ref-line concepts remain unsupported here. */
+ *  `y2_keys`). Export-fidelity gap (2026-08-11) closed: `refLines` and
+ *  `regionShades` now ride `ref_lines`/`region_shades` the same way —
+ *  see `calc.figure_decor`. Error-bar concepts remain unsupported HERE
+ *  (they ride a separate `error_spans` field built by `exportErrorSpans`
+ *  below, not this override object). */
 export function viewOverrides(st: Pick<
   PlotView,
   | "legendTitle"
@@ -358,6 +362,8 @@ export function viewOverrides(st: Pick<
   | "legendPos"
   | "annotations"
   | "shapes"
+  | "refLines"
+  | "regionShades"
   | "xLim"
   | "yLim"
   | "y2Lim"
@@ -407,6 +413,28 @@ export function viewOverrides(st: Pick<
       ...(s.width != null ? { width: s.width } : {}),
       ...(s.dash ? { dash: s.dash } : {}),
     }));
+  // Export-fidelity gap (2026-08-11): fixed X/Y reference lines (Hc/Tc
+  // markers…), wire-shaped (no `id` — same reasoning as `shapes` above).
+  const refLines = st.refLines
+    .filter((r) => Number.isFinite(r.value))
+    .map((r) => ({ axis: r.axis, value: r.value }));
+  // Filled region bands (Origin `Rect*` shading, decode-plan #41). `axis: 1`
+  // rides through explicitly; 0/absent are equivalent (both mean primary to
+  // every consumer, screen and backend alike) so both are omitted the same
+  // way — `calc.figure_decor` resolves the axis-1-without-a-real-y2-axis
+  // fallback on the backend itself, mirroring the screen's own
+  // `regionShadePlugin` fallback, so this mapping does not need to know
+  // whether `y2Keys` is actually set.
+  const regionShades = st.regionShades
+    .filter((r) => [r.x1, r.x2, r.y1, r.y2].every(Number.isFinite))
+    .map((r) => ({
+      x1: r.x1,
+      x2: r.x2,
+      y1: r.y1,
+      y2: r.y2,
+      fill: r.fill,
+      ...(r.axis === 1 ? { axis: 1 as const } : {}),
+    }));
   const finiteLim = (lim: [number, number] | null): [number, number] | undefined =>
     lim && lim.every(Number.isFinite) ? lim : undefined;
   return (
@@ -414,6 +442,8 @@ export function viewOverrides(st: Pick<
       legend,
       annotations,
       shapes,
+      ref_lines: refLines,
+      region_shades: regionShades,
       x_lim: finiteLim(st.xLim),
       y_lim: finiteLim(st.yLim),
       y2_lim: finiteLim(st.y2Lim),

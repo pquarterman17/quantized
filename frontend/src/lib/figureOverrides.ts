@@ -65,6 +65,22 @@ export interface FigureOverrides {
     width?: number;
     dash?: boolean;
   }[];
+  /** Export-fidelity gap (2026-08-11): fixed X/Y reference lines (Hc/Tc
+   *  markers, a zero line, a critical edge…) — `lib/uplotOverlays.ts`'s
+   *  refLinePlugin. Mirrors `RefLine` minus `id` (the wire needs no
+   *  identity, unlike the screen's editable list — same reasoning as
+   *  `shapes` above). Always the PRIMARY axes — `RefLine` has no
+   *  secondary-axis concept, unlike `RegionShade` below. See
+   *  `calc.figure_decor._apply_ref_lines`. */
+  ref_lines?: { axis: "x" | "y"; value: number }[];
+  /** Export-fidelity gap (2026-08-11): filled rectangular region bands
+   *  (Origin `Rect*` film-stack shading, decode-plan #41) —
+   *  `lib/uplotOverlays.ts`'s regionShadePlugin. Mirrors `RegionShade`
+   *  minus `id`. `axis: 1` renders on the SECONDARY (y2) scale when the
+   *  request has one (`y2_keys` set and non-empty); falls back to the
+   *  primary scale otherwise — matches the screen's own `hasY2` fallback.
+   *  See `calc.figure_decor._apply_region_shades`/`_split_region_shades_by_axis`. */
+  region_shades?: { x1: number; x2: number; y1: number; y2: number; fill: string; axis?: 0 | 1 }[];
 }
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -176,6 +192,28 @@ export function sanitizeFigureOverrides(value: unknown): FigureOverrides | null 
       return [next];
     });
   }
+  if (Array.isArray(raw.ref_lines)) {
+    out.ref_lines = raw.ref_lines.flatMap((value) => {
+      const rl = record(value);
+      const axis = rl?.axis;
+      const v = rl ? finite(rl.value) : undefined;
+      if (!rl || (axis !== "x" && axis !== "y") || v === undefined) return [];
+      return [{ axis, value: v }];
+    });
+  }
+  if (Array.isArray(raw.region_shades)) {
+    out.region_shades = raw.region_shades.flatMap((value) => {
+      const shade = record(value);
+      if (!shade || typeof shade.fill !== "string") return [];
+      const coordinates = ["x1", "x2", "y1", "y2"].map((key) => finite(shade[key]));
+      if (coordinates.some((coordinate) => coordinate === undefined)) return [];
+      const next: NonNullable<FigureOverrides["region_shades"]>[number] = {
+        x1: coordinates[0]!, x2: coordinates[1]!, y1: coordinates[2]!, y2: coordinates[3]!, fill: shade.fill,
+      };
+      if (shade.axis === 0 || shade.axis === 1) next.axis = shade.axis;
+      return [next];
+    });
+  }
   return compactOverrides(out);
 }
 
@@ -235,8 +273,13 @@ export function compactOverrides(ov: FigureOverrides): FigureOverrides | null {
   for (const [k, v] of Object.entries(ov)) {
     if (v === undefined) continue;
     if (Array.isArray(v)) {
-      // limits: keep only when at least one bound is set; annotations/breaks/shapes: non-empty
-      if ((k === "annotations" || k === "x_breaks" || k === "shapes") && v.length === 0) continue;
+      // limits: keep only when at least one bound is set; annotations/breaks/shapes/
+      // ref_lines/region_shades: non-empty
+      if (
+        (k === "annotations" || k === "x_breaks" || k === "shapes" || k === "ref_lines" || k === "region_shades") &&
+        v.length === 0
+      )
+        continue;
       if ((k === "x_lim" || k === "y_lim" || k === "y2_lim") && v.every((b) => b === null))
         continue;
       out[k] = v;

@@ -27,6 +27,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
+from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
@@ -212,6 +213,16 @@ def render_with_secondary_axis(
     rather than through ``_apply_overrides``, since that function only
     ever targets a single axes.
 
+    ``ov["region_shades"]`` tagged ``axis: 1`` (export-fidelity gap,
+    2026-08-11) are pre-stripped from the ``ov`` handed to the primary
+    ``draw_series_axes`` call below and applied to ``ax2`` directly instead,
+    via the SAME ``figure_decor._apply_region_shades`` -- the exact
+    ``y2_lim`` precedent one paragraph up, for the same reason
+    (``_apply_overrides`` only ever sees ``ax``, never ``ax2``, which does
+    not exist until this function creates it). See ``figure_decor.py``'s
+    module header for the full reasoning, including the axis-1-without-a-
+    real-y2-axis fallback this split preserves.
+
     A ``twinx()`` axes re-adds its own right spine; kept visible even when
     the primary axes hid its own (``draw_series_axes``'s ``box_on``
     branch), or a real secondary axis would read as absent.
@@ -228,9 +239,16 @@ def render_with_secondary_axis(
     primary, primary_styles, y2_series, y2_styles = _split_by_mask(
         series, series_styles, y2_mask
     )
+    # Export-fidelity gap (2026-08-11): axis-1 region shades belong on ax2,
+    # which does not exist yet -- strip them from the ov the primary
+    # draw_series_axes call below sees (unless there are none, in which case
+    # `ov` is passed through UNCHANGED so a render with no y2-tagged shades
+    # stays byte-identical to before this feature existed).
+    primary_shades, secondary_shades = _split_region_shades_by_axis(ov.get("region_shades"))
+    primary_ov = ov if not secondary_shades else {**ov, "region_shades": primary_shades}
     artists = draw_series_axes(
         fig, ax, xv, primary,
-        st=st, ov=ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
+        st=st, ov=primary_ov, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label,
         series_styles=primary_styles,
         x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
@@ -249,6 +267,7 @@ def render_with_secondary_axis(
         minor_ticks=minor_ticks,
     )
     ax2.spines["right"].set_visible(True)
+    _apply_region_shades(ax2, secondary_shades)
     y2_lim = ov.get("y2_lim")
     if y2_lim is not None:
         lo, hi = y2_lim

@@ -5,6 +5,7 @@ import {
   buildFigureSpecFromDocument,
   buildStageFigureSpec,
   resolveFigureDocumentData,
+  viewOverrides,
 } from "./figureSpec";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
@@ -61,6 +62,8 @@ function richView() {
     y2Lim: [2, 20] as [number, number],
     annotations: [{ id: "a", x: 1, y: 2, text: "peak", size: 14, frame: { pad: 3 } }],
     shapes: [{ id: "s", kind: "rect" as const, x1: 0, y1: 1, x2: 2, y2: 3, stroke: "#f00" }],
+    refLines: [{ id: "r", axis: "x" as const, value: 5 }],
+    regionShades: [{ id: "sh", x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 as const }],
     pageSetup: {
       width: 10,
       height: 5,
@@ -129,6 +132,8 @@ describe("FigureDocument FigureSpec adapter", () => {
         legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Signals" },
         annotations: [{ x: 1, y: 2, text: "peak", size: 14, frame: { pad: 3 } }],
         shapes: [{ kind: "rect", x1: 0, y1: 1, x2: 2, y2: 3, stroke: "#f00" }],
+        ref_lines: [{ axis: "x", value: 5 }],
+        region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
         x_lim: [0.1, 10],
         y_lim: [1, 9],
         grid: true,
@@ -193,6 +198,12 @@ describe("FigureDocument FigureSpec adapter", () => {
       legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Signals" },
       annotations: [{ text: "peak", frame: { pad: 3 } }],
       shapes: [{ kind: "rect", stroke: "#f00" }],
+      // Export-fidelity gap (2026-08-11): confirms refLines/regionShades
+      // flow through the buildFigureSpecFromDocument path too (the shared
+      // core viewOverrides feeds, per figureDocumentToPlotView), not just
+      // the StoreGet path the byte-equality test above pins.
+      ref_lines: [{ axis: "x", value: 5 }],
+      region_shades: [{ x1: 0, x2: 2, y1: 1, y2: 3, fill: "#336699", axis: 1 }],
       x_breaks: [[0.4, 0.6]],
       margins: { left: 0.1, right: 0.2, top: 0.1, bottom: 0.3 },
     });
@@ -482,5 +493,76 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
         opts,
       ),
     ).toThrow("grouped figures cannot use a secondary Y axis");
+  });
+});
+
+// Export-fidelity gap (2026-08-11): `viewOverrides`' doc comment used to say
+// "region/ref-line concepts remain unsupported here" — a PDF/SVG/PNG/
+// clipboard export silently dropped Hc/Tc reference-line markers and
+// Origin-decoded region shades that the screen showed. These tests exercise
+// `viewOverrides` directly (it is a pure function of a PlotView-shaped
+// object, no dataset/document machinery needed) for the new mapping's own
+// contract; the byte-equality and toMatchObject tests above already cover
+// it flowing through both the StoreGet and FigureDocument entry points.
+describe("viewOverrides — reference lines and region shades", () => {
+  it("closes the silent-drop gap: refLines/regionShades now reach the export overrides", () => {
+    // Before this change, viewOverrides had NO mapping for either field —
+    // ref_lines/region_shades would be absent from the result no matter
+    // what the view carried. They must now be present and correctly shaped.
+    const ov = viewOverrides({
+      ...defaultPlotView(),
+      refLines: [{ id: "r", axis: "x" as const, value: 3 }],
+      regionShades: [{ id: "s", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#112233" }],
+    });
+    expect(ov?.ref_lines).toEqual([{ axis: "x", value: 3 }]);
+    expect(ov?.region_shades).toEqual([{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#112233" }]);
+  });
+
+  it("strips the screen-only id from both wire shapes", () => {
+    const ov = viewOverrides({
+      ...defaultPlotView(),
+      refLines: [{ id: "should-not-appear", axis: "y" as const, value: 1 }],
+      regionShades: [{ id: "also-not-appear", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#abcdef" }],
+    });
+    expect(ov?.ref_lines?.[0]).not.toHaveProperty("id");
+    expect(ov?.region_shades?.[0]).not.toHaveProperty("id");
+  });
+
+  it("filters non-finite ref line values and region shade coordinates", () => {
+    const ov = viewOverrides({
+      ...defaultPlotView(),
+      refLines: [
+        { id: "bad", axis: "x" as const, value: NaN },
+        { id: "good", axis: "y" as const, value: 2 },
+      ],
+      regionShades: [
+        { id: "bad", x1: Infinity, x2: 1, y1: 0, y2: 1, fill: "#112233" },
+        { id: "good", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#445566" },
+      ],
+    });
+    expect(ov?.ref_lines).toEqual([{ axis: "y", value: 2 }]);
+    expect(ov?.region_shades).toEqual([{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#445566" }]);
+  });
+
+  it("passes axis:1 through explicitly but omits axis:0/absent (both mean primary)", () => {
+    const ov = viewOverrides({
+      ...defaultPlotView(),
+      regionShades: [
+        { id: "primary-absent", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#111111" },
+        { id: "primary-explicit", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#222222", axis: 0 as const },
+        { id: "secondary", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#333333", axis: 1 as const },
+      ],
+    });
+    expect(ov?.region_shades).toEqual([
+      { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#111111" },
+      { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#222222" },
+      { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#333333", axis: 1 },
+    ]);
+  });
+
+  it("omits both keys entirely when no ref lines or region shades are set", () => {
+    const ov = viewOverrides(defaultPlotView());
+    expect(ov?.ref_lines).toBeUndefined();
+    expect(ov?.region_shades).toBeUndefined();
   });
 });
