@@ -407,6 +407,104 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-11 — Reference lines and region shades in publication export (Claude Sonnet 5)
+
+- **The audited gap, re-verified against live code before touching anything.**
+  `PlotView` carries `refLines: RefLine[]` (`id, axis: "x"|"y", value`) and
+  `regionShades: RegionShade[]` (`id, x1, x2, y1, y2, fill, axis?: 0|1`) —
+  both render on the live uPlot canvas (`lib/uplotOverlays.ts`'s
+  `refLinePlugin`/`regionShadePlugin`), persist in `.dwk`, and are canonical
+  `decor.referenceLines`/`decor.regionShades` document fields
+  (`lib/figureContract.ts`). But `lib/figureSpec.ts`'s `viewOverrides` — the
+  ONE function every export/copy/page-panel path shares — had no mapping for
+  either, and its own doc comment said so ("region/ref-line concepts remain
+  unsupported here"). `lib/figureOverrides.ts` had no wire fields, and the
+  backend `calc/figure_overrides.py` had no handling. Net effect: every
+  publication export/copy (PDF/SVG/PNG, clipboard, page panels) silently
+  dropped Hc/Tc reference markers and Origin-decoded film-stack region shades
+  that the screen showed.
+- **The fix, layer by layer.** Backend: new sibling module
+  `calc/figure_decor.py` (needed to be shared between `figure_overrides.py`
+  and `figure_y2.py` for the y2 routing below, so it followed
+  `figure_shapes.py`'s split-module precedent rather than growing either
+  existing file) with `_validate_ref_lines`/`_validate_region_shades` (reject
+  non-finite values, malformed `#RRGGBB` fill, bad axis tags) and
+  `_apply_ref_lines`/`_apply_region_shades` (matplotlib `axvline`/`axhline`
+  dashed lines; `Rectangle` patches at `zorder=0`). `figure_overrides.py`'s
+  `_validate_overrides`/`_apply_overrides` call them for the primary axes.
+  Frontend: `FigureOverrides` gains `ref_lines`/`region_shades` wire fields
+  (`figureOverrides.ts`, with sanitizer + `compactOverrides` array-key
+  updates); `viewOverrides` (`figureSpec.ts`) maps `PlotView.refLines`/
+  `regionShades` onto them, filtering non-finite values and stripping the
+  screen-only `id` (same pattern as `shapes`/`annotations`).
+  `buildStageFigureSpec`/`buildFigureSpecFromDocument` needed no changes —
+  they already route through `viewOverrides` via
+  `figureDocumentToPlotView`'s full `PlotView` clone.
+- **The z-order decision, verified against the plugin source, not assumed.**
+  `regionShadePlugin` draws in uPlot's `drawClear` hook (fires immediately
+  after canvas clear, BEFORE grid/axes/series) — shades sit behind
+  everything on screen, confirmed by the plugin's own doc comment ("Drawn
+  translucently BEHIND the data"). `refLinePlugin` draws in uPlot's `draw`
+  hook, which fires AFTER every series paints — ref lines are actually ON
+  TOP of the data on screen, the opposite of an initial assumption. Backend
+  match: region shades get `zorder=0` (below matplotlib's Patch default of 1
+  and Line2D default of 2, so they land behind grid+data regardless of add
+  order); ref lines get no special zorder — `_apply_ref_lines` runs from
+  `_apply_overrides`, which is `draw_series_axes`'s last step (series
+  already plotted), so the tied default Line2D zorder (2) resolves via
+  add-order, landing them on top — confirmed with a direct smoke test, not
+  assumed.
+- **The y2-shade decision.** `RegionShade.axis === 1` means "expressed in
+  the secondary y2 scale," but `_apply_overrides` only ever sees the primary
+  `ax` — `ax2` is created by `figure_y2.render_with_secondary_axis` (via
+  `ax.twinx()`) AFTER the primary `draw_series_axes` call, of which
+  `_apply_overrides` is the last step. Rather than thread a new "is y2 about
+  to exist" flag through `draw_series_axes` (whose signature
+  `figure_page.py`'s multi-panel composer also depends on), the fix mirrors
+  the EXISTING `y2_lim` precedent exactly: `render_with_secondary_axis`
+  pre-strips axis-1 shades from the `ov` it hands to the primary
+  `draw_series_axes` call (`figure_decor._split_region_shades_by_axis`) and
+  applies them to `ax2` directly once it exists, via the same
+  `_apply_region_shades`. A render with NO y2 axis at all sees the FULL
+  `region_shades` list including axis-1 entries — the documented fallback,
+  matching the screen's own `regionShadePlugin` (`hasY2 = u.scales.y2 !=
+  null` gates the y2 lookup; absent a real y2 scale, an axis-1 shade still
+  draws on the primary scale rather than vanishing). `RefLine` has no
+  secondary-axis concept at all (`axis: "x"|"y"` only, no y2 ref-line type
+  on screen), so `_apply_ref_lines` only ever targets the primary axes — no
+  split needed there. Verified directly with a standalone smoke script
+  exercising all three cases before writing the formal suite.
+- **Tests.** Backend: new `tests/test_calc_figure_decor.py` (24 tests) —
+  validation rejects, primary ref-line/region-shade rendering (dash style,
+  zorder, z-order-vs-series ordering), the axis-1-without-y2 fallback, and a
+  class exercising `render_with_secondary_axis` directly (axis-1 shade on
+  ax2 not ax, axis-0 stays primary, mixed-axis split, byte-identical no-op
+  when no shades are set). Frontend: extended `figureSpec.test.ts`'s
+  byte-equality tests plus a new viewOverrides describe block
+  (closes-the-gap characterization, id-stripping, non-finite filtering,
+  axis passthrough, both-keys-omitted-when-unset). Also fixed two
+  pre-existing hand-rolled `PlotView`-shaped test fixtures
+  (`exportFigureCommand.test.ts`, `copyFigureCommand.test.ts`) that lacked
+  `refLines`/`regionShades` and broke at runtime once `viewOverrides`'s
+  `Pick<PlotView,...>` widened — both `as never`/`as any`-cast, so
+  TypeScript couldn't catch the omission at compile time. Extended
+  `figureCompatibility.ts`'s `figureDocPlotCompatibility` loss inventory
+  (`ref_lines`/`region_shades`) to close the same silent-drop class one
+  layer over.
+- **Gate** (agent run + orchestrator-verified on the merged tree): backend
+  ruff/mypy clean, pytest 3,932 passed (collected 3,986 → 4,010, +24 =
+  exactly the new test file, no shrinkage); frontend lint 0 errors, 412
+  files / 6,039 tests, tsc clean, build 879.8 kB eager (23.5 kB headroom).
+  The one backend failure during verification was
+  `test_calc_map.py::test_auto_qspace_map_builds_fast_on_real_corpus` —
+  investigated to root cause and recalibrated in the same session (see
+  TEST_DETERMINISM_PLAN's 2026-08-11 note: mis-calibrated budget premise,
+  NOT a regression — the same input at the original calibration commit was
+  2x slower than today's code).
+- `calc/figure_decor.py` (196), `figure_overrides.py` (224), `figure_y2.py`
+  (285), `lib/figureOverrides.ts` (326), `lib/figureSpec.ts` (481) all stay
+  under their ceilings — no pins needed.
+
 ### 2026-08-11 — F2.3c shapes property panel in Publication Preview (Claude Sonnet 5)
 
 - Added canonical-draft controls for per-shape properties: the four

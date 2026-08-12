@@ -11,9 +11,10 @@ agents that do not need to hold the whole picture.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-11 (header date caught up during the twenty-second
-BACKLOG reconcile — tasks 1/2/3/4/6 all completed 2026-08-10 without the
-date being bumped; open residue is #7 plus the #5 standing rule)
+**Updated:** 2026-08-11 (worked-example backstop recalibrated 8 → 90 s
+after a five-for-five deterministic failure that was initially mistaken
+for a load flake — see the dated addendum in Completed; open residue is
+#7 plus the #5 standing rule)
 
 ---
 
@@ -196,6 +197,22 @@ rule in task 4.
   concurrent load (2.22 s standalone, red under parallel agents); replaced by a
   deterministic assertion on the resolved gridding METHOD plus a loose 8 s
   backstop. Originated as RSM_CUTS_PLAN item 16.
+  **Recalibrated 2026-08-11 (8 → 90 s), with a lesson the plan didn't have
+  yet:** the 8 s backstop failed five-for-five (13.3–16.1 s, three runs
+  standalone with no load) — not a flake but a mis-calibrated PREMISE. The
+  test's file-selection loop picks the first ≥100k-point corpus qualifier,
+  which is `m3learning_rsm.xrdml` at 465,885 pts (`sorted()` puts capitals
+  first), while the budget's "~0.3 s linear" numbers described a ~100k-point
+  file. Verified NOT a product regression by timing the same input at the
+  original calibration commit in a synced worktree: 26.7 s there vs 13–16 s
+  on today's code — the code got FASTER; the budget was never achievable.
+  **The lesson: a corpus-dependent wall-clock must be calibrated against the
+  file the selection loop ACTUALLY picks, and the failure of a "loose"
+  backstop deserves root-cause investigation before being written off as
+  load** — this one looked exactly like a load flake (it first surfaced
+  during a 3-agent session) and wasn't. The invariant assertion (auto →
+  "linear") was green throughout, which is what let the clock's failure be
+  diagnosed as calibration rather than product.
 - ~~**Class B, `useFigureBuilder.test.ts`**~~ (2026-08-09) — root-caused and
   fixed; was RSM_CUTS_PLAN item 22. Baseline 1/30 standalone single-threaded,
   0/90 after, independently re-verified 0/30. The evidence rests on the
