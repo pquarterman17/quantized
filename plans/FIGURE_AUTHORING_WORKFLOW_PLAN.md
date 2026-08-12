@@ -686,6 +686,27 @@ recorded above instead.
   `result.current.preview` (strictly stronger: it is null until the debounced
   hit-map resolves AND commits). `weak-waits-inventory.md` updated;
   figurebuilder is the first directory cleared under TEST_DETERMINISM #5.
+- **Swept the whole class, and it is a clean negative.** A
+  render-time-`getState()` detector (brace/scope walk over every non-test
+  `.ts`/`.tsx` under `frontend/src`, flagging `useApp.getState()` reached
+  during render rather than inside a callback) was first VALIDATED against
+  this very bug — run over the pre-fix file it flags the exact line — then run
+  over the fixed tree. 255 `getState()` call sites exist; every one outside
+  this fix is either an action function (`newGraphWindow`, `runUndo`,
+  `exportSavedPage`, the whole `folderOps`/`contextActions` family — reading
+  freshest state at action time, which is the correct idiom) or one of two
+  DELIBERATE, documented render-time reads in `Stage/PlotStage.tsx`
+  (`qfitRoi`, `gadgetCursors`), where the comment explains that subscribing
+  would rebuild the uPlot instance and orphan the plugin's in-flight drag
+  listeners. Those two are correct; recorded here so they are not
+  re-investigated as suspects.
+- **No standing guard was added, deliberately.** The detector needs ~60
+  allowlist entries to go green because "action function" vs "render body" is
+  a judgement call at the syntax level — the same unreliable-classification
+  trap TEST_DETERMINISM #4 hit three times before that campaign abandoned
+  classification for a plain count ratchet. A guard that must be maintained
+  against 60 false positives gets disabled, not maintained. The method is
+  recorded here instead so it can be re-run cheaply after new hooks land.
 - **F2.2 stays open.** This closes a defect in F2.2a's shipped mechanism, not
   the remaining broader-entry-point parity work.
 
