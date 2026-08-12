@@ -72,9 +72,9 @@ const describeBindings = (bindings: readonly ErrorBinding[], labels: readonly st
     .join(", ");
 
 /** Read-only summary of the canonical Y error bindings that describe
- *  `channel` (F2.3b: DISPLAY only -- `document.bindings.errors` is canonical,
- *  but reassigning it needs the same channel-picker "well" Graph Builder
- *  already owns, not a per-row toggle here; see the F2.3b decision log). */
+ *  `channel` (F2.3b: DISPLAY only in the Series group -- `document.bindings.
+ *  errors` is canonical and editable, but through the separate Error columns
+ *  group, F2.3f's ErrorColumnsPanel, not a per-row toggle here). */
 export function describeSeriesErrors(
   bindings: readonly ErrorBinding[],
   channel: number,

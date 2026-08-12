@@ -7,21 +7,24 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { exportFigure, type FigureSpec } from "../../../lib/api";
+import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
-import { appendRefLine, patchRefLineList, refLineIdForHit, removeRefLineFromList } from "./canonicalRefLines";
-import { deriveShapeRows, patchShapeList, removeShapeFromList, shapeIdForHit, translateShape } from "./canonicalShapes";
+import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
+import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
+import { dragPreviewElement } from "./previewDrag";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
+import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { effectiveChannels } from "../../../lib/plotdata";
-import { groupForElement, pxToCanvasFraction, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
+import { groupForElement } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -33,10 +36,6 @@ let _docSeq = 0;
 // data, extracted to fund F2.4e's shape-drag addition) — re-exported here so
 // every existing importer of this module is untouched.
 export { FIGURE_FORMATS, FIGURE_STYLES, FIGURE_STYLE_DPI } from "./figureOutputConstants";
-
-/** b minus a, both `{x, y}` points -> `[dx, dy]` — shared by dragElement's
- *  F2.4e shape branch across the data-anchor/page-anchor delta (same shape). */
-const deltaXY = (a: { x: number; y: number }, b: { x: number; y: number }): [number, number] => [b.x - a.x, b.y - a.y];
 
 export function useFigureBuilder() {
   const active = useActiveDataset();
@@ -183,10 +182,8 @@ export function useFigureBuilder() {
   // legend/annotations/breaks above, they write straight through
   // setCanonicalView instead of the publication-overrides delta bridge, the
   // same way editElementText's title/xLabel/yLabel already do. Error-bar
-  // DESIGNATIONS (document.bindings.errors) are canonical too but stay
-  // display-only here -- reassigning them needs the same channel-picker
-  // "well" Graph Builder already owns (useGraphBuilder.ts), not a per-row
-  // toggle; see canonicalSeries.ts's doc and the F2.3b decision log.
+  // DESIGNATIONS stay a read-only summary here -- editing them is the
+  // separate Error columns group below (F2.3f).
   const seriesChannels = canonical && canonicalData && canonicalDocument
     ? effectiveChannels(
         canonicalData,
@@ -253,6 +250,21 @@ export function useFigureBuilder() {
   const setXFmtCanonical = (next: AxisFormat) => setCanonicalView({ xFmt: next });
   const setYFmtCanonical = (next: AxisFormat) => setCanonicalView({ yFmt: next });
   const setY2FmtCanonical = (next: AxisFormat | null) => setCanonicalView({ y2Fmt: next });
+
+  // F2.3f: error-column bindings live on `document.bindings.errors`, not
+  // the PlotView, so edits patch the document directly instead of routing
+  // through setCanonicalView. Index is a binding's whole identity (no `id`
+  // field -- canonicalErrors.ts's doc explains why).
+  const errorBindings: readonly ErrorBinding[] = canonicalDocument?.bindings.errors ?? [];
+  const setErrorBindings = (next: ErrorBinding[]) =>
+    patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, errors: next } }));
+  const patchErrorBinding = (index: number, patch: Partial<Omit<ErrorBinding, "channel">>) =>
+    setErrorBindings(patchErrorBindingList(errorBindings, index, patch));
+  const addErrorBinding = (channel: number, target: number, axis: ErrorBinding["axis"], side: ErrorSide) =>
+    setErrorBindings(appendErrorBinding(errorBindings, channel, target, axis, side));
+  const removeErrorBinding = (index: number) =>
+    setErrorBindings(removeErrorBindingFromList(errorBindings, index));
+  const detectErrorBindings = () => canonicalData && setErrorBindings(inferErrorBindings(canonicalData));
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -350,57 +362,14 @@ export function useFigureBuilder() {
   const textOf = (id: string): string =>
     id === "title" ? (canonicalView?.plotTitle ?? title) : id === "xlabel" ? (canonicalView?.xAxisLabel ?? xLabel) : id === "ylabel" ? (canonicalView?.yAxisLabel ?? yLabel) : "";
 
-  /** Drag-to-place: legend -> custom figure-fraction anchor; annotation ->
-   *  new data coords. Both commit through the ONE overrides object (#11).
-   *  `startPx`/`startPy` (the press origin, F2.4e) are optional so every
-   *  pre-existing 3-arg call (legend/annotation drags, tests included) stays
-   *  source-compatible — only the shape branch needs them. */
-  function dragElement(id: string, px: number, py: number, startPx?: number, startPy?: number): void {
-    if (!hitmap) return;
-    if (id === "legend") {
-      setActiveOverrides({
-        ...activeOverrides,
-        legend: {
-          ...activeOverrides.legend,
-          loc: "custom",
-          anchor: pxToFigureFraction(hitmap.width, hitmap.height, px, py),
-        },
-      });
-    } else if (id.startsWith("refline:")) {
-      // F2.4d: drag a reference line to move it, the same gesture the Stage's
-      // uPlot canvas already supports (`updateRefLine`). Value only — a line's
-      // AXIS is fixed once created everywhere in the app, so a horizontal drag
-      // of a Y line is a no-op rather than a reinterpretation.
-      const lineId = refLineIdForHit(refLines, Number(id.slice("refline:".length)));
-      const line = refLines.find((candidate) => candidate.id === lineId);
-      if (!line) return;
-      const { x, y } = pxToData(hitmap.axes, px, py);
-      const next = line.axis === "x" ? x : y;
-      if (Number.isFinite(next)) setRefLineValue(line.id, next);
-    } else if (id.startsWith("ann:")) {
-      const i = Number(id.slice(4));
-      const anns = activeOverrides.annotations ?? [];
-      if (!Number.isInteger(i) || i >= anns.length) return;
-      const { x, y } = pxToData(hitmap.axes, px, py);
-      setActiveOverrides({
-        ...activeOverrides,
-        annotations: anns.map((a, j) => (j === i ? { ...a, x, y } : a)),
-      });
-    } else if (id.startsWith("shape:")) {
-      // F2.4e: translate by the pointer's DELTA, never jump to the drop point
-      // (translateShape). Page anchor -> canvas-fraction delta
-      // (pxToCanvasFraction); data anchor (default) -> data-coord delta, same
-      // space a reference line's value already moves in.
-      const shapeId = shapeIdForHit(shapes, Number(id.slice("shape:".length)));
-      const shape = shapes.find((candidate) => candidate.id === shapeId);
-      if (!shape || startPx === undefined || startPy === undefined) return;
-      const [dx, dy] = shape.anchor === "page"
-        ? deltaXY(pxToCanvasFraction(hitmap.width, hitmap.height, startPx, startPy), pxToCanvasFraction(hitmap.width, hitmap.height, px, py))
-        : deltaXY(pxToData(hitmap.axes, startPx, startPy), pxToData(hitmap.axes, px, py));
-      const patch = translateShape(shape, dx, dy);
-      if (patch) setShapeStyle(shape.id, patch);
-    }
-  }
+  /** Drag-to-place commit map — the dispatch lives in previewDrag.ts (moved
+   *  whole when the F2.4e+F2.3f merge hit this module's size pin); this
+   *  wrapper only binds the hook's live state. */
+  const dragElement = (id: string, px: number, py: number, startPx?: number, startPy?: number): void =>
+    dragPreviewElement(
+      { hitmap, activeOverrides, setActiveOverrides, refLines, setRefLineValue, shapes, setShapeStyle },
+      id, px, py, startPx, startPy,
+    );
 
   async function exportNow(): Promise<void> {
     if (canonicalDocument) {
@@ -498,6 +467,12 @@ export function useFigureBuilder() {
     setXFmtCanonical,
     setYFmtCanonical,
     setY2FmtCanonical,
+    // F2.3f: canonical-only (empty/no-op in legacy mode — see the field doc above).
+    errorBindings,
+    patchErrorBinding,
+    addErrorBinding,
+    removeErrorBinding,
+    detectErrorBindings,
     data,
     hitmap,
     focusGroup,

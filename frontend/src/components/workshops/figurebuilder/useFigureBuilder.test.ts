@@ -2,7 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
-import { createFigureDocument, deserializeFigureDocument, serializeFigureDocument } from "../../../lib/figureDocument";
+import {
+  createFigureDocument,
+  deserializeFigureDocument,
+  figureDocumentToPlotView,
+  serializeFigureDocument,
+} from "../../../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
 import type { DataStruct, Shape } from "../../../lib/types";
@@ -1235,6 +1240,155 @@ describe("useFigureBuilder", () => {
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.preview).not.toBeNull());
       expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_fmt).toBeUndefined();
+    });
+  });
+
+  // F2.3f: error-column bindings live on document.bindings.errors -- NOT the
+  // PlotView -- so this is the one canonical-only slice that does not route
+  // through setCanonicalView. Same coverage contract as F2.3d/e regardless:
+  // setters, Apply-commits/Cancel-is-mutation-free, and a wire-reaches-render
+  // proof. The extra case: the read-only Series summary (F2.3b) must reflect
+  // a binding added through THIS panel rather than reading stale data.
+  describe("canonical error-column bindings (F2.3f)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const eb = (channel: number, target: number, axis: "x" | "y", side: "both" | "+" | "-") =>
+      ({ channel, target, axis, side });
+    const errorDocument = (
+      id: string,
+      errors: ReturnType<typeof eb>[],
+      view: Partial<ReturnType<typeof defaultPlotView>> = {},
+    ) => createFigureDocument({ id, name: "Err doc", datasetId: "d1", view: { ...defaultPlotView(), ...view }, errors });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("computes an empty error-binding list in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.errorBindings).toEqual([]);
+    });
+
+    it("exposes the draft's error bindings once canonical", () => {
+      useApp.setState({ figurePublicationSession: session(errorDocument("figure-err-a", [eb(1, 0, "y", "both")])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.errorBindings).toEqual([eb(1, 0, "y", "both")]);
+    });
+
+    it("patchErrorBinding patches the binding at the given index only", () => {
+      useApp.setState({
+        figurePublicationSession: session(
+          errorDocument("figure-err-b", [eb(1, 0, "y", "both"), eb(0, -1, "x", "both")]),
+        ),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.patchErrorBinding(0, { side: "+" }));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([
+        eb(1, 0, "y", "+"),
+        eb(0, -1, "x", "both"),
+      ]);
+    });
+
+    it("addErrorBinding appends a new binding", () => {
+      useApp.setState({ figurePublicationSession: session(errorDocument("figure-err-c", [])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addErrorBinding(1, 0, "y", "both"));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([eb(1, 0, "y", "both")]);
+    });
+
+    it("removeErrorBinding drops the binding at the given index only", () => {
+      useApp.setState({
+        figurePublicationSession: session(
+          errorDocument("figure-err-d", [eb(1, 0, "y", "both"), eb(0, -1, "x", "both")]),
+        ),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.removeErrorBinding(0));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([eb(0, -1, "x", "both")]);
+    });
+
+    it("detectErrorBindings replaces the draft's bindings with the pure name-inference result", () => {
+      useApp.setState({
+        datasets: [{ id: "d1", name: "scan.dat", data: { ...DATA, labels: ["R", "dR"] } }],
+        figurePublicationSession: session(errorDocument("figure-err-e", [])),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.detectErrorBindings());
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([eb(1, 0, "y", "both")]);
+    });
+
+    it("the read-only Series summary (F2.3b) reflects a binding added here, not stale data", () => {
+      useApp.setState({ figurePublicationSession: session(errorDocument("figure-err-i", [], { yKeys: [0] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.seriesErrors).toEqual([]);
+      act(() => result.current.addErrorBinding(1, 0, "y", "both"));
+      expect(result.current.seriesErrors).toEqual([eb(1, 0, "y", "both")]);
+    });
+
+    it("Apply commits into the window document and mirrors symmetric-Y bindings into errKeys", async () => {
+      const document = errorDocument("figure-err-f", [eb(1, 0, "y", "both")]);
+      useApp.setState({
+        // Unlike the other F2.3 fields (plain PlotView members), a symmetric-Y
+        // binding round-trips through the LIVE errKeys singleton -- seed it
+        // from the document so the focused window's live facade already
+        // agrees with the session baseline before any edit (see
+        // figureDocument.ts's updateFigureDocumentFromPlotView).
+        ...figureDocumentToPlotView(document),
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.addErrorBinding(0, -1, "x", "both"));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.bindings.errors).toEqual([
+        eb(1, 0, "y", "both"),
+        eb(0, -1, "x", "both"),
+      ]);
+      // errKeysFromBindings only projects symmetric Y bindings -- the x
+      // binding above has no place in the legacy Record<number,number> shape.
+      expect(state.errKeys).toEqual({ 0: 1 });
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = errorDocument("figure-err-g", [eb(1, 0, "y", "both")]);
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addErrorBinding(0, -1, "x", "both"));
+      act(() => result.current.cancel());
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("reaches the render request, so the preview shows what the panel edits", async () => {
+      useApp.setState({
+        figurePublicationSession: session(errorDocument("figure-err-h", [], { yKeys: [0] })),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.addErrorBinding(1, 0, "y", "both"));
+      // error_spans is the wire field buildFigureSpecForView derives from
+      // document.bindings.errors via exportErrorSpans (MAIN #36) -- without
+      // this the panel would edit a field the rendered figure never shows.
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].error_spans).toEqual([
+          { y: { plus: [9, 8, 7], minus: [9, 8, 7] } },
+        ]),
+      );
     });
   });
 

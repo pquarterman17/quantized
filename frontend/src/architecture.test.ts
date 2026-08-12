@@ -340,7 +340,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // state moved to usePreviewRender.ts, funding the reference-line drag. 41
   // freed, 11 spent. Three slices, three extractions, pin 598 -> 522 — the
   // ratchet has paid for every one of them and never been raised.
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 522,
+  // useFigureBuilder.ts GRADUATED 2026-08-12 (pin was 522): the F2.4e+F2.3f
+  // pair each funded itself with the same figureOutputConstants.ts
+  // extraction, so their merge went 21 over — resolved by also moving the
+  // drag-to-place dispatch whole to previewDrag.ts, which dropped the hook
+  // under the general ceiling and off this list entirely.
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };

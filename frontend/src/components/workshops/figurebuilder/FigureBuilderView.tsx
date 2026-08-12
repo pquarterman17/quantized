@@ -142,6 +142,16 @@ export default function FigureBuilderView() {
                 onYFmt: f.setYFmtCanonical,
                 onY2Fmt: f.setY2FmtCanonical,
               } : undefined}
+              // F2.3f: gated on `canonical` only, like reference lines --
+              // Add needs no live canvas, just the dataset's column labels.
+              errorColumns={f.canonical ? {
+                bindings: f.errorBindings,
+                labels: f.data?.labels ?? [],
+                onPatch: f.patchErrorBinding,
+                onAdd: f.addErrorBinding,
+                onRemove: f.removeErrorBinding,
+                onDetect: f.detectErrorBindings,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />

@@ -4,11 +4,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ErrorBinding } from "../../../lib/errorRoles";
+import type { ErrorBinding, ErrorSide } from "../../../lib/errorRoles";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
 import type { AxisFormat, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
+import ErrorColumnsPanel from "./ErrorColumnsPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
 import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
@@ -70,6 +71,19 @@ export interface TickFormatPanelProps {
   onY2Fmt: (next: AxisFormat | null) => void;
 }
 
+/** F2.3f: error-column bindings on the canonical draft. Supplied only in a
+ *  canonical session -- like F2.3d's reference lines (not F2.3b's Series,
+ *  which stays read-only display), the group renders even with an EMPTY
+ *  list, because Add needs only the dataset's column labels, no live canvas. */
+export interface ErrorColumnsPanelProps {
+  bindings: readonly ErrorBinding[];
+  labels: readonly string[];
+  onPatch: (index: number, patch: Partial<Omit<ErrorBinding, "channel">>) => void;
+  onAdd: (channel: number, target: number, axis: ErrorBinding["axis"], side: ErrorSide) => void;
+  onRemove: (index: number) => void;
+  onDetect: () => void;
+}
+
 function Group({
   title,
   children,
@@ -114,6 +128,7 @@ export default function PropertyPanels({
   shapes,
   refLines,
   tickFormats,
+  errorColumns,
   openGroup = null,
   openNonce,
 }: {
@@ -145,6 +160,10 @@ export default function PropertyPanels({
   refLines?: RefLinesPanelProps;
   /** F2.3e: canonical axis tick formats -- see TickFormatPanelProps' doc. */
   tickFormats?: TickFormatPanelProps;
+  /** F2.3f: canonical error-column bindings. Absent (legacy mode) hides the
+   *  group; present-but-empty still renders it -- see ErrorColumnsPanelProps'
+   *  doc. */
+  errorColumns?: ErrorColumnsPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -329,6 +348,19 @@ export default function PropertyPanels({
             onValue={refLines.onValue}
             onAdd={refLines.onAdd}
             onRemove={refLines.onRemove}
+          />
+        </Group>
+      )}
+
+      {errorColumns && (
+        <Group title="Error columns" forceOpen={openGroup === "Error columns"} openNonce={openNonce}>
+          <ErrorColumnsPanel
+            bindings={errorColumns.bindings}
+            labels={errorColumns.labels}
+            onPatch={errorColumns.onPatch}
+            onAdd={errorColumns.onAdd}
+            onRemove={errorColumns.onRemove}
+            onDetect={errorColumns.onDetect}
           />
         </Group>
       )}

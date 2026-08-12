@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import type { Shape } from "../../../lib/types";
 import { groupForElement } from "../../../lib/previewmap";
-import PropertyPanels, { type RefLinesPanelProps, type SeriesPanelProps, type ShapesPanelProps } from "./PropertyPanels";
+import PropertyPanels, {
+  type ErrorColumnsPanelProps,
+  type RefLinesPanelProps,
+  type SeriesPanelProps,
+  type ShapesPanelProps,
+} from "./PropertyPanels";
 
 function Harness({
   initial,
@@ -442,6 +447,55 @@ describe("PropertyPanels Reference lines group (F2.3d)", () => {
     );
     fireEvent.change(screen.getByLabelText("X reference 1 value"), { target: { value: "900" } });
     expect(onValue).toHaveBeenCalledWith("r1", 900);
+  });
+});
+
+describe("PropertyPanels Error columns group (F2.3f)", () => {
+  const errorColumnsProp = (
+    overrides: Partial<ErrorColumnsPanelProps> = {},
+  ): ErrorColumnsPanelProps => ({
+    bindings: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+    labels: ["R", "dR"],
+    onPatch: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    onDetect: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the group entirely in legacy mode (no prop supplied)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Error columns" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Error columns/ })).not.toBeInTheDocument();
+  });
+
+  it("KEEPS the group when the canonical draft has none — unlike Series", () => {
+    // The panel can create the first binding from just the dataset's column
+    // labels; hiding it when empty would put reassignment back on the Stage.
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Error columns"
+        hasY2={false}
+        errorColumns={errorColumnsProp({ bindings: [] })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("new error binding channel")).toBeInTheDocument();
+  });
+
+  it("renders the group and forwards edits to the supplied callbacks", () => {
+    const onPatch = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Error columns"
+        hasY2={false}
+        errorColumns={errorColumnsProp({ onPatch })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("error binding 1 side"), { target: { value: "+" } });
+    expect(onPatch).toHaveBeenCalledWith(0, { side: "+" });
   });
 });
 
