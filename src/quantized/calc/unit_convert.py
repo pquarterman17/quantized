@@ -185,9 +185,17 @@ def _parse_units(unit_str: str) -> dict[str, Any]:
             total_scale = base_scale ** tok["exp"]
         except OverflowError as exc:
             raise ValueError(f"unit exponent too large in {unit_str!r}") from exc
-        if total_scale == 0.0 and base_scale != 0.0:
-            # A huge negative exponent underflowed the scale to exactly 0.0, which
-            # would divide-by-zero downstream; reject instead of crashing.
+        if total_scale == 0.0:
+            # A zero-scale token would divide-by-zero downstream -- both when it
+            # sits in a denominator (the `scale / total_scale` below) and, even
+            # if not, when it later becomes a same-dimension conversion factor's
+            # denominator in `unit_convert`. Two ways to get here: a bare
+            # numeric-literal token of "0" itself (`base_scale == 0.0`, e.g. the
+            # nonsensical "0" or "m/0"), or a huge negative exponent underflowing
+            # a genuine unit's scale to exactly 0.0. Reject both instead of
+            # crashing with an uncaught ZeroDivisionError.
+            if base_scale == 0.0:
+                raise ValueError(f"unit token in {unit_str!r} scales to zero (not a valid unit)")
             raise ValueError(f"unit exponent underflows the scale to zero in {unit_str!r}")
         if tok["in_denom"]:
             dims = dims - base_dims * tok["exp"]

@@ -190,3 +190,32 @@ def test_curve_fit_empty_arrays_raise_valueerror_not_zerodivision() -> None:
     # A real fit is unaffected.
     res = curve_fit([0.0, 1.0, 2.0], [1.0, 3.0, 5.0], linear, [1.0, 0.0])
     assert res["params"][0] == pytest.approx(2.0, rel=1e-6)
+
+
+# ── 2026-08-12 round ──────────────────────────────────────────────────────
+# Hardening re-sweep of routes/calc modules added or substantially changed
+# since the 2026-07-19 round. Confirmed live (HTTP 500 via TestClient)
+# before fixing.
+
+
+def test_unit_convert_zero_literal_token_raises_valueerror_not_zerodivision() -> None:
+    """A bare numeric-literal unit token of "0" (accepted as a dimensionless
+    scale factor by ``_decompose_token``) slipped past the exponent-underflow
+    guard in ``_parse_units`` -- which only fired when ``base_scale != 0.0``
+    -- leaving ``total_scale == 0.0`` unguarded. That zero then divided by
+    zero in two different places: immediately, if "0" sat in a denominator
+    token (``scale = scale / total_scale`` inside ``_parse_units`` itself),
+    or later in ``unit_convert``'s same-dimension path
+    (``factor = from_p["scale"] / to_p["scale"]``, a plain Python float
+    division) -- both an uncaught ``ZeroDivisionError`` (HTTP 500) via
+    ``POST /api/reference/convert`` rather than a 422.
+    """
+    with pytest.raises(ValueError, match="scales to zero"):
+        unit_convert(1.0, "1", "0")
+    with pytest.raises(ValueError, match="scales to zero"):
+        unit_convert(1.0, "0", "1")
+    with pytest.raises(ValueError, match="scales to zero"):
+        unit_convert(1.0, "m", "m/0")  # "0" as a denominator token
+    # A real conversion is unaffected.
+    result, _ = unit_convert(1.0, "m", "m")
+    assert float(np.asarray(result)) == pytest.approx(1.0)
