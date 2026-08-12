@@ -28,3 +28,36 @@ export function sessionLiveDrifted(
   const live = liveWindowDocument(state, window);
   return live !== null && JSON.stringify(live) !== JSON.stringify(session.baseline);
 }
+
+/** Zustand SELECTOR form of the check above -- the form `useFigureBuilder`
+ *  must use.
+ *
+ *  The distinction is not stylistic. A focused window's LIVE document is
+ *  derived (`liveWindowDocument` -> `snapshotView`) from the top-level store
+ *  singletons -- `refLines`, `regionShades`, `shapes`, `annotations`,
+ *  `hiddenChannels`, `plotTitle`, every `VIEW_KEYS` field -- NOT from the
+ *  window record. Reading them through `useApp.getState()` at render time
+ *  computes the right answer but subscribes to nothing, so a Stage edit made
+ *  behind the open, non-modal preview never woke the hook: Apply stayed
+ *  enabled, and clicking it rejected the whole session
+ *  ("publication preview target changed; changes not applied"), discarding
+ *  every preview edit. That is the precise failure item 1 exists to prevent,
+ *  and it survived item 1 because the item-1 test drifts `plotWindows` -- a
+ *  field the hook DOES subscribe to.
+ *
+ *  Cost: this runs on every store notification, so the no-session case (the
+ *  overwhelming majority of the app's life -- Publication Preview is one
+ *  transient tool window) short-circuits on a single property read before
+ *  touching `plotWindows` or building any document. Only an open,
+ *  not-yet-stale, window-target session pays for the derive+stringify, and
+ *  it returns a BOOLEAN, so an unchanged answer re-renders nothing. */
+export function selectSessionLiveDrifted(state: AppState): boolean {
+  const session = state.figurePublicationSession;
+  if (session === null || session.target === "new-editable" || session.staleBaseline) return false;
+  // Mirrors useFigureBuilder's own `targetBlocked` exactly; both mean "this
+  // session has a different Apply-blocking reason already".
+  const targetBlocked =
+    !state.plotWindows.some((candidate) => candidate.id === session.windowId) ||
+    state.focusedWindowId !== session.windowId;
+  return sessionLiveDrifted(session, state.plotWindows, targetBlocked, state);
+}

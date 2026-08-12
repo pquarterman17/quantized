@@ -11,14 +11,20 @@ commit.
 
 ## Summary
 
-**CRITICAL:** SUSPECT count (98) exceeds task-scoped appetite (~40). This is a larger campaign than task 4 anticipated. The owner should decide on appetite before task 5 begins scheduling per-directory fixes.
+**CRITICAL:** SUSPECT count (98 at triage) exceeds task-scoped appetite (~40). This is a larger campaign than task 4 anticipated. The owner should decide on appetite before task 5 begins scheduling per-directory fixes.
 
-| Metric | Count |
-|--------|-------|
-| Total matches found | 124 |
-| SAFE (final assertion or mock-only checks) | 26 |
-| SUSPECT (depends on awaited call's resolved value) | 98 |
-| **% SUSPECT** | **79%** |
+| Metric | Count at triage (2026-08-10) | Now |
+|--------|------------------------------|-----|
+| Total matches found | 124 | 104 |
+| SAFE (final assertion or mock-only checks) | 26 | 26 |
+| SUSPECT (depends on awaited call's resolved value) | 98 | 78 |
+| **% SUSPECT** | **79%** | **75%** |
+
+**Progress under task 5's standing rule:** `components/workshops/figurebuilder`
+cleared 2026-08-12 (22 → 0) while that file was being edited for the
+Publication Preview drift-subscription fix. No directory has been scheduled
+as a campaign; this is opportunistic clearing only, which is the whole design
+of task 5.
 
 ## Classification rules (mechanical, no judgement)
 
@@ -93,32 +99,18 @@ commit.
 | useDistribution.test.ts | 185 | statsFitDistributions | `await waitFor(() => expect(result.current.rankedFits.length).toBe(2));` |
 | useDistribution.test.ts | 317 | statsHistogram | `await waitFor(() => expect(result.current.hist).not.toBeNull());` |
 
-### components/workshops/figurebuilder (22 suspect)
+### components/workshops/figurebuilder (0 suspect — CLEARED 2026-08-12)
 
-| File | Line | Mock | Context |
-|------|------|------|---------|
-| useFigureBuilder.test.ts | 58 | renderFigureHitmap | `expect(result.current.preview).toBe("data:image/png;base64...")` |
-| useFigureBuilder.test.ts | 174 | renderFigureHitmap | `expect(preview?.series_styles).toEqual([...])` |
-| useFigureBuilder.test.ts | 214 | renderFigureHitmap | `expect(preview?.group_col).toBe(1);` |
-| useFigureBuilder.test.ts | 337 | renderFigureHitmap | `await waitFor(() => expect(result.current.hitmap).not.toBeNull());` |
-| useFigureBuilder.test.ts | 408 | renderFigureHitmap | `await waitFor(() => expect(result.current.hitmap).not.toBeNull());` |
-| useFigureBuilder.test.ts | 451 | renderFigureHitmap | `act(() => result.current.setOverrides(...))` |
-| useFigureBuilder.test.ts | 479 | renderFigureHitmap | `expect(result.current.canApply).toBe(false);` |
-| useFigureBuilder.test.ts | 492 | renderFigureHitmap | `expect(result.current.canApply).toBe(false);` |
-| useFigureBuilder.test.ts | 505 | renderFigureHitmap | `expect(result.current.canApply).toBe(true);` |
-| useFigureBuilder.test.ts | 518 | renderFigureHitmap | `expect(result.current.canApply).toBe(false);` |
-| useFigureBuilder.test.ts | 539 | renderFigureHitmap | `expect(result.current.canApply).toBe(true);` |
-| useFigureBuilder.test.ts | 564 | renderFigureHitmap | `expect(result.current.canApply).toBe(true);` |
-| useFigureBuilder.test.ts | 658 | renderFigureHitmap | `act(() => {` |
-| useFigureBuilder.test.ts | 733 | renderFigureHitmap | `act(() => {` |
-| useFigureBuilder.test.ts | 747 | renderFigureHitmap | `await waitFor(() => expect(result.current.hitmap).not.toBeNull());` |
-| useFigureBuilder.test.ts | 812 | renderFigureHitmap | `expect(result.current.hitmap).toBeNull();` |
-| useFigureBuilder.test.ts | 849 | renderFigureHitmap | `act(() => result.current.editElementText("xlabel", ...))` |
-| useFigureBuilder.test.ts | 860 | renderFigureHitmap | `act(() => result.current.editElementText("ylabel", ...))` |
-| useFigureBuilder.test.ts | 881 | renderFigureHitmap | `await waitFor(() => expect(result.current.hitmap).not.toBeNull());` |
-| useFigureBuilder.test.ts | 943 | renderFigureHitmap | `await waitFor(() => expect(result.current.hitmap).not.toBeNull());` |
-| useFigureBuilder.test.ts | 975 | renderFigureHitmap | `expect(result.current.xBreaks).toEqual([[1, 2]]);` |
-| useFigureBuilder.test.ts | 1002 | renderFigureHitmap | `expect(result.current.xBreaks).toEqual([[1, 2]]);` |
+All 22 sites in `useFigureBuilder.test.ts` were converted while editing that
+file for the Publication Preview drift-subscription fix, per task 5's standing
+rule. Every plain
+`waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled())` became
+`waitFor(() => expect(result.current.preview).not.toBeNull())`, which is
+strictly stronger — `preview` stays null until the debounced hit-map both
+resolves and commits to state, so no converted test can settle earlier than it
+did before. The task-6 allowlist ratcheted 22 → 2 in the same commit; the 2
+remaining are `toHaveBeenCalledTimes(1)` sites where the CALL COUNT is the
+assertion, which is the SAFE category, not a synchronisation barrier.
 
 ### components/workshops/figurepage (12 suspect)
 

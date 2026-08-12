@@ -16,7 +16,7 @@ import {
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
-import { sessionLiveDrifted } from "./canonicalSession";
+import { selectSessionLiveDrifted } from "./canonicalSession";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
@@ -327,13 +327,11 @@ export function useFigureBuilder() {
     focusedWindowId !== publicationSession.windowId
   );
   // Item 1: catch a Stage edit made behind the open, non-modal dialog on THIS
-  // render rather than only via a rejected Apply (staleBaseline, above).
-  // useApp.getState() reads live state directly here -- NOT a selector --
-  // so this adds no subscription; existing ones re-render the hook enough
-  // for a real edit to reach this check on its own.
-  const liveDrifted = publicationSession
-    ? sessionLiveDrifted(publicationSession, plotWindows, targetBlocked, useApp.getState())
-    : false;
+  // render rather than only via a rejected Apply (staleBaseline, above). MUST
+  // stay a real subscription, never a `useApp.getState()` read — the live
+  // document derives from view SINGLETONS this hook selects on none of; see
+  // canonicalSession.ts's selectSessionLiveDrifted for what that let through.
+  const liveDrifted = useApp(selectSessionLiveDrifted);
   const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
       publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)

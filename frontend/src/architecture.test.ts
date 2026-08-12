@@ -325,7 +325,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/components/Stage/worksheet/useWorksheetView.ts": 649,
   "/lib/roi.ts": 638,
   "/lib/plotspec2.ts": 637,
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 600,
+  // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
+  // canonicalSession.ts's selectSessionLiveDrifted, where the subscription
+  // contract it documents actually lives. Ratchet, not a bump.
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 598,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };
@@ -466,7 +469,15 @@ describe("FigureDocument write chokepoint (F1)", () => {
 // churn on unrelated edits). TEST_DETERMINISM_PLAN #4 triage and #5 fixes
 // follow this per-file inventory; #6 prevents new sites from landing.
 const WEAK_WAIT_PINS: Record<string, number> = {
-  "/components/workshops/figurebuilder/useFigureBuilder.test.ts": 22,
+  // 22 -> 2 (2026-08-12, #5's standing rule applied while editing this file
+  // for the drift-subscription fix). Every plain
+  // `waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled())` became
+  // `waitFor(() => expect(result.current.preview).not.toBeNull())`. That is
+  // strictly STRONGER, not merely different: `preview` is null until the
+  // debounced hit-map resolves AND commits to state, so no converted test can
+  // settle earlier than it used to. The 2 that remain are
+  // `toHaveBeenCalledTimes(1)` sites, where the COUNT is the assertion.
+  "/components/workshops/figurebuilder/useFigureBuilder.test.ts": 2,
   "/components/workshops/figurepage/useFigurePage.test.ts": 12,
   "/components/workshops/multivar/MultivarPanel.test.tsx": 13,
   "/components/workshops/fityx/FitYByXPanel.test.tsx": 8,

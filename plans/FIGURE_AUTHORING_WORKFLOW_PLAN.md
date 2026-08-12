@@ -407,6 +407,50 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-12 — F2.2 defect: the pre-emptive drift check was blind to Stage edits (Claude Opus 5)
+
+- **Found by driving the real app, not by reading code.** With a Publication
+  Preview open on the focused window, adding a reference line through the
+  Inspector left **Apply enabled**. Clicking it rejected the entire session —
+  `staleBaseline: true`, status "publication preview target changed; changes
+  not applied" — discarding every preview edit made up to that point. That is
+  precisely the failure item 1 (`sessionLiveDrifted`, F2.2a) exists to
+  prevent: "flag Apply as blocked BEFORE the user clicks it instead of only
+  after a rejected Apply".
+- **Root cause: a computation without a subscription.** `useFigureBuilder`
+  read `useApp.getState()` inline, with a comment asserting that "existing
+  [selectors] re-render the hook enough for a real edit to reach this check
+  on its own." That assumption is false. A focused window's LIVE document is
+  derived (`liveWindowDocument` → `snapshotView`) from the store's top-level
+  view SINGLETONS — `refLines`, `regionShades`, `shapes`, `annotations`,
+  `hiddenChannels`, `plotTitle`, every `VIEW_KEYS` field — and the hook
+  subscribes to none of them. No re-render, no re-check.
+- **Why item 1's own test missed it:** it drifts `plotWindows[i].document`,
+  and `plotWindows` IS one of the hook's selectors. The test proved the
+  drift *computation* and never the *subscription*. The new test drifts
+  `refLines` — exactly what `Inspector/RefLinesCard`'s Add does — and was
+  confirmed red before the fix, with the failure matching the live app's.
+- **Fix:** `selectSessionLiveDrifted(state)` in `canonicalSession.ts`, a
+  Zustand selector returning a boolean. Cost is the reason it's shaped this
+  way: it runs on every store notification, so the no-session case (nearly
+  the whole life of the app — Publication Preview is one transient tool
+  window) short-circuits on a single property read before touching
+  `plotWindows` or building any document. **Measured in the running app**
+  rather than argued: 2000 store notifications took 66.0 ms with no session
+  and 119.8 ms with a preview open — ~0.027 ms per notification, and that
+  delta is an upper bound since it includes everything else an open preview
+  adds. At a 60 Hz drag that is ~1.6 ms/s.
+- Ratchets, both DOWN, in the same commit: `useFigureBuilder.ts` 600 → 598
+  (the long rationale moved to `canonicalSession.ts`, where the contract it
+  documents lives), and the weak-wait allowlist for
+  `useFigureBuilder.test.ts` 22 → 2 — the guard caught the new test copying
+  the file's own weak-wait idiom, so all 22 sites were converted to wait on
+  `result.current.preview` (strictly stronger: it is null until the debounced
+  hit-map resolves AND commits). `weak-waits-inventory.md` updated;
+  figurebuilder is the first directory cleared under TEST_DETERMINISM #5.
+- **F2.2 stays open.** This closes a defect in F2.2a's shipped mechanism, not
+  the remaining broader-entry-point parity work.
+
 ### 2026-08-11 — Reference lines and region shades in publication export (Claude Sonnet 5)
 
 - **The audited gap, re-verified against live code before touching anything.**
