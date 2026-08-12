@@ -3,8 +3,9 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — F2.4e shape drag (F2.4 complete) + F2.3f editable
-error-column bindings in the preview
+**Updated:** 2026-08-12 — F2.3g channels + F2.3h group-by panels land; F2.3's
+named panel set is now exhausted except facet (no wire — needs the
+multi-panel preview contract) and region shades (owner call)
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -264,8 +265,30 @@ decisions are merged.
         Subtlety: `bindings.errors` lives on `document.bindings`, not the
         PlotView, so edits patch the document directly rather than routing
         through `setCanonicalView`. A real latent bug surfaced en route —
-        see the 2026-08-12 F2.3f log entry. Remaining F2.3 panels: channels
-        reassignment and grouping/faceting.
+        see the 2026-08-12 F2.3f log entry.
+  - [x] **F2.3g Channels reassignment panel (Claude Sonnet 5).** X-axis
+        select + per-channel Y/Y2/not-plotted toggles on
+        `document.bindings.xKey/yKeys/y2Keys`, matching
+        `Inspector/ChannelsCard.tsx`'s vocabulary AND guard semantics —
+        which live nowhere else: `sanitizePlotView` only typechecks these
+        fields, so the membership invariants (≥1 Y remains; Y2 requires
+        already-plotted, keeping ≥1 primary) were ported into
+        `canonicalChannels.ts`. See the 2026-08-12 F2.3g log entry.
+  - [x] **F2.3h Group-by binding panel (Claude Sonnet 5).** The GROUP half
+        only: `bindings.groupKey` already reached the renderer
+        (`group_col`), and the grouped+y2 rejection surfaces through the
+        existing readiness banner. **Facet was deliberately DECLINED with
+        evidence**: `bindings.facetKey` has no render-request wire and no
+        creation surface anywhere in the app — the working facet feature
+        (`facetByColumn`/`MultiPanelStage`) is an unrelated store singleton
+        sharing only the name. Editing it here would write dead state.
+        Remains open below. See the 2026-08-12 F2.3h log entry.
+  - [ ] **F2.3i Facet editing (BLOCKED — needs a multi-panel Publication
+        Preview contract first).** Booked by F2.3h's scoping:
+        `figureCompatibility.ts` already blocks faceted Graph Builder specs
+        from opening Publication Preview for exactly this reason. Unblocks
+        if/when the preview grows a multi-panel contract (relates to F3's
+        PageDocument, but per-figure faceting is a different mechanism).
 - [x] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
       **COMPLETE 2026-08-12** — the named gesture set (legend drag, annotation
@@ -480,6 +503,60 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.3g channels reassignment panel (Claude Sonnet 5)
+
+- X-axis select + per-channel Y/Y2/not-plotted toggles on the canonical draft
+  (`document.bindings.xKey/yKeys/y2Keys`), matching
+  `Inspector/ChannelsCard.tsx`'s vocabulary and guard semantics (≥1 Y channel
+  remains; Y2 requires the channel already be plotted, keeping ≥1 primary;
+  dropping a channel from Y also drops it from Y2).
+- **The finding: `sanitizePlotView` enforces no membership invariants at
+  all** — it only typechecks (integer-or-null, integer-list-or-null). The
+  real guards live in ChannelsCard's `toggle`/`toggleAxis` on the live
+  store, which the document path never touches. They were ported into
+  `canonicalChannels.ts` as pure helpers; a rejected toggle returns the SAME
+  object reference so the hook skips the patch (and its history entry) —
+  proven by a test asserting the store object is reference-identical after
+  a guarded no-op.
+- One deliberate divergence from ChannelsCard: the draft materializes an
+  explicit `yKeys` list instead of collapsing back to the live store's null
+  "auto" sentinel — a saved document should freeze intent, not re-derive
+  channels when the dataset changes.
+- Channel ROLE/modeling-type and the inline ±error picker stayed out of
+  scope (dataset-scoped fields / F2.3f's territory).
+- Funded by two extractions: `exportNow` → `previewExport.ts`
+  (previewDrag.ts's deps-object pattern) and the six panel-prop interfaces →
+  `propertyPanelTypes.ts` (re-exported; no importer changed).
+
+### 2026-08-12 — F2.3h group-by binding panel; facet declined with evidence (Claude Sonnet 5)
+
+- Ships the GROUP half only. `document.bindings.groupKey` already reaches
+  the renderer (`group_col` via `buildFigureSpecFromDocument`), including
+  the grouped+y2 "cannot use a secondary Y axis" rejection, which surfaces
+  through the existing readiness banner — the panel does not pre-block or
+  duplicate it. Vocabulary matches the Graph Builder's Group well (None +
+  column labels, no eligibility restriction).
+- **Facet deliberately declined — an F2.3d-style scoping finding, not an
+  oversight.** `bindings.facetKey` has no wire to the render request
+  (`figureSpec.ts`'s own doc says so) and no creation surface anywhere in
+  the app; only test fixtures and pass-through preservation code touch it.
+  The live "facet" feature that DOES work (Stage's `facetByColumn` →
+  `MultiPanelStage`) is an unrelated store singleton sharing only the name.
+  A control here would edit dead state or invent a second "facet" concept.
+  Booked as F2.3i, blocked on a multi-panel Publication Preview contract
+  (`figureCompatibility.ts` already blocks faceted Graph Builder specs from
+  opening the preview for the same reason).
+- Funded by extracting the select/edit/textOf dispatch to
+  `previewSelect.ts` (previewDrag.ts's pattern).
+- **Merge note:** built in parallel with F2.3g; the prescribed disjoint
+  funding extractions (`previewExport.ts` vs `previewSelect.ts`) held — the
+  only resolutions were unioning the two bindings blocks in the hook, moving
+  `GroupingPanelProps` into F2.3g's new `propertyPanelTypes.ts` for
+  consistency, and splicing both new test suites. Merged-tree gate: lint 0
+  errors, 6,319 tests green (427 files), build + bundle budget green
+  (880.0 kB eager, 23.3 kB headroom); `useFigureBuilder.ts` at 492 and
+  `PropertyPanels.tsx` at 371, both under their ceilings.
 
 ### 2026-08-12 — F2.3f editable error-column bindings in the preview (Claude Sonnet 5)
 
