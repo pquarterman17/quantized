@@ -12,7 +12,7 @@
 // the thin wiring layer over it PLUS the two things that belong beside a
 // live gesture: the rAF-coalesced client preview (lib/roiMath.ts — NEVER the
 // commit path, see that module's header) and the inline bar's backend
-// actions (∫x/∫y land a dataset via useCutLanding; Stats fetches box_stats
+// actions (the two ∫ buttons land a dataset via useCutLanding; Stats fetches box_stats
 // directly — neither of those two APIs is on the drag path, only on a click).
 //
 // px<->data conversion reuses `mapRender.ts`'s own exported `plotRect`/
@@ -130,6 +130,9 @@ export interface UseMapRoiState {
   onUp: (px: [number, number]) => void;
   onLeave: () => void;
   onKeyDown: (ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload) => void;
+  /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
+   *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
+  remove: () => void;
 
   /** Client preview (lib/roiMath.ts), rAF-coalesced — LOCAL to this hook,
    *  never written to the store, never landed. */
@@ -138,7 +141,9 @@ export interface UseMapRoiState {
   setPreviewAxis: (axis: "x" | "y") => void;
   previewStats: RoiBoxStats | null;
 
-  /** ∫x / ∫y — POST /api/rsm/box, landed via useCutLanding. */
+  /** The bar's two ∫ buttons — POST /api/rsm/box, landed via useCutLanding.
+   *  Still keyed "x"/"y" (the collapse axis); what the buttons are LABELLED
+   *  is the map's own axis names, derived in `roiAxisNames.ts`. */
   commitIntegrate: (axis: "x" | "y") => void;
   landingBusy: boolean;
 
@@ -344,6 +349,9 @@ export function useMapRoi(active: Dataset | null, cutSpace: CutSpace | null): Us
     onUp,
     onLeave,
     onKeyDown,
+    /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
+     *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
+    remove: () => setMapRoi(null),
     preview,
     previewAxis,
     setPreviewAxis,

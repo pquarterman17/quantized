@@ -187,6 +187,90 @@ feature checklist.
 
 ## Completed
 
+- ~~**Map ROI safety + drag: three defects from a real release test**~~
+  (2026-08-12, owner-reported). Testing 3-D XRD (pixel4d) integration boxes
+  surfaced four complaints; three are fixed here, the rest are booked in
+  BACKLOG's actionable table.
+  1. **"Resizing the integration box did not work" — root-caused to the box
+     eating its own drag.** The commit bar is a sibling `div` over the canvas,
+     and it appears the instant a zero-size box exists, i.e. under the cursor
+     at mouse-down. A canvas cannot have DOM children, so the pointer crossing
+     onto the bar fires the canvas's `onMouseLeave` → the tool's `onLeave` →
+     `cancelDrag()` → the shape reverts to its pre-gesture value. **Measured in
+     the running app:** drawing from (560, 390) put the bar at x 560..776,
+     y 398..518, directly across the drag path — the box existed after
+     mouse-down and was null one move later. Any draw or resize heading its way
+     silently failed. Fixed by making both bars pointer-transparent for the
+     duration of their own shape's drag; verified in the same live run (box now
+     survives mid-drag and lands). This broke DRAWING as well as resizing.
+  2. **"Ended up deleting the dataset" — a real double-fire, not a mis-hit.**
+     `useGlobalShortcuts` binds Delete/Backspace at the WINDOW level to
+     `removeSelected()`. `preventDefault()` does not stop propagation and the
+     global handler never checked `defaultPrevented`, so a component deleting
+     its OWN focused object had the same keystroke continue on and remove the
+     DATASET too. Four handlers were exposed to this: map ROI box, cut ruler,
+     worksheet block, Figure Page slot. One `defaultPrevented` guard fixes the
+     class. With `confirmRemove` defaulting to false there was no prompt, and
+     `mapRoi` is excluded from undo (see #1's own note above), so nothing to
+     undo either. Verified live: Delete on a focused map now removes the box
+     and leaves the dataset intact.
+  3. **No mouse path to remove a shape.** Delete/Backspace on a FOCUSED map was
+     the only way, and the map is only focusable once a shape exists — so with
+     focus anywhere else the keystroke went straight to the global handler.
+     Both bars now carry a ✕, in the header row deliberately away from the
+     ∫/Stats buttons they sit beside.
+  Deferred to the entry below / BACKLOG: the `x`/`y` control labels (fixed
+  next); the box `▭` and ruler `▱` glyphs are too alike; and a near-miss on a
+  handle still starts a NEW box rather than resizing, which is unrecoverable
+  while `mapRoi` stays out of undo.
+
+- ~~**Map ROI commit bar names the data's own axes**~~ (2026-08-12,
+  owner-reported — the fourth complaint from the same release test: "the
+  control inputs were x and y, not the actual axes of the data"). The bar's
+  preview toggle and its two ∫ buttons showed the CODE's collapse axis, so
+  someone reading canvas axes titled "2Theta (deg)" and "Omega (deg)" had to
+  guess which of `∫x`/`∫y` produced which profile.
+  - New pure `Stage/roiAxisNames.ts` derives the names, because the box and
+    the ruler do NOT collapse in the same frame and "just show the data axes"
+    would be **wrong** for the ruler. The box is axis-aligned, so its collapse
+    axes are the map's own — composed exactly the way `mapRender.ts` composes
+    the canvas axis title, so the bar and the axis agree word for word
+    ("∫ 2Theta", "∫ Qx", unit in the tooltip). The ruler passes
+    `angle: ruler.angle` and `rulerToRect` puts local x along its LENGTH, so
+    it gets "along"/"across" with the angle quoted against the map's x axis
+    ("the ruler's length (23.8° from 2Theta)"). Both tooltips also name the
+    axis being summed AWAY, which the old ones never did.
+  - The two ∫ buttons moved to their own row (named axes do not fit
+    three-to-a-row beside Stats in a 216 px bar); `BAR_H` 140 → 166 to match,
+    measured at 148 px live.
+  - The bounds readout gained the same names ("2Theta 60.67…61.26   Omega
+    30.37…30.64"), and all three map readouts (box/ruler/sector) moved onto a
+    shared `.qzk-roi-readout` — at `--text-dim` they were **invisible** over
+    viridis' bright centre; now full-strength ink over a surface-coloured
+    halo, checked in both themes.
+  - Names ellipsize at 6 chars with a CSS max-width backstop. Verified live at
+    every density: 0 overflowing rows, ✕ never pushed out (worst case
+    "2Theta"/"Omega" at comfy/12 px = 51/53 px against a 66 px cap).
+
+- ~~**Map drawing tools get their own icons**~~ (2026-08-12, owner-reported —
+  the last part of the same release-test message: "the controls were
+  confusing (the icon wasn't super clear)"). Two problems behind one
+  complaint, both now test-pinned in `MapToolbar.test.tsx`:
+  1. The box and the ruler wore `▭` and `▱` — a rectangle and a
+     near-rectangle, the same silhouette at 13 px (confirmed by rendering the
+     candidates at real size).
+  2. Both glyphs were **already spoken for**: `▭` is the Rectangle shape tool
+     *and* the Background Region tool in `plotToolbarDefs`, `▱` is the plot
+     toolbar's shape-dock button. The map's two tools were wearing two other
+     tools' icons.
+  Now `▣` (a region with content selected) and `▨` (diagonal fill = the
+  rotated swath a ruler is), which also makes `▣ ▨ ◔` read as one family — the
+  three shape-with-a-floating-bar tools — against the thin-line one-shot cuts
+  `─ │ ∕` beside them. Titles lead with what the tool PRODUCES ("Integration
+  box", "Angled line cut (ruler)") rather than with its shape ("Box ROI",
+  "Cut ruler"). The collision test is the durable half: one glyph, one
+  meaning, enforced against `SHAPE_TOOLS` + `TOOL_DEFS`.
+
 - ~~**#1 Undoable mouse-driven visual edits**~~ (2026-08-10) — one flat current-session EDIT history spanning data + visual/layout + organization edits, plus separate Back/Forward VIEW history for zoom/pan/autoscale. Drag gestures coalesce into single history steps. Action names shown in status (e.g., "Undid Move annotation"). Covers 68+ tracked mutations across all major editing surfaces. Does NOT persist across restart. Deliberately excludes transient working geometry (`mapRoi`/`mapRuler` — `store/rois.ts` has full rationale). Coverage gap found 2026-08-10: `savedRois` was missing from `HistorySnapshot` (added same day).
 
 - ~~**#2 Plot Objects tree — closing slice**~~ (2026-07-24) — the item's last

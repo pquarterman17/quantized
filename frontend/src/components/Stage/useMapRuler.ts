@@ -14,7 +14,7 @@
 // mapping. This hook is the thin wiring layer over it, PLUS the same two
 // things useMapRoi.ts adds beside a live gesture: the rAF-coalesced client
 // preview (lib/roiMath.ts — never the commit path) and the inline bar's
-// backend actions (∫x/∫y land via useCutLanding; Stats fetches box_stats
+// backend actions (the two ∫ buttons land via useCutLanding; Stats fetches box_stats
 // directly). `cellSize`/`pxToData`/`boxColsFor` are IMPORTED from
 // useMapRoi.ts (not re-derived) — one implementation of each.
 //
@@ -116,6 +116,9 @@ export interface UseMapRulerState {
   onUp: (px: [number, number]) => void;
   onLeave: () => void;
   onKeyDown: (ev: { key: string; shiftKey: boolean; preventDefault: () => void }, payload: MapPayload) => void;
+  /** Same effect as Delete/Backspace on a focused map, reachable by mouse —
+   *  see MapRoiOverlay's CommitBarProps.onRemove for why that matters. */
+  remove: () => void;
 
   /** Client preview (lib/roiMath.ts), rAF-coalesced — LOCAL to this hook,
    *  never written to the store, never landed. */
@@ -124,8 +127,10 @@ export interface UseMapRulerState {
   setPreviewAxis: (axis: "x" | "y") => void;
   previewStats: RoiBoxStats | null;
 
-  /** ∫x / ∫y — POST /api/rsm/box (angle from the ruler), landed via
-   *  useCutLanding. */
+  /** The bar's two ∫ buttons — POST /api/rsm/box (angle from the ruler),
+   *  landed via useCutLanding. Keyed "x"/"y", but LABELLED "along"/"across":
+   *  this shape collapses in its own rotated frame, so the data axis names
+   *  would be wrong at any non-zero angle. See `roiAxisNames.ts`. */
   commitIntegrate: (axis: "x" | "y") => void;
   landingBusy: boolean;
 
@@ -331,6 +336,7 @@ export function useMapRuler(active: Dataset | null, cutSpace: CutSpace | null): 
     onUp,
     onLeave,
     onKeyDown,
+    remove: () => setMapRuler(null),
     preview,
     previewAxis,
     setPreviewAxis,

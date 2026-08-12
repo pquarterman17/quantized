@@ -15,7 +15,13 @@ export const SPARK_H = 30;
 // estimate; it still stays inside the plot rect on the axis that matters,
 // horizontal).
 export const BAR_W = 216;
-export const BAR_H = 140;
+// 140 -> 166: the box/ruler bars gained a row when the ∫ buttons started
+// carrying real axis names ("∫ 2Theta") and no longer fitted three-to-a-row
+// beside Stats. Measured in the running app at 148 px (150 at comfy density),
+// so this keeps roughly the headroom 140 had. The wedge bar (still 2 rows) now
+// sits under the estimate — harmless: it only decides when to flip the bar
+// above its shape rather than below.
+export const BAR_H = 166;
 
 /** SVG polyline `points` for a preview profile's intensity, normalized into
  *  a `w`x`h` box (min at the bottom, max at the top; a non-finite value

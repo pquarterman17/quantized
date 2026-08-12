@@ -3,7 +3,7 @@
 // useRoiCuts.ts, each card (Box/Sector/Saved ROIs) is its own sub-component.
 //
 // This panel is NEVER required for a plain box cut — once item 6 lands, the
-// map's floating inline bar (draw a box, click ∫x) is the fast 3-click path.
+// map's floating inline bar (draw a box, click its ∫ button) is the fast 3-click path.
 // What THIS panel is for: exact numeric bounds, sector/annulus profiles, and
 // named ROIs you re-apply on the next dataset — the one entry point that
 // works without ever touching the canvas (select a dataset from the
