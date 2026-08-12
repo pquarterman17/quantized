@@ -155,12 +155,13 @@ test("an editable figure survives save, window close, and reopen byte-for-byte @
     .toBe(false);
 
   // ── Reopen from the Library, by clicking its row ──────────────────────
-  const row = page.locator(`[title="open editable figure \\"${savedDocument.name}\\""]`);
-  if ((await row.count()) === 0) {
-    // The section is collapsible; expand it and try again.
-    await page.getByText(/editable/i).first().click();
-  }
-  await page.locator(`[title="open editable figure \\"${savedDocument.name}\\""]`).first().click();
+  // `toBeVisible` rather than a `count()` check: the row is rendered by a
+  // store subscription, so on a cold CI runner a one-shot count can read zero
+  // purely because React has not flushed yet — a false "collapsed section"
+  // that the old fallback then "fixed" by clicking something else entirely.
+  const row = page.locator(`[title="open editable figure \\"${savedDocument.name}\\""]`).first();
+  await expect(row, "the saved figure has a Library row to reopen from").toBeVisible();
+  await row.click();
 
   await expect
     .poll(() => page.evaluate((id) =>
