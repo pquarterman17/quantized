@@ -325,7 +325,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/components/Stage/worksheet/useWorksheetView.ts": 649,
   "/lib/roi.ts": 638,
   "/lib/plotspec2.ts": 637,
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 616,
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 600,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };

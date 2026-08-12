@@ -3,7 +3,8 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import PropertyPanels, { type SeriesPanelProps } from "./PropertyPanels";
+import type { Shape } from "../../../lib/types";
+import PropertyPanels, { type SeriesPanelProps, type ShapesPanelProps } from "./PropertyPanels";
 
 function Harness({
   initial,
@@ -345,5 +346,54 @@ describe("PropertyPanels Series group (F2.3b)", () => {
     expect(screen.getByLabelText("series 1 mode")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("series 1 width"), { target: { value: "2" } });
     expect(onStyle).toHaveBeenCalledWith(0, { width: 2 });
+  });
+});
+
+// F2.3c: shapes have no legacy FigureOverrides equivalent either — the
+// Shapes group exists only when the caller supplies a canonical `shapes`
+// prop with at least one drawn shape, and it delegates straight to
+// ShapePropertiesPanel (already unit-tested standalone) rather than
+// duplicating its behavior here.
+describe("PropertyPanels Shapes group (F2.3c)", () => {
+  const ARROW: Shape = { id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 };
+  const shapesProp = (overrides: Partial<ShapesPanelProps> = {}): ShapesPanelProps => ({
+    shapes: [ARROW],
+    onStyle: vi.fn(),
+    onRemove: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the Shapes group entirely when no shapes prop is supplied (legacy mode)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Shapes" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Shapes/ })).not.toBeInTheDocument();
+  });
+
+  it("omits the Shapes group when the canonical draft has no shapes", () => {
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Shapes"
+        hasY2={false}
+        shapes={shapesProp({ shapes: [] })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Shapes/ })).not.toBeInTheDocument();
+  });
+
+  it("renders the Shapes group and forwards edits to the supplied callbacks", () => {
+    const onStyle = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Shapes"
+        hasY2={false}
+        shapes={shapesProp({ onStyle })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("arrow 1")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("arrow 1 width"), { target: { value: "3" } });
+    expect(onStyle).toHaveBeenCalledWith("s1", { width: 3 });
   });
 });

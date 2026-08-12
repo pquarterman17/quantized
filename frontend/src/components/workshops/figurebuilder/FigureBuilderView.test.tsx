@@ -67,6 +67,11 @@ const figureState = {
   setSeriesStyle: vi.fn(),
   setSeriesHidden: vi.fn(),
   moveSeries: vi.fn(),
+  // F2.3c: shapes editing is canonical-only too; same default-empty rationale.
+  shapes: [],
+  shapeRows: [],
+  setShapeStyle: vi.fn(),
+  removeShape: vi.fn(),
   focusGroup: null,
   saveAsFigure: vi.fn(),
   saveStyleTemplate: vi.fn(),

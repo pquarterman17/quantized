@@ -6,11 +6,12 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
-import type { SeriesStyle } from "../../../lib/types";
+import type { Shape, SeriesStyle } from "../../../lib/types";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
+import ShapePropertiesPanel from "./ShapePropertiesPanel";
 
 /** F2.3b: per-series properties on the canonical draft. Supplied only when a
  *  canonical session has at least one plotted channel (legacy Publication
@@ -27,6 +28,17 @@ export interface SeriesPanelProps {
   onStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   onHiddenChange: (channel: number, hidden: boolean) => void;
   onMove: (channel: number, direction: -1 | 1) => void;
+}
+
+/** F2.3c: per-shape properties on the canonical draft. Supplied only when a
+ *  canonical session's draft has at least one drawn shape -- the Shapes
+ *  group renders nothing when this is absent (legacy Publication Preview has
+ *  no lossless shape document field to edit -- see useFigureBuilder.ts's
+ *  field doc, same reasoning as SeriesPanelProps above). */
+export interface ShapesPanelProps {
+  shapes: readonly Shape[];
+  onStyle: (id: string, patch: Partial<Omit<Shape, "id">>) => void;
+  onRemove: (id: string) => void;
 }
 
 function Group({
@@ -70,6 +82,7 @@ export default function PropertyPanels({
   xBreaks,
   setXBreaks,
   series,
+  shapes,
   openGroup = null,
   openNonce,
 }: {
@@ -92,6 +105,10 @@ export default function PropertyPanels({
    *  canonical draft with nothing plotted) hides the Series group entirely —
    *  there is no lossless legacy equivalent to fall back to. */
   series?: SeriesPanelProps;
+  /** F2.3c: canonical drawn shapes. Absent (legacy mode, or a canonical
+   *  draft with no shapes) hides the Shapes group entirely -- see
+   *  ShapesPanelProps' doc. */
+  shapes?: ShapesPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -245,6 +262,12 @@ export default function PropertyPanels({
             onHiddenChange={series.onHiddenChange}
             onMove={series.onMove}
           />
+        </Group>
+      )}
+
+      {shapes && shapes.shapes.length > 0 && (
+        <Group title="Shapes" forceOpen={openGroup === "Shapes"} openNonce={openNonce}>
+          <ShapePropertiesPanel shapes={shapes.shapes} onStyle={shapes.onStyle} onRemove={shapes.onRemove} />
         </Group>
       )}
 

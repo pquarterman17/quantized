@@ -14,9 +14,11 @@ import {
   type GraphTemplate,
 } from "../../../lib/figuredoc";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
+import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
+import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { sessionLiveDrifted } from "./canonicalSession";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
-import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
+import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import { effectiveChannels } from "../../../lib/plotdata";
@@ -26,7 +28,7 @@ import {
   pxToFigureFraction,
   type FigureHitmap,
 } from "../../../lib/previewmap";
-import { axisFmtParam, type AxisScale, type DataStruct, type SeriesStyle } from "../../../lib/types";
+import { axisFmtParam, type AxisScale, type DataStruct, type Shape, type SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -58,13 +60,6 @@ export const FIGURE_STYLE_DPI: Record<string, number> = {
   poster: 150,
 };
 
-type CanonicalReadiness =
-  | { state: "ready"; data: DataStruct; spec: FigureSpec }
-  | { state: "missing-source"; error: string }
-  | { state: "invalid-spec"; data: DataStruct; error: string };
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "unknown error";
 const PREVIEW_DPI = 110; // screen-resolution preview; export uses the chosen DPI
 
 export function useFigureBuilder() {
@@ -169,41 +164,12 @@ export function useFigureBuilder() {
   const canonicalDataset = canonicalDocument?.bindings.datasetId
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
-  const canonicalReadiness = useMemo<CanonicalReadiness | null>(() => {
-    if (!canonicalDocument) return null;
-    // A live document whose bound dataset isn't in the store (closed,
-    // never loaded this session) would otherwise fall through to
-    // resolveFigureDocumentData and surface its raw internal dataset id in
-    // the user-facing message. Catch that specific, common case here with
-    // an actionable message before it gets there; other failures (a frozen
-    // document with no snapshot, a dataset/document id mismatch) still flow
-    // through the generic catch below unchanged.
-    if (canonicalDocument.data.mode !== "frozen" && canonicalDocument.bindings.datasetId !== null && !canonicalDataset) {
-      return {
-        state: "missing-source",
-        error: "source unavailable: this figure's dataset is not loaded — re-import it to preview or export",
-      };
-    }
-    let canonicalData: DataStruct;
-    try {
-      canonicalData = resolveFigureDocumentData(canonicalDocument, canonicalDataset).data;
-    } catch (error) {
-      return { state: "missing-source", error: `source unavailable: ${errorMessage(error)}` };
-    }
-    try {
-      return {
-        state: "ready",
-        data: canonicalData,
-        spec: buildFigureSpecFromDocument(canonicalDocument, canonicalDataset, "preview"),
-      };
-    } catch (error) {
-      return {
-        state: "invalid-spec",
-        data: canonicalData,
-        error: `figure configuration is not previewable: ${errorMessage(error)}`,
-      };
-    }
-  }, [canonicalDocument, canonicalDataset]);
+  // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a
+  // pure function of document + dataset) -- this hook just memoizes the call.
+  const canonicalReadiness = useMemo<CanonicalReadiness | null>(
+    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset),
+    [canonicalDocument, canonicalDataset],
+  );
   const canonicalData = canonicalReadiness?.state === "missing-source"
     ? null
     : canonicalReadiness?.data ?? null;
@@ -285,6 +251,19 @@ export function useFigureBuilder() {
     [order[index], order[target]] = [order[target], order[index]];
     setCanonicalView({ seriesOrder: order });
   };
+
+  // F2.3c: drawn shapes (`document.plot.view.shapes`) are the SAME kind of
+  // canonical-only PlotView field as F2.3b's series properties above -- no
+  // FigureOverrides equivalent, so edits write straight through
+  // setCanonicalView. Adding a NEW shape stays a Stage gesture (drag-to-draw
+  // needs a live canvas); this only reaches editing/removing what's already
+  // on the draft. Canonical-only: empty in legacy mode, same as seriesChannels.
+  const shapes: readonly Shape[] = canonical ? canonicalView?.shapes ?? [] : [];
+  const shapeRows = deriveShapeRows(shapes);
+  const setShapeStyle = (id: string, patch: Partial<Omit<Shape, "id">>) =>
+    setCanonicalView({ shapes: patchShapeList(shapes, id, patch) });
+  const removeShape = (id: string) =>
+    setCanonicalView({ shapes: removeShapeFromList(shapes, id) });
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -589,6 +568,11 @@ export function useFigureBuilder() {
     setSeriesStyle,
     setSeriesHidden,
     moveSeries,
+    // F2.3c: canonical-only (empty in legacy mode — see the field doc above).
+    shapes,
+    shapeRows,
+    setShapeStyle,
+    removeShape,
     data,
     hitmap,
     focusGroup,

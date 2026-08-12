@@ -112,6 +112,13 @@ export default function FigureBuilderView() {
                 onHiddenChange: f.setSeriesHidden,
                 onMove: f.moveSeries,
               } : undefined}
+              // F2.3c: shapes editing has no legacy equivalent either -- same
+              // "omit entirely" degrade as series above.
+              shapes={f.canonical && f.shapes.length > 0 ? {
+                shapes: f.shapes,
+                onStyle: f.setShapeStyle,
+                onRemove: f.removeShape,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />

@@ -2,10 +2,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
-import { createFigureDocument } from "../../../lib/figureDocument";
+import { createFigureDocument, deserializeFigureDocument, serializeFigureDocument } from "../../../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
-import type { DataStruct } from "../../../lib/types";
+import type { DataStruct, Shape } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
 
@@ -698,6 +698,129 @@ describe("useFigureBuilder", () => {
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();
       expect(state.plotWindows).toEqual(before);
+    });
+  });
+
+  // F2.3c: drawn shapes (color/fill/opacity/width/dash, plus remove) live
+  // straight on document.plot.view.shapes -- the SAME kind of field as
+  // F2.3b's series properties above, so this mirrors that block's coverage:
+  // the hook's setters, plus the required Apply-commits/Cancel-is-mutation-
+  // free pin, plus a serialize/deserialize round trip (shapes has no schema
+  // change of its own -- PlotView already carried it losslessly, F1.2).
+  describe("canonical drawn shapes (F2.3c)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const shape = (id: string, kind: Shape["kind"] = "arrow"): Shape => ({ id, kind, x1: 0, y1: 0, x2: 1, y2: 1 });
+    const shapesDocument = (id: string, shapes: Shape[]) => createFigureDocument({
+      id, name: "Shapes doc", datasetId: "d1", view: { ...defaultPlotView(), shapes },
+    });
+
+    it("computes an empty shapes list in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.shapes).toEqual([]);
+      expect(result.current.shapeRows).toEqual([]);
+    });
+
+    it("exposes the draft's shapes + kind-scoped rows once canonical", () => {
+      const document = shapesDocument("figure-shapes-a", [shape("s1", "arrow"), shape("s2", "rect")]);
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.shapes).toHaveLength(2);
+      expect(result.current.shapeRows).toEqual([
+        { id: "s1", kind: "arrow", label: "arrow 1" },
+        { id: "s2", kind: "rect", label: "rect 1" },
+      ]);
+    });
+
+    it("setShapeStyle merges a patch into the one shape matching id, leaving siblings untouched", () => {
+      const document = shapesDocument("figure-shapes-b", [shape("s1", "arrow"), shape("s2", "rect")]);
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setShapeStyle("s2", { stroke: "--series-4", width: 2 }));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.shapes).toEqual([
+        shape("s1", "arrow"),
+        { ...shape("s2", "rect"), stroke: "--series-4", width: 2 },
+      ]);
+    });
+
+    it("removeShape drops the matching shape and leaves siblings untouched", () => {
+      const document = shapesDocument("figure-shapes-c", [shape("s1", "arrow"), shape("s2", "rect")]);
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.removeShape("s1"));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.shapes).toEqual([shape("s2", "rect")]);
+    });
+
+    it("Apply commits shape edits into the window document and the legacy facade", async () => {
+      const document = shapesDocument("figure-shapes-d", [shape("s1", "arrow")]);
+      useApp.setState({
+        // Mirrors F2.3b's Apply test: the store's top-level ambient PlotView
+        // fields must match the baseline's view (defaultPlotView() + shapes)
+        // or applyFigurePublicationEdit's liveWindowDocument sees drift and rejects.
+        ...defaultPlotView(),
+        shapes: [shape("s1", "arrow")],
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => {
+        result.current.setShapeStyle("s1", { stroke: "--series-5", dash: true });
+      });
+      act(() => {
+        result.current.apply();
+      });
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view.shapes).toEqual([
+        { ...shape("s1", "arrow"), stroke: "--series-5", dash: true },
+      ]);
+      // hydrateView spreads the applied view onto the legacy top-level facade
+      // too (the same field ShapesCard/Stage shape editing reads).
+      expect(state.shapes).toEqual([{ ...shape("s1", "arrow"), stroke: "--series-5", dash: true }]);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = shapesDocument("figure-shapes-e", [shape("s1", "arrow")]);
+      useApp.setState({
+        figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => {
+        result.current.setShapeStyle("s1", { width: 4 });
+      });
+      act(() => {
+        result.current.cancel();
+      });
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("an edited shape round-trips through document serialize/deserialize", () => {
+      const document = shapesDocument("figure-shapes-f", [shape("s1", "rect")]);
+      const editedShapes = [{ ...shape("s1", "rect"), fill: "--series-6", opacity: 0.6 }];
+      const edited = {
+        ...document,
+        plot: { ...document.plot, view: { ...document.plot.view, shapes: editedShapes } },
+      };
+      const restored = deserializeFigureDocument(serializeFigureDocument(edited));
+      expect(restored?.plot.view.shapes).toEqual(editedShapes);
     });
   });
 
