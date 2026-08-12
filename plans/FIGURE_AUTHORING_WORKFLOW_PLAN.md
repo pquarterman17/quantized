@@ -275,6 +275,12 @@ decisions are merged.
         F2.3c's log entry recorded as impossible ("the backend hitmap has no
         `shape:N` elements to route from"). Selection only; DRAG for these
         objects stays open under F2.4.
+  - [x] **F2.4d Reference-line drag (Claude Opus 5).** Dragging a reference
+        line in the preview moves it, the gesture the Stage canvas has always
+        had — unblocked by F2.4c's hit target and F2.3d's panel. Value only:
+        a line's axis is fixed everywhere in the app, so a sideways drag of a
+        Y line is a no-op rather than a reinterpretation. Shape drag stays
+        open (four coordinates and a grab-handle model, not one value).
 - [x] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output. **COMPLETE 2026-08-11** — all five named
@@ -430,6 +436,36 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.4d reference-line drag in the preview (Claude Opus 5)
+
+- The gesture F2.4 was waiting on. F2.4b's matrix said the remaining gesture
+  types "F2.3's still-missing shape/reference-object panels would need to
+  exist first (nothing to attach a drag to yet)"; F2.3d built the panel and
+  F2.4c the hit target, so this is the first of them to land.
+- **The index mapping is the whole subtlety, and it gets its own pure
+  function.** A `refline:N` element's N is the RENDER REQUEST's array
+  position: `figureSpec`'s `viewOverrides` emits
+  `st.refLines.filter((r) => Number.isFinite(r.value))`, so one non-finite
+  value in the draft (reachable from a legacy `.dwk` — both add paths reject
+  one today) shifts every later index by one and a bare `refLines[n]` would
+  drag the WRONG line. `refLineIdForHit` applies the same filter and lives
+  next to the reasoning, so the two cannot drift apart unnoticed.
+- Value only, never axis: a reference line's axis is fixed everywhere in this
+  app once created, so a sideways drag of a Y line moves nothing rather than
+  being reinterpreted as an X line. Non-finite results are dropped rather than
+  committed.
+- Shape drag stays open under F2.4 — four coordinates and a grab-handle model,
+  not a single value. Its tooltip still advertises right-click only, so the
+  preview never promises a gesture it does not have.
+- **Verified with a real mouse**, which is the only thing that can prove it:
+  press on the line's hitbox, move 90 px right, release → the draft value goes
+  0 → 3702 (the axis spans ±5000 across ~250 px of axes), the tooltip reads
+  "drag to move; right-click for properties", the cursor is `move`, and the
+  LIVE store's `refLines` stays untouched because the draft is detached. The
+  CSS↔image pixel scale is already handled by PreviewOverlay's
+  `scale = map.width / rect.width`, which is why the committed value matches
+  the drop position rather than being off by the display ratio.
 
 ### 2026-08-12 — Publication Preview usability sweep (Claude Opus 5)
 

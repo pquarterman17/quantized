@@ -6,25 +6,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportFigure, renderFigureHitmap, type FigureSpec } from "../../../lib/api";
+import { exportFigure, type FigureSpec } from "../../../lib/api";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
-import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
+import { appendRefLine, patchRefLineList, refLineIdForHit, removeRefLineFromList } from "./canonicalRefLines";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { useGraphTemplates } from "./useGraphTemplates";
+import { usePreviewRender } from "./usePreviewRender";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { effectiveChannels } from "../../../lib/plotdata";
-import {
-  groupForElement,
-  pxToData,
-  pxToFigureFraction,
-  type FigureHitmap,
-} from "../../../lib/previewmap";
+import { groupForElement, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -57,8 +53,6 @@ export const FIGURE_STYLE_DPI: Record<string, number> = {
   presentation: 150,
   poster: 150,
 };
-
-const PREVIEW_DPI = 110; // screen-resolution preview; export uses the chosen DPI
 
 export function useFigureBuilder() {
   const active = useActiveDataset();
@@ -128,9 +122,7 @@ export function useFigureBuilder() {
     setFrozenData(!figureDocSeed.live ? (figureDocSeed.dataSnapshot ?? null) : null);
     clearFigureDocSeed();
   }, [figureDocSeed, clearFigureDocSeed]);
-  const [preview, setPreview] = useState<string | null>(null);
-  // The preview's element hit-map (#13) + which panel group a click focused.
-  const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
+  // Which panel group a preview click focused (#13).
   const [focusGroup, setFocusGroup] = useState<string | null>(null);
   // Selection is a monotonic signal, not just the group name: re-selecting
   // the SAME element after the user manually collapsed its panel must still
@@ -138,8 +130,6 @@ export function useFigureBuilder() {
   // gives Group's effect nothing to react to. Bumping this on every
   // selection gives it one.
   const [focusNonce, setFocusNonce] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // Style preset change: sync DPI to that preset's calibrated value (audit
   // follow-up — the field previously stayed wherever it was left, so a
@@ -303,6 +293,8 @@ export function useFigureBuilder() {
     ? canonicalReadiness.spec
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
+  // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
+  const { preview, hitmap, error, busy } = usePreviewRender(spec, canonical);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -343,39 +335,6 @@ export function useFigureBuilder() {
 
   // User graph templates (#15) — legacy-mode-only by nature; see the module doc.
   const templates = useGraphTemplates({ legacy: legacyState, setStyle, setOverrides, setDocSeriesStyles, setStatus });
-
-  // Debounced PNG preview — re-renders on any spec change.
-  useEffect(() => {
-    if (!spec) {
-      setPreview(null);
-      if (canonical) {
-        setHitmap(null);
-        setBusy(false);
-      }
-      return;
-    }
-    let cancelled = false;
-    setBusy(true);
-    const timer = setTimeout(() => {
-      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI })
-        .then((m) => {
-          if (cancelled) return;
-          setHitmap(m);
-          setPreview(`data:image/png;base64,${m.image}`);
-          setError(null);
-        })
-        .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : "preview failed");
-        })
-        .finally(() => {
-          if (!cancelled) setBusy(false);
-        });
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [canonical, spec]);
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
   /** Click: focus the matching #11 panel group. Always bumps the nonce so a
@@ -420,6 +379,17 @@ export function useFigureBuilder() {
           anchor: pxToFigureFraction(hitmap.width, hitmap.height, px, py),
         },
       });
+    } else if (id.startsWith("refline:")) {
+      // F2.4d: drag a reference line to move it, the same gesture the Stage's
+      // uPlot canvas already supports (`updateRefLine`). Value only — a line's
+      // AXIS is fixed once created everywhere in the app, so a horizontal drag
+      // of a Y line is a no-op rather than a reinterpretation.
+      const lineId = refLineIdForHit(refLines, Number(id.slice("refline:".length)));
+      const line = refLines.find((candidate) => candidate.id === lineId);
+      if (!line) return;
+      const { x, y } = pxToData(hitmap.axes, px, py);
+      const next = line.axis === "x" ? x : y;
+      if (Number.isFinite(next)) setRefLineValue(line.id, next);
     } else if (id.startsWith("ann:")) {
       const i = Number(id.slice(4));
       const anns = activeOverrides.annotations ?? [];

@@ -336,7 +336,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 570 -> 552 (2026-08-12, F2.3e): the #15 graph-template block moved to
   // useGraphTemplates.ts, funding the tick-format wiring. Net down again: 37
   // freed, 19 spent. Two slices, two extractions, pin 598 -> 552.
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 552,
+  // 552 -> 522 (2026-08-12, F2.4d): the debounced preview render + hit-map
+  // state moved to usePreviewRender.ts, funding the reference-line drag. 41
+  // freed, 11 spent. Three slices, three extractions, pin 598 -> 522 — the
+  // ratchet has paid for every one of them and never been raised.
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 522,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };

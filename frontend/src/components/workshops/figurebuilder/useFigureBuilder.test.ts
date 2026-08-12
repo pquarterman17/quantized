@@ -983,6 +983,56 @@ describe("useFigureBuilder", () => {
       expect(deserializeFigureDocument(serializeFigureDocument(edited))?.plot.view.refLines).toEqual(editedRefLines);
     });
 
+    // F2.4d: drag-to-move, the gesture the Stage canvas has always had. The
+    // hit element's index is the RENDER REQUEST's position, not the draft's,
+    // so these pin the mapping as well as the commit.
+    describe("drag to move (F2.4d)", () => {
+      const dragSession = async (lines: ReturnType<typeof refLine>[]) => {
+        const document = refLineDocument("figure-ref-drag", lines);
+        useApp.setState({ ...defaultPlotView(), figurePublicationSession: session(document) });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+        return result;
+      };
+      const draftRefLines = () =>
+        useApp.getState().figurePublicationSession!.draft.plot.view.refLines;
+
+      it("moves an X line to the dragged pixel's data X", async () => {
+        const result = await dragSession([refLine("r1", "x", 5)]);
+        // The mocked hit-map is 600x400 over xlim/ylim [0,1]; mid-width is x=0.5.
+        act(() => result.current.dragElement("refline:0", 300, 200));
+        expect(draftRefLines()[0].value).toBeCloseTo(0.5, 6);
+      });
+
+      it("moves a Y line by the dragged pixel's data Y, ignoring the horizontal component", async () => {
+        // A line's axis is fixed everywhere in the app, so a sideways drag of
+        // a Y line must not reinterpret it as an X line.
+        const result = await dragSession([refLine("r1", "y", 5)]);
+        act(() => result.current.dragElement("refline:0", 300, 100));
+        expect(draftRefLines()[0].axis).toBe("y");
+        expect(draftRefLines()[0].value).toBeCloseTo(0.75, 6);
+      });
+
+      it("resolves the hit index through the render request's finite filter", async () => {
+        // viewOverrides drops the non-finite line, so element `refline:1` is
+        // the THIRD draft line; a bare index would drag the second.
+        const result = await dragSession([
+          refLine("a", "x", 1),
+          refLine("bad", "x", Number.NaN),
+          refLine("c", "x", 3),
+        ]);
+        act(() => result.current.dragElement("refline:1", 300, 200));
+        expect(draftRefLines()[2].value).toBeCloseTo(0.5, 6);
+        expect(draftRefLines()[0].value).toBe(1);
+      });
+
+      it("ignores a drag on an element index no line answers to", async () => {
+        const result = await dragSession([refLine("r1", "x", 5)]);
+        act(() => result.current.dragElement("refline:7", 300, 200));
+        expect(draftRefLines()[0].value).toBe(5);
+      });
+    });
+
     it("reaches the render request, so the preview shows what the panel edits", async () => {
       useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-h", [])) });
       const { result } = renderHook(() => useFigureBuilder());

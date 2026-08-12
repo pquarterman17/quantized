@@ -66,6 +66,24 @@ export function removeRefLineFromList(lines: readonly RefLine[], id: string): Re
   return lines.filter((line) => line.id !== id);
 }
 
+/** Which draft line a preview hit element (`refline:N`) refers to, or null.
+ *
+ *  N is the RENDER REQUEST's array position, not the draft's: `figureSpec`'s
+ *  `viewOverrides` builds `overrides.ref_lines` as
+ *  `st.refLines.filter((r) => Number.isFinite(r.value))`, so a draft holding a
+ *  non-finite value (reachable from a legacy `.dwk` — `appendRefLine` and the
+ *  Stage's own add both reject one) shifts every later index by one. Applying
+ *  the SAME filter here is the whole mapping; indexing `refLines[n]` directly
+ *  would silently drag the wrong line.
+ *
+ *  Kept next to the filter's meaning rather than inlined at the call site so
+ *  the two cannot drift apart unnoticed — if `viewOverrides` ever drops a
+ *  different set, this function is the one place to follow it. */
+export function refLineIdForHit(lines: readonly RefLine[], hitIndex: number): string | null {
+  if (!Number.isInteger(hitIndex) || hitIndex < 0) return null;
+  return lines.filter((line) => Number.isFinite(line.value))[hitIndex]?.id ?? null;
+}
+
 /** Id prefix for lines created inside a Publication Preview draft.
  *
  *  Deliberately NOT the store's `ref-` prefix. `useApp.ts` mints those from a

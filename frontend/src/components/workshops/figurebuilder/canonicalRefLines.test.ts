@@ -5,6 +5,7 @@ import {
   appendRefLine,
   deriveRefLineRows,
   patchRefLineList,
+  refLineIdForHit,
   removeRefLineFromList,
 } from "./canonicalRefLines";
 
@@ -109,5 +110,32 @@ describe("appendRefLine", () => {
     const lines: RefLine[] = [line("a", "x", 1)];
     appendRefLine(lines, "y", 2);
     expect(lines).toHaveLength(1);
+  });
+});
+
+describe("refLineIdForHit", () => {
+  it("maps a hit index straight through when every value is finite", () => {
+    const lines = [line("a", "x", 1), line("b", "y", 2), line("c", "x", 3)];
+    expect([0, 1, 2].map((n) => refLineIdForHit(lines, n))).toEqual(["a", "b", "c"]);
+  });
+
+  it("skips a non-finite line, exactly as the render request does", () => {
+    // figureSpec's viewOverrides drops it, so element `refline:1` is the THIRD
+    // draft line -- indexing the draft directly would drag the wrong one.
+    const lines = [line("a", "x", 1), line("bad", "x", Number.NaN), line("c", "x", 3)];
+    expect(refLineIdForHit(lines, 0)).toBe("a");
+    expect(refLineIdForHit(lines, 1)).toBe("c");
+  });
+
+  it("returns null past the end rather than undefined-ing a caller", () => {
+    expect(refLineIdForHit([line("a", "x", 1)], 5)).toBeNull();
+    expect(refLineIdForHit([], 0)).toBeNull();
+  });
+
+  it("rejects a malformed index instead of coercing it", () => {
+    const lines = [line("a", "x", 1)];
+    expect(refLineIdForHit(lines, -1)).toBeNull();
+    expect(refLineIdForHit(lines, 1.5)).toBeNull();
+    expect(refLineIdForHit(lines, Number.NaN)).toBeNull();
   });
 });
