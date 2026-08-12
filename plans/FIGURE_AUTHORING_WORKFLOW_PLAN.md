@@ -268,6 +268,13 @@ decisions are merged.
         F2.3's still-missing shape/reference-object panels would need to
         exist first (nothing to attach a drag to yet) — see the decision
         log for the full matrix.
+  - [x] **F2.4c Decor hit targets (Claude Opus 5).** The backend hitmap now
+        emits `refline:N` and `shape:N` elements (matplotlib `gid`, padded to
+        a 6 px band on a degenerate axis), so right-clicking a reference line
+        or a shape in the preview opens its property panel — the exact wiring
+        F2.3c's log entry recorded as impossible ("the backend hitmap has no
+        `shape:N` elements to route from"). Selection only; DRAG for these
+        objects stays open under F2.4.
 - [x] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output. **COMPLETE 2026-08-11** — all five named
@@ -423,6 +430,48 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.4c decor hit targets: right-click a reference line or shape (Claude Opus 5)
+
+- **Closes a gap this plan had already written down as impossible.** F2.3c's
+  log entry says, verbatim: "No PreviewOverlay/context-menu wiring:
+  `calc/figure_hitmap.py` (backend, unmodified) emits `series:N`/`ann:N` hit
+  elements but NO `shape:N` … drawn shapes render into the preview PNG but
+  have no individual hitbox to route a right-click menu from." F2.3d landed
+  with the same limitation. So both new panels were reachable only by hunting
+  the collapsed group list — the objects were visible in the figure and inert.
+- **Identity by `gid`, not by position.** `figure_decor._apply_ref_lines` and
+  `figure_shapes._apply_shapes` now tag each artist with matplotlib's own
+  `gid` (`refline:N` / `shape:N`), and `collect_map` harvests any artist in
+  `ax.lines`/`ax.patches` carrying one. Position would not work: reference
+  lines share `ax.lines` with the series, and a colour-mapped series is not in
+  `ax.lines` at all — the exact misalignment `collect_map`'s existing
+  `series_artists` doc already warns about.
+- **The bug the smoke test caught before any test was written.** The first
+  build emitted nothing for reference lines: an `axvline` is EXACTLY zero
+  pixels wide (an `axhline` zero tall), and `add`'s
+  `if bbox.width <= 0 or bbox.height <= 0: return` guard — correct for an
+  absent title — silently dropped every one. Fixed with a separate `add_decor`
+  that grows a degenerate axis to ±3 px, i.e. a 6 px target matching the
+  tolerance `lib/uplotOverlays.ts`'s `pickRefLine` already uses on the live
+  canvas, so the preview and the plot are equally forgiving to click.
+- Frontend is three small pieces: `groupForElement` routes `refline:` →
+  "Reference lines" and `shape:` → "Shapes"; `PreviewOverlay`'s `elementName`
+  names them (the generic fallback would have rendered "Refline:0"); and the
+  tooltip advertises right-click only, since drag is not wired for them.
+- **The routing key is a bare group-title STRING shared by two files**, so a
+  rename in `PropertyPanels` would break click-to-focus with every test still
+  green. Added a parametrized guard that asserts every title
+  `groupForElement` can return is actually rendered as a `Group` — verified by
+  planting a rename, which reddens exactly the `refline:0` case.
+- Deliberately NOT in this slice: dragging a reference line in the preview to
+  move it. That needs the element index mapped back to a specific draft object
+  through the same finite filter `viewOverrides` applies, plus per-object
+  commit semantics. F2.4 stays open for it — but it now has something to
+  attach to, which it did not before.
+- Verified in the running app: both hitboxes appear with correct tooltips,
+  right-click offers "Properties…", and choosing it opens and scrolls to the
+  matching group.
 
 ### 2026-08-12 — F2.3e axis tick-format panel in Publication Preview (Claude Opus 5)
 

@@ -74,10 +74,15 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
     """
     if not shapes:
         return
-    for sh in shapes:
+    for index, sh in enumerate(shapes):
         kind = sh.get("kind")
         if kind not in _SHAPE_KINDS:
             continue
+        # Artist identity for figure_hitmap.collect_map -- see the matching
+        # `gid` note in figure_decor._apply_ref_lines. Tagged with the
+        # SEQUENCE index, which skips unrecognized kinds above exactly as the
+        # client's own render does.
+        gid = f"shape:{index}"
         p1, p2, transform = _shape_endpoints(sh, ax, fig)
         stroke = sh.get("stroke") or _DEFAULT_STROKE
         # `is not None` (not `or`): an explicit `width: 0` is falsy in Python
@@ -109,6 +114,7 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
                 linestyle=dash,
                 alpha=opacity,
             )
+            patch.set_gid(gid)
             ax.add_patch(patch)
         elif kind == "line":
             line = Line2D(
@@ -120,6 +126,7 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
                 linestyle=dash,
                 alpha=opacity,
             )
+            line.set_gid(gid)
             ax.add_line(line)
         elif kind == "rect":
             x0, x1v = min(p1[0], p2[0]), max(p1[0], p2[0])
@@ -135,6 +142,7 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
                 linestyle=dash,
                 alpha=opacity,
             )
+            patch.set_gid(gid)
             ax.add_patch(patch)
         else:  # ellipse
             cx, cy = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
@@ -150,4 +158,5 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
                 linestyle=dash,
                 alpha=opacity,
             )
+            patch.set_gid(gid)
             ax.add_patch(patch)

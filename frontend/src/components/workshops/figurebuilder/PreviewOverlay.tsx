@@ -16,6 +16,10 @@ const DRAGGABLE = (id: string) => id === "legend" || id.startsWith("ann:");
 const elementName = (id: string) => {
   if (id.startsWith("ann:")) return "Annotation";
   if (id.startsWith("series:")) return "Series";
+  // F2.4c: without these the generic fallback below renders the raw element
+  // id, so the new decor hitboxes would have read "Refline:0" / "Shape:2".
+  if (id.startsWith("refline:")) return "Reference line";
+  if (id.startsWith("shape:")) return "Shape";
   return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
 };
 /** F2.3b: a "series:N" hitbox becomes reachable once the canonical draft has
@@ -31,6 +35,9 @@ const elementTitle = (id: string, canonicalSeriesEditable: boolean) => {
       ? `${name} \u2014 right-click for properties`
       : `${name} \u2014 properties are edited on Stage`;
   }
+  // F2.4c: decor objects have a panel but no drag/inline-edit gesture yet, so
+  // the tooltip advertises exactly the one thing that works.
+  if (id.startsWith("refline:") || id.startsWith("shape:")) return `${name} \u2014 right-click for properties`;
   return name;
 };
 const hitboxArea = (element: HitElement) => (element.x1 - element.x0) * (element.y1 - element.y0);

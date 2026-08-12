@@ -88,4 +88,16 @@ describe("groupForElement", () => {
     expect(groupForElement("title")).toBe("Text & fonts");
     expect(groupForElement("series:0")).toBeNull();
   });
+
+  it("routes decor objects to the F2.3c/F2.3d panels (F2.4c)", () => {
+    // Titles must match PropertyPanels' Group titles exactly — that string IS
+    // the routing key, so a rename there silently breaks click-to-focus here.
+    expect(groupForElement("refline:0")).toBe("Reference lines");
+    expect(groupForElement("shape:3")).toBe("Shapes");
+  });
+
+  it("stays null for anything it does not recognize", () => {
+    expect(groupForElement("mystery:1")).toBeNull();
+    expect(groupForElement("")).toBeNull();
+  });
 });
