@@ -6,11 +6,13 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
-import type { Shape, SeriesStyle } from "../../../lib/types";
+import type { AxisFormat, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
+import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
+import TickFormatPanel from "./TickFormatPanel";
 import ShapePropertiesPanel from "./ShapePropertiesPanel";
 
 /** F2.3b: per-series properties on the canonical draft. Supplied only when a
@@ -39,6 +41,33 @@ export interface ShapesPanelProps {
   shapes: readonly Shape[];
   onStyle: (id: string, patch: Partial<Omit<Shape, "id">>) => void;
   onRemove: (id: string) => void;
+}
+
+/** F2.3d: reference lines on the canonical draft. Supplied only in a canonical
+ *  session -- but UNLIKE Series and Shapes, the group renders even with an
+ *  EMPTY list, because this panel can create the first line (axis + value
+ *  needs no live canvas). Hiding it when empty would make "add a reference
+ *  line" reachable only by leaving the preview for the Stage, which is the
+ *  one action that invalidates the session. */
+export interface RefLinesPanelProps {
+  refLines: readonly RefLine[];
+  onValue: (id: string, value: number) => void;
+  onAdd: (axis: RefLine["axis"], value: number) => void;
+  onRemove: (id: string) => void;
+}
+
+/** F2.3e: axis tick formats on the canonical draft. Absent (legacy mode)
+ *  hides the controls -- legacy Publication Preview renders from the LIVE
+ *  store's xFmt/yFmt, which the Stage's own Inspector card already owns, so a
+ *  second editor for the same singleton would be a confusing duplicate. */
+export interface TickFormatPanelProps {
+  xFmt: AxisFormat;
+  yFmt: AxisFormat;
+  y2Fmt: AxisFormat | null;
+  xIsDate: boolean;
+  onXFmt: (next: AxisFormat) => void;
+  onYFmt: (next: AxisFormat) => void;
+  onY2Fmt: (next: AxisFormat | null) => void;
 }
 
 function Group({
@@ -83,6 +112,8 @@ export default function PropertyPanels({
   setXBreaks,
   series,
   shapes,
+  refLines,
+  tickFormats,
   openGroup = null,
   openNonce,
 }: {
@@ -109,6 +140,11 @@ export default function PropertyPanels({
    *  draft with no shapes) hides the Shapes group entirely -- see
    *  ShapesPanelProps' doc. */
   shapes?: ShapesPanelProps;
+  /** F2.3d: canonical reference lines. Absent (legacy mode) hides the group;
+   *  present-but-empty still renders it -- see RefLinesPanelProps' doc. */
+  refLines?: RefLinesPanelProps;
+  /** F2.3e: canonical axis tick formats -- see TickFormatPanelProps' doc. */
+  tickFormats?: TickFormatPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -222,6 +258,21 @@ export default function PropertyPanels({
             </button>
           </span>
         </div>
+        {tickFormats && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%", marginTop: 4 }}>
+            <span className="qzk-field-lbl" style={{ width: "100%" }}>tick format</span>
+            <TickFormatPanel
+              xFmt={tickFormats.xFmt}
+              yFmt={tickFormats.yFmt}
+              y2Fmt={tickFormats.y2Fmt}
+              hasY2={hasY2}
+              xIsDate={tickFormats.xIsDate}
+              onXFmt={tickFormats.onXFmt}
+              onYFmt={tickFormats.onYFmt}
+              onY2Fmt={tickFormats.onY2Fmt}
+            />
+          </div>
+        )}
       </Group>
 
       <Group title="Legend" forceOpen={openGroup === "Legend"} openNonce={openNonce}>
@@ -268,6 +319,17 @@ export default function PropertyPanels({
       {shapes && shapes.shapes.length > 0 && (
         <Group title="Shapes" forceOpen={openGroup === "Shapes"} openNonce={openNonce}>
           <ShapePropertiesPanel shapes={shapes.shapes} onStyle={shapes.onStyle} onRemove={shapes.onRemove} />
+        </Group>
+      )}
+
+      {refLines && (
+        <Group title="Reference lines" forceOpen={openGroup === "Reference lines"} openNonce={openNonce}>
+          <RefLinePropertiesPanel
+            refLines={refLines.refLines}
+            onValue={refLines.onValue}
+            onAdd={refLines.onAdd}
+            onRemove={refLines.onRemove}
+          />
         </Group>
       )}
 

@@ -7,7 +7,7 @@ import type { CalcResult } from "../../../lib/types";
 export default function FitConvergenceWarning({ result }: { result: CalcResult | null }) {
   if (!result || result.exitFlag !== 0) return null;
   return (
-    <div className="qzk-ds-meta" role="alert" style={{ marginTop: 10, color: "var(--danger)" }}>
+    <div className="qzk-ds-meta qzk-msg" role="alert" style={{ marginTop: 10, color: "var(--danger)" }}>
       Fit did not converge — displayed parameters and statistics may be unreliable. Adjust the model,
       starting values, bounds, or fit range and try again.
     </div>

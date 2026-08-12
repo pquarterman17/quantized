@@ -102,7 +102,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
         ))
       )}
       {halfPairs.length > 0 && (
-        <div role="alert" className="qzk-ds-meta" style={{ color: "var(--warn, #c80)" }}>
+        <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn, #c80)" }}>
           {halfPairs.length} one-sided binding{halfPairs.length === 1 ? "" : "s"} —
           an asymmetric pair needs BOTH halves, so nothing is drawn for these.
         </div>

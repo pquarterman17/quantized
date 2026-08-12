@@ -115,11 +115,24 @@ export function pxToFigureFraction(
   ];
 }
 
-/** Which #11 property-panel group a hit element belongs to (click-to-focus). */
+/** Which #11 property-panel group a hit element belongs to (click-to-focus).
+ *
+ *  `refline:`/`shape:` (F2.4c) route to the panels F2.3c/F2.3d added. Before
+ *  the backend tagged those artists with a `gid`, both were drawn into the
+ *  preview with no hit element at all — the F2.3c log entry records that as
+ *  the reason its shapes panel got no context-menu wiring — so their panels
+ *  were reachable only by hunting the collapsed group list. Group only, not
+ *  the index: an element's index is the RENDER REQUEST's array position, i.e.
+ *  the draft's list after the finite filter `viewOverrides` applies, so it is
+ *  not safe to use as a draft index without re-deriving that filter. Opening
+ *  the group is all the panels need; per-object focus would have to earn that
+ *  mapping first. */
 export function groupForElement(id: string): string | null {
   if (id === "legend") return "Legend";
   if (id.startsWith("ann:")) return "Annotations";
   if (id === "title" || id === "xlabel" || id === "ylabel") return "Text & fonts";
+  if (id.startsWith("refline:")) return "Reference lines";
+  if (id.startsWith("shape:")) return "Shapes";
   if (id.startsWith("series:")) return null; // per-series styles live on the plot side
   return null;
 }

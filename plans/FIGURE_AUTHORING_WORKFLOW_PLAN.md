@@ -237,6 +237,23 @@ decisions are merged.
         `document.plot.view`. No context-menu wiring — the backend hitmap
         has no `shape:N` elements to route from; the panel lives in the
         always-visible panel list. See the 2026-08-11 F2.3c log entry.
+  - [x] **F2.3d Reference-line property panel (Claude Opus 5).** Canonical
+        draft now exposes per-line value and remove, plus an axis+value Add
+        form — full parity with `Inspector/RefLinesCard.tsx`. Axis stays
+        read-only per row (nothing in the app flips an existing line's axis).
+        Unlike F2.3c's shapes, ADD belongs here: a reference line needs no
+        live canvas. No schema change: `refLines` already lived on
+        `document.plot.view`. **Region shades are deliberately NOT in this
+        slice** — see the 2026-08-12 log entry for why they need an owner
+        call first.
+  - [x] **F2.3e Axis tick-format panel (Claude Opus 5).** Canonical draft now
+        exposes the X/Y/Y2 number formats (Auto/Fixed/Sci/Eng + digits, the
+        X-only date modes gated on `time_is_datetime`, and Y2's inherit-Y
+        rule). No schema change and no render change: `xFmt`/`yFmt`/`y2Fmt`
+        already lived on `document.plot.view` AND already reached the wire
+        (`x_fmt`/`y_fmt`/`secondaryAxisWire`) — the panel was the only
+        missing piece. Vocabulary shared with `Inspector/TickFormat.tsx` via
+        the new `lib/tickFormat.ts` so the two surfaces cannot drift.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
@@ -251,6 +268,19 @@ decisions are merged.
         F2.3's still-missing shape/reference-object panels would need to
         exist first (nothing to attach a drag to yet) — see the decision
         log for the full matrix.
+  - [x] **F2.4c Decor hit targets (Claude Opus 5).** The backend hitmap now
+        emits `refline:N` and `shape:N` elements (matplotlib `gid`, padded to
+        a 6 px band on a degenerate axis), so right-clicking a reference line
+        or a shape in the preview opens its property panel — the exact wiring
+        F2.3c's log entry recorded as impossible ("the backend hitmap has no
+        `shape:N` elements to route from"). Selection only; DRAG for these
+        objects stays open under F2.4.
+  - [x] **F2.4d Reference-line drag (Claude Opus 5).** Dragging a reference
+        line in the preview moves it, the gesture the Stage canvas has always
+        had — unblocked by F2.4c's hit target and F2.3d's panel. Value only:
+        a line's axis is fixed everywhere in the app, so a sideways drag of a
+        Y line is a no-op rather than a reinterpretation. Shape drag stays
+        open (four coordinates and a grab-handle model, not one value).
 - [x] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output. **COMPLETE 2026-08-11** — all five named
@@ -344,9 +374,26 @@ Check these only with automated coverage plus an owner-visible desktop run.
 - [ ] **A2 Mouse editing:** Change line/scatter mode, colors, widths, errors,
       scales, limits, legend, and labels through direct manipulation/properties.
 - [ ] **A3 Lossless figure:** Save, close, reopen, and compare the complete
-      document/spec for equality.
+      document/spec for equality. **Automated half DONE 2026-08-12** —
+      `e2e/specs/figure-document-roundtrip.spec.ts`, a real-Chromium journey
+      against the real backend: Save Editable Figure via the File menu, close
+      the window, reopen from the Library row, assert the reopened document
+      `toEqual` the saved one. Runs in CI's `e2e.yml`. Owner desktop run still
+      gates the checkbox.
 - [ ] **A4 Complex 1-D:** Repeat A3 with y2, asymmetric errors, hidden/reordered
       series, custom formats, annotations, shapes, and waterfall offset.
+      **Automated half DONE 2026-08-12** — the same spec carries y2 keys,
+      hidden + reordered series, a renamed series, per-series styles, all three
+      tick formats, an annotation, a shape, two reference lines, and explicit
+      limits, and asserts each is present in the SAVED document before
+      comparing, so a lossy round trip cannot pass by comparing two empty
+      objects. Waterfall offset and ASYMMETRIC Y errors are covered too — the
+      latter is the one A4 construct that is not a view field (it rides
+      `bindings.errors`, seeded from the dataset's `errorRoles` at window
+      creation) and is exactly what proves the live-facade rebuild PRESERVES
+      bindings instead of re-deriving them from the legacy symmetric-only
+      projection. Verified load-bearing twice, by planting a shapes-dropping
+      reopen and an asymmetric-error-dropping rebuild; each reddens it.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
       and export with the same series and labels.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
@@ -406,6 +453,328 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — Figure Page (F3) usability sweep: two real defects (Claude Opus 5)
+
+F3's exit criterion is "Page → save → close → reopen → edit → copy/export
+retains every panel, relationship, and visual setting", and F3.6 proved it
+with a byte-for-byte round-trip test — but the plan is explicit that it was
+never owner-verified in the live app (A6 stays open). Driving it in a real
+browser: **the journey itself passes.** Two editable figures saved, both
+assigned to slots, the save gate cleared, the page saved, closed, reopened
+byte-identical, and `figure_page.pdf` exported — no console errors. Two
+defects around it did not:
+
+1. **The save gate's instruction was 84% invisible.** A page can only
+   reference SAVED editable figures (F3.2's no-lossy-flattening rule), so
+   assigning an unsaved plot window correctly refuses with: *"slot (a): … is
+   an open plot window not yet saved as an editable figure — save it (its
+   title-bar Save button, or File > Save Editable Figure), then Save this
+   page again"*. That message renders with `.qzk-ds-meta`, a SINGLE-LINE
+   utility (`overflow:hidden; text-overflow:ellipsis; white-space:nowrap`)
+   built for a dataset's "201 pts · 1 ch" row. Measured: `scrollWidth` 988 px
+   in a `clientWidth` 154 px column — and because the text overflowed a
+   nowrap line rather than filling one, not even an ellipsis hinted anything
+   was missing. The user saw "slot (a): "two-channel.csv"" and no way
+   forward. Fixed with a `.qzk-msg` modifier that restores wrapping
+   (`scrollWidth` now equals `clientWidth`). The Save button is left ENABLED
+   deliberately: it already toasts the full reason, which is louder than a
+   disabled button with a tooltip.
+2. **Saving the default window produced a figure named `""`.** Reached
+   through the documented UI in three steps: import a file → File ▸ Save
+   Editable Figure. The main window is created at store init, before any
+   dataset exists, so its `title` is the `""` sentinel forever; the title BAR
+   resolves that via `displayedWindowTitle` (explicit title → bound dataset's
+   name → "Untitled graph"), but `saveFigure` read `title` raw. Result: a
+   nameless Library row, a bare glyph in this very Figure Page's
+   panel-source list (which is how it was spotted), and the status line
+   `figure "" saved`. `saveFigure` now resolves the same name the title bar
+   shows — only when blank, so an explicit title and `saveFigureAs`'s dialog
+   name are never overridden. `saveFigureAs`'s default and the close-confirm
+   prompt had the same raw read with a WEAKER fallback ("Untitled graph"
+   instead of the file name); both now use the shared resolver.
+
+**The clipping is a class, so it got a guard**, not just seven edits: an
+`architecture.test.ts` check that every `role="alert"`/`role="note"` element
+borrowing `.qzk-ds-meta` also carries `.qzk-msg`. It paid for itself
+immediately — it caught a SEVENTH site (`FigureBuilderView`'s own
+"Editing … Apply updates this figure; Cancel discards them." note) that a
+grep missed because its `className` sits on a separate line from its `role`.
+Six of the seven are multi-sentence instructions; the rule is mechanical, so
+the guard has no false positives to allowlist.
+
+### 2026-08-12 — F2.4d reference-line drag in the preview (Claude Opus 5)
+
+- The gesture F2.4 was waiting on. F2.4b's matrix said the remaining gesture
+  types "F2.3's still-missing shape/reference-object panels would need to
+  exist first (nothing to attach a drag to yet)"; F2.3d built the panel and
+  F2.4c the hit target, so this is the first of them to land.
+- **The index mapping is the whole subtlety, and it gets its own pure
+  function.** A `refline:N` element's N is the RENDER REQUEST's array
+  position: `figureSpec`'s `viewOverrides` emits
+  `st.refLines.filter((r) => Number.isFinite(r.value))`, so one non-finite
+  value in the draft (reachable from a legacy `.dwk` — both add paths reject
+  one today) shifts every later index by one and a bare `refLines[n]` would
+  drag the WRONG line. `refLineIdForHit` applies the same filter and lives
+  next to the reasoning, so the two cannot drift apart unnoticed.
+- Value only, never axis: a reference line's axis is fixed everywhere in this
+  app once created, so a sideways drag of a Y line moves nothing rather than
+  being reinterpreted as an X line. Non-finite results are dropped rather than
+  committed.
+- Shape drag stays open under F2.4 — four coordinates and a grab-handle model,
+  not a single value. Its tooltip still advertises right-click only, so the
+  preview never promises a gesture it does not have.
+- **Verified with a real mouse**, which is the only thing that can prove it:
+  press on the line's hitbox, move 90 px right, release → the draft value goes
+  0 → 3702 (the axis spans ±5000 across ~250 px of axes), the tooltip reads
+  "drag to move; right-click for properties", the cursor is `move`, and the
+  LIVE store's `refLines` stays untouched because the draft is detached. The
+  CSS↔image pixel scale is already handled by PreviewOverlay's
+  `scale = map.width / rect.width`, which is why the committed value matches
+  the drop position rather than being off by the display ratio.
+
+### 2026-08-12 — Publication Preview usability sweep (Claude Opus 5)
+
+A deliberate hunt for more defects of the drift-bug class: drive the real
+preview in a browser and measure, rather than read the code. Nine checks over
+a 3-channel dataset with a secondary axis. **Six confirmed the design already
+holds** — Apply is correctly disabled with zero edits; the y2 limit fields and
+the Y2 tick row appear only with a y2 channel plotted; unticking "inherits Y"
+seeds the current Y format; Cancel on a dirty draft raises the discard confirm
+and then discards; a reopened session starts clean; Export from the preview
+produces the PDF; zero console errors throughout. **Two were real and are
+fixed here:**
+
+1. **Export/Apply/Cancel scrolled away with the settings.** Measured: with the
+   property groups expanded the settings column is ~2,400 px tall inside an
+   ~890 px scrollport, which put Apply at y≈1163 in a 950 px viewport — the
+   buttons that COMMIT the work sat below the fold and had to be hunted for,
+   and every panel added since F2.3b made it worse. They are now a sticky
+   footer row (y≈909 after the fix, comfortably in view) pinned inside the
+   same scroller, so no ToolWindow structure changed. A second pass was needed
+   on the styling: `bottom: 0` parks the row one `--pad-lg` ABOVE the
+   scrollport edge, so scrolling content showed through the gap beneath it —
+   fixed by sticking past the padding and adding it back inside.
+2. **The F2.3d Add field ignored Enter**, while `Inspector/RefLinesCard`'s
+   identical field commits on it. Adding several lines meant a mouse trip per
+   line. Now matches the Stage.
+
+The jsdom test for #1 asserts the MECHANISM (the sticky container holds all
+three buttons), not a pixel position — jsdom has no layout, so a coordinate
+assertion there would be theatre. The measurement that justifies it is
+recorded above instead.
+
+### 2026-08-12 — F2.4c decor hit targets: right-click a reference line or shape (Claude Opus 5)
+
+- **Closes a gap this plan had already written down as impossible.** F2.3c's
+  log entry says, verbatim: "No PreviewOverlay/context-menu wiring:
+  `calc/figure_hitmap.py` (backend, unmodified) emits `series:N`/`ann:N` hit
+  elements but NO `shape:N` … drawn shapes render into the preview PNG but
+  have no individual hitbox to route a right-click menu from." F2.3d landed
+  with the same limitation. So both new panels were reachable only by hunting
+  the collapsed group list — the objects were visible in the figure and inert.
+- **Identity by `gid`, not by position.** `figure_decor._apply_ref_lines` and
+  `figure_shapes._apply_shapes` now tag each artist with matplotlib's own
+  `gid` (`refline:N` / `shape:N`), and `collect_map` harvests any artist in
+  `ax.lines`/`ax.patches` carrying one. Position would not work: reference
+  lines share `ax.lines` with the series, and a colour-mapped series is not in
+  `ax.lines` at all — the exact misalignment `collect_map`'s existing
+  `series_artists` doc already warns about.
+- **The bug the smoke test caught before any test was written.** The first
+  build emitted nothing for reference lines: an `axvline` is EXACTLY zero
+  pixels wide (an `axhline` zero tall), and `add`'s
+  `if bbox.width <= 0 or bbox.height <= 0: return` guard — correct for an
+  absent title — silently dropped every one. Fixed with a separate `add_decor`
+  that grows a degenerate axis to ±3 px, i.e. a 6 px target matching the
+  tolerance `lib/uplotOverlays.ts`'s `pickRefLine` already uses on the live
+  canvas, so the preview and the plot are equally forgiving to click.
+- Frontend is three small pieces: `groupForElement` routes `refline:` →
+  "Reference lines" and `shape:` → "Shapes"; `PreviewOverlay`'s `elementName`
+  names them (the generic fallback would have rendered "Refline:0"); and the
+  tooltip advertises right-click only, since drag is not wired for them.
+- **The routing key is a bare group-title STRING shared by two files**, so a
+  rename in `PropertyPanels` would break click-to-focus with every test still
+  green. Added a parametrized guard that asserts every title
+  `groupForElement` can return is actually rendered as a `Group` — verified by
+  planting a rename, which reddens exactly the `refline:0` case.
+- Deliberately NOT in this slice: dragging a reference line in the preview to
+  move it. That needs the element index mapped back to a specific draft object
+  through the same finite filter `viewOverrides` applies, plus per-object
+  commit semantics. F2.4 stays open for it — but it now has something to
+  attach to, which it did not before.
+- Verified in the running app: both hitboxes appear with correct tooltips,
+  right-click offers "Properties…", and choosing it opens and scrolls to the
+  matching group.
+
+### 2026-08-12 — F2.3e axis tick-format panel in Publication Preview (Claude Opus 5)
+
+- **The narrowest gap of the F2.3 set, and the one with the most direct
+  publication value.** `xFmt`/`yFmt`/`y2Fmt` were already canonical
+  `document.plot.view` fields AND already reached the renderer —
+  `lib/figureSpec.ts` sends `x_fmt`/`y_fmt` through `axisFmtParam` and the
+  secondary format through `secondaryAxisWire`. So the *only* thing missing
+  was a control: a figure's tick notation ("2 decimals", "scientific") could
+  be changed on the Stage alone, i.e. only by the action that invalidates an
+  open preview session. Nothing in the render path changed for this slice.
+- **Shared vocabulary instead of a second copy.** The mode list, the date-mode
+  set, the `time_is_datetime` gate, and the 0..20 digit clamp moved to a new
+  pure `lib/tickFormat.ts` that BOTH `Inspector/TickFormat.tsx` and the new
+  panel import. Two surfaces editing the same `AxisFormat` must offer the same
+  four modes in the same order, or a figure's ticks change meaning depending
+  on which panel the user reached for. The Inspector refactor is import-only:
+  its 99 tests pass untouched.
+- **Placed inside the existing "Axes & ticks" group**, under a `tick format`
+  caption, rather than as a seventh top-level group. Tick notation IS an axis
+  property; a separate group would have split the axis controls in two.
+- **Two behaviours kept verbatim from the Stage, both deliberate:** Y2 renders
+  only when the draft actually plots a secondary axis (without one
+  `resolveSecondaryAxis` returns null and no `y2_fmt` is ever sent — the field
+  would be a placebo, the same reasoning as F2.3a's `hasY2` gate on y2 limits);
+  and unticking "inherits Y" seeds Y2 from the CURRENT Y format rather than a
+  fresh default, so turning inheritance off shows what the axis is already
+  rendering instead of silently resetting it to Auto.
+- A date mode displays as "Auto" in the numeric segmented control with the
+  date select beside it carrying the truth — the four numeric modes cannot
+  represent "datetime", and showing no selection at all would read as broken.
+- Verified in the real app: Y → Sci/3 re-renders the preview's Y ticks as
+  `4.000e+0`; the live store's `yFmt` stays untouched while the draft
+  diverges; Apply commits to both the window document and the legacy facade;
+  the date select correctly stays hidden on a physics (Field/Oe) X axis.
+- **Funded by extraction again, pin DOWN again.** The #15 graph-template block
+  moved to `useGraphTemplates.ts` (legacy-mode-only by nature — its UI renders
+  only when `!f.canonical`). 37 lines freed, 19 spent; pin 570 → 552. Across
+  F2.3d and F2.3e: 598 → 552, two slices added, zero bumps.
+- Gate: 419 files / 6151 tests, tsc clean, eslint 0 on every touched file,
+  build green (879.9 kB eager, 23.4 kB under budget).
+- F2.3 remains open: channels/errors reassignment, grouping/faceting, and
+  region shades (owner-gated) are still unreached by the canonical preview.
+
+### 2026-08-12 — F2.3d reference-line property panel in Publication Preview (Claude Opus 5)
+
+- **The gap, confirmed in the running app before any code changed.** With two
+  reference lines and a region shade on the plot, Publication Preview RENDERS
+  all three (the 2026-08-11 `figure_decor.py` slice made sure of it) but its
+  panel list was Text & fonts / Axes & ticks / Legend / Series / Canvas /
+  Annotations — no way to touch any of them. They were the only visible
+  elements of the figure with no property panel. Worse, the one alternative —
+  reaching for the Stage's own Reference Lines card — is precisely the action
+  that invalidates the open session (see the drift entry below). So "adjust
+  the Hc marker before exporting" had no non-destructive path at all.
+- **Scope: reference lines, matched field-for-field to the Stage.**
+  `RefLinesCard` adds (axis + value), removes, and drag-on-canvas moves
+  (`updateRefLine`, value only). So the panel edits VALUE, removes, and adds;
+  AXIS is read-only per row, the same call F2.3c made for shape `kind` —
+  nothing in this app flips an existing line's axis, and adding that only in
+  the detached panel would be a one-sided divergence. ADD *does* belong here,
+  unlike shapes: a reference line is fully specified by an axis and a number,
+  so it needs no live canvas to draw on. That is also why the group renders
+  when the list is EMPTY (Series and Shapes hide themselves) — hiding it would
+  put "add the first reference line" back on the Stage, i.e. back on the one
+  action that kills the session.
+- **Region shades were deliberately left out, and that is an owner call, not
+  an oversight.** `regionShades` has NO creation or editing surface anywhere
+  in the app — they exist only as Origin-decoded film-stack decor
+  (`originRegionShades`, applied on figure import). Adding editing solely in
+  the detached preview would invent a capability the live plot lacks, which is
+  the exact inconsistency F2.3c declined for shape `kind`. The consistent fix
+  is a Stage card *and* a preview panel together; the honest question first is
+  whether decoded decor should be user-editable at all. Booked as an open
+  F2.3 residue rather than answered unilaterally.
+- **Verified end to end in the real app, not only in jsdom:** edit an existing
+  line's value → the preview PNG re-renders with it moved; Add a Y line → it
+  appears in the preview; the live store's `refLines` stays untouched while the
+  draft diverges (detached draft, as designed); Apply commits both edits to the
+  window document AND the legacy top-level facade. A hook test also pins that
+  the edit reaches `overrides.ref_lines` on the render request — without it the
+  panel could edit a field the rendered figure never shows.
+- **A usability defect found by looking at the rendered panel, not the DOM:**
+  the first build labelled rows "X reference 1", which wraps mid-phrase in the
+  ~210px panel, and captioned every single-field row "value". Rows now read
+  "X 1" with no per-row caption (the group title already says "Reference
+  lines"), while `aria-label` keeps the full phrase — the visible-vs-accessible
+  split `PropertyNumberField`'s own `ariaLabel` prop documents. The Add form's
+  axis picker also gained a visible "axis" label, which the Stage card's bare
+  X/Y pair lacks.
+- New pure module `canonicalRefLines.ts` (row derivation, patch/remove/append
+  by id) and view `RefLinePropertiesPanel.tsx`, both unit tested standalone.
+  Draft-created lines use a `pref-` id namespace, NOT the store's `ref-`:
+  `useApp` mints those from a module-global counter that knows nothing about a
+  detached draft, so a shared prefix would let a later Stage Add re-mint an id
+  the draft had already applied.
+- **Funded by extraction, as required — and the pin still went DOWN.**
+  `useFigureBuilder.ts` was at its exact 598 pin with zero headroom, so the
+  legacy-mode spec + FigureDoc builders moved to `legacyFigure.ts` as pure
+  functions (the canonicalReadiness.ts pattern from F2.3c). 47 lines freed, 28
+  spent by the new wiring; pin ratcheted 598 → 570.
+- Gate: 417 files / 6120 tests, tsc clean, eslint 0, ruff clean, build green
+  (879.8 kB eager, 23.5 kB under budget), backend 3616 passed unchanged.
+- F2.3 remains open: channels/errors reassignment, grouping/faceting, tick
+  formats, and region shades are still unreached by the canonical preview.
+
+### 2026-08-12 — F2.2 defect: the pre-emptive drift check was blind to Stage edits (Claude Opus 5)
+
+- **Found by driving the real app, not by reading code.** With a Publication
+  Preview open on the focused window, adding a reference line through the
+  Inspector left **Apply enabled**. Clicking it rejected the entire session —
+  `staleBaseline: true`, status "publication preview target changed; changes
+  not applied" — discarding every preview edit made up to that point. That is
+  precisely the failure item 1 (`sessionLiveDrifted`, F2.2a) exists to
+  prevent: "flag Apply as blocked BEFORE the user clicks it instead of only
+  after a rejected Apply".
+- **Root cause: a computation without a subscription.** `useFigureBuilder`
+  read `useApp.getState()` inline, with a comment asserting that "existing
+  [selectors] re-render the hook enough for a real edit to reach this check
+  on its own." That assumption is false. A focused window's LIVE document is
+  derived (`liveWindowDocument` → `snapshotView`) from the store's top-level
+  view SINGLETONS — `refLines`, `regionShades`, `shapes`, `annotations`,
+  `hiddenChannels`, `plotTitle`, every `VIEW_KEYS` field — and the hook
+  subscribes to none of them. No re-render, no re-check.
+- **Why item 1's own test missed it:** it drifts `plotWindows[i].document`,
+  and `plotWindows` IS one of the hook's selectors. The test proved the
+  drift *computation* and never the *subscription*. The new test drifts
+  `refLines` — exactly what `Inspector/RefLinesCard`'s Add does — and was
+  confirmed red before the fix, with the failure matching the live app's.
+- **Fix:** `selectSessionLiveDrifted(state)` in `canonicalSession.ts`, a
+  Zustand selector returning a boolean. Cost is the reason it's shaped this
+  way: it runs on every store notification, so the no-session case (nearly
+  the whole life of the app — Publication Preview is one transient tool
+  window) short-circuits on a single property read before touching
+  `plotWindows` or building any document. **Measured in the running app**
+  rather than argued: 2000 store notifications took 66.0 ms with no session
+  and 119.8 ms with a preview open — ~0.027 ms per notification, and that
+  delta is an upper bound since it includes everything else an open preview
+  adds. At a 60 Hz drag that is ~1.6 ms/s.
+- Ratchets, both DOWN, in the same commit: `useFigureBuilder.ts` 600 → 598
+  (the long rationale moved to `canonicalSession.ts`, where the contract it
+  documents lives), and the weak-wait allowlist for
+  `useFigureBuilder.test.ts` 22 → 2 — the guard caught the new test copying
+  the file's own weak-wait idiom, so all 22 sites were converted to wait on
+  `result.current.preview` (strictly stronger: it is null until the debounced
+  hit-map resolves AND commits). `weak-waits-inventory.md` updated;
+  figurebuilder is the first directory cleared under TEST_DETERMINISM #5.
+- **Swept the whole class, and it is a clean negative.** A
+  render-time-`getState()` detector (brace/scope walk over every non-test
+  `.ts`/`.tsx` under `frontend/src`, flagging `useApp.getState()` reached
+  during render rather than inside a callback) was first VALIDATED against
+  this very bug — run over the pre-fix file it flags the exact line — then run
+  over the fixed tree. 255 `getState()` call sites exist; every one outside
+  this fix is either an action function (`newGraphWindow`, `runUndo`,
+  `exportSavedPage`, the whole `folderOps`/`contextActions` family — reading
+  freshest state at action time, which is the correct idiom) or one of two
+  DELIBERATE, documented render-time reads in `Stage/PlotStage.tsx`
+  (`qfitRoi`, `gadgetCursors`), where the comment explains that subscribing
+  would rebuild the uPlot instance and orphan the plugin's in-flight drag
+  listeners. Those two are correct; recorded here so they are not
+  re-investigated as suspects.
+- **No standing guard was added, deliberately.** The detector needs ~60
+  allowlist entries to go green because "action function" vs "render body" is
+  a judgement call at the syntax level — the same unreliable-classification
+  trap TEST_DETERMINISM #4 hit three times before that campaign abandoned
+  classification for a plain count ratchet. A guard that must be maintained
+  against 60 false positives gets disabled, not maintained. The method is
+  recorded here instead so it can be re-run cheaply after new hooks land.
+- **F2.2 stays open.** This closes a defect in F2.2a's shipped mechanism, not
+  the remaining broader-entry-point parity work.
 
 ### 2026-08-11 — Reference lines and region shades in publication export (Claude Sonnet 5)
 

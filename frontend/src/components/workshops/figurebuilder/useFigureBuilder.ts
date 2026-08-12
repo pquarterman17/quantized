@@ -6,29 +6,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportFigure, renderFigureHitmap, type FigureSpec } from "../../../lib/api";
-import {
-  deleteGraphTemplate,
-  loadGraphTemplates,
-  saveGraphTemplate,
-  type GraphTemplate,
-} from "../../../lib/figuredoc";
+import { exportFigure, type FigureSpec } from "../../../lib/api";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
+import { appendRefLine, patchRefLineList, refLineIdForHit, removeRefLineFromList } from "./canonicalRefLines";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
-import { sessionLiveDrifted } from "./canonicalSession";
-import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
+import { selectSessionLiveDrifted } from "./canonicalSession";
+import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
+import { useGraphTemplates } from "./useGraphTemplates";
+import { usePreviewRender } from "./usePreviewRender";
+import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
-import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
+import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { effectiveChannels } from "../../../lib/plotdata";
-import {
-  groupForElement,
-  pxToData,
-  pxToFigureFraction,
-  type FigureHitmap,
-} from "../../../lib/previewmap";
-import { axisFmtParam, type AxisScale, type DataStruct, type Shape, type SeriesStyle } from "../../../lib/types";
+import { groupForElement, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
+import { xAxisIsDate } from "../../../lib/tickFormat";
+import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -59,8 +53,6 @@ export const FIGURE_STYLE_DPI: Record<string, number> = {
   presentation: 150,
   poster: 150,
 };
-
-const PREVIEW_DPI = 110; // screen-resolution preview; export uses the chosen DPI
 
 export function useFigureBuilder() {
   const active = useActiveDataset();
@@ -110,10 +102,6 @@ export function useFigureBuilder() {
   >(undefined);
   // Frozen doc (#12): render from its data snapshot instead of the live dataset.
   const [frozenData, setFrozenData] = useState<DataStruct | null>(null);
-  // User graph templates (#15).
-  const [graphTemplates, setGraphTemplates] = useState<GraphTemplate[]>(() =>
-    loadGraphTemplates(),
-  );
 
   // Restore an opened FigureDoc's full config into the builder (one-shot).
   useEffect(() => {
@@ -134,9 +122,7 @@ export function useFigureBuilder() {
     setFrozenData(!figureDocSeed.live ? (figureDocSeed.dataSnapshot ?? null) : null);
     clearFigureDocSeed();
   }, [figureDocSeed, clearFigureDocSeed]);
-  const [preview, setPreview] = useState<string | null>(null);
-  // The preview's element hit-map (#13) + which panel group a click focused.
-  const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
+  // Which panel group a preview click focused (#13).
   const [focusGroup, setFocusGroup] = useState<string | null>(null);
   // Selection is a monotonic signal, not just the group name: re-selecting
   // the SAME element after the user manually collapsed its panel must still
@@ -144,8 +130,6 @@ export function useFigureBuilder() {
   // gives Group's effect nothing to react to. Bumping this on every
   // selection gives it one.
   const [focusNonce, setFocusNonce] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // Style preset change: sync DPI to that preset's calibrated value (audit
   // follow-up — the field previously stayed wherever it was left, so a
@@ -265,6 +249,27 @@ export function useFigureBuilder() {
   const removeShape = (id: string) =>
     setCanonicalView({ shapes: removeShapeFromList(shapes, id) });
 
+  // F2.3d: reference lines are the same canonical-only PlotView field as
+  // F2.3b's series properties and F2.3c's shapes -- no FigureOverrides
+  // equivalent, so edits write straight through setCanonicalView. Unlike
+  // shapes, ADD belongs here too (axis + number needs no live canvas). Axis
+  // stays read-only per row; see RefLinePropertiesPanel's doc.
+  const refLines: readonly RefLine[] = canonical ? canonicalView?.refLines ?? [] : [];
+  const setRefLineValue = (id: string, value: number) =>
+    setCanonicalView({ refLines: patchRefLineList(refLines, id, { value }) });
+  const addRefLine = (axis: RefLine["axis"], value: number) =>
+    setCanonicalView({ refLines: appendRefLine(refLines, axis, value) });
+  const removeRefLine = (id: string) =>
+    setCanonicalView({ refLines: removeRefLineFromList(refLines, id) });
+
+  // F2.3e: axis tick formats are the same canonical-only PlotView fields as
+  // the three slices above -- and they already reach the renderer
+  // (figureSpec's x_fmt/y_fmt + secondaryAxisWire's y2_fmt), so the panel was
+  // the only missing piece. y2Fmt null = inherit Y, the Stage's own rule.
+  const setXFmtCanonical = (next: AxisFormat) => setCanonicalView({ xFmt: next });
+  const setYFmtCanonical = (next: AxisFormat) => setCanonicalView({ yFmt: next });
+  const setY2FmtCanonical = (next: AxisFormat | null) => setCanonicalView({ y2Fmt: next });
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -272,50 +277,24 @@ export function useFigureBuilder() {
   const effYKeys = docYKeys !== undefined ? docYKeys : yKeys;
   const effXScale = docScales?.x ?? xScale;
   const effYScale = docScales?.y ?? yScale;
-  const legacySpec = useMemo<FigureSpec | null>(() => {
-    if (!data) return null;
-    const plotted = effYKeys ?? data.labels.map((_, i) => i);
-    return {
-      dataset: data,
-      x_key: effXKey ?? undefined,
-      y_keys: effYKeys ?? undefined,
-      x_log: effXScale === "log",
-      y_log: effYScale === "log",
-      x_scale: effXScale,
-      y_scale: effYScale,
-      x_fmt: axisFmtParam(xFmt),
-      y_fmt: axisFmtParam(yFmt),
-      style,
-      overrides: compactOverrides(overrides),
-      title: title.trim(),
-      x_label: xLabel.trim() || undefined,
-      y_label: yLabel.trim() || undefined,
-      series_styles: docSeriesStyles !== undefined
-        ? (docSeriesStyles ?? undefined)
-        : buildExportStyles(plotted, seriesStyles),
-      group_col: docGroupCol ?? undefined,
-    };
-  }, [
-    data,
-    effYKeys,
-    effXKey,
-    effXScale,
-    effYScale,
-    xFmt,
-    yFmt,
-    style,
-    title,
-    xLabel,
-    yLabel,
-    seriesStyles,
-    docSeriesStyles,
-    docGroupCol,
-    overrides,
+  // The whole legacy field set as ONE object, so the preview request and the
+  // "Save as figure" doc are built from the same picks by construction — see
+  // legacyFigure.ts's module doc.
+  const legacyState = useMemo<LegacyFigureState>(() => ({
+    data, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
+    xFmt, yFmt, style, overrides, title, xLabel, yLabel,
+    seriesStyles, docSeriesStyles, docGroupCol,
+  }), [
+    data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style,
+    overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
   ]);
+  const legacySpec = useMemo<FigureSpec | null>(() => buildLegacyFigureSpec(legacyState), [legacyState]);
   const canonicalSpec = canonicalReadiness?.state === "ready"
     ? canonicalReadiness.spec
     : null;
   const spec = canonical ? canonicalSpec : legacySpec;
+  // Debounced PNG preview + hit-map — see usePreviewRender's module doc.
+  const { preview, hitmap, error, busy } = usePreviewRender(spec, canonical);
   // A window-target session outlives its target window closing/unfocusing
   // (windows.ts's closeWindow clears the common case, but a session can still
   // be left pointing at a background window — applyFigurePublicationEdit's
@@ -327,13 +306,11 @@ export function useFigureBuilder() {
     focusedWindowId !== publicationSession.windowId
   );
   // Item 1: catch a Stage edit made behind the open, non-modal dialog on THIS
-  // render rather than only via a rejected Apply (staleBaseline, above).
-  // useApp.getState() reads live state directly here -- NOT a selector --
-  // so this adds no subscription; existing ones re-render the hook enough
-  // for a real edit to reach this check on its own.
-  const liveDrifted = publicationSession
-    ? sessionLiveDrifted(publicationSession, plotWindows, targetBlocked, useApp.getState())
-    : false;
+  // render rather than only via a rejected Apply (staleBaseline, above). MUST
+  // stay a real subscription, never a `useApp.getState()` read — the live
+  // document derives from view SINGLETONS this hook selects on none of; see
+  // canonicalSession.ts's selectSessionLiveDrifted for what that let through.
+  const liveDrifted = useApp(selectSessionLiveDrifted);
   const canApply = !targetBlocked && !publicationSession?.staleBaseline && !liveDrifted && canonicalReadiness?.state === "ready" && (
     publicationSession?.target === "new-editable" || (
       publicationSession !== null && JSON.stringify(publicationSession.baseline) !== JSON.stringify(publicationSession.draft)
@@ -348,94 +325,16 @@ export function useFigureBuilder() {
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
   function saveAsFigure(name: string, live: boolean): void {
-    if (!data) return;
-    const plotted = effYKeys ?? data.labels.map((_, i) => i);
-    addFigureDoc({
-      id: `figd-${Date.now().toString(36)}-${++_docSeq}`,
-      name,
-      datasetId: active?.id ?? null,
-      live,
-      ...(live ? {} : { dataSnapshot: data }),
-      config: {
-        xKey: effXKey,
-        yKeys: effYKeys,
-        groupCol: docGroupCol,
-        xScale: effXScale,
-        yScale: effYScale,
-        title,
-        xLabel,
-        yLabel,
-        style,
-        fmt,
-        dpi,
-        overrides: compactOverrides(overrides),
-        seriesStyles: docSeriesStyles !== undefined
-          ? docSeriesStyles
-          : buildExportStyles(plotted, seriesStyles),
-      },
-    });
-  }
-
-  // User graph templates (#15): the style half, appliable to any figure.
-  function saveStyleTemplate(name: string): void {
-    if (!data) return;
-    const plotted = effYKeys ?? data.labels.map((_, i) => i);
-    setGraphTemplates(
-      saveGraphTemplate({
-        name,
-        style,
-        overrides: compactOverrides(overrides),
-        seriesStyles: buildExportStyles(plotted, seriesStyles),
-      }),
+    const doc = buildLegacyFigureDoc(
+      legacyState,
+      { id: `figd-${Date.now().toString(36)}-${++_docSeq}`, name, datasetId: active?.id ?? null, live },
+      { fmt, dpi },
     );
-    setStatus(`graph template "${name}" saved`);
+    if (doc) addFigureDoc(doc);
   }
 
-  function applyStyleTemplate(name: string): void {
-    const t = graphTemplates.find((x) => x.name === name);
-    if (!t) return;
-    setStyle(t.style);
-    setOverrides(t.overrides ?? {});
-    setDocSeriesStyles(t.seriesStyles ?? null);
-    setStatus(`graph template "${name}" applied`);
-  }
-
-  function removeStyleTemplate(name: string): void {
-    setGraphTemplates(deleteGraphTemplate(name));
-  }
-
-  // Debounced PNG preview — re-renders on any spec change.
-  useEffect(() => {
-    if (!spec) {
-      setPreview(null);
-      if (canonical) {
-        setHitmap(null);
-        setBusy(false);
-      }
-      return;
-    }
-    let cancelled = false;
-    setBusy(true);
-    const timer = setTimeout(() => {
-      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI })
-        .then((m) => {
-          if (cancelled) return;
-          setHitmap(m);
-          setPreview(`data:image/png;base64,${m.image}`);
-          setError(null);
-        })
-        .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : "preview failed");
-        })
-        .finally(() => {
-          if (!cancelled) setBusy(false);
-        });
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [canonical, spec]);
+  // User graph templates (#15) — legacy-mode-only by nature; see the module doc.
+  const templates = useGraphTemplates({ legacy: legacyState, setStyle, setOverrides, setDocSeriesStyles, setStatus });
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
   /** Click: focus the matching #11 panel group. Always bumps the nonce so a
@@ -480,6 +379,17 @@ export function useFigureBuilder() {
           anchor: pxToFigureFraction(hitmap.width, hitmap.height, px, py),
         },
       });
+    } else if (id.startsWith("refline:")) {
+      // F2.4d: drag a reference line to move it, the same gesture the Stage's
+      // uPlot canvas already supports (`updateRefLine`). Value only — a line's
+      // AXIS is fixed once created everywhere in the app, so a horizontal drag
+      // of a Y line is a no-op rather than a reinterpretation.
+      const lineId = refLineIdForHit(refLines, Number(id.slice("refline:".length)));
+      const line = refLines.find((candidate) => candidate.id === lineId);
+      if (!line) return;
+      const { x, y } = pxToData(hitmap.axes, px, py);
+      const next = line.axis === "x" ? x : y;
+      if (Number.isFinite(next)) setRefLineValue(line.id, next);
     } else if (id.startsWith("ann:")) {
       const i = Number(id.slice(4));
       const anns = activeOverrides.annotations ?? [];
@@ -573,6 +483,21 @@ export function useFigureBuilder() {
     shapeRows,
     setShapeStyle,
     removeShape,
+    // F2.3d: canonical-only (empty/no-op in legacy mode — see the field doc above).
+    refLines,
+    setRefLineValue,
+    addRefLine,
+    removeRefLine,
+    // F2.3e: canonical-only. The fmt values fall back to the live singletons in
+    // legacy mode so the panel can render there too, read-only-ish (the legacy
+    // request already sends the live xFmt/yFmt — see legacyFigure.ts).
+    canonicalXFmt: canonicalView?.xFmt ?? xFmt,
+    canonicalYFmt: canonicalView?.yFmt ?? yFmt,
+    canonicalY2Fmt: canonicalView?.y2Fmt ?? null,
+    xIsDate: xAxisIsDate(data?.metadata, (canonicalView?.xFmt ?? xFmt).mode),
+    setXFmtCanonical,
+    setYFmtCanonical,
+    setY2FmtCanonical,
     data,
     hitmap,
     focusGroup,
@@ -591,9 +516,6 @@ export function useFigureBuilder() {
     apply: applyFigurePublicationEdit,
     cancel: cancelFigurePublicationEdit,
     saveAsFigure,
-    graphTemplates,
-    saveStyleTemplate,
-    applyStyleTemplate,
-    removeStyleTemplate,
+    ...templates,
   };
 }

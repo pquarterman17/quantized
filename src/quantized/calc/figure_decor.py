@@ -145,9 +145,22 @@ def _apply_ref_lines(ax: Any, ref_lines: Sequence[Mapping[str, Any]] | None) -> 
     verified against the plugin source, not assumed."""
     if not ref_lines:
         return
-    for rl in ref_lines:
+    for index, rl in enumerate(ref_lines):
         value = float(rl["value"])
-        line_kw = dict(color=_REF_LINE_COLOR, linewidth=_REF_LINE_WIDTH, dashes=_REF_LINE_DASH)
+        # ``gid`` is matplotlib's own artist-identity slot and is the ONLY
+        # thing ``figure_hitmap.collect_map`` uses to tell a reference line
+        # apart from a series ``Line2D`` -- both land in ``ax.lines``, and
+        # colour-mapped series are not in ``ax.lines`` at all, so a positional
+        # rule would misalign (see collect_map's own ``series_artists`` doc).
+        # The index is this SEQUENCE's index; the client re-derives which of
+        # its own reference lines that is by applying the same finite filter
+        # ``viewOverrides`` used to build the sequence.
+        line_kw = dict(
+            color=_REF_LINE_COLOR,
+            linewidth=_REF_LINE_WIDTH,
+            dashes=_REF_LINE_DASH,
+            gid=f"refline:{index}",
+        )
         if rl["axis"] == "x":
             ax.axvline(value, **line_kw)
         else:

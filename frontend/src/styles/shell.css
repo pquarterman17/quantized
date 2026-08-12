@@ -170,6 +170,17 @@ body {
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qzk-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
+/* Modifier for MESSAGE text (role="alert" / role="note") that borrows
+   qzk-ds-meta's typography but must never be clipped. qzk-ds-meta is a
+   single-line utility built for a dataset's "201 pts · 1 ch" row, where an
+   ellipsis is exactly right; applied to a multi-sentence, actionable message
+   it hides the actionable half. Measured case that prompted this: the Figure
+   Page save gate rendered 988 px of "…save it (its title-bar Save button, or
+   File > Save Editable Figure), then Save this page again" inside a 154 px
+   column — ~84% of the instruction invisible, with no ellipsis to hint at it
+   (the text overflowed a nowrap line rather than filling one). Any new
+   alert/note that borrows qzk-ds-meta should carry this too. */
+.qzk-msg { overflow: visible; text-overflow: clip; white-space: normal; }
 /* Per-dataset tag chips (Library): click a chip to filter, ✕ to remove, ＋ to add. */
 .qzk-ds-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .qzk-tag { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: var(--type-nano); cursor: pointer; }

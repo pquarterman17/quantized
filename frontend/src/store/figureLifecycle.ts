@@ -6,7 +6,7 @@ import {
   type FigureDocument,
 } from "../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../lib/figureDocumentPublication";
-import { hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
+import { displayedWindowTitle, hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
 import { toast } from "./toasts";
 import { withPlotWindowDocument } from "./windowDocuments";
@@ -303,8 +303,22 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     saveFigure: (windowId) => {
       const state = get();
       const window = state.plotWindows.find((candidate) => candidate.id === windowId);
-      const document = window && liveWindowDocument(state, window);
-      if (!window || !document) return null;
+      const live = window && liveWindowDocument(state, window);
+      if (!window || !live) return null;
+      // A window's `title` is "" until someone renames it -- the default main
+      // window never gets one, since it is created at store init before any
+      // dataset exists. The TITLE BAR resolves that sentinel through
+      // `displayedWindowTitle` (explicit title -> bound dataset's name ->
+      // "Untitled graph"), so a user looking at a window labelled
+      // "two-channel.csv" and choosing Save Editable Figure used to get a
+      // figure named "" -- a nameless Library row, a bare glyph in the Figure
+      // Page's panel-source list, and the status line `figure "" saved`.
+      // Resolve the same name the user is looking at. Only fills a BLANK
+      // name, so an explicit title (and `saveFigureAs`'s dialog name) is
+      // never overridden.
+      const document = live.name.trim()
+        ? live
+        : { ...live, name: displayedWindowTitle(window, state.datasets) };
       state.recordHistory("save figure");
       set((current) => ({
         editableFigures: current.editableFigures.some((saved) => saved.id === document.id)

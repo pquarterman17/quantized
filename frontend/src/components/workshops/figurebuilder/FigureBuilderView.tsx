@@ -47,7 +47,7 @@ export default function FigureBuilderView() {
             <div
               role="note"
               aria-label="Publication preview behavior"
-              className="qzk-ds-meta"
+              className="qzk-ds-meta qzk-msg"
               style={{ color: "var(--text-dim)", marginBottom: 2 }}
             >
               {f.canonical && detachedCanonical
@@ -119,6 +119,29 @@ export default function FigureBuilderView() {
                 onStyle: f.setShapeStyle,
                 onRemove: f.removeShape,
               } : undefined}
+              // F2.3d: gated on `canonical` ONLY, not on a non-empty list --
+              // this panel can create the first reference line, and the
+              // alternative (reach for the Stage card) is the one action that
+              // invalidates the open session.
+              refLines={f.canonical ? {
+                refLines: f.refLines,
+                onValue: f.setRefLineValue,
+                onAdd: f.addRefLine,
+                onRemove: f.removeRefLine,
+              } : undefined}
+              // F2.3e: canonical-only. Legacy Publication Preview renders from
+              // the LIVE store's xFmt/yFmt, which the Stage's own Inspector
+              // card already owns — a second editor for the same singleton
+              // would be a confusing duplicate, not a feature.
+              tickFormats={f.canonical ? {
+                xFmt: f.canonicalXFmt,
+                yFmt: f.canonicalYFmt,
+                y2Fmt: f.canonicalY2Fmt,
+                xIsDate: f.xIsDate,
+                onXFmt: f.setXFmtCanonical,
+                onYFmt: f.setYFmtCanonical,
+                onY2Fmt: f.setY2FmtCanonical,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />
@@ -180,29 +203,56 @@ export default function FigureBuilderView() {
             )}
 
             </>}
-            <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
-              <Button variant="primary" onClick={f.exportNow} disabled={exportDisabled} style={{ marginTop: 6 }}>
-                Export {f.fmt.toUpperCase()}
-              </Button>
-            </span>
-            {f.canonical && f.applyBlockedReason && (
-              <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
-                {f.applyBlockedReason}
-              </div>
-            )}
-            {f.canonical && (
-              <div style={{ display: "flex", gap: 6 }}>
-                <Button
-                  variant="primary"
-                  onClick={f.apply}
-                  disabled={!f.canApply}
-                  title={f.applyBlockedReason ?? undefined}
-                >
-                  {detachedCanonical ? "Create Editable Figure" : "Apply"}
+            {/* Sticky action row. Export/Apply/Cancel used to scroll away with
+                the rest of the column: with the property groups expanded the
+                settings column is ~2,400 px tall inside a ~900 px viewport, so
+                the buttons that COMMIT the work sat ~200 px below the fold and
+                had to be hunted for. Sticking them to the bottom of the
+                scroller keeps the commit affordance permanently in reach
+                without changing the DOM structure ToolWindow lays out. */}
+            <div
+              style={{
+                position: "sticky",
+                // The scroller (.qzk-win-body) has `--pad-lg` bottom padding;
+                // sticking at plain `bottom: 0` parks the row one padding-width
+                // ABOVE the scrollport edge, so scrolling content shows through
+                // the gap under it. Stick past the padding and add it back
+                // inside, so the row sits flush and stays opaque.
+                bottom: "calc(var(--pad-lg) * -1)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                paddingTop: 8,
+                paddingBottom: "var(--pad-lg)",
+                marginTop: "auto",
+                background: "var(--surface-2)",
+                borderTop: "1px solid var(--border-soft)",
+              }}
+            >
+              <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
+                <Button variant="primary" onClick={f.exportNow} disabled={exportDisabled}>
+                  Export {f.fmt.toUpperCase()}
                 </Button>
-                <Button onClick={() => void cancelPublicationPreview()}>Cancel</Button>
-              </div>
-            )}
+              </span>
+              {f.canonical && f.applyBlockedReason && (
+                <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
+                  {f.applyBlockedReason}
+                </div>
+              )}
+              {f.canonical && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Button
+                    variant="primary"
+                    onClick={f.apply}
+                    disabled={!f.canApply}
+                    title={f.applyBlockedReason ?? undefined}
+                  >
+                    {detachedCanonical ? "Create Editable Figure" : "Apply"}
+                  </Button>
+                  <Button onClick={() => void cancelPublicationPreview()}>Cancel</Button>
+                </div>
+              )}
+            </div>
           </div>
           <div
             style={{
@@ -217,7 +267,7 @@ export default function FigureBuilderView() {
             }}
           >
             {f.error ? (
-              <div role="alert" aria-live="polite" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+              <div role="alert" aria-live="polite" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
                 {f.error}
               </div>
             ) : f.preview && f.hitmap ? (

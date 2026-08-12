@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import type { Shape } from "../../../lib/types";
-import PropertyPanels, { type SeriesPanelProps, type ShapesPanelProps } from "./PropertyPanels";
+import { groupForElement } from "../../../lib/previewmap";
+import PropertyPanels, { type RefLinesPanelProps, type SeriesPanelProps, type ShapesPanelProps } from "./PropertyPanels";
 
 function Harness({
   initial,
@@ -395,5 +396,88 @@ describe("PropertyPanels Shapes group (F2.3c)", () => {
     expect(screen.getByText("arrow 1")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("arrow 1 width"), { target: { value: "3" } });
     expect(onStyle).toHaveBeenCalledWith("s1", { width: 3 });
+  });
+});
+
+describe("PropertyPanels Reference lines group (F2.3d)", () => {
+  const refLinesProp = (overrides: Partial<RefLinesPanelProps> = {}): RefLinesPanelProps => ({
+    refLines: [{ id: "r1", axis: "x", value: 500 }],
+    onValue: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the group entirely in legacy mode (no prop supplied)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Reference lines" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Reference lines/ })).not.toBeInTheDocument();
+  });
+
+  it("KEEPS the group when the canonical draft has none — unlike Series and Shapes", () => {
+    // The panel can create the first line; hiding it when empty would put
+    // "add a reference line" back on the Stage, the one action that
+    // invalidates the open session.
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Reference lines"
+        hasY2={false}
+        refLines={refLinesProp({ refLines: [] })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("new reference line value")).toBeInTheDocument();
+  });
+
+  it("renders the group and forwards edits to the supplied callbacks", () => {
+    const onValue = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Reference lines"
+        hasY2={false}
+        refLines={refLinesProp({ onValue })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("X reference 1 value"), { target: { value: "900" } });
+    expect(onValue).toHaveBeenCalledWith("r1", 900);
+  });
+});
+
+// F2.4c: `groupForElement` routes a preview click by returning a GROUP TITLE
+// STRING, and PropertyPanels opens whichever Group has that exact title. The
+// coupling is a bare string in two files, so renaming a Group title silently
+// breaks click-to-focus with every test still green. This closes that.
+describe("preview click-to-focus routing stays wired to real group titles", () => {
+  const ELEMENT_TO_GROUP = [
+    ["legend", "Legend"],
+    ["ann:0", "Annotations"],
+    ["title", "Text & fonts"],
+    ["refline:0", "Reference lines"],
+    ["shape:0", "Shapes"],
+  ] as const;
+
+  it.each(ELEMENT_TO_GROUP)("%s opens a group that actually exists", (elementId, expected) => {
+    expect(groupForElement(elementId)).toBe(expected);
+    render(
+      <PropertyPanels
+        overrides={{ annotations: [{ x: 0, y: 0, text: "a" }] }}
+        openGroup={expected}
+        hasY2={false}
+        series={{
+          labels: ["A"], channels: [0], styles: {}, hiddenChannels: [], nameOverrides: {}, errors: [],
+          onStyle: vi.fn(), onHiddenChange: vi.fn(), onMove: vi.fn(),
+        }}
+        shapes={{ shapes: [{ id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 }], onStyle: vi.fn(), onRemove: vi.fn() }}
+        refLines={{ refLines: [], onValue: vi.fn(), onAdd: vi.fn(), onRemove: vi.fn() }}
+        setOverrides={vi.fn()}
+      />,
+    );
+    // The Group renders its title in a `.qzk-group-name` span; a title
+    // `groupForElement` can return but no Group carries would focus nothing.
+    const titles = screen.getAllByText((_, node) => node?.className === "qzk-group-name")
+      .map((node) => node.textContent);
+    expect(titles).toContain(expected);
   });
 });

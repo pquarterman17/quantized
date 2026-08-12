@@ -12,10 +12,17 @@ import { groupForElement, type FigureHitmap, type HitElement } from "../../../li
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 
 const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
-const DRAGGABLE = (id: string) => id === "legend" || id.startsWith("ann:");
+// F2.4d: reference lines join the draggable set — the Stage canvas has
+// always supported dragging one, and the preview now has the hit target
+// (F2.4c) and the panel (F2.3d) to make it round-trip.
+const DRAGGABLE = (id: string) => id === "legend" || id.startsWith("ann:") || id.startsWith("refline:");
 const elementName = (id: string) => {
   if (id.startsWith("ann:")) return "Annotation";
   if (id.startsWith("series:")) return "Series";
+  // F2.4c: without these the generic fallback below renders the raw element
+  // id, so the new decor hitboxes would have read "Refline:0" / "Shape:2".
+  if (id.startsWith("refline:")) return "Reference line";
+  if (id.startsWith("shape:")) return "Shape";
   return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
 };
 /** F2.3b: a "series:N" hitbox becomes reachable once the canonical draft has
@@ -31,6 +38,10 @@ const elementTitle = (id: string, canonicalSeriesEditable: boolean) => {
       ? `${name} \u2014 right-click for properties`
       : `${name} \u2014 properties are edited on Stage`;
   }
+  // F2.4c: shapes have a panel but no drag gesture (four coordinates and a
+  // grab-handle model, unlike a reference line's single value), so the tooltip
+  // advertises exactly the one thing that works for them.
+  if (id.startsWith("shape:")) return `${name} \u2014 right-click for properties`;
   return name;
 };
 const hitboxArea = (element: HitElement) => (element.x1 - element.x0) * (element.y1 - element.y0);

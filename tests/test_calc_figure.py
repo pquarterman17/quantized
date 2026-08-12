@@ -278,6 +278,79 @@ def test_color_by_scatter_hitmap_keeps_series_indices_aligned() -> None:
         assert b["x0"] < b["x1"] and b["y0"] < b["y1"]
 
 
+class TestDecorHitElements:
+    """F2.4c: reference lines and shapes are visible in the render, so they
+    need hit targets -- otherwise the client can draw an object into the
+    preview with no way to open its property panel from it."""
+
+    X = [0.0, 1.0, 2.0, 3.0]
+    SERIES = [("a", [1.0, 2.0, 3.0, 4.0])]
+
+    def _map(self, **overrides):
+        return render_figure_map(self.X, self.SERIES, dpi=80, overrides=overrides)
+
+    def _boxes(self, out):
+        return {e["id"]: e for e in out["elements"]}
+
+    def test_reference_lines_get_indexed_hit_boxes(self):
+        boxes = self._boxes(
+            self._map(ref_lines=[{"axis": "x", "value": 1.5}, {"axis": "y", "value": 2.5}])
+        )
+        assert {"refline:0", "refline:1"} <= set(boxes)
+
+    def test_a_zero_width_reference_line_is_still_hittable(self):
+        # axvline is EXACTLY zero pixels wide; the plain `add` path drops any
+        # empty bbox (correct for an absent title), which silently lost every
+        # reference line until add_decor padded the degenerate axis.
+        vertical = self._boxes(self._map(ref_lines=[{"axis": "x", "value": 1.5}]))["refline:0"]
+        horizontal = self._boxes(self._map(ref_lines=[{"axis": "y", "value": 2.5}]))["refline:0"]
+        assert vertical["x1"] - vertical["x0"] == pytest.approx(6.0)
+        assert vertical["y1"] > vertical["y0"] + 6.0  # spans the axis, not padded
+        assert horizontal["y1"] - horizontal["y0"] == pytest.approx(6.0)
+        assert horizontal["x1"] > horizontal["x0"] + 6.0
+
+    def test_the_pad_is_centred_on_the_line_not_offset_from_it(self):
+        # A user clicking the DRAWN pixel must land inside the box, so the
+        # padding has to grow symmetrically about the artist. Checked against
+        # the pixel the axes rect + data limits put x=1.5 at, not against
+        # another call to the same code.
+        out = self._map(ref_lines=[{"axis": "x", "value": 1.5}])
+        box = self._boxes(out)["refline:0"]
+        axes = out["axes"]
+        lo, hi = axes["xlim"]
+        expected_px = axes["x0"] + (1.5 - lo) / (hi - lo) * (axes["x1"] - axes["x0"])
+        assert (box["x0"] + box["x1"]) / 2 == pytest.approx(expected_px, abs=0.5)
+
+    @pytest.mark.parametrize("kind", ["arrow", "line", "rect", "ellipse"])
+    def test_every_shape_kind_gets_a_hit_box(self, kind: str):
+        boxes = self._boxes(
+            self._map(shapes=[{"kind": kind, "x1": 0.5, "y1": 1.0, "x2": 2.5, "y2": 3.0}])
+        )
+        assert "shape:0" in boxes
+        box = boxes["shape:0"]
+        assert box["x0"] < box["x1"] and box["y0"] < box["y1"]
+
+    def test_shape_indices_follow_the_request_order(self):
+        boxes = self._boxes(
+            self._map(
+                shapes=[
+                    {"kind": "rect", "x1": 0.2, "y1": 1.0, "x2": 1.0, "y2": 2.0},
+                    {"kind": "rect", "x1": 2.0, "y1": 3.0, "x2": 3.0, "y2": 4.0},
+                ]
+            )
+        )
+        # The second shape is up and to the right of the first.
+        assert boxes["shape:1"]["x0"] > boxes["shape:0"]["x0"]
+        assert boxes["shape:1"]["y1"] < boxes["shape:0"]["y1"]
+
+    def test_series_lines_are_not_mistaken_for_decor(self):
+        # Reference lines and series lines share ax.lines; only a gid tells
+        # them apart, so an untagged series must contribute no decor element.
+        ids = {e["id"] for e in self._map()["elements"]}
+        assert not any(i.startswith(("refline:", "shape:")) for i in ids)
+        assert "series:0" in ids
+
+
 # ── Property overrides (gap #11) ─────────────────────────────────────────────
 class TestOverrides:
     X = [1.0, 2.0, 3.0, 4.0]

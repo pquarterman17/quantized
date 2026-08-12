@@ -18,6 +18,13 @@ from typing import Any
 
 __all__ = ["collect_map"]
 
+#: Half-thickness, in image pixels, of a decor object's hit box along an axis
+#: it is degenerate on. 3 px each side = a 6 px target, matching the tolerance
+#: the interactive canvas already uses to pick a reference line
+#: (``lib/uplotOverlays.ts``'s ``pickRefLine`` default ``tol = 6``), so the
+#: preview and the live plot are equally forgiving to click.
+_HIT_PAD = 3.0
+
 
 def _bbox_to_pixels(bbox: Any, height: float) -> dict[str, float]:
     """Window extent (origin bottom-left) -> image pixels (origin top-left)."""
@@ -83,6 +90,28 @@ def collect_map(
             return
         elements.append({"id": el_id, **_bbox_to_pixels(bbox, height)})
 
+    def add_decor(el_id: str, artist: Any) -> None:
+        """``add`` for a decor object, whose bbox is legitimately degenerate.
+
+        A reference line drawn by ``axvline`` is exactly zero pixels WIDE (an
+        ``axhline`` zero pixels TALL), and a flattened rect/line shape is the
+        same -- so the emptiness guard in ``add`` above, which is correct for
+        an absent title or an unlabelled axis, would silently drop every one
+        of them. They are still perfectly visible in the render and the user
+        will click them, so each thin axis is grown to ``_HIT_PAD`` on either
+        side of the artist instead.
+        """
+        try:
+            bbox = _artist_window_extent(artist, renderer)
+        except (RuntimeError, AttributeError):
+            return
+        box = _bbox_to_pixels(bbox, height)
+        for lo, hi in (("x0", "x1"), ("y0", "y1")):
+            if box[hi] - box[lo] < 2 * _HIT_PAD:
+                mid = (box[lo] + box[hi]) / 2
+                box[lo], box[hi] = mid - _HIT_PAD, mid + _HIT_PAD
+        elements.append({"id": el_id, **box})
+
     if ax.get_title():
         add("title", ax.title)
     if ax.get_xlabel():
@@ -95,6 +124,20 @@ def collect_map(
         add(f"series:{i}", artist)
     for i, txt in enumerate(ax.texts):
         add(f"ann:{i}", txt)
+    # Decor objects identify themselves by matplotlib ``gid`` rather than by
+    # position: reference lines share ``ax.lines`` with the series (and a
+    # colour-mapped series is not in ``ax.lines`` at all -- see the
+    # ``series_artists`` note above), and shapes share ``ax.patches`` with
+    # nothing today but need not stay alone there. ``gid`` is matplotlib's own
+    # identity slot, set by ``figure_decor._apply_ref_lines`` and
+    # ``figure_shapes._apply_shapes``; anything else keeps a ``None`` gid and
+    # is skipped. Without these the client can render a reference line or a
+    # shape into the preview and have no hit target to open its property
+    # panel from.
+    for artist in [*ax.lines, *ax.patches]:
+        gid = artist.get_gid()
+        if isinstance(gid, str) and gid.startswith(("refline:", "shape:")):
+            add_decor(gid, artist)
 
     axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
     buf = BytesIO()

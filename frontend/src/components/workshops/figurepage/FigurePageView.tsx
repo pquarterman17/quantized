@@ -134,7 +134,7 @@ export default function FigurePageView() {
             </Button>
           </div>
           {p.unresolvedSlots.length > 0 ? (
-            <div role="note" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+            <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
               Cannot save yet:
               <ul style={{ margin: "2px 0 0", paddingLeft: 16 }}>
                 {p.unresolvedSlots.map((msg) => (
@@ -144,7 +144,7 @@ export default function FigurePageView() {
             </div>
           ) : (
             !p.everSaved && (
-              <div role="note" className="qzk-ds-meta" style={{ color: "var(--text-dim)" }}>
+              <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--text-dim)" }}>
                 Not yet saved — closing without saving discards this page.
               </div>
             )

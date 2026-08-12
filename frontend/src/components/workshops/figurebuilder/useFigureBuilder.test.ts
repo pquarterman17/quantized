@@ -171,7 +171,7 @@ describe("useFigureBuilder", () => {
       },
     });
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
     const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
     expect(preview?.series_styles).toEqual([{ color: "#123456", line: "none", marker: true }]);
     expect(useApp.getState().figureDocSeed).toBeNull();
@@ -211,7 +211,7 @@ describe("useFigureBuilder", () => {
       },
     });
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
     const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
     expect(preview?.group_col).toBe(1);
 
@@ -334,7 +334,7 @@ describe("useFigureBuilder", () => {
     });
     useApp.setState({ figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) } });
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
     await waitFor(() => expect(result.current.hitmap).not.toBeNull());
     expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0]).toMatchObject({
       y2_keys: [0], overrides: { x_breaks: [[0.2, 0.5]] }, error_spans: [null, null],
@@ -405,7 +405,7 @@ describe("useFigureBuilder", () => {
       },
     });
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
     await waitFor(() => expect(result.current.hitmap).not.toBeNull());
 
     // The view-derived annotation must be visible to the property panels —
@@ -448,7 +448,7 @@ describe("useFigureBuilder", () => {
       },
     });
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
 
     act(() => result.current.setOverrides({ ...result.current.overrides, grid: false }));
     const overrides = useApp.getState().figurePublicationSession!.draft.publication?.overrides;
@@ -476,7 +476,7 @@ describe("useFigureBuilder", () => {
     it("blocks Apply with a reason once the target window is closed", async () => {
       useApp.setState({ figurePublicationSession: session("w1", true), plotWindows: [], focusedWindowId: null });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.canApply).toBe(false);
       expect(result.current.applyBlockedReason).toBe("focus the previewed plot window to apply");
@@ -489,7 +489,7 @@ describe("useFigureBuilder", () => {
         focusedWindowId: "w2",
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.canApply).toBe(false);
       expect(result.current.applyBlockedReason).toBe("focus the previewed plot window to apply");
@@ -502,7 +502,7 @@ describe("useFigureBuilder", () => {
         focusedWindowId: "w1",
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.canApply).toBe(true);
       expect(result.current.applyBlockedReason).toBeNull();
@@ -515,7 +515,7 @@ describe("useFigureBuilder", () => {
         focusedWindowId: "w1",
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.canApply).toBe(false);
       expect(result.current.applyBlockedReason).toContain("Cancel and reopen Publication Preview");
@@ -536,7 +536,7 @@ describe("useFigureBuilder", () => {
       const focused: PlotWindow = { ...win("w1"), title: s.baseline.name, document: focusedDocument };
       useApp.setState({ ...defaultPlotView(), figurePublicationSession: s, plotWindows: [focused], focusedWindowId: "w1" });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       // Sanity: nothing has drifted yet, so the dirty+focused session is applyable.
       expect(result.current.canApply).toBe(true);
@@ -556,12 +556,49 @@ describe("useFigureBuilder", () => {
       );
     });
 
+    // The test above drifts the WINDOW RECORD (`plotWindows`), which the hook
+    // subscribes to -- so it proves the drift COMPUTATION but never the
+    // SUBSCRIPTION. Real Stage edits don't work that way: `refLines`,
+    // `regionShades`, `shapes`, `annotations`, `hiddenChannels`, `plotTitle`
+    // and every other live-view field is a top-level store singleton that the
+    // focused window's document is derived FROM (liveWindowDocument ->
+    // snapshotView), not a field on the window record. The hook subscribes to
+    // none of them, so the pre-emptive check never re-ran and Apply stayed
+    // enabled until the user clicked it and had the whole session rejected.
+    // Verified against the running app before this test was written: add a
+    // reference line on the Stage behind an open preview, Apply stays enabled,
+    // click it -> "publication preview target changed; changes not applied"
+    // and every preview edit is lost.
+    it("blocks Apply once a LIVE VIEW field the hook does not subscribe to drifts (reference lines)", async () => {
+      const s = session("w1", true);
+      const focused: PlotWindow = { ...win("w1"), title: s.baseline.name, document: structuredClone(s.baseline) };
+      useApp.setState({ ...defaultPlotView(), figurePublicationSession: s, plotWindows: [focused], focusedWindowId: "w1" });
+      const { result } = renderHook(() => useFigureBuilder());
+      // Wait on the STATE the debounced render produces, not on the mock
+      // being called (TEST_DETERMINISM #5/#6) — `preview` is the resolved
+      // hit-map's data URL, so this cannot pass before the render settles.
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+
+      expect(result.current.canApply).toBe(true);
+
+      // Exactly what Inspector/RefLinesCard's "Add" does — no window record
+      // is touched, so nothing the hook selects on changes identity.
+      act(() => {
+        useApp.setState({ refLines: [{ id: "ref-1", axis: "x", value: 500 }] });
+      });
+
+      expect(result.current.canApply).toBe(false);
+      expect(result.current.applyBlockedReason).toBe(
+        "the plot changed while previewing — Cancel and reopen Publication Preview to pick up the changes",
+      );
+    });
+
     it("does not report drift when the window's live document still matches the session baseline", async () => {
       const s = session("w1", true);
       const focused: PlotWindow = { ...win("w1"), title: s.baseline.name, document: structuredClone(s.baseline) };
       useApp.setState({ ...defaultPlotView(), figurePublicationSession: s, plotWindows: [focused], focusedWindowId: "w1" });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.canApply).toBe(true);
       expect(result.current.applyBlockedReason).toBeNull();
@@ -655,7 +692,7 @@ describe("useFigureBuilder", () => {
         focusedWindowId: "w1",
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
       act(() => {
         result.current.setSeriesStyle(0, { color: "--series-5", width: 2 });
         result.current.setSeriesHidden(1, true);
@@ -824,6 +861,314 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3d: reference lines live straight on document.plot.view.refLines --
+  // the SAME kind of canonical-only field as F2.3b's series properties and
+  // F2.3c's shapes, so this mirrors those blocks' coverage contract: the
+  // hook's setters, the Apply-commits/Cancel-is-mutation-free pin, and a
+  // serialize/deserialize round trip. The extra case here is ADD, which
+  // shapes deliberately does not have (a reference line needs no live canvas).
+  describe("canonical reference lines (F2.3d)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const refLine = (id: string, axis: "x" | "y", value: number) => ({ id, axis, value });
+    const refLineDocument = (id: string, refLines: ReturnType<typeof refLine>[]) => createFigureDocument({
+      id, name: "Ref doc", datasetId: "d1", view: { ...defaultPlotView(), refLines },
+    });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("computes an empty reference-line list in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.refLines).toEqual([]);
+    });
+
+    it("exposes the draft's reference lines once canonical", () => {
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-a", [refLine("r1", "x", 5)])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.refLines).toEqual([refLine("r1", "x", 5)]);
+    });
+
+    it("setRefLineValue patches the matching line only, leaving siblings untouched", () => {
+      useApp.setState({
+        figurePublicationSession: session(refLineDocument("figure-ref-b", [refLine("r1", "x", 5), refLine("r2", "y", 7)])),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setRefLineValue("r2", 9));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([
+        refLine("r1", "x", 5),
+        refLine("r2", "y", 9),
+      ]);
+    });
+
+    it("addRefLine appends with a draft-namespaced id that cannot collide with the store's", () => {
+      // useApp mints `ref-N` from its own module-global counter, which knows
+      // nothing about a detached draft — a shared prefix would let a later
+      // Stage "Add" re-mint an id this draft already applied.
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-c", [refLine("ref-1", "x", 5)])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addRefLine("y", 12));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([
+        refLine("ref-1", "x", 5),
+        refLine("pref-1", "y", 12),
+      ]);
+    });
+
+    it("removeRefLine drops the matching line and leaves siblings untouched", () => {
+      useApp.setState({
+        figurePublicationSession: session(refLineDocument("figure-ref-d", [refLine("r1", "x", 5), refLine("r2", "y", 7)])),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.removeRefLine("r1"));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([refLine("r2", "y", 7)]);
+    });
+
+    it("Apply commits reference-line edits into the window document and the legacy facade", async () => {
+      const document = refLineDocument("figure-ref-e", [refLine("r1", "x", 5)]);
+      useApp.setState({
+        // Same requirement as F2.3b/F2.3c's Apply tests: the ambient PlotView
+        // singletons must match the baseline's view or liveWindowDocument
+        // sees drift and Apply rejects.
+        ...defaultPlotView(),
+        refLines: [refLine("r1", "x", 5)],
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.setRefLineValue("r1", 42));
+      act(() => result.current.addRefLine("y", -3));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view.refLines).toEqual([
+        refLine("r1", "x", 42),
+        refLine("pref-1", "y", -3),
+      ]);
+      // hydrateView spreads the applied view onto the legacy top-level facade
+      // too — the same field Inspector/RefLinesCard reads on the Stage.
+      expect(state.refLines).toEqual([refLine("r1", "x", 42), refLine("pref-1", "y", -3)]);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = refLineDocument("figure-ref-f", [refLine("r1", "x", 5)]);
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addRefLine("y", 99));
+      act(() => result.current.cancel());
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("edited reference lines round-trip through document serialize/deserialize", () => {
+      const document = refLineDocument("figure-ref-g", [refLine("r1", "x", 5)]);
+      const editedRefLines = [refLine("r1", "x", 42), refLine("pref-1", "y", -3)];
+      const edited = {
+        ...document,
+        plot: { ...document.plot, view: { ...document.plot.view, refLines: editedRefLines } },
+      };
+      expect(deserializeFigureDocument(serializeFigureDocument(edited))?.plot.view.refLines).toEqual(editedRefLines);
+    });
+
+    // F2.4d: drag-to-move, the gesture the Stage canvas has always had. The
+    // hit element's index is the RENDER REQUEST's position, not the draft's,
+    // so these pin the mapping as well as the commit.
+    describe("drag to move (F2.4d)", () => {
+      const dragSession = async (lines: ReturnType<typeof refLine>[]) => {
+        const document = refLineDocument("figure-ref-drag", lines);
+        useApp.setState({ ...defaultPlotView(), figurePublicationSession: session(document) });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+        return result;
+      };
+      const draftRefLines = () =>
+        useApp.getState().figurePublicationSession!.draft.plot.view.refLines;
+
+      it("moves an X line to the dragged pixel's data X", async () => {
+        const result = await dragSession([refLine("r1", "x", 5)]);
+        // The mocked hit-map is 600x400 over xlim/ylim [0,1]; mid-width is x=0.5.
+        act(() => result.current.dragElement("refline:0", 300, 200));
+        expect(draftRefLines()[0].value).toBeCloseTo(0.5, 6);
+      });
+
+      it("moves a Y line by the dragged pixel's data Y, ignoring the horizontal component", async () => {
+        // A line's axis is fixed everywhere in the app, so a sideways drag of
+        // a Y line must not reinterpret it as an X line.
+        const result = await dragSession([refLine("r1", "y", 5)]);
+        act(() => result.current.dragElement("refline:0", 300, 100));
+        expect(draftRefLines()[0].axis).toBe("y");
+        expect(draftRefLines()[0].value).toBeCloseTo(0.75, 6);
+      });
+
+      it("resolves the hit index through the render request's finite filter", async () => {
+        // viewOverrides drops the non-finite line, so element `refline:1` is
+        // the THIRD draft line; a bare index would drag the second.
+        const result = await dragSession([
+          refLine("a", "x", 1),
+          refLine("bad", "x", Number.NaN),
+          refLine("c", "x", 3),
+        ]);
+        act(() => result.current.dragElement("refline:1", 300, 200));
+        expect(draftRefLines()[2].value).toBeCloseTo(0.5, 6);
+        expect(draftRefLines()[0].value).toBe(1);
+      });
+
+      it("ignores a drag on an element index no line answers to", async () => {
+        const result = await dragSession([refLine("r1", "x", 5)]);
+        act(() => result.current.dragElement("refline:7", 300, 200));
+        expect(draftRefLines()[0].value).toBe(5);
+      });
+    });
+
+    it("reaches the render request, so the preview shows what the panel edits", async () => {
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-h", [])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.addRefLine("x", 7));
+      // ref_lines is the wire field lib/figureOverrides.ts's viewOverrides
+      // maps refLines onto (2026-08-11 figure_decor slice) — without this the
+      // panel would edit a field the rendered figure never shows.
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].overrides?.ref_lines)
+          .toEqual([{ axis: "x", value: 7 }]),
+      );
+    });
+  });
+
+  // F2.3e: axis tick formats (xFmt/yFmt/y2Fmt) live straight on
+  // document.plot.view -- the same canonical-only fields as the three slices
+  // above, and unlike them they ALREADY reached the renderer, so the panel
+  // was the only missing piece. Same coverage contract: setters, the
+  // Apply/Cancel pin, and proof the edit reaches the render request.
+  describe("canonical tick formats (F2.3e)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const fmtDocument = (id: string, view: Partial<ReturnType<typeof defaultPlotView>> = {}) =>
+      createFigureDocument({ id, name: "Fmt doc", datasetId: "d1", view: { ...defaultPlotView(), ...view } });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("falls back to the live singletons in legacy (non-canonical) mode", () => {
+      useApp.setState({ xFmt: { mode: "sci", digits: 1 }, yFmt: { mode: "eng", digits: 2 } });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.canonicalXFmt).toEqual({ mode: "sci", digits: 1 });
+      expect(result.current.canonicalYFmt).toEqual({ mode: "eng", digits: 2 });
+    });
+
+    it("exposes the draft's own formats once canonical, not the live plot's", () => {
+      useApp.setState({
+        xFmt: { mode: "sci", digits: 1 },
+        figurePublicationSession: session(fmtDocument("figure-fmt-a", { xFmt: { mode: "fixed", digits: 3 } })),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.canonicalXFmt).toEqual({ mode: "fixed", digits: 3 });
+    });
+
+    it("writes each axis format into the draft independently", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-b")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setXFmtCanonical({ mode: "sci", digits: 3 }));
+      act(() => result.current.setYFmtCanonical({ mode: "fixed", digits: 1 }));
+      const view = useApp.getState().figurePublicationSession!.draft.plot.view;
+      expect(view.xFmt).toEqual({ mode: "sci", digits: 3 });
+      expect(view.yFmt).toEqual({ mode: "fixed", digits: 1 });
+      expect(view.y2Fmt).toBeNull();
+    });
+
+    it("round-trips y2 inheritance through null, the renderer's own sentinel", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-c")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setY2FmtCanonical({ mode: "eng", digits: 2 }));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.y2Fmt).toEqual({ mode: "eng", digits: 2 });
+      act(() => result.current.setY2FmtCanonical(null));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.y2Fmt).toBeNull();
+    });
+
+    it("offers date modes only when the bound data's X column is timestamps", () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-d")) });
+      const plain = renderHook(() => useFigureBuilder());
+      expect(plain.result.current.xIsDate).toBe(false);
+
+      useApp.setState({
+        datasets: [{ id: "d1", name: "log.csv", data: { ...DATA, metadata: { time_is_datetime: true } } }],
+        figurePublicationSession: session(fmtDocument("figure-fmt-d2")),
+      });
+      const dated = renderHook(() => useFigureBuilder());
+      expect(dated.result.current.xIsDate).toBe(true);
+    });
+
+    it("Apply commits format edits into the window document and the legacy facade", async () => {
+      const document = fmtDocument("figure-fmt-e");
+      useApp.setState({
+        ...defaultPlotView(),
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.setYFmtCanonical({ mode: "sci", digits: 3 }));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view.yFmt).toEqual({ mode: "sci", digits: 3 });
+      // The same field Inspector/TickFormat reads on the Stage.
+      expect(state.yFmt).toEqual({ mode: "sci", digits: 3 });
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = fmtDocument("figure-fmt-f");
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setXFmtCanonical({ mode: "eng", digits: 4 }));
+      act(() => result.current.cancel());
+      expect(useApp.getState().plotWindows).toEqual(before);
+    });
+
+    it("reaches the render request, so the preview shows the notation the panel picks", async () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-g")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.setYFmtCanonical({ mode: "sci", digits: 3 }));
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_fmt)
+          .toEqual({ mode: "sci", digits: 3 }),
+      );
+    });
+
+    it("omits the format from the request while an axis is auto (MAIN #24's lean-request rule)", async () => {
+      useApp.setState({ figurePublicationSession: session(fmtDocument("figure-fmt-h")) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_fmt).toBeUndefined();
+    });
+  });
+
   // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
   // double-click text (title/xlabel/ylabel) gestures already branched on
   // `canonical` from the initial canonical session (a6c809c), and commit
@@ -853,7 +1198,7 @@ describe("useFigureBuilder", () => {
     describe("legacy (non-canonical) characterization", () => {
       it("editElementText writes straight into the local title/label fields, no session involved", async () => {
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         act(() => {
           result.current.editElementText("title", "Local title");
           result.current.editElementText("xlabel", "Local x");
@@ -867,7 +1212,7 @@ describe("useFigureBuilder", () => {
 
       it("dragElement writes straight into the local overrides object, no session involved", async () => {
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         // dragElement no-ops until the hitmap it maps pixels against has
         // landed on `result.current` -- "the mock was called" only proves the
         // debounced fetch STARTED, not that its resolved hitmap has reached
@@ -969,7 +1314,7 @@ describe("useFigureBuilder", () => {
           figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
         });
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         act(() => result.current.editElementText("xlabel", "New X"));
         expect(useApp.getState().figurePublicationSession!.draft.plot.view.xAxisLabel).toBe("New X");
       });
@@ -980,7 +1325,7 @@ describe("useFigureBuilder", () => {
           figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
         });
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         act(() => result.current.editElementText("ylabel", "New Y"));
         expect(useApp.getState().figurePublicationSession!.draft.plot.view.yAxisLabel).toBe("New Y");
       });
@@ -1001,7 +1346,7 @@ describe("useFigureBuilder", () => {
           focusedWindowId: "w1",
         });
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         // KNOWN FLAKE, root-caused: "toHaveBeenCalled" only proves the
         // debounced fetch started, not that its resolved hitmap has reached
         // this render -- dragElement no-ops on a still-null hitmap. Under
@@ -1063,7 +1408,7 @@ describe("useFigureBuilder", () => {
         });
         const before = structuredClone(useApp.getState().plotWindows);
         const { result } = renderHook(() => useFigureBuilder());
-        await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+        await waitFor(() => expect(result.current.preview).not.toBeNull());
         // Same hitmap-readiness wait as the Apply test above -- this test's
         // own assertions don't depend on the drag having registered (Cancel
         // discards the draft either way), but keeping it consistent means a
@@ -1095,7 +1440,7 @@ describe("useFigureBuilder", () => {
         figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.xBreaks).toEqual([[1, 2]]);
 
@@ -1122,7 +1467,7 @@ describe("useFigureBuilder", () => {
         figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
       });
       const { result } = renderHook(() => useFigureBuilder());
-      await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
 
       expect(result.current.xBreaks).toEqual([[1, 2]]);
 
