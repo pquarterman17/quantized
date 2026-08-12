@@ -10,8 +10,9 @@ import { exportFigure, type FigureSpec } from "../../../lib/api";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { appendRefLine, patchRefLineList, refLineIdForHit, removeRefLineFromList } from "./canonicalRefLines";
-import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
+import { deriveShapeRows, patchShapeList, removeShapeFromList, shapeIdForHit, translateShape } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
+import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
@@ -20,7 +21,7 @@ import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { effectiveChannels } from "../../../lib/plotdata";
-import { groupForElement, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
+import { groupForElement, pxToCanvasFraction, pxToData, pxToFigureFraction } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -28,31 +29,14 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
 
-export const FIGURE_FORMATS = ["pdf", "svg", "png", "tiff"];
-export const FIGURE_STYLES = [
-  "default",
-  "aps",
-  "nature",
-  "thesis",
-  "report",
-  "web",
-  "presentation",
-  "poster",
-];
-// Calibrated raster DPI per preset, mirrored from
-// src/quantized/calc/figure_styles.py's FIGURE_STYLES table (no styles-list
-// endpoint exists to fetch this live — keep in sync by hand if the backend
-// table changes; tests/test_calc_figure_styles.py guards the source values).
-export const FIGURE_STYLE_DPI: Record<string, number> = {
-  default: 200,
-  aps: 600,
-  nature: 600,
-  thesis: 300,
-  report: 300,
-  web: 150,
-  presentation: 150,
-  poster: 150,
-};
+// Output format/style/DPI constants live in figureOutputConstants.ts (pure
+// data, extracted to fund F2.4e's shape-drag addition) — re-exported here so
+// every existing importer of this module is untouched.
+export { FIGURE_FORMATS, FIGURE_STYLES, FIGURE_STYLE_DPI } from "./figureOutputConstants";
+
+/** b minus a, both `{x, y}` points -> `[dx, dy]` — shared by dragElement's
+ *  F2.4e shape branch across the data-anchor/page-anchor delta (same shape). */
+const deltaXY = (a: { x: number; y: number }, b: { x: number; y: number }): [number, number] => [b.x - a.x, b.y - a.y];
 
 export function useFigureBuilder() {
   const active = useActiveDataset();
@@ -367,8 +351,11 @@ export function useFigureBuilder() {
     id === "title" ? (canonicalView?.plotTitle ?? title) : id === "xlabel" ? (canonicalView?.xAxisLabel ?? xLabel) : id === "ylabel" ? (canonicalView?.yAxisLabel ?? yLabel) : "";
 
   /** Drag-to-place: legend -> custom figure-fraction anchor; annotation ->
-   *  new data coords. Both commit through the ONE overrides object (#11). */
-  function dragElement(id: string, px: number, py: number): void {
+   *  new data coords. Both commit through the ONE overrides object (#11).
+   *  `startPx`/`startPy` (the press origin, F2.4e) are optional so every
+   *  pre-existing 3-arg call (legend/annotation drags, tests included) stays
+   *  source-compatible — only the shape branch needs them. */
+  function dragElement(id: string, px: number, py: number, startPx?: number, startPy?: number): void {
     if (!hitmap) return;
     if (id === "legend") {
       setActiveOverrides({
@@ -399,6 +386,19 @@ export function useFigureBuilder() {
         ...activeOverrides,
         annotations: anns.map((a, j) => (j === i ? { ...a, x, y } : a)),
       });
+    } else if (id.startsWith("shape:")) {
+      // F2.4e: translate by the pointer's DELTA, never jump to the drop point
+      // (translateShape). Page anchor -> canvas-fraction delta
+      // (pxToCanvasFraction); data anchor (default) -> data-coord delta, same
+      // space a reference line's value already moves in.
+      const shapeId = shapeIdForHit(shapes, Number(id.slice("shape:".length)));
+      const shape = shapes.find((candidate) => candidate.id === shapeId);
+      if (!shape || startPx === undefined || startPy === undefined) return;
+      const [dx, dy] = shape.anchor === "page"
+        ? deltaXY(pxToCanvasFraction(hitmap.width, hitmap.height, startPx, startPy), pxToCanvasFraction(hitmap.width, hitmap.height, px, py))
+        : deltaXY(pxToData(hitmap.axes, startPx, startPy), pxToData(hitmap.axes, px, py));
+      const patch = translateShape(shape, dx, dy);
+      if (patch) setShapeStyle(shape.id, patch);
     }
   }
 

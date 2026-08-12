@@ -859,6 +859,75 @@ describe("useFigureBuilder", () => {
       const restored = deserializeFigureDocument(serializeFigureDocument(edited));
       expect(restored?.plot.view.shapes).toEqual(editedShapes);
     });
+
+    // F2.4e: drag-to-move, the last F2.4 gesture. Mirrors F2.4d's drag block:
+    // the hit element's index is the RENDER REQUEST's position, not the
+    // draft's, and a shape translates by the pointer's DELTA (press origin
+    // to drop point), never a jump. The mocked hit-map is 600x400 over
+    // xlim/ylim [0,1] (top-of-file mock) — press (100,300) -> drop (220,100)
+    // gives a clean data-coord delta of (+0.2, +0.5).
+    describe("drag to move (F2.4e)", () => {
+      const dragSession = async (shapes: Shape[]) => {
+        const document = shapesDocument("figure-shapes-drag", shapes);
+        useApp.setState({ ...defaultPlotView(), figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) } });
+        const { result } = renderHook(() => useFigureBuilder());
+        await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+        return result;
+      };
+      const draftShapes = () =>
+        useApp.getState().figurePublicationSession!.draft.plot.view.shapes;
+
+      it("translates a data-anchored shape by the pointer's delta, preserving the grab offset", async () => {
+        const result = await dragSession([{ ...shape("s1", "rect"), x1: 0.1, y1: 0.1, x2: 0.3, y2: 0.3 }]);
+        act(() => result.current.dragElement("shape:0", 220, 100, 100, 300));
+        const s = draftShapes()[0];
+        expect(s.x1).toBeCloseTo(0.3, 6);
+        expect(s.y1).toBeCloseTo(0.6, 6);
+        expect(s.x2).toBeCloseTo(0.5, 6);
+        expect(s.y2).toBeCloseTo(0.8, 6);
+      });
+
+      it("translates a page-anchored shape in canvas fractions -- the OPPOSITE y-direction from a data anchor", async () => {
+        const result = await dragSession([
+          { ...shape("s1", "rect"), anchor: "page", x1: 0.1, y1: 0.1, x2: 0.3, y2: 0.3 },
+        ]);
+        // Same press/drop as the data-anchor case above, but canvas fractions
+        // have NO y-flip (px/width, py/height): dy is -0.5 here, not +0.5.
+        act(() => result.current.dragElement("shape:0", 220, 100, 100, 300));
+        const s = draftShapes()[0];
+        expect(s.x1).toBeCloseTo(0.3, 6);
+        expect(s.y1).toBeCloseTo(-0.4, 6);
+        expect(s.x2).toBeCloseTo(0.5, 6);
+        expect(s.y2).toBeCloseTo(-0.2, 6);
+      });
+
+      it("resolves the hit index through the render request's finite filter", async () => {
+        // viewOverrides drops the non-finite shape, so element `shape:1` is
+        // the THIRD draft shape; a bare index would drag the second.
+        const bad: Shape = { id: "bad", kind: "rect", x1: 0, y1: 0, x2: Number.NaN, y2: 1 };
+        const result = await dragSession([
+          shape("a", "arrow"),
+          bad,
+          { ...shape("c", "rect"), x1: 0, y1: 0, x2: 0.2, y2: 0.2 },
+        ]);
+        act(() => result.current.dragElement("shape:1", 220, 100, 100, 300));
+        expect(draftShapes()[0]).toEqual(shape("a", "arrow"));
+        expect(draftShapes()[2].x1).toBeCloseTo(0.2, 6);
+        expect(draftShapes()[2].y1).toBeCloseTo(0.5, 6);
+      });
+
+      it("ignores a drag on an element index no shape answers to", async () => {
+        const result = await dragSession([shape("s1", "rect")]);
+        act(() => result.current.dragElement("shape:7", 220, 100, 100, 300));
+        expect(draftShapes()[0]).toEqual(shape("s1", "rect"));
+      });
+
+      it("no-ops without a press origin (the pre-F2.4e call shape)", async () => {
+        const result = await dragSession([shape("s1", "rect")]);
+        act(() => result.current.dragElement("shape:0", 220, 100));
+        expect(draftShapes()[0]).toEqual(shape("s1", "rect"));
+      });
+    });
   });
 
   // F2.3d: reference lines live straight on document.plot.view.refLines --

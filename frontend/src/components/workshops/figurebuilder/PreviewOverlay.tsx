@@ -2,8 +2,10 @@
 // element hit-map layered as percentage-positioned boxes (scale-free — no
 // resize observers). Hover outlines an element; click selects it (the view
 // focuses the matching #11 panel); double-click a text element edits it
-// inline; dragging the legend or an annotation reports the drop point in
-// IMAGE pixels (the hook maps those to figure-fraction / data coords).
+// inline; dragging a draggable element (legend, annotation, reference line,
+// or shape) reports both the drop point AND the press origin in IMAGE
+// pixels (the hook diffs them into a translation delta, or maps the drop
+// point alone to a figure-fraction / data coordinate).
 
 import { useRef, useState } from "react";
 
@@ -15,7 +17,11 @@ const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
 // F2.4d: reference lines join the draggable set — the Stage canvas has
 // always supported dragging one, and the preview now has the hit target
 // (F2.4c) and the panel (F2.3d) to make it round-trip.
-const DRAGGABLE = (id: string) => id === "legend" || id.startsWith("ann:") || id.startsWith("refline:");
+// F2.4e: shapes join too — dragElement translates by the pointer's delta
+// (drop minus press origin) so the grab offset is preserved, the same feel
+// the Stage's own shape drag already has.
+const DRAGGABLE = (id: string) =>
+  id === "legend" || id.startsWith("ann:") || id.startsWith("refline:") || id.startsWith("shape:");
 const elementName = (id: string) => {
   if (id.startsWith("ann:")) return "Annotation";
   if (id.startsWith("series:")) return "Series";
@@ -38,10 +44,6 @@ const elementTitle = (id: string, canonicalSeriesEditable: boolean) => {
       ? `${name} \u2014 right-click for properties`
       : `${name} \u2014 properties are edited on Stage`;
   }
-  // F2.4c: shapes have a panel but no drag gesture (four coordinates and a
-  // grab-handle model, unlike a reference line's single value), so the tooltip
-  // advertises exactly the one thing that works for them.
-  if (id.startsWith("shape:")) return `${name} \u2014 right-click for properties`;
   return name;
 };
 const hitboxArea = (element: HitElement) => (element.x1 - element.x0) * (element.y1 - element.y0);
@@ -66,8 +68,10 @@ export default function PreviewOverlay({
   textOf: (id: string) => string;
   onSelect: (id: string) => void;
   onEditText: (id: string, value: string) => void;
-  /** Drop position in image pixels. */
-  onDragEnd: (id: string, px: number, py: number) => void;
+  /** Drop position in image pixels, followed by the PRESS ORIGIN (F2.4e) in
+   *  the same space — a shape drag needs both to translate by the pointer's
+   *  delta rather than jumping its reference point to the drop location. */
+  onDragEnd: (id: string, px: number, py: number, startPx: number, startPy: number) => void;
   /** F2.3b: the canonical draft has per-series controls to open (the Series
    *  property group). Default false keeps every other/legacy caller's
    *  "properties are edited on Stage" hitbox exactly as before. */
@@ -173,7 +177,8 @@ export default function PreviewOverlay({
               Math.abs(ev.clientX - d.startX) + Math.abs(ev.clientY - d.startY) > 3;
             if (!moved) return; // a plain click — selection already handled
             const [px, py] = toImagePx(ev.clientX, ev.clientY);
-            onDragEnd(e.id, px, py);
+            const [startPx, startPy] = toImagePx(d.startX, d.startY);
+            onDragEnd(e.id, px, py, startPx, startPy);
           }}
           style={{
             position: "absolute",

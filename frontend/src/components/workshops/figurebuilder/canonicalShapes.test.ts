@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { Shape } from "../../../lib/types";
-import { deriveShapeRows, patchShapeList, removeShapeFromList, shapeSupportsFill } from "./canonicalShapes";
+import {
+  deriveShapeRows,
+  patchShapeList,
+  removeShapeFromList,
+  shapeIdForHit,
+  shapeSupportsFill,
+  translateShape,
+} from "./canonicalShapes";
 
 const shape = (id: string, kind: Shape["kind"]): Shape => ({
   id, kind, x1: 0, y1: 0, x2: 1, y2: 1,
@@ -66,5 +73,46 @@ describe("removeShapeFromList", () => {
   it("is a no-op for an unknown id", () => {
     const shapes = [shape("s1", "arrow")];
     expect(removeShapeFromList(shapes, "missing")).toEqual(shapes);
+  });
+});
+
+describe("shapeIdForHit", () => {
+  it("maps a hit index straight through when every shape is finite", () => {
+    const shapes = [shape("s1", "arrow"), shape("s2", "rect"), shape("s3", "line")];
+    expect([0, 1, 2].map((n) => shapeIdForHit(shapes, n))).toEqual(["s1", "s2", "s3"]);
+  });
+
+  it("skips a non-finite shape, exactly as the render request does", () => {
+    // figureSpec's viewOverrides drops it, so element `shape:1` is the THIRD
+    // draft shape -- indexing the draft directly would drag the wrong one.
+    const bad: Shape = { id: "bad", kind: "rect", x1: 0, y1: 0, x2: Number.NaN, y2: 1 };
+    const shapes = [shape("s1", "arrow"), bad, shape("s3", "line")];
+    expect(shapeIdForHit(shapes, 0)).toBe("s1");
+    expect(shapeIdForHit(shapes, 1)).toBe("s3");
+  });
+
+  it("returns null past the end rather than undefined-ing a caller", () => {
+    expect(shapeIdForHit([shape("s1", "arrow")], 5)).toBeNull();
+    expect(shapeIdForHit([], 0)).toBeNull();
+  });
+
+  it("rejects a malformed index instead of coercing it", () => {
+    const shapes = [shape("s1", "arrow")];
+    expect(shapeIdForHit(shapes, -1)).toBeNull();
+    expect(shapeIdForHit(shapes, 1.5)).toBeNull();
+    expect(shapeIdForHit(shapes, Number.NaN)).toBeNull();
+  });
+});
+
+describe("translateShape", () => {
+  it("adds (dx, dy) to every coordinate", () => {
+    const s: Shape = { id: "s1", kind: "rect", x1: 2, y1: 3, x2: 4, y2: 5, stroke: "--series-2" };
+    expect(translateShape(s, 1, -1)).toEqual({ x1: 3, y1: 2, x2: 5, y2: 4 });
+  });
+
+  it("returns null instead of a broken patch when the result isn't finite", () => {
+    const s = shape("s1", "line");
+    expect(translateShape(s, Number.NaN, 0)).toBeNull();
+    expect(translateShape(s, Number.POSITIVE_INFINITY, 0)).toBeNull();
   });
 });

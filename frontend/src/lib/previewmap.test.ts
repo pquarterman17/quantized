@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   groupForElement,
   hitAt,
+  pxToCanvasFraction,
   pxToData,
   pxToFigureFraction,
   type AxesInfo,
@@ -78,6 +79,16 @@ describe("pxToFigureFraction", () => {
   it("clamps to [0,1] and flips y to bottom-left origin", () => {
     expect(pxToFigureFraction(600, 400, 300, 100)).toEqual([0.5, 0.75]);
     expect(pxToFigureFraction(600, 400, -10, 500)).toEqual([0, 0]);
+  });
+});
+
+describe("pxToCanvasFraction", () => {
+  it("divides straight through with NO y-flip (top-left origin, unlike pxToFigureFraction)", () => {
+    expect(pxToCanvasFraction(600, 400, 300, 100)).toEqual({ x: 0.5, y: 0.25 });
+  });
+
+  it("does not clamp to [0,1] — a drag delta needs the raw value", () => {
+    expect(pxToCanvasFraction(600, 400, -60, 500)).toEqual({ x: -0.1, y: 1.25 });
   });
 });
 

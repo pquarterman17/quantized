@@ -115,6 +115,28 @@ export function pxToFigureFraction(
   ];
 }
 
+/** Image pixels -> canvas fraction (top-left origin, y-down): what a
+ *  PAGE-anchored `Shape`'s x1/y1/x2/y2 store (`Shape.anchor === "page"`, see
+ *  its doc in `lib/types.ts`) -- UNLIKE a page-anchored legend/annotation,
+ *  which is a matplotlib figure fraction (`pxToFigureFraction` above,
+ *  bottom-left origin, y-up). Image pixels already share the canvas's
+ *  top-left/y-down origin (this module's header), so there's no flip to
+ *  apply here -- the backend's own y-flip (`calc/figure_shapes.py`'s
+ *  `1.0 - y1`) is what bridges canvas-fraction storage into matplotlib's
+ *  transFigure space at render time.
+ *
+ *  Deliberately UNCLAMPED, unlike `pxToFigureFraction`: F2.4e's shape drag
+ *  uses this only to take the DIFFERENCE of two calls (drop minus press
+ *  origin), and clamping each endpoint first would distort that delta
+ *  whenever the pointer strays outside the image mid-drag -- mirrors the
+ *  Stage's own page-anchor drag (`uplotShapes.ts`'s shape-move handler),
+ *  which computes the raw canvas-pixel delta before clamping the commit.
+ *  Returns `{x, y}` (not a tuple, unlike `pxToFigureFraction`) so a caller
+ *  can diff it against a `pxToData` result with the same shape. */
+export function pxToCanvasFraction(width: number, height: number, px: number, py: number): { x: number; y: number } {
+  return { x: px / width, y: py / height };
+}
+
 /** Which #11 property-panel group a hit element belongs to (click-to-focus).
  *
  *  `refline:`/`shape:` (F2.4c) route to the panels F2.3c/F2.3d added. Before
