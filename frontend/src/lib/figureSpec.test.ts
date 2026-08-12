@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFigureSpec, buildFigureSpecFromDocument, resolveFigureDocumentData } from "./figureSpec";
+import {
+  buildFigureSpec,
+  buildFigureSpecFromDocument,
+  buildStageFigureSpec,
+  resolveFigureDocumentData,
+} from "./figureSpec";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
@@ -293,5 +298,189 @@ describe("FigureDocument FigureSpec adapter", () => {
     });
     expect(() => buildFigureSpecFromDocument(invalid, dataset, "invalid"))
       .toThrow("grouped figures cannot use a secondary Y axis");
+  });
+});
+
+// F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): Stage copy/export ("Copy figure",
+// "Copy figure (vector)", "Export figure…") used to build its spec via
+// buildFigureSpec — the live PlotView singleton, which cannot represent
+// groupKey/axisBreaks/publication overrides at all (no fields for them) — so
+// a Stage copy/export of a grouped, axis-broken, or publication-styled
+// window silently dropped all three, even though the SAME window's
+// Publication Preview export and F3.6's page-panel export kept them (both
+// already routed through buildFigureSpecFromDocument). buildStageFigureSpec
+// is the fix: it prefers the focused window's canonical document and only
+// falls back to the legacy builder when no canonical document applies.
+describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
+  /** A StoreGet-shaped closure carrying richView()'s fields (what the
+   *  FALLBACK path reads) plus the window-focus fields buildStageFigureSpec
+   *  itself reads. Defaults to "nothing focused" so a bare fakeStage()
+   *  always exercises the fallback, matching every pre-F2.5b test's shape. */
+  function fakeStage(over: Record<string, unknown> = {}) {
+    const state = { ...richView(), focusedWindowId: null, windowsForSave: () => [], ...over };
+    return (() => state) as never;
+  }
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
+
+  it("CHARACTERIZATION: the legacy builder cannot carry grouping/breaks/publication overrides at all; routing through the focused window's document closes the gap", () => {
+    const document = createFigureDocument({
+      id: "stage-window",
+      name: "Stage window",
+      datasetId: dataset.id,
+      // y2 disabled on the document's own view — grouping + a secondary axis
+      // is a separate, deliberately rejected combination (tested below).
+      view: { ...richView(), y2Keys: [], y2Scale: null, y2Fmt: null, y2Step: null, y2AxisLabel: "" },
+      groupKey: 0,
+      axisBreaks: { x: [[0.4, 0.6]] },
+      publication: { overrides: { font_size: 11 } },
+    });
+
+    // BEFORE (the audited gap): the legacy builder, with no focused window
+    // routed in, cannot carry any of the three fields onto the wire.
+    const legacy = buildFigureSpec(fakeStage(), dataset, "device", opts);
+    expect(legacy.group_col).toBeUndefined();
+    expect(legacy.overrides?.x_breaks).toBeUndefined();
+    expect(legacy.overrides?.font_size).toBeUndefined();
+
+    // AFTER (the fix): the SAME dataset/stem/opts, but with the document
+    // reachable as the focused window — all three now reach the wire.
+    const routed = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(routed.group_col).toBe(0);
+    expect(routed.overrides?.x_breaks).toEqual([[0.4, 0.6]]);
+    expect(routed.overrides?.font_size).toBe(11);
+  });
+
+  it("dialog/copy-default choices win over the document's saved output settings, and the dataset stem still names the file", () => {
+    const document = createFigureDocument({
+      id: "stage-window-2",
+      name: "Stage window 2",
+      datasetId: dataset.id,
+      view: richView(),
+      output: { format: "tiff", stylePreset: "nature", dpi: 900, filename: "saved-name" },
+    });
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device-stem",
+      { fmt: "svg", style: "thesis", dpi: 72, title: "Caller title", xLabel: "", yLabel: "" },
+    );
+    expect(spec.fmt).toBe("svg");
+    expect(spec.style).toBe("thesis");
+    expect(spec.dpi).toBe(72);
+    expect(spec.title).toBe("Caller title");
+    // filename: null (Stage's convention) — never the document's own saved
+    // output filename.
+    expect(spec.filename).toBe("device-stem");
+  });
+
+  it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {
+    const spec = buildStageFigureSpec(fakeStage(), dataset, "device", opts, { transparent: true });
+    expect(spec.transparent).toBe(true);
+  });
+
+  it("falls back to the legacy builder when no window is focused", () => {
+    const spec = buildStageFigureSpec(fakeStage({ focusedWindowId: null }), dataset, "device", opts);
+    expect(spec.group_col).toBeUndefined();
+  });
+
+  it('falls back to the legacy builder when the focused window is not kind:"plot"', () => {
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "snap1", windowsForSave: () => [{ id: "snap1", kind: "snapshot" }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.group_col).toBeUndefined();
+  });
+
+  it("falls back to the legacy builder when the focused plot window has no document yet", () => {
+    const spec = buildStageFigureSpec(
+      fakeStage({
+        focusedWindowId: "w1",
+        windowsForSave: () => [{ id: "w1", kind: "plot", document: undefined }],
+      }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.group_col).toBeUndefined();
+  });
+
+  it("falls back to the legacy builder when the focused window's LIVE document is bound to a DIFFERENT dataset (the resolveDataset-race guard)", () => {
+    // Reachable when the user refocuses to a different window/dataset WHILE
+    // exportActive's async resolveDataset() for the ORIGINAL activeId is
+    // still in flight — the module doc's third fallback bullet. Falling
+    // back here keeps the export honest to `dataset` instead of throwing
+    // (buildFigureSpecFromDocument rejects a mismatched live dataset
+    // outright) or silently pairing a stranger's styling with this data.
+    const document = createFigureDocument({
+      id: "stage-window-3",
+      name: "Stage window 3",
+      datasetId: "other-dataset",
+      view: richView(),
+      groupKey: 0,
+    });
+    expect(() =>
+      buildStageFigureSpec(
+        fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+        dataset,
+        "device",
+        opts,
+      ),
+    ).not.toThrow();
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.group_col).toBeUndefined();
+  });
+
+  it("routes a FROZEN focused document through the canonical builder even though its dataset binding does not match `ds` — frozen documents ignore the passed dataset by design", () => {
+    const frozenSnapshot: DataStruct = {
+      time: [9, 8],
+      values: [[1], [2]],
+      labels: ["frozen-only"],
+      units: [""],
+      metadata: {},
+    };
+    const document = createFigureDocument({
+      id: "stage-window-frozen",
+      name: "Stage window frozen",
+      datasetId: null, // every real frozen document has no live dataset binding
+      view: { ...defaultPlotView(), yKeys: [0] },
+      data: { mode: "frozen", snapshot: frozenSnapshot },
+    });
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset, // a real, unrelated active dataset — must be ignored, not matched
+      "device",
+      opts,
+    );
+    expect(spec.dataset).toEqual(frozenSnapshot);
+  });
+
+  it("surfaces the grouped+secondary-axis rejection as a thrown error, same as the direct adapter (exportActive's catch turns this into a toast/status, tested at the command level)", () => {
+    const document = createFigureDocument({
+      id: "stage-window-invalid",
+      name: "Stage window invalid",
+      datasetId: dataset.id,
+      view: richView(), // richView() plots y2Keys: [2] — grouped + y2 is invalid
+      groupKey: 0,
+    });
+    expect(() =>
+      buildStageFigureSpec(
+        fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+        dataset,
+        "device",
+        opts,
+      ),
+    ).toThrow("grouped figures cannot use a secondary Y axis");
   });
 });

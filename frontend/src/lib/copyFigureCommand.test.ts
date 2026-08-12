@@ -18,6 +18,8 @@ import {
   runCopyFigureCommand,
   runCopyFigureSvgCommand,
 } from "./copyFigureCommand";
+import { createFigureDocument } from "./figureDocument";
+import { defaultPlotView } from "./plotview";
 import type { DataStruct, Dataset } from "./types";
 
 vi.mock("./api", () => ({ renderFigureBlob: vi.fn() }));
@@ -43,7 +45,11 @@ const ds: Dataset = { id: "d1", name: "scan.dat", data };
 
 const setStatus = vi.fn();
 
-/** Minimal store snapshot — only the fields buildFigureSpec + the command read. */
+/** Minimal store snapshot — only the fields buildFigureSpec + the command read.
+ *  F2.5b: `focusedWindowId`/`windowsForSave` default to "nothing focused", so
+ *  every pre-F2.5b test below still exercises the legacy live-view builder
+ *  unchanged (buildStageFigureSpec's fallback path) — only the new "F2.5b"
+ *  describe block below overrides them to route through a document. */
 function fakeGet(over: Record<string, unknown> = {}) {
   const state = {
     datasets: [ds],
@@ -84,6 +90,8 @@ function fakeGet(over: Record<string, unknown> = {}) {
     shapes: [],
     pageSetup: null,
     copyFigureTransparent: false,
+    focusedWindowId: null as string | null,
+    windowsForSave: () => [] as { id: string; kind: string; document?: unknown }[],
     ...over,
   };
   return (() => state) as never;
@@ -198,5 +206,75 @@ describe("runCopyFigureSvgCommand (MAIN #35)", () => {
     await runCopyFigureSvgCommand(fakeGet());
     const msgs = setStatus.mock.calls.map((c) => String(c[0]));
     expect(msgs.some((m) => m.startsWith("copy failed"))).toBe(true);
+  });
+});
+
+// F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): Stage copy used to build its spec
+// via buildFigureSpec (the live PlotView singleton), which cannot represent
+// groupKey/axisBreaks/publication overrides at all — a copy of a grouped or
+// publication-styled window silently dropped them, even though the SAME
+// window's Publication Preview export kept them. Fixed by routing through
+// buildStageFigureSpec (lib/figureSpec.ts), which prefers the focused
+// window's canonical FigureDocument.
+describe("F2.5b — Stage copy routes through the focused window's canonical document", () => {
+  it("carries a grouped window's group_col onto the copied spec, not just the live view", async () => {
+    const document = createFigureDocument({
+      id: "w1-doc",
+      name: "Window 1",
+      datasetId: "d1", // matches activeId/the resolved dataset — routes through the document
+      view: { ...defaultPlotView(), yKeys: [0] },
+      groupKey: 1,
+    });
+    await runCopyFigureCommand(
+      fakeGet({
+        focusedWindowId: "w1",
+        windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+      }),
+    );
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.group_col).toBe(1);
+  });
+
+  it("does not route through a focused window bound to a DIFFERENT dataset than the one being copied", async () => {
+    const document = createFigureDocument({
+      id: "w1-doc-other",
+      name: "Window on another dataset",
+      datasetId: "d-other",
+      view: { ...defaultPlotView(), yKeys: [0] },
+      groupKey: 1,
+    });
+    await runCopyFigureCommand(
+      fakeGet({
+        focusedWindowId: "w1",
+        windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+      }),
+    );
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.group_col).toBeUndefined();
+  });
+
+  it("surfaces a grouped+secondary-axis document as a copy-failed toast/status, not an unhandled rejection", async () => {
+    const document = createFigureDocument({
+      id: "w1-doc-invalid",
+      name: "Window invalid",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0, 1], y2Keys: [1] },
+      groupKey: 1, // grouping + a secondary axis is a backend-invalid combination
+    });
+    await expect(
+      runCopyFigureCommand(
+        fakeGet({
+          focusedWindowId: "w1",
+          windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+        }),
+      ),
+    ).resolves.toBeUndefined();
+    expect(renderFigureBlob).not.toHaveBeenCalled();
+    const messages = setStatus.mock.calls.map((c) => String(c[0]));
+    expect(
+      messages.some(
+        (m) => m.startsWith("copy failed") && m.includes("grouped figures cannot use a secondary Y axis"),
+      ),
+    ).toBe(true);
   });
 });

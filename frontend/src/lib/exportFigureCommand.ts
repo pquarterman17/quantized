@@ -7,14 +7,15 @@
 // export API against the active dataset — no React/store coupling beyond
 // the `StoreGet` handle every command closure already takes.
 //
-// The spec itself is built by `lib/figureSpec.buildFigureSpec` (MAIN_PLAN
-// #35), shared verbatim with "Copy figure" so a pasted figure and an exported
-// one cannot drift. This file now owns only the DIALOG and the download verb.
+// The spec itself is built by `lib/figureSpec.buildStageFigureSpec` (MAIN_PLAN
+// #35; routed through the canonical-document adapter as of F2.5b), shared
+// verbatim with "Copy figure" so a pasted figure and an exported one cannot
+// drift. This file now owns only the DIALOG and the download verb.
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
 import { exportActive, type StoreGet } from "./exportActive";
-import { buildFigureSpec } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpec";
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
@@ -69,7 +70,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const titleStr = asStr(params.title).trim();
   await exportActive(s, (stem, ds) =>
     exportFigure(
-      buildFigureSpec(s, ds, stem, {
+      buildStageFigureSpec(s, ds, stem, {
         fmt: params.fmt as string,
         style: params.style as string,
         dpi: params.dpi as number,

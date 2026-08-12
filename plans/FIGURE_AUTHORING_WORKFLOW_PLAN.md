@@ -387,6 +387,157 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-11 — F2.5b Stage copy/export from the canonical document (Claude Sonnet 5)
+
+- **The audited gap, re-verified against live code before touching anything.**
+  `lib/copyFigureCommand.ts` ("Copy figure", "Copy figure (vector)") and
+  `lib/exportFigureCommand.ts` ("Export figure…") built their request via
+  `lib/figureSpec.buildFigureSpec`, which derives from the live `PlotView`
+  singleton — a projection with NO fields for `groupKey`, `axisBreaks`, or
+  publication overrides/series styles (confirmed by grep: those fields exist
+  only on `FigureDocument`, which every `kind:"plot"` window has carried
+  since F1). `buildFigureSpecFromDocument` (same module) already threads all
+  three through its `extras` parameter, and both Publication Preview export
+  and F3.6's page-panel "window" branch already route through it. Net
+  effect: Stage copy/export of a window whose document carried grouping,
+  X-axis breaks (Publication Preview, F2.3a), or publication overrides
+  silently dropped all three — the exact "parallel ad-hoc spec assembly"
+  F2.5's own text warns against, and the same defect class F3.6 fixed for
+  page panels one slice earlier.
+- **The fix: one new entry point, not a special case per caller.**
+  `lib/figureSpec.ts` gains `buildStageFigureSpec(s, ds, stem, o, extra)` —
+  Stage copy/export's shared entry point. It resolves the FOCUSED window via
+  `s().windowsForSave().find(w => w.id === s().focusedWindowId)` (the same
+  helper F3.6's `panelFigure` uses, and for the same reason: these are
+  ordinary async event-handler bodies, not `useShallow`/
+  `useSyncExternalStore` selectors, so the `structuredClone`-per-call cost
+  documented in F3.6's log — and the infinite-loop trap that cost taught —
+  do not apply here). When that window is `kind:"plot"` and its document
+  qualifies (see below), the spec routes through `buildFigureSpecFromDocument`;
+  otherwise it falls back to the pre-existing `buildFigureSpec`.
+  `copyFigureCommand.ts`/`exportFigureCommand.ts` now call
+  `buildStageFigureSpec` instead of `buildFigureSpec` directly — no other
+  change to either command's structure.
+- **The "does this ever misroute?" investigation, not assumed.** Three
+  questions had to be answered before the routing guard could be trusted:
+  1. *Is the focused window ever NOT `kind:"plot"`?* No — `store/windows.ts`'s
+     `focusWindow` refuses to move focus onto a non-`"plot"` window (a
+     snapshot or worksheet/map document window only gets its z raised); the
+     module's own doc says so explicitly ("`focusedWindowId` always points
+     at a `kind:"plot"` window"). Guarded anyway (defensive, not load-bearing).
+  2. *Does a live document's `bindings.datasetId` ever disagree with the
+     resolved active dataset?* By construction by way of
+     `focusedRebindPatch`/`_focusHandoff` it should always match
+     `AppState.activeId`, which `exportActive` resolves `ds` from — EXCEPT
+     `exportActive` resolves `ds` from `activeId` BEFORE an async
+     `resolveDataset()` call, during which the user can refocus to a
+     different window bound to a different dataset. `buildStageFigureSpec`
+     falls back to the legacy builder in exactly this case, rather than
+     either throwing (routing straight into
+     `buildFigureSpecFromDocument`'s own dataset-mismatch rejection) or
+     silently pairing a stranger window's styling with `ds`'s data. Proven
+     reachable, not hypothetical: this is precisely the state Vitest's own
+     `useApp` fixtures start in (the default main window is born bound to a
+     `null` dataset, independent of whatever `activeId` a test's `setState`
+     sets), and the existing 41 `exportFigureCommand.test.ts` tests +14
+     `copyFigureCommand.test.ts` tests all already exercised this fallback
+     path unmodified once `windowsForSave`/`focusedWindowId` were added to
+     their fixtures.
+  3. *Can the focused window's document legitimately be FROZEN
+     (`data.mode: "frozen"`)?* Yes — `store/figureLifecycle.ts`'s
+     `openEditableFigure` can attach a saved frozen editable figure (one
+     promoted from a legacy `FigureDoc` via
+     `figureDocumentFromLegacyFigureDoc`, which always pairs `mode:
+     "frozen"` with `datasetId: null`) onto a brand-new live `kind:"plot"`
+     window. A frozen document's `resolveFigureDocumentData` ignores
+     whatever dataset is passed and renders its own snapshot — matching
+     F3.6's page-panel "window" branch, which already routes a frozen-or-
+     live window document through the same adapter unconditionally. So the
+     routing guard is `document.data.mode === "frozen" ||
+     document.bindings.datasetId === ds.id`, not a bare dataset-id compare —
+     dropping the frozen clause would silently reopen this exact gap for a
+     window seeded from a frozen editable figure.
+- **Grouped + secondary axis fails visibly, for the first time on Stage
+  copy/export.** The shared core already rejects that combination
+  ("grouped figures cannot use a secondary Y axis") — `buildFigureSpec`
+  never exercised the check because it never passed `groupKey` at all, so a
+  Stage copy/export of a grouped+y2 window used to silently drop the
+  grouping (not fail) before this fix. Now that the document path can be
+  reached, the same window throws, and `exportActive`'s existing try/catch
+  turns it into the ordinary copy-failed/export-failed toast+status — no
+  new wiring needed, only a test proving it (both command test files).
+- **Dialog/copy-default choices still win**, per contract:
+  `buildStageFigureSpec` maps every `FigureRenderOpts` field (`fmt`,
+  `style`, `dpi`, `title`, `xLabel`, `yLabel`) straight onto
+  `FigureDocumentRenderOpts`'s superset, with `filename: null` so the
+  dataset stem keeps naming the file (Stage's convention) rather than the
+  document's own saved output filename. `extra.transparent` (Copy figure's
+  `copyFigureTransparent` preference) is applied LAST, after either builder
+  runs, so it wins even on the fallback path — matching the pre-fix
+  `{...buildFigureSpec(...), transparent: ...}` spread the two commands used
+  to write by hand.
+- **Characterization test, written before the fix, then flipped.** New
+  `describe("buildStageFigureSpec (F2.5b …")` in `figureSpec.test.ts`
+  builds one `FigureDocument` with `bindings.groupKey` set,
+  `plot.axisBreaks.x` non-empty, and `publication.overrides.font_size` set,
+  then asserts BOTH halves in one test: `buildFigureSpec` on the same
+  dataset/stem/opts (no focused-window routing) produces a spec with
+  `group_col`/`overrides.x_breaks`/`overrides.font_size` all `undefined`
+  (the gap, still true today — this is the legacy builder, unchanged); the
+  SAME document, reached via a focused window, produces a spec with
+  `group_col: 0`, `overrides.x_breaks: [[0.4, 0.6]]`,
+  `overrides.font_size: 11` (the fix). Confirmed red-then-green by running
+  it against the pre-fix command bodies (`buildFigureSpec` call sites) before
+  swapping them to `buildStageFigureSpec`. 8 further unit tests cover the
+  fallback conditions individually (no focused window, non-`"plot"` focus,
+  no document yet, mismatched live dataset, frozen-document routing,
+  dialog-wins, filename:null, and the grouped+y2 throw). 3 new tests each
+  in `copyFigureCommand.test.ts` and `exportFigureCommand.test.ts` prove the
+  same behavior end-to-end through the actual commands (group_col reaches
+  `renderFigureBlob`/`exportFigure`; the dataset-mismatch fallback; the
+  grouped+y2 toast/status, asserted via `.resolves.toBeUndefined()` — no
+  unhandled rejection). `exportFigureCommand.test.ts`'s version uses the
+  REAL store (`useApp`), which surfaced a real fixture gotcha worth
+  recording: `windowsForSave()` rebuilds the FOCUSED window's document from
+  the store's LIVE singleton PlotView fields (`yKeys`/`y2Keys`/`xKey`/…),
+  not from whatever `view` a test attaches to the window's own `document` —
+  correct production behavior ("the focused window's live view IS the
+  singleton fields"), but it means a fixture must set those live fields
+  too, not just the window's document, to exercise a specific plotted/y2
+  shape for the focused case. `groupKey`/`axisBreaks`/`publication` are
+  NOT part of `PlotView` and survive that rebuild untouched from the
+  attached document, which is what makes the group_col tests possible at
+  all without also faking a full live-view reconstruction.
+- **Scope boundaries respected, not touched:** `useFigureBuilder.ts`'s
+  legacy export branch (F2.1/F2.2 convergence residue), stat-stage/multivar
+  exports (`useStatStage.ts`, `CorrelationView.tsx`, `SplomTabView.tsx`),
+  and everything backend — this slice is 100% frontend TypeScript.
+- **Gate:** Frontend — `npm run lint` clean (0 errors, 9 pre-existing
+  unrelated warnings, unchanged baseline); full `npx vitest run` **412
+  files / 6034 tests passed** (0 new files, +15 tests over the pre-slice
+  baseline of 6019: +9 in `figureSpec.test.ts` (7 → 16), +3 in
+  `copyFigureCommand.test.ts` (14 → 17), +3 in `exportFigureCommand.test.ts`
+  (41 → 44)); `npx tsc -b --noEmit` clean; `npm run build` clean, bundle
+  878.9 kB eager / 903.3 kB budget (24.4 kB headroom,
+  down ~4 kB from F3.6's 28.4 kB — the new `buildStageFigureSpec` function
+  and its doc comment land in the already-lazy `figureSpec` chunk shared by
+  both Stage commands, not the eager bundle's largest chunks). Backend
+  untouched — no backend gate run.
+- **F2.5 status:** this closes the Stage copy/export half of F2.5's
+  contract ("Stage copy, Stage export, publication preview, saved preview,
+  and reopen must derive from the same document and produce equivalent
+  output"). Publication preview export, saved-figure export, and page-panel
+  export already routed through `buildFigureSpecFromDocument` (F1.5,
+  F2.5a's readiness-error slice, F3.6) — Stage copy/export was the last
+  caller still on the reduced legacy path. F2.5 is NOT ticked in this
+  entry: "reopen" parity (closing and reopening a Stage-plotted window,
+  independent of the page/library round-trip F3.6 already proved) has no
+  dedicated round-trip test yet, and this slice did not audit every other
+  live-PlotView-only caller in the codebase for the same reduced-spec
+  pattern (only the two Stage commands named in scope). The orchestrator
+  should decide whether that residue is enough to keep F2.5 open or whether
+  it was already covered by F1/F3's own round-trip proofs.
+
 ### 2026-08-07 — F3.6 unified export from PageDocument (Claude Sonnet 5)
 
 - **Survey first.** Read the F3.1–F3.5 logs plus the live code before writing

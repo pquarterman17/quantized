@@ -9,6 +9,15 @@
 // multi-panel layout. Both now build this spec and post it to
 // /api/export/figure; only the output verb differs (download vs clipboard).
 // Do NOT add a third rendering implementation — extend this one.
+//
+// F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): `buildFigureSpec` derives from the
+// live `PlotView` singleton, which structurally cannot represent grouping,
+// axis breaks, or publication overrides/series styles — PlotView has no
+// fields for them. `buildStageFigureSpec` is Stage copy/export's entry
+// point: it prefers the FOCUSED window's canonical `FigureDocument` (which
+// carries all three, via `buildFigureSpecFromDocument`) and falls back to
+// `buildFigureSpec` only when no canonical document applies — see its own
+// doc for the exact fallback conditions.
 
 import {
   resolveSecondaryAxis,
@@ -254,6 +263,75 @@ export function buildFigureSpecFromDocument(
       allowExplicitXAsY: true,
     },
   );
+}
+
+/** Stage copy/export entry point (F2.5b). Every Stage command that renders
+ *  "the active dataset" (Copy figure, Copy figure (vector), Export figure…)
+ *  must derive from the SAME canonical document the focused plot window
+ *  carries, per F2.5's contract — not reassemble a reduced spec from the
+ *  live `PlotView` singleton, which cannot represent grouping, axis breaks,
+ *  or publication overrides/series styles at all (see the module header).
+ *
+ *  Routes through `buildFigureSpecFromDocument` when the FOCUSED window is a
+ *  `kind:"plot"` window (the only kind `focusedWindowId` ever names — see
+ *  `PlotWindow`'s doc in lib/plotview.ts) whose document is either:
+ *   - bound to `ds`, the resolved active dataset every Stage command already
+ *     exports (the common case: `AppState.activeId` is documented to always
+ *     equal the focused window's bound dataset), or
+ *   - frozen — a frozen document ignores whatever dataset is passed
+ *     (`resolveFigureDocumentData` renders its own snapshot regardless) and
+ *     is reachable here via `openEditableFigure` opening a frozen editable
+ *     figure into a window; F3.6's page-panel "window" branch already routes
+ *     a frozen-or-live window document through this same adapter
+ *     unconditionally, so this matches established precedent.
+ *
+ *  Falls back to `buildFigureSpec` (the live-view builder) otherwise:
+ *   - no focused window, the focused window isn't `kind:"plot"`, or it has
+ *     no document yet — none of these should occur in practice (every real
+ *     window has carried a document since F1, and only a `kind:"plot"`
+ *     window can hold focus) but the fallback is the safe response to an
+ *     invariant violation, not a crash;
+ *   - a LIVE document whose `bindings.datasetId` disagrees with `ds.id` —
+ *     the one case this guard actively defends: `exportActive` resolves
+ *     `ds` from `activeId` BEFORE an async `resolveDataset()`, during which
+ *     the user can refocus to a different window bound to a different
+ *     dataset; falling back keeps the export honest to `ds` rather than
+ *     silently pairing the new focus's styling with the old dataset.
+ *
+ *  `o`'s dialog/copy-default choices always win over anything saved on the
+ *  document — every field `FigureRenderOpts` carries maps directly onto
+ *  `FigureDocumentRenderOpts`, a superset. `filename: null` keeps the
+ *  dataset stem naming the file (Stage's existing convention), never the
+ *  document's own saved output filename. `extra.transparent` is applied
+ *  LAST, after either builder runs, so a caller's transparency preference
+ *  (Copy figure's `copyFigureTransparent`) wins even on the fallback path,
+ *  matching this function's callers' pre-F2.5b behavior of spreading it
+ *  onto the built spec themselves. */
+export function buildStageFigureSpec(
+  s: StoreGet,
+  ds: Dataset,
+  stem: string,
+  o: FigureRenderOpts,
+  extra: { transparent?: boolean } = {},
+): FigureSpec {
+  const st = s();
+  const focused = st.windowsForSave().find((w) => w.id === st.focusedWindowId);
+  const document = focused && focused.kind === "plot" ? focused.document : undefined;
+  const canRouteThroughDocument =
+    document !== undefined &&
+    (document.data.mode === "frozen" || document.bindings.datasetId === ds.id);
+  const spec = canRouteThroughDocument
+    ? buildFigureSpecFromDocument(document, ds, stem, {
+        fmt: o.fmt,
+        style: o.style,
+        dpi: o.dpi,
+        title: o.title,
+        xLabel: o.xLabel,
+        yLabel: o.yLabel,
+        filename: null,
+      })
+    : buildFigureSpec(s, ds, stem, o);
+  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }
 
 /** Screen-parity overrides (MAIN #18): annotations (with their pointer-tool

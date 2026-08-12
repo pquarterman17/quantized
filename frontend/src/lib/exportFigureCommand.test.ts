@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
 import { runExportFigureCommand } from "./exportFigureCommand";
+import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureSpec";
+import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
@@ -563,4 +565,148 @@ describe("runExportFigureCommand — P0.4 finding 15 (malformed/partial askParam
       expect(vi.mocked(exportFigure).mock.calls[0][0].fmt).toBe(fmt);
     },
   );
+});
+
+// F2.5b (FIGURE_AUTHORING_WORKFLOW_PLAN): "Export figure…" used to build its
+// spec via buildFigureSpec (the live PlotView singleton), which cannot
+// represent groupKey/axisBreaks/publication overrides at all — an export of
+// a grouped or publication-styled window silently dropped them, even though
+// the SAME window's Publication Preview export kept them. Fixed by routing
+// through buildStageFigureSpec (lib/figureSpec.ts), which prefers the
+// FOCUSED window's canonical FigureDocument (`store.plotWindows` here — the
+// REAL store, not a fake closure, since buildStageFigureSpec reads
+// `windowsForSave()`/`focusedWindowId` through the whole StoreGet).
+//
+// Gotcha proven while writing this: `windowsForSave()`'s REAL implementation
+// rebuilds the FOCUSED window's document from the store's LIVE singleton
+// PlotView fields (`yKeys`/`y2Keys`/`xKey`/…), not from whatever `view` a
+// test attached to the window's own `document` — that mirrors production
+// ("the focused window's live view IS the singleton fields", windows.ts's
+// own doc). `groupKey`/`axisBreaks`/`publication` are NOT part of PlotView,
+// so they survive that rebuild from the attached document untouched; yKeys/
+// y2Keys/xKey do not and must be set as live singletons too.
+describe("runExportFigureCommand — F2.5b (routes through the focused window's canonical document)", () => {
+  const DATASET_ID = "d1";
+
+  /** A minimal but fully-typed PlotWindow (WindowsSlice's real shape) — the
+   *  same fixture pattern useFigurePage.test.ts's `win()` established for
+   *  F3.6's identical need (a document-backed window in the REAL store). */
+  function win(over: Partial<PlotWindow>): PlotWindow {
+    return {
+      id: "w1",
+      kind: "plot",
+      title: "Window 1",
+      datasetId: DATASET_ID,
+      geometry: { x: 0, y: 0, w: 400, h: 300 },
+      z: 0,
+      winState: "normal",
+      view: defaultPlotView(),
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      ...over,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    vi.mocked(askParams).mockResolvedValue({
+      fmt: "pdf",
+      style: "default",
+      dpi: 300,
+      title: "",
+      x_label: "",
+      y_label: "",
+    });
+    useApp.setState({
+      datasets: [
+        {
+          id: DATASET_ID,
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [
+              [1, 10],
+              [2, 20],
+            ],
+            labels: ["A", "B"],
+            units: ["u", "v"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: DATASET_ID,
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("carries a grouped window's group_col onto the exported spec, not just the live view", async () => {
+    useApp.setState({ yKeys: [0] }); // the live singleton windowsForSave() snapshots for the focused window
+    const document = createFigureDocument({
+      id: "figure-w1",
+      name: "Window 1",
+      datasetId: DATASET_ID,
+      view: defaultPlotView(),
+      groupKey: 1,
+    });
+    useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.group_col).toBe(1);
+  });
+
+  it("does not route through a focused window bound to a DIFFERENT dataset than the one being exported", async () => {
+    useApp.setState({ yKeys: [0] });
+    const document = createFigureDocument({
+      id: "figure-w1-other",
+      name: "Window on another dataset",
+      datasetId: "d-other",
+      view: defaultPlotView(),
+      groupKey: 1,
+    });
+    useApp.setState({
+      plotWindows: [win({ document, datasetId: "d-other" })],
+      focusedWindowId: "w1",
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.group_col).toBeUndefined();
+  });
+
+  it("surfaces a grouped+secondary-axis document as an export-failed status, not an unhandled rejection", async () => {
+    useApp.setState({ yKeys: [0, 1], y2Keys: [1] }); // grouping + a secondary axis is a backend-invalid combination
+    const document = createFigureDocument({
+      id: "figure-w1-invalid",
+      name: "Window invalid",
+      datasetId: DATASET_ID,
+      view: defaultPlotView(),
+      groupKey: 1,
+    });
+    useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
+    await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
+    expect(exportFigure).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("grouped figures cannot use a secondary Y axis");
+  });
 });
