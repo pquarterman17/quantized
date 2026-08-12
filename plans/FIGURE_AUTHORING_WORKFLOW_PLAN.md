@@ -374,9 +374,22 @@ Check these only with automated coverage plus an owner-visible desktop run.
 - [ ] **A2 Mouse editing:** Change line/scatter mode, colors, widths, errors,
       scales, limits, legend, and labels through direct manipulation/properties.
 - [ ] **A3 Lossless figure:** Save, close, reopen, and compare the complete
-      document/spec for equality.
+      document/spec for equality. **Automated half DONE 2026-08-12** —
+      `e2e/specs/figure-document-roundtrip.spec.ts`, a real-Chromium journey
+      against the real backend: Save Editable Figure via the File menu, close
+      the window, reopen from the Library row, assert the reopened document
+      `toEqual` the saved one. Runs in CI's `e2e.yml`. Owner desktop run still
+      gates the checkbox.
 - [ ] **A4 Complex 1-D:** Repeat A3 with y2, asymmetric errors, hidden/reordered
       series, custom formats, annotations, shapes, and waterfall offset.
+      **Automated half DONE 2026-08-12** — the same spec carries y2 keys,
+      hidden + reordered series, a renamed series, per-series styles, all three
+      tick formats, an annotation, a shape, two reference lines, and explicit
+      limits, and asserts each is present in the SAVED document before
+      comparing, so a lossy round trip cannot pass by comparing two empty
+      objects. Verified load-bearing by planting a shapes-dropping reopen,
+      which reddens it. Waterfall offset and asymmetric errors are not yet in
+      the fixture — the remaining gap on this row.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
       and export with the same series and labels.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
