@@ -7,6 +7,7 @@ import type { Shape } from "../../../lib/types";
 import { groupForElement } from "../../../lib/previewmap";
 import PropertyPanels, {
   type ErrorColumnsPanelProps,
+  type GroupingPanelProps,
   type RefLinesPanelProps,
   type SeriesPanelProps,
   type ShapesPanelProps,
@@ -496,6 +497,51 @@ describe("PropertyPanels Error columns group (F2.3f)", () => {
     );
     fireEvent.change(screen.getByLabelText("error binding 1 side"), { target: { value: "+" } });
     expect(onPatch).toHaveBeenCalledWith(0, { side: "+" });
+  });
+});
+
+describe("PropertyPanels Grouping group (F2.3h)", () => {
+  const groupingProp = (overrides: Partial<GroupingPanelProps> = {}): GroupingPanelProps => ({
+    groupKey: null,
+    labels: ["R", "dR"],
+    onGroupKey: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the group entirely in legacy mode (no prop supplied)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Grouping" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Grouping/ })).not.toBeInTheDocument();
+  });
+
+  it("KEEPS the group when the canonical draft has no group set — unlike Series", () => {
+    // Picking "None" needs no live canvas; hiding it when unset would put
+    // reassignment back on the Stage, the one action that invalidates the
+    // open session.
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Grouping"
+        hasY2={false}
+        grouping={groupingProp({ groupKey: null })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("group by")).toHaveValue("");
+  });
+
+  it("renders the group and forwards edits to the supplied callback", () => {
+    const onGroupKey = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Grouping"
+        hasY2={false}
+        grouping={groupingProp({ onGroupKey })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("group by"), { target: { value: "1" } });
+    expect(onGroupKey).toHaveBeenCalledWith(1);
   });
 });
 

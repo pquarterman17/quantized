@@ -166,6 +166,13 @@ export default function FigureBuilderView() {
                 onRemove: f.removeErrorBinding,
                 onDetect: f.detectErrorBindings,
               } : undefined}
+              // F2.3h: gated on `canonical` only, like reference lines/error
+              // columns -- choosing a group column needs no live canvas.
+              grouping={f.canonical ? {
+                groupKey: f.groupKey,
+                labels: f.data?.labels ?? [],
+                onGroupKey: f.setGroupKey,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />

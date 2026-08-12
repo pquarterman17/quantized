@@ -9,6 +9,7 @@ import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
+import GroupingPanel from "./GroupingPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
 import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
@@ -29,11 +30,13 @@ import ShapePropertiesPanel from "./ShapePropertiesPanel";
 export type {
   ChannelsPanelProps,
   ErrorColumnsPanelProps,
+  GroupingPanelProps,
   RefLinesPanelProps,
   SeriesPanelProps,
   ShapesPanelProps,
   TickFormatPanelProps,
 } from "./propertyPanelTypes";
+import type { GroupingPanelProps } from "./propertyPanelTypes";
 
 function Group({
   title,
@@ -81,6 +84,7 @@ export default function PropertyPanels({
   refLines,
   tickFormats,
   errorColumns,
+  grouping,
   openGroup = null,
   openNonce,
 }: {
@@ -119,6 +123,8 @@ export default function PropertyPanels({
    *  group; present-but-empty still renders it -- see ErrorColumnsPanelProps'
    *  doc. */
   errorColumns?: ErrorColumnsPanelProps;
+  /** F2.3h: canonical group-by binding -- rendered even unset ("None"), like F2.3d/f. */
+  grouping?: GroupingPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
   /** Bumped on every selection (even reselecting the same group) so a
@@ -303,6 +309,12 @@ export default function PropertyPanels({
             onHiddenChange={series.onHiddenChange}
             onMove={series.onMove}
           />
+        </Group>
+      )}
+
+      {grouping && (
+        <Group title="Grouping" forceOpen={openGroup === "Grouping"} openNonce={openNonce}>
+          <GroupingPanel groupKey={grouping.groupKey} labels={grouping.labels} onGroupKey={grouping.onGroupKey} />
         </Group>
       )}
 

@@ -1536,6 +1536,109 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3h: the group-by binding lives on document.bindings.groupKey -- NOT
+  // the PlotView -- same reasoning and coverage contract as F2.3f directly
+  // above: setters, Apply-commits/Cancel-is-mutation-free, and a
+  // wire-reaches-render proof (group_col). The grouped+y2 rejection is
+  // figureSpec.ts's own concern (pinned there, figureSpec.test.ts); this
+  // suite only proves the panel's setter reaches the SAME document field
+  // that check reads.
+  describe("canonical group-by binding (F2.3h)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const groupDocument = (
+      id: string,
+      groupKey: number | null,
+      view: Partial<ReturnType<typeof defaultPlotView>> = {},
+    ) => createFigureDocument({ id, name: "Group doc", datasetId: "d1", view: { ...defaultPlotView(), ...view }, groupKey });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("computes null in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.groupKey).toBeNull();
+    });
+
+    it("exposes the draft's group-by binding once canonical", () => {
+      useApp.setState({ figurePublicationSession: session(groupDocument("figure-grp-a", 1)) });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.groupKey).toBe(1);
+    });
+
+    it("setGroupKey writes the chosen channel into the draft", () => {
+      useApp.setState({ figurePublicationSession: session(groupDocument("figure-grp-b", null)) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setGroupKey(0));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.groupKey).toBe(0);
+    });
+
+    it("setGroupKey(null) clears an existing binding", () => {
+      useApp.setState({ figurePublicationSession: session(groupDocument("figure-grp-c", 1)) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setGroupKey(null));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.groupKey).toBeNull();
+    });
+
+    it("Apply commits into the window document", async () => {
+      const document = groupDocument("figure-grp-d", null);
+      useApp.setState({
+        // Same requirement as every other F2.3 Apply test: applyFigurePublicationEdit
+        // resolves the focused window's "live" document from the store's
+        // top-level ambient PlotView fields, which must mirror the
+        // baseline's view (defaultPlotView() here) or Apply rejects as
+        // drifted -- groupKey itself is NOT a live singleton (it carries
+        // forward from the window's own stored document), so this is about
+        // matching the surrounding view, not the field under test.
+        ...defaultPlotView(),
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.setGroupKey(1));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.bindings.groupKey).toBe(1);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = groupDocument("figure-grp-e", null);
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setGroupKey(1));
+      act(() => result.current.cancel());
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("reaches the render request as group_col, so the preview shows what the panel edits", async () => {
+      useApp.setState({
+        figurePublicationSession: session(groupDocument("figure-grp-f", null, { yKeys: [0, 1] })),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.setGroupKey(0));
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].group_col).toBe(0),
+      );
+    });
+  });
+
   // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
   // double-click text (title/xlabel/ylabel) gestures already branched on
   // `canonical` from the initial canonical session (a6c809c), and commit

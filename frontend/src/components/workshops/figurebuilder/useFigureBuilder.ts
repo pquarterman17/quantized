@@ -18,6 +18,7 @@ import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
 import { exportPreviewFigure } from "./previewExport";
+import { editPreviewElementText, previewElementText, selectPreviewElement } from "./previewSelect";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
@@ -25,7 +26,6 @@ import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/fig
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
-import { groupForElement } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -287,6 +287,16 @@ export function useFigureBuilder() {
     if (next !== channelBindings) setChannelBindings(next);
   };
 
+  // F2.3h: same `document.bindings` shape as F2.3f's error bindings above
+  // (not the PlotView) -- patches the document directly. Already reaches
+  // the renderer (`group_col`); the panel was the only missing piece.
+  // Facet editing is deliberately NOT exposed -- `bindings.facetKey` has no
+  // render-request wire and no creation surface anywhere in the app; see
+  // GroupingPanel.tsx's doc for the full reasoning (the F2.3d precedent).
+  const groupKey = canonicalDocument?.bindings.groupKey ?? null;
+  const setGroupKey = (next: number | null) =>
+    patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, groupKey: next } }));
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -354,34 +364,17 @@ export function useFigureBuilder() {
   const templates = useGraphTemplates({ legacy: legacyState, setStyle, setOverrides, setDocSeriesStyles, setStatus });
 
   // ── Preview interactions (#13/#14) ────────────────────────────────────
-  /** Click: focus the matching #11 panel group. Always bumps the nonce so a
-   *  re-selection of the same group's element reopens a manually-collapsed
-   *  panel instead of being a no-op. F2.3b: a rendered "series:N" hitbox now
-   *  has somewhere to go too -- `groupForElement` deliberately stays null for
-   *  it (per-series styles have no single N->channel mapping without the
-   *  hitmap's plotted-position order), so it is special-cased straight to
-   *  the new Series group here instead. */
-  function selectElement(id: string): void {
-    setFocusGroup(id.startsWith("series:") ? "Series" : groupForElement(id));
-    setFocusNonce((n) => n + 1);
-  }
-
-  /** Double-click inline edit commits straight into the config fields. */
-  function editElementText(id: string, value: string): void {
-    if (id === "title") {
-      if (canonical) setCanonicalView({ plotTitle: value });
-      else setTitle(value);
-    } else if (id === "xlabel") {
-      if (canonical) setCanonicalView({ xAxisLabel: value });
-      else setXLabel(value);
-    } else if (id === "ylabel") {
-      if (canonical) setCanonicalView({ yAxisLabel: value });
-      else setYLabel(value);
-    }
-  }
-
-  const textOf = (id: string): string =>
-    id === "title" ? (canonicalView?.plotTitle ?? title) : id === "xlabel" ? (canonicalView?.xAxisLabel ?? xLabel) : id === "ylabel" ? (canonicalView?.yAxisLabel ?? yLabel) : "";
+  // Dispatch lives in previewSelect.ts (moved out to fund F2.3h's grouping
+  // panel, same "extract first" move previewDrag.ts made for dragElement);
+  // these are thin wrappers binding the hook's live state.
+  const previewSelectDeps = {
+    setFocusGroup, setFocusNonce, canonical, canonicalView, setCanonicalView,
+    title, setTitle, xLabel, setXLabel, yLabel, setYLabel,
+  };
+  const selectElement = (id: string): void => selectPreviewElement(previewSelectDeps, id);
+  const editElementText = (id: string, value: string): void =>
+    editPreviewElementText(previewSelectDeps, id, value);
+  const textOf = (id: string): string => previewElementText(previewSelectDeps, id);
 
   /** Drag-to-place commit map — the dispatch lives in previewDrag.ts (moved
    *  whole when the F2.4e+F2.3f merge hit this module's size pin); this
@@ -472,6 +465,9 @@ export function useFigureBuilder() {
     setChannelXKey,
     toggleChannelY,
     toggleChannelY2,
+    // F2.3h: canonical-only (null/no-op in legacy mode — see setGroupKey's doc above).
+    groupKey,
+    setGroupKey,
     data,
     hitmap,
     focusGroup,
