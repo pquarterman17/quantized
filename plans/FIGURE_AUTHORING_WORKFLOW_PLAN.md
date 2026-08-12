@@ -244,12 +244,25 @@ decisions are merged.
         F2.3's still-missing shape/reference-object panels would need to
         exist first (nothing to attach a drag to yet) — see the decision
         log for the full matrix.
-- [ ] **F2.5 Unify render paths.** Stage copy, Stage export, publication
+- [x] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
-      produce equivalent output.
+      produce equivalent output. **COMPLETE 2026-08-11** — all five named
+      paths now route through `buildFigureSpecFromDocument`: publication
+      preview (F2.1b), saved preview/readiness (F2.5a), page panels + reopen
+      round-trip (F3.6), and Stage copy/export (F2.5b, the last reduced-path
+      caller — `buildFigureSpec` retains zero production callers outside its
+      own fallback). The legacy Figure Builder export path is a DIFFERENT
+      surface, tracked under F2.1/F2.2's broader legacy convergence.
   - [x] **F2.5a Canonical preview readiness errors (planned PR #113).**
         Publication Preview distinguishes unavailable document sources from
         invalid render specifications and fails visibly without a fallback.
+  - [x] **F2.5b Stage copy/export from the canonical document (Claude
+        Sonnet 5).** "Copy figure", "Copy figure (vector)", and "Export
+        figure…" now prefer the focused window's canonical FigureDocument
+        (grouping, X-breaks, publication overrides — fields `PlotView`
+        cannot represent), falling back to the live-view builder only when
+        no canonical document applies. See the 2026-08-11 decision-log
+        entry for the routing guard's three verified cases.
 
 **F2 exit:** Opening publication preview can no longer reduce a figure, and
 every edit remains available in the internal plot after the dialog closes.
