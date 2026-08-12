@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-07 — F3.6 unified export from PageDocument; F3 complete
+**Updated:** 2026-08-12 — F2.4e shape drag in the preview; F2.4 complete
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -254,8 +254,13 @@ decisions are merged.
         (`x_fmt`/`y_fmt`/`secondaryAxisWire`) — the panel was the only
         missing piece. Vocabulary shared with `Inspector/TickFormat.tsx` via
         the new `lib/tickFormat.ts` so the two surfaces cannot drift.
-- [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
+- [x] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
+      **COMPLETE 2026-08-12** — the named gesture set (legend drag, annotation
+      drag, text double-click, reference-line drag, shape drag) all work on
+      the canonical draft with matching panels. Region shades have NO gesture
+      anywhere in the app (no surface creates or edits one); that is the
+      owner-gated F2.3 residue, not an F2.4 gap.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
         annotations expose their existing property panel; text also exposes
         the existing inline editor. Series remain visibly Stage-owned.
@@ -281,6 +286,16 @@ decisions are merged.
         a line's axis is fixed everywhere in the app, so a sideways drag of a
         Y line is a no-op rather than a reinterpretation. Shape drag stays
         open (four coordinates and a grab-handle model, not one value).
+  - [x] **F2.4e Shape drag (Claude Sonnet 5).** Dragging a shape in the
+        preview translates it by the pointer's DELTA (drop minus press
+        origin), preserving the grab offset instead of jumping its reference
+        point to the drop location. `shapeIdForHit` resolves the hit index
+        through `viewOverrides`' finite-coordinate filter, mirroring F2.4d's
+        `refLineIdForHit` exactly. Page-anchored shapes needed genuinely
+        different delta math from data-anchored ones — canvas fractions with
+        NO y-flip (the backend's `calc/figure_shapes.py` flips at render
+        time), verified against the backend before writing the frontend
+        conversion. See the 2026-08-12 F2.4e log entry.
 - [x] **F2.5 Unify render paths.** Stage copy, Stage export, publication
       preview, saved preview, and reopen must derive from the same document and
       produce equivalent output. **COMPLETE 2026-08-11** — all five named
@@ -453,6 +468,41 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.4e shape drag in the preview (Claude Sonnet 5)
+
+- Closes F2.4: with shape drag landed, the preview's named direct-manipulation
+  set (legend, annotation, text, reference line, shape) is complete — every
+  gesture F2.4b's matrix recorded as blocked behind missing panels now exists.
+- **Translates by the pointer's delta, never jumps to the drop point.** A
+  reference line is one value, so F2.4d could commit the drop position
+  directly; a shape is four coordinates, so the drag diffs the press origin
+  against the drop point and translates all four — the grab offset is
+  preserved, matching the Stage's own shape-drag feel. `PreviewOverlay`'s
+  `onDragEnd` now reports the press origin too (it always had it in
+  `dragRef`); `dragElement` takes the two extra args as optional so every
+  pre-existing 3-arg caller is untouched.
+- **The two anchor modes needed genuinely different delta math.** A
+  page-anchored `Shape` stores canvas fractions (top-left origin, y-down, NO
+  y-flip — `calc/figure_shapes.py`'s `1.0 - y1` does the flip at render
+  time, verified before writing the frontend conversion), unlike a
+  page-anchored legend/annotation, which is a matplotlib figure fraction
+  (y-up). New `pxToCanvasFraction` is deliberately unclamped: it only ever
+  feeds a two-point difference, and clamping the endpoints would distort the
+  delta.
+- The hit index resolves through `shapeIdForHit`, applying the same
+  finite-coordinate filter `viewOverrides` applies — the F2.4d index-mapping
+  discipline, kept in `canonicalShapes.ts` next to its sibling helpers.
+  Non-finite translation results are dropped, not committed
+  (`translateShape` returns null). Commits go through `setShapeStyle` →
+  `setCanonicalView`, so Apply/Cancel round-trips and Cancel stays
+  mutation-free.
+- `useFigureBuilder.ts` sat exactly at its 522-line MODULE_PINS pin, so the
+  output format/style/DPI constants moved to a new
+  `figureOutputConstants.ts` (re-exported — no importer changed) to fund the
+  addition; the file lands at exactly 522 again.
+- Gate: lint 0 errors, 6,229/6,229 frontend tests, build + bundle budget
+  green (880.0 kB eager, 23.3 kB headroom).
 
 ### 2026-08-12 — Figure Page (F3) usability sweep: two real defects (Claude Opus 5)
 
