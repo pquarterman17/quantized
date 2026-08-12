@@ -230,6 +230,13 @@ decisions are merged.
         step, reusing the shipped mark vocabulary), visibility, and display
         order, plus read-only error-bar designation text. No schema change:
         these already lived on `document.plot.view`.
+  - [x] **F2.3c Shapes property panel (Claude Sonnet 5).** Canonical draft
+        now exposes per-shape coordinates, stroke/fill, opacity, width,
+        dash, and remove (kind read-only — no Stage surface mutates it
+        either). No schema change: `shapes` already lived on
+        `document.plot.view`. No context-menu wiring — the backend hitmap
+        has no `shape:N` elements to route from; the panel lives in the
+        always-visible panel list. See the 2026-08-11 F2.3c log entry.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
@@ -399,6 +406,62 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-11 — F2.3c shapes property panel in Publication Preview (Claude Sonnet 5)
+
+- Added canonical-draft controls for per-shape properties: the four
+  coordinates, stroke/fill color, opacity, width, and a dash toggle, plus
+  per-shape remove — the same `Shape` fields `Stage/useShapeEdit.ts`'s
+  right-click object menu and `Inspector/ShapesCard.tsx` already edit,
+  now reachable on the detached draft. All write straight through
+  `setCanonicalView` into `document.plot.view.shapes` — the same
+  mechanism F2.3b's series properties use, since `shapes` has no
+  `FigureOverrides` equivalent either. No schema, backend, or shape
+  changes were needed: `FigureViewState` already carried `shapes`
+  losslessly (F1.2).
+- Kind is READ-ONLY (glyph + kind-scoped label, e.g. "arrow 1"): no
+  surface in the app, Stage included, ever changes an existing shape's
+  kind after it's drawn — adding that only in this detached panel would
+  be a new capability with no Stage equivalent to stay consistent with.
+  Fill renders only for rect/ellipse, matching `useShapeEdit.ts`'s
+  `canFill` check verbatim. Opacity/width are free-typed numeric fields
+  here (not the Stage context menu's 3/4-step presets) — `Shape.opacity`/
+  `.width` are plain numbers and a full-parity panel should reach any of
+  them, not just the menu's coarse shortcuts.
+- Adding a NEW shape stays a Stage-only gesture (drag-to-draw needs a
+  live canvas) — deliberately out of scope, same as F2.3b left channel/
+  error reassignment to Graph Builder's own UI.
+- No PreviewOverlay/context-menu wiring: `calc/figure_hitmap.py` (backend,
+  unmodified) emits `series:N`/`ann:N` hit elements but NO `shape:N` —
+  drawn shapes render into the preview PNG (already flow through
+  `buildFigureSpecFromDocument` → `FigureSpec.overrides.shapes`) but have
+  no individual hitbox to route a right-click menu from. The Shapes group
+  is reachable the same way "Axes & ticks"/"Canvas" already are: a
+  manually-opened item in the always-visible panel list, not a hitmap
+  shortcut. Not a regression — there was no shape hitbox to enable.
+- New pure module `canonicalShapes.ts` (kind-scoped row derivation,
+  patch/remove-by-id, fill-applicability check) and view
+  `ShapePropertiesPanel.tsx`, both unit tested standalone; `useFigureBuilder.ts`
+  gained the setters/derived state (canonical-only — empty/no-op in
+  legacy mode). The hook was at its exact 616-line pin with zero
+  headroom; extracted `canonicalReadiness.ts` (pure readiness computation)
+  first to fund the wiring, landing at 600 — pin ratcheted down, not
+  raised. Pinned: draft edit → Apply → the window document and legacy
+  top-level facade both reflect it; Cancel → no persistent mutation;
+  full JSON serialize/deserialize round-trips edited shapes.
+- Gate (verified independently by the orchestrator, not only the
+  implementing agent): lint 0 errors, tsc clean, 414 files / 6063 tests,
+  build green with the panel in the already-lazy FigureBuilderView chunk
+  (eager 878.9 kB, 24.4 kB headroom). One UNRELATED test flaked once
+  under three-way concurrent load during verification and passed 2/2
+  otherwise; its identity was lost to output truncation — consistent
+  with the known flake population TEST_DETERMINISM bounds, noted here
+  for honesty rather than papered over.
+- F2.3 remains open: channels/errors reassignment, grouping/faceting,
+  tick formats, and reference objects are still unreached by the
+  canonical preview. F2.4's shape/reference-object drag gestures remain
+  deferred — this slice gives shapes something to attach to but adds no
+  drag wiring itself.
 
 ### 2026-08-11 — F2.5b Stage copy/export from the canonical document (Claude Sonnet 5)
 

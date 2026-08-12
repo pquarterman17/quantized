@@ -494,7 +494,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining F2.3 property panels: channels/errors reassignment, grouping/faceting, tick formats, shapes, reference objects — F2.4's remaining gestures unblock behind those panels; **F2.5 render-path unification COMPLETE 2026-08-11**, F2.5b closed the last reduced-path caller), F3 COMPLETE (F3.1–F3.6 shipped 2026-08-05/06/07), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2, F4 |
+| Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining F2.3 property panels: channels/errors reassignment, grouping/faceting, tick formats, reference objects — **shapes panel SHIPPED 2026-08-11 (F2.3c)**; F2.4's remaining gestures unblock behind the missing panels; **F2.5 render-path unification COMPLETE 2026-08-11**, F2.5b closed the last reduced-path caller), F3 COMPLETE (F3.1–F3.6 shipped 2026-08-05/06/07), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2, F4 |
 | Statistical-honesty note in the contributing docs — a short paragraph on why "N clean runs" is weak flake-fix evidence (rule of three) and that a forced-race test is the standard; cite the item-22 case | TEST_DETERMINISM #7 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
