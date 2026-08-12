@@ -328,7 +328,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
   // canonicalSession.ts's selectSessionLiveDrifted, where the subscription
   // contract it documents actually lives. Ratchet, not a bump.
-  "/components/workshops/figurebuilder/useFigureBuilder.ts": 598,
+  // 598 -> 570 (2026-08-12, F2.3d): the legacy-mode spec + FigureDoc builders
+  // moved to legacyFigure.ts as pure functions, which is what funded F2.3d's
+  // reference-line wiring — the same extract-first discipline canonicalReadiness.ts
+  // used for F2.3c. Note the net is DOWN even after the new slice: 47 lines
+  // freed, 28 spent. The next canonical slice extracts again; it does not bump.
+  "/components/workshops/figurebuilder/useFigureBuilder.ts": 570,
   "/lib/uplotShapes.ts": 593,
   "/components/Stage/statRender.ts": 527,
 };

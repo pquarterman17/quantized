@@ -237,6 +237,15 @@ decisions are merged.
         `document.plot.view`. No context-menu wiring — the backend hitmap
         has no `shape:N` elements to route from; the panel lives in the
         always-visible panel list. See the 2026-08-11 F2.3c log entry.
+  - [x] **F2.3d Reference-line property panel (Claude Opus 5).** Canonical
+        draft now exposes per-line value and remove, plus an axis+value Add
+        form — full parity with `Inspector/RefLinesCard.tsx`. Axis stays
+        read-only per row (nothing in the app flips an existing line's axis).
+        Unlike F2.3c's shapes, ADD belongs here: a reference line needs no
+        live canvas. No schema change: `refLines` already lived on
+        `document.plot.view`. **Region shades are deliberately NOT in this
+        slice** — see the 2026-08-12 log entry for why they need an owner
+        call first.
 - [ ] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
@@ -406,6 +415,68 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — F2.3d reference-line property panel in Publication Preview (Claude Opus 5)
+
+- **The gap, confirmed in the running app before any code changed.** With two
+  reference lines and a region shade on the plot, Publication Preview RENDERS
+  all three (the 2026-08-11 `figure_decor.py` slice made sure of it) but its
+  panel list was Text & fonts / Axes & ticks / Legend / Series / Canvas /
+  Annotations — no way to touch any of them. They were the only visible
+  elements of the figure with no property panel. Worse, the one alternative —
+  reaching for the Stage's own Reference Lines card — is precisely the action
+  that invalidates the open session (see the drift entry below). So "adjust
+  the Hc marker before exporting" had no non-destructive path at all.
+- **Scope: reference lines, matched field-for-field to the Stage.**
+  `RefLinesCard` adds (axis + value), removes, and drag-on-canvas moves
+  (`updateRefLine`, value only). So the panel edits VALUE, removes, and adds;
+  AXIS is read-only per row, the same call F2.3c made for shape `kind` —
+  nothing in this app flips an existing line's axis, and adding that only in
+  the detached panel would be a one-sided divergence. ADD *does* belong here,
+  unlike shapes: a reference line is fully specified by an axis and a number,
+  so it needs no live canvas to draw on. That is also why the group renders
+  when the list is EMPTY (Series and Shapes hide themselves) — hiding it would
+  put "add the first reference line" back on the Stage, i.e. back on the one
+  action that kills the session.
+- **Region shades were deliberately left out, and that is an owner call, not
+  an oversight.** `regionShades` has NO creation or editing surface anywhere
+  in the app — they exist only as Origin-decoded film-stack decor
+  (`originRegionShades`, applied on figure import). Adding editing solely in
+  the detached preview would invent a capability the live plot lacks, which is
+  the exact inconsistency F2.3c declined for shape `kind`. The consistent fix
+  is a Stage card *and* a preview panel together; the honest question first is
+  whether decoded decor should be user-editable at all. Booked as an open
+  F2.3 residue rather than answered unilaterally.
+- **Verified end to end in the real app, not only in jsdom:** edit an existing
+  line's value → the preview PNG re-renders with it moved; Add a Y line → it
+  appears in the preview; the live store's `refLines` stays untouched while the
+  draft diverges (detached draft, as designed); Apply commits both edits to the
+  window document AND the legacy top-level facade. A hook test also pins that
+  the edit reaches `overrides.ref_lines` on the render request — without it the
+  panel could edit a field the rendered figure never shows.
+- **A usability defect found by looking at the rendered panel, not the DOM:**
+  the first build labelled rows "X reference 1", which wraps mid-phrase in the
+  ~210px panel, and captioned every single-field row "value". Rows now read
+  "X 1" with no per-row caption (the group title already says "Reference
+  lines"), while `aria-label` keeps the full phrase — the visible-vs-accessible
+  split `PropertyNumberField`'s own `ariaLabel` prop documents. The Add form's
+  axis picker also gained a visible "axis" label, which the Stage card's bare
+  X/Y pair lacks.
+- New pure module `canonicalRefLines.ts` (row derivation, patch/remove/append
+  by id) and view `RefLinePropertiesPanel.tsx`, both unit tested standalone.
+  Draft-created lines use a `pref-` id namespace, NOT the store's `ref-`:
+  `useApp` mints those from a module-global counter that knows nothing about a
+  detached draft, so a shared prefix would let a later Stage Add re-mint an id
+  the draft had already applied.
+- **Funded by extraction, as required — and the pin still went DOWN.**
+  `useFigureBuilder.ts` was at its exact 598 pin with zero headroom, so the
+  legacy-mode spec + FigureDoc builders moved to `legacyFigure.ts` as pure
+  functions (the canonicalReadiness.ts pattern from F2.3c). 47 lines freed, 28
+  spent by the new wiring; pin ratcheted 598 → 570.
+- Gate: 417 files / 6120 tests, tsc clean, eslint 0, ruff clean, build green
+  (879.8 kB eager, 23.5 kB under budget), backend 3616 passed unchanged.
+- F2.3 remains open: channels/errors reassignment, grouping/faceting, tick
+  formats, and region shades are still unreached by the canonical preview.
 
 ### 2026-08-12 — F2.2 defect: the pre-emptive drift check was blind to Stage edits (Claude Opus 5)
 

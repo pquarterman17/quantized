@@ -15,8 +15,10 @@ import {
 } from "../../../lib/figuredoc";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
+import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
+import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
@@ -28,7 +30,7 @@ import {
   pxToFigureFraction,
   type FigureHitmap,
 } from "../../../lib/previewmap";
-import { axisFmtParam, type AxisScale, type DataStruct, type Shape, type SeriesStyle } from "../../../lib/types";
+import type { AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -265,6 +267,19 @@ export function useFigureBuilder() {
   const removeShape = (id: string) =>
     setCanonicalView({ shapes: removeShapeFromList(shapes, id) });
 
+  // F2.3d: reference lines are the same canonical-only PlotView field as
+  // F2.3b's series properties and F2.3c's shapes -- no FigureOverrides
+  // equivalent, so edits write straight through setCanonicalView. Unlike
+  // shapes, ADD belongs here too (axis + number needs no live canvas). Axis
+  // stays read-only per row; see RefLinePropertiesPanel's doc.
+  const refLines: readonly RefLine[] = canonical ? canonicalView?.refLines ?? [] : [];
+  const setRefLineValue = (id: string, value: number) =>
+    setCanonicalView({ refLines: patchRefLineList(refLines, id, { value }) });
+  const addRefLine = (axis: RefLine["axis"], value: number) =>
+    setCanonicalView({ refLines: appendRefLine(refLines, axis, value) });
+  const removeRefLine = (id: string) =>
+    setCanonicalView({ refLines: removeRefLineFromList(refLines, id) });
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -272,46 +287,18 @@ export function useFigureBuilder() {
   const effYKeys = docYKeys !== undefined ? docYKeys : yKeys;
   const effXScale = docScales?.x ?? xScale;
   const effYScale = docScales?.y ?? yScale;
-  const legacySpec = useMemo<FigureSpec | null>(() => {
-    if (!data) return null;
-    const plotted = effYKeys ?? data.labels.map((_, i) => i);
-    return {
-      dataset: data,
-      x_key: effXKey ?? undefined,
-      y_keys: effYKeys ?? undefined,
-      x_log: effXScale === "log",
-      y_log: effYScale === "log",
-      x_scale: effXScale,
-      y_scale: effYScale,
-      x_fmt: axisFmtParam(xFmt),
-      y_fmt: axisFmtParam(yFmt),
-      style,
-      overrides: compactOverrides(overrides),
-      title: title.trim(),
-      x_label: xLabel.trim() || undefined,
-      y_label: yLabel.trim() || undefined,
-      series_styles: docSeriesStyles !== undefined
-        ? (docSeriesStyles ?? undefined)
-        : buildExportStyles(plotted, seriesStyles),
-      group_col: docGroupCol ?? undefined,
-    };
-  }, [
-    data,
-    effYKeys,
-    effXKey,
-    effXScale,
-    effYScale,
-    xFmt,
-    yFmt,
-    style,
-    title,
-    xLabel,
-    yLabel,
-    seriesStyles,
-    docSeriesStyles,
-    docGroupCol,
-    overrides,
+  // The whole legacy field set as ONE object, so the preview request and the
+  // "Save as figure" doc are built from the same picks by construction — see
+  // legacyFigure.ts's module doc.
+  const legacyState = useMemo<LegacyFigureState>(() => ({
+    data, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
+    xFmt, yFmt, style, overrides, title, xLabel, yLabel,
+    seriesStyles, docSeriesStyles, docGroupCol,
+  }), [
+    data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style,
+    overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
   ]);
+  const legacySpec = useMemo<FigureSpec | null>(() => buildLegacyFigureSpec(legacyState), [legacyState]);
   const canonicalSpec = canonicalReadiness?.state === "ready"
     ? canonicalReadiness.spec
     : null;
@@ -346,32 +333,12 @@ export function useFigureBuilder() {
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
   function saveAsFigure(name: string, live: boolean): void {
-    if (!data) return;
-    const plotted = effYKeys ?? data.labels.map((_, i) => i);
-    addFigureDoc({
-      id: `figd-${Date.now().toString(36)}-${++_docSeq}`,
-      name,
-      datasetId: active?.id ?? null,
-      live,
-      ...(live ? {} : { dataSnapshot: data }),
-      config: {
-        xKey: effXKey,
-        yKeys: effYKeys,
-        groupCol: docGroupCol,
-        xScale: effXScale,
-        yScale: effYScale,
-        title,
-        xLabel,
-        yLabel,
-        style,
-        fmt,
-        dpi,
-        overrides: compactOverrides(overrides),
-        seriesStyles: docSeriesStyles !== undefined
-          ? docSeriesStyles
-          : buildExportStyles(plotted, seriesStyles),
-      },
-    });
+    const doc = buildLegacyFigureDoc(
+      legacyState,
+      { id: `figd-${Date.now().toString(36)}-${++_docSeq}`, name, datasetId: active?.id ?? null, live },
+      { fmt, dpi },
+    );
+    if (doc) addFigureDoc(doc);
   }
 
   // User graph templates (#15): the style half, appliable to any figure.
@@ -571,6 +538,11 @@ export function useFigureBuilder() {
     shapeRows,
     setShapeStyle,
     removeShape,
+    // F2.3d: canonical-only (empty/no-op in legacy mode — see the field doc above).
+    refLines,
+    setRefLineValue,
+    addRefLine,
+    removeRefLine,
     data,
     hitmap,
     focusGroup,

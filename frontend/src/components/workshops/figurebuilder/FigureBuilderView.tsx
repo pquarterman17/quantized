@@ -119,6 +119,16 @@ export default function FigureBuilderView() {
                 onStyle: f.setShapeStyle,
                 onRemove: f.removeShape,
               } : undefined}
+              // F2.3d: gated on `canonical` ONLY, not on a non-empty list --
+              // this panel can create the first reference line, and the
+              // alternative (reach for the Stage card) is the one action that
+              // invalidates the open session.
+              refLines={f.canonical ? {
+                refLines: f.refLines,
+                onValue: f.setRefLineValue,
+                onAdd: f.addRefLine,
+                onRemove: f.removeRefLine,
+              } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}
             />

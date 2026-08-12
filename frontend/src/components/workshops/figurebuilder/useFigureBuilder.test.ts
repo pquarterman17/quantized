@@ -861,6 +861,143 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3d: reference lines live straight on document.plot.view.refLines --
+  // the SAME kind of canonical-only field as F2.3b's series properties and
+  // F2.3c's shapes, so this mirrors those blocks' coverage contract: the
+  // hook's setters, the Apply-commits/Cancel-is-mutation-free pin, and a
+  // serialize/deserialize round trip. The extra case here is ADD, which
+  // shapes deliberately does not have (a reference line needs no live canvas).
+  describe("canonical reference lines (F2.3d)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const refLine = (id: string, axis: "x" | "y", value: number) => ({ id, axis, value });
+    const refLineDocument = (id: string, refLines: ReturnType<typeof refLine>[]) => createFigureDocument({
+      id, name: "Ref doc", datasetId: "d1", view: { ...defaultPlotView(), refLines },
+    });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("computes an empty reference-line list in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.refLines).toEqual([]);
+    });
+
+    it("exposes the draft's reference lines once canonical", () => {
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-a", [refLine("r1", "x", 5)])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.refLines).toEqual([refLine("r1", "x", 5)]);
+    });
+
+    it("setRefLineValue patches the matching line only, leaving siblings untouched", () => {
+      useApp.setState({
+        figurePublicationSession: session(refLineDocument("figure-ref-b", [refLine("r1", "x", 5), refLine("r2", "y", 7)])),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setRefLineValue("r2", 9));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([
+        refLine("r1", "x", 5),
+        refLine("r2", "y", 9),
+      ]);
+    });
+
+    it("addRefLine appends with a draft-namespaced id that cannot collide with the store's", () => {
+      // useApp mints `ref-N` from its own module-global counter, which knows
+      // nothing about a detached draft — a shared prefix would let a later
+      // Stage "Add" re-mint an id this draft already applied.
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-c", [refLine("ref-1", "x", 5)])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addRefLine("y", 12));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([
+        refLine("ref-1", "x", 5),
+        refLine("pref-1", "y", 12),
+      ]);
+    });
+
+    it("removeRefLine drops the matching line and leaves siblings untouched", () => {
+      useApp.setState({
+        figurePublicationSession: session(refLineDocument("figure-ref-d", [refLine("r1", "x", 5), refLine("r2", "y", 7)])),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.removeRefLine("r1"));
+      expect(useApp.getState().figurePublicationSession!.draft.plot.view.refLines).toEqual([refLine("r2", "y", 7)]);
+    });
+
+    it("Apply commits reference-line edits into the window document and the legacy facade", async () => {
+      const document = refLineDocument("figure-ref-e", [refLine("r1", "x", 5)]);
+      useApp.setState({
+        // Same requirement as F2.3b/F2.3c's Apply tests: the ambient PlotView
+        // singletons must match the baseline's view or liveWindowDocument
+        // sees drift and Apply rejects.
+        ...defaultPlotView(),
+        refLines: [refLine("r1", "x", 5)],
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.setRefLineValue("r1", 42));
+      act(() => result.current.addRefLine("y", -3));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.plot.view.refLines).toEqual([
+        refLine("r1", "x", 42),
+        refLine("pref-1", "y", -3),
+      ]);
+      // hydrateView spreads the applied view onto the legacy top-level facade
+      // too — the same field Inspector/RefLinesCard reads on the Stage.
+      expect(state.refLines).toEqual([refLine("r1", "x", 42), refLine("pref-1", "y", -3)]);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = refLineDocument("figure-ref-f", [refLine("r1", "x", 5)]);
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.addRefLine("y", 99));
+      act(() => result.current.cancel());
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("edited reference lines round-trip through document serialize/deserialize", () => {
+      const document = refLineDocument("figure-ref-g", [refLine("r1", "x", 5)]);
+      const editedRefLines = [refLine("r1", "x", 42), refLine("pref-1", "y", -3)];
+      const edited = {
+        ...document,
+        plot: { ...document.plot, view: { ...document.plot.view, refLines: editedRefLines } },
+      };
+      expect(deserializeFigureDocument(serializeFigureDocument(edited))?.plot.view.refLines).toEqual(editedRefLines);
+    });
+
+    it("reaches the render request, so the preview shows what the panel edits", async () => {
+      useApp.setState({ figurePublicationSession: session(refLineDocument("figure-ref-h", [])) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.addRefLine("x", 7));
+      // ref_lines is the wire field lib/figureOverrides.ts's viewOverrides
+      // maps refLines onto (2026-08-11 figure_decor slice) — without this the
+      // panel would edit a field the rendered figure never shows.
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].overrides?.ref_lines)
+          .toEqual([{ axis: "x", value: 7 }]),
+      );
+    });
+  });
+
   // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
   // double-click text (title/xlabel/ylabel) gestures already branched on
   // `canonical` from the initial canonical session (a6c809c), and commit
