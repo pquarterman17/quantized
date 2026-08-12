@@ -76,6 +76,35 @@ describe("editable figure lifecycle", () => {
     expect(useApp.getState().editableFigures[0].plot.view.plotTitle).toBe("Changed since save");
   });
 
+  // Reached through the documented UI (import a file -> File > Save Editable
+  // Figure) before this test existed: the DEFAULT main window is created at
+  // store init, before any dataset exists, so its `title` is the "" sentinel
+  // forever. The title BAR resolves that through displayedWindowTitle, so the
+  // window plainly reads "Data" while `title` stays "" -- and the saved
+  // figure landed named "", giving a nameless Library row, a bare glyph in
+  // the Figure Page panel-source list, and the status `figure "" saved`.
+  it("names a figure saved from an untitled window after what its title bar shows", () => {
+    useApp.setState({ plotWindows: [{ ...window(), title: "", document: { ...document(), name: "" } }] });
+    useApp.getState().saveFigure("w1");
+    expect(useApp.getState().editableFigures[0].name).toBe("Data");
+    expect(useApp.getState().status).toBe('figure "Data" saved');
+  });
+
+  it("falls back to Untitled graph when an untitled window has no dataset either", () => {
+    useApp.setState({
+      plotWindows: [{ ...window(), title: "", datasetId: null, document: { ...document(), name: "" } }],
+    });
+    useApp.getState().saveFigure("w1");
+    expect(useApp.getState().editableFigures[0].name).toBe("Untitled graph");
+  });
+
+  it("never overrides a window's explicit title", () => {
+    // The window() fixture is titled "Current plot"; resolving must be a
+    // fallback for the blank sentinel only, never a rename.
+    useApp.getState().saveFigure("w1");
+    expect(useApp.getState().editableFigures[0].name).toBe("Current plot");
+  });
+
   it("Save As assigns a new identity and updates the open window", () => {
     const id = useApp.getState().saveFigureAs("w1", "Analysis copy");
     expect(id).not.toBe("figure-w1");

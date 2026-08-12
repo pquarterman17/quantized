@@ -437,6 +437,55 @@ Before starting a slice:
 
 ## Completed / decision log
 
+### 2026-08-12 — Figure Page (F3) usability sweep: two real defects (Claude Opus 5)
+
+F3's exit criterion is "Page → save → close → reopen → edit → copy/export
+retains every panel, relationship, and visual setting", and F3.6 proved it
+with a byte-for-byte round-trip test — but the plan is explicit that it was
+never owner-verified in the live app (A6 stays open). Driving it in a real
+browser: **the journey itself passes.** Two editable figures saved, both
+assigned to slots, the save gate cleared, the page saved, closed, reopened
+byte-identical, and `figure_page.pdf` exported — no console errors. Two
+defects around it did not:
+
+1. **The save gate's instruction was 84% invisible.** A page can only
+   reference SAVED editable figures (F3.2's no-lossy-flattening rule), so
+   assigning an unsaved plot window correctly refuses with: *"slot (a): … is
+   an open plot window not yet saved as an editable figure — save it (its
+   title-bar Save button, or File > Save Editable Figure), then Save this
+   page again"*. That message renders with `.qzk-ds-meta`, a SINGLE-LINE
+   utility (`overflow:hidden; text-overflow:ellipsis; white-space:nowrap`)
+   built for a dataset's "201 pts · 1 ch" row. Measured: `scrollWidth` 988 px
+   in a `clientWidth` 154 px column — and because the text overflowed a
+   nowrap line rather than filling one, not even an ellipsis hinted anything
+   was missing. The user saw "slot (a): "two-channel.csv"" and no way
+   forward. Fixed with a `.qzk-msg` modifier that restores wrapping
+   (`scrollWidth` now equals `clientWidth`). The Save button is left ENABLED
+   deliberately: it already toasts the full reason, which is louder than a
+   disabled button with a tooltip.
+2. **Saving the default window produced a figure named `""`.** Reached
+   through the documented UI in three steps: import a file → File ▸ Save
+   Editable Figure. The main window is created at store init, before any
+   dataset exists, so its `title` is the `""` sentinel forever; the title BAR
+   resolves that via `displayedWindowTitle` (explicit title → bound dataset's
+   name → "Untitled graph"), but `saveFigure` read `title` raw. Result: a
+   nameless Library row, a bare glyph in this very Figure Page's
+   panel-source list (which is how it was spotted), and the status line
+   `figure "" saved`. `saveFigure` now resolves the same name the title bar
+   shows — only when blank, so an explicit title and `saveFigureAs`'s dialog
+   name are never overridden. `saveFigureAs`'s default and the close-confirm
+   prompt had the same raw read with a WEAKER fallback ("Untitled graph"
+   instead of the file name); both now use the shared resolver.
+
+**The clipping is a class, so it got a guard**, not just seven edits: an
+`architecture.test.ts` check that every `role="alert"`/`role="note"` element
+borrowing `.qzk-ds-meta` also carries `.qzk-msg`. It paid for itself
+immediately — it caught a SEVENTH site (`FigureBuilderView`'s own
+"Editing … Apply updates this figure; Cancel discards them." note) that a
+grep missed because its `className` sits on a separate line from its `role`.
+Six of the seven are multi-sentence instructions; the rule is mechanical, so
+the guard has no false positives to allowlist.
+
 ### 2026-08-12 — F2.4d reference-line drag in the preview (Claude Opus 5)
 
 - The gesture F2.4 was waiting on. F2.4b's matrix said the remaining gesture

@@ -790,3 +790,38 @@ GUI_INTERACTION_PLAN #21 motivating incident: savedRois was missing for 24 hours
     expect(missing, "each exclusion must have a descriptive reason (≥5 chars)").toEqual([]);
   });
 });
+
+// Alert/note text must never be clipped (2026-08-12). `.qzk-ds-meta` is a
+// SINGLE-LINE utility — `overflow: hidden; text-overflow: ellipsis;
+// white-space: nowrap` — and it is exactly right for a dataset's
+// "201 pts · 1 ch" row. Applied to a `role="alert"`/`role="note"` MESSAGE it
+// hides the actionable half of the sentence. Measured case that motivated
+// this guard: the Figure Page save gate rendered 988 px of "…save it (its
+// title-bar Save button, or File > Save Editable Figure), then Save this page
+// again" inside a 154 px column — ~84% invisible, and because the text
+// overflowed a nowrap line rather than filling one, not even an ellipsis
+// hinted that anything was missing. The `.qzk-msg` modifier restores wrapping.
+describe("alert/note messages are not clipped", () => {
+  it("every role=alert/note element using qzk-ds-meta also carries qzk-msg", () => {
+    const offenders: string[] = [];
+    for (const [path, src] of sources()) {
+      if (!path.endsWith(".tsx")) continue;
+      // Walk each `className="qzk-ds-meta"` (no qzk-msg) back to its opening
+      // `<`, so a multi-line JSX tag is matched as a whole.
+      const re = /className="qzk-ds-meta"/g;
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(src)) !== null) {
+        const open = src.lastIndexOf("<", match.index);
+        if (open < 0) continue;
+        const tag = src.slice(open, match.index + match[0].length);
+        if (/role="(alert|note)"/.test(tag)) {
+          offenders.push(`${path}:${src.slice(0, match.index).split("\n").length}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'add the "qzk-msg" modifier (className="qzk-ds-meta qzk-msg") so the message wraps instead of being clipped mid-sentence',
+    ).toEqual([]);
+  });
+});

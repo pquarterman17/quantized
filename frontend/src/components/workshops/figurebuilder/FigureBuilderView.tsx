@@ -47,7 +47,7 @@ export default function FigureBuilderView() {
             <div
               role="note"
               aria-label="Publication preview behavior"
-              className="qzk-ds-meta"
+              className="qzk-ds-meta qzk-msg"
               style={{ color: "var(--text-dim)", marginBottom: 2 }}
             >
               {f.canonical && detachedCanonical
@@ -235,7 +235,7 @@ export default function FigureBuilderView() {
                 </Button>
               </span>
               {f.canonical && f.applyBlockedReason && (
-                <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+                <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
                   {f.applyBlockedReason}
                 </div>
               )}
@@ -267,7 +267,7 @@ export default function FigureBuilderView() {
             }}
           >
             {f.error ? (
-              <div role="alert" aria-live="polite" className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
+              <div role="alert" aria-live="polite" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)" }}>
                 {f.error}
               </div>
             ) : f.preview && f.hitmap ? (
