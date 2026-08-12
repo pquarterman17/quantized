@@ -571,17 +571,31 @@ fail-before/pass-after regression test:
   already use, re-seeding errKeys/hiddenChannels from the fresh columns); an
   unchanged shape still keeps the user's styles/hidden/keys.
 
-### Backend hardening round (2026-07-19, `4d61e56`)
+### Backend hardening rounds (standing — re-sweep as routes land)
 
-A second sweep of the "route catches a narrow exception tuple, callee raises
-something else" class first named on 2026-07-05. Three live HTTP 500s on
-plausible user input, all confirmed against the real app before fixing and all
-now 422: `DataStruct.from_dict`'s TypeError on a non-numeric `dataset` (the
-class-wide one — ~17 handlers across 7 route modules, fixed in the ONE shared
-constructor), `semiconductor.fermi_level`'s ZeroDivisionError from an
-underflowed `ni`, and `fitting.curve_fit`'s ZeroDivisionError on empty arrays.
-Backend 3000 + ruff + mypy green. The class recurs as new routes land —
-re-sweep periodically.
+**Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added
+or substantially changed since the second round (RSM, outliers/varcomp,
+dataset/upload caches, database/sqlite, multivar/statplot exports,
+crystallography/electrical/xray, plot, parsers + the new SPC old-format
+decoder, stats/design, fitting, diffusion, substrates, thin film, books,
+import templates, reference, corrections, peaks, page/figure exports).
+One confirmed live 500, fixed at the calc chokepoint: a unit expression that
+decomposes to a literal zero scale (e.g. converting to `"0"` or `"m/0"`)
+raised an uncaught ZeroDivisionError via both `/api/reference/convert` and
+`/api/calc/call` — `calc/unit_convert.py`'s underflow guard generalized to
+reject any zero-scale token, regression test in
+`tests/test_calc_degenerate_inputs.py`. Everything else clean. Gate: 3943
+passed / ruff / mypy green.
+
+**Second round (2026-07-19, `4d61e56`).** A sweep of the "route catches a
+narrow exception tuple, callee raises something else" class first named on
+2026-07-05. Three live HTTP 500s on plausible user input, all confirmed
+against the real app before fixing and all now 422: `DataStruct.from_dict`'s
+TypeError on a non-numeric `dataset` (the class-wide one — ~17 handlers
+across 7 route modules, fixed in the ONE shared constructor),
+`semiconductor.fermi_level`'s ZeroDivisionError from an underflowed `ni`, and
+`fitting.curve_fit`'s ZeroDivisionError on empty arrays. Backend 3000 + ruff
++ mypy green. The class recurs as new routes land — re-sweep periodically.
 
 ## Owner actions & owner-gated decisions
 
