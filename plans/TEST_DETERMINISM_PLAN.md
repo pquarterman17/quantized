@@ -11,7 +11,9 @@ agents that do not need to hold the whole picture.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-09
-**Updated:** 2026-08-09
+**Updated:** 2026-08-11 (header date caught up during the twenty-second
+BACKLOG reconcile — tasks 1/2/3/4/6 all completed 2026-08-10 without the
+date being bumped; open residue is #7 plus the #5 standing rule)
 
 ---
 

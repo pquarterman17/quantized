@@ -11,7 +11,10 @@ achieved empirically via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-08-10 (plan-hygiene reconciliation sweep — three items:
+**Updated:** 2026-08-11 (#41 struck — it shipped `5ad96db` the same
+evening it was folded up, in a worktree parallel to the twenty-first
+reconcile pass, so that pass recorded it open; see Completed.)
+Prior: 2026-08-10 (plan-hygiene reconciliation sweep — three items:
 `RSM_CUTS_PLAN.md` folded up and archived, its item 25 becoming Tier 3
 #41 below and its owner-skipped item 11 becoming a Deferral below; the
 stale Apache-2.0 copyright-holder-line owner gate was removed from the
@@ -632,21 +635,8 @@ in git history @ `e4f6590`.)*
 
 ~~16. **Append/merge workspace**~~ COMPLETED 2026-07-11 (see Completed).
 
-41. **Sector ROI state is component-local, not store-backed** (folded up
-    2026-08-10 from `RSM_CUTS_PLAN.md` #25, archived same day — the plan's
-    campaign completed with this as its only residue). The box tool uses
-    `store.mapRoi`, so canvas and panel stay structurally in sync; the
-    SECTOR tool's fields instead live as local state inside
-    `workshops/roicuts/useRoiCuts.ts`, so a second, independently-mounted
-    `RoiCutsPanel` will not see a live drag from the first — "one value, two
-    entry points" only within a single mounted `MapStage`. Pre-existing
-    (`MapRoiOverlay.tsx`'s header already documented this for the old
-    read-only preview); not worsened by any RSM_CUTS_PLAN work.
-    - [ ] Move the sector fields into `store/rois.ts` beside `mapRoi`/
-      `mapRuler`, which is where they belonged from the start, then delete
-      the cross-instance caveat from both headers.
-    - Low priority: two simultaneously-mounted ROI panels is not a common
-      configuration. Do next time `store/rois.ts` is open anyway.
+~~41. **Sector ROI state is component-local, not store-backed**~~ COMPLETED
+    2026-08-10 (see Completed).
 
 *(further candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*
 
@@ -728,6 +718,17 @@ in git history @ `e4f6590`.)*
   everything downstream "passes" against.
 
 ## Completed
+
+- ~~**#41 Sector ROI state into the store**~~ (2026-08-10) — `5ad96db`
+  moved the SECTOR tool's fields out of component-local state in
+  `workshops/roicuts/useRoiCuts.ts` into `store/rois.ts` beside
+  `mapRoi`/`mapRuler` (new `mapSector` slice, +82 lines), so a second
+  independently-mounted `RoiCutsPanel` now sees a live drag from the
+  first; `0140408` excluded `mapSector` from undo, matching
+  `mapRoi`/`mapRuler`. Shipped the same evening it was folded up from
+  RSM_CUTS_PLAN #25 — five minutes before the twenty-first reconcile
+  pass was authored in a parallel worktree, which is why that pass
+  still listed it open.
 
 - **#39 Python client for live sessions (`quantized.client`)** (2026-08-05)
   — slice 1 shipped: `src/quantized/client.py` (321 lines), a sync

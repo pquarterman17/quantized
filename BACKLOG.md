@@ -6,7 +6,39 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-08-10 (twenty-first pass — `docs/plan-drift-guard`
+**Last reconciled:** 2026-08-11 (twenty-second pass — closing the
+parallel-worktree race the twenty-first pass itself lost). Four findings:
+
+1. **MAIN #41 was already SHIPPED when the twenty-first pass recorded it
+   open.** `5ad96db` (sector ROI fields → `store/rois.ts`, 21:04) merged
+   five minutes before the reconcile commit (`a8357a3`, 21:09) was
+   authored — in a *different worktree*, merged 21:13. Neither session
+   could see the other; the drift existed only on the merged tree.
+   Struck in MAIN_PLAN, actionable row removed, dashboard row updated.
+2. **The TEST_DETERMINISM dashboard row predated its own plan's
+   completions** — it still listed items 1/2/3/4/6 as open although the
+   plan's Completed section records all five shipped 2026-08-10. Row
+   rewritten; #7 (the docs note) promoted to the actionable table; #5 is
+   a standing opportunistic rule, not a schedulable item.
+3. **The twenty-first pass's "#55 correct-red" note is superseded**:
+   `610e299` widened the guard's `PARTIAL_QUALIFIERS` to treat
+   "GATE OPEN" as a partial qualifier, so
+   `tests/test_repo_integrity.py` is now fully green with #55 correctly
+   left open.
+4. **Unbooked ships since the last pass** (no rows needed, recorded here
+   for the narrative): v0.19.0 released 2026-08-10 (all 8 version files
+   bumped, lockfiles included); PR #127 closed the open high/medium
+   GitHub security alerts (SECURITY.md added, hardening across
+   `desktop_consent`/`io.delimited`/`io.sqlite_query` + 6 route
+   modules); PR #128 closed the last 5 CodeQL alerts via a fenced query
+   exclusion in `.github/codeql/codeql-config.yml` with a new
+   integrity-test guard on the exclusion list. Alert count: 0 open.
+   Also: `weak-waits-inventory.md` re-headed as a standing
+   TEST_DETERMINISM appendix (its "delete when task 5 completes" note
+   contradicted the 2026-08-10 owner decision that task 5 is never
+   done) and given a `**Parent:**` declaration per plan-consolidation.
+
+Prior (twenty-first pass, 2026-08-10 — `docs/plan-drift-guard`
 guard follow-through). The new `test_plan_items_claiming_completion_are_moved_to_completed`
 guard (tests/test_repo_integrity.py) was RED on real drift in three plans;
 fixed per-plan, one commit each:
@@ -463,7 +495,7 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Figure-authoring campaign, next slices — F2 broader parity (legacy + Graph Builder convergence on the canonical session, remaining Stage property bridge, direct-manipulation parity, render-path unification), F3 COMPLETE (F3.1–F3.6 shipped 2026-08-05/06/07 — see the F3 exit-criterion note in the plan's 2026-08-07 log), then F4 recipes/templates + live grouping parity (F4.1, F4.2 rest, F4.3, F4.4); A1–A10 acceptance journeys are the exit gate | FIGURE_AUTHORING F2, F4 |
-| Sector ROI state is component-local (`workshops/roicuts/useRoiCuts.ts`), not store-backed — a second independently-mounted `RoiCutsPanel` won't see a live drag from the first. Low priority: two simultaneously-mounted ROI panels isn't a common configuration; fix by moving the fields into `store/rois.ts` beside `mapRoi`/`mapRuler` next time that file is open anyway | MAIN #41 (was RSM_CUTS_PLAN #25, folded up 2026-08-10) |
+| Statistical-honesty note in the contributing docs — a short paragraph on why "N clean runs" is weak flake-fix evidence (rule of three) and that a forced-race test is the standard; cite the item-22 case | TEST_DETERMINISM #7 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -684,11 +716,11 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#41 are shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard); **#41 open** (was RSM_CUTS_PLAN #25, folded up 2026-08-10 — sector ROI state should move into `store/rois.ts`); the Apache-2.0 copyright-holder owner gate was REMOVED 2026-08-10 — resolved since the first commit, never actually open; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#41 are ALL shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard; **#41 shipped 2026-08-10** `5ad96db` — sector ROI state moved into `store/rois.ts`, struck 2026-08-11 after the parallel-worktree race described in the twenty-second pass above); the Apache-2.0 copyright-holder owner gate was REMOVED 2026-08-10 — resolved since the first commit, never actually open; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47 (owner cert), #48 (owner acceptance-run residual only — its Trusted Publisher claim was stale, corrected 2026-08-10), #49 (owner, gated on #47), #50 (continuous); **#1/#2/#5 (W0 repo scaffold/enforcement/CI) drift-fixed 2026-08-10** — shipped since 2026-06-21 with sub-boxes checked but never struck; **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19. **Considered for fold-up 2026-08-10, rejected**: reads as the standing mission doc for the whole initiative (the switch-trigger acceptance protocol IS the go/no-go test), Tier 3 is deliberately empty pending these very gates, and Q9 is duplicate-tracked as PRIMARY SOFTWARE's own Gate A item — not finished residue |
 | `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. **Considered for fold-up 2026-08-10, rejected**: 188 open `- [ ]` items across P0–P4 and five acceptance gates (A–E) as of this pass — nowhere near the fold-up threshold |
-| `plans/TEST_DETERMINISM_PLAN.md` | Active | Created 2026-08-09. 2 of 9 items shipped (the worked-example wall-clock fix in `test_calc_map.py`, and the `useFigureBuilder` weak-wait fix — both originated as RSM_CUTS_PLAN items 16/22 and were absorbed here). Open: item 1 (forced-race regression test), item 2 (4 remaining Python wall-clock budgets), item 3 (`GridViewport.perf.test.tsx`), item 4 (triage 110 weak-wait call sites), item 5 (fix the SUSPECT sites), item 6 (lint guard), item 7 (Tier 3 documentation note) |
+| `plans/TEST_DETERMINISM_PLAN.md` (+ `weak-waits-inventory.md` appendix) | Active | Created 2026-08-09; **campaign essentially complete 2026-08-10** — #1 forced-race test (15/15 deterministic, red-on-revert verified), #2 Python wall-clock budgets (all four sites assert load-invariant properties; budgets never lowered after one corrected round), #3 GridViewport (time budgets dropped, DOM-node-count assertions kept), #4 triage (98-SUSPECT classification proved unreliable — its negative evidence redirected the campaign), and #6 the per-file weak-wait count ratchet in `architecture.test.ts` (33 files / 124 sites pinned) ALL shipped, plus the two 2026-08-09 worked examples. Open: **#5 is a STANDING RULE, never "done"** (fix weak waits opportunistically when editing an inventoried file; ratchet down in the same commit) and **#7** (statistical-honesty note in contributing docs — the one actionable residue, in the actionable table above) |
 | `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md` | Active | **F0 + F1 COMPLETE** (honest transitions; versioned FigureDocument with lifecycle, reversible conversions, migration). F2 mid-campaign: seven bounded slices shipped 2026-08-02 (canonical Publication Preview session PR #111, F2.1a–d/F2.2a–c/F2.3a/F2.4a/F2.5a); F2.1–F2.5 stay open for legacy/Graph-Builder convergence, the remaining Stage property bridge, direct-manipulation parity, and render-path unification. **F3 COMPLETE 2026-08-07** (F3.1–F3.6: versioned PageDocument + persistence, missing/frozen panel semantics, Save/Save As/dirty/reopen lifecycle, unified panel editing, complete layout controls, unified export — one `buildSpec` path for preview/file-export/clipboard-copy, a real window-panel fidelity fix (error bars/y2/groups/breaks/overrides now render from the window's own canonical document instead of a reduced ad-hoc spec), and Library "export a saved page without reopening it"); the plan's own F3 exit criterion is coded-and-tested (round-trip test proves save→close→reopen→export byte-identical) but NOT owner-verified in the live app — A6 stays an owner acceptance check, not ticked here. F4 open except F4.2a (plot type + error designations, with the Graph Builder error-bar wells + step/Line+Symbol marks, v0.16.0). A1–A10 acceptance journeys unchecked. Authored by ChatGPT-Sol, not Claude. |
 | `plans/JMP_GAP_PLAN.md` | Active | **Every census-independent register item is SHIPPED** — campaign 2026-07-28/29 (J3, J5, J6, J7, J9, J10, J11, J12, J17 + J8 backend) + the 2026-07-31 residual wave (J8 UI, J10 export parity, J3 mosaic/prediction band, J7 curve-fit By, Dixon table verified) + #14 module splits w/ `MODULE_PINS` ratchet (2026-07-29). **Tier-section duplicate copies of J3/J6/J7/J8/J9/J10/J11/J12/J17/#14 removed 2026-08-10** (already recorded in Completed, guard drift). Open: J1 string categoricals (with P1.4), J2 recode, J4 live group split (= P1.5) — all Gate-A-sequenced; Tier 3 census-gated = J13 clustering, J14 control charts/capability, J15 MSA, J16 DOE. Owner gate: Gate J census + switch trial |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); **#2/#5/#15/#17 struck and moved to Completed 2026-08-10** (guard drift — every sub-box was checked but the tier-section copies were never removed); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |

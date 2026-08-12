@@ -1,7 +1,13 @@
 # Weak Waits Inventory — Task 4 (TEST_DETERMINISM_PLAN)
 
-**Status:** Triage complete (2026-08-10)
-**Scope:** Task 4 inventory for TEST_DETERMINISM_PLAN; scratch file to be deleted when task 5 completes per plan-consolidation rule.
+**Status:** Standing reference (triage completed 2026-08-10)
+**Parent:** TEST_DETERMINISM_PLAN.md
+**Scope:** Appendix to TEST_DETERMINISM_PLAN task 5, which is a standing
+opportunistic rule (owner decision 2026-08-10), never "done" — so this
+file is NOT deleted. When editing a test file listed here for any other
+reason, fix its weak waits (wait on STATE, never on the mock call) and
+lower the task-6 ratchet allowlist in `architecture.test.ts` in the same
+commit.
 
 ## Summary
 
