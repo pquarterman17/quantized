@@ -4,85 +4,36 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ErrorBinding, ErrorSide } from "../../../lib/errorRoles";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
-import type { AxisFormat, RefLine, Shape, SeriesStyle } from "../../../lib/types";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
+import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
 import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
+import type {
+  ChannelsPanelProps,
+  ErrorColumnsPanelProps,
+  RefLinesPanelProps,
+  SeriesPanelProps,
+  ShapesPanelProps,
+  TickFormatPanelProps,
+} from "./propertyPanelTypes";
 import TickFormatPanel from "./TickFormatPanel";
 import ShapePropertiesPanel from "./ShapePropertiesPanel";
 
-/** F2.3b: per-series properties on the canonical draft. Supplied only when a
- *  canonical session has at least one plotted channel (legacy Publication
- *  Preview has no lossless series-level document field to edit — see
- *  useFigureBuilder.ts's field doc) — the Series group renders nothing when
- *  this is absent. */
-export interface SeriesPanelProps {
-  labels: readonly string[];
-  channels: readonly number[];
-  styles: Record<number, SeriesStyle>;
-  hiddenChannels: readonly number[];
-  nameOverrides: Record<number, string>;
-  errors: readonly ErrorBinding[];
-  onStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
-  onHiddenChange: (channel: number, hidden: boolean) => void;
-  onMove: (channel: number, direction: -1 | 1) => void;
-}
-
-/** F2.3c: per-shape properties on the canonical draft. Supplied only when a
- *  canonical session's draft has at least one drawn shape -- the Shapes
- *  group renders nothing when this is absent (legacy Publication Preview has
- *  no lossless shape document field to edit -- see useFigureBuilder.ts's
- *  field doc, same reasoning as SeriesPanelProps above). */
-export interface ShapesPanelProps {
-  shapes: readonly Shape[];
-  onStyle: (id: string, patch: Partial<Omit<Shape, "id">>) => void;
-  onRemove: (id: string) => void;
-}
-
-/** F2.3d: reference lines on the canonical draft. Supplied only in a canonical
- *  session -- but UNLIKE Series and Shapes, the group renders even with an
- *  EMPTY list, because this panel can create the first line (axis + value
- *  needs no live canvas). Hiding it when empty would make "add a reference
- *  line" reachable only by leaving the preview for the Stage, which is the
- *  one action that invalidates the session. */
-export interface RefLinesPanelProps {
-  refLines: readonly RefLine[];
-  onValue: (id: string, value: number) => void;
-  onAdd: (axis: RefLine["axis"], value: number) => void;
-  onRemove: (id: string) => void;
-}
-
-/** F2.3e: axis tick formats on the canonical draft. Absent (legacy mode)
- *  hides the controls -- legacy Publication Preview renders from the LIVE
- *  store's xFmt/yFmt, which the Stage's own Inspector card already owns, so a
- *  second editor for the same singleton would be a confusing duplicate. */
-export interface TickFormatPanelProps {
-  xFmt: AxisFormat;
-  yFmt: AxisFormat;
-  y2Fmt: AxisFormat | null;
-  xIsDate: boolean;
-  onXFmt: (next: AxisFormat) => void;
-  onYFmt: (next: AxisFormat) => void;
-  onY2Fmt: (next: AxisFormat | null) => void;
-}
-
-/** F2.3f: error-column bindings on the canonical draft. Supplied only in a
- *  canonical session -- like F2.3d's reference lines (not F2.3b's Series,
- *  which stays read-only display), the group renders even with an EMPTY
- *  list, because Add needs only the dataset's column labels, no live canvas. */
-export interface ErrorColumnsPanelProps {
-  bindings: readonly ErrorBinding[];
-  labels: readonly string[];
-  onPatch: (index: number, patch: Partial<Omit<ErrorBinding, "channel">>) => void;
-  onAdd: (channel: number, target: number, axis: ErrorBinding["axis"], side: ErrorSide) => void;
-  onRemove: (index: number) => void;
-  onDetect: () => void;
-}
+// The panel-group prop contracts live in propertyPanelTypes.ts (extracted to
+// fund F2.3g -- see its module doc); re-exported so every existing importer
+// of these names (PropertyPanels.test.tsx included) stays source-compatible.
+export type {
+  ChannelsPanelProps,
+  ErrorColumnsPanelProps,
+  RefLinesPanelProps,
+  SeriesPanelProps,
+  ShapesPanelProps,
+  TickFormatPanelProps,
+} from "./propertyPanelTypes";
 
 function Group({
   title,
@@ -124,6 +75,7 @@ export default function PropertyPanels({
   hasY2,
   xBreaks,
   setXBreaks,
+  channels,
   series,
   shapes,
   refLines,
@@ -147,6 +99,9 @@ export default function PropertyPanels({
    *  behavior unchanged. */
   xBreaks?: [number, number][];
   setXBreaks?: (next: [number, number][]) => void;
+  /** F2.3g: canonical channel reassignment. Absent (legacy mode) hides the
+   *  group -- see ChannelsPanelProps' doc. */
+  channels?: ChannelsPanelProps;
   /** F2.3b: canonical per-series properties. Absent (legacy mode, or a
    *  canonical draft with nothing plotted) hides the Series group entirely —
    *  there is no lossless legacy equivalent to fall back to. */
@@ -318,6 +273,22 @@ export default function PropertyPanels({
           />
         </span>
       </Group>
+
+      {channels && (
+        <Group title="Channels" forceOpen={openGroup === "Channels"} openNonce={openNonce}>
+          <ChannelsPanel
+            labels={channels.labels}
+            channelRoles={channels.channelRoles}
+            xKey={channels.xKey}
+            yKeys={channels.yKeys}
+            y2Keys={channels.y2Keys}
+            fallbackYKeys={channels.fallbackYKeys}
+            onXKey={channels.onXKey}
+            onToggleY={channels.onToggleY}
+            onToggleY2={channels.onToggleY2}
+          />
+        </Group>
+      )}
 
       {series && series.channels.length > 0 && (
         <Group title="Series" forceOpen={openGroup === "Series"} openNonce={openNonce}>

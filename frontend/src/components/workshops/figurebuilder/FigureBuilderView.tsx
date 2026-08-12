@@ -97,6 +97,20 @@ export default function FigureBuilderView() {
               hasY2={f.hasY2}
               xBreaks={f.xBreaks}
               setXBreaks={f.setXBreaks}
+              // F2.3g: gated on `canonical` only, like reference lines/error
+              // columns -- the X-axis select and per-channel toggles need no
+              // live canvas.
+              channels={f.canonical ? {
+                labels: f.data?.labels ?? [],
+                channelRoles: f.channelRoles,
+                xKey: f.channelXKey,
+                yKeys: f.channelYKeys,
+                y2Keys: f.channelY2Keys,
+                fallbackYKeys: f.channelFallbackYKeys,
+                onXKey: f.setChannelXKey,
+                onToggleY: f.toggleChannelY,
+                onToggleY2: f.toggleChannelY2,
+              } : undefined}
               // F2.3b: series editing has no legacy equivalent -- omit the
               // prop entirely (rather than pass an always-empty object) so a
               // canonical draft with nothing plotted degrades the same way

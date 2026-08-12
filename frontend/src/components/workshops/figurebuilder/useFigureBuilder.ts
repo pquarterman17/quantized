@@ -6,8 +6,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportFigure, type FigureSpec } from "../../../lib/api";
+import type { FigureSpec } from "../../../lib/api";
 import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
+import { toggleChannelPlotted, toggleChannelSecondary, type ChannelMembership } from "./canonicalChannels";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
@@ -16,18 +17,17 @@ import { selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
+import { exportPreviewFigure } from "./previewExport";
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
-import { effectiveChannels } from "../../../lib/plotdata";
+import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { groupForElement } from "../../../lib/previewmap";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
-import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
@@ -266,6 +266,27 @@ export function useFigureBuilder() {
     setErrorBindings(removeErrorBindingFromList(errorBindings, index));
   const detectErrorBindings = () => canonicalData && setErrorBindings(inferErrorBindings(canonicalData));
 
+  // F2.3g: channel membership (X axis, each other channel's Y/Y2/not-plotted
+  // state) lives on `document.bindings` too -- same "not the PlotView" shape
+  // as F2.3f's error bindings. Guards mirror ChannelsCard's `toggle`/
+  // `toggleAxis` (canonicalChannels.ts); a rejected toggle returns the SAME
+  // object, so the wrapper below skips the patch (and its history entry).
+  const channelBindings: ChannelMembership = {
+    xKey: canonicalDocument?.bindings.xKey ?? null, yKeys: canonicalDocument?.bindings.yKeys ?? null, y2Keys: canonicalDocument?.bindings.y2Keys ?? null,
+  };
+  const channelFallback = canonicalData ? defaultDenseChannels(canonicalData, channelBindings.xKey) : [];
+  const setChannelBindings = (patch: Partial<ChannelMembership>) =>
+    patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, ...patch } }));
+  const setChannelXKey = (xKey: number | null) => setChannelBindings({ xKey });
+  const toggleChannelY = (channel: number) => {
+    const next = toggleChannelPlotted(channelBindings, channel, channelFallback);
+    if (next !== channelBindings) setChannelBindings(next);
+  };
+  const toggleChannelY2 = (channel: number) => {
+    const next = toggleChannelSecondary(channelBindings, channel, channelFallback);
+    if (next !== channelBindings) setChannelBindings(next);
+  };
+
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -371,45 +392,14 @@ export function useFigureBuilder() {
       id, px, py, startPx, startPy,
     );
 
-  async function exportNow(): Promise<void> {
-    if (canonicalDocument) {
-      if (canonicalReadiness?.state !== "ready") {
-        const msg = `export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`;
-        toast(msg, "danger");
-        setStatus(msg);
-        return;
-      }
-      try {
-        let dataset = canonicalDataset;
-        if (dataset?.pending) dataset = await useApp.getState().resolveDataset(dataset.id) ?? null;
-        const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
-        await exportFigure({ ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem), filename: stem });
-        setStatus(`exported ${stem}.${canonicalDocument.output.format}`);
-      } catch (e) {
-        const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
-        toast(msg, "danger");
-        setStatus(msg);
-      }
-      return;
-    }
-    if (!spec) return;
-    try {
-      // #38 deferred edge: a LIVE (non-frozen) spec tracks the active
-      // dataset — resolve its full data first rather than silently exporting
-      // the small preview. A frozen doc's dataSnapshot is untouched (it was
-      // deliberately captured as-is).
-      let dataset = spec.dataset;
-      if (!frozenData && active?.pending) {
-        const ds = await useApp.getState().resolveDataset(active.id);
-        if (ds) dataset = ds.data;
-      }
-      const stem = (active?.name ?? "figure").replace(/\.[^.]+$/, "");
-      await exportFigure({ ...spec, dataset, fmt, dpi, filename: stem });
-      setStatus(`exported ${stem}.${fmt}`);
-    } catch (e) {
-      setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
-    }
-  }
+  /** Export commit — the dispatch lives in previewExport.ts (moved whole
+   *  when F2.3g's channel wiring hit this module's size pin, the same move
+   *  dragElement's previewDrag.ts made); this wrapper only binds the hook's
+   *  live state. */
+  const exportNow = (): Promise<void> =>
+    exportPreviewFigure({
+      canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, setStatus,
+    });
 
   return {
     active,
@@ -473,6 +463,15 @@ export function useFigureBuilder() {
     addErrorBinding,
     removeErrorBinding,
     detectErrorBindings,
+    // F2.3g: canonical-only channel membership (empty/no-op in legacy mode).
+    channelXKey: channelBindings.xKey,
+    channelYKeys: channelBindings.yKeys,
+    channelY2Keys: channelBindings.y2Keys,
+    channelFallbackYKeys: channelFallback,
+    channelRoles: canonicalDataset?.channelRoles,
+    setChannelXKey,
+    toggleChannelY,
+    toggleChannelY2,
     data,
     hitmap,
     focusGroup,

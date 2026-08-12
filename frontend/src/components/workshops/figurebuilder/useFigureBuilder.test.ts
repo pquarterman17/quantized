@@ -1392,6 +1392,150 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // F2.3g: channel membership (X axis, and each other channel's Y/Y2/not-
+  // plotted state) lives on document.bindings too -- same "not the PlotView"
+  // shape as F2.3f's error bindings, so it does not route through
+  // setCanonicalView either. Same coverage contract as F2.3d/e/f: setters,
+  // Apply-commits/Cancel-is-mutation-free, and a wire-reaches-render proof.
+  // The extra case: a guard-rejected toggle must not even reach the store
+  // (canonicalChannels.test.ts covers the guard LOGIC; this proves the
+  // wrapper actually skips the patch instead of writing a no-op history entry).
+  describe("canonical channel membership (F2.3g)", () => {
+    const win = (id: string, document?: ReturnType<typeof createFigureDocument>): PlotWindow => ({
+      id, kind: "plot", title: document?.name ?? id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      ...(document ? { document } : {}),
+    });
+    const channelDocument = (
+      id: string,
+      view: Partial<ReturnType<typeof defaultPlotView>> = {},
+    ) => createFigureDocument({ id, name: "Ch doc", datasetId: "d1", view: { ...defaultPlotView(), ...view } });
+    const session = (document: ReturnType<typeof createFigureDocument>) => ({
+      target: "window" as const, windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    });
+
+    it("computes null channel membership in legacy (non-canonical) mode", () => {
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.channelXKey).toBeNull();
+      expect(result.current.channelYKeys).toBeNull();
+      expect(result.current.channelY2Keys).toBeNull();
+    });
+
+    it("exposes the draft's channel bindings once canonical", () => {
+      useApp.setState({
+        figurePublicationSession: session(channelDocument("figure-ch-a", { xKey: 1, yKeys: [0], y2Keys: null })),
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      expect(result.current.channelXKey).toBe(1);
+      expect(result.current.channelYKeys).toEqual([0]);
+      expect(result.current.channelY2Keys).toBeNull();
+    });
+
+    it("setChannelXKey patches the draft's xKey only", () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-b", { yKeys: [0, 1] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.setChannelXKey(1));
+      const draft = useApp.getState().figurePublicationSession!.draft;
+      expect(draft.bindings.xKey).toBe(1);
+      expect(draft.bindings.yKeys).toEqual([0, 1]);
+    });
+
+    it("toggleChannelY adds an unselected channel to the draft's yKeys", () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-c", { yKeys: [0] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.toggleChannelY(1));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.yKeys).toEqual([0, 1]);
+    });
+
+    it("toggleChannelY removes a selected channel from the draft's yKeys", () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-d", { yKeys: [0, 1] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.toggleChannelY(0));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.yKeys).toEqual([1]);
+    });
+
+    it("toggleChannelY is a no-op -- no store write at all -- when it would leave nothing plotted", () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-e", { yKeys: [0] })) });
+      const before = useApp.getState().figurePublicationSession;
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.toggleChannelY(0));
+      // The SAME session object (not just an equal one) -- the guard means
+      // the wrapper never called patchFigurePublicationDraft at all.
+      expect(useApp.getState().figurePublicationSession).toBe(before);
+    });
+
+    it("toggleChannelY2 promotes an already-plotted channel onto y2Keys", () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-f", { yKeys: [0, 1] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.toggleChannelY2(0));
+      expect(useApp.getState().figurePublicationSession!.draft.bindings.y2Keys).toEqual([0]);
+    });
+
+    it("Apply commits channel bindings into the window document and mirrors them into the legacy facade", async () => {
+      const document = channelDocument("figure-ch-g", { yKeys: [0] });
+      useApp.setState({
+        // Seed the live facade to already agree with the session baseline
+        // (figureLifecycle.ts's liveWindowDocument rebuilds the focused
+        // window's "live" document from the top-level xKey/yKeys/y2Keys
+        // singletons, not from window.document.bindings) -- same seed
+        // F2.3f's error-binding Apply test needs, for the same reason.
+        ...figureDocumentToPlotView(document),
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.hitmap).not.toBeNull());
+      act(() => result.current.toggleChannelY(1));
+      act(() => result.current.apply());
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows[0].document?.bindings.yKeys).toEqual([0, 1]);
+      // hydrateView spreads the applied view onto the legacy top-level facade
+      // (the same singleton ChannelsCard reads/writes on the Stage).
+      expect(state.yKeys).toEqual([0, 1]);
+    });
+
+    it("Cancel makes no persistent mutation", () => {
+      const document = channelDocument("figure-ch-h", { yKeys: [0] });
+      useApp.setState({
+        figurePublicationSession: session(document),
+        plotWindows: [win("w1", structuredClone(document))],
+        focusedWindowId: "w1",
+      });
+      const before = structuredClone(useApp.getState().plotWindows);
+      const { result } = renderHook(() => useFigureBuilder());
+      act(() => result.current.toggleChannelY(1));
+      act(() => result.current.cancel());
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.plotWindows).toEqual(before);
+    });
+
+    it("reaches the render request, so the preview shows the channel the panel selects", async () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-i", { yKeys: [0] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.toggleChannelY(1));
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].y_keys).toEqual([0, 1]),
+      );
+    });
+
+    it("reaches the render request for an X-axis reassignment too", async () => {
+      useApp.setState({ figurePublicationSession: session(channelDocument("figure-ch-j", { yKeys: [0] })) });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.setChannelXKey(1));
+      await waitFor(() =>
+        expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].x_key).toBe(1),
+      );
+    });
+  });
+
   // F2.4b gap analysis: PreviewOverlay's drag (legend/annotation) and
   // double-click text (title/xlabel/ylabel) gestures already branched on
   // `canonical` from the initial canonical session (a6c809c), and commit
