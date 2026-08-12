@@ -387,9 +387,13 @@ Check these only with automated coverage plus an owner-visible desktop run.
       tick formats, an annotation, a shape, two reference lines, and explicit
       limits, and asserts each is present in the SAVED document before
       comparing, so a lossy round trip cannot pass by comparing two empty
-      objects. Verified load-bearing by planting a shapes-dropping reopen,
-      which reddens it. Waterfall offset and asymmetric errors are not yet in
-      the fixture — the remaining gap on this row.
+      objects. Waterfall offset and ASYMMETRIC Y errors are covered too — the
+      latter is the one A4 construct that is not a view field (it rides
+      `bindings.errors`, seeded from the dataset's `errorRoles` at window
+      creation) and is exactly what proves the live-facade rebuild PRESERVES
+      bindings instead of re-deriving them from the legacy symmetric-only
+      projection. Verified load-bearing twice, by planting a shapes-dropping
+      reopen and an asymmetric-error-dropping rebuild; each reddens it.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
       and export with the same series and labels.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
