@@ -111,6 +111,8 @@ describe("figure transition compatibility", () => {
         x_lim: [0, 1],
         legend: { show: false },
         annotations: [{ x: 1, y: 2, text: "note" }],
+        ref_lines: [{ axis: "x", value: 5 }],
+        region_shades: [{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#112233" }],
         x_breaks: [[3, 4]],
         font_size: 12,
       },
@@ -124,6 +126,8 @@ describe("figure transition compatibility", () => {
       "manual axis ranges",
       "legend settings",
       "annotations",
+      "reference lines",
+      "region shades",
       "axis breaks",
       "publication fonts, ticks, frame, margins, or grid settings",
     ]));

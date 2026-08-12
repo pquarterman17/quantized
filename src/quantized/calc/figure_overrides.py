@@ -16,6 +16,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from quantized.calc.figure_decor import (
+    _apply_ref_lines,
+    _apply_region_shades,
+    _validate_ref_lines,
+    _validate_region_shades,
+)
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
@@ -69,6 +75,8 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
                 raise ValueError("x_breaks entries must be sorted and non-overlapping")
             prev_hi = hi
     _validate_shapes(ov.get("shapes"))
+    _validate_ref_lines(ov.get("ref_lines"))
+    _validate_region_shades(ov.get("region_shades"))
 
 
 def _apply_overrides(
@@ -142,6 +150,16 @@ def _apply_overrides(
 
     if "grid" in ov:
         ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
+
+    # Export-fidelity gap (2026-08-11): region shades paint first (they must
+    # sit BEHIND the grid/data -- see figure_decor's zorder doc), then
+    # reference lines, both ahead of the annotations/margins/shapes sweep
+    # below. `ov["region_shades"]` here is ALREADY axis-1-filtered by
+    # `figure_y2.render_with_secondary_axis` when a secondary axis exists;
+    # a single-axes render sees the full list, including any axis-1 entries
+    # (the documented fallback -- see figure_decor.py's header).
+    _apply_region_shades(ax, ov.get("region_shades"))
+    _apply_ref_lines(ax, ov.get("ref_lines"))
 
     for ann in ov.get("annotations", []):
         # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle

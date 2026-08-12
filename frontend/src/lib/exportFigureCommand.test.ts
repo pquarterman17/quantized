@@ -12,7 +12,7 @@ import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureSpec";
 import { defaultPlotView, type PlotWindow } from "./plotview";
-import type { Annotation, Shape } from "./types";
+import type { Annotation, RefLine, RegionShade, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
 vi.mock("./api", () => ({
@@ -38,6 +38,8 @@ function fakeGet(over: {
   legendTitle?: string | null;
   annotations?: Annotation[];
   shapes?: Shape[];
+  refLines?: RefLine[];
+  regionShades?: RegionShade[];
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
   y2Lim?: [number, number] | null;
@@ -54,6 +56,8 @@ function fakeGet(over: {
     legendTitle: over.legendTitle ?? null,
     annotations: over.annotations ?? [],
     shapes: over.shapes ?? [],
+    refLines: over.refLines ?? [],
+    regionShades: over.regionShades ?? [],
     xLim: over.xLim,
     yLim: over.yLim,
     y2Lim: over.y2Lim,

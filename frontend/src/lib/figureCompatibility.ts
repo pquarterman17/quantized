@@ -88,6 +88,8 @@ export function figureDocPlotCompatibility(doc: FigureDoc): FigureTransitionComp
   if (ov?.legend) losses.add("legend settings");
   if (ov?.annotations?.length) losses.add("annotations");
   if (ov?.shapes?.length) losses.add("shapes");
+  if (ov?.ref_lines?.length) losses.add("reference lines");
+  if (ov?.region_shades?.length) losses.add("region shades");
   if (ov?.x_breaks?.length) losses.add("axis breaks");
   if (
     ov &&

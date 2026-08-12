@@ -254,14 +254,18 @@ describe("6. Decor: annotations, shapes, legend, grid/spines, log ticks", () => 
 });
 
 describe("7. Error bars — documented gap", () => {
-  // liveViewOverrides' own doc comment: "error-bar/region/ref-line concepts
-  // remain unsupported here." Confirmed structurally too: FigureSpec
-  // (lib/api.ts) has no err_keys/error_bars field at all, so there is
-  // nothing for any override to populate. Booked as GUI_INTERACTION #12
-  // Slice 4 ("the booked export residuals"). This test pins the CURRENT
-  // (gap) behavior deliberately — it must FAIL, not silently start passing
-  // by coincidence, the day error-bar export support actually lands, as a
-  // reminder to update this pin alongside that feature.
+  // liveViewOverrides' own doc comment: error-bar concepts remain
+  // unsupported HERE (this override object) — they ride a separate
+  // `error_spans` field built by `exportErrorSpans`, not viewOverrides at
+  // all (unlike the reference-line/region-shade gap, closed 2026-08-11,
+  // which DID route through this override object once wired). Confirmed
+  // structurally too: FigureSpec (lib/api.ts) has no err_keys/error_bars
+  // field at all, so there is nothing for any override to populate. Booked
+  // as GUI_INTERACTION #12 Slice 4 ("the booked export residuals"). This
+  // test pins the CURRENT (gap) behavior deliberately — it must FAIL, not
+  // silently start passing by coincidence, the day error-bar export
+  // support actually lands, as a reminder to update this pin alongside
+  // that feature.
   it("live errKeys never reach the export request (no err_keys field anywhere in the body)", async () => {
     useApp.setState({ errKeys: { 0: 1 } }); // channel 0's error rides in channel 1
     expect(useApp.getState().errKeys).toEqual({ 0: 1 }); // sanity: the live state IS set
