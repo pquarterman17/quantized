@@ -8,6 +8,7 @@ import {
 import { figureDocumentFromLegacyFigureDoc } from "../lib/figureDocumentPublication";
 import { displayedWindowTitle, hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
+import { figurePublicationSourceUnavailable, resolveLibraryApply } from "./figurePublicationLibrary";
 import { toast } from "./toasts";
 import { withPlotWindowDocument } from "./windowDocuments";
 
@@ -17,7 +18,10 @@ const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figure
 // place to update, kept off the StatusBar-only rest of the file (toast(...) +
 // status both carry it — the convention the rest of the app follows for
 // refusals/failures the user might not be looking at the status bar for).
-const SESSION_BUSY_MSG = "finish or cancel the current Publication Preview before opening another";
+// Exported so a UI entry point (the Library row button) can pre-emptively
+// disable itself with the SAME wording, instead of only discovering the
+// refusal after a click.
+export const SESSION_BUSY_MSG = "finish or cancel the current Publication Preview before opening another";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -78,9 +82,12 @@ export function pruneEditableFigureRefs(
 /** A transient Publication Preview edit: never persisted or history-tracked
  * until Apply updates its target or creates its detached editable document. */
 export interface FigurePublicationSession {
-  /** `window` updates a verified focused facade; `new-editable` saves a
-   * detached canonical draft only when the user explicitly applies it. */
-  target: "window" | "new-editable";
+  /** `window` updates a verified focused facade; `library` updates a saved
+   *  Library entry (`editableFigures`) in place, syncing any open window
+   *  showing the same document the same way `saveFigure`/`renameEditableFigure`
+   *  already do; `new-editable` saves a detached canonical draft only when
+   *  the user explicitly applies it. */
+  target: "window" | "library" | "new-editable";
   windowId: string | null;
   baseline: FigureDocument;
   draft: FigureDocument;
@@ -102,6 +109,9 @@ export interface FigureLifecycleSlice {
   figurePublicationSession: FigurePublicationSession | null;
   beginFigurePublicationEdit: (windowId?: string) => boolean;
   beginDetachedFigurePublicationEdit: (document: FigureDocument) => boolean;
+  /** Open a SAVED Library figure directly in Publication Preview -- no window
+   * required -- so Apply can replace that same entry in place. */
+  beginFigurePublicationEditForFigure: (figureId: string) => boolean;
   replaceFigurePublicationDraft: (draft: FigureDocument) => void;
   patchFigurePublicationDraft: (patch: (draft: FigureDocument) => FigureDocument) => void;
   applyFigurePublicationEdit: () => boolean;
@@ -150,17 +160,9 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
         set({ status: SESSION_BUSY_MSG });
         return false;
       }
-      if (
-        document.data.mode === "live" &&
-        (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
-      ) {
-        const msg = `cannot open "${document.name}" in Publication Preview: source dataset is unavailable`;
-        toast(msg, "danger");
-        set({ status: msg });
-        return false;
-      }
-      if (document.data.mode === "frozen" && !document.data.snapshot) {
-        const msg = `cannot open "${document.name}" in Publication Preview: frozen data is unavailable`;
+      const problem = figurePublicationSourceUnavailable(document, state.datasets);
+      if (problem) {
+        const msg = `cannot open "${document.name}" in Publication Preview: ${problem}`;
         toast(msg, "danger");
         set({ status: msg });
         return false;
@@ -173,6 +175,35 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
           windowId: null,
           baseline: structuredClone(draft),
           draft,
+        },
+        figureBuilderOpen: true,
+      });
+      return true;
+    },
+    beginFigurePublicationEditForFigure: (figureId) => {
+      const state = get();
+      if (state.figurePublicationSession) {
+        toast(SESSION_BUSY_MSG, "danger");
+        set({ status: SESSION_BUSY_MSG });
+        return false;
+      }
+      const document = state.editableFigures.find((candidate) => candidate.id === figureId);
+      if (!document) return false;
+      const problem = figurePublicationSourceUnavailable(document, state.datasets);
+      if (problem) {
+        const msg = `cannot open "${document.name}" in Publication Preview: ${problem}`;
+        toast(msg, "danger");
+        set({ status: msg });
+        return false;
+      }
+      // Unlike the detached path above, the draft KEEPS the saved figure's own
+      // id -- Apply replaces that entry in place rather than minting a new one.
+      set({
+        figurePublicationSession: {
+          target: "library",
+          windowId: null,
+          baseline: structuredClone(document),
+          draft: structuredClone(document),
         },
         figureBuilderOpen: true,
       });
@@ -195,17 +226,9 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
       if (!session) return false;
       if (session.target === "new-editable") {
         const document = session.draft;
-        if (
-          document.data.mode === "live" &&
-          (!document.bindings.datasetId || !state.datasets.some((dataset) => dataset.id === document.bindings.datasetId))
-        ) {
-          const msg = `cannot save editable figure "${document.name}": source dataset is unavailable`;
-          toast(msg, "danger");
-          set({ status: msg });
-          return false;
-        }
-        if (document.data.mode === "frozen" && !document.data.snapshot) {
-          const msg = `cannot save editable figure "${document.name}": frozen data is unavailable`;
+        const problem = figurePublicationSourceUnavailable(document, state.datasets);
+        if (problem) {
+          const msg = `cannot save editable figure "${document.name}": ${problem}`;
           toast(msg, "danger");
           set({ status: msg });
           return false;
@@ -216,6 +239,40 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
           figurePublicationSession: null,
           figureBuilderOpen: false,
           status: `created editable figure "${document.name}"; open it from Editable figures`,
+        }));
+        return true;
+      }
+      if (session.target === "library") {
+        // The staleness/availability checks and the focused-window-sync
+        // decision are pure -- see figurePublicationLibrary.ts's doc comment
+        // for why a focused window's document additionally needs hydrateView.
+        const outcome = resolveLibraryApply(state, session);
+        if (outcome.kind !== "ready") {
+          const msg = outcome.kind === "stale" ? outcome.toastMsg : outcome.msg;
+          toast(msg, "danger");
+          set(outcome.kind === "stale"
+            ? { status: "publication preview target changed; changes not applied", figurePublicationSession: { ...session, staleBaseline: true } }
+            : { status: msg });
+          return false;
+        }
+        const { document, syncFocusedView } = outcome;
+        const view = figureDocumentToPlotView(document);
+        state.recordHistory("apply publication preview");
+        set((current) => ({
+          editableFigures: current.editableFigures.map((entry) =>
+            entry.id === document.id ? structuredClone(document) : entry,
+          ),
+          // Sync any open window(s) showing this document by id -- the same
+          // convention saveFigure/renameEditableFigure already follow.
+          plotWindows: current.plotWindows.map((candidate) =>
+            candidate.kind === "plot" && candidate.document?.id === document.id
+              ? withPlotWindowDocument(candidate, document)
+              : candidate,
+          ),
+          ...(syncFocusedView ? hydrateView(view) : {}),
+          figurePublicationSession: null,
+          figureBuilderOpen: false,
+          status: `applied publication preview to "${document.name}"`,
         }));
         return true;
       }
