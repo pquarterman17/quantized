@@ -831,6 +831,61 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
       expect(result.current.pageDocument.panels[0].figureId).toBe(figures[0].id);
     });
 
+    // F0.3's third compat surface: promoteSlot now gates through the same
+    // figureDocPublicationCompatibility report the Library "Editable" button
+    // uses. A context menu / double-click gesture has no button to disable,
+    // so a blocked source refuses via a status message instead.
+    it("promoteSlot refuses with a status message (no confirm, no copy) when the source has since become blocked", () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.docSources[0])); // FROZEN_DOC ("f1")
+
+      // Simulate F3.2's "died while assigned" case: the frozen doc loses its
+      // snapshot after the slot already points at it.
+      act(() => {
+        useApp.setState((s) => ({
+          figureDocs: s.figureDocs.map((d) => (d.id === "f1" ? { ...d, dataSnapshot: undefined } : d)),
+        }));
+      });
+
+      act(() => result.current.promoteSlot(0));
+
+      expect(useApp.getState().editableFigures).toHaveLength(0);
+      expect(askConfirm).not.toHaveBeenCalled();
+      expect(useApp.getState().status).toContain('cannot create an editable copy of "MvsH figure"');
+      expect(useApp.getState().status).toContain("frozen data snapshot is unavailable");
+    });
+
+    it("promoteSlot confirms before creating a lossy editable copy, and only promotes when confirmed", async () => {
+      // FROZEN_DOC's overrides carry no shapes/ref_lines; add one so the
+      // promotion is genuinely lossy (figureDocumentFromLegacyFigureDoc
+      // carries shapes/ref_lines raw into publication.overrides without
+      // ever populating plot.view.shapes/refLines — see
+      // figureCompatibility.ts's figureDocPublicationCompatibility).
+      const lossy: FigureDoc = {
+        ...FROZEN_DOC,
+        id: "f3",
+        name: "Lossy figure",
+        config: {
+          ...FROZEN_DOC.config,
+          overrides: { ...FROZEN_DOC.config.overrides, shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }] },
+        },
+      };
+      useApp.setState((s) => ({ figureDocs: [...s.figureDocs, lossy] }));
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, { kind: "figdoc", id: "f3", name: "Lossy figure" }));
+
+      askConfirm.mockResolvedValueOnce(false);
+      await act(() => result.current.promoteSlot(0));
+      expect(useApp.getState().editableFigures).toHaveLength(0);
+      expect(askConfirm).toHaveBeenCalledOnce();
+
+      askConfirm.mockResolvedValueOnce(true);
+      await act(() => result.current.promoteSlot(0));
+      const figures = useApp.getState().editableFigures;
+      expect(figures).toHaveLength(1);
+      expect(result.current.slots[0].source).toMatchObject({ kind: "figure", id: figures[0].id });
+    });
+
     it("duplicateForPage duplicates a figure-kind panel's document and repoints THIS slot, leaving the original untouched", () => {
       useApp.setState({ editableFigures: [FIGURE] });
       const { result } = renderHook(() => useFigurePage());

@@ -11,7 +11,11 @@
 
 import { useState } from "react";
 
-import { figureDocPlotCompatibility, figureTransitionWarning } from "../../lib/figureCompatibility";
+import {
+  figureDocPlotCompatibility,
+  figureDocPublicationCompatibility,
+  figureTransitionWarning,
+} from "../../lib/figureCompatibility";
 import { docRenderable } from "../../lib/figuredoc";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
@@ -45,6 +49,7 @@ export default function SavedFiguresSection() {
           const plotCompatibility = figureDocPlotCompatibility(d);
           const missingLiveSource = d.live && !datasetIds.has(d.datasetId ?? "");
           const canOpenWindow = !missingLiveSource && plotCompatibility.blocker === null;
+          const publicationCompatibility = figureDocPublicationCompatibility(d, datasetIds);
           return (
             <div key={d.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
               <button
@@ -96,12 +101,25 @@ export default function SavedFiguresSection() {
                 style={{ minHeight: 24, minWidth: 24 }}
                 aria-label={`Make editable copy of ${d.name}`}
                 title={
-                  ok
-                    ? "Create an editable copy under Editable figures; the publication figure stays unchanged."
-                    : unavailableReason
+                  publicationCompatibility.blocker ??
+                  (publicationCompatibility.losses.length > 0
+                    ? `create an editable copy with limited settings; changed: ${publicationCompatibility.losses.join(", ")}`
+                    : "Create an editable copy under Editable figures; the publication figure stays unchanged.")
                 }
-                disabled={!ok}
-                onClick={() => promoteLegacyFigureDoc(d.id)}
+                disabled={publicationCompatibility.blocker !== null}
+                onClick={() => {
+                  if (publicationCompatibility.losses.length === 0) {
+                    promoteLegacyFigureDoc(d.id);
+                    return;
+                  }
+                  void askConfirm(
+                    `Create an editable copy of "${d.name}"?`,
+                    figureTransitionWarning(publicationCompatibility.losses),
+                    "Create Copy",
+                  ).then((proceed) => {
+                    if (proceed) promoteLegacyFigureDoc(d.id);
+                  });
+                }}
               >
                 {/* "Editable" not "Make editable": the Library sidebar can be
                     resized down to LIBRARY_PANEL_WIDTH_MIN (160px) and the
