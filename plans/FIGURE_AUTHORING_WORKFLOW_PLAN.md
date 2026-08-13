@@ -3,9 +3,9 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — F2.3 panel set exhausted (F2.3c–h); legacy
-convergence mapped into concrete slices (F2.1e/f/g booked, three owner
-gates extracted to BACKLOG)
+**Updated:** 2026-08-12 — F2.3 panels exhausted; convergence round 1 shipped
+(figdoc page panels canonical, promotion compat report, in-place library
+editing F2.1h/F2.2d); F2.1e/f/g/i open, three owner gates in BACKLOG
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -233,6 +233,21 @@ decisions are merged.
         (`hasY2` from live `y2Keys` enables y2-limit controls whose
         `y2_lim` reaches a request that never declares `y2_keys` — inert);
         fix that one line sooner if D-4 keeps legacy mode alive.
+  - [x] **F2.1h Library editable figures open canonically (Claude
+        Sonnet 5, 2026-08-12).** A saved editable figure now opens directly
+        into Publication Preview (new `⎙` Library row button) via a third
+        session target, `library` — no window round-trip needed. See the
+        2026-08-12 in-place-apply log entry.
+  - [ ] **F2.1i Decompose promoted overrides into the view — the
+        rendered-but-uneditable class.** F2.1c's converter copies
+        `config.overrides` raw into `publication.overrides`; shapes and
+        reference lines survive the EXPORT (publication wins the merge) but
+        the F2.3c/d panels read `plot.view` directly, so a promoted copy's
+        shapes/ref-lines render yet cannot be edited. Fix at the converter:
+        decompose shapes/refLines into `plot.view`. Evaluate
+        `seriesStyles` at the same time — same mechanism, but it fires on
+        essentially every doc (`buildExportStyles` always assigns colors),
+        which is why the F0.3 promotion report deliberately excludes it.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
@@ -244,6 +259,14 @@ decisions are merged.
   - [x] **F2.2c Detached-create transaction (planned PR #115).** Applying a
         Graph Builder preview creates one undoable editable figure, including
         an unchanged draft; Cancel remains mutation-free.
+  - [x] **F2.2d Library in-place transaction (Claude Sonnet 5,
+        2026-08-12).** The `library` target's Apply REPLACES the saved
+        `editableFigures` entry as one undoable edit (never duplicates —
+        resolving decision D-2 the only way consistent with this item's
+        contract); refuses via the existing stale-baseline flow when the
+        figure was deleted or edited elsewhere; syncs any open window
+        sharing the document id and hydrates the live view singletons only
+        when that window is focused. Cancel mutation-free.
 - [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
@@ -526,6 +549,47 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — Convergence round 1: page panels, promotion report, in-place library editing (Claude Sonnet 5 ×3)
+
+Three parallel slices off the convergence map, each gated green individually
+and re-gated together on the merged tree (lint 0 errors, 6,352 tests /
+427 files, build 882.1 kB eager with 21.2 kB headroom):
+
+1. **figdoc page panels through the canonical adapter** (F2.5-adjacent;
+   closes the map's "third hand-built spec builder"). `panelResolve.ts`'s
+   figdoc branch now converts via `figureDocumentFromLegacyFigureDoc` and
+   resolves through `buildFigureSpecFromDocument`, same as figure/window
+   panels. Characterization test: a Graph-Builder error binding
+   (`config.errors`) now reaches `error_spans` — previously silently
+   dropped from every page export. Degrades to the existing missing/error
+   panel state (null, not throw) on convert failure / missing dataset /
+   adapter rejection. Deliberately unchanged: `resolveSlotFigureId` still
+   returns null for figdoc sources (persistence-promotion is F3.4's
+   territory, not rendering fidelity).
+2. **Promotion compatibility report** (closes F0.3's third case). New
+   `figureDocPublicationCompatibility` in `figureCompatibility.ts`,
+   surfaced on both promote buttons (Library "Editable", Figure Page
+   "Create editable copy") via the existing `figureTransitionWarning`
+   flow; an empty report promotes with no new friction. **The audit's real
+   finding:** the loss isn't the frozen-dataset nulling — it's that
+   shapes/ref-lines survive in `publication.overrides` where the export
+   renders them but the F2.3c/d panels (reading `plot.view`) cannot:
+   rendered but silently uneditable post-promotion. Proven empirically
+   (converted doc's `plotView.shapes` is `[]` with populated
+   `config.overrides.shapes`). Booked as F2.1i, including the
+   deliberately-excluded `seriesStyles` case (same mechanism, fires on
+   every doc — universal friction, so report excludes it).
+3. **In-place library editing** (F2.1h + F2.2d, resolves D-2). Third
+   session target `library`: a saved editable figure opens directly in
+   the preview and Apply updates it in place as one undoable edit. The
+   window-sync subtlety: a FOCUSED window's document is rebuilt from the
+   live view singletons on every read (`liveWindowDocument`), so Apply
+   must `hydrateView` for a focused window or the next read silently
+   reverts the edit — the composition of the two existing sync policies
+   (saveFigure's id-sync + the window target's hydrate), not a new one.
+   New pure `figurePublicationLibrary.ts` funded `figureLifecycle.ts`'s
+   ceiling (511→470).
 
 ### 2026-08-12 — Legacy-convergence map: the remaining non-canonical paths (Claude Fable 5 scout)
 
