@@ -3,9 +3,9 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — F2.3g channels + F2.3h group-by panels land; F2.3's
-named panel set is now exhausted except facet (no wire — needs the
-multi-panel preview contract) and region shades (owner call)
+**Updated:** 2026-08-12 — F2.3 panel set exhausted (F2.3c–h); legacy
+convergence mapped into concrete slices (F2.1e/f/g booked, three owner
+gates extracted to BACKLOG)
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -210,6 +210,29 @@ decisions are merged.
   - [x] **F2.1d Graph Builder detached canonical preview (planned PR #115).**
         Graph Builder now opens a fresh detached FigureDocument transaction,
         never an ephemeral legacy FigureDoc seed.
+  - [ ] **F2.1e Canonical fallback for the unfocused-window command.** The
+        "Publication preview…" command with no focused plot window drops to
+        LEGACY mode (`fileCommands.ts` fallback) — one of only two legacy
+        openers left. Replace with a synthesized canonical document from the
+        active dataset + live view (the `createFigureDocument` +
+        `snapshotView` pair `windowDocumentPersistence.ts` uses). Makes
+        Apply available where it previously wasn't — call that out.
+  - [ ] **F2.1f Open saved legacy figures canonically (BLOCKED on the
+        graph-templates and migration owner gates).** `openFigureDraft`
+        (`useApp.ts`) still seeds legacy mode for Library ▸ Publication
+        figures — the other remaining legacy opener; the canonical route is
+        `figureDocumentFromLegacyFigureDoc` → detached session, exactly what
+        Graph Builder does. Blocked because the legacy-only Save-as-figure /
+        graph-template UI disappears for these docs (see the 2026-08-12
+        convergence-map log entry, decisions D-1/D-3).
+  - [ ] **F2.1g Retire legacy mode (BLOCKED on F2.1e/f + the archival owner
+        gate D-4).** Once both legacy openers are gone: delete
+        `legacyFigure.ts`, `figureDocSeed`, the hook's legacy state twins,
+        and the `canonical` fork everywhere (~150 lines out of
+        `useFigureBuilder.ts`). Kills the known legacy y2 placebo defect
+        (`hasY2` from live `y2Keys` enables y2-limit controls whose
+        `y2_lim` reaches a request that never declares `y2_keys` — inert);
+        fix that one line sooner if D-4 keeps legacy mode alive.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
@@ -503,6 +526,40 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — Legacy-convergence map: the remaining non-canonical paths (Claude Fable 5 scout)
+
+A read-only sweep of every figure entry point, booked here so F2.1/F2.2's
+"legacy convergence" is a concrete work list instead of a phrase. Findings:
+
+- **Exactly two legacy openers remain**: the "Publication preview…" command's
+  no-focused-window fallback (`fileCommands.ts`) and Library ▸ Publication
+  figures (`openFigureDraft` → `figureDocSeed`, its only consumer). Booked
+  as F2.1e/F2.1f.
+- **A THIRD hand-built spec reducer** lives in Figure Page's
+  `panelResolve.ts` figdoc branch (no tick formats, y2, error spans,
+  hidden/order at all) — legacy docs on a page render through neither of
+  the two known paths.
+- **Promotion has no compatibility report** — F0.3's third case ("any
+  partial adapter") was never implemented; the Editable button's tooltip
+  promises more than the conversion audits.
+- **The legacy reduced-model gap is 14 fields wide** (y2 wire, error spans,
+  tick steps, page size, hidden/order, label renames, roles-aware channel
+  resolution, all view-derived decor, publication delta, breaks,
+  transparent, fail-closed guards, log-boolean leftovers) — including one
+  live placebo defect: legacy mode offers y2 min/max controls that reach a
+  request with no `y2_keys` (booked under F2.1g).
+- **Owner decisions extracted** (BACKLOG owner table): D-1 auto-migrate
+  saved legacy FigureDocs vs. explicit-promotion-forever (explicit-only is
+  deliberate and documented in three places today); D-3 whether #15 graph
+  templates survive legacy-mode retirement (structurally legacy-only;
+  Origin `.otp/.otpu` imports write into the same `localStorage` store, so
+  it is not a one-user feature; its own doc defers the canonical
+  equivalent to F4's semantic recipes); D-4 delete legacy mode vs. keep it
+  as a read-only "renders exactly as saved" archival mode. D-2 (what Apply
+  means for a reopened figure) is being resolved in engineering as an
+  update-in-place session target rather than create-a-copy — the only
+  semantics consistent with F2.2's contract.
 
 ### 2026-08-12 — F2.3g channels reassignment panel (Claude Sonnet 5)
 
