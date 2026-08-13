@@ -191,7 +191,10 @@ describe("figure transition compatibility", () => {
       expect(figureDocPublicationCompatibility(frozen, datasetIds).losses).toEqual([]);
     });
 
-    it("reports shapes and reference lines as no longer editable after promotion", () => {
+    // F2.1i: shapes/ref_lines used to be a real loss (the panels started
+    // empty even though the objects still rendered) -- promotion now
+    // decomposes them into the view, so this fixture reports no loss at all.
+    it("reports no loss for shapes and reference lines now that promotion decomposes them into the view", () => {
       const withDecor = doc({
         overrides: {
           shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
@@ -199,20 +202,17 @@ describe("figure transition compatibility", () => {
         },
       });
       const report = figureDocPublicationCompatibility(withDecor, datasetIds);
-      expect(report.blocker).toBeNull();
-      expect(report.losses).toEqual([
-        "shapes and reference lines (still render, but the copy's Shapes/Reference-lines panels start empty)",
-      ]);
+      expect(report).toEqual({ blocker: null, losses: [] });
     });
 
     // The claim above is not theoretical: figureDocumentFromLegacyFigureDoc
-    // carries config.overrides RAW into publication.overrides without ever
-    // populating plot.view.shapes/refLines, and the Figure Builder's Shapes
-    // and Reference-lines panels read plot.view directly, never
-    // publication.overrides (see figureCompatibility.ts's doc comment for
-    // the file:line evidence). Prove it against the real adapter rather than
-    // trusting the report to describe its own mechanism correctly.
-    it("proves the gap against the real adapter: shapes/ref_lines survive in publication.overrides but plot.view stays empty", () => {
+    // decomposes config.overrides.shapes/.ref_lines into plot.view.shapes/
+    // .refLines and drops them from publication.overrides, so the Figure
+    // Builder's Shapes and Reference-lines panels (which read plot.view
+    // directly, never publication.overrides) see the real objects. Prove it
+    // against the real adapter rather than trusting the report to describe
+    // its own mechanism correctly.
+    it("proves the fix against the real adapter: shapes/ref_lines decompose into plot.view and drop out of publication.overrides", () => {
       const withDecor = doc({
         overrides: {
           shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
@@ -220,11 +220,11 @@ describe("figure transition compatibility", () => {
         },
       });
       const promoted = figureDocumentFromLegacyFigureDoc(withDecor);
-      expect(promoted.publication?.overrides?.shapes).toHaveLength(1);
-      expect(promoted.publication?.overrides?.ref_lines).toHaveLength(1);
+      expect(promoted.publication?.overrides?.shapes).toBeUndefined();
+      expect(promoted.publication?.overrides?.ref_lines).toBeUndefined();
       const view = figureDocumentToPlotView(promoted);
-      expect(view.shapes).toEqual([]);
-      expect(view.refLines).toEqual([]);
+      expect(view.shapes).toHaveLength(1);
+      expect(view.refLines).toHaveLength(1);
     });
   });
 });
