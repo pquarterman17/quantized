@@ -247,13 +247,23 @@ describe("useFigurePage", () => {
     expect(p0.figure.y_keys).toEqual([1]);
     expect(p0.figure.x_scale).toBe("log");
     expect(p0.figure.title).toBe("W title");
-    // Doc panel: grid cell (1,1), frozen snapshot + config; the page-
-    // incompatible x_breaks/margins overrides are stripped, grid survives.
+    // Doc panel: grid cell (1,1), frozen snapshot + config, now routed
+    // through the SAME canonical adapter the window panel above uses (post-
+    // F3.6 follow-up) — it emits x_scale/y_scale like the window branch, not
+    // the legacy y_log boolean, and its overrides carry the view-decor
+    // fields (legend/spines/ticks) every converted document gets, merged
+    // with the doc's own `grid`; the page-incompatible x_breaks/margins are
+    // still stripped.
     expect([p1.row, p1.col]).toEqual([1, 1]);
     expect(p1.figure.dataset).toEqual(DATA);
-    expect(p1.figure.y_log).toBe(true);
+    expect(p1.figure.y_scale).toBe("log");
     expect(p1.figure.title).toBe("doc title");
-    expect(p1.figure.overrides).toEqual({ grid: true });
+    expect(p1.figure.overrides).toEqual({
+      legend: { show: true, loc: "upper right" },
+      grid: true,
+      spines: { top: false, right: false },
+      ticks: { minor: true },
+    });
     // MAIN #24: both sources default to auto (no saved fmt on a doc, no
     // configured fmt on the window's default view) -> x_fmt/y_fmt omitted.
     expect(p0.figure.x_fmt).toBeUndefined();
@@ -1041,5 +1051,38 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       expect(copyImageAsync).not.toHaveBeenCalled();
       expect(useApp.getState().status).toBe("assign at least one panel to copy a figure page");
     });
+  });
+});
+
+// Post-F3.6 follow-up (see panelResolve.ts's module header): the "figdoc"
+// branch was the one hand-built holdout F3.6 left in place. It now converts
+// through `figureDocumentFromLegacyFigureDoc` and resolves through the same
+// `buildFigureSpecFromDocument` adapter the "figure"/"window" branches use.
+describe("useFigurePage figdoc panel canonical-adapter migration", () => {
+  // The gap this closes: the old hand-built figdoc branch never read
+  // `config.errors` (the Graph Builder Y-error wells) at all, so a figdoc
+  // panel's error bars silently vanished from its page panel even though
+  // Publication Preview opened from the same doc would show them. Fail-
+  // before/pass-after: reverting panelFigure's figdoc branch to the pre-
+  // conversion hand-built spec makes this fail (error_spans absent) — see
+  // FROZEN_DOC's own config, which carries no `errors` field at all, versus
+  // this one.
+  it("renders a figdoc panel's Graph Builder error bindings, not just its ad-hoc FigureConfig fields", async () => {
+    useApp.setState({
+      figureDocs: [
+        {
+          ...FROZEN_DOC,
+          config: {
+            ...FROZEN_DOC.config,
+            errors: [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }],
+          },
+        },
+      ],
+    });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.docSources[0]));
+    const spec = await result.current.buildSpec();
+    expect(spec!.panels[0].figure.error_spans).toBeDefined();
+    expect(spec!.panels[0].figure.error_spans![0]).not.toBeNull();
   });
 });

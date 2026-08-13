@@ -19,15 +19,27 @@
 // adapter the "figure" branch already uses, so a window-sourced panel and its
 // post-save "figure"-sourced reincarnation render identically — the round-
 // trip property the F3 exit criterion names ("save -> close -> reopen ->
-// export retains every ... visual setting"). The "figdoc" (legacy
-// Publication figure) branch is UNCHANGED: F1 never gave that kind a
-// FigureDocument counterpart at all (F3.1's log), so there is no canonical
-// adapter to route it through — a pre-existing, already-documented gap this
-// slice does not close.
+// export retains every ... visual setting"). At the time, the "figdoc"
+// (legacy Publication figure) branch was left UNCHANGED: F1 never gave that
+// kind a FigureDocument counterpart at all (F3.1's log), so there was no
+// canonical adapter to route it through yet — documented then as a
+// pre-existing gap this slice did not close.
 //
 // F3.6 also adds `buildPageSpecFromDocument`: the same resolve-and-build path
 // applied to a SAVED `PageDocument` directly (Library "Export…"), so a page
 // can be exported without reopening it into the workshop session.
+//
+// Post-F3.6 follow-up: the "figdoc" branch is no longer the holdout above —
+// it converts through `figureDocumentFromLegacyFigureDoc` (the exact
+// converter F2.1c explicit-promotion already uses,
+// `lib/figureDocumentPublication.ts`) and then resolves through the SAME
+// `buildFigureSpecFromDocument` adapter the "figure"/"window" branches use.
+// This closes the same most-reduced-spec problem F3.6 fixed for "window"
+// sources (no x_fmt/y_fmt, no y2, no error spans, no hidden-series/order, no
+// view decor) plus the "MAIN #24 no saved tick format" gap that lived in
+// this branch's old hand-built return — a figdoc-sourced panel now renders
+// with the same fidelity a promoted (editable) copy of that figure already
+// has.
 
 import {
   type FigureSpec,
@@ -35,6 +47,7 @@ import {
 } from "../../../lib/api";
 import type { FigurePageSpec } from "../../../lib/api/figurePage";
 import type { FigureDocument } from "../../../lib/figureDocument";
+import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepage";
@@ -43,7 +56,6 @@ import {
   resolvePagePanel,
   type PageDocument,
 } from "../../../lib/pageDocument";
-import type { DataStruct } from "../../../lib/types";
 import { type PlotWindow } from "../../../lib/plotview";
 import { useApp, type AppState } from "../../../store/useApp";
 
@@ -97,9 +109,10 @@ export function stripPageIncompatibleOverrides(
  *  FOCUSED window's live view is captured, `resolveDataset` so a pending
  *  (preview-only) dataset never exports small (#38 discipline). Returns null
  *  when the source can no longer render (window unbound, doc dataset gone,
- *  or — F3.3's "figure" kind — the referenced editableFigures entry is gone,
- *  its live dataset is unavailable, or its FigureDocument->FigureSpec adapter
- *  rejects the document, e.g. a grouped figure with a secondary axis). */
+ *  a figdoc that fails to convert or whose data is unavailable, or — F3.3's
+ *  "figure" kind — the referenced editableFigures entry is gone, its live
+ *  dataset is unavailable, or its FigureDocument->FigureSpec adapter rejects
+ *  the document, e.g. a grouped figure with a secondary axis). */
 export async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
   const s = useApp.getState();
   if (source.kind === "figure") {
@@ -150,32 +163,31 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
   }
   const doc = s.figureDocs.find((d) => d.id === source.id);
   if (!doc) return null;
-  let data: DataStruct | undefined;
-  if (doc.live) {
-    data = doc.datasetId ? (await s.resolveDataset(doc.datasetId))?.data : undefined;
-  } else {
-    data = doc.dataSnapshot;
+  // Convert first, then resolve through the exact same adapter the "figure"/
+  // "window" branches above use (see the module header). The converter
+  // throws only for a frozen legacy doc with no snapshot -- the same
+  // "can't render" outcome the pre-conversion branch reached below.
+  let document: FigureDocument;
+  try {
+    document = figureDocumentFromLegacyFigureDoc(doc);
+  } catch {
+    return null;
   }
-  if (!data) return null;
-  const c = doc.config;
-  // MAIN #24: FigureConfig (a saved Library figure) doesn't persist a tick
-  // format at all -- unlike xScale/yScale, this predates the feature, so
-  // there is no saved xFmt/yFmt to restore here; a doc-sourced panel exports
-  // at the backend's default ("auto") until FigureConfig grows the field.
-  return {
-    dataset: data,
-    x_key: c.xKey ?? undefined,
-    y_keys: c.yKeys ?? undefined,
-    x_log: c.xScale === "log",
-    y_log: c.yScale === "log",
-    x_scale: c.xScale,
-    y_scale: c.yScale,
-    title: c.title.trim(),
-    x_label: c.xLabel.trim() || undefined,
-    y_label: c.yLabel.trim() || undefined,
-    series_styles: c.seriesStyles ?? undefined,
-    overrides: stripPageIncompatibleOverrides(c.overrides),
-  };
+  // A converted figdoc is "live" only when the source was; a frozen one
+  // always has its snapshot inline (guaranteed by the converter above) and
+  // never needs a dataset lookup, mirroring the "figure" branch's handling
+  // of a frozen editableFigures entry.
+  const dataset =
+    document.data.mode === "live" && document.bindings.datasetId
+      ? await s.resolveDataset(document.bindings.datasetId)
+      : undefined;
+  if (document.data.mode === "live" && !dataset) return null;
+  try {
+    const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+    return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
+  } catch {
+    return null;
+  }
 }
 
 /** Preview invalidation (MAIN #8g): the flattened store inputs the assigned
