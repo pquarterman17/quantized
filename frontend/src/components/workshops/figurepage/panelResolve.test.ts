@@ -8,11 +8,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
+import type { FigureDoc } from "../../../lib/figuredoc";
 import { createPageDocument } from "../../../lib/pageDocument";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { buildPageSpecFromDocument } from "./panelResolve";
+import { buildPageSpecFromDocument, panelFigure } from "./panelResolve";
 
 const DATA: DataStruct = {
   time: [0, 1, 2],
@@ -132,5 +133,85 @@ describe("buildPageSpecFromDocument", () => {
     const spec = await buildPageSpecFromDocument(page, [FROZEN]);
     expect(spec!.panels).toHaveLength(1);
     expect([spec!.panels[0].row, spec!.panels[0].col]).toEqual([0, 1]);
+  });
+});
+
+// Post-F3.6 follow-up (see panelResolve.ts's module header): the "figdoc"
+// source kind used to be the one hand-built holdout — it built a THIRD,
+// most-reduced FigureSpec by hand instead of going through
+// `buildFigureSpecFromDocument` like "figure"/"window" already did. It now
+// converts first via `figureDocumentFromLegacyFigureDoc` (the exact
+// converter F2.1c explicit-promotion uses) and resolves through the SAME
+// adapter, degrading to null on the same failure classes the other two
+// kinds already degrade on, rather than throwing and crashing the page.
+describe("panelFigure — figdoc kind", () => {
+  const LIVE_FIGDOC: FigureDoc = {
+    id: "doc-live",
+    name: "Live doc",
+    datasetId: "d1",
+    live: true,
+    config: {
+      xKey: null,
+      yKeys: [0],
+      xScale: "linear",
+      yScale: "linear",
+      title: "live doc title",
+      xLabel: "",
+      yLabel: "",
+      style: "default",
+      fmt: "pdf",
+      dpi: 300,
+      overrides: null,
+      seriesStyles: null,
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({ figureDocs: [], datasets: [] });
+  });
+
+  it("resolves a live figdoc's bound dataset through the canonical adapter", async () => {
+    useApp.setState({ figureDocs: [LIVE_FIGDOC], datasets: [{ id: "d1", name: "scan.dat", data: DATA }] });
+    const spec = await panelFigure({ kind: "figdoc", id: "doc-live", name: "Live doc" });
+    expect(spec).not.toBeNull();
+    expect(spec!.dataset).toEqual(DATA);
+    expect(spec!.title).toBe("live doc title");
+  });
+
+  it("degrades to null, never throws, when a live figdoc's dataset is unavailable", async () => {
+    useApp.setState({ figureDocs: [LIVE_FIGDOC], datasets: [] });
+    await expect(panelFigure({ kind: "figdoc", id: "doc-live", name: "Live doc" })).resolves.toBeNull();
+  });
+
+  it("degrades to null, never throws, for a frozen figdoc with no data snapshot", async () => {
+    // The converter (figureDocumentFromLegacyFigureDoc) throws for this
+    // shape -- panelFigure's figdoc branch must catch it, not propagate it.
+    const brokenFrozen: FigureDoc = { ...LIVE_FIGDOC, id: "doc-broken", live: false, dataSnapshot: undefined };
+    useApp.setState({ figureDocs: [brokenFrozen] });
+    await expect(panelFigure({ kind: "figdoc", id: "doc-broken", name: "Broken doc" })).resolves.toBeNull();
+  });
+
+  it("degrades to null, never throws, when the adapter rejects an empty (no visible series) doc", async () => {
+    const emptyDoc: FigureDoc = { ...LIVE_FIGDOC, id: "doc-empty", config: { ...LIVE_FIGDOC.config, yKeys: [] } };
+    useApp.setState({ figureDocs: [emptyDoc], datasets: [{ id: "d1", name: "scan.dat", data: DATA }] });
+    await expect(panelFigure({ kind: "figdoc", id: "doc-empty", name: "Empty doc" })).resolves.toBeNull();
+  });
+
+  // The fidelity gain this migration exists for: the pre-conversion
+  // hand-built branch never read `config.errors` (the Graph Builder
+  // Y-error wells) at all, so these bars silently vanished from a figdoc
+  // panel's page export. Fail-before/pass-after: reverting the figdoc
+  // branch to its pre-conversion hand-built return makes this fail
+  // (error_spans absent).
+  it("threads a Graph Builder error binding into error_spans", async () => {
+    const errored: FigureDoc = {
+      ...LIVE_FIGDOC,
+      id: "doc-errors",
+      config: { ...LIVE_FIGDOC.config, errors: [{ channel: 1, target: 0, axis: "y", side: "both" }] },
+    };
+    useApp.setState({ figureDocs: [errored], datasets: [{ id: "d1", name: "scan.dat", data: DATA }] });
+    const spec = await panelFigure({ kind: "figdoc", id: "doc-errors", name: "Errored doc" });
+    expect(spec!.error_spans).toBeDefined();
+    expect(spec!.error_spans![0]).not.toBeNull();
   });
 });
