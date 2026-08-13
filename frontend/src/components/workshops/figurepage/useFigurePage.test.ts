@@ -856,19 +856,18 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
     });
 
     it("promoteSlot confirms before creating a lossy editable copy, and only promotes when confirmed", async () => {
-      // FROZEN_DOC's overrides carry no shapes/ref_lines; add one so the
-      // promotion is genuinely lossy (figureDocumentFromLegacyFigureDoc
-      // carries shapes/ref_lines raw into publication.overrides without
-      // ever populating plot.view.shapes/refLines — see
-      // figureCompatibility.ts's figureDocPublicationCompatibility).
+      // FROZEN_DOC is frozen with datasetId: null (already unbound), so it
+      // promotes losslessly on its own. Naming a still-resolvable dataset on
+      // a frozen doc is the one remaining real loss (F2.1i decomposed
+      // shapes/ref_lines into the view, closing what used to make this
+      // fixture lossy — see figureCompatibility.ts's
+      // figureDocPublicationCompatibility doc comment): the copy keeps only
+      // the frozen snapshot, so the live dataset link doesn't carry over.
       const lossy: FigureDoc = {
         ...FROZEN_DOC,
         id: "f3",
         name: "Lossy figure",
-        config: {
-          ...FROZEN_DOC.config,
-          overrides: { ...FROZEN_DOC.config.overrides, shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }] },
-        },
+        datasetId: "d1",
       };
       useApp.setState((s) => ({ figureDocs: [...s.figureDocs, lossy] }));
       const { result } = renderHook(() => useFigurePage());

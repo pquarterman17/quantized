@@ -113,25 +113,27 @@ export function figureDocPlotCompatibility(doc: FigureDoc): FigureTransitionComp
  *  Audited line by line: every `FigureConfig` field the adapter reads
  *  (channels, scales, labels, group, output settings, overrides,
  *  seriesStyles, errors) carries into the new document -- most of it
- *  verbatim, so a plain figure promotes with an EMPTY report. Two real gaps
- *  remain, both confirmed against the adapter's and the Figure Builder's
- *  actual code, not assumed:
+ *  verbatim, so a plain figure promotes with an EMPTY report. One real gap
+ *  remains, confirmed against the adapter's actual code, not assumed:
  *
- *  1. A frozen doc always promotes with `bindings.datasetId: null`
- *     (figureDocumentPublication.ts:18 -- deliberate, "never a
- *     coincidentally active live dataset"), even when the source still
- *     names a resolvable one. The copy keeps rendering its snapshot fine;
- *     it just can't be re-bound to that dataset's live data afterward.
- *  2. `config.overrides` is copied RAW into `publication.overrides`
- *     (figureDocumentPublication.ts:41) without decomposing it into
- *     `plot.view` -- fine for `annotations`/`legend`/axis limits/grid
- *     (their property panels read the merged `effective` overrides, see
- *     canonicalOverrides.ts), but the Shapes and Reference-lines panels
- *     read `plot.view.shapes`/`.refLines` DIRECTLY (useFigureBuilder.ts),
- *     never `publication.overrides`. Any shapes/ref lines the source had
- *     still render in the copy (publication wins the export-time merge --
- *     figureOverrides.ts's `mergeFigureOverrides`) but start invisible and
- *     un-editable in those two panels.
+ *  A frozen doc always promotes with `bindings.datasetId: null`
+ *  (figureDocumentPublication.ts -- deliberate, "never a coincidentally
+ *  active live dataset"), even when the source still names a resolvable
+ *  one. The copy keeps rendering its snapshot fine; it just can't be
+ *  re-bound to that dataset's live data afterward.
+ *
+ *  F2.1i (2026-08-12) closed the second gap this audit originally found:
+ *  `config.overrides.shapes`/`.ref_lines` now decompose into
+ *  `plot.view.shapes`/`.refLines` at promotion time, so the Shapes (F2.3c)
+ *  and Reference-lines (F2.3d) panels see the exact objects the export
+ *  renders, not an empty list -- see figureDocumentPublication.ts. Two
+ *  fields deliberately still copy raw and are NOT losses: `region_shades`
+ *  has no view editor anywhere yet (an owner decision on whether decoded
+ *  shades become editable is pending), and `seriesStyles` stays an exact,
+ *  un-decomposed array on purpose -- see figureDocumentPublication.ts's own
+ *  doc for why a legacy array can't decompose losslessly into per-channel
+ *  view styles, and F2.1a's "exact export styles" contract every other
+ *  FigureDocument producer already honors the same way.
  *
  *  `FigureConfig` never stored tick formats, a Y2 assignment, tick steps,
  *  hidden/order state, page setup, or a mark choice at all, so promoting
@@ -150,10 +152,6 @@ export function figureDocPublicationCompatibility(
   const losses = new Set<string>();
   if (!doc.live && doc.datasetId !== null) {
     losses.add("live dataset link (the copy keeps only the frozen snapshot)");
-  }
-  const ov = doc.config.overrides;
-  if (ov?.shapes?.length || ov?.ref_lines?.length) {
-    losses.add("shapes and reference lines (still render, but the copy's Shapes/Reference-lines panels start empty)");
   }
   return { blocker: null, losses: [...losses] };
 }
