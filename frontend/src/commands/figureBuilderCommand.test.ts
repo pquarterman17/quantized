@@ -1,15 +1,58 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
 import { fuzzy } from "../lib/fuzzy";
+import { defaultPlotView } from "../lib/plotview";
 import { useApp } from "../store/useApp";
 
+// F2.1e fixture: minimal dataset shared by the no-focused-window canonical
+// tests below -- shape mirrors figureLifecycle.test.ts's own fixture.
+const sampleDataset = () => ({
+  id: "d1",
+  name: "Sample data",
+  data: { time: [0, 1, 2], values: [[1, 2, 3]], labels: ["Y"], units: [""], metadata: {} },
+});
+
+// The real store actions, captured once before any test replaces them with a
+// spy -- restored every beforeEach so a mock one test installs (setStatus,
+// setFigureBuilderOpen, beginFigurePublicationEdit) can never leak into a
+// later test that never meant to touch it.
+const REAL_ACTIONS = {
+  setStatus: useApp.getState().setStatus,
+  setFigureBuilderOpen: useApp.getState().setFigureBuilderOpen,
+  beginFigurePublicationEdit: useApp.getState().beginFigurePublicationEdit,
+};
+
 describe("Publication Preview command", () => {
-  it("opens a canonical session when possible and a safe compatibility preview otherwise", () => {
+  // This file has no store reset between tests (the module-singleton `useApp`
+  // persists for the whole file) -- pin the fields this command reads/writes
+  // to a known baseline before every test so one test's dataset/session/mock
+  // never leaks into the next.
+  beforeEach(() => {
+    useApp.setState({
+      ...defaultPlotView(),
+      ...REAL_ACTIONS,
+      figurePublicationSession: null,
+      figureBuilderOpen: false,
+      datasets: [],
+      activeId: null,
+      editableFigures: [],
+    });
+  });
+
+  it("opens a canonical detached session from the active dataset when no window is focused", () => {
     const setFigureBuilderOpen = vi.fn();
     const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
     const setStatus = vi.fn();
-    useApp.setState({ figurePublicationSession: null, setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
+    useApp.setState({
+      datasets: [sampleDataset()],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [0],
+      setFigureBuilderOpen,
+      beginFigurePublicationEdit,
+      setStatus,
+    });
     const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
 
     expect(command).toMatchObject({
@@ -19,10 +62,53 @@ describe("Publication Preview command", () => {
 
     command?.run();
     expect(beginFigurePublicationEdit).toHaveBeenCalled();
+    // Apply is now available from this entry point -- the legacy no-Apply
+    // opener must NOT fire once a canonical detached session opened instead.
+    expect(setFigureBuilderOpen).not.toHaveBeenCalled();
+    expect(useApp.getState().figurePublicationSession).toMatchObject({
+      target: "new-editable",
+      windowId: null,
+      draft: { name: "Sample data", bindings: { datasetId: "d1", xKey: 0, yKeys: [0] } },
+    });
+    expect(useApp.getState().figureBuilderOpen).toBe(true);
+    expect(setStatus).toHaveBeenCalledWith(
+      'no plot window is focused — previewing "Sample data"; Apply will save it as a new editable figure',
+    );
+  });
+
+  it("falls back to the legacy no-Apply preview when neither a window nor a dataset is available", () => {
+    const setFigureBuilderOpen = vi.fn();
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
+    const setStatus = vi.fn();
+    useApp.setState({ setFigureBuilderOpen, beginFigurePublicationEdit, setStatus });
+    const command = buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder");
+
+    command?.run();
+    expect(beginFigurePublicationEdit).toHaveBeenCalled();
     expect(setStatus).toHaveBeenCalledWith(
       "no plot window is focused — previewing the active dataset; Apply is unavailable in this mode",
     );
     expect(setFigureBuilderOpen).toHaveBeenCalledWith(true);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+  });
+
+  it("round-trips: Apply from the unfocused-window entry point creates exactly one new editable figure", () => {
+    const beginFigurePublicationEdit = vi.fn().mockReturnValue(false);
+    useApp.setState({ datasets: [sampleDataset()], activeId: "d1", beginFigurePublicationEdit });
+    const historyLength = useApp.getState().history.length;
+
+    buildFileCommands(useApp.getState).find((item) => item.id === "figure-builder")?.run();
+    expect(useApp.getState().figurePublicationSession?.target).toBe("new-editable");
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+    expect(useApp.getState().editableFigures[0]).toMatchObject({ name: "Sample data", bindings: { datasetId: "d1" } });
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+    expect(useApp.getState().figureBuilderOpen).toBe(false);
+    expect(useApp.getState().history).toHaveLength(historyLength + 1);
+
+    useApp.getState().undo();
+    expect(useApp.getState().editableFigures).toEqual([]);
   });
 
   it("begins a canonical focused-window session before falling back", () => {

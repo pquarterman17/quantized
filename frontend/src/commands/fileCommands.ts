@@ -19,10 +19,12 @@ import { clearAutosave } from "../lib/autosave";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { runExportFigureCommand } from "../lib/exportFigureCommand";
 import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
+import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
+import { snapshotView } from "../lib/plotview";
 import type { LoadedWorkspace } from "../lib/workspace";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
@@ -301,8 +303,34 @@ export function buildFileCommands(s: StoreGet): Action[] {
           return;
         }
         if (s().beginFigurePublicationEdit()) return;
-        s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
-        s().setFigureBuilderOpen(true);
+        // F2.1e: no focused plot window. With no active dataset either, this
+        // degrades exactly as before -- the legacy FigureBuilderView opens
+        // with nothing to show ("Select a dataset to preview a figure.").
+        // With an active dataset, open the SAME detached canonical session
+        // Graph Builder's openInFigureBuilder uses
+        // (beginDetachedFigurePublicationEdit), synthesized from the active
+        // dataset + the live on-screen view (snapshotView mirrors channels,
+        // scales, styles, decor) rather than the old legacy-mode preview --
+        // so Apply now creates a new editable figure instead of being a dead
+        // end.
+        const state = s();
+        const active = state.datasets.find((dataset) => dataset.id === state.activeId);
+        if (!active) {
+          s().setStatus("no plot window is focused — previewing the active dataset; Apply is unavailable in this mode");
+          s().setFigureBuilderOpen(true);
+          return;
+        }
+        const draft = createFigureDocument({
+          id: `figure-preview-${active.id}`,
+          name: active.name,
+          datasetId: active.id,
+          view: snapshotView(state),
+        });
+        if (s().beginDetachedFigurePublicationEdit(draft)) {
+          s().setStatus(
+            `no plot window is focused — previewing "${active.name}"; Apply will save it as a new editable figure`,
+          );
+        }
       },
     },
     {
