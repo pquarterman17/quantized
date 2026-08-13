@@ -45,6 +45,11 @@ beforeEach(() => {
     pages: [],
     plotWindows: [],
     history: [],
+    // The Publication Preview row button can open a real session (it isn't
+    // stubbed) -- without resetting this, a session left open by one test
+    // leaks into the next and disables the button under test.
+    figurePublicationSession: null,
+    figureBuilderOpen: false,
   });
 });
 
@@ -120,5 +125,41 @@ describe("EditableFiguresSection", () => {
     fireEvent.click(screen.getByTitle("delete editable figure (undo available)"));
     await Promise.resolve();
     expect(useApp.getState().editableFigures).toHaveLength(1);
+  });
+
+  describe("Publication Preview row button", () => {
+    it("opens the figure directly in Publication Preview via the library target", () => {
+      useApp.setState({ editableFigures: [figure()] });
+      render(<EditableFiguresSection />);
+      fireEvent.click(screen.getByTitle('open "MvsH loop" in Publication Preview; Apply updates it in place'));
+      const s = useApp.getState();
+      expect(s.figurePublicationSession?.target).toBe("library");
+      expect(s.figurePublicationSession?.draft.id).toBe("figure-1");
+      expect(s.figureBuilderOpen).toBe(true);
+    });
+
+    it("is disabled with a source-unavailable tooltip when the bound dataset is gone", () => {
+      useApp.setState({ datasets: [], editableFigures: [figure()] });
+      render(<EditableFiguresSection />);
+      const button = screen.getByTitle("source dataset is unavailable");
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+      expect(useApp.getState().figurePublicationSession).toBeNull();
+    });
+
+    it("is disabled with the session-busy tooltip while a Publication Preview session is already open", () => {
+      useApp.setState({
+        editableFigures: [figure()],
+        figurePublicationSession: {
+          target: "new-editable",
+          windowId: null,
+          baseline: figure({ id: "other" }),
+          draft: figure({ id: "other" }),
+        },
+      });
+      render(<EditableFiguresSection />);
+      const button = screen.getByTitle("finish or cancel the current Publication Preview before opening another");
+      expect(button).toBeDisabled();
+    });
   });
 });

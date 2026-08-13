@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
-import { editableFigureDirty, figurePublicationDirty } from "./figureLifecycle";
+import { editableFigureDirty, figurePublicationDirty, liveWindowDocument } from "./figureLifecycle";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -380,5 +380,201 @@ describe("closeWindow and a window-target Publication Preview session (item 3a)"
     expect(s.figurePublicationSession).not.toBeNull();
     expect(s.figureBuilderOpen).toBe(true);
     expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+});
+
+// Edit a SAVED editable figure directly in Publication Preview, Apply
+// replacing that same Library entry in place -- the third session target
+// alongside `window` (a live focused facade) and `new-editable` (always
+// creates fresh). Mirrors the `new-editable` begin/apply readiness gate and
+// the `window` branch's stale-baseline discipline; see
+// figurePublicationLibrary.ts for the shared pure decision logic.
+describe("canonical Publication Preview session — library target", () => {
+  const libraryFigure = (over: Partial<FigureDocument> = {}): FigureDocument => ({
+    ...createFigureDocument({
+      id: "figure-lib-1",
+      name: "Saved figure",
+      datasetId: "d1",
+      view: defaultPlotView(),
+    }),
+    ...over,
+  });
+
+  it("begins from a saved figure with an isolated baseline/draft that KEEPS its own id", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1")).toBe(true);
+    const session = useApp.getState().figurePublicationSession!;
+    expect(session.target).toBe("library");
+    expect(session.windowId).toBeNull();
+    expect(session.draft.id).toBe("figure-lib-1");
+    expect(session.baseline).toEqual(saved);
+    expect(session.draft).not.toBe(session.baseline);
+    expect(useApp.getState().figureBuilderOpen).toBe(true);
+    // No window required -- opening from the Library is fully decoupled from the MDI model.
+    expect(useApp.getState().plotWindows).toEqual([window()]);
+  });
+
+  it("returns false for an unknown figure id without opening a session", () => {
+    expect(useApp.getState().beginFigurePublicationEditForFigure("does-not-exist")).toBe(false);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+  });
+
+  it("refuses to replace an active session, same as the other begin* entry points", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1")).toBe(true);
+    const before = structuredClone(useApp.getState().figurePublicationSession);
+
+    expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1")).toBe(false);
+    expect(useApp.getState().figurePublicationSession).toEqual(before);
+    expect(useApp.getState().status).toContain("finish or cancel");
+  });
+
+  it("fails closed opening a figure whose live source is unavailable", () => {
+    const saved = libraryFigure({ bindings: { ...libraryFigure().bindings, datasetId: "gone" } });
+    useApp.setState({ editableFigures: [saved] });
+    expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1")).toBe(false);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+    expect(useApp.getState().status).toContain("source dataset is unavailable");
+  });
+
+  it("applies once, REPLACING the same Library entry (never duplicating it), as one undoable edit", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    const history = useApp.getState().history.length;
+    expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1")).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Renamed via preview" }));
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    const state = useApp.getState();
+    expect(state.editableFigures).toHaveLength(1);
+    expect(state.editableFigures[0]).toMatchObject({ id: "figure-lib-1", name: "Renamed via preview" });
+    expect(state.history).toHaveLength(history + 1);
+    expect(state.figurePublicationSession).toBeNull();
+    expect(state.figureBuilderOpen).toBe(false);
+    expect(state.status).toContain("applied publication preview");
+
+    state.undo();
+    expect(useApp.getState().editableFigures[0].name).toBe("Saved figure");
+  });
+
+  it("Cancel makes no persistent mutation or history entry", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    const history = useApp.getState().history.length;
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Discarded" }));
+
+    useApp.getState().cancelFigurePublicationEdit();
+    expect(useApp.getState().editableFigures).toEqual([saved]);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().figurePublicationSession).toBeNull();
+  });
+
+  it("refuses Apply and flags staleBaseline once the figure is DELETED elsewhere while previewing", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Edited in preview" }));
+    useApp.getState().deleteEditableFigure("figure-lib-1"); // e.g. the Library panel's delete button
+    const history = useApp.getState().history.length;
+    useToasts.setState({ toasts: [] });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().figurePublicationSession?.staleBaseline).toBe(true);
+    expect(useApp.getState().status).toContain("target changed");
+    expect(
+      useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("deleted while previewing")),
+    ).toBe(true);
+  });
+
+  it("refuses Apply and flags staleBaseline once the figure is EDITED elsewhere (renamed) while previewing", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Edited in preview" }));
+    useApp.getState().renameEditableFigure("figure-lib-1", "Renamed from the Library panel");
+    const history = useApp.getState().history.length;
+    useToasts.setState({ toasts: [] });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().editableFigures[0].name).toBe("Renamed from the Library panel");
+    expect(useApp.getState().figurePublicationSession?.staleBaseline).toBe(true);
+    expect(
+      useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("Cancel and reopen")),
+    ).toBe(true);
+
+    // Never re-enables itself once flagged, even though nothing about the
+    // drift condition changes -- same discipline as the window target.
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+  });
+
+  it("refuses Apply when the live source becomes unavailable after the session began", () => {
+    const saved = libraryFigure();
+    useApp.setState({ editableFigures: [saved] });
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    const history = useApp.getState().history.length;
+    useApp.setState({ datasets: [] });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+    expect(useApp.getState().history).toHaveLength(history);
+    expect(useApp.getState().editableFigures).toEqual([saved]);
+    expect(useApp.getState().figurePublicationSession).not.toBeNull();
+    expect(useApp.getState().status).toContain("source dataset is unavailable");
+  });
+
+  it("syncs a NON-focused open window sharing the document's id, without touching the live singletons", () => {
+    const saved = libraryFigure();
+    const w2: PlotWindow = { ...window(), id: "w2", title: "Saved figure", document: libraryFigure() };
+    useApp.setState({
+      editableFigures: [saved],
+      plotWindows: [window(), w2], // w1 (unrelated document) stays focused
+      plotTitle: "Untouched",
+    });
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      plot: { ...draft.plot, view: { ...draft.plot.view, plotTitle: "New title" } },
+    }));
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    const state = useApp.getState();
+    expect(state.plotWindows.find((w) => w.id === "w2")?.document?.plot.view.plotTitle).toBe("New title");
+    // w1 is the FOCUSED window and carries an unrelated document -- its live
+    // singletons must not be disturbed by an update that targets a different figure.
+    expect(state.plotTitle).toBe("Untouched");
+  });
+
+  it("syncs AND hydrates the live singletons once the matching window IS focused", () => {
+    const saved = libraryFigure();
+    const w1: PlotWindow = { ...window(), id: "w1", title: "Saved figure", document: libraryFigure() };
+    useApp.setState({
+      editableFigures: [saved],
+      plotWindows: [w1],
+      focusedWindowId: "w1",
+      plotTitle: "",
+    });
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      plot: { ...draft.plot, view: { ...draft.plot.view, plotTitle: "New title" } },
+    }));
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    const state = useApp.getState();
+    expect(state.editableFigures[0].plot.view.plotTitle).toBe("New title");
+    expect(state.plotWindows[0].document?.plot.view.plotTitle).toBe("New title");
+    // The critical assertion (item 2's window-sync investigation): the live
+    // top-level singletons were hydrated too, so the NEXT liveWindowDocument
+    // read (saveFigure, editableFigureDirty, ...) sees the applied edit
+    // instead of silently reverting it back to the pre-Apply Stage state.
+    expect(state.plotTitle).toBe("New title");
+    expect(liveWindowDocument(state, state.plotWindows[0])?.plot.view.plotTitle).toBe("New title");
   });
 });

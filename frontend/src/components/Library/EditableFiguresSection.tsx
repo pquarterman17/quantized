@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 import { pagesReferencingFigure } from "../../lib/pageDocument";
+import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
+import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 
@@ -14,6 +16,8 @@ export default function EditableFiguresSection() {
   const rename = useApp((state) => state.renameEditableFigure);
   const duplicate = useApp((state) => state.duplicateEditableFigure);
   const remove = useApp((state) => state.deleteEditableFigure);
+  const publicationSession = useApp((state) => state.figurePublicationSession);
+  const previewInPlace = useApp((state) => state.beginFigurePublicationEditForFigure);
   const [collapsed, setCollapsed] = useState(false);
 
   if (documents.length === 0) return null;
@@ -27,6 +31,14 @@ export default function EditableFiguresSection() {
       </button>
       {!collapsed && documents.map((document) => {
         const dataset = datasets.find((candidate) => candidate.id === document.bindings.datasetId);
+        // Same readiness gate beginFigurePublicationEditForFigure enforces at
+        // click time -- computed here too so the button can fail closed with
+        // a tooltip instead of only a post-click toast (SESSION_BUSY_MSG is
+        // the identical wording the store action itself uses for the same
+        // refusal, kept in one place).
+        const unavailable = figurePublicationSourceUnavailable(document, datasets);
+        const sessionBusy = publicationSession !== null;
+        const previewDisabled = sessionBusy || unavailable !== null;
         return (
           <div key={document.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
             <button
@@ -36,6 +48,16 @@ export default function EditableFiguresSection() {
             >
               <span className="qzk-fig-name">◇ {document.name}</span>
               <span className="qzk-fig-meta">{dataset?.name ?? "unbound"}</span>
+            </button>
+            <button
+              className="qz-btn qz-ghost qz-sm"
+              style={{ minHeight: 24, minWidth: 24 }}
+              aria-label={`Preview "${document.name}" in Publication Preview`}
+              title={sessionBusy ? SESSION_BUSY_MSG : (unavailable ?? `open "${document.name}" in Publication Preview; Apply updates it in place`)}
+              disabled={previewDisabled}
+              onClick={() => previewInPlace(document.id)}
+            >
+              ⎙
             </button>
             <button
               className="qz-btn qz-ghost qz-sm"

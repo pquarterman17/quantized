@@ -610,6 +610,66 @@ describe("useFigureBuilder", () => {
     });
   });
 
+  // Edit a SAVED editable figure directly in Publication Preview -- no plot
+  // window required -- with Apply replacing that same Library entry in
+  // place. The `library` session target is deliberately transparent to this
+  // hook: `canonical` (session !== null), `targetBlocked` (only checked for
+  // `window`), and `canApply`'s dirty-check branch (only `new-editable`
+  // skips it) all already treat `library` exactly like `window` with no code
+  // changes here -- this end-to-end pass is what proves that.
+  describe("library-target Apply (edit a saved figure in place)", () => {
+    const savedFigure = (id: string) => createFigureDocument({
+      id, name: "Library figure", datasetId: "d1", view: defaultPlotView(),
+    });
+
+    it("edits a saved figure end-to-end: Apply replaces the SAME Library entry as one undoable edit", async () => {
+      const saved = savedFigure("figure-lib-e2e");
+      useApp.setState({ editableFigures: [saved] });
+      const history = useApp.getState().history.length;
+      expect(useApp.getState().beginFigurePublicationEditForFigure("figure-lib-e2e")).toBe(true);
+
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(result.current.publicationTarget).toBe("library");
+      act(() => result.current.setTitle("Edited title"));
+      expect(result.current.dirty).toBe(true);
+
+      act(() => {
+        result.current.apply();
+      });
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.editableFigures).toHaveLength(1); // replaced, never duplicated
+      expect(state.editableFigures[0]).toMatchObject({
+        id: "figure-lib-e2e",
+        plot: { view: { plotTitle: "Edited title" } },
+      });
+      expect(state.history).toHaveLength(history + 1);
+    });
+
+    it("Cancel leaves the Library entry untouched", async () => {
+      const saved = savedFigure("figure-lib-e2e-cancel");
+      useApp.setState({ editableFigures: [saved] });
+      const before = structuredClone(useApp.getState().editableFigures);
+      const history = useApp.getState().history.length;
+      useApp.getState().beginFigurePublicationEditForFigure("figure-lib-e2e-cancel");
+
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      act(() => result.current.setTitle("Discarded"));
+
+      act(() => {
+        result.current.cancel();
+      });
+
+      const state = useApp.getState();
+      expect(state.figurePublicationSession).toBeNull();
+      expect(state.editableFigures).toEqual(before);
+      expect(state.history).toHaveLength(history);
+    });
+  });
+
   // F2.3b: per-series properties (color/width/mode, visibility, order) live
   // straight on document.plot.view — these exercise the hook's setters, plus
   // the required Apply-commits/Cancel-is-mutation-free pin.
