@@ -104,6 +104,41 @@ describe("SavedFiguresSection", () => {
     expect(state.status).toContain("open it from Editable figures");
   });
 
+  it("confirms before creating a lossy editable copy, and only promotes when confirmed", async () => {
+    // A frozen doc that still names its source dataset (F0.3's third compat
+    // surface): figureDocumentFromLegacyFigureDoc deliberately nulls the
+    // copy's dataset binding, so this is a real, reported loss -- unlike the
+    // no-loss `doc()` default used by the two tests above.
+    const frozen = doc({
+      id: "frozen-1",
+      name: "Frozen loop",
+      live: false,
+      datasetId: "d1",
+      dataSnapshot: d1.data,
+    });
+    useApp.setState({ figureDocs: [frozen] });
+    render(<SavedFiguresSection />);
+
+    const copyButton = screen.getByRole("button", { name: "Make editable copy of Frozen loop" });
+    expect(copyButton).not.toBeDisabled();
+    expect(copyButton).toHaveAttribute("title", expect.stringContaining("live dataset link"));
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    fireEvent.click(copyButton);
+    await Promise.resolve();
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(true);
+    fireEvent.click(copyButton);
+    await Promise.resolve();
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+    expect(useApp.getState().editableFigures[0]).toMatchObject({
+      name: "Frozen loop (editable copy)",
+      bindings: { datasetId: null },
+      data: { mode: "frozen" },
+    });
+  });
+
   it("labels the promote button distinctly from duplicate, with the full action in its title", () => {
     // The visible text stays short ("Editable") so it fits the Library
     // sidebar down to its minimum resize width, but the aria-label and

@@ -25,6 +25,7 @@
 
 import { useMemo, useState } from "react";
 
+import { figureDocPublicationCompatibility, figureTransitionWarning } from "../../../lib/figureCompatibility";
 import { docRenderable } from "../../../lib/figuredoc";
 import {
   PAGE_MAX_GRID,
@@ -44,6 +45,7 @@ import {
 import { createPageDocument, type PageLayoutSettings } from "../../../lib/pageDocument";
 import { displayedWindowTitle } from "../../../lib/plotview";
 import { useApp } from "../../../store/useApp";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
 import { usePageLifecycle } from "./usePageLifecycle";
 import { usePagePreviewExport } from "./usePagePreviewExport";
@@ -254,15 +256,48 @@ export function useFigurePage() {
    *  the new copy in one step, so the panel converts straight from
    *  non-durable ("figdoc") to durable ("figure") without a second manual
    *  reassignment. The Library's own "Editable" button performs the same
-   *  promotion with no slot to repoint. */
+   *  promotion with no slot to repoint.
+   *
+   *  Gated by the same `figureDocPublicationCompatibility` report the
+   *  Library button uses (F0.3's third compat surface): a blocked doc
+   *  refuses with a status message (there is no button here to disable —
+   *  this fires from a context-menu item / double-click gesture), and a
+   *  lossy one confirms first. A context menu can't be reopened mid-command
+   *  the way a disabled button reads its tooltip, so the refusal has to be
+   *  a status line instead. */
   function promoteSlot(i: number): void {
     const slot = slots[i];
     if (!slot.source || slot.source.kind !== "figdoc") return;
-    const s = useApp.getState();
-    const newId = s.promoteLegacyFigureDoc(slot.source.id);
-    if (!newId) return;
-    const created = useApp.getState().editableFigures.find((f) => f.id === newId);
-    assign(i, { kind: "figure", id: newId, name: created?.name ?? `${slot.source.name} (editable copy)` });
+    const sourceId = slot.source.id;
+    const sourceName = slot.source.name;
+    const commit = (): void => {
+      const s = useApp.getState();
+      const newId = s.promoteLegacyFigureDoc(sourceId);
+      if (!newId) return;
+      const created = useApp.getState().editableFigures.find((f) => f.id === newId);
+      assign(i, { kind: "figure", id: newId, name: created?.name ?? `${sourceName} (editable copy)` });
+    };
+    const doc = figureDocs.find((candidate) => candidate.id === sourceId);
+    if (!doc) {
+      commit(); // stale reference: let the store's own not-found guard (toast + status) handle it
+      return;
+    }
+    const compatibility = figureDocPublicationCompatibility(doc, datasetIds);
+    if (compatibility.blocker) {
+      setStatus(`cannot create an editable copy of "${doc.name}": ${compatibility.blocker}`);
+      return;
+    }
+    if (compatibility.losses.length === 0) {
+      commit();
+      return;
+    }
+    void askConfirm(
+      `Create an editable copy of "${doc.name}"?`,
+      figureTransitionWarning(compatibility.losses),
+      "Create Copy",
+    ).then((proceed) => {
+      if (proceed) commit();
+    });
   }
 
   /** F3.4 "duplicate for this page" / unlink: only meaningful for a

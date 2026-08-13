@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   figureDocPlotCompatibility,
+  figureDocPublicationCompatibility,
   figureTransitionWarning,
   plotSpecPublicationCompatibility,
 } from "./figureCompatibility";
+import { figureDocumentToPlotView } from "./figureDocument";
+import { figureDocumentFromLegacyFigureDoc } from "./figureDocumentPublication";
 import type { FigureDoc } from "./figuredoc";
 import type { PlotSpec } from "./plotspec";
 
@@ -137,5 +140,91 @@ describe("figure transition compatibility", () => {
   it("blocks frozen and missing-source FigureDocs", () => {
     expect(figureDocPlotCompatibility({ ...doc(), live: false }).blocker).not.toBeNull();
     expect(figureDocPlotCompatibility({ ...doc(), datasetId: null }).blocker).not.toBeNull();
+  });
+
+  // F0.3's third compat surface: legacy FigureDoc -> canonical FigureDocument
+  // promotion (figureLifecycle.ts's promoteLegacyFigureDoc, via
+  // figureDocumentFromLegacyFigureDoc).
+  describe("figureDocPublicationCompatibility", () => {
+    const datasetIds = new Set(["d1"]);
+
+    it("promotes a plain live figure with an empty report (the near-lossless happy path)", () => {
+      expect(figureDocPublicationCompatibility(doc(), datasetIds)).toEqual({ blocker: null, losses: [] });
+    });
+
+    it("reports no losses for an ordinary decorated doc -- group split, axis overrides, and per-series styles all carry through", () => {
+      const report = figureDocPublicationCompatibility(
+        doc({
+          groupCol: 2,
+          style: "aps",
+          overrides: { grid: true, x_lim: [0, 1] },
+          seriesStyles: [{ color: "#123456" }],
+        }),
+        datasetIds,
+      );
+      expect(report).toEqual({ blocker: null, losses: [] });
+    });
+
+    it("blocks a frozen doc with no data snapshot", () => {
+      const report = figureDocPublicationCompatibility({ ...doc(), live: false, dataSnapshot: undefined }, datasetIds);
+      expect(report.blocker).not.toBeNull();
+      expect(report.losses).toEqual([]);
+    });
+
+    it("blocks a live doc whose source dataset is unavailable", () => {
+      const report = figureDocPublicationCompatibility({ ...doc(), datasetId: "gone" }, datasetIds);
+      expect(report.blocker).not.toBeNull();
+      expect(report.losses).toEqual([]);
+    });
+
+    it("reports the lost live-dataset link when a frozen doc still names a resolvable one", () => {
+      const snapshot = { time: [0], values: [[1]], labels: ["s"], units: [""], metadata: {} };
+      const frozen = { ...doc(), live: false, datasetId: "d1", dataSnapshot: snapshot };
+      const report = figureDocPublicationCompatibility(frozen, datasetIds);
+      expect(report.blocker).toBeNull();
+      expect(report.losses).toEqual(["live dataset link (the copy keeps only the frozen snapshot)"]);
+    });
+
+    it("does not report a dataset-link loss for a frozen doc that was already unbound", () => {
+      const snapshot = { time: [0], values: [[1]], labels: ["s"], units: [""], metadata: {} };
+      const frozen = { ...doc(), live: false, datasetId: null, dataSnapshot: snapshot };
+      expect(figureDocPublicationCompatibility(frozen, datasetIds).losses).toEqual([]);
+    });
+
+    it("reports shapes and reference lines as no longer editable after promotion", () => {
+      const withDecor = doc({
+        overrides: {
+          shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
+          ref_lines: [{ axis: "x", value: 5 }],
+        },
+      });
+      const report = figureDocPublicationCompatibility(withDecor, datasetIds);
+      expect(report.blocker).toBeNull();
+      expect(report.losses).toEqual([
+        "shapes and reference lines (still render, but the copy's Shapes/Reference-lines panels start empty)",
+      ]);
+    });
+
+    // The claim above is not theoretical: figureDocumentFromLegacyFigureDoc
+    // carries config.overrides RAW into publication.overrides without ever
+    // populating plot.view.shapes/refLines, and the Figure Builder's Shapes
+    // and Reference-lines panels read plot.view directly, never
+    // publication.overrides (see figureCompatibility.ts's doc comment for
+    // the file:line evidence). Prove it against the real adapter rather than
+    // trusting the report to describe its own mechanism correctly.
+    it("proves the gap against the real adapter: shapes/ref_lines survive in publication.overrides but plot.view stays empty", () => {
+      const withDecor = doc({
+        overrides: {
+          shapes: [{ kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
+          ref_lines: [{ axis: "x", value: 5 }],
+        },
+      });
+      const promoted = figureDocumentFromLegacyFigureDoc(withDecor);
+      expect(promoted.publication?.overrides?.shapes).toHaveLength(1);
+      expect(promoted.publication?.overrides?.ref_lines).toHaveLength(1);
+      const view = figureDocumentToPlotView(promoted);
+      expect(view.shapes).toEqual([]);
+      expect(view.refLines).toEqual([]);
+    });
   });
 });

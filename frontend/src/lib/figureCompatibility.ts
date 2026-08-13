@@ -3,7 +3,7 @@
 // keep every user-facing loss inventory here so entry points cannot drift into
 // silently dropping different sets of state.
 
-import type { FigureDoc } from "./figuredoc";
+import { docRenderable, type FigureDoc } from "./figuredoc";
 import type { PlotSpec } from "./plotspec";
 import type { SeriesStyle } from "./types";
 
@@ -102,6 +102,58 @@ export function figureDocPlotCompatibility(doc: FigureDoc): FigureTransitionComp
       ov.grid !== undefined)
   ) {
     losses.add("publication fonts, ticks, frame, margins, or grid settings");
+  }
+  return { blocker: null, losses: [...losses] };
+}
+
+/** Saved FigureDoc -> its canonical FigureDocument promotion (F0.3's third
+ *  surface: figureLifecycle.ts's `promoteLegacyFigureDoc`, via
+ *  `figureDocumentFromLegacyFigureDoc` in figureDocumentPublication.ts).
+ *
+ *  Audited line by line: every `FigureConfig` field the adapter reads
+ *  (channels, scales, labels, group, output settings, overrides,
+ *  seriesStyles, errors) carries into the new document -- most of it
+ *  verbatim, so a plain figure promotes with an EMPTY report. Two real gaps
+ *  remain, both confirmed against the adapter's and the Figure Builder's
+ *  actual code, not assumed:
+ *
+ *  1. A frozen doc always promotes with `bindings.datasetId: null`
+ *     (figureDocumentPublication.ts:18 -- deliberate, "never a
+ *     coincidentally active live dataset"), even when the source still
+ *     names a resolvable one. The copy keeps rendering its snapshot fine;
+ *     it just can't be re-bound to that dataset's live data afterward.
+ *  2. `config.overrides` is copied RAW into `publication.overrides`
+ *     (figureDocumentPublication.ts:41) without decomposing it into
+ *     `plot.view` -- fine for `annotations`/`legend`/axis limits/grid
+ *     (their property panels read the merged `effective` overrides, see
+ *     canonicalOverrides.ts), but the Shapes and Reference-lines panels
+ *     read `plot.view.shapes`/`.refLines` DIRECTLY (useFigureBuilder.ts),
+ *     never `publication.overrides`. Any shapes/ref lines the source had
+ *     still render in the copy (publication wins the export-time merge --
+ *     figureOverrides.ts's `mergeFigureOverrides`) but start invisible and
+ *     un-editable in those two panels.
+ *
+ *  `FigureConfig` never stored tick formats, a Y2 assignment, tick steps,
+ *  hidden/order state, page setup, or a mark choice at all, so promoting
+ *  those is not a loss -- there is nothing on the source to drop. */
+export function figureDocPublicationCompatibility(
+  doc: FigureDoc,
+  datasetIds: ReadonlySet<string>,
+): FigureTransitionCompatibility {
+  if (!docRenderable(doc, datasetIds)) {
+    return {
+      blocker: doc.live ? "source dataset is unavailable" : "frozen data snapshot is unavailable",
+      losses: [],
+    };
+  }
+
+  const losses = new Set<string>();
+  if (!doc.live && doc.datasetId !== null) {
+    losses.add("live dataset link (the copy keeps only the frozen snapshot)");
+  }
+  const ov = doc.config.overrides;
+  if (ov?.shapes?.length || ov?.ref_lines?.length) {
+    losses.add("shapes and reference lines (still render, but the copy's Shapes/Reference-lines panels start empty)");
   }
   return { blocker: null, losses: [...losses] };
 }
