@@ -3,9 +3,10 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — F2.3 panels exhausted; convergence round 1 shipped
-(figdoc page panels canonical, promotion compat report, in-place library
-editing F2.1h/F2.2d); F2.1e/f/g/i open, three owner gates in BACKLOG
+**Updated:** 2026-08-12 — convergence rounds 1+2 shipped (figdoc page panels,
+promotion compat report, in-place library editing, F2.1e canonical fallback,
+F2.1i override decomposition); ALL unblocked convergence work is done —
+F2.1f/g remain, both owner-gated (D-1/D-3/D-4 in BACKLOG)
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -210,13 +211,14 @@ decisions are merged.
   - [x] **F2.1d Graph Builder detached canonical preview (planned PR #115).**
         Graph Builder now opens a fresh detached FigureDocument transaction,
         never an ephemeral legacy FigureDoc seed.
-  - [ ] **F2.1e Canonical fallback for the unfocused-window command.** The
-        "Publication preview…" command with no focused plot window drops to
-        LEGACY mode (`fileCommands.ts` fallback) — one of only two legacy
-        openers left. Replace with a synthesized canonical document from the
-        active dataset + live view (the `createFigureDocument` +
-        `snapshotView` pair `windowDocumentPersistence.ts` uses). Makes
-        Apply available where it previously wasn't — call that out.
+  - [x] **F2.1e Canonical fallback for the unfocused-window command
+        (Claude Sonnet 5, 2026-08-12).** The dataset-present path now
+        synthesizes a canonical document from the active dataset + live
+        view and opens it detached (Graph Builder's opener, which mints a
+        fresh id itself) — Apply now saves a new editable figure where the
+        legacy fallback said "Apply is unavailable". The
+        no-window-no-dataset degrade is byte-identical. See the 2026-08-12
+        round-2 log entry.
   - [ ] **F2.1f Open saved legacy figures canonically (BLOCKED on the
         graph-templates and migration owner gates).** `openFigureDraft`
         (`useApp.ts`) still seeds legacy mode for Library ▸ Publication
@@ -225,8 +227,8 @@ decisions are merged.
         Graph Builder does. Blocked because the legacy-only Save-as-figure /
         graph-template UI disappears for these docs (see the 2026-08-12
         convergence-map log entry, decisions D-1/D-3).
-  - [ ] **F2.1g Retire legacy mode (BLOCKED on F2.1e/f + the archival owner
-        gate D-4).** Once both legacy openers are gone: delete
+  - [ ] **F2.1g Retire legacy mode (BLOCKED on F2.1f + the archival owner
+        gate D-4; F2.1e shipped 2026-08-12).** Once both legacy openers are gone: delete
         `legacyFigure.ts`, `figureDocSeed`, the hook's legacy state twins,
         and the `canonical` fork everywhere (~150 lines out of
         `useFigureBuilder.ts`). Kills the known legacy y2 placebo defect
@@ -238,16 +240,16 @@ decisions are merged.
         into Publication Preview (new `⎙` Library row button) via a third
         session target, `library` — no window round-trip needed. See the
         2026-08-12 in-place-apply log entry.
-  - [ ] **F2.1i Decompose promoted overrides into the view — the
-        rendered-but-uneditable class.** F2.1c's converter copies
-        `config.overrides` raw into `publication.overrides`; shapes and
-        reference lines survive the EXPORT (publication wins the merge) but
-        the F2.3c/d panels read `plot.view` directly, so a promoted copy's
-        shapes/ref-lines render yet cannot be edited. Fix at the converter:
-        decompose shapes/refLines into `plot.view`. Evaluate
-        `seriesStyles` at the same time — same mechanism, but it fires on
-        essentially every doc (`buildExportStyles` always assigns colors),
-        which is why the F0.3 promotion report deliberately excludes it.
+  - [x] **F2.1i Decompose promoted overrides into the view (Claude
+        Sonnet 5, 2026-08-12).** The converter now decomposes
+        `config.overrides.shapes`/`.ref_lines` into `plot.view` with
+        deterministic ids and strips the originals (each object represented
+        exactly once — render-once regression test). The compat report
+        shrank to match. `seriesStyles` investigated and deliberately left
+        raw: no lossless `ExportSeriesStyle`→`SeriesStyle` mapping exists
+        (`line: "none"` vs the `width: 0` scatter sentinel), and the exact
+        array is F2.1a's own contract. `region_shades` stays raw pending
+        the owner call. See the 2026-08-12 round-2 log entry.
 - [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
@@ -549,6 +551,36 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-12 — Convergence round 2: canonical fallback + override decomposition (Claude Sonnet 5 ×2)
+
+Both slices gated individually and together (lint 0 errors, 6,360 tests /
+427 files, build 882.5 kB eager, 20.8 kB headroom):
+
+1. **F2.1e canonical unfocused-window fallback.** The "Publication
+   preview…" command's no-window path now synthesizes a FigureDocument
+   from the active dataset + live view (`createFigureDocument` +
+   `snapshotView`, the `liveWindowDocument` pair) and opens it via
+   `beginDetachedFigurePublicationEdit` — Graph Builder's opener, which
+   mints a fresh id itself (verified against the repeat-Apply id-collision
+   concern). Apply now creates a new editable figure where the legacy
+   fallback was a documented dead end. The no-dataset degrade is
+   byte-identical. One legacy opener remains: Library ▸ Publication
+   figures (F2.1f, gated on D-1/D-3).
+2. **F2.1i override decomposition.** Promoted shapes/reference-lines now
+   land in `plot.view` (deterministic `legacyshape-/legacyref-<docId>-<i>`
+   ids, the `originFigures.ts` convention) and are stripped from
+   `publication.overrides` — closing the rendered-but-uneditable class
+   with a render-exactly-once regression test and a real-patch-path edit
+   round-trip. The promotion compat report shrank in the same change (its
+   "shapes and reference lines" warning became false the moment this
+   landed). **seriesStyles deliberately NOT decomposed**, with evidence:
+   producers bake mark-level choices into the array (`line: "none"` for
+   scatter) that `SeriesStyle` cannot represent losslessly — the view's
+   scatter encoding is the `width: 0` sentinel, so a verbatim copy would
+   render "Line + Symbol" instead of "Scatter" in the F2.3b panel — and
+   the exact array is F2.1a's own "exact export styles" contract.
+   `region_shades` stays raw pending the owner region-shades decision.
 
 ### 2026-08-12 — Convergence round 1: page panels, promotion report, in-place library editing (Claude Sonnet 5 ×3)
 
