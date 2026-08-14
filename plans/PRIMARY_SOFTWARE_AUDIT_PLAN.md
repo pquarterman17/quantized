@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-01 latest (ChatGPT-Sol's v0.14.0 figure-authoring
+**Updated:** 2026-08-13 latest (second child plan registered:
+`LIBRARY_WORKBOOK_UX_PLAN.md`, ChatGPT-Sol's 2026-08-12 Library / workbook /
+Quick Plot UX discovery from an owner interview — decisions L0.1–L0.14
+recorded, LQ.1 confirmed 2026-08-13, NO implementation authorized yet.
+Prior: 2026-08-01 — ChatGPT-Sol's v0.14.0 figure-authoring
 round-trip audit is now the child plan `FIGURE_AUTHORING_WORKFLOW_PLAN.md`;
 it expands operating rule #3 and P1.3/P1.5 into a lossless document campaign.
 Prior: 2026-07-31 queue sweep: P3.4 payload decimation
@@ -54,6 +58,14 @@ Page → clipboard/export contract is tracked in
 ChatGPT-Sol on 2026-08-01; do not attribute it to Claude. Its checkboxes are
 authoritative for figure-document round-trip work, while P1.3/P1.5 retain the
 broader recipe and grouping dependencies here.
+
+The Library → workbook → children hierarchy, tile/tree/details view modes,
+and the known-data-only Quick Plot / Quick Figure Builder contract are
+tracked in `plans/LIBRARY_WORKBOOK_UX_PLAN.md`, a second child plan authored
+by ChatGPT-Sol on 2026-08-12 from an owner interview (also not Claude's).
+Its confirmed L0.x decisions are authoritative for Library organization and
+Quick Plot behavior; its proposed PR A–H sequence is NOT authorized until
+the interview completes.
 
 ## Executive verdict
 
