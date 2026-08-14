@@ -226,5 +226,21 @@ describe("figure transition compatibility", () => {
       expect(view.shapes).toHaveLength(1);
       expect(view.refLines).toHaveLength(1);
     });
+
+    // F2.3j (2026-08-13): region_shades joins shapes/ref_lines above now that
+    // a view editor exists for it too (RegionShadesCard/
+    // RegionShadePropertiesPanel) -- same mechanism, same "no loss" report.
+    it("proves the fix against the real adapter: region_shades decomposes into plot.view and drops out of publication.overrides", () => {
+      const withShade = doc({
+        overrides: {
+          region_shades: [{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" }],
+        },
+      });
+      expect(figureDocPublicationCompatibility(withShade, datasetIds)).toEqual({ blocker: null, losses: [] });
+      const promoted = figureDocumentFromLegacyFigureDoc(withShade);
+      expect(promoted.publication?.overrides?.region_shades).toBeUndefined();
+      const view = figureDocumentToPlotView(promoted);
+      expect(view.regionShades).toHaveLength(1);
+    });
   });
 });

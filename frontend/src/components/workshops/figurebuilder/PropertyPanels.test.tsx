@@ -9,6 +9,7 @@ import PropertyPanels, {
   type ErrorColumnsPanelProps,
   type GroupingPanelProps,
   type RefLinesPanelProps,
+  type RegionShadesPanelProps,
   type SeriesPanelProps,
   type ShapesPanelProps,
 } from "./PropertyPanels";
@@ -448,6 +449,51 @@ describe("PropertyPanels Reference lines group (F2.3d)", () => {
     );
     fireEvent.change(screen.getByLabelText("X reference 1 value"), { target: { value: "900" } });
     expect(onValue).toHaveBeenCalledWith("r1", 900);
+  });
+});
+
+describe("PropertyPanels Region shades group (F2.3j)", () => {
+  const regionShadesProp = (
+    overrides: Partial<RegionShadesPanelProps> = {},
+  ): RegionShadesPanelProps => ({
+    regionShades: [{ id: "sh1", x1: 0, y1: 1, x2: 2, y2: 3, fill: "#336699" }],
+    onPatch: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    ...overrides,
+  });
+
+  it("omits the group entirely in legacy mode (no prop supplied)", () => {
+    render(<PropertyPanels overrides={{}} openGroup="Region shades" hasY2={false} setOverrides={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Region shades/ })).not.toBeInTheDocument();
+  });
+
+  it("KEEPS the group when the canonical draft has none — same F2.3d reasoning as Reference lines", () => {
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Region shades"
+        hasY2={false}
+        regionShades={regionShadesProp({ regionShades: [] })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("new shade x1")).toBeInTheDocument();
+  });
+
+  it("renders the group and forwards edits to the supplied callbacks", () => {
+    const onPatch = vi.fn();
+    render(
+      <PropertyPanels
+        overrides={{}}
+        openGroup="Region shades"
+        hasY2={false}
+        regionShades={regionShadesProp({ onPatch })}
+        setOverrides={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Region shade 1 x2"), { target: { value: "9" } });
+    expect(onPatch).toHaveBeenCalledWith("sh1", { x2: 9 });
   });
 });
 

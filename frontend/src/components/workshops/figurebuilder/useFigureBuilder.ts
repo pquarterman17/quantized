@@ -12,6 +12,7 @@ import { toggleChannelPlotted, toggleChannelSecondary, type ChannelMembership } 
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
+import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
@@ -243,6 +244,11 @@ export function useFigureBuilder() {
   const removeRefLine = (id: string) =>
     setCanonicalView({ refLines: removeRefLineFromList(refLines, id) });
 
+  // F2.3j: region shades bundle from canonicalRegionShades.ts's
+  // regionShadeBindings -- see that module's doc for why (this hook sits
+  // close to its own size ceiling).
+  const regionShadeOps = regionShadeBindings(canonical ? canonicalView?.regionShades ?? [] : [], setCanonicalView);
+
   // F2.3e: axis tick formats are the same canonical-only PlotView fields as
   // the three slices above -- and they already reach the renderer
   // (figureSpec's x_fmt/y_fmt + secondaryAxisWire's y2_fmt), so the panel was
@@ -440,6 +446,8 @@ export function useFigureBuilder() {
     setRefLineValue,
     addRefLine,
     removeRefLine,
+    // F2.3j: canonical-only (empty/no-op in legacy mode).
+    ...regionShadeOps,
     // F2.3e: canonical-only. The fmt values fall back to the live singletons in
     // legacy mode so the panel can render there too, read-only-ish (the legacy
     // request already sends the live xFmt/yFmt — see legacyFigure.ts).

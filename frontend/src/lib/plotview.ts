@@ -532,9 +532,9 @@ function axisLabelStylesOrDefault(v: unknown): AxisLabelStyles {
 
 const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
 
-/** Validate a persisted annotation list (MAIN #21's `.anchor` field). Every
- *  other overlay list in this sanitizer (`refLines`/`regionShades`) is a
- *  structural "cast, don't deep-validate" passthrough — but `anchor` gets
+/** Validate a persisted annotation list (MAIN #21's `.anchor` field). The
+ *  other simple overlay list in this sanitizer (`refLines`) is a structural
+ *  "cast, don't deep-validate" passthrough — but `anchor` gets
  *  real validation because an unrecognized value would silently change
  *  where `annotationLayout` reads `x`/`y` FROM (data coords vs. canvas
  *  fractions): an unknown string falls back to `undefined` (= "data", the
@@ -646,6 +646,39 @@ export function sanitizeShapes(v: unknown): Shape[] {
   return out;
 }
 
+/** Validate a persisted region-shade list (F2.3j — decoded film-stack shades
+ *  became editable plot objects, not immutable provenance; previously this
+ *  field was a bare `Array.isArray` cast). The `RegionShade` analogue of
+ *  `sanitizeShapes` above: an entry missing its required `id`/finite
+ *  `x1..y2`/string `fill` is dropped (nothing sane to fall back to for a
+ *  single list entry); `axis` keeps only 0/1, same "drop the bad value, keep
+ *  the entry" shape as an unrecognized annotation anchor. Region shades are
+ *  always data-anchored (unlike `Shape`, there is no page-fraction variant),
+ *  so coordinates are never clamped — same "never clamp DATA coords"
+ *  convention `sanitizeShapes` already uses for a data-anchored shape. Never
+ *  throws. */
+export function sanitizeRegionShades(v: unknown): RegionShade[] {
+  if (!Array.isArray(v)) return [];
+  const out: RegionShade[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.fill !== "string") continue;
+    const coords = [o.x1, o.y1, o.x2, o.y2];
+    if (!coords.every((n): n is number => typeof n === "number" && Number.isFinite(n))) continue;
+    out.push({
+      id: o.id,
+      x1: o.x1 as number,
+      y1: o.y1 as number,
+      x2: o.x2 as number,
+      y2: o.y2 as number,
+      fill: o.fill,
+      ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
+    });
+  }
+  return out;
+}
+
 /** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
  *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
  *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
@@ -709,7 +742,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
     refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],
     annotations: sanitizeAnnotations(o.annotations),
-    regionShades: Array.isArray(o.regionShades) ? (o.regionShades as RegionShade[]) : [],
+    regionShades: sanitizeRegionShades(o.regionShades),
     shapes: sanitizeShapes(o.shapes),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
@@ -898,80 +931,6 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
  *  empty slot, and an empty `datasetIds` as the whole-window empty state).
  *  Identity (same window object) when nothing on it changed, so callers
  *  that spread this into other patch fields don't force needless re-renders. */
-// ── Edge / sibling snapping while dragging (item 12) ────────────────────────
-
-/** How close (px) a window edge must be to a snap line before it snaps. */
-export const SNAP_THRESHOLD = 8;
-
-/** All the vertical (`v`) and horizontal (`h`) snap lines a dragged window
- *  can land on: the canvas edges plus BOTH edges of every sibling rect on
- *  each axis — one flat pool per axis, so edge-ALIGN (our left on a
- *  sibling's left) and ABUT (our left on a sibling's right) fall out of the
- *  same comparison instead of being separate cases. */
-function collectSnapLines(
-  bounds: { width: number; height: number } | undefined,
-  siblings: readonly WindowGeometry[],
-): { v: number[]; h: number[] } {
-  const v: number[] = bounds ? [0, bounds.width] : [];
-  const h: number[] = bounds ? [0, bounds.height] : [];
-  for (const s of siblings) {
-    v.push(s.x, s.x + s.w);
-    h.push(s.y, s.y + s.h);
-  }
-  return { v, h };
-}
-
-/** The adjustment that moves the best of `edges` onto the nearest of `lines`,
- *  or 0 when nothing is within `threshold` — the NEAREST candidate wins
- *  across all edge×line pairs on this axis. */
-function snapDelta(edges: readonly number[], lines: readonly number[], threshold: number): number {
-  let best = 0;
-  let bestDist = Infinity;
-  for (const edge of edges) {
-    for (const line of lines) {
-      const d = line - edge;
-      const dist = Math.abs(d);
-      if (dist <= threshold && dist < bestDist) {
-        bestDist = dist;
-        best = d;
-      }
-    }
-  }
-  return best;
-}
-
-/** Snap a MOVE gesture's proposed geometry: either vertical edge (left OR
- *  right) may pull `x`, either horizontal edge (top OR bottom) may pull `y`
- *  — the two axes snap independently. Returns the snapped position only (a
- *  move never changes size). Pure; `PlotWindowFrame` applies this before its
- *  clamp + rAF-throttled store write, and skips it while Alt is held (the
- *  standard window-manager convention). */
-export function snapMovePosition(
-  proposed: WindowGeometry,
-  bounds: { width: number; height: number } | undefined,
-  siblings: readonly WindowGeometry[],
-  threshold: number = SNAP_THRESHOLD,
-): { x: number; y: number } {
-  const lines = collectSnapLines(bounds, siblings);
-  return {
-    x: proposed.x + snapDelta([proposed.x, proposed.x + proposed.w], lines.v, threshold),
-    y: proposed.y + snapDelta([proposed.y, proposed.y + proposed.h], lines.h, threshold),
-  };
-}
-
-/** Snap a RESIZE gesture's proposed geometry: only the MOVING edges — the
- *  right (`x+w`) and bottom (`y+h`), matching the frame's single bottom-right
- *  grip — may pull `w`/`h`; the anchored left/top edges never snap. Returns
- *  the snapped size only (a resize never changes position). */
-export function snapResizeSize(
-  proposed: WindowGeometry,
-  bounds: { width: number; height: number } | undefined,
-  siblings: readonly WindowGeometry[],
-  threshold: number = SNAP_THRESHOLD,
-): { w: number; h: number } {
-  const lines = collectSnapLines(bounds, siblings);
-  return {
-    w: proposed.w + snapDelta([proposed.x + proposed.w], lines.v, threshold),
-    h: proposed.h + snapDelta([proposed.y + proposed.h], lines.h, threshold),
-  };
-}
+// Edge/sibling drag-snapping (item 12) moved to lib/windowSnap.ts (F2.3j) —
+// pure window-geometry math with no PlotView involvement, extracted to fund
+// the region-shades sanitizer below under this module's own size ratchet.
