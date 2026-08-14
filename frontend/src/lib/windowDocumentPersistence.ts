@@ -61,6 +61,14 @@ export function sanitizeDocumentBackedPlotWindows(
       document = { ...document, bindings: { ...document.bindings, datasetId: null } };
     }
     if (usedDocumentIds.has(document.id)) {
+      // Every field the sibling constructor (windowDocuments.ts's
+      // createPlotWindowDocument) forwards from `previous` must be forwarded
+      // here too -- this is the SAME "mint a fresh id, keep everything else"
+      // repair, just triggered by a duplicate id found at load time instead
+      // of at create/duplicate time. `publication` (export overrides + exact
+      // per-channel seriesStyles) was the one field missing (item 2); every
+      // other field it forwards (mark/groupKey/facetKey/errors/data/
+      // axisBreaks/output) was already here.
       document = createFigureDocument({
         id: `figure-${window.id}`,
         name: document.name,
@@ -73,6 +81,7 @@ export function sanitizeDocumentBackedPlotWindows(
         data: document.data,
         axisBreaks: document.plot.axisBreaks,
         output: document.output,
+        publication: document.publication,
       });
     }
     usedDocumentIds.add(document.id);
