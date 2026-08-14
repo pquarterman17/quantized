@@ -5,7 +5,7 @@
 **Updated:** 2026-08-14 — owner decisions complete through L0.57 and
 spot-verified in the Claude session (L0.2, L0.45, L0.54, L0.57 re-confirmed
 directly); technical boundary audit adversarially verified against the code
-(all claims exact); PR A1 launched
+(all claims exact); PR A1 SHIPPED (`914042e`)
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -879,10 +879,8 @@ Current facts that an implementer must preserve:
 
 Recommended PR A decomposition:
 
-1. [ ] **PR A1 — pure workbook model and legacy migration.** Add a first-class
-   `WorkbookNode` plus `Dataset.workbookId`; create a new sub-500-line pure
-   module for sanitization, deterministic v1-v3 migration, reference pruning,
-   and tests. Bump `.dwk` to v4 only when the new structure is serialized.
+1. [x] ~~**PR A1 — pure workbook model and legacy migration.**~~ (2026-08-14)
+   Shipped `8a6d0e6`/`c1adf97`/`914042e` — see `## Completed`.
 2. [ ] **PR A2 — workspace/store persistence.** Thread `workbooks[]` through
    `WorkspaceState`, `LoadedWorkspace`, serialization/parsing, `loadWorkspace`,
    history/reset, autosave, and architecture tests. Preserve all v1-v3 inputs.
@@ -1023,6 +1021,25 @@ back to the owner. No Library implementation is authorized by this pause.
   L0.54, and L0.56; engineering safeguards remain unchecked until built.
 - [ ] Revisit L0.44 after real cross-workbook work to confirm that folder-level
   results remain understandable and do not create Origin-like clutter.
+
+## Completed
+
+- ~~**PR A1 — pure workbook model and legacy migration**~~ (2026-08-14) —
+  `lib/workbooks.ts` (383 lines, pure): `WorkbookNode`, `deriveWorkbooks`
+  (stem-scoped Origin grouping identical to `originSheetGroups`' partition,
+  `(path, importedAt)` import-event grouping with singleton fallback when
+  `importedAt` is absent, `planOriginFolders` surrogate-folder detection with
+  four exact-match conditions), `sanitizeWorkbooks`, `reconcileWorkbookRefs`
+  (repairs dangling refs without rewriting valid memberships).
+  `Dataset.workbookId` added; funded by extracting the Reductions wire types
+  to `lib/reductionTypes.ts` (types.ts pin lowered 1090 → 1053, never
+  raised). 27 focused tests incl. a partition-agreement test against
+  `originSheetGroups` and a red-proven adversarial-review fix (occupancy for
+  surrogate detection is judged against the FULL document, not the repair
+  subset — a tenant-occupied folder is never offered for conversion). Gate:
+  6,502 frontend tests, lint 0 errors, build + bundle budget green. NOT yet
+  serialized/wired — `.dwk` stays v3 until PR A2. Commits `8a6d0e6`,
+  `c1adf97`, `914042e`.
 
 ## Change log
 
