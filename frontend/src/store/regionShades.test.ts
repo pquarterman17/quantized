@@ -79,4 +79,38 @@ describe("regionShades (F2.3j)", () => {
       { id: "sh1", x1: 0, y1: 0, x2: 1, y2: 1, fill: "#336699" },
     ]);
   });
+
+  // Every action above calls recordHistory, and architecture.test.ts's
+  // HISTORY_EXCLUDED entry justifies the raw field's exclusion by CLAIMING
+  // undo captures it inside the `view: PlotView` snapshot (VIEW_KEYS derives
+  // from defaultPlotView(), which now lists regionShades). These two tests
+  // are the behavioral proof of that claim — without them, a regression that
+  // drops regionShades from the view snapshot would leave every shade action
+  // announcing "Undid …" while changing nothing, and stay green.
+  it("undo reverts addRegionShade; redo re-applies it", () => {
+    useApp.setState({ regionShades: [] });
+    const id = useApp.getState().addRegionShade({ x1: 0, y1: 0, x2: 1, y2: 1, fill: "#336699" });
+    expect(useApp.getState().regionShades).toHaveLength(1);
+
+    useApp.getState().undo();
+    expect(useApp.getState().regionShades).toEqual([]);
+
+    useApp.getState().redo();
+    expect(useApp.getState().regionShades).toEqual([
+      { x1: 0, y1: 0, x2: 1, y2: 1, fill: "#336699", id },
+    ]);
+  });
+
+  it("undo reverts updateRegionShade to the pre-edit shade", () => {
+    useApp.setState({
+      regionShades: [{ id: "sh1", x1: 0, y1: 0, x2: 1, y2: 1, fill: "#336699" }],
+    });
+    useApp.getState().updateRegionShade("sh1", { x2: 10, fill: "#ff0000" });
+    expect(useApp.getState().regionShades[0]).toMatchObject({ x2: 10, fill: "#ff0000" });
+
+    useApp.getState().undo();
+    expect(useApp.getState().regionShades).toEqual([
+      { id: "sh1", x1: 0, y1: 0, x2: 1, y2: 1, fill: "#336699" },
+    ]);
+  });
 });
