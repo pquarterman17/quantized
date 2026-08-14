@@ -40,7 +40,7 @@ export default function EditableFiguresSection() {
         const sessionBusy = publicationSession !== null;
         const previewDisabled = sessionBusy || unavailable !== null;
         return (
-          <div key={document.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+          <div key={document.id} className="qzk-fig-row">
             <button
               className="qzk-fig-item"
               title={`open editable figure "${document.name}"`}

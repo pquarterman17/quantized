@@ -220,6 +220,36 @@ describe("canonical Publication Preview session", () => {
     expect(figurePublicationDirty(useApp.getState().figurePublicationSession)).toBe(true);
   });
 
+  // Item 5 (cosmetic): the default main window is created at store init,
+  // before any dataset exists, so its `title` is the "" sentinel forever --
+  // `liveWindowDocument` used to carry that raw "" straight into the
+  // window-target session's name, so the Publication Preview title bar read
+  // "Publication preview — " and the builder's "Editing ." (a trailing bare
+  // period, no name) for a window the user is plainly looking at as "Data".
+  // saveFigure already solves this exact case with a displayedWindowTitle
+  // fallback (see its own test above); liveWindowDocument now applies the
+  // same one.
+  it("names a window-target session after what its title bar shows, for a never-renamed window", () => {
+    useApp.setState({ plotWindows: [{ ...window(), title: "", document: { ...document(), name: "" } }] });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Data");
+  });
+
+  it("falls back to Untitled graph when an untitled window has no dataset either", () => {
+    useApp.setState({
+      plotWindows: [{ ...window(), title: "", datasetId: null, document: { ...document(), name: "" } }],
+    });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Untitled graph");
+  });
+
+  it("never overrides a window's explicit title", () => {
+    // The window() fixture is titled "Current plot" -- resolving must be a
+    // fallback for the blank sentinel only, never a rename.
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Current plot");
+  });
+
   it("refuses to replace an active Publication Preview session", () => {
     const source = document();
     expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
@@ -576,5 +606,43 @@ describe("canonical Publication Preview session — library target", () => {
     // instead of silently reverting it back to the pre-Apply Stage state.
     expect(state.plotTitle).toBe("New title");
     expect(liveWindowDocument(state, state.plotWindows[0])?.plot.view.plotTitle).toBe("New title");
+  });
+
+  // Item 1 (data loss): the finder's exact repro at full-store level -- a
+  // saved figure open as a live FOCUSED window with an unsaved Stage edit
+  // (a log-scale toggle, a drawn shape -- plotTitle stands in here, matching
+  // the sibling window-target drift test above) that was never routed
+  // through saveFigure, so `editableFigures` itself looks untouched. A
+  // library-target Publication Preview session on that SAME saved figure
+  // must refuse Apply instead of silently reverting the live edit via
+  // applyFigurePublicationEdit's unconditional withPlotWindowDocument +
+  // hydrateView. Companion to the pure-decision-layer coverage in
+  // figurePublicationLibrary.test.ts (resolveLibraryApply/
+  // libraryWindowLiveDrifted), which exercises the same scenario one layer
+  // down without the full store.
+  it("refuses Apply and preserves an unsaved live Stage edit on a FOCUSED window sharing the figure's id", () => {
+    const saved = libraryFigure();
+    const w1: PlotWindow = { ...window(), id: "w1", title: "Saved figure", document: libraryFigure() };
+    useApp.setState({ editableFigures: [saved], plotWindows: [w1], focusedWindowId: "w1", plotTitle: "" });
+    useApp.setState({ plotTitle: "Live unsaved edit" }); // the unsaved Stage edit
+
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Renamed via preview" }));
+    const history = useApp.getState().history.length;
+    useToasts.setState({ toasts: [] });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+
+    const state = useApp.getState();
+    expect(state.history).toHaveLength(history);
+    // The saved Library entry must NOT pick up the draft's rename...
+    expect(state.editableFigures[0].name).toBe("Saved figure");
+    // ...and, the actual data-loss bug: the live Stage edit on the open
+    // window must survive Apply's refusal rather than being silently reverted.
+    expect(state.plotTitle).toBe("Live unsaved edit");
+    expect(state.figurePublicationSession?.staleBaseline).toBe(true);
+    expect(
+      useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("the plot changed while previewing")),
+    ).toBe(true);
   });
 });

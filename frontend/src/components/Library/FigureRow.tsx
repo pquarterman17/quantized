@@ -41,7 +41,7 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div className="qzk-origin-figure-row">
-      <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+      <div className="qzk-fig-row">
       <button
         className="qzk-fig-item"
         disabled={!resolved}

@@ -14,9 +14,10 @@
 // in the app flips this" history to preserve for a brand-new editing
 // surface, and the plan's pointer-default rule).
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { deriveRegionShadeRows } from "./canonicalRegionShades";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { RegionShade } from "../../../lib/types";
 import { Button, IconButton, NumberField, SegmentedControl } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
@@ -48,6 +49,10 @@ export default function RegionShadePropertiesPanel({
   const [y2, setY2] = useState("1");
   const [fill, setFill] = useState(DEFAULT_FILL);
   const [axis, setAxis] = useState<AxisChoice>("y");
+  // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
+  // row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
   const coords = [x1, y1, x2, y2].map(Number);
   // Same validity rule the store enforces (appendRegionShade rejects any
   // non-finite coordinate): a broken shade renders nowhere and would
@@ -67,7 +72,10 @@ export default function RegionShadePropertiesPanel({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+    // tabIndex=-1: an invisible, programmatic-only focus anchor for the
+    // per-row remove buttons below — see lib/focusGuard's doc. Not a new
+    // Tab stop.
+    <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {rows.map((row, index) => {
         const sh = regionShades[index];
         if (!sh) return null;
@@ -78,7 +86,11 @@ export default function RegionShadePropertiesPanel({
           >
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span className="qz-v" style={{ flex: 1 }}>{row.short}</span>
-              <IconButton title="Remove" aria-label={`Remove ${row.label}`} onClick={() => onRemove(row.id)}>
+              <IconButton
+                title="Remove"
+                aria-label={`Remove ${row.label}`}
+                onClick={() => removeRowSafely(containerRef.current, () => onRemove(row.id))}
+              >
                 ✕
               </IconButton>
             </div>

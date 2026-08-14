@@ -2,8 +2,9 @@
 // (mark Hc, Tc, a critical edge, zero…). Pick an axis + value, add it; the line
 // renders via the uPlot refLinePlugin. Lines are global to the Stage.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { fmtNum } from "../../lib/format";
 import { useApp } from "../../store/useApp";
 import { Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
@@ -14,6 +15,10 @@ export default function RefLinesCard() {
   const removeRefLine = useApp((s) => s.removeRefLine);
   const [axis, setAxis] = useState<"x" | "y">("x");
   const [value, setValue] = useState("0");
+  // Focus-safety anchor (lib/focusGuard) — the per-line ✕ below unmounts
+  // its own row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead.
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const add = () => {
     const v = Number(value);
@@ -48,20 +53,26 @@ export default function RefLinesCard() {
         </div>
       )}
 
-      {refLines.map((r) => (
-        <div
-          key={r.id}
-          className="qz-meta-row"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-        >
-          <span className="qz-k">
-            {r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
-          </span>
-          <IconButton title="Remove" onClick={() => removeRefLine(r.id)}>
-            ✕
-          </IconButton>
-        </div>
-      ))}
+      {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
+       *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
+       *  Delete/Backspace that lands here right after a removal, before it
+       *  can bubble to useGlobalShortcuts' window listener. */}
+      <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
+        {refLines.map((r) => (
+          <div
+            key={r.id}
+            className="qz-meta-row"
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          >
+            <span className="qz-k">
+              {r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
+            </span>
+            <IconButton title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}>
+              ✕
+            </IconButton>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

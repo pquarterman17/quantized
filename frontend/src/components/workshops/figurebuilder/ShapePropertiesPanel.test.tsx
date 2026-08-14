@@ -79,4 +79,24 @@ describe("ShapePropertiesPanel", () => {
     fireEvent.click(screen.getByLabelText("Remove arrow 1"));
     expect(onRemove).toHaveBeenCalledWith("s1");
   });
+
+  // Data-loss class bug (lib/focusGuard): the ✕ button unmounts its own row
+  // on click; without a focus handoff the browser drops focus to <body>,
+  // which useGlobalShortcuts.ts's Delete handler treats as "nothing is being
+  // edited" and removes the ACTIVE DATASET instead.
+  it("focus never lands on <body> after removing a shape via its ✕", () => {
+    renderPanel([ARROW, RECT]);
+    fireEvent.click(screen.getByLabelText("Remove arrow 1"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient — see Inspector/RegionShadesCard's test of
+  // the same name for the full explanation.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    renderPanel([ARROW, RECT]);
+    fireEvent.click(screen.getByLabelText("Remove arrow 1"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });

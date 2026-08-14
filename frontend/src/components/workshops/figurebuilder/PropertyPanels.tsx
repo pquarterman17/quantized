@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
 import { Checkbox, NumberField, Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
@@ -139,6 +140,11 @@ export default function PropertyPanels({
   openNonce?: number;
 }) {
   const patch = (change: Partial<FigureOverrides>) => setOverrides({ ...overrides, ...change });
+  // Post-removal focus anchor for the break rows' Remove buttons — the same
+  // lib/focusGuard class fix the decor cards/panels carry: the clicked button
+  // unmounts with its row, focus would fall to <body>, and a follow-up
+  // Delete/Backspace would reach useGlobalShortcuts' dataset removal.
+  const breaksRef = useRef<HTMLDivElement>(null);
   const breaksControlled = xBreaks !== undefined;
   const currentBreaks = breaksControlled ? xBreaks : (overrides.x_breaks ?? []);
   const commitBreaks = (next: [number, number][]) =>
@@ -203,7 +209,12 @@ export default function PropertyPanels({
         <Checkbox checked={overrides.spines?.top ?? true} onChange={(top) => patch({ spines: { ...overrides.spines, top } })}>top spine</Checkbox>
         <Checkbox checked={overrides.spines?.right ?? true} onChange={(right) => patch({ spines: { ...overrides.spines, right } })}>right spine</Checkbox>
         <Checkbox checked={overrides.grid ?? false} onChange={(grid) => patch({ grid: grid || undefined })}>grid</Checkbox>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}>
+        <div
+          ref={breaksRef}
+          tabIndex={-1}
+          onKeyDown={absorbStrayDeleteOnContainer}
+          style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}
+        >
           <span className="qzk-field-lbl" style={{ width: "100%" }}>x-axis breaks</span>
           {currentBreaks.map(([lo, hi], index) => (
             <div key={`${lo}:${hi}:${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -212,7 +223,11 @@ export default function PropertyPanels({
                 className="qz-btn qz-ghost qz-sm"
                 aria-label={`Remove x-axis break ${index + 1}`}
                 title="Remove this omitted x-axis range"
-                onClick={() => commitBreaks(currentBreaks.filter((_, current) => current !== index))}
+                onClick={() =>
+                  removeRowSafely(breaksRef.current, () =>
+                    commitBreaks(currentBreaks.filter((_, current) => current !== index)),
+                  )
+                }
               >
                 Remove
               </button>

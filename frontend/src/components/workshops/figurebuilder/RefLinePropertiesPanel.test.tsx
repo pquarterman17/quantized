@@ -55,6 +55,26 @@ describe("RefLinePropertiesPanel", () => {
     expect(onRemove).toHaveBeenCalledWith("r2");
   });
 
+  // Data-loss class bug (lib/focusGuard): the ✕ button unmounts its own row
+  // on click; without a focus handoff the browser drops focus to <body>,
+  // which useGlobalShortcuts.ts's Delete handler treats as "nothing is being
+  // edited" and removes the ACTIVE DATASET instead.
+  it("focus never lands on <body> after removing a line via its ✕", () => {
+    renderPanel([X_LINE, Y_LINE]);
+    fireEvent.click(screen.getByLabelText("Remove Y reference 1"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient — see Inspector/RegionShadesCard's test of
+  // the same name for the full explanation.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    renderPanel([X_LINE, Y_LINE]);
+    fireEvent.click(screen.getByLabelText("Remove Y reference 1"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("labels the axis picker, which the Stage card leaves as bare X/Y glyphs", () => {
     renderPanel([]);
     expect(screen.getByText("axis")).toBeInTheDocument();

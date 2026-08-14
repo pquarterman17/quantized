@@ -84,6 +84,38 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
     expect(useApp.getState().regionShades[0].x2).toBe(10);
   });
 
+  // Wrong-result bug (reproduced live): the row fields used to bind straight
+  // to the store number with no local buffer, so an unparseable keystroke
+  // ("-") committed nothing and the controlled field snapped back to the OLD
+  // digits — the NEXT keystroke then landed appended to that old value.
+  // Editing 1 to -5 silently produced 15. BufferedNumberField decouples the
+  // DOM value into a local buffer so the in-progress "-" stays visible.
+  describe("negative-number typing (BufferedNumberField)", () => {
+    it("typing '-' then '5' commits -5, not 15", () => {
+      render(<RegionShadesCard />);
+      const field = screen.getAllByPlaceholderText("x1")[0];
+      // Simulates the keystroke sequence: "-" first (an incomplete number —
+      // nothing commits yet), then the full "-5".
+      fireEvent.change(field, { target: { value: "-" } });
+      expect(useApp.getState().regionShades[0].x1).toBe(1); // unchanged mid-typing
+      expect(field).toHaveValue("-"); // buffer shows the in-progress text, doesn't snap back
+      fireEvent.change(field, { target: { value: "-5" } });
+      expect(useApp.getState().regionShades[0].x1).toBe(-5);
+      expect(field).toHaveValue("-5");
+    });
+
+    it("Select-All+Backspace clears the buffer; blur reverts to the last committed value", () => {
+      render(<RegionShadesCard />);
+      const field = screen.getAllByPlaceholderText("x1")[0];
+      fireEvent.change(field, { target: { value: "" } });
+      expect(field).toHaveValue(""); // the field can actually go empty now
+      expect(useApp.getState().regionShades[0].x1).toBe(1); // no undefined write
+      fireEvent.blur(field);
+      expect(field).toHaveValue("1"); // required: reverts to the committed value
+      expect(useApp.getState().regionShades[0].x1).toBe(1);
+    });
+  });
+
   it("changing the fill color commits it via updateRegionShade", () => {
     render(<RegionShadesCard />);
     fireEvent.change(screen.getByLabelText("Fill color"), { target: { value: "#00ff00" } });
@@ -109,6 +141,34 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
     render(<RegionShadesCard />);
     fireEvent.click(screen.getByLabelText("Remove region shade"));
     expect(useApp.getState().regionShades).toHaveLength(0);
+  });
+
+  // Data-loss class bug (reproduced live): the ✕ button unmounts itself on
+  // click, and without a focus handoff the browser drops focus to <body> —
+  // which useGlobalShortcuts.ts's Delete handler treats as "nothing is being
+  // edited" and removes the ACTIVE DATASET. lib/focusGuard moves focus to the
+  // card's own container first, synchronously, so body never receives it.
+  it("focus never lands on <body> after removing a shade via its ✕", () => {
+    render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("Remove region shade"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient: a focused plain <div> is not an "editing
+  // target" either, so useGlobalShortcuts' `!isEditing(e.target)` guard would
+  // still let a Delete/Backspace through and remove the active dataset even
+  // though body never received focus (measured live — this exact assertion
+  // caught it: the interim focus-only version left activeElement as the
+  // container but the keystroke still bubbled un-prevented). The container's
+  // own onKeyDown (lib/focusGuard's absorbStrayDeleteOnContainer) must call
+  // preventDefault() so useGlobalShortcuts' window listener never sees an
+  // un-prevented Delete for this target.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("Remove region shade"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it("shows the shade count badge", () => {

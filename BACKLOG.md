@@ -605,6 +605,43 @@ fail-before/pass-after regression test:
   already use, re-seeding errKeys/hiddenChannels from the fresh columns); an
   unchanged shape still keeps the user's styles/hidden/keys.
 
+### Frontend hardening rounds (standing — re-sweep as feature waves land)
+
+**First round (2026-08-14).** Four parallel finders (state/gesture,
+persistence round-trips, mechanical scan, live-GUI adversarial) over the 66
+files shipped since v0.20.0. Eight real bugs found, ALL FIXED same session
+(9 fixes counting the orchestrator's extension of the focus-guard class to
+the x-axis-breaks rows): (1) library-target Publication Preview Apply could
+silently clobber an unsaved live Stage edit — found independently by
+code-trace AND live repro; the session UI's `targetBlocked` check was also
+coincidentally short-circuiting for library sessions, so both layers now
+guard (`store/liveWindowDocument.ts` extracted to break the import cycle).
+(2) `.dwk` duplicate-document-id repair dropped `publication` on reopen.
+(3) `openFigureDocInWindow` silently dropped a FigureDoc's error-bar
+bindings; `figureDocPlotCompatibility`'s loss inventory was blind to the
+field (now applied, with coupled regression tests). (4) Decor-card ✕ removal
+let a follow-up Delete fall through to DATASET removal (focus fell to body)
+— fixed as a class via `lib/focusGuard.ts` across 10 surfaces; container
+focus alone measured insufficient, the preventDefault absorber is the
+load-bearing half. (5) Inspector decor-card numeric fields corrupted
+negative typing ("-5" became 15) — `BufferedNumberField` primitive extracted
+from PropertyNumberField, adopted in RegionShades/Shapes cards.
+(6) Library saved-figure rows clipped ALL action buttons at the default
+210 px panel width (the new ⎙ was unreachable). (7) duplicate error-binding
+Add is now a no-op (React key collision). (8) window-target preview session
+showed a blank name for a never-renamed window. Negative evidence recorded:
+PlotView↔sanitize is compile-time complete; promotion decomposition has no
+double-apply; export field semantics match the Stage (incl. shade alpha);
+zero console errors across the whole adversarial run; JSON.parse/floating-
+promise/cleanup classes all clean. Follow-ups booked, NOT fixed:
+`ErrorRolesCard`'s remove control is a `<span role="button">`, not
+keyboard-reachable (a11y gap, pre-existing); `SavedFiguresSection`'s delete
+button still ~31 px past the panel edge at the 160 px MINIMUM width
+(pre-existing "Editable" label-width constraint; fine at default);
+F2.1e's detached-session fallback branch in `fileCommands.ts` may be dead
+code (`focusWindow` invariant seems to make it unreachable — verify before
+deleting, it is a deliberate fallback).
+
 ### Backend hardening rounds (standing — re-sweep as routes land)
 
 **Third round (2026-08-12, `872a26f`).** Audited ~29 route/calc modules added

@@ -102,6 +102,20 @@ describe("PropertyPanels publication parity controls", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ x_breaks: [] }));
   });
 
+  // The break rows' Remove buttons are the same lib/focusGuard class as the
+  // decor cards': the clicked button unmounts with its row, focus would fall
+  // to <body>, and a follow-up Delete/Backspace would reach useGlobalShortcuts'
+  // DATASET removal. Same two-part assertions as RegionShadesCard.test.tsx —
+  // the defaultPrevented one is the load-bearing half.
+  it("focus never lands on <body> after removing a break, and a follow-up Delete is prevented", async () => {
+    render(<Harness initial={{ x_breaks: [[5, 8]] }} openGroup="Axes & ticks" onChange={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove x-axis break 1" }));
+    expect(document.activeElement).not.toBe(document.body);
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("edits a legend title and all supported annotation fields in place", async () => {
     const onLegend = vi.fn();
     const { unmount } = render(<Harness initial={{ legend: {} }} openGroup="Legend" onChange={onLegend} />);

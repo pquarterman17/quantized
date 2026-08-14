@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import AnnotationEditor from "./AnnotationEditor";
@@ -47,5 +47,27 @@ describe("AnnotationEditor — font size floor (item 8)", () => {
   it("uses a sane positivity floor (1) instead of Number.MIN_VALUE", () => {
     render(<AnnotationEditor annotations={ANNOTATIONS} onChange={vi.fn()} />);
     expect(screen.getByLabelText("annotation 1 font size")).toHaveAttribute("min", "1");
+  });
+});
+
+// Data-loss class bug (lib/focusGuard): "Remove" unmounts its own row on
+// click; without a focus handoff the browser drops focus to <body>, which
+// useGlobalShortcuts.ts's Delete handler treats as "nothing is being edited"
+// and removes the ACTIVE DATASET instead.
+describe("AnnotationEditor — remove focus safety", () => {
+  it("focus never lands on <body> after removing an annotation", () => {
+    render(<AnnotationEditor annotations={ANNOTATIONS} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText("Remove annotation 1"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient — see Inspector/RegionShadesCard's test of
+  // the same name for the full explanation.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    render(<AnnotationEditor annotations={ANNOTATIONS} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText("Remove annotation 1"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 });

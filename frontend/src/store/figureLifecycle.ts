@@ -1,16 +1,18 @@
 // Editable FigureDocument lifecycle. These are the canonical, reopenable plot
 // documents; legacy FigureDoc objects remain the Publication Preview model.
-import {
-  figureDocumentToPlotView,
-  updateFigureDocumentFromPlotView,
-  type FigureDocument,
-} from "../lib/figureDocument";
+import { figureDocumentToPlotView, type FigureDocument } from "../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../lib/figureDocumentPublication";
-import { displayedWindowTitle, hydrateView, snapshotView, type PlotWindow } from "../lib/plotview";
+import { displayedWindowTitle, hydrateView, type PlotWindow } from "../lib/plotview";
 import type { AppState } from "./useApp";
 import { figurePublicationSourceUnavailable, resolveLibraryApply } from "./figurePublicationLibrary";
+import { liveWindowDocument } from "./liveWindowDocument";
 import { toast } from "./toasts";
 import { withPlotWindowDocument } from "./windowDocuments";
+
+// Re-exported so every existing importer (figureLifecycle.test.ts,
+// canonicalSession.ts, ...) is untouched -- see liveWindowDocument.ts's doc
+// for why the definition itself moved to a dependency-free module.
+export { liveWindowDocument } from "./liveWindowDocument";
 
 let figureSequence = 0;
 const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;
@@ -25,18 +27,6 @@ export const SESSION_BUSY_MSG = "finish or cancel the current Publication Previe
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-/** Return the canonical document with the focused facade folded into it. */
-export function liveWindowDocument(state: AppState, window: PlotWindow): FigureDocument | null {
-  if (window.kind !== "plot" || !window.document) return null;
-  return window.id === state.focusedWindowId
-    ? updateFigureDocumentFromPlotView(window.document, {
-        view: snapshotView(state),
-        name: window.title,
-        datasetId: window.datasetId,
-      })
-    : structuredClone(window.document);
-}
 
 export function editableFigureDirty(state: AppState, window: PlotWindow): boolean {
   if (window.kind !== "plot" || !window.document) return false;

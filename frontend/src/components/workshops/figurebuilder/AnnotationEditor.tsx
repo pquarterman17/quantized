@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { NumberField, Select } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
@@ -22,6 +23,10 @@ export default function AnnotationEditor({
   const [annText, setAnnText] = useState("");
   const [annX, setAnnX] = useState("");
   const [annY, setAnnY] = useState("");
+  // Focus-safety anchor (lib/focusGuard) — the "Remove" button below unmounts
+  // its own row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
   const updateAnnotation = (index: number, change: Partial<Annotation>) =>
     onChange(annotations.map((annotation, current) =>
       current === index ? { ...annotation, ...change } : annotation,
@@ -33,7 +38,12 @@ export default function AnnotationEditor({
   };
 
   return (
-    <>
+    // A plain <div> replacing the prior Fragment so there's a stable root to
+    // focus (lib/focusGuard) — flex/flexWrap/gap/width match the parent
+    // Group's own content-row styling (PropertyPanels.tsx) so nesting one
+    // more level changes nothing visually. tabIndex=-1: invisible,
+    // programmatic-only focus anchor, not a new Tab stop.
+    <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexWrap: "wrap", gap: 8, width: "100%" }}>
       {annotations.map((annotation, index) => (
         <div key={index} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", width: "100%", paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
           <span className="qzk-ds-meta" style={{ width: "100%" }}>Annotation {index + 1}</span>
@@ -128,7 +138,11 @@ export default function AnnotationEditor({
             className="qz-btn qz-ghost qz-sm"
             aria-label={`Remove annotation ${index + 1}`}
             title="Remove annotation"
-            onClick={() => onChange(annotations.filter((_, current) => current !== index))}
+            onClick={() =>
+              removeRowSafely(containerRef.current, () =>
+                onChange(annotations.filter((_, current) => current !== index)),
+              )
+            }
           >
             Remove
           </button>
@@ -162,6 +176,6 @@ export default function AnnotationEditor({
       >
         + Add
       </button>
-    </>
+    </div>
   );
 }
