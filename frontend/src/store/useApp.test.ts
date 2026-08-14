@@ -4815,6 +4815,88 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     expect(s.stageTab).toBe("plot"); // item 1: surfaced even though we started on Worksheet
   });
 
+  // Item 3 (silent loss): openFigureDocInWindow patched xKey/yKeys/scales/
+  // titles from the doc's config but never doc.config.errors -- the window
+  // instead kept whatever createWindow seeded from the bound DATASET's own
+  // (possibly stale or absent) errorRoles. The finder's exact repro: a
+  // dataset with an uncommitted error column (errorRoles empty/different)
+  // and a doc whose config.errors names the Y-error binding the wells
+  // actually chose. Companion assertion in figureCompatibility.test.ts
+  // proves the compatibility inventory reports zero losses for an
+  // errors-only doc BECAUSE this test proves they are actually applied.
+  it("applies the doc's own error-bar bindings (item 3), not just the bound dataset's committed errorRoles", () => {
+    const twoColumn: DataStruct = {
+      time: [0, 1, 2],
+      values: [[1, 2, 3], [0.1, 0.1, 0.1]],
+      labels: ["Y", "Y err"],
+      units: ["", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "XRD:Book1", data: raw },
+        // No errorRoles committed -- the wells were set in the Graph Builder
+        // but never written back to the dataset (the finder's scenario).
+        { id: "d2", name: "XRD:Book2", data: twoColumn },
+      ],
+    });
+    useApp.getState().addFigureDoc({
+      id: "doc-err",
+      name: "Errors Figure",
+      datasetId: "d2",
+      live: true,
+      config: {
+        xKey: null,
+        yKeys: [0],
+        xScale: "linear",
+        yScale: "linear",
+        title: "Errors Doc",
+        xLabel: "",
+        yLabel: "",
+        style: "default",
+        fmt: "pdf",
+        dpi: 200,
+        overrides: null,
+        seriesStyles: null,
+        errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      },
+    });
+    useApp.getState().openFigureDocInWindow("doc-err");
+    const s = useApp.getState();
+    const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(created.document?.bindings.errors).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    // The legacy errKeys projection (the plugin/fit-weighting consumer) stays
+    // in sync too, so a subsequent commit doesn't drop the binding back out.
+    expect(s.errKeys).toEqual({ 0: 1 });
+  });
+
+  it("leaves createWindow's dataset-seeded errors untouched when the doc carries none (older docs, additive field)", () => {
+    useApp.getState().addFigureDoc({
+      id: "doc-no-errors",
+      name: "Plain Figure",
+      datasetId: "d2",
+      live: true,
+      config: {
+        xKey: null,
+        yKeys: [0],
+        xScale: "linear",
+        yScale: "linear",
+        title: "Plain Doc",
+        xLabel: "",
+        yLabel: "",
+        style: "default",
+        fmt: "pdf",
+        dpi: 200,
+        overrides: null,
+        seriesStyles: null,
+      },
+    });
+    useApp.getState().openFigureDocInWindow("doc-no-errors");
+    const s = useApp.getState();
+    const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(created.document?.bindings.errors).toEqual([]);
+  });
+
   it("openFigureDocInWindow is a no-op for a frozen doc or one with no resolved dataset", () => {
     useApp.getState().addFigureDoc({
       id: "doc-frozen",
