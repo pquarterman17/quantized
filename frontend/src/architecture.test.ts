@@ -318,7 +318,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // ReflectivityFftResult) — a self-contained leaf block nothing else in this
   // file references — moved verbatim to the new lib/reductionTypes.ts,
   // funding the new WorkbookNode type + Dataset.workbookId field added next.
-  "/lib/types.ts": 1040,
+  // 1040 -> 1053 (2026-08-14, same PR): added the `Dataset.workbookId` field
+  // (see lib/workbooks.ts's `deriveWorkbooks`/`reconcileWorkbookRefs`, the
+  // new pure module that derives/repairs it — not yet wired into the store
+  // or .dwk; that's PR A2).
+  "/lib/types.ts": 1053,
   "/lib/plotspec.ts": 893,
   "/lib/originFigures.ts": 793,
   "/components/Stage/useMultiPanelStage.ts": 791,

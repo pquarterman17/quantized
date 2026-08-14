@@ -80,7 +80,7 @@ export interface OriginSheetGroup {
  *  what stops two DIFFERENT Origin imports that both happen to contain a
  *  "Book1" (Origin's own default naming) from merging into one sheet group
  *  (WORKSHEET_PLAN item 5 hardening / "originSheetGroups keying collision"). */
-function importStem(d: Dataset): string {
+export function importStem(d: Dataset): string {
   const i = d.name.indexOf(":");
   return i < 0 ? d.name : d.name.slice(0, i);
 }

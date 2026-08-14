@@ -537,6 +537,19 @@ export interface Dataset {
    *  (re-picks via the browser dialog, see `store/reimport.ts`). Round-trips
    *  through .dwk. */
   source?: { kind: "path"; path: string };
+  /** Containing WORKBOOK id (LIBRARY_WORKBOOK_UX_PLAN PR A1 — the
+   *  folder -> workbook -> worksheet/figure/analysis/note hierarchy, L0.1).
+   *  Absent = not yet assigned a workbook (pre-migration legacy data, or a
+   *  dataset created before this field existed). Membership lives HERE, on
+   *  the dataset — not as a workbook child-list — for the exact reason
+   *  `folderId` does: deleting a dataset can never leave a workbook pointing
+   *  at a dangling member. Pure organization, like `folderId`; it never
+   *  gates row-state (excludedRows/filter). `lib/workbooks.ts` derives this
+   *  field's value for legacy documents (`deriveWorkbooks`) and repairs a
+   *  broken reference (`reconcileWorkbookRefs`); wiring it into the
+   *  workspace document (.dwk v4) and the store is PR A2's job — this field
+   *  is added now so the type is stable underneath that work. */
+  workbookId?: string;
 }
 
 /** A folder in the Library's project tree (project-organization plan, Approach
