@@ -208,11 +208,19 @@ function groupKeyOf(d: Dataset): { kind: GroupKind; key: string; base?: string }
  * datasets. Pure and deterministic: identical inputs plus a deterministic
  * `genId` produce identical output, byte for byte. Workbook list order and
  * per-folder `order` both follow FIRST APPEARANCE in `datasets`.
+ *
+ * `occupancy` is the FULL document's dataset list for rule 2's
+ * folder-exclusivity check; it defaults to `datasets` (the whole-document
+ * migration case) but a partial derivation (reconcile's orphan repair) must
+ * pass the complete list — judging occupancy from the derivation subset
+ * alone would flag a folder as a convertible surrogate while a
+ * valid-membership tenant still lives in it.
  */
 export function deriveWorkbooks(
   datasets: readonly Dataset[],
   folders: readonly FolderNode[],
   genId: () => string,
+  occupancy: readonly Dataset[] = datasets,
 ): WorkbookDerivation {
   // Pass 1: bucket datasets into ordered groups (first-appearance order of
   // each group's KEY, mirroring lib/originFolders.ts's `planOriginFolders`).
@@ -244,7 +252,7 @@ export function deriveWorkbooks(
       sortedMembers = [...g.members].sort((a, b) => originSheetNumber(a) - originSheetNumber(b));
       node.name = g.base!;
       node.originBook = g.base!;
-      const surrogate = detectSurrogateFolder(g.members, g.base!, folders, datasets);
+      const surrogate = detectSurrogateFolder(g.members, g.base!, folders, occupancy);
       if (surrogate) {
         convertedFolderIds.push(surrogate.folderId);
         node.folderId = surrogate.parentId;
@@ -365,7 +373,7 @@ export function reconcileWorkbookRefs(
     return { workbooks: [...workbooks], membership, convertedFolderIds: [], warnings };
   }
 
-  const derived = deriveWorkbooks(orphaned, folders, genId);
+  const derived = deriveWorkbooks(orphaned, folders, genId, datasets);
   return {
     workbooks: [...workbooks, ...derived.workbooks],
     membership: { ...membership, ...derived.membership },

@@ -339,4 +339,25 @@ describe("reconcileWorkbookRefs", () => {
     expect(Object.keys(result.membership).sort()).toEqual(["a", "b", "c"]);
     expect(result.membership.a).toBe("w1");
   });
+
+  it("does not flag a surrogate folder that also hosts a valid-membership dataset", () => {
+    // Folder "Book4" holds two ORPHANED Origin sheets AND a tenant dataset
+    // whose workbookId is valid. The folder is not exclusively the book's
+    // planOriginFolders surrogate — offering it for conversion would let A3
+    // collapse a folder out from under the valid tenant. Occupancy must be
+    // judged against the WHOLE document, not just the orphaned subset the
+    // repair pass re-derives over.
+    const folders = [folder("f1", "Book4", null)];
+    const workbooks = [{ id: "w1", name: "elsewhere" }];
+    const s1 = ds("a", "Proj:Book4", { originBook: "Book4", folderId: "f1" });
+    const s2 = ds("b", "Proj:Book4@2", { originBook: "Book4@2", folderId: "f1" });
+    const tenant = ds("c", "tenant.csv", { folderId: "f1" });
+    tenant.workbookId = "w1";
+    const result = reconcileWorkbookRefs([s1, s2, tenant], workbooks, folders, counterGenId());
+    expect(result.convertedFolderIds).toEqual([]);
+    // The orphaned sheets still get one shared workbook, placed IN the folder.
+    expect(result.membership.a).toBe(result.membership.b);
+    const book = result.workbooks.find((w) => w.id === result.membership.a)!;
+    expect(book.folderId).toBe("f1");
+  });
 });
