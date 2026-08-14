@@ -35,7 +35,13 @@ export function removeErrorBindingFromList(
 
 /** Append a new binding. No id to mint (unlike appendRefLine/canonicalShapes'
  *  add) -- see this module's doc for why the array index is the binding's
- *  whole identity. */
+ *  whole identity. A documented no-op for an EXACT channel+target+axis+side
+ *  duplicate of an existing binding (item 4): the same binding twice is
+ *  semantically meaningless (one error column bound to one target, stated
+ *  twice), and ErrorColumnsPanel.tsx keys each row by that exact tuple, so a
+ *  duplicate collides with its twin's React key. Differing in even one
+ *  field (e.g. the same channel/target/axis at the opposite `side` of an
+ *  asymmetric pair) is a distinct, meaningful binding and still appends. */
 export function appendErrorBinding(
   bindings: readonly ErrorBinding[],
   channel: number,
@@ -43,5 +49,9 @@ export function appendErrorBinding(
   axis: ErrorBinding["axis"],
   side: ErrorSide,
 ): ErrorBinding[] {
-  return [...bindings, { channel, target, axis, side }];
+  const isDuplicate = bindings.some(
+    (binding) =>
+      binding.channel === channel && binding.target === target && binding.axis === axis && binding.side === side,
+  );
+  return isDuplicate ? [...bindings] : [...bindings, { channel, target, axis, side }];
 }
