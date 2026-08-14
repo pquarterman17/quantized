@@ -3,10 +3,12 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-12 — convergence rounds 1+2 shipped (figdoc page panels,
-promotion compat report, in-place library editing, F2.1e canonical fallback,
-F2.1i override decomposition); ALL unblocked convergence work is done —
-F2.1f/g remain, both owner-gated (D-1/D-3/D-4 in BACKLOG)
+**Updated:** 2026-08-13 — the region-shades owner gate is DECIDED (editable),
+booked as unblocked slice F2.3j. Prior: 2026-08-12 — convergence rounds 1+2
+shipped (figdoc page panels, promotion compat report, in-place library
+editing, F2.1e canonical fallback, F2.1i override decomposition); ALL other
+unblocked convergence work is done — F2.1f/g remain, both owner-gated
+(D-1/D-3/D-4 in BACKLOG)
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -337,13 +339,25 @@ decisions are merged.
         from opening Publication Preview for exactly this reason. Unblocks
         if/when the preview grows a multi-panel contract (relates to F3's
         PageDocument, but per-figure faceting is a different mechanism).
+  - [ ] **F2.3j Region-shade editing (owner DECIDED editable, 2026-08-13 —
+        unblocked dev work).** Resolves the question F2.3d deliberately
+        left open: decoded film-stack shades are NOT immutable provenance —
+        they become user-editable plot objects, per the pointer-default
+        rule (plot objects manipulable from day one). Ships as ONE slice,
+        both halves together per F2.3d's consistency argument: a Stage
+        card (create/edit/remove, following RefLinesCard's conventions —
+        a shade is fully specified by numbers, so ADD belongs in both
+        surfaces) AND the matching Publication Preview panel. Once a real
+        editing surface exists, F2.1i's deliberately-raw `region_shades`
+        override should decompose into the view like shapes/refLines did.
 - [x] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
       **COMPLETE 2026-08-12** — the named gesture set (legend drag, annotation
       drag, text double-click, reference-line drag, shape drag) all work on
       the canonical draft with matching panels. Region shades have NO gesture
-      anywhere in the app (no surface creates or edits one); that is the
-      owner-gated F2.3 residue, not an F2.4 gap.
+      anywhere in the app (no surface creates or edits one); that was the
+      owner-gated F2.3 residue, not an F2.4 gap (decided editable
+      2026-08-13 → booked as F2.3j).
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
         annotations expose their existing property panel; text also exposes
         the existing inline editor. Series remain visibly Stage-owned.

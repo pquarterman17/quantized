@@ -11,7 +11,9 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-08-10 (plan-hygiene reconciliation: #2, #5, #15, #17 had
+**Updated:** 2026-08-13 (the #17 `clearShapes` parked judgment call is
+CLOSED — owner decided ADD CONFIRM, shipped `77bc718` same session; see
+Completed. Prior: 2026-08-10, plan-hygiene reconciliation: #2, #5, #15, #17 had
 every sub-box checked in their tier sections but were never struck/moved —
 moved to Completed with their evidence dates. The only unchecked box left in
 this plan is #16's `.opju` migration edges, which is owner-dependent. Prior:
@@ -187,6 +189,16 @@ feature checklist.
 
 ## Completed
 
+- ~~**#17 residue: `clearShapes` "Clear all" confirm judgment call**~~
+  (2026-08-13) — the 2026-07-19 destructive-action sweep parked this as an
+  owner call; owner decided ADD CONFIRM, shipped `77bc718` the same session
+  (ShapesCard's "Clear all" now routes through `askConfirm`; the per-shape
+  ✕ stays confirm-free under the canvas-object exemption, and
+  `plotspecApply`'s programmatic REPLACE path is untouched). One premise in
+  the parked row had gone stale and is corrected in the dialog copy: the
+  wipe is no longer un-undoable — `clearShapes` records a "clear shapes"
+  history entry since GUI #1's edit history landed, so the body says
+  "You can restore them with Undo."
 - ~~**Map ROI safety + drag: three defects from a real release test**~~
   (2026-08-12, owner-reported). Testing 3-D XRD (pixel4d) integration boxes
   surfaced four complaints; three are fixed here, the rest are booked in
