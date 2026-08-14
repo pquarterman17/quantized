@@ -169,6 +169,24 @@ flow — the project doesn't exist until the first publish):
      `pip install quantized-lab` / `pipx install quantized-lab` /
      `uv tool install quantized-lab` pick up the new version immediately.
 
+### Cutting the tag from a cloud session (no laptop needed)
+
+Cloud/CCR sessions carry git credentials scoped to their own branch — they
+cannot write `refs/tags/*` (confirmed: every tag push 403s regardless of tag
+name). The `tag-release` workflow closes the gap: **Actions → tag-release →
+Run workflow** with the version (with or without the leading `v`), after the
+eight-file bump commit is merged to `main`.
+
+It refuses to run unless the requested version matches what the checked-out
+commit itself declares (the v0.2.x auto-update-loop footgun), refuses to move
+an existing tag, and pushes with the `RELEASE_TAG_PAT` fine-grained PAT
+(Contents: read & write, this repo only — stored as an Actions secret; setup
+steps in the workflow's own header). The PAT matters: a tag pushed by the
+built-in `GITHUB_TOKEN` emits **no push event** (Actions loop prevention), so
+`release.yml`/`pypi.yml` would never fire and PyPI would silently stay a
+version behind. A PAT push is a real push event and fans out to both,
+exactly like a laptop push.
+
 ### Dry run (validate without releasing)
 
 - Actions → *release* → *Run workflow* (manual dispatch): builds +

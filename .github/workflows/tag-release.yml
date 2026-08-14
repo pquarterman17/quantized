@@ -1,0 +1,85 @@
+name: tag-release
+
+# Push the vX.Y.Z release tag from CI, so a release can be cut end-to-end
+# from a cloud session whose git credentials cannot write refs/tags/*
+# (they are scoped to the session's own branch).
+#
+# WHY A PAT AND NOT THE BUILT-IN GITHUB_TOKEN: a tag pushed with
+# GITHUB_TOKEN does not emit a push event (GitHub suppresses workflow
+# triggers from workflow-created refs to prevent loops), so release.yml
+# and pypi.yml would never fire and PyPI would silently stay a version
+# behind while the GitHub Release looked complete. A fine-grained-PAT
+# push is a real push event: both workflows trigger exactly as if the
+# tag came from the owner's machine.
+#
+# One-time setup (owner):
+#   1. GitHub -> Settings -> Developer settings -> Personal access tokens
+#      -> Fine-grained tokens: repository access = pquarterman17/quantized
+#      ONLY, permissions = Contents: Read and write. Pick a sane expiry.
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> New
+#      repository secret, name RELEASE_TAG_PAT, value = that token.
+#
+# Dispatch input: version ("0.21.0" or "v0.21.0"). The job REFUSES to
+# tag unless the requested version matches the version the target commit
+# itself declares (tagging a commit whose files say something else is
+# the auto-update-loop footgun RELEASE.md documents from v0.2.x), and
+# REFUSES to move an existing tag under any circumstances.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (X.Y.Z, with or without the leading v)"
+        required: true
+        type: string
+
+permissions:
+  contents: read # the tag push itself authenticates with the PAT, not GITHUB_TOKEN
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the PAT secret
+        env:
+          HAS_PAT: ${{ secrets.RELEASE_TAG_PAT != '' }}
+        run: |
+          if [ "$HAS_PAT" != "true" ]; then
+            echo "::error::RELEASE_TAG_PAT is not configured — see this workflow's header for the one-time setup."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.RELEASE_TAG_PAT }}
+          fetch-depth: 0 # full history so refs/tags/* are present for the exists-check
+
+      - name: Refuse a version the checked-out commit does not declare
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${REQUESTED#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-]?(a|b|rc|pre|dev)\.?[0-9]*)?$'; then
+            echo "::error::'$REQUESTED' is not an X.Y.Z(-pre) version"
+            exit 1
+          fi
+          declared=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$version" != "$declared" ]; then
+            echo "::error::requested v$version but this commit declares $declared — merge the eight-file release bump first (RELEASE.md), then dispatch again"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::tag v$version already exists — this workflow never moves a tag"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_ENV"
+
+      - name: Create and push the annotated tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$version" -m "v$version"
+          git push origin "v$version"
+          echo "pushed v$version at $(git rev-parse HEAD)"
