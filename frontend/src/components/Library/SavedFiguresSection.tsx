@@ -51,7 +51,7 @@ export default function SavedFiguresSection() {
           const canOpenWindow = !missingLiveSource && plotCompatibility.blocker === null;
           const publicationCompatibility = figureDocPublicationCompatibility(d, datasetIds);
           return (
-            <div key={d.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+            <div key={d.id} className="qzk-fig-row">
               <button
                 className="qzk-fig-item"
                 disabled={!ok}

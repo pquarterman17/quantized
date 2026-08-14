@@ -284,12 +284,24 @@ body {
 /* Inspector breadcrumb (sub-item 2) — the active dataset's folder path. */
 .qzk-ds-breadcrumb { padding: 4px 6px; font-size: var(--type-nano); font-family: var(--font-mono); color: var(--text-faint); border-bottom: 1px solid var(--border-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Figures section (item 18): one restorable plot-state snapshot per row. */
-.qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
+/* Figures section (item 18): one restorable plot-state snapshot per row.
+   `.qzk-fig-row` wraps this button plus its trailing rename/preview/
+   duplicate/delete action buttons (EditableFiguresSection/SavedFiguresSection/
+   PagesSection/FigureRow) — same shape as a dataset row's name+actions
+   (.qzk-ds-name / .qzk-ds-actions), so the same two rules apply: the name
+   half gets `min-width: 0` so it can actually shrink below its content size,
+   and the trailing actions never do. Measured bug (210px default Library
+   width): without `min-width: 0` here, `.qzk-fig-item`'s own automatic
+   minimum size (content-based, since neither it nor `.qzk-fig-meta` opted
+   out) pinned the row wider than the panel, clipping/hiding every action
+   button after the first. */
+.qzk-fig-row { display: flex; gap: 4px; align-items: stretch; min-width: 0; }
+.qzk-fig-row > .qz-btn { flex-shrink: 0; }
+.qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }
 .qzk-fig-item:disabled { opacity: 0.45; cursor: default; }
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qzk-fig-meta { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
+.qzk-fig-meta { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 .qzk-origin-figure-row { min-width: 0; }
 .qzk-origin-preview-window { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: var(--pad); margin: 0; }
 .qzk-origin-preview-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }

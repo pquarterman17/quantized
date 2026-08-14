@@ -63,7 +63,7 @@ export default function PagesSection() {
         <span className="qzk-group-count">{pages.length}</span>
       </button>
       {!collapsed && sorted.map((page) => (
-        <div key={page.id} style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+        <div key={page.id} className="qzk-fig-row">
           <button
             className="qzk-fig-item"
             title={`open saved page "${page.name}"`}
