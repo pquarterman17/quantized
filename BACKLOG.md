@@ -624,6 +624,25 @@ across 7 route modules, fixed in the ONE shared constructor),
 | ~~**Baseline: frontend channel-bind vs. backend corrections-DAG** (#5)~~ **RESOLVED 2026-07-19** — the established DAG stays authoritative for its default time/value-0 channel; an arbitrary plotted X/Y baseline subtracts into a DERIVED dataset carrying explicit channel provenance, so the raw source and unrelated channels are never silently rewritten | GUI_INTERACTION #5 gate |
 | ~~**Plot Objects tree scope** (#2)~~ **MOOT 2026-07-24** — the large bet was taken and delivered (PR #66) as a bounded Inspector extension, not a full Object Manager; every #2 sub-item is struck. The gate was simply never closed behind the shipped work | GUI_INTERACTION #2 gate |
 
+### Dependency security — alert #24 OPEN, upstream-blocked (booked 2026-08-13)
+
+**extract-zip <= 2.0.1, high, unvalidated symlink path traversal** (Dependabot
+alert #24, created 2026-08-12). Chain: `puppeteer-core@23.11.1 →
+@puppeteer/browsers@2.6.1 → extract-zip@2.0.1` in
+`tools/visual/package-lock.json` — the dev-only screenshot harness, never
+shipped. Triage 2026-08-13:
+
+- **No patched version exists** — 2.0.1 IS the latest release, so no bump can
+  close it; the alert is upstream-blocked, not negligence.
+- **Reachability is low**: extract-zip only unpacks Chrome-for-Testing
+  archives fetched from Google's CDN, not attacker-controlled zips.
+- **Owner decision 2026-08-13: leave OPEN, do not dismiss.** Re-check on
+  every reconcile pass: (a) a patched extract-zip ships (then the ordinary
+  lockfile bump auto-resolves the alert), or (b) puppeteer replaces the dep.
+  The structural fix — migrating `tools/visual` from puppeteer-core to the
+  Playwright already used for e2e — was presented and not chosen; it remains
+  the fallback if the upstream stall drags on.
+
 ### Dependency security (swept 2026-08-06 — 6 alerts closed)
 
 `fd7c5d0` applied all 5 open Dependabot PR groups as ONE commit (same
