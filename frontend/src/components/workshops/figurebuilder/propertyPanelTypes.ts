@@ -6,7 +6,7 @@
 // PropertyPanels.tsx so every existing importer stays source-compatible.
 
 import type { ErrorBinding, ErrorSide } from "../../../lib/errorRoles";
-import type { AxisFormat, ChannelRole, RefLine, Shape, SeriesStyle } from "../../../lib/types";
+import type { AxisFormat, ChannelRole, RefLine, RegionShade, Shape, SeriesStyle } from "../../../lib/types";
 
 /** F2.3b: per-series properties on the canonical draft. Supplied only when a
  *  canonical session has at least one plotted channel (legacy Publication
@@ -46,6 +46,17 @@ export interface RefLinesPanelProps {
   refLines: readonly RefLine[];
   onValue: (id: string, value: number) => void;
   onAdd: (axis: RefLine["axis"], value: number) => void;
+  onRemove: (id: string) => void;
+}
+
+/** F2.3j: region shades on the canonical draft (owner decision 2026-08-13:
+ *  decoded shades are EDITABLE plot objects, not immutable provenance).
+ *  Supplied only in a canonical session -- like F2.3d's reference lines, the
+ *  group renders even with an EMPTY list, because Add needs no live canvas. */
+export interface RegionShadesPanelProps {
+  regionShades: readonly RegionShade[];
+  onPatch: (id: string, patch: Partial<Omit<RegionShade, "id">>) => void;
+  onAdd: (shade: Omit<RegionShade, "id">) => void;
   onRemove: (id: string) => void;
 }
 

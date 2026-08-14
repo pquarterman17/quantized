@@ -3,12 +3,13 @@
 **Status:** Active
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`
 **Created:** 2026-08-01
-**Updated:** 2026-08-13 — the region-shades owner gate is DECIDED (editable),
-booked as unblocked slice F2.3j. Prior: 2026-08-12 — convergence rounds 1+2
-shipped (figdoc page panels, promotion compat report, in-place library
-editing, F2.1e canonical fallback, F2.1i override decomposition); ALL other
-unblocked convergence work is done — F2.1f/g remain, both owner-gated
-(D-1/D-3/D-4 in BACKLOG)
+**Updated:** 2026-08-13 — F2.3j region-shade editing SHIPPED (Stage card +
+Publication Preview panel + override decomposition). Prior same day: the
+region-shades owner gate DECIDED (editable), booked as unblocked slice
+F2.3j. Prior: 2026-08-12 — convergence rounds 1+2 shipped (figdoc page
+panels, promotion compat report, in-place library editing, F2.1e canonical
+fallback, F2.1i override decomposition); ALL other unblocked convergence
+work is done — F2.1f/g remain, both owner-gated (D-1/D-3/D-4 in BACKLOG)
 **Audit author:** ChatGPT-Sol (not Claude)
 **Audited baseline:** Quantized 0.14.0, commit `6b8b891` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -339,25 +340,40 @@ decisions are merged.
         from opening Publication Preview for exactly this reason. Unblocks
         if/when the preview grows a multi-panel contract (relates to F3's
         PageDocument, but per-figure faceting is a different mechanism).
-  - [ ] **F2.3j Region-shade editing (owner DECIDED editable, 2026-08-13 —
-        unblocked dev work).** Resolves the question F2.3d deliberately
-        left open: decoded film-stack shades are NOT immutable provenance —
-        they become user-editable plot objects, per the pointer-default
-        rule (plot objects manipulable from day one). Ships as ONE slice,
-        both halves together per F2.3d's consistency argument: a Stage
-        card (create/edit/remove, following RefLinesCard's conventions —
-        a shade is fully specified by numbers, so ADD belongs in both
-        surfaces) AND the matching Publication Preview panel. Once a real
-        editing surface exists, F2.1i's deliberately-raw `region_shades`
-        override should decompose into the view like shapes/refLines did.
+  - [x] **F2.3j Region-shade editing (owner DECIDED editable, 2026-08-13;
+        shipped same day, Claude Sonnet 5).** Resolves the question F2.3d
+        deliberately left open: decoded film-stack shades are NOT immutable
+        provenance — they are user-editable plot objects, per the pointer-
+        default rule (plot objects manipulable from day one). Shipped as
+        ONE slice, all three parts: `Inspector/RegionShadesCard.tsx` (Stage
+        card — create/edit/remove, following RefLinesCard's ADD-belongs-here
+        convention plus ShapesCard's inline-coordinate-editing convention,
+        since a shade carries four coordinates + fill + axis, not one
+        value), `RegionShadePropertiesPanel.tsx` + `canonicalRegionShades.ts`
+        (the matching Publication Preview panel, mirroring
+        RefLinePropertiesPanel/canonicalRefLines.ts's structure and test
+        style), and F2.1i's deliberately-raw `region_shades` override now
+        decomposes into `plot.view.regionShades` at promotion time exactly
+        the way commit `37754f59` decomposed shapes/ref_lines. Unlike
+        RefLine's axis (fixed at Add time — "nothing in the app flips an
+        existing line's axis"), a shade's axis is editable per row on BOTH
+        surfaces: a brand-new editing surface has no such prior behavior to
+        preserve. The live Stage renderer was NOT a gap to close — it
+        already existed (`regionShadePlugin`, wired through the store's
+        existing `regionShades` singleton since decode-plan #41); the new
+        Inspector card and its actions simply give that singleton a
+        create/edit/remove surface for the first time. See the 2026-08-13
+        F2.3j log entry.
 - [x] **F2.4 Preserve direct manipulation.** Drag legend/annotations and
       double-click text on the live document, with matching property panels.
       **COMPLETE 2026-08-12** — the named gesture set (legend drag, annotation
       drag, text double-click, reference-line drag, shape drag) all work on
-      the canonical draft with matching panels. Region shades have NO gesture
-      anywhere in the app (no surface creates or edits one); that was the
-      owner-gated F2.3 residue, not an F2.4 gap (decided editable
-      2026-08-13 → booked as F2.3j).
+      the canonical draft with matching panels. Region shades gained
+      create/edit/remove panels under F2.3j (2026-08-13) but still have NO
+      DRAG gesture on the live canvas (unlike reference lines/shapes) — the
+      F2.3j slice covered card + panel + override decomposition only, per
+      that item's own scope note; canvas drag remains open under F2.4 if
+      ever wanted.
   - [x] **F2.4a Preview element context menu.** Hitmapped text, legend, and
         annotations expose their existing property panel; text also exposes
         the existing inline editor. Series remain visibly Stage-owned.
@@ -507,7 +523,27 @@ Check these only with automated coverage plus an owner-visible desktop run.
       projection. Verified load-bearing twice, by planting a shapes-dropping
       reopen and an asymmetric-error-dropping rebuild; each reddens it.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
-      and export with the same series and labels.
+      and export with the same series and labels. **Automated half DONE
+      2026-08-14** — `e2e/specs/group-facet-journey.spec.ts`, a real-Chromium
+      journey against the real backend: Graph Builder's Group well →
+      Publication Preview (asserts `group_col` reaches the render and one
+      `series:N` hitbox renders per group level) → edit on Stage (rename +
+      recolor through the real property panel) → Create Editable Figure →
+      close/reopen from the Library → a fresh Publication Preview session →
+      real SVG export, asserting the exact per-group legend labels
+      (`Value (Run=1/2/3)`) appear in the downloaded bytes (matplotlib embeds
+      each text artist's source string as an SVG XML comment even under
+      `svg.fonttype: path`). Facet is deliberately out of scope:
+      `bindings.facetKey` has no render wire (F2.3i, still BLOCKED), and the
+      Graph Builder's `facetByColumn` writes `AppState.facetCol`, a field
+      outside `PlotView`/`FigureDocument` that cannot survive
+      save/reopen/export — exercising it would not test this journey. Verified
+      load-bearing twice: dropping `bindings.groupKey` in
+      `updateFigureDocumentFromPlotView` reddens the spec (via a
+      permanent-unsaved-edits confirm-gate deadlock on close); stripping the
+      per-level suffix in `calc.plotting.build_grouped_series` reddens the
+      exported-SVG label assertion directly. Runs in CI's `e2e.yml`. Owner
+      desktop run still gates the checkbox.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
       save/reopen, edit one panel, and preserve layout.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
@@ -565,6 +601,96 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-08-13 — F2.3j region-shade editing: Stage card + preview panel + override decomposition (Claude Sonnet 5)
+
+The owner call F2.3d deliberately parked (2026-08-12) came back decided the
+same day: decoded film-stack region shades are EDITABLE plot objects, not
+immutable provenance. Shipped as one slice, all three parts, gated together
+(tsc clean, lint 0 errors, targeted suite green — 386 tests across the 15
+touched files, plus a 2,158-test sweep of `store/`, `Inspector/`,
+`figurebuilder/`, `Stage/`, `windows/`, and the plotview/figureSpec/
+originFigures/uplotOverlays libs):
+
+1. **Stage card** (`Inspector/RegionShadesCard.tsx`, new). Create/edit/remove,
+   following `RefLinesCard`'s "ADD belongs here" convention (a shade is fully
+   specified by numbers) plus `ShapesCard`'s inline-coordinate-field
+   convention (a shade carries four coordinates + a fill color + an axis,
+   not RefLine's one value). New store actions `addRegionShade`/
+   `updateRegionShade`/`removeRegionShade` live in a new `store/
+   regionShades.ts` slice (mirroring `store/shapes.ts`'s "own the array +
+   its actions, composed into useApp" shape) — `useApp.ts` was 4 lines under
+   its 2868 pin, so the field + its new actions moved out together rather
+   than being inlined. The Stage renderer was NOT a gap: `regionShadePlugin`
+   already drew the store's `regionShades` singleton (decode-plan #41); the
+   card just gives that singleton create/edit/remove for the first time.
+2. **Publication Preview panel** (`RegionShadePropertiesPanel.tsx` +
+   `canonicalRegionShades.ts`, new), mirroring F2.3d's
+   `RefLinePropertiesPanel.tsx`/`canonicalRefLines.ts` structure, test style,
+   and naming (`deriveRegionShadeRows`/`patchRegionShadeList`/
+   `removeRegionShadeFromList`/`appendRegionShade`, a `pshade-` draft-id
+   namespace paralleling `appendRefLine`'s `pref-`). One deliberate
+   divergence: axis is EDITABLE per row on both surfaces, unlike RefLine's
+   axis (fixed at Add time because "nothing in the app flips an existing
+   line's axis" was already true everywhere else) — a shade's axis has no
+   such prior behavior to preserve, and the plan's pointer-default rule
+   wants every field on a freshly-editable object manipulable from day one.
+   `useFigureBuilder.ts` sat 9 lines under its own 500-line ceiling, too
+   little for the usual inline get/set trio F2.3d left inline; the wiring
+   bundles into one `regionShadeBindings()` call in `canonicalRegionShades.ts`
+   instead (documented there as the one difference from F2.3d's inline shape
+   — same resulting callbacks, constructed in one place instead of three).
+3. **Override decomposition** (`lib/figureDocumentPublication.ts`). F2.1i's
+   deliberately-raw `config.overrides.region_shades` now decomposes into
+   `plot.view.regionShades` at promotion time — mints `legacyshade-<docId>-
+   <i>` ids and strips the field from `publication.overrides`, exactly the
+   mechanism commit `37754f59` used for shapes/ref_lines. The promotion
+   compat report needed no code change (it never special-cased
+   `region_shades`); only its doc comment updated. `figureDocPlotCompatibility`
+   (the OTHER legacy bridge — FigureDoc → plain interactive PlotWindow, not
+   the canonical-promotion path) still reports `region_shades` as a loss
+   there, correctly: that bridge never routed through
+   `figureDocumentFromLegacyFigureDoc` and is out of this slice's scope.
+
+`lib/plotview.ts`'s `regionShades` field was already a full PlotView field
+(round-tripping through `snapshotView`/`hydrateView`/`.dwk` since before this
+slice — decode-plan #41 wired it as a passthrough), but `sanitizePlotView`
+only cast it (`Array.isArray` check, no per-field validation), unlike
+`shapes`/`annotations`. Added `sanitizeRegionShades` with the same
+missing-id/non-finite-coordinate/bad-axis dropping `sanitizeShapes` does
+(never clamped — a region shade, unlike `Shape`, has no page-anchor variant).
+`plotview.ts` was 1 line under its 978 pin; funded the new sanitizer by
+extracting the fully self-contained edge/sibling drag-snapping section (item
+12: `snapMovePosition`/`snapResizeSize`/`SNAP_THRESHOLD`, consumed only by
+`PlotWindowFrame.tsx`) to a new `lib/windowSnap.ts`, its own tests moving
+with it to `windowSnap.test.ts` — pure geometry with no PlotView involvement,
+so nothing else about the extraction needed care.
+
+One test-infrastructure fix needed: `architecture.test.ts`'s HistorySnapshot
+coverage guard (GUI_INTERACTION_PLAN #21) scans every `export interface
+XXXSlice` for state fields and requires each to be in `HistorySnapshot` or
+`HISTORY_EXCLUDED` with a reason. `regionShades` had never been visible to
+that scanner before (it lived directly on the big `AppState` interface body,
+not inside a named `*Slice` interface) — moving it into the new
+`RegionShadesSlice` interface surfaced it for the first time. Added a
+`HISTORY_EXCLUDED` entry mirroring `shapes`'s existing one: both are
+PlotView-nested fields already captured inside `HistorySnapshot`'s `view:
+PlotView` field, not tracked by their raw name.
+
+Plant-a-violation evidence: reverting `figureDocumentFromLegacyFigureDoc`'s
+`region_shades` destructure (putting it back in `restOverrides` instead of
+pulling it into `regionShades`, i.e. `const regionShades: RegionShade[] =
+[]`) fails 5 tests across `figureDocumentPublication.test.ts` and
+`figureCompatibility.test.ts`, including a test written specifically to
+catch this reversion (`"would fail the two tests above if region_shades
+reverted to a raw passthrough"`).
+
+Deliberately out of scope, matching the task's own escape hatch: canvas DRAG
+for a region shade (F2.4's gesture set covers reference lines/shapes/legend/
+annotations/text but never grew a shade gesture, and this slice didn't add
+one — no backend `regionshade:N` hitmap element exists to route a hit
+through, unlike F2.4c/d's `refline:N`/`shape:N`). Remains open under F2.4 if
+ever wanted; not a live-Stage rendering gap (see part 1 above).
 
 ### 2026-08-12 — Convergence round 2: canonical fallback + override decomposition (Claude Sonnet 5 ×2)
 

@@ -53,7 +53,24 @@ import type { AppState } from "./useApp";
 const HISTORY_DEPTH = 50;
 
 /** The undoable slice of AppState — see the module doc for why this exact
- *  field list and no more. */
+ *  field list and no more.
+ *
+ *  CRITICAL: This is an **inclusion allowlist**, not a struct that tracks in
+ *  parallel — any new persistent store field is SILENTLY OUTSIDE undo until
+ *  added here AND in snapshotOf(). The `savedRois` field was forgotten for a
+ *  day (2026-08-09–2026-08-10), making ROI deletions unrecoverable.
+ *
+ *  When adding a new field to AppState:
+ *  1. Decide: does this field represent a **persistent user edit** that should
+ *     survive Ctrl+Z, or is it **transient/UI-only** state?
+ *  2. If persistent → add it here AND to snapshotOf() below.
+ *  3. If transient → add it to the HISTORY_EXCLUDED list in
+ *     frontend/src/architecture.test.ts with a clear justification comment —
+ *     the test will verify the classification is exhaustive and intentional.
+ *
+ *  See store/rois.ts for the rationale behind excluding `mapRoi`/`mapRuler`
+ *  (working geometry that survives dataset switches but not undo).
+ */
 export interface HistorySnapshot {
   datasets: AppState["datasets"];
   activeId: AppState["activeId"];

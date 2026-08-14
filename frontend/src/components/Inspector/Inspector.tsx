@@ -14,6 +14,7 @@ import NotesCard from "./NotesCard";
 import OriginProvenanceCard from "./OriginProvenanceCard";
 import PlotObjectsCard from "./PlotObjectsCard";
 import RefLinesCard from "./RefLinesCard";
+import RegionShadesCard from "./RegionShadesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import ShapesCard from "./ShapesCard";
 import StatsCard from "./StatsCard";
@@ -124,6 +125,8 @@ export default function Inspector() {
       <TitlesCard />
 
       <RefLinesCard />
+
+      <RegionShadesCard />
 
       <AnnotationsCard />
 

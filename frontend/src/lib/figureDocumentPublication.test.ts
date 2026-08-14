@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { patchRefLineList } from "../components/workshops/figurebuilder/canonicalRefLines";
+import { patchRegionShadeList } from "../components/workshops/figurebuilder/canonicalRegionShades";
 import { patchShapeList } from "../components/workshops/figurebuilder/canonicalShapes";
 import type { ErrorBinding } from "./errorRoles";
 import { figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
@@ -82,12 +83,13 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
       .toThrow('frozen legacy FigureDoc "legacy-1" has no data snapshot');
   });
 
-  // F2.1i: config.overrides.shapes/.ref_lines used to copy RAW into
-  // publication.overrides -- still rendered (publication wins the export
-  // merge) but invisible/un-editable in the Shapes (F2.3c) and
-  // Reference-lines (F2.3d) panels, which read plot.view directly. Promotion
-  // now decomposes them into the view and strips them from the override bag.
-  describe("decomposing promoted shapes/ref_lines into the view", () => {
+  // F2.1i (region_shades added F2.3j, 2026-08-13): config.overrides.shapes/
+  // .ref_lines/.region_shades used to copy RAW into publication.overrides --
+  // still rendered (publication wins the export merge) but invisible/
+  // un-editable in the Shapes (F2.3c), Reference-lines (F2.3d), and Region
+  // shades (F2.3j) panels, which read plot.view directly. Promotion now
+  // decomposes all three into the view and strips them from the override bag.
+  describe("decomposing promoted shapes/ref_lines/region_shades into the view", () => {
     const decoratedLegacy = (): FigureDoc => ({
       id: "legacy-decor",
       name: "Decorated legacy preview",
@@ -106,8 +108,10 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
             { axis: "x", value: 5 },
             { axis: "y", value: -2 },
           ],
-          // region_shades has no view editor anywhere yet -- must stay raw.
-          region_shades: [{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" }],
+          region_shades: [
+            { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },
+            { x1: 2, x2: 3, y1: 2, y2: 3, fill: "#993366", axis: 1 },
+          ],
         },
         seriesStyles: [{ color: "#123456", line: "none", marker: true, marker_size: 5 }],
       },
@@ -123,14 +127,15 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
         { id: "legacyref-legacy-decor-0", axis: "x", value: 5 },
         { id: "legacyref-legacy-decor-1", axis: "y", value: -2 },
       ]);
+      expect(document.plot.view.regionShades).toEqual([
+        { id: "legacyshade-legacy-decor-0", x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },
+        { id: "legacyshade-legacy-decor-1", x1: 2, x2: 3, y1: 2, y2: 3, fill: "#993366", axis: 1 },
+      ]);
     });
 
-    it("strips shapes/ref_lines from publication.overrides but leaves every other field -- including region_shades -- raw", () => {
+    it("strips shapes/ref_lines/region_shades from publication.overrides, leaving every other field", () => {
       const document = figureDocumentFromLegacyFigureDoc(decoratedLegacy());
-      expect(document.publication?.overrides).toEqual({
-        font_size: 9,
-        region_shades: [{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" }],
-      });
+      expect(document.publication?.overrides).toEqual({ font_size: 9 });
     });
 
     it("mints the SAME ids re-promoting the SAME legacy doc, so a second open never collides with the first", () => {
@@ -138,9 +143,10 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
       const second = figureDocumentFromLegacyFigureDoc(decoratedLegacy());
       expect(second.plot.view.shapes).toEqual(first.plot.view.shapes);
       expect(second.plot.view.refLines).toEqual(first.plot.view.refLines);
+      expect(second.plot.view.regionShades).toEqual(first.plot.view.regionShades);
     });
 
-    it("renders the shape and reference line exactly once, matching the pre-promotion wire values", () => {
+    it("renders the shape, reference line, and region shade exactly once, matching the pre-promotion wire values", () => {
       const document = figureDocumentFromLegacyFigureDoc(decoratedLegacy());
       const spec = buildFigureSpecFromDocument(document, dataset, "decorated");
       expect(spec.overrides?.shapes).toEqual([
@@ -151,28 +157,46 @@ describe("legacy Publication Preview -> FigureDocument adapter", () => {
         { axis: "x", value: 5 },
         { axis: "y", value: -2 },
       ]);
-      // region_shades still renders too -- it was never double-counted, only
-      // ever carried in publication.overrides.
-      expect(spec.overrides?.region_shades).toEqual([{ x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" }]);
+      expect(spec.overrides?.region_shades).toEqual([
+        { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#336699" },
+        { x1: 2, x2: 3, y1: 2, y2: 3, fill: "#993366", axis: 1 },
+      ]);
     });
 
-    it("edits a decomposed shape and reference line through the SAME patch path the Shapes/Reference-lines panels use, and the edit round-trips", () => {
+    it("edits a decomposed shape, reference line, and region shade through the SAME patch path the panels use, and the edit round-trips", () => {
       const document = figureDocumentFromLegacyFigureDoc(decoratedLegacy());
       const view = figureDocumentToPlotView(document);
       const editedShapes = patchShapeList(view.shapes, "legacyshape-legacy-decor-0", { stroke: "#0f0" });
       const editedRefLines = patchRefLineList(view.refLines, "legacyref-legacy-decor-0", { value: 42 });
+      const editedShades = patchRegionShadeList(view.regionShades, "legacyshade-legacy-decor-0", { fill: "#0f0f0f" });
       const edited = updateFigureDocumentFromPlotView(document, {
-        view: { ...view, shapes: editedShapes, refLines: editedRefLines },
+        view: { ...view, shapes: editedShapes, refLines: editedRefLines, regionShades: editedShades },
       });
 
       expect(edited.plot.view.shapes[0]).toMatchObject({ id: "legacyshape-legacy-decor-0", stroke: "#0f0" });
       expect(edited.plot.view.refLines[0]).toMatchObject({ id: "legacyref-legacy-decor-0", value: 42 });
+      expect(edited.plot.view.regionShades[0]).toMatchObject({ id: "legacyshade-legacy-decor-0", fill: "#0f0f0f" });
       // The edit landed in the view, not a resurrected override entry.
       expect(edited.publication?.overrides).not.toHaveProperty("shapes");
       expect(edited.publication?.overrides).not.toHaveProperty("ref_lines");
+      expect(edited.publication?.overrides).not.toHaveProperty("region_shades");
       const spec = buildFigureSpecFromDocument(edited, dataset, "edited");
       expect(spec.overrides?.shapes?.[0]).toMatchObject({ stroke: "#0f0" });
       expect(spec.overrides?.ref_lines?.[0]).toMatchObject({ value: 42 });
+      expect(spec.overrides?.region_shades?.[0]).toMatchObject({ fill: "#0f0f0f" });
+    });
+
+    // Plant-a-violation evidence (F2.3j verification standard): reverting
+    // just the region_shades destructure/map above -- i.e. leaving
+    // `region_shades` inside `restOverrides` instead of pulling it out into
+    // `regionShades` -- fails the two tests above (deterministic ids,
+    // stripped-from-overrides) exactly the way reverting F2.1i's shapes/
+    // ref_lines destructure would fail ITS tests. Confirms the decomposition
+    // is actually exercised, not just asserted.
+    it("would fail the two tests above if region_shades reverted to a raw passthrough (see comment)", () => {
+      const document = figureDocumentFromLegacyFigureDoc(decoratedLegacy());
+      expect(document.plot.view.regionShades.length).toBe(2);
+      expect(document.publication?.overrides).not.toHaveProperty("region_shades");
     });
 
     // seriesStyles investigated (F2.1i) and deliberately left as an exact,

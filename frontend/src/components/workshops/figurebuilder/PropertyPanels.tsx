@@ -13,10 +13,12 @@ import GroupingPanel from "./GroupingPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
 import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
+import RegionShadePropertiesPanel from "./RegionShadePropertiesPanel";
 import type {
   ChannelsPanelProps,
   ErrorColumnsPanelProps,
   RefLinesPanelProps,
+  RegionShadesPanelProps,
   SeriesPanelProps,
   ShapesPanelProps,
   TickFormatPanelProps,
@@ -32,6 +34,7 @@ export type {
   ErrorColumnsPanelProps,
   GroupingPanelProps,
   RefLinesPanelProps,
+  RegionShadesPanelProps,
   SeriesPanelProps,
   ShapesPanelProps,
   TickFormatPanelProps,
@@ -82,6 +85,7 @@ export default function PropertyPanels({
   series,
   shapes,
   refLines,
+  regionShades,
   tickFormats,
   errorColumns,
   grouping,
@@ -117,6 +121,9 @@ export default function PropertyPanels({
   /** F2.3d: canonical reference lines. Absent (legacy mode) hides the group;
    *  present-but-empty still renders it -- see RefLinesPanelProps' doc. */
   refLines?: RefLinesPanelProps;
+  /** F2.3j: canonical region shades. Absent (legacy mode) hides the group;
+   *  present-but-empty still renders it -- see RegionShadesPanelProps' doc. */
+  regionShades?: RegionShadesPanelProps;
   /** F2.3e: canonical axis tick formats -- see TickFormatPanelProps' doc. */
   tickFormats?: TickFormatPanelProps;
   /** F2.3f: canonical error-column bindings. Absent (legacy mode) hides the
@@ -331,6 +338,17 @@ export default function PropertyPanels({
             onValue={refLines.onValue}
             onAdd={refLines.onAdd}
             onRemove={refLines.onRemove}
+          />
+        </Group>
+      )}
+
+      {regionShades && (
+        <Group title="Region shades" forceOpen={openGroup === "Region shades"} openNonce={openNonce}>
+          <RegionShadePropertiesPanel
+            regionShades={regionShades.regionShades}
+            onPatch={regionShades.onPatch}
+            onAdd={regionShades.onAdd}
+            onRemove={regionShades.onRemove}
           />
         </Group>
       )}

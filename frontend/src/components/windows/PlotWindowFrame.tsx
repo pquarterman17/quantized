@@ -25,13 +25,9 @@
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  snapMovePosition,
-  snapResizeSize,
-  type PlotWindow,
-  type WindowGeometry,
-} from "../../lib/plotview";
+import { type PlotWindow, type WindowGeometry } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
+import { snapMovePosition, snapResizeSize } from "../../lib/windowSnap";
 import { useApp } from "../../store/useApp";
 import { DATASET_DND } from "../Library/useLibraryTree";
 import { Badge } from "../primitives";

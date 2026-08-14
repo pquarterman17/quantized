@@ -126,14 +126,15 @@ export function figureDocPlotCompatibility(doc: FigureDoc): FigureTransitionComp
  *  `config.overrides.shapes`/`.ref_lines` now decompose into
  *  `plot.view.shapes`/`.refLines` at promotion time, so the Shapes (F2.3c)
  *  and Reference-lines (F2.3d) panels see the exact objects the export
- *  renders, not an empty list -- see figureDocumentPublication.ts. Two
- *  fields deliberately still copy raw and are NOT losses: `region_shades`
- *  has no view editor anywhere yet (an owner decision on whether decoded
- *  shades become editable is pending), and `seriesStyles` stays an exact,
- *  un-decomposed array on purpose -- see figureDocumentPublication.ts's own
- *  doc for why a legacy array can't decompose losslessly into per-channel
- *  view styles, and F2.1a's "exact export styles" contract every other
- *  FigureDocument producer already honors the same way.
+ *  renders, not an empty list -- see figureDocumentPublication.ts. F2.3j
+ *  (2026-08-13) closed the same gap for `region_shades`, once
+ *  `RegionShadesCard`/`RegionShadePropertiesPanel` gave it a view editor
+ *  too. `seriesStyles` deliberately still copies raw and is NOT a loss: it
+ *  stays an exact, un-decomposed array on purpose -- see
+ *  figureDocumentPublication.ts's own doc for why a legacy array can't
+ *  decompose losslessly into per-channel view styles, and F2.1a's "exact
+ *  export styles" contract every other FigureDocument producer already
+ *  honors the same way.
  *
  *  `FigureConfig` never stored tick formats, a Y2 assignment, tick steps,
  *  hidden/order state, page setup, or a mark choice at all, so promoting

@@ -122,15 +122,6 @@ feature checklist.
 
 ## Tier 1 — High Impact
 
-21. **Coverage of new gesture systems in the edit history** — `HistorySnapshot` 
-    is an explicit field list, so any new store slice is silently outside undo 
-    until added to both the interface and `snapshotOf()`. `savedRois` was missing 
-    for a day (2026-08-09–2026-08-10, fixed 2026-08-10). Add a comment on 
-    `HistorySnapshot` and a check to prevent the next slice from repeating it.
-    - [ ] Document the explicit-field-list pattern and future-proofing notes
-    - [ ] Add a test asserting `mapRoi`/`mapRuler` stay outside undo (working geometry)
-    - [ ] Consider a runtime guard if new slices make this recurrent
-
 ## Tier 2 — Medium Impact
 
 ## Tier 3 — Nice-to-Have
@@ -188,6 +179,32 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#21 Coverage of new gesture systems in the edit history**~~ (2026-08-14) —
+  `HistorySnapshot` is an explicit field-inclusion allowlist; the `savedRois`
+  field was silently omitted for a day (2026-08-09–2026-08-10), making ROI
+  deletion unrecoverable. All three boxes closed:
+  - **Box 1: Documentation** — ✓ Added a future-proofing comment to the
+    `HistorySnapshot` interface explaining the inclusion-allowlist pattern,
+    the `savedRois` incident, the decision tree (persistent vs. transient),
+    and pointers to the enforcement guard (architecture.test.ts) and
+    rationale (store/rois.ts). Existing module doc already named the pattern;
+    the interface-level JSDoc now makes it explicit for future maintainers
+    adding new store fields.
+  - **Box 2: Behavioral test** — ✓ Added two strong-form store tests
+    (`mapRoi SURVIVES undo` and `mapRuler SURVIVES undo`) verifying that
+    drawing a working ROI, performing an undoable edit, undoing, and
+    asserting the ROI is unchanged (working geometry, not history). Both
+    tests follow the plan's behavioral spec exactly. Per-action tests at
+    lines 452–506 of history.test.ts.
+  - **Box 3: Runtime guard** — ✓ Verified: architecture.test.ts already
+    contains comprehensive `HistorySnapshot` field coverage guard
+    (lines 693–785) comparing AppState fields against HistorySnapshot +
+    HISTORY_EXCLUDED classification. `mapRoi`, `mapRuler`, and `mapSector`
+    are properly listed with documentation (lines 671–677) citing store/rois.ts
+    for the rationale (in-progress working geometry that survives dataset
+    switches but not undo). The guard prevents the next new slice from
+    repeating the `savedRois` mistake.
 
 - ~~**#17 residue: `clearShapes` "Clear all" confirm judgment call**~~
   (2026-08-13) — the 2026-07-19 destructive-action sweep parked this as an

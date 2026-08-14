@@ -450,6 +450,10 @@ describe("per-action-class undo/redo coverage", () => {
   });
 
   it("mapRoi changes do NOT create an undo entry (working geometry excluded)", () => {
+    // Distinct from the SURVIVES-undo tests below: a regression where drawing
+    // starts recording history would still pass those (undo would revert the
+    // spurious entry's OTHER fields), but it would cost the user an extra
+    // Ctrl+Z per drawn box. Both properties are guarded on purpose.
     useApp.setState({ savedRois: [], mapRoi: null });
     useApp.getState().recordHistory("baseline");
     const historyLengthBefore = useApp.getState().history.length;
@@ -460,5 +464,53 @@ describe("per-action-class undo/redo coverage", () => {
 
     // The history stack should NOT have a new entry for this mutation
     expect(useApp.getState().history.length).toBe(historyLengthBefore);
+  });
+
+  it("mapRoi SURVIVES undo — it is working geometry, not history (box 2, strong form)", () => {
+    // Set up: dataset exists, record a baseline edit
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1", mapRoi: null });
+    useApp.getState().recordHistory("baseline");
+    const preEdit1 = useApp.getState().datasets;
+
+    // User draws a mapRoi on the canvas (working geometry, no recordHistory)
+    const drawnRoi = { x0: 10, y0: 20, x1: 30, y1: 40, space: "angular" as const };
+    useApp.setState({ mapRoi: drawnRoi });
+    const roiAfterDraw = useApp.getState().mapRoi;
+
+    // Then user makes another undoable edit (e.g., rename dataset)
+    useApp.getState().renameDataset("d1", "renamed");
+    expect(useApp.getState().datasets[0].name).toBe("renamed");
+
+    // Undo the rename
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toEqual(preEdit1);
+
+    // The mapRoi should be UNCHANGED by undo — it is working geometry, not history
+    expect(useApp.getState().mapRoi).toEqual(roiAfterDraw);
+    expect(useApp.getState().mapRoi).not.toBeNull();
+  });
+
+  it("mapRuler SURVIVES undo — it is working geometry, not history (box 2, strong form)", () => {
+    // Set up: dataset exists, record a baseline edit
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1", mapRuler: null });
+    useApp.getState().recordHistory("baseline");
+    const preEdit1 = useApp.getState().datasets;
+
+    // User draws a mapRuler on the canvas (working geometry, no recordHistory)
+    const drawnRuler = { cx: 50, cy: 60, angle: 45, length: 15, width: 2, space: "angular" as const };
+    useApp.setState({ mapRuler: drawnRuler });
+    const rulerAfterDraw = useApp.getState().mapRuler;
+
+    // Then user makes another undoable edit (e.g., rename dataset)
+    useApp.getState().renameDataset("d1", "renamed");
+    expect(useApp.getState().datasets[0].name).toBe("renamed");
+
+    // Undo the rename
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toEqual(preEdit1);
+
+    // The mapRuler should be UNCHANGED by undo — it is working geometry, not history
+    expect(useApp.getState().mapRuler).toEqual(rulerAfterDraw);
+    expect(useApp.getState().mapRuler).not.toBeNull();
   });
 });
