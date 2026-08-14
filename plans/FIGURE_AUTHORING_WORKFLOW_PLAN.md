@@ -507,7 +507,27 @@ Check these only with automated coverage plus an owner-visible desktop run.
       projection. Verified load-bearing twice, by planting a shapes-dropping
       reopen and an asymmetric-error-dropping rebuild; each reddens it.
 - [ ] **A5 Group/facet:** Build with Group/Facet, edit on Stage, save/reopen,
-      and export with the same series and labels.
+      and export with the same series and labels. **Automated half DONE
+      2026-08-14** — `e2e/specs/group-facet-journey.spec.ts`, a real-Chromium
+      journey against the real backend: Graph Builder's Group well →
+      Publication Preview (asserts `group_col` reaches the render and one
+      `series:N` hitbox renders per group level) → edit on Stage (rename +
+      recolor through the real property panel) → Create Editable Figure →
+      close/reopen from the Library → a fresh Publication Preview session →
+      real SVG export, asserting the exact per-group legend labels
+      (`Value (Run=1/2/3)`) appear in the downloaded bytes (matplotlib embeds
+      each text artist's source string as an SVG XML comment even under
+      `svg.fonttype: path`). Facet is deliberately out of scope:
+      `bindings.facetKey` has no render wire (F2.3i, still BLOCKED), and the
+      Graph Builder's `facetByColumn` writes `AppState.facetCol`, a field
+      outside `PlotView`/`FigureDocument` that cannot survive
+      save/reopen/export — exercising it would not test this journey. Verified
+      load-bearing twice: dropping `bindings.groupKey` in
+      `updateFigureDocumentFromPlotView` reddens the spec (via a
+      permanent-unsaved-edits confirm-gate deadlock on close); stripping the
+      per-level suffix in `calc.plotting.build_grouped_series` reddens the
+      exported-SVG label assertion directly. Runs in CI's `e2e.yml`. Owner
+      desktop run still gates the checkbox.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
       save/reopen, edit one panel, and preserve layout.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in

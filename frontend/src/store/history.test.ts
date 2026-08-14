@@ -449,6 +449,23 @@ describe("per-action-class undo/redo coverage", () => {
     expect(useApp.getState().savedRois).toEqual(post);
   });
 
+  it("mapRoi changes do NOT create an undo entry (working geometry excluded)", () => {
+    // Distinct from the SURVIVES-undo tests below: a regression where drawing
+    // starts recording history would still pass those (undo would revert the
+    // spurious entry's OTHER fields), but it would cost the user an extra
+    // Ctrl+Z per drawn box. Both properties are guarded on purpose.
+    useApp.setState({ savedRois: [], mapRoi: null });
+    useApp.getState().recordHistory("baseline");
+    const historyLengthBefore = useApp.getState().history.length;
+
+    // Mutate mapRoi directly without recordHistory — this is how drawing tools work
+    useApp.setState({ mapRoi: { x0: 1, y0: 2, x1: 3, y1: 4, space: "angular" } });
+    expect(useApp.getState().mapRoi).not.toBeNull();
+
+    // The history stack should NOT have a new entry for this mutation
+    expect(useApp.getState().history.length).toBe(historyLengthBefore);
+  });
+
   it("mapRoi SURVIVES undo — it is working geometry, not history (box 2, strong form)", () => {
     // Set up: dataset exists, record a baseline edit
     useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1", mapRoi: null });
