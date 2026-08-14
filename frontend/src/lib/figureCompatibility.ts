@@ -68,7 +68,13 @@ export function plotSpecPublicationCompatibility(
   return { blocker: null, losses: [...losses] };
 }
 
-/** Saved FigureDoc → fresh interactive PlotWindow (the current inverse bridge). */
+/** Saved FigureDoc → fresh interactive PlotWindow (the current inverse
+ *  bridge). `config.errors` (ORIGIN_GAP_PLAN #51's Graph Builder error
+ *  wells) is deliberately NOT audited here as a loss: openFigureDocInWindow
+ *  (useApp.ts, item 3) applies it onto the opened window's document via
+ *  withWindowDocumentErrors instead of dropping it -- see
+ *  figureCompatibility.test.ts's coupled test for the contract this depends
+ *  on staying true. */
 export function figureDocPlotCompatibility(doc: FigureDoc): FigureTransitionCompatibility {
   if (!doc.live || !doc.datasetId) {
     return {

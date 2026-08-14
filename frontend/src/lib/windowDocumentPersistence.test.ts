@@ -102,4 +102,30 @@ describe("document-backed plot-window persistence", () => {
 
     expect(restored.map((candidate) => candidate.document?.id)).toEqual(["duplicate", "figure-w2"]);
   });
+
+  // Item 2 (data loss): windowDocuments.ts's createPlotWindowDocument (the
+  // sibling FigureDocument constructor used for duplicate/create) forwards
+  // `publication: previous?.publication` -- this repair path minted its
+  // createFigureDocument call without it, so a document carrying export
+  // overrides or exact per-channel seriesStyles silently lost them on
+  // reopening a workspace with two windows sharing one document id.
+  it("keeps publication (export overrides + seriesStyles) through the duplicate-id repair, on BOTH windows", () => {
+    const document = {
+      ...createFigureDocument({
+        id: "duplicate",
+        name: "Plot",
+        datasetId: "d1",
+        view: defaultPlotView(),
+      }),
+      publication: { overrides: { grid: false }, seriesStyles: null },
+    };
+    const restored = sanitizeDocumentBackedPlotWindows([
+      window({ id: "w1", document }),
+      window({ id: "w2", document }),
+    ], new Set(["d1"]));
+
+    expect(restored.map((candidate) => candidate.document?.id)).toEqual(["duplicate", "figure-w2"]);
+    expect(restored[0].document?.publication).toEqual({ overrides: { grid: false }, seriesStyles: null });
+    expect(restored[1].document?.publication).toEqual({ overrides: { grid: false }, seriesStyles: null });
+  });
 });

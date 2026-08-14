@@ -142,6 +142,26 @@ describe("figure transition compatibility", () => {
     expect(figureDocPlotCompatibility({ ...doc(), datasetId: null }).blocker).not.toBeNull();
   });
 
+  // Item 3 (silent loss, coupled with useApp.test.ts's "applies the doc's own
+  // error-bar bindings" test): this inventory deliberately never checks
+  // `c.errors` -- correct ONLY because openFigureDocInWindow (useApp.ts)
+  // actually applies them onto the opened window's document, via
+  // withWindowDocumentErrors, instead of dropping them. Before that fix, an
+  // errors-only doc (no groupCol/seriesStyles/style/overrides difference)
+  // reported ZERO losses here while silently dropping its error bindings --
+  // SavedFiguresSection.tsx skips the confirm dialog whenever losses is
+  // empty, so the loss was invisible to the user. If `c.errors` is ever
+  // read here to add a loss row, useApp.ts's application must be removed in
+  // the SAME change, or this pair of tests would together describe two
+  // different (and contradictory) behaviors.
+  it("never reports the doc's error bindings as a loss -- they are actually applied, not dropped", () => {
+    const withErrors = figureDocPlotCompatibility(doc({
+      errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+    }));
+    expect(withErrors.blocker).toBeNull();
+    expect(withErrors.losses).toEqual([]);
+  });
+
   // F0.3's third compat surface: legacy FigureDoc -> canonical FigureDocument
   // promotion (figureLifecycle.ts's promoteLegacyFigureDoc, via
   // figureDocumentFromLegacyFigureDoc).

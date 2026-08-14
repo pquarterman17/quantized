@@ -6,6 +6,7 @@ import {
   updateFigureDocumentFromPlotView,
   type FigureDocument,
 } from "../lib/figureDocument";
+import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 
@@ -108,6 +109,37 @@ export function withPlotWindowDocument(window: PlotWindow, document: FigureDocum
     datasetId: canonical.bindings.datasetId,
     view: figureDocumentToPlotView(canonical),
     document: canonical,
+  };
+}
+
+/** Item 3: overwrite ONE window's document error bindings, leaving every
+ *  other field untouched -- openFigureDocInWindow's fix for a FigureDoc's own
+ *  error-well config (Graph Builder's Y/X error wells), which `createWindow`
+ *  cannot see (it only seeds `bindings.errors` from the bound dataset's
+ *  already-committed `errorRoles`, not from the doc being opened). Returns
+ *  both the patched window list and the legacy `errKeys` projection the
+ *  focused-window facade must be kept in sync with: `liveWindowDocument` ->
+ *  `updateFigureDocumentFromPlotView` reconstructs a focused window's
+ *  document on every subsequent commit from `richErrors` (X-axis/asymmetric
+ *  bindings, read off `document.bindings.errors`) PLUS
+ *  `legacyErrorBindings(view.errKeys)` (symmetric Y) -- so a symmetric-Y
+ *  binding applied to the document alone, with the top-level `errKeys`
+ *  singleton left stale, would vanish again on the very next commit. */
+export function withWindowDocumentErrors(
+  windows: readonly PlotWindow[],
+  windowId: string,
+  errors: readonly ErrorBinding[],
+): { plotWindows: PlotWindow[]; errKeys: Record<number, number> } {
+  return {
+    plotWindows: windows.map((window) =>
+      window.id === windowId && window.kind === "plot" && window.document
+        ? withPlotWindowDocument(window, {
+            ...window.document,
+            bindings: { ...window.document.bindings, errors: [...errors] },
+          })
+        : window,
+    ),
+    errKeys: errKeysFromBindings(errors),
   };
 }
 

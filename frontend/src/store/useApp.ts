@@ -74,7 +74,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { pruneWindowDatasetRefs, rebindFocusedPlotWindow, syncDatasetWindowDocuments } from "./windowDocuments";
+import { pruneWindowDatasetRefs, rebindFocusedPlotWindow, syncDatasetWindowDocuments, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -2727,7 +2727,7 @@ export const useApp = create<AppState>((set, get) => ({
     s.focusWindow(winId);
     const c = doc.config;
     const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
-    set({
+    set((current) => ({
       // Plot-intent (item 1): "open in new window" always means look at the
       // plot, so surface it regardless of which tab was showing.
       ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
@@ -2738,7 +2738,9 @@ export const useApp = create<AppState>((set, get) => ({
       plotTitle: c.title,
       xAxisLabel: c.xLabel,
       yAxisLabel: c.yLabel,
-    });
+      // Item 3: the doc's own error bindings, if any (else createWindow's dataset-seeded errorRoles stand).
+      ...(c.errors ? withWindowDocumentErrors(current.plotWindows, winId, c.errors) : {}),
+    }));
     get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
   },
   clearFigureDocSeed: () => set({ figureDocSeed: null }),

@@ -57,4 +57,22 @@ describe("appendErrorBinding", () => {
     appendErrorBinding(bindings, 2, 0, "x", "both");
     expect(bindings).toHaveLength(1);
   });
+
+  // Item 4: an ErrorBinding has no `id` -- the array index IS its whole
+  // identity (this module's own doc) -- and ErrorColumnsPanel.tsx keys each
+  // row by the exact channel+target+axis+side tuple. Two rows with an
+  // identical tuple collide on that React key, AND are semantically
+  // meaningless (the same error column bound to the same target, twice).
+  it("is a no-op for an exact channel+target+axis+side duplicate", () => {
+    const bindings = [binding(1, 0, "y", "both")];
+    expect(appendErrorBinding(bindings, 1, 0, "y", "both")).toEqual(bindings);
+  });
+
+  it("still appends when only one field differs from an existing binding", () => {
+    const bindings = [binding(1, 0, "y", "both")];
+    expect(appendErrorBinding(bindings, 1, 0, "y", "+")).toEqual([
+      binding(1, 0, "y", "both"),
+      binding(1, 0, "y", "+"),
+    ]);
+  });
 });

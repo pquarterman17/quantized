@@ -6,23 +6,34 @@
 
 import type { PlotWindow } from "../../../lib/plotview";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
+import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
 import type { AppState } from "../../../store/useApp";
 
-/** True once a window-target session's live document -- the SAME comparison
+/** True once a session's live document -- the SAME comparison
  *  `applyFigurePublicationEdit` makes against `session.baseline` -- has
  *  already drifted, so the caller can flag Apply as blocked BEFORE the user
  *  clicks it instead of only after a rejected Apply flips `staleBaseline`.
  *  Skips the comparison entirely once a session is absent, detached
  *  (`new-editable` has no window to drift from), already flagged
- *  `staleBaseline`, or its target window is blocked for another reason --
- *  those paths already carry their own Apply-blocking reason. */
+ *  `staleBaseline`, or (window target only) its target window is blocked for
+ *  another reason -- those paths already carry their own Apply-blocking
+ *  reason.
+ *
+ *  Item 1: the `library` target has no single "target window" to be
+ *  blocked on -- ANY open window sharing its document id counts, focused or
+ *  not -- so it delegates to `libraryWindowLiveDrifted`
+ *  (figurePublicationLibrary.ts), the exact check `resolveLibraryApply`
+ *  enforces at Apply time, instead of the single-`windowId` comparison below
+ *  that only ever fits the `window` target. */
 export function sessionLiveDrifted(
   session: FigurePublicationSession,
   plotWindows: readonly PlotWindow[],
   targetBlocked: boolean,
   state: AppState,
 ): boolean {
-  if (session.target === "new-editable" || session.staleBaseline || targetBlocked) return false;
+  if (session.staleBaseline) return false;
+  if (session.target === "library") return libraryWindowLiveDrifted(state, session);
+  if (session.target === "new-editable" || targetBlocked) return false;
   const window = plotWindows.find((candidate) => candidate.id === session.windowId);
   if (!window) return false;
   const live = liveWindowDocument(state, window);
@@ -55,9 +66,16 @@ export function selectSessionLiveDrifted(state: AppState): boolean {
   const session = state.figurePublicationSession;
   if (session === null || session.target === "new-editable" || session.staleBaseline) return false;
   // Mirrors useFigureBuilder's own `targetBlocked` exactly; both mean "this
-  // session has a different Apply-blocking reason already".
-  const targetBlocked =
+  // session has a different Apply-blocking reason already" -- and, like that
+  // one, only means anything for the `window` target. A `library` session's
+  // `windowId` is always null (no single target window), so evaluating this
+  // against `session.windowId` unconditionally used to read as "blocked" for
+  // EVERY library session regardless of real window state, which is exactly
+  // what silenced item 1 for that target: `sessionLiveDrifted` never got past
+  // its `targetBlocked` guard to run the check at all.
+  const targetBlocked = session.target === "window" && (
     !state.plotWindows.some((candidate) => candidate.id === session.windowId) ||
-    state.focusedWindowId !== session.windowId;
+    state.focusedWindowId !== session.windowId
+  );
   return sessionLiveDrifted(session, state.plotWindows, targetBlocked, state);
 }
