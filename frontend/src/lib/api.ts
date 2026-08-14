@@ -27,18 +27,16 @@ import type {
   CorrectionParams,
   DataStruct,
   ElementInfo,
-  FftThicknessResult,
   FitModel,
   ImportFilterWire,
   ImportPreviewResponse,
   ImportSettingsWire,
   MultiFitResult,
   Peak,
-  ReflectivityFftResult,
   SinglePeakFit,
   SldPreset,
-  WilliamsonHallResult,
 } from "./types";
+import type { FftThicknessResult, ReflectivityFftResult, WilliamsonHallResult } from "./reductionTypes";
 
 // The transport helpers the standalone clients already import from "./api"
 // (lib/jobs, lib/fitbumps, lib/originTemplate) — re-exported so that stays true.

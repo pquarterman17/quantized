@@ -1031,59 +1031,9 @@ export interface ImportFilterWire {
   updated: string;
 }
 
-// ── Reductions (MAIN_PLAN #11) ──────────────────────────────────────────────
-// Wire shapes of POST /api/reductions/{williamson-hall,fft-thickness,
-// reflectivity-fft} (routes/reductions.py -> calc.reductions*). NaN-typed
-// fields (undefined grain size, no superlattice detected) serialize as null —
-// the routes return `dict[str, Any]`, which FastAPI runs through pydantic's
-// JSON-mode encoder, converting NaN to null (verified empirically; same
-// convention as RsmStrainResponse above).
-
-/** Response of POST /api/reductions/williamson-hall. */
-export interface WilliamsonHallResult {
-  grain_size_nm: number | null; // null when the fit intercept <= 0 (undefined)
-  microstrain: number;
-  r2: number;
-  plot_x: number[];
-  plot_y: number[];
-  fit_line: [number, number];
-}
-
-/** Response of POST /api/reductions/fft-thickness. */
-export interface FftThicknessResult {
-  thickness_nm: number;
-  uncertainty_nm: number | null; // null when the FFT peak's FWHM can't be bracketed
-  wavelength_a: number;
-  two_theta_range: [number, number];
-  fft_magnitude: number[];
-  thickness_axis: number[];
-  n_points: number;
-}
-
-/** The `superlattice` block of a reflectivity-FFT response — null fields when
- *  no bilayer periodicity was detected (`detected: false`, the common case). */
-export interface SuperlatticeResult {
-  detected: boolean;
-  bilayer_period_nm: number | null;
-  total_thickness_nm: number | null;
-  n_repeats: number | null;
-  sublayer_a_nm: number | null;
-  sublayer_b_nm: number | null;
-  suppressed_orders: number[];
-}
-
-/** Response of POST /api/reductions/reflectivity-fft. */
-export interface ReflectivityFftResult {
-  thicknesses_nm: number[];
-  amplitudes: number[];
-  harmonic_labels: string[];
-  q_range: [number, number];
-  preprocess: string;
-  fft_magnitude: number[];
-  thickness_axis: number[];
-  is_neutron: boolean;
-  wavelength_a?: number;
-  superlattice: SuperlatticeResult;
-}
+// Reductions wire types (WilliamsonHallResult, FftThicknessResult,
+// SuperlatticeResult, ReflectivityFftResult) moved to lib/reductionTypes.ts
+// (LIBRARY_WORKBOOK_UX_PLAN PR A1) to fund the WorkbookNode/Dataset.workbookId
+// addition below without raising this file's pinned ratchet ceiling.
 
 export type { ErrorBinding, ErrorSide } from "./errorRoles";

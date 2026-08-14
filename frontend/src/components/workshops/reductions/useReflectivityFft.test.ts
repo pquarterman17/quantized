@@ -2,7 +2,8 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { reflectivityFft } from "../../../lib/api";
-import type { DataStruct, SuperlatticeResult } from "../../../lib/types";
+import type { SuperlatticeResult } from "../../../lib/reductionTypes";
+import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useReflectivityFft } from "./useReflectivityFft";
 

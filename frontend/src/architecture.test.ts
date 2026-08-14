@@ -313,7 +313,12 @@ const TS_CEILING = 500;
 const TS_MODULE_PINS: Record<string, number> = {
   "/lib/uplotOpts.ts": 1446,
   "/lib/uplotOverlays.ts": 1175,
-  "/lib/types.ts": 1090,
+  // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
+  // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
+  // ReflectivityFftResult) — a self-contained leaf block nothing else in this
+  // file references — moved verbatim to the new lib/reductionTypes.ts,
+  // funding the new WorkbookNode type + Dataset.workbookId field added next.
+  "/lib/types.ts": 1040,
   "/lib/plotspec.ts": 893,
   "/lib/originFigures.ts": 793,
   "/components/Stage/useMultiPanelStage.ts": 791,

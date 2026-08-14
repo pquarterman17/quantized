@@ -11,7 +11,7 @@
 import { useState } from "react";
 
 import { williamsonHall } from "../../../lib/api";
-import type { WilliamsonHallResult } from "../../../lib/types";
+import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
 
 export interface WHPeakRow {
   twoTheta: number;
