@@ -220,6 +220,36 @@ describe("canonical Publication Preview session", () => {
     expect(figurePublicationDirty(useApp.getState().figurePublicationSession)).toBe(true);
   });
 
+  // Item 5 (cosmetic): the default main window is created at store init,
+  // before any dataset exists, so its `title` is the "" sentinel forever --
+  // `liveWindowDocument` used to carry that raw "" straight into the
+  // window-target session's name, so the Publication Preview title bar read
+  // "Publication preview — " and the builder's "Editing ." (a trailing bare
+  // period, no name) for a window the user is plainly looking at as "Data".
+  // saveFigure already solves this exact case with a displayedWindowTitle
+  // fallback (see its own test above); liveWindowDocument now applies the
+  // same one.
+  it("names a window-target session after what its title bar shows, for a never-renamed window", () => {
+    useApp.setState({ plotWindows: [{ ...window(), title: "", document: { ...document(), name: "" } }] });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Data");
+  });
+
+  it("falls back to Untitled graph when an untitled window has no dataset either", () => {
+    useApp.setState({
+      plotWindows: [{ ...window(), title: "", datasetId: null, document: { ...document(), name: "" } }],
+    });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Untitled graph");
+  });
+
+  it("never overrides a window's explicit title", () => {
+    // The window() fixture is titled "Current plot" -- resolving must be a
+    // fallback for the blank sentinel only, never a rename.
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.baseline.name).toBe("Current plot");
+  });
+
   it("refuses to replace an active Publication Preview session", () => {
     const source = document();
     expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
