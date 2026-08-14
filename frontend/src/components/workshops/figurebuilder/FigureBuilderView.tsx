@@ -143,6 +143,16 @@ export default function FigureBuilderView() {
                 onAdd: f.addRefLine,
                 onRemove: f.removeRefLine,
               } : undefined}
+              // F2.3j: gated on `canonical` ONLY, like reference lines above --
+              // this panel can create the first shade, and the alternative
+              // (reach for the Stage card) is the one action that invalidates
+              // the open session.
+              regionShades={f.canonical ? {
+                regionShades: f.regionShades,
+                onPatch: f.patchRegionShade,
+                onAdd: f.addRegionShade,
+                onRemove: f.removeRegionShade,
+              } : undefined}
               // F2.3e: canonical-only. Legacy Publication Preview renders from
               // the LIVE store's xFmt/yFmt, which the Stage's own Inspector
               // card already owns — a second editor for the same singleton

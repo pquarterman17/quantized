@@ -4,7 +4,7 @@ import { createFigureDocument, type FigureDocument } from "./figureDocument";
 import type { FigureOverrides } from "./figureOverrides";
 import type { FigureDoc } from "./figuredoc";
 import { defaultPlotView } from "./plotview";
-import type { RefLine, Shape } from "./types";
+import type { RefLine, RegionShade, Shape } from "./types";
 
 export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocument {
   const config = legacy.config;
@@ -21,15 +21,19 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
   // them into the view here, and strip them from the override bag below, so
   // the promoted document represents each object exactly ONCE.
   //
-  // Wire shapes/ref_lines carry no `id` (figureOverrides.ts's `shapes`/
-  // `ref_lines` mirror `Shape`/`RefLine` minus id -- see figureSpec.ts's
-  // `viewOverrides`); mint deterministic ids from the source doc id + array
-  // index, the same convention lib/originFigures.ts uses for its own
-  // wire->view conversions (`figann-${key}-${fi}-${mi}`) so re-promoting the
-  // SAME legacy doc twice yields the SAME ids rather than a fresh set each
-  // time.
+  // F2.3j (2026-08-13): `region_shades` joins them the same way now that
+  // `Inspector/RegionShadesCard.tsx` + `RegionShadePropertiesPanel.tsx` give
+  // it a view editor too -- the owner call F2.1i left pending is resolved.
+  //
+  // Wire shapes/ref_lines/region_shades carry no `id` (figureOverrides.ts's
+  // `shapes`/`ref_lines`/`region_shades` mirror `Shape`/`RefLine`/
+  // `RegionShade` minus id -- see figureSpec.ts's `viewOverrides`); mint
+  // deterministic ids from the source doc id + array index, the same
+  // convention lib/originFigures.ts uses for its own wire->view conversions
+  // (`figann-${key}-${fi}-${mi}`) so re-promoting the SAME legacy doc twice
+  // yields the SAME ids rather than a fresh set each time.
   const ov: FigureOverrides = config.overrides ?? {};
-  const { shapes: wireShapes, ref_lines: wireRefLines, ...restOverrides } = ov;
+  const { shapes: wireShapes, ref_lines: wireRefLines, region_shades: wireRegionShades, ...restOverrides } = ov;
   const shapes: Shape[] = (wireShapes ?? []).map((wire, i) => ({
     id: `legacyshape-${legacy.id}-${i}`,
     ...wire,
@@ -38,9 +42,10 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
     id: `legacyref-${legacy.id}-${i}`,
     ...wire,
   }));
-  // `region_shades` has NO view editor anywhere yet (an owner decision on
-  // whether decoded shades become editable is pending) -- unlike shapes/
-  // ref_lines above, it stays raw in the override bag untouched.
+  const regionShades: RegionShade[] = (wireRegionShades ?? []).map((wire, i) => ({
+    id: `legacyshade-${legacy.id}-${i}`,
+    ...wire,
+  }));
   const overrides: FigureOverrides | null = Object.keys(restOverrides).length ? restOverrides : null;
   return createFigureDocument({
     id: legacy.id,
@@ -60,6 +65,7 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
       yAxisLabel: config.yLabel,
       shapes,
       refLines,
+      regionShades,
     },
     groupKey: config.groupCol ?? null,
     // Graph Builder's error wells (#51 phase 3): threaded through so
@@ -74,7 +80,7 @@ export function figureDocumentFromLegacyFigureDoc(legacy: FigureDoc): FigureDocu
       : { mode: "frozen", snapshot: legacy.dataSnapshot },
     output: { format: config.fmt, stylePreset: config.style, dpi: config.dpi },
     // seriesStyles investigated (F2.1i) and deliberately left RAW, unlike
-    // shapes/ref_lines above -- see legacyFigure.ts's `buildLegacyFigureDoc`:
+    // shapes/ref_lines/region_shades above -- see legacyFigure.ts's `buildLegacyFigureDoc`:
     // every producer builds this array via `buildExportStyles`/`stylesForMark`,
     // which bakes MARK-level choices into per-entry fields no `SeriesStyle`
     // (the view type) can represent losslessly. A scatter-mark entry carries

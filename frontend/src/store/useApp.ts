@@ -85,6 +85,7 @@ import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
+import { createRegionShadesSlice, type RegionShadesSlice } from "./regionShades";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
@@ -142,7 +143,6 @@ import type {
   ModelingType,
   PeakOverlay,
   RefLine,
-  RegionShade,
   SeriesStyle,
 } from "../lib/types";
 
@@ -317,7 +317,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -436,7 +436,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
-  regionShades: RegionShade[]; // Origin Rect* region bands (decode-plan #41), replaced per figure apply
+  // regionShades: declared by RegionShadesSlice (store/regionShades.ts) —
+  // owns the array + its create/edit/remove actions (F2.3j).
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
@@ -920,6 +921,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set, get),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set, get),
+  ...createRegionShadesSlice(set, get),
   ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
@@ -1004,7 +1006,6 @@ export const useApp = create<AppState>((set, get) => ({
   y2AxisLabel: "",
   refLines: [],
   annotations: [],
-  regionShades: [],
   seriesStyles: {},
   seriesLabels: {},
   errKeys: {},
