@@ -577,4 +577,42 @@ describe("canonical Publication Preview session — library target", () => {
     expect(state.plotTitle).toBe("New title");
     expect(liveWindowDocument(state, state.plotWindows[0])?.plot.view.plotTitle).toBe("New title");
   });
+
+  // Item 1 (data loss): the finder's exact repro at full-store level -- a
+  // saved figure open as a live FOCUSED window with an unsaved Stage edit
+  // (a log-scale toggle, a drawn shape -- plotTitle stands in here, matching
+  // the sibling window-target drift test above) that was never routed
+  // through saveFigure, so `editableFigures` itself looks untouched. A
+  // library-target Publication Preview session on that SAME saved figure
+  // must refuse Apply instead of silently reverting the live edit via
+  // applyFigurePublicationEdit's unconditional withPlotWindowDocument +
+  // hydrateView. Companion to the pure-decision-layer coverage in
+  // figurePublicationLibrary.test.ts (resolveLibraryApply/
+  // libraryWindowLiveDrifted), which exercises the same scenario one layer
+  // down without the full store.
+  it("refuses Apply and preserves an unsaved live Stage edit on a FOCUSED window sharing the figure's id", () => {
+    const saved = libraryFigure();
+    const w1: PlotWindow = { ...window(), id: "w1", title: "Saved figure", document: libraryFigure() };
+    useApp.setState({ editableFigures: [saved], plotWindows: [w1], focusedWindowId: "w1", plotTitle: "" });
+    useApp.setState({ plotTitle: "Live unsaved edit" }); // the unsaved Stage edit
+
+    useApp.getState().beginFigurePublicationEditForFigure("figure-lib-1");
+    useApp.getState().patchFigurePublicationDraft((draft) => ({ ...draft, name: "Renamed via preview" }));
+    const history = useApp.getState().history.length;
+    useToasts.setState({ toasts: [] });
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(false);
+
+    const state = useApp.getState();
+    expect(state.history).toHaveLength(history);
+    // The saved Library entry must NOT pick up the draft's rename...
+    expect(state.editableFigures[0].name).toBe("Saved figure");
+    // ...and, the actual data-loss bug: the live Stage edit on the open
+    // window must survive Apply's refusal rather than being silently reverted.
+    expect(state.plotTitle).toBe("Live unsaved edit");
+    expect(state.figurePublicationSession?.staleBaseline).toBe(true);
+    expect(
+      useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg.includes("the plot changed while previewing")),
+    ).toBe(true);
+  });
 });
