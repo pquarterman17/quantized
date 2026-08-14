@@ -52,6 +52,30 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     fireEvent.click(screen.getByTitle("Remove"));
     expect(useApp.getState().shapes).toHaveLength(0);
   });
+
+  // Data-loss class bug, same mechanism as RegionShadesCard (lib/focusGuard):
+  // the ✕ button unmounts its own row on click; without a focus handoff the
+  // browser drops focus to <body>, which useGlobalShortcuts.ts's Delete
+  // handler treats as "nothing is being edited" and removes the ACTIVE
+  // DATASET instead.
+  it("focus never lands on <body> after removing a shape via its ✕", () => {
+    render(<ShapesCard />);
+    fireEvent.click(screen.getByTitle("Remove"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient — see RegionShadesCard's test of the same
+  // name for the full explanation. The container's own onKeyDown
+  // (absorbStrayDeleteOnContainer) must preventDefault() a Delete/Backspace
+  // targeting it directly, or useGlobalShortcuts' window listener still
+  // treats it as "nothing is being edited."
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    render(<ShapesCard />);
+    fireEvent.click(screen.getByTitle("Remove"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });
 
 // GUI_INTERACTION #17's parked judgment call, decided 2026-08-13: the bulk

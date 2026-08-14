@@ -16,7 +16,10 @@
 // -- `Shape.opacity`/`.width` are plain numbers and a "full parity" panel
 // should reach any of them, not just the menu's coarse shortcuts.
 
+import { useRef } from "react";
+
 import { deriveShapeRows, SHAPE_KIND_GLYPH, shapeSupportsFill } from "./canonicalShapes";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { Shape } from "../../../lib/types";
 import { resolveShapeOpacity } from "../../../lib/uplotShapes";
 import { Checkbox, IconButton } from "../../primitives";
@@ -100,8 +103,13 @@ export default function ShapePropertiesPanel({
   onRemove: (id: string) => void;
 }) {
   const rows = deriveShapeRows(shapes);
+  // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
+  // row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+    // tabIndex=-1: invisible, programmatic-only focus anchor. Not a new Tab stop.
+    <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {rows.map((row, i) => {
         const shape = shapes[i];
         if (!shape) return null;
@@ -114,7 +122,11 @@ export default function ShapePropertiesPanel({
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span aria-hidden="true">{SHAPE_KIND_GLYPH[shape.kind]}</span>
               <span className="qz-v" style={{ flex: 1 }}>{row.label}</span>
-              <IconButton title="Remove" aria-label={`Remove ${row.label}`} onClick={() => onRemove(row.id)}>
+              <IconButton
+                title="Remove"
+                aria-label={`Remove ${row.label}`}
+                onClick={() => removeRowSafely(containerRef.current, () => onRemove(row.id))}
+              >
                 ✕
               </IconButton>
             </div>

@@ -19,9 +19,10 @@
 // (unlike RefLinePropertiesPanel's numeric field) there is no Enter-to-commit
 // affordance to wire.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import { Button, IconButton, Select } from "../../primitives";
 
 const SIDES: { value: ErrorSide; label: string }[] = [
@@ -66,6 +67,10 @@ export default function ErrorColumnsPanel({
   const [target, setTarget] = useState("-1");
   const [axis, setAxis] = useState<ErrorBinding["axis"]>("y");
   const [side, setSide] = useState<ErrorSide>("both");
+  // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
+  // row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const halfPairs = bindings.filter(
     (binding) => binding.side !== "both" && !asymmetricPair(bindings, binding.target, binding.axis),
@@ -73,7 +78,10 @@ export default function ErrorColumnsPanel({
   const addReason: string | null = labels.length === 0 ? "no data columns to bind" : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+    // tabIndex=-1: an invisible, programmatic-only focus anchor for the
+    // per-row remove buttons below — see lib/focusGuard's doc. Not a new
+    // Tab stop.
+    <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {bindings.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           No error columns bound. Detect them from the column names, or add one below.
@@ -113,7 +121,11 @@ export default function ErrorColumnsPanel({
                 title="Symmetric, or one half of an asymmetric pair"
                 options={SIDES}
               />
-              <IconButton title="Remove" aria-label={`Remove error binding for ${channelLabel}`} onClick={() => onRemove(i)}>
+              <IconButton
+                title="Remove"
+                aria-label={`Remove error binding for ${channelLabel}`}
+                onClick={() => removeRowSafely(containerRef.current, () => onRemove(i))}
+              >
                 ✕
               </IconButton>
             </div>

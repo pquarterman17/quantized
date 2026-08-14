@@ -13,8 +13,9 @@
 // freshly-editable plot object manipulable from day one. `SegmentedControl`
 // is string-keyed, so the "y"/"y2" labels double as the axis's wire values.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
 import { Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
 
@@ -33,6 +34,10 @@ export default function RegionShadesCard() {
   const [y2, setY2] = useState("1");
   const [fill, setFill] = useState(DEFAULT_FILL);
   const [axis, setAxis] = useState<AxisChoice>("y");
+  // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
+  // row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const coords = [x1, y1, x2, y2].map(Number);
   const addReason: string | null = [x1, y1, x2, y2].some((v) => v.trim() === "")
@@ -61,55 +66,65 @@ export default function RegionShadesCard() {
 
   return (
     <Card title="Region shades" count={regionShades.length || undefined} defaultOpen={false}>
-      {regionShades.map((sh) => (
-        <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span className="qz-k" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="color"
-              aria-label="Fill color"
-              value={sh.fill}
-              onChange={(e) => updateRegionShade(sh.id, { fill: e.target.value })}
-              style={{ width: 20, height: 20, padding: 0, border: "1px solid var(--border)" }}
-            />
-            <SegmentedControl<AxisChoice>
-              options={axisOptions}
-              value={axisOf(sh.axis)}
-              onChange={(next) => updateRegionShade(sh.id, { axis: next === "y2" ? 1 : 0 })}
-            />
-            <span style={{ flex: 1 }} />
-            <IconButton title="Remove" aria-label="Remove region shade" onClick={() => removeRegionShade(sh.id)}>
-              ✕
-            </IconButton>
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <NumberField value={String(sh.x1)} width={48} placeholder="x1" onChange={setCoord(sh.id, "x1")} />
-            <NumberField value={String(sh.y1)} width={48} placeholder="y1" onChange={setCoord(sh.id, "y1")} />
-            <span style={{ color: "var(--text-faint)" }}>→</span>
-            <NumberField value={String(sh.x2)} width={48} placeholder="x2" onChange={setCoord(sh.id, "x2")} />
-            <NumberField value={String(sh.y2)} width={48} placeholder="y2" onChange={setCoord(sh.id, "y2")} />
+      {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
+       *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
+       *  Delete/Backspace that lands here right after a removal, before it
+       *  can bubble to useGlobalShortcuts' window listener. */}
+      <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
+        {regionShades.map((sh) => (
+          <div key={sh.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span className="qz-k" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="color"
+                aria-label="Fill color"
+                value={sh.fill}
+                onChange={(e) => updateRegionShade(sh.id, { fill: e.target.value })}
+                style={{ width: 20, height: 20, padding: 0, border: "1px solid var(--border)" }}
+              />
+              <SegmentedControl<AxisChoice>
+                options={axisOptions}
+                value={axisOf(sh.axis)}
+                onChange={(next) => updateRegionShade(sh.id, { axis: next === "y2" ? 1 : 0 })}
+              />
+              <span style={{ flex: 1 }} />
+              <IconButton
+                title="Remove"
+                aria-label="Remove region shade"
+                onClick={() => removeRowSafely(containerRef.current, () => removeRegionShade(sh.id))}
+              >
+                ✕
+              </IconButton>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <NumberField value={String(sh.x1)} width={48} placeholder="x1" onChange={setCoord(sh.id, "x1")} />
+              <NumberField value={String(sh.y1)} width={48} placeholder="y1" onChange={setCoord(sh.id, "y1")} />
+              <span style={{ color: "var(--text-faint)" }}>→</span>
+              <NumberField value={String(sh.x2)} width={48} placeholder="x2" onChange={setCoord(sh.id, "x2")} />
+              <NumberField value={String(sh.y2)} width={48} placeholder="y2" onChange={setCoord(sh.id, "y2")} />
+            </span>
+          </div>
+        ))}
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", marginTop: regionShades.length ? 6 : 0 }}>
+          <NumberField value={x1} width={48} placeholder="x1" onChange={setX1} />
+          <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />
+          <span style={{ color: "var(--text-faint)" }}>→</span>
+          <NumberField value={x2} width={48} placeholder="x2" onChange={setX2} />
+          <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />
+          <input
+            type="color"
+            aria-label="New shade fill color"
+            value={fill}
+            onChange={(e) => setFill(e.target.value)}
+            style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
+          />
+          <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} />
+          <span title={addReason ?? "Add a filled region shade at these coordinates"}>
+            <Button size="sm" disabled={addReason !== null} onClick={add}>
+              Add
+            </Button>
           </span>
         </div>
-      ))}
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "end", marginTop: regionShades.length ? 6 : 0 }}>
-        <NumberField value={x1} width={48} placeholder="x1" onChange={setX1} />
-        <NumberField value={y1} width={48} placeholder="y1" onChange={setY1} />
-        <span style={{ color: "var(--text-faint)" }}>→</span>
-        <NumberField value={x2} width={48} placeholder="x2" onChange={setX2} />
-        <NumberField value={y2} width={48} placeholder="y2" onChange={setY2} />
-        <input
-          type="color"
-          aria-label="New shade fill color"
-          value={fill}
-          onChange={(e) => setFill(e.target.value)}
-          style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
-        />
-        <SegmentedControl<AxisChoice> options={axisOptions} value={axis} onChange={setAxis} />
-        <span title={addReason ?? "Add a filled region shade at these coordinates"}>
-          <Button size="sm" disabled={addReason !== null} onClick={add}>
-            Add
-          </Button>
-        </span>
       </div>
     </Card>
   );

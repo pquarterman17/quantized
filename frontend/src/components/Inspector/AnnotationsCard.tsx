@@ -10,8 +10,9 @@
 // coordinate is a strictly more precise substitute for a nudge, not just a
 // menu-parity checkbox.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { clampAnnotationSize } from "../../lib/uplotOverlays";
 import { useApp } from "../../store/useApp";
 import { Button, Card, IconButton, NumberField, RichText } from "../primitives";
@@ -24,6 +25,10 @@ export default function AnnotationsCard() {
   const [x, setX] = useState("0");
   const [y, setY] = useState("0");
   const [text, setText] = useState("");
+  // Focus-safety anchor (lib/focusGuard) — the per-annotation ✕ below
+  // unmounts its own row; without this, focus falls to <body> and a
+  // follow-up Delete keystroke deletes the ACTIVE DATASET instead.
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const add = () => {
     const xv = Number(x);
@@ -54,54 +59,63 @@ export default function AnnotationsCard() {
         </Button>
       </div>
 
-      {annotations.map((a) => (
-        <div key={a.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span
-            className="qz-k"
-            style={{ overflow: "hidden", textOverflow: "ellipsis", display: "flex", justifyContent: "space-between" }}
-          >
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-              <RichText text={a.text} />
+      {/* tabIndex=-1: an invisible, programmatic-only focus anchor — see
+       *  lib/focusGuard's doc. Not a new Tab stop. onKeyDown absorbs a stray
+       *  Delete/Backspace that lands here right after a removal, before it
+       *  can bubble to useGlobalShortcuts' window listener. */}
+      <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
+        {annotations.map((a) => (
+          <div key={a.id} className="qz-meta-row" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span
+              className="qz-k"
+              style={{ overflow: "hidden", textOverflow: "ellipsis", display: "flex", justifyContent: "space-between" }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                <RichText text={a.text} />
+              </span>
+              {a.anchor === "page" && <span style={{ color: "var(--text-faint)" }}>page</span>}
             </span>
-            {a.anchor === "page" && <span style={{ color: "var(--text-faint)" }}>page</span>}
-          </span>
-          {/* Editable X/Y (GUI_INTERACTION #3 sub-item 4) — the non-mouse path
-           *  for "move this annotation": typing an exact coordinate, in
-           *  place of the read-only (x, y) text every prior version showed. */}
-          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <NumberField
-              value={String(a.x)}
-              width={56}
-              placeholder="X"
-              onChange={(v) => {
-                const n = Number(v);
-                if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { x: n });
-              }}
-            />
-            <NumberField
-              value={String(a.y)}
-              width={56}
-              placeholder="Y"
-              onChange={(v) => {
-                const n = Number(v);
-                if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { y: n });
-              }}
-            />
-            <NumberField
-              value={String(a.size ?? "")}
-              width={40}
-              placeholder="px"
-              onChange={(v) => {
-                const n = Number(v);
-                if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { size: clampAnnotationSize(n) });
-              }}
-            />
-            <IconButton title="Remove" onClick={() => removeAnnotation(a.id)}>
-              ✕
-            </IconButton>
-          </span>
-        </div>
-      ))}
+            {/* Editable X/Y (GUI_INTERACTION #3 sub-item 4) — the non-mouse path
+             *  for "move this annotation": typing an exact coordinate, in
+             *  place of the read-only (x, y) text every prior version showed. */}
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <NumberField
+                value={String(a.x)}
+                width={56}
+                placeholder="X"
+                onChange={(v) => {
+                  const n = Number(v);
+                  if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { x: n });
+                }}
+              />
+              <NumberField
+                value={String(a.y)}
+                width={56}
+                placeholder="Y"
+                onChange={(v) => {
+                  const n = Number(v);
+                  if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { y: n });
+                }}
+              />
+              <NumberField
+                value={String(a.size ?? "")}
+                width={40}
+                placeholder="px"
+                onChange={(v) => {
+                  const n = Number(v);
+                  if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { size: clampAnnotationSize(n) });
+                }}
+              />
+              <IconButton
+                title="Remove"
+                onClick={() => removeRowSafely(containerRef.current, () => removeAnnotation(a.id))}
+              >
+                ✕
+              </IconButton>
+            </span>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

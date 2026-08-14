@@ -111,6 +111,34 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
     expect(useApp.getState().regionShades).toHaveLength(0);
   });
 
+  // Data-loss class bug (reproduced live): the ✕ button unmounts itself on
+  // click, and without a focus handoff the browser drops focus to <body> —
+  // which useGlobalShortcuts.ts's Delete handler treats as "nothing is being
+  // edited" and removes the ACTIVE DATASET. lib/focusGuard moves focus to the
+  // card's own container first, synchronously, so body never receives it.
+  it("focus never lands on <body> after removing a shade via its ✕", () => {
+    render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("Remove region shade"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient: a focused plain <div> is not an "editing
+  // target" either, so useGlobalShortcuts' `!isEditing(e.target)` guard would
+  // still let a Delete/Backspace through and remove the active dataset even
+  // though body never received focus (measured live — this exact assertion
+  // caught it: the interim focus-only version left activeElement as the
+  // container but the keystroke still bubbled un-prevented). The container's
+  // own onKeyDown (lib/focusGuard's absorbStrayDeleteOnContainer) must call
+  // preventDefault() so useGlobalShortcuts' window listener never sees an
+  // un-prevented Delete for this target.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    render(<RegionShadesCard />);
+    fireEvent.click(screen.getByLabelText("Remove region shade"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("shows the shade count badge", () => {
     render(<RegionShadesCard />);
     expect(screen.getByText("1")).toBeInTheDocument();

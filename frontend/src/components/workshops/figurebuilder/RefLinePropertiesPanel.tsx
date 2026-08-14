@@ -20,9 +20,10 @@
 // fully specified by an axis and a number, so it needs no live canvas to draw
 // on; it is the identical two-field form the Stage card uses.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { deriveRefLineRows } from "./canonicalRefLines";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { RefLine } from "../../../lib/types";
 import { Button, IconButton, NumberField, SegmentedControl } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
@@ -42,6 +43,10 @@ export default function RefLinePropertiesPanel({
 }) {
   const [axis, setAxis] = useState<RefLine["axis"]>("x");
   const [draft, setDraft] = useState("0");
+  // Focus-safety anchor (lib/focusGuard) — a remove ✕ below unmounts its own
+  // row; without this, focus falls to <body> and a follow-up Delete
+  // keystroke deletes the ACTIVE DATASET instead (see focusGuard's doc).
+  const containerRef = useRef<HTMLDivElement>(null);
   const parsed = Number(draft);
   // Same validity rule the store enforces (useApp's addRefLine is called only
   // for a finite value): an Inf/NaN line renders nowhere and would serialize
@@ -61,7 +66,10 @@ export default function RefLinePropertiesPanel({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+    // tabIndex=-1: an invisible, programmatic-only focus anchor for the
+    // per-row remove buttons below — see lib/focusGuard's doc. Not a new
+    // Tab stop.
+    <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       {rows.map((row, index) => {
         const line = refLines[index];
         if (!line) return null;
@@ -78,7 +86,11 @@ export default function RefLinePropertiesPanel({
               required
               onValue={(value) => (value === undefined ? undefined : onValue(row.id, value))}
             />
-            <IconButton title="Remove" aria-label={`Remove ${row.label}`} onClick={() => onRemove(row.id)}>
+            <IconButton
+              title="Remove"
+              aria-label={`Remove ${row.label}`}
+              onClick={() => removeRowSafely(containerRef.current, () => onRemove(row.id))}
+            >
               ✕
             </IconButton>
           </div>

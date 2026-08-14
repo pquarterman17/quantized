@@ -73,6 +73,26 @@ describe("ErrorColumnsPanel", () => {
     expect(onRemove).toHaveBeenCalledWith(1);
   });
 
+  // Data-loss class bug (lib/focusGuard): the ✕ button unmounts its own row
+  // on click; without a focus handoff the browser drops focus to <body>,
+  // which useGlobalShortcuts.ts's Delete handler treats as "nothing is being
+  // edited" and removes the ACTIVE DATASET instead.
+  it("focus never lands on <body> after removing a binding via its ✕", () => {
+    renderPanel([SYM, { channel: 0, target: -1, axis: "x", side: "both" }]);
+    fireEvent.click(screen.getByLabelText("Remove error binding for X"));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  // Focus alone is NOT sufficient — see Inspector/RegionShadesCard's test of
+  // the same name for the full explanation.
+  it("a Delete keystroke on the post-removal focus anchor is prevented, not left to bubble", () => {
+    renderPanel([SYM, { channel: 0, target: -1, axis: "x", side: "both" }]);
+    fireEvent.click(screen.getByLabelText("Remove error binding for X"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("warns about a one-sided binding with no partner, and only that one", () => {
     renderPanel([
       { channel: 2, target: 1, axis: "y", side: "+" },
