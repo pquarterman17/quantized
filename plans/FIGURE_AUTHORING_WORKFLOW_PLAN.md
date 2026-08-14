@@ -499,8 +499,40 @@ Check these only with automated coverage plus an owner-visible desktop run.
 
 - [ ] **A1 Arbitrary data:** Drop/import data, confirm inferred roles, and
       reach a production-quality editable plot without code.
+      **Automated half DONE 2026-08-14** —
+      `e2e/specs/arbitrary-data-journey.spec.ts`, a real-Chromium journey
+      against the real backend: drives the Import wizard's real guess →
+      preview → confirm → import flow (the actual role-confirmation gate,
+      not the Channels card) against a synthetic non-instrument CSV,
+      confirms all 4 guessed column roles against the rendered fields,
+      corrects the one deliberately-wrong guess (a QC column the guess
+      defaults to "y", fixed to "ignore"), and verifies the resulting plot:
+      correct series count and legend labels on the live Stage, matching
+      Channels-card state, a real Publication Preview render carrying the
+      confirmed channel set, and a real SVG export whose matplotlib-embedded
+      text carries the fixture's headers/units. Runs in CI's `e2e.yml`.
+      Verified load-bearing: planting `ignore` into `import_preview.py`'s
+      `_CHANNEL_ROLES` reddens the spec's channel-count assertion; reverted.
+      Owner desktop run still gates the checkbox.
 - [ ] **A2 Mouse editing:** Change line/scatter mode, colors, widths, errors,
       scales, limits, legend, and labels through direct manipulation/properties.
+      **Automated half DONE 2026-08-14** —
+      `e2e/specs/mouse-editing-journey.spec.ts`, a real-Chromium journey
+      against the real backend: ONE continuous journey — line/scatter mode,
+      color, and width via the Series style properties card; error bars
+      on/off/on via the Channels card; log Y scale, explicit Y limits, and a
+      Y axis label edit via the Axes/Titles cards; a legend rename via
+      double-click — then Save Editable Figure, close, and reopen, asserting
+      every edit survived in both the saved document and the reopened
+      window's live view facade. Deliberately scoped against
+      `curve-restyle.spec.ts` (canvas-context-menu color/marker) and
+      `axis-title-limits.spec.ts` (X label/limits) to avoid re-testing their
+      clicks — this journey covers the Y counterparts, scale, mode, errors,
+      and legend, plus the save/reopen persistence check neither existing
+      spec performs. Runs in CI's `e2e.yml`. Verified load-bearing: planting
+      a dropped `seriesStyles` into `figureDocument.ts`'s
+      `figureDocumentToPlotView` reddens the "survived reopen" assertion;
+      reverted. Owner desktop run still gates the checkbox.
 - [ ] **A3 Lossless figure:** Save, close, reopen, and compare the complete
       document/spec for equality. **Automated half DONE 2026-08-12** —
       `e2e/specs/figure-document-roundtrip.spec.ts`, a real-Chromium journey
