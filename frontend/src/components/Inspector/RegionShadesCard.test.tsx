@@ -84,6 +84,38 @@ describe("RegionShadesCard — existing shade: edit + remove", () => {
     expect(useApp.getState().regionShades[0].x2).toBe(10);
   });
 
+  // Wrong-result bug (reproduced live): the row fields used to bind straight
+  // to the store number with no local buffer, so an unparseable keystroke
+  // ("-") committed nothing and the controlled field snapped back to the OLD
+  // digits — the NEXT keystroke then landed appended to that old value.
+  // Editing 1 to -5 silently produced 15. BufferedNumberField decouples the
+  // DOM value into a local buffer so the in-progress "-" stays visible.
+  describe("negative-number typing (BufferedNumberField)", () => {
+    it("typing '-' then '5' commits -5, not 15", () => {
+      render(<RegionShadesCard />);
+      const field = screen.getAllByPlaceholderText("x1")[0];
+      // Simulates the keystroke sequence: "-" first (an incomplete number —
+      // nothing commits yet), then the full "-5".
+      fireEvent.change(field, { target: { value: "-" } });
+      expect(useApp.getState().regionShades[0].x1).toBe(1); // unchanged mid-typing
+      expect(field).toHaveValue("-"); // buffer shows the in-progress text, doesn't snap back
+      fireEvent.change(field, { target: { value: "-5" } });
+      expect(useApp.getState().regionShades[0].x1).toBe(-5);
+      expect(field).toHaveValue("-5");
+    });
+
+    it("Select-All+Backspace clears the buffer; blur reverts to the last committed value", () => {
+      render(<RegionShadesCard />);
+      const field = screen.getAllByPlaceholderText("x1")[0];
+      fireEvent.change(field, { target: { value: "" } });
+      expect(field).toHaveValue(""); // the field can actually go empty now
+      expect(useApp.getState().regionShades[0].x1).toBe(1); // no undefined write
+      fireEvent.blur(field);
+      expect(field).toHaveValue("1"); // required: reverts to the committed value
+      expect(useApp.getState().regionShades[0].x1).toBe(1);
+    });
+  });
+
   it("changing the fill color commits it via updateRegionShade", () => {
     render(<RegionShadesCard />);
     fireEvent.change(screen.getByLabelText("Fill color"), { target: { value: "#00ff00" } });

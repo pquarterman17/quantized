@@ -41,6 +41,37 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     expect(useApp.getState().shapes[0].y1).toBe(-3);
   });
 
+  // Wrong-result bug, same mechanism as RegionShadesCard: the row fields
+  // used to bind straight to the store number with no local buffer, so an
+  // unparseable keystroke ("-") committed nothing and the controlled field
+  // snapped back to the OLD digits — the NEXT keystroke then landed appended
+  // to that old value. Editing 1 to -5 silently produced 15.
+  // BufferedNumberField (shared with RegionShadesCard/PropertyNumberField)
+  // decouples the DOM value into a local buffer so the in-progress "-" stays
+  // visible — this proves the shared fix took here too, not just on
+  // RegionShadesCard.
+  it("typing '-' then '5' commits -5, not 15", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    fireEvent.change(field, { target: { value: "-" } });
+    expect(useApp.getState().shapes[0].x1).toBe(1); // unchanged mid-typing
+    expect(field).toHaveValue("-"); // buffer shows the in-progress text
+    fireEvent.change(field, { target: { value: "-5" } });
+    expect(useApp.getState().shapes[0].x1).toBe(-5);
+    expect(field).toHaveValue("-5");
+  });
+
+  it("Select-All+Backspace clears the buffer; blur reverts to the last committed value", () => {
+    render(<ShapesCard />);
+    const field = screen.getByPlaceholderText("x1");
+    fireEvent.change(field, { target: { value: "" } });
+    expect(field).toHaveValue("");
+    expect(useApp.getState().shapes[0].x1).toBe(1);
+    fireEvent.blur(field);
+    expect(field).toHaveValue("1");
+    expect(useApp.getState().shapes[0].x1).toBe(1);
+  });
+
   it("clicking the kind label still toggles selection (unaffected by the new fields)", () => {
     render(<ShapesCard />);
     fireEvent.click(screen.getByText("rect"));

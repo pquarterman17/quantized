@@ -19,7 +19,7 @@ import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGu
 import { resolveShapeStroke } from "../../lib/uplotShapes";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
-import { Button, Card, IconButton, NumberField } from "../primitives";
+import { BufferedNumberField, Button, Card, IconButton } from "../primitives";
 
 const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
 
@@ -35,11 +35,16 @@ export default function ShapesCard() {
   // keystroke deletes the ACTIVE DATASET instead.
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Nudge one coordinate of one shape — the shared onChange body for all
-  // four fields below (only the patched key differs).
-  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: string) => {
-    const n = Number(v);
-    if (Number.isFinite(n) && v.trim()) updateShape(id, { [key]: n });
+  // Nudge one coordinate of one shape — the shared onValue body for all four
+  // fields below (only the patched key differs). Bound through
+  // BufferedNumberField (primitives), not a raw NumberField straight to the
+  // store number: a controlled field with no local buffer snaps back to the
+  // OLD digits on every unparseable keystroke, so typing "-" then "5" to
+  // edit 1 into -5 silently produced 15 instead (the digit landed appended
+  // to the reverted "1"). BufferedNumberField keeps the in-progress text
+  // visible until it resolves to a valid number.
+  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number | undefined) => {
+    if (v !== undefined) updateShape(id, { [key]: v });
   };
 
   return (
@@ -88,11 +93,11 @@ export default function ShapesCard() {
             {/* Editable x1/y1 → x2/y2 (GUI_INTERACTION #3 sub-item 4) — the
              *  non-mouse path for "move/reshape this shape"; see the module doc. */}
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <NumberField value={String(sh.x1)} width={48} placeholder="x1" onChange={setCoord(sh.id, "x1")} />
-              <NumberField value={String(sh.y1)} width={48} placeholder="y1" onChange={setCoord(sh.id, "y1")} />
+              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
+              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />
               <span style={{ color: "var(--text-faint)" }}>→</span>
-              <NumberField value={String(sh.x2)} width={48} placeholder="x2" onChange={setCoord(sh.id, "x2")} />
-              <NumberField value={String(sh.y2)} width={48} placeholder="y2" onChange={setCoord(sh.id, "y2")} />
+              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
+              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />
             </span>
           </div>
         ))}

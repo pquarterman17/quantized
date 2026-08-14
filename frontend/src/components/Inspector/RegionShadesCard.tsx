@@ -17,7 +17,7 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
-import { Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
+import { BufferedNumberField, Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
 
 const DEFAULT_FILL = "#3388cc";
 type AxisChoice = "y" | "y2";
@@ -52,11 +52,16 @@ export default function RegionShadesCard() {
     addRegionShade({ x1: nx1, y1: ny1, x2: nx2, y2: ny2, fill, ...(axis === "y2" ? { axis: 1 } : {}) });
   };
 
-  // Nudge one coordinate of one shade — the shared onChange body for all four
-  // fields below (only the patched key differs), matching ShapesCard's setCoord.
-  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: string) => {
-    const n = Number(v);
-    if (Number.isFinite(n) && v.trim()) updateRegionShade(id, { [key]: n });
+  // Nudge one coordinate of one shade — the shared onValue body for all four
+  // fields below (only the patched key differs), matching ShapesCard's
+  // setCoord. Bound through BufferedNumberField (primitives), not a raw
+  // NumberField straight to the store number: a controlled field with no
+  // local buffer snaps back to the OLD digits on every unparseable
+  // keystroke, so typing "-" then "5" to edit 1 into -5 silently produced 15
+  // instead (the digit landed appended to the reverted "1"). BufferedNumberField
+  // keeps the in-progress text visible until it resolves to a valid number.
+  const setCoord = (id: string, key: "x1" | "y1" | "x2" | "y2") => (v: number | undefined) => {
+    if (v !== undefined) updateRegionShade(id, { [key]: v });
   };
 
   const axisOptions: { value: AxisChoice; label: string }[] = [
@@ -96,11 +101,11 @@ export default function RegionShadesCard() {
               </IconButton>
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <NumberField value={String(sh.x1)} width={48} placeholder="x1" onChange={setCoord(sh.id, "x1")} />
-              <NumberField value={String(sh.y1)} width={48} placeholder="y1" onChange={setCoord(sh.id, "y1")} />
+              <BufferedNumberField value={sh.x1} width={48} placeholder="x1" required onValue={setCoord(sh.id, "x1")} />
+              <BufferedNumberField value={sh.y1} width={48} placeholder="y1" required onValue={setCoord(sh.id, "y1")} />
               <span style={{ color: "var(--text-faint)" }}>→</span>
-              <NumberField value={String(sh.x2)} width={48} placeholder="x2" onChange={setCoord(sh.id, "x2")} />
-              <NumberField value={String(sh.y2)} width={48} placeholder="y2" onChange={setCoord(sh.id, "y2")} />
+              <BufferedNumberField value={sh.x2} width={48} placeholder="x2" required onValue={setCoord(sh.id, "x2")} />
+              <BufferedNumberField value={sh.y2} width={48} placeholder="y2" required onValue={setCoord(sh.id, "y2")} />
             </span>
           </div>
         ))}

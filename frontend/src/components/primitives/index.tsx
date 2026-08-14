@@ -11,6 +11,7 @@ import type {
 import clsx from "clsx";
 
 export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
+export { default as BufferedNumberField } from "./BufferedNumberField";
 export { default as Card, type CardProps } from "./Card";
 export { default as RichText } from "./RichText";
 export { default as RichLabelInput } from "./RichLabelInput";

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
-
-import { NumberField } from "../../primitives";
+import { BufferedNumberField } from "../../primitives";
 
 /** A labelled numeric field that retains valid in-progress typing while
- * reflecting externally replaced canonical-draft values. */
+ * reflecting externally replaced canonical-draft values. The buffer-commit
+ * logic itself now lives in the shared `BufferedNumberField` primitive (also
+ * used unlabelled by the Inspector decor cards' row fields) — this component
+ * is just that primitive plus the visible `<label>` this panel's dense field
+ * grid needs. */
 export default function PropertyNumberField({
   label,
   ariaLabel,
@@ -28,44 +30,17 @@ export default function PropertyNumberField({
   /** Required coordinates retain their last finite value if cleared or invalid. */
   required?: boolean;
 }) {
-  const [text, setText] = useState(value === undefined ? "" : String(value));
-  const committedText = value === undefined ? "" : String(value);
-  useEffect(() => {
-    setText(committedText);
-  }, [committedText]);
-
   return (
     <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
       <label className="qzk-field-lbl">{label}</label>
-      <NumberField
+      <BufferedNumberField
         aria-label={ariaLabel ?? label}
-        value={text}
+        value={value}
+        onValue={onValue}
         width={width}
         min={min}
         max={max}
         required={required}
-        onBlur={() => {
-          const next = Number(text);
-          if (
-            required &&
-            (text.trim() === "" ||
-              !Number.isFinite(next) ||
-              (min !== undefined && next < min) ||
-              (max !== undefined && next > max))
-          ) setText(committedText);
-        }}
-        onChange={(next) => {
-          setText(next);
-          if (next.trim() === "") onValue(undefined);
-          else {
-            const numeric = Number(next);
-            if (
-              Number.isFinite(numeric) &&
-              (min === undefined || numeric >= min) &&
-              (max === undefined || numeric <= max)
-            ) onValue(numeric);
-          }
-        }}
       />
     </span>
   );
