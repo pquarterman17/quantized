@@ -3,12 +3,17 @@
 // had no way to reposition it except dragging its body/handle on the canvas.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { askConfirm } from "../overlays/ConfirmDialog";
+
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 import ShapesCard from "./ShapesCard";
 import { useApp } from "../../store/useApp";
 
 beforeEach(() => {
+  vi.mocked(askConfirm).mockReset();
   useApp.setState({
     shapes: [{ id: "s1", kind: "rect", x1: 1, y1: 2, x2: 3, y2: 4 }],
     selectedShapeId: null,
@@ -46,5 +51,40 @@ describe("ShapesCard — editable x1/y1 → x2/y2", () => {
     render(<ShapesCard />);
     fireEvent.click(screen.getByTitle("Remove"));
     expect(useApp.getState().shapes).toHaveLength(0);
+  });
+});
+
+// GUI_INTERACTION #17's parked judgment call, decided 2026-08-13: the bulk
+// "Clear all" pauses for a confirm; the per-shape ✕ stays confirm-free.
+describe("ShapesCard — Clear all confirm", () => {
+  it("does not clear synchronously; clears once the confirm resolves true", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    render(<ShapesCard />);
+    fireEvent.click(screen.getByText("Clear all"));
+    expect(useApp.getState().shapes).toHaveLength(1);
+    await Promise.resolve();
+    expect(useApp.getState().shapes).toHaveLength(0);
+    expect(vi.mocked(askConfirm).mock.calls[0][0]).toBe("Clear all 1 shape?");
+  });
+
+  it("declining the confirm leaves every shape in place", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    render(<ShapesCard />);
+    fireEvent.click(screen.getByText("Clear all"));
+    await Promise.resolve();
+    expect(useApp.getState().shapes).toHaveLength(1);
+  });
+
+  it("pluralizes the title for several shapes", () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    useApp.setState({
+      shapes: [
+        { id: "s1", kind: "rect", x1: 1, y1: 2, x2: 3, y2: 4 },
+        { id: "s2", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 },
+      ],
+    });
+    render(<ShapesCard />);
+    fireEvent.click(screen.getByText("Clear all"));
+    expect(vi.mocked(askConfirm).mock.calls[0][0]).toBe("Clear all 2 shapes?");
   });
 });

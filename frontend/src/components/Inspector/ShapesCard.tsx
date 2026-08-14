@@ -15,6 +15,7 @@
 
 import { resolveShapeStroke } from "../../lib/uplotShapes";
 import { useApp } from "../../store/useApp";
+import { askConfirm } from "../overlays/ConfirmDialog";
 import { Button, Card, IconButton, NumberField } from "../primitives";
 
 const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
@@ -84,7 +85,24 @@ export default function ShapesCard() {
         </div>
       ))}
       {shapes.length > 0 && (
-        <Button size="sm" onClick={clearShapes} style={{ marginTop: 6 }}>
+        <Button
+          size="sm"
+          onClick={() => {
+            // Bulk wipe gets a confirm; the per-shape ✕ above stays exempt
+            // (the canvas-object exemption is scoped to ONE-at-a-time
+            // deletes). Undo can restore either way — clearShapes records a
+            // "clear shapes" history entry — so the body says so.
+            void askConfirm(
+              `Clear all ${shapes.length} shape${shapes.length === 1 ? "" : "s"}?`,
+              "Every drawn shape on this plot will be removed. You can restore them with Undo.",
+              "Clear all",
+              true,
+            ).then((confirmed) => {
+              if (confirmed) clearShapes();
+            });
+          }}
+          style={{ marginTop: 6 }}
+        >
           Clear all
         </Button>
       )}
