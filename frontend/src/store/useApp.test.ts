@@ -56,6 +56,7 @@ beforeEach(() => {
     originFigures: [],
     originFidelity: [],
     folders: [],
+    workbooks: [],
     expandedFolders: [],
     originBookClickOpens: "worksheet", // item 15 — reset the pref between tests
     // The four row-indexed analysis overlays are singleton fields — null them
@@ -134,6 +135,7 @@ describe("clearAll (File ▸ Remove all)", () => {
         { id: "b", name: "b", data: raw },
       ],
       folders: [{ id: "f1", name: "Proj", parentId: null, order: 0 }],
+      workbooks: [{ id: "w1", name: "Book" }],
       expandedFolders: ["f1"],
       originFigures: [
         {
@@ -161,6 +163,9 @@ describe("clearAll (File ▸ Remove all)", () => {
     const s = useApp.getState();
     expect(s.datasets).toEqual([]);
     expect(s.folders).toEqual([]);
+    // clearAll reuses loadWorkspace's "replace everything" reset — workbooks
+    // clear through the exact same explicit `ws.workbooks ?? []` path folders do.
+    expect(s.workbooks).toEqual([]);
     expect(s.expandedFolders).toEqual([]);
     expect(s.originFigures).toEqual([]);
     expect(s.activeId).toBeNull();
@@ -3250,6 +3255,32 @@ describe("useApp loadWorkspace", () => {
     expect(s.expandedFolders).toContain(fid);
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN PR A2's sharpest bug: `set()` merges a PARTIAL
+  // state, so a `loadWorkspace` return object that OMITTED `workbooks` would
+  // silently leave the PREVIOUS project's workbooks in place on the newly
+  // opened one — TypeScript cannot catch a missing object-literal key here.
+  it("does not leak the previous project's workbooks into a newly opened one with none", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "first", data: raw }],
+      workbooks: [{ id: "wb1", name: "Old Book" }],
+    });
+    expect(useApp.getState().workbooks).toEqual([{ id: "wb1", name: "Old Book" }]);
+
+    // A v1-v3-shaped doc (or any doc with no `workbooks` field at all).
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w2", name: "second", data: raw }] });
+    expect(useApp.getState().workbooks).toEqual([]);
+  });
+
+  it("restores a persisted workbooks array (v4)", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "a", data: raw, workbookId: "wb1" }],
+      workbooks: [{ id: "wb1", name: "Book" }],
+    });
+    const s = useApp.getState();
+    expect(s.workbooks).toEqual([{ id: "wb1", name: "Book" }]);
+    expect(s.datasets[0].workbookId).toBe("wb1");
+  });
+
   it("re-loading an already-migrated workspace does not duplicate the folder", () => {
     useApp.getState().loadWorkspace({
       datasets: [{ id: "w1", name: "a", data: raw, group: "Batch A" }],
@@ -3274,6 +3305,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     return {
       datasets,
       folders: [],
+      workbooks: [],
       activeId: null,
       selectedIds: [],
       expandedFolders: [],

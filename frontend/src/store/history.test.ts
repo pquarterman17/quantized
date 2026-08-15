@@ -271,6 +271,7 @@ describe("per-action-class undo/redo coverage", () => {
     const incoming: LoadedWorkspace = {
       datasets: [{ id: "d2", name: "b", data: raw }],
       folders: [],
+      workbooks: [],
       activeId: null,
       selectedIds: [],
       expandedFolders: [],
@@ -447,6 +448,21 @@ describe("per-action-class undo/redo coverage", () => {
 
     useApp.getState().redo();
     expect(useApp.getState().savedRois).toEqual(post);
+  });
+
+  it("workbooks are included in undo history (LIBRARY_WORKBOOK_UX_PLAN PR A2 — no mutating action yet, so a raw set stands in)", () => {
+    useApp.setState({ workbooks: [] });
+    const pre = useApp.getState().workbooks;
+
+    useApp.getState().recordHistory("mutate workbooks");
+    useApp.setState({ workbooks: [{ id: "wb1", name: "Book" }] });
+    const post = useApp.getState().workbooks;
+
+    useApp.getState().undo();
+    expect(useApp.getState().workbooks).toEqual(pre);
+
+    useApp.getState().redo();
+    expect(useApp.getState().workbooks).toEqual(post);
   });
 
   it("mapRoi changes do NOT create an undo entry (working geometry excluded)", () => {

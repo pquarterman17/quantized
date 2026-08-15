@@ -271,7 +271,15 @@ const MODULE_PINS: Record<string, number> = {
   // extraction's own re-export line and the savedRois hook-in (field +
   // serialize call + parse call; the actual (de)serialize logic lives in
   // store/rois.ts, not here).
-  "/lib/workspace.ts": 633,
+  // 633 -> 609 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A2): the Origin
+  // figure/fidelity parsing (`parseOriginFigures`/`parseOriginFidelity`/
+  // `isOriginFidelityManifest`, plus the small shared `stringsIn` helper —
+  // both functions and the helper were called only from this file, verified
+  // by grep) moved verbatim to the new lib/workspaceOrigin.ts, funding the
+  // new v4 `workbooks[]` wiring (WORKSPACE_VERSION bump + WorkspaceState/
+  // LoadedWorkspace/WorkspaceDoc fields + the parseWorkspace
+  // sanitizeWorkbooks/reconcileWorkbookRefs call site + serializer lines).
+  "/lib/workspace.ts": 609,
   "/lib/plotview.ts": 978,
 };
 

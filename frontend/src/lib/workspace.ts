@@ -28,6 +28,8 @@ import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
+import { reconcileWorkbookRefs, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
+import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import type {
   BookSource,
   ChannelRole,
@@ -39,7 +41,6 @@ import type {
   FitWeighting,
   FolderNode,
   ModelingType,
-  OriginFidelityManifest,
   WeightMode,
 } from "./types";
 
@@ -49,8 +50,16 @@ export const WORKSPACE_FORMAT = "quantized-workspace";
 // mode, per-dataset fit specs, and reports; later also smart folders (org #9),
 // the plot window layout (MULTI_PLOT_PLAN item 7), and the ToolWindow layout
 // registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed.
+// v4 (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds the workbook layer confirmed by
+// L0.1 (folder -> workbook -> worksheet/figure/analysis/note) — `workbooks[]`
+// plus per-dataset `workbookId`. A v1-v3 doc has neither field; parseWorkspace
+// derives them the same way it already migrates folders/pipeline/etc. — ONE
+// parse path for every version (lib/workbooks.ts's `deriveWorkbooks`/
+// `reconcileWorkbookRefs`, ported verbatim from PR A1). See that call site
+// below for the exact per-version behavior, including the v1 `group`-string
+// case (deliberate — see workspace.workbooks.test.ts for the pinned test).
 // Older docs still load — migrated on parse with safe defaults.
-export const WORKSPACE_VERSION = 3;
+export const WORKSPACE_VERSION = 4;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -62,6 +71,12 @@ export const WORKSPACE_VERSION = 3;
 export interface WorkspaceState {
   datasets: Dataset[];
   folders?: FolderNode[];
+  /** LIBRARY_WORKBOOK_UX_PLAN L0.1's middle hierarchy layer (folder ->
+   *  workbook -> worksheet/figure/analysis/note). Membership rides on each
+   *  dataset's `Dataset.workbookId`, not a child list here — see
+   *  lib/workbooks.ts's `WorkbookNode` doc. Absent on a pre-v4 doc; a v4
+   *  round-trip (`serializeWorkspace` below) always writes the array. */
+  workbooks?: WorkbookNode[];
   activeId?: string | null;
   selectedIds?: string[];
   expandedFolders?: string[];
@@ -101,6 +116,9 @@ export interface WorkspaceState {
 export interface LoadedWorkspace {
   datasets: Dataset[];
   folders: FolderNode[];
+  /** Always populated — derived (v1-v3) or sanitized+reconciled (v4). See
+   *  WorkspaceState.workbooks. */
+  workbooks: WorkbookNode[];
   activeId: string | null;
   selectedIds: string[];
   expandedFolders: string[];
@@ -129,6 +147,7 @@ interface WorkspaceDoc {
   savedAt: string;
   datasets: Dataset[];
   folders: FolderNode[];
+  workbooks: WorkbookNode[];
   activeId: string | null;
   selectedIds: string[];
   expandedFolders: string[];
@@ -156,6 +175,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     version: WORKSPACE_VERSION,
     savedAt: new Date().toISOString(),
     folders: ws.folders ?? [],
+    workbooks: ws.workbooks ?? [],
     activeId: ws.activeId ?? null,
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
@@ -194,6 +214,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.tags?.length ? { tags: d.tags } : {}),
       ...(d.group?.trim() ? { group: d.group } : {}),
       ...(d.folderId ? { folderId: d.folderId } : {}),
+      ...(d.workbookId ? { workbookId: d.workbookId } : {}),
       ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
       ...(d.errorRoles?.length ? { errorRoles: d.errorRoles } : {}),
@@ -282,88 +303,6 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
   return documents;
 }
 
-function stringsIn(v: unknown, valid: Set<string>): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && valid.has(x)) : [];
-}
-
-/** Validate the persisted Origin-import figures, dropping malformed entries and
- *  clamping dataset references to ids that survived load — so a restored figure
- *  can never dangle onto a pruned dataset. `figure` is opaque decoded Origin
- *  data (an `OriginFigure`); it is passed through structurally rather than
- *  deep-validated, mirroring how `data` (a DataStruct) is the only structurally
- *  checked payload. */
-function parseOriginFigures(v: unknown, dsIds: Set<string>): OriginFigureEntry[] {
-  if (!Array.isArray(v)) return [];
-  const out: OriginFigureEntry[] = [];
-  for (const f of v) {
-    if (typeof f !== "object" || f === null) continue;
-    const o = f as Record<string, unknown>;
-    if (
-      typeof o.id !== "string" ||
-      typeof o.stem !== "string" ||
-      typeof o.figure !== "object" ||
-      o.figure === null ||
-      !(o.datasetId === null || typeof o.datasetId === "string")
-    ) {
-      continue;
-    }
-    const datasetId =
-      typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    const siblingIds = Array.isArray(o.siblingIds)
-      ? o.siblingIds.filter((x): x is string => typeof x === "string" && dsIds.has(x))
-      : [];
-    out.push({
-      id: o.id,
-      stem: o.stem,
-      figure: o.figure as OriginFigureEntry["figure"],
-      datasetId,
-      siblingIds,
-    });
-  }
-  return out;
-}
-
-function isOriginFidelityManifest(v: unknown): v is OriginFidelityManifest {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    o.version === 1 &&
-    (o.container === "opj" || o.container === "opju") &&
-    ["exact", "best_effort", "reference_only", "unresolved"].includes(String(o.status)) &&
-    Number.isInteger(o.graph_records_total) && Number(o.graph_records_total) >= 0 &&
-    Number.isInteger(o.graph_records_actionable) && Number(o.graph_records_actionable) >= 0 &&
-    Number.isInteger(o.graph_records_filtered) && Number(o.graph_records_filtered) >= 0 &&
-    Array.isArray(o.omissions) &&
-    o.omissions.every((x) => typeof x === "string") &&
-    Array.isArray(o.filtered_figures) &&
-    o.filtered_figures.every((f) => {
-      if (typeof f !== "object" || f === null) return false;
-      const item = f as Record<string, unknown>;
-      return (
-        Number.isInteger(item.index) &&
-        typeof item.name === "string" &&
-        (item.layer === null || Number.isInteger(item.layer)) &&
-        typeof item.reason === "string"
-      );
-    })
-  );
-}
-
-function parseOriginFidelity(v: unknown, dsIds: Set<string>): OriginFidelityEntry[] {
-  if (!Array.isArray(v)) return [];
-  const out: OriginFidelityEntry[] = [];
-  for (const item of v) {
-    if (typeof item !== "object" || item === null) continue;
-    const o = item as Record<string, unknown>;
-    if (typeof o.id !== "string" || typeof o.stem !== "string") continue;
-    if (!isOriginFidelityManifest(o.manifest)) continue;
-    const siblingIds = stringsIn(o.siblingIds, dsIds);
-    if (siblingIds.length === 0) continue;
-    out.push({ id: o.id, stem: o.stem, siblingIds, manifest: o.manifest });
-  }
-  return out;
-}
-
 function isNumberArray(v: unknown): v is number[] {
   return Array.isArray(v) && v.every((x) => typeof x === "number");
 }
@@ -438,7 +377,7 @@ export function parseWorkspace(
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2 && o.version !== 3) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {
@@ -561,6 +500,10 @@ export function parseWorkspace(
     const source = parseSource(dd.source);
     if (source) ds.source = source;
     if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
+    // Raw parse only — reconcileWorkbookRefs (below, after folders/datasets are
+    // pruned) is the single place that decides whether this survives, is
+    // repaired, or is replaced; see WORKSPACE_VERSION's v4 comment above.
+    if (typeof dd.workbookId === "string" && dd.workbookId) ds.workbookId = dd.workbookId;
     if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
     return ds;
   });
@@ -571,6 +514,39 @@ export function parseWorkspace(
   const datasets = pruneOrphans(folders, datasetsRaw);
   const dsIds = new Set(datasets.map((d) => d.id));
   const folderIds = new Set(folders.map((f) => f.id));
+  const migrationWarnings: string[] = [];
+  // Workbooks (v4, LIBRARY_WORKBOOK_UX_PLAN PR A2). ONE path for every
+  // version: sanitize whatever `workbooks[]` the doc carries (absent on a
+  // v1-v3 doc -> []), then reconcileWorkbookRefs repairs only the ORPHANED
+  // datasets (every dataset on a v1-v3 doc, since none carry a workbookId
+  // yet) via deriveWorkbooks's grouping rules (L0.2 one source file -> one
+  // workbook). An already-valid v4 membership is never rewritten. `genId` is
+  // a LOCAL deterministic counter, never Date.now()-based like the store's
+  // nextFolderId/nextDatasetId — re-parsing one document twice must yield
+  // byte-identical workbook ids (the plan's round-trip acceptance gate), and
+  // it skips any id a crafted v4 doc already used so the two can't collide.
+  // NOTE (deliberate, pinned in workspace.workbooks.test.ts): a v1 doc whose
+  // only organization is `Dataset.group` strings has no `folderId` at this
+  // point either — that promotion happens later, in the STORE's
+  // `loadWorkspace` (`migrateGroupsToFolders`) — so this derivation sees no
+  // folders yet and places such workbooks at the Library root. Membership is
+  // still correct; PR A3 owns any placement polish.
+  const workbooksSanitized = sanitizeWorkbooks(o.workbooks, folderIds);
+  const usedWorkbookIds = new Set(workbooksSanitized.map((w) => w.id));
+  let workbookIdSeq = 0;
+  const genWorkbookId = (): string => {
+    let id: string;
+    do {
+      workbookIdSeq++;
+      id = `wbm-${workbookIdSeq}`;
+    } while (usedWorkbookIds.has(id));
+    usedWorkbookIds.add(id);
+    return id;
+  };
+  const workbookResult = reconcileWorkbookRefs(datasets, workbooksSanitized, folders, genWorkbookId);
+  for (const d of datasets) d.workbookId = workbookResult.membership[d.id];
+  const workbooks = workbookResult.workbooks;
+  migrationWarnings.push(...workbookResult.warnings);
   const selectedIds = stringsIn(o.selectedIds, dsIds);
   const activeId =
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
@@ -584,7 +560,6 @@ export function parseWorkspace(
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
   // Legacy Publication Preview FigureDocs stay unchanged until F2 preserves their unsupported overrides.
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
-  const migrationWarnings: string[] = [];
   const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
   const pages = sanitizePageDocuments(o.pages);
   const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings);
@@ -602,6 +577,7 @@ export function parseWorkspace(
   return {
     datasets,
     folders,
+    workbooks,
     activeId,
     selectedIds,
     expandedFolders,

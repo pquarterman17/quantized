@@ -181,7 +181,7 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
   it("writes the format tag and version", () => {
     const doc = JSON.parse(ser([makeDataset("a", "x")]));
     expect(doc.format).toBe(WORKSPACE_FORMAT);
-    expect(doc.version).toBe(3); // v3 (gap #5): pipeline + recalc mode + fit specs
+    expect(doc.version).toBe(4); // v4 (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds workbooks[]
     expect(typeof doc.savedAt).toBe("string");
   });
 });

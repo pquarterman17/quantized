@@ -41,6 +41,7 @@ import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
+import type { WorkbookNode } from "../lib/workbooks";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import {
   doubleYPartner,
@@ -352,6 +353,13 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Library folder tree (project-organization plan, Approach B): pure
   // organization over `datasets[]` (`Dataset.folderId`); never gates row-state.
   folders: FolderNode[];
+  // Library workbooks (LIBRARY_WORKBOOK_UX_PLAN L0.1's folder -> workbook ->
+  // worksheet/figure/analysis/note hierarchy, PR A2). Membership rides on
+  // `Dataset.workbookId`, same design as `folders`/`folderId` above; this
+  // array is populated ONLY by loadWorkspace (from `ws.workbooks ?? []` —
+  // see that action's doc for why the explicit fallback matters) until PR
+  // A3/A4 add mutating actions.
+  workbooks: WorkbookNode[];
   // Expanded folder ids (Library tree UI state); persisted so a project reopens
   // with the same folders open. Round-trips .dwk v2.
   expandedFolders: string[];
@@ -946,6 +954,7 @@ export const useApp = create<AppState>((set, get) => ({
   staleDatasets: [],
   staleFits: [],
   folders: [],
+  workbooks: [],
   expandedFolders: [],
   smartFolders: [],
   leftCollapsed: false,
@@ -1595,6 +1604,11 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         datasets,
         folders: migrated.folders,
+        // MUST be explicit — `set()` merges a PARTIAL state, so omitting this
+        // silently leaves the PREVIOUS project's workbooks in place on the
+        // newly opened one (a v1-v3 doc has no `workbooks` field at all, and
+        // TypeScript won't catch a missing key in an object literal here).
+        workbooks: ws.workbooks ?? [],
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
         activeId: active,
         // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.

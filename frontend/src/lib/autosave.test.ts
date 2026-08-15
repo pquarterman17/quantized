@@ -76,6 +76,20 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
     expect(r?.expandedFolders).toEqual(["f1"]);
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN PR A2: saveAutosave/loadAutosave reuse
+  // serializeWorkspace/parseWorkspace verbatim (see this module's header), so
+  // this is a VERIFICATION that the new `workbooks[]` field flows through
+  // that shared path with zero autosave-specific changes — not an assumption.
+  it("round-trips workbooks + per-dataset workbookId (v4)", async () => {
+    await saveAutosave({
+      datasets: [{ ...ds("a", "first"), workbookId: "w1" }],
+      workbooks: [{ id: "w1", name: "Book" }],
+    });
+    const r = await loadAutosave();
+    expect(r?.workbooks).toEqual([{ id: "w1", name: "Book" }]);
+    expect(r?.datasets[0].workbookId).toBe("w1");
+  });
+
   it("returns null when nothing is autosaved", async () => {
     expect(await loadAutosave()).toBeNull();
   });

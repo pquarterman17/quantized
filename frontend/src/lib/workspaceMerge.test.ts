@@ -29,6 +29,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     return {
       datasets,
       folders: [],
+      workbooks: [],
       activeId: null,
       selectedIds: [],
       expandedFolders: [],
@@ -77,6 +78,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     expect(result.renamed).toBe(0);
     expect(result.droppedBgRefs).toBe(0);
     expect(result.droppedFolderRefs).toBe(0);
+    expect(result.droppedWorkbookRefs).toBe(0);
   });
 
   it("remaps an incoming dataset id that collides with a CURRENT id (existing dataset untouched)", () => {
@@ -161,6 +163,29 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     expect(result.datasets[0].folderId).toBeUndefined();
     expect(result.datasets[0].order).toBe(3);
     expect(result.droppedFolderRefs).toBe(1);
+    expect(result.droppedWorkbookRefs).toBe(0);
+  });
+
+  // LIBRARY_WORKBOOK_UX_PLAN PR A2: real cross-project workbook transfer is
+  // PR A4's contract — until then an appended dataset's workbookId is
+  // stripped the same way folderId always has been (see workspaceMerge.ts's
+  // header for the full reference-field matrix).
+  it("strips workbookId on every incoming dataset — no workbook is merged in either (counted, not just folderId)", () => {
+    const incoming = [
+      { ...makeDataset("a", "in-workbook-1"), workbookId: "w1" },
+      { ...makeDataset("b", "in-workbook-2"), workbookId: "w2" },
+      makeDataset("c", "workbook-less"), // never had one
+    ];
+
+    const result = mergeWorkspace([], asLoaded(incoming), genId);
+
+    expect(result.datasets.every((d) => d.workbookId === undefined)).toBe(true);
+    expect(result.droppedWorkbookRefs).toBe(2); // "c" never had one to drop
+    // No dangling reference anywhere — the field is simply absent, not
+    // pointing at an id that resolves to nothing.
+    expect(result.datasets.every((d) => !("workbookId" in d) || d.workbookId === undefined)).toBe(
+      true,
+    );
   });
 
   it("appending an empty incoming workspace is a no-op over current", () => {

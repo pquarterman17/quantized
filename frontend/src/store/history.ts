@@ -83,6 +83,11 @@ export interface HistorySnapshot {
   editableFigures: AppState["editableFigures"];
   pages: AppState["pages"];
   folders: AppState["folders"];
+  // LIBRARY_WORKBOOK_UX_PLAN PR A2 — persistent Library organization, same
+  // class as `folders` right above it (not yet mutated by any action; wired
+  // here now so the FIRST mutating action in a later PR inherits undo for
+  // free instead of repeating the `savedRois` omission this file's header warns about).
+  workbooks: AppState["workbooks"];
   smartFolders: AppState["smartFolders"];
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
@@ -121,6 +126,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     editableFigures: s.editableFigures,
     pages: s.pages,
     folders: s.folders,
+    workbooks: s.workbooks,
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,

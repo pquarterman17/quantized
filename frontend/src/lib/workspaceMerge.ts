@@ -10,8 +10,8 @@
 // output of `lib/workspace.ts`'s `parseWorkspace`) into the CURRENTLY loaded
 // library — additive, never a replace (that's `loadWorkspace`). Only the
 // flat `datasets[]` list is merged in; every workspace-LEVEL structure on the
-// incoming doc (folders, originFigures, smartFolders, reports, macroSteps,
-// figureDocs, plotWindows, activeId, selectedIds, expandedFolders,
+// incoming doc (folders, workbooks, originFigures, smartFolders, reports,
+// macroSteps, figureDocs, plotWindows, activeId, selectedIds, expandedFolders,
 // recalcMode, focusedWindowId, savedPlotSpecs, savedRois) is deliberately
 // never read here — the store action built on top of this
 // (`useApp.appendWorkspace`) doesn't touch the destination folder tree, view
@@ -33,6 +33,17 @@
 //     `droppedFolderRefs`) so the dataset lands at the Library root — the
 //     same graceful degrade `foldertree.pruneOrphans` already gives a
 //     dataset whose folder didn't survive validation.
+//   - `Dataset.workbookId` (LIBRARY_WORKBOOK_UX_PLAN PR A2) — points into
+//     `WorkspaceState.workbooks`, which this merge never imports, for the
+//     EXACT reason `folderId` above doesn't: real cross-project workbook
+//     transfer (rewritten ids, preserved membership, the whole bundle) is PR
+//     A4's contract, not this one's. Every incoming `workbookId` is
+//     therefore stripped (counted in `droppedWorkbookRefs`) so an appended
+//     dataset never points at a workbook that doesn't exist on this side.
+//     It arrives workbook-LESS, exactly like a brand-new import — the next
+//     `.dwk` load re-derives a fresh single-dataset workbook for it via
+//     `lib/workbooks.ts`'s `reconcileWorkbookRefs` (an orphan with no
+//     `workbookId` at all, same as any legacy v1-v3 dataset).
 //   - `OriginFigureEntry.datasetId`/`.siblingIds`, `ReportEntry.datasetId`,
 //     `FigureDoc.datasetId`, `PlotWindow.datasetId`, `WorkspaceState.activeId`/
 //     `.selectedIds` — all live in workspace-level structures that are never
@@ -71,6 +82,10 @@ export interface WorkspaceMergeResult {
   /** `folderId` memberships dropped because the destination folder tree is
    *  never merged in — see the field matrix above. */
   droppedFolderRefs: number;
+  /** `workbookId` memberships stripped because real cross-project workbook
+   *  transfer is PR A4's contract, not this one's — see the field matrix
+   *  above. Every appended dataset arrives workbook-less. */
+  droppedWorkbookRefs: number;
 }
 
 /** Merge `incoming`'s datasets into `current` (Origin's "Append Project").
@@ -112,10 +127,11 @@ export function mergeWorkspace(
     idMap.set(d.id, id);
   }
 
-  // Pass 2: dedupe the name, remap/drop bgRef, drop folderId.
+  // Pass 2: dedupe the name, remap/drop bgRef, drop folderId + workbookId.
   let renamed = 0;
   let droppedBgRefs = 0;
   let droppedFolderRefs = 0;
+  let droppedWorkbookRefs = 0;
   const merged = incoming.datasets.map((d, i) => {
     const id = finalIds[i];
 
@@ -128,8 +144,9 @@ export function mergeWorkspace(
     }
     usedNames.add(name);
 
-    const next: Dataset = { ...d, id, name, folderId: undefined };
+    const next: Dataset = { ...d, id, name, folderId: undefined, workbookId: undefined };
     if (d.folderId !== undefined) droppedFolderRefs++;
+    if (d.workbookId !== undefined) droppedWorkbookRefs++;
     if (d.bgRef) {
       const target = idMap.get(d.bgRef.datasetId);
       if (target) {
@@ -148,5 +165,6 @@ export function mergeWorkspace(
     renamed,
     droppedBgRefs,
     droppedFolderRefs,
+    droppedWorkbookRefs,
   };
 }
