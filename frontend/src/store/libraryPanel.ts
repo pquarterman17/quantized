@@ -118,7 +118,21 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
           : [...s.expandedWorkbookIds, id],
       })),
     librarySelection: null,
-    setLibrarySelection: (librarySelection) => set({ librarySelection }),
+    // L0.25 selection coherence (P1 fix): the tree's folder/workbook
+    // selection and the dataset selection are mutually exclusive. Setting a
+    // non-null librarySelection ALWAYS clears selectedIds here — the single
+    // chokepoint — rather than relying on every row component that can
+    // trigger a folder/workbook select (WorkbookRow.select/FolderRow's
+    // onClick, today; anything added later) to remember to clear it itself.
+    // The reverse direction (activating/selecting a dataset clears
+    // librarySelection) lives at ITS OWN chokepoints: activateFromLibrary/
+    // toggleSelected/selectRange (useApp.ts) and focusedRebindPatch
+    // (windows.ts, shared by setActive). Together the two directions close
+    // the gap that let a stale worksheet selectedIds/activeId survive
+    // alongside a freshly-selected workbook/folder — LibraryTree.tsx's own
+    // Delete/Backspace handling is the other half of that fix.
+    setLibrarySelection: (librarySelection) =>
+      set({ librarySelection, ...(librarySelection ? { selectedIds: [] } : {}) }),
     workbookLastChild: {},
     setWorkbookLastChild: (workbookId, childKey) =>
       set((s) => ({ workbookLastChild: { ...s.workbookLastChild, [workbookId]: childKey } })),

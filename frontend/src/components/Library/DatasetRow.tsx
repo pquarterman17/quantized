@@ -112,10 +112,10 @@ export default function DatasetRow({
   // the plotted dataset. Routes through `activateFromLibrary` (item 15), not
   // `setActive` directly, so an Origin-project row opens its Worksheet instead
   // of rebinding the focused plot window, per the `originBookClickOpens` pref.
-  // PR C: clears librarySelection (a dataset row can't coexist with a
-  // folder/workbook selection) and records L0.6's remembered workbook child.
+  // PR C: records L0.6's remembered workbook child. L0.25 librarySelection
+  // clearing now lives at the STORE level (activateFromLibrary/
+  // toggleSelected/selectRange/setActive), not re-implemented here.
   const onRowClick = (e: React.MouseEvent) => {
-    useApp.getState().setLibrarySelection(null);
     if (e.shiftKey) selectRange(d.id);
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
     else { activateFromLibrary(d.id); recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`); }

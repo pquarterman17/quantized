@@ -1717,7 +1717,7 @@ export const useApp = create<AppState>((set, get) => ({
       set({
         worksheetId: id,
         selectedIds: [id], // plain click collapses the selection, same as setActive
-        stageTab: "worksheet",
+        stageTab: "worksheet", librarySelection: null, // L0.25: also exits folder/workbook selection
       });
       // #38: WorksheetPane's own pending-effect covers the render-side
       // fetch once mounted; kick it here too (single-flight — harmless if
@@ -1732,9 +1732,8 @@ export const useApp = create<AppState>((set, get) => ({
   // the plotted/active dataset (the plot only follows a plain click).
   toggleSelected: (id) =>
     set((s) => ({
-      selectedIds: s.selectedIds.includes(id)
-        ? s.selectedIds.filter((x) => x !== id)
-        : [...s.selectedIds, id],
+      selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id],
+      librarySelection: null, // L0.25: also exits folder/workbook selection (selectRange/setActive do the same)
     })),
   // Shift-click: select the contiguous range from the anchor (activeId) to `id`
   // in library order. Doesn't move the active selection (the plot stays put).
@@ -1744,9 +1743,9 @@ export const useApp = create<AppState>((set, get) => ({
       const anchor = s.activeId ?? id;
       const a = order.indexOf(anchor);
       const b = order.indexOf(id);
-      if (a < 0 || b < 0) return { selectedIds: [id] };
+      if (a < 0 || b < 0) return { selectedIds: [id], librarySelection: null };
       const [lo, hi] = a <= b ? [a, b] : [b, a];
-      return { selectedIds: order.slice(lo, hi + 1) };
+      return { selectedIds: order.slice(lo, hi + 1), librarySelection: null };
     }),
   // Explicit-list selection (folder "Select all" — item 8): de-duplicated and
   // clamped to live datasets; the plotted/active dataset stays put.

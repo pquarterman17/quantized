@@ -10,7 +10,7 @@
 // (expansion toggles re-flattening the hierarchy) instead of a frozen array.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryTree from "./LibraryTree";
 import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
@@ -18,7 +18,13 @@ import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
+import { askConfirm } from "../overlays/ConfirmDialog";
 import { useApp } from "../../store/useApp";
+
+// P1 fix — Delete/Backspace routing: workbookDeleteActions[0]/folderDeleteActions[0]
+// are destructive registry entries, confirmed via the shared ConfirmDialog —
+// stub it like every other askConfirm-gated test does (see FolderRow.test.tsx).
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const fld = (id: string, parentId: string | null = null): FolderNode => ({ id, name: id, parentId, order: 0 });
 const wb = (id: string, folderId?: string): WorkbookNode => ({ id, name: id, folderId });
@@ -216,5 +222,54 @@ describe("LibraryTree — kind dispatch", () => {
     });
     render(<Harness />);
     expect(screen.getByText(/My Figure/)).toBeInTheDocument();
+  });
+});
+
+describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delete flow (P1 fix)", () => {
+  // The reviewer's exact scenario: an unrelated worksheet is active/selected
+  // (so useGlobalShortcuts.ts's removeSelected() fallback WOULD act on it),
+  // then the user clicks (focuses + selects) a workbook/folder row and hits
+  // Delete. Before the fix, LibraryTree never handled Delete at all, so the
+  // keystroke bubbled to the window-level handler and removed "solo".
+  beforeEach(() => {
+    useApp.setState({
+      folders: [fld("f1")],
+      workbooks: [wb("w1", "f1")],
+      datasets: [ds("d1", "w1"), ds("solo")],
+      expandedFolders: ["f1"],
+      expandedWorkbookIds: [],
+      librarySelection: null,
+      activeId: "solo",
+      selectedIds: ["solo"],
+    });
+    vi.mocked(askConfirm).mockReset().mockResolvedValue(true);
+  });
+
+  it("Delete on a selected workbook row runs the workbook's own confirm flow — the unrelated worksheet survives", async () => {
+    render(<Harness />);
+    fireEvent.click(workbookRow("w1")); // WorkbookRow.select: librarySelection = {kind:"workbook", id:"w1"}
+    fireEvent.keyDown(workbookRow("w1"), { key: "Delete" });
+    expect(askConfirm).toHaveBeenCalledOnce();
+    await act(() => Promise.resolve());
+    expect(useApp.getState().workbooks.find((w) => w.id === "w1")).toBeUndefined();
+    expect(useApp.getState().datasets.some((d) => d.id === "solo")).toBe(true); // survives
+  });
+
+  it("Backspace on a selected folder row runs the folder's own (reparent) confirm flow", async () => {
+    render(<Harness />);
+    fireEvent.click(folderRow("f1")); // FolderRow's onClick: librarySelection = {kind:"folder", id:"f1"}
+    fireEvent.keyDown(folderRow("f1"), { key: "Backspace" });
+    expect(askConfirm).toHaveBeenCalledOnce();
+    await act(() => Promise.resolve());
+    expect(useApp.getState().folders.find((f) => f.id === "f1")).toBeUndefined();
+    expect(useApp.getState().datasets.some((d) => d.id === "solo")).toBe(true); // survives
+  });
+
+  it("Delete on a focused worksheet row still falls through to the global dataset handler (unchanged)", () => {
+    useApp.setState({ expandedWorkbookIds: ["w1"] });
+    render(<Harness />);
+    worksheetRow("d1").focus();
+    fireEvent.keyDown(worksheetRow("d1"), { key: "Delete" });
+    expect(askConfirm).not.toHaveBeenCalled(); // LibraryTree didn't intercept it
   });
 });

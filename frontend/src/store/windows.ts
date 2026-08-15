@@ -159,7 +159,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // `worksheetId ?? activeId` fallback already tracks it; a stale override
     // would otherwise strand the worksheet on the PREVIOUS browse target.
     worksheetId: null,
-    selectedIds: [id], // plain click collapses the selection to this one row
+    selectedIds: [id], librarySelection: null, // L0.25: setActive exits folder/workbook selection too
     // MULTI_PLOT_PLAN item 4: scoped to the FOCUSED window — it rebinds that
     // window's dataset (unfocused windows keep whatever they're pinned to,
     // decision #4).

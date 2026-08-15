@@ -24,9 +24,11 @@ import FolderRow from "./FolderRow";
 import WorkbookRow from "./WorkbookRow";
 import { openLibraryNode } from "./libraryOpen";
 import { childFolders, folderDatasets } from "../../lib/foldertree";
+import { folderDeleteActions, runContextAction } from "../../lib/contextActions";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
+import { workbookDeleteActions } from "../../lib/workbookContextActions";
 import { useApp } from "../../store/useApp";
 
 const NAV_KEYS: Record<string, NavDirection> = {
@@ -123,6 +125,37 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
     const key = keyOfRow(e.target as Element);
     const idx = indexOfKey(rows, key);
     if (idx < 0) return;
+    // P1 fix — delete-shortcut misfire: Delete/Backspace on a focused
+    // folder/workbook row routes to THAT row's own confirmed delete flow,
+    // never useGlobalShortcuts.ts's dataset removeSelected() fallback (which
+    // would otherwise remove an unrelated worksheet whenever a workbook/
+    // folder is librarySelection'd while some dataset is still
+    // selectedIds/activeId). Only acts when librarySelection STILL names the
+    // exact row the keydown landed on — the L0.25 coherence fix above keeps
+    // that true on every normal selection path; this is the belt.
+    // preventDefault() is the documented extension protocol (see
+    // useGlobalShortcuts.ts's header comment) — it stops the window-level
+    // handler from ALSO firing on the same keystroke.
+    if (e.key === "Delete" || e.key === "Backspace") {
+      const node = rows[idx].node;
+      const sel = useApp.getState().librarySelection;
+      if (sel && sel.kind === "workbook" && node.kind === "workbook" && sel.id === node.entityId) {
+        e.preventDefault();
+        runContextAction(workbookDeleteActions[0], { node, onRename: () => {} });
+        return;
+      }
+      if (sel && sel.kind === "folder" && node.kind === "folder" && sel.id === node.entityId) {
+        e.preventDefault();
+        runContextAction(folderDeleteActions[0], {
+          folder: node.entity,
+          count: subtreeCount(folders, datasets, node.entityId),
+          onRename: () => {},
+          onExpand: () => {},
+        });
+        return;
+      }
+      return; // worksheet/figure/… row, or a stale librarySelection: defer to the global dataset handler
+    }
     if (e.key === "Enter") {
       e.preventDefault();
       openLibraryNode(rows[idx].node);

@@ -48,6 +48,23 @@ describe("libraryPanel slice — PR C additions", () => {
       useApp.getState().setLibrarySelection(null);
       expect(useApp.getState().librarySelection).toBeNull();
     });
+
+    // P1 fix (delete-shortcut misfire): a folder/workbook selection and a
+    // dataset selection must be mutually exclusive, or Delete/Backspace can
+    // resolve to the wrong object (LibraryTree.tsx's own Delete handling vs.
+    // useGlobalShortcuts.ts's removeSelected() fallback).
+    it("selecting a folder/workbook clears any dataset multi-selection", () => {
+      useApp.setState({ selectedIds: ["d1", "d2"] });
+      useApp.getState().setLibrarySelection({ kind: "workbook", id: "w1" });
+      expect(useApp.getState().selectedIds).toEqual([]);
+    });
+
+    it("clearing back to null does not itself touch selectedIds", () => {
+      useApp.setState({ selectedIds: ["d1"] });
+      useApp.getState().setLibrarySelection({ kind: "folder", id: "f1" });
+      useApp.getState().setLibrarySelection(null);
+      expect(useApp.getState().selectedIds).toEqual([]); // still whatever the folder-select left it at
+    });
   });
 
   describe("workbookLastChild / setWorkbookLastChild", () => {
