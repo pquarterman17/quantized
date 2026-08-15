@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { libraryDetailsRows, sortLibraryDetailsRows } from "./libraryDetails";
+import { detailsNavIndex, libraryDetailsRows, sortLibraryDetailsRows } from "./libraryDetails";
 import { buildLibraryHierarchy } from "./libraryHierarchy";
 import type { OriginFigureEntry } from "./originFigures";
 import type { Dataset } from "./types";
@@ -86,5 +86,27 @@ describe("Library Details projection", () => {
     });
     const row = libraryDetailsRows(hierarchy).find((item) => item.node.kind === "origin-figure");
     expect(row?.source).toBe("Unresolved");
+  });
+});
+
+describe("detailsNavIndex — flat roving arithmetic (follow-up 4a)", () => {
+  it("steps, clamps at both boundaries, and jumps Home/End", () => {
+    expect(detailsNavIndex(3, 0, "ArrowDown")).toBe(1);
+    expect(detailsNavIndex(3, 2, "ArrowDown")).toBe(2); // clamp, no wrap
+    expect(detailsNavIndex(3, 1, "ArrowUp")).toBe(0);
+    expect(detailsNavIndex(3, 0, "ArrowUp")).toBe(0); // clamp, no wrap
+    expect(detailsNavIndex(3, 2, "Home")).toBe(0);
+    expect(detailsNavIndex(3, 0, "End")).toBe(2);
+  });
+
+  it("an unknown starting index lands on the first row going down", () => {
+    expect(detailsNavIndex(3, -1, "ArrowDown")).toBe(0);
+  });
+
+  it("returns null for non-navigation keys and an empty table — including Left/Right (no disclosure semantics in a flat sort)", () => {
+    expect(detailsNavIndex(3, 1, "ArrowLeft")).toBeNull();
+    expect(detailsNavIndex(3, 1, "ArrowRight")).toBeNull();
+    expect(detailsNavIndex(3, 1, "a")).toBeNull();
+    expect(detailsNavIndex(0, 0, "ArrowDown")).toBeNull();
   });
 });

@@ -535,14 +535,17 @@ build, and focused interaction coverage where appropriate.
    claim global L1.4 interaction parity: Details context menus, rename/move,
    and drag/drop still need the shared-action follow-through in their owning
    slices, and Tiles remains PR E.
-4a. [ ] **PR D follow-up — Details roving keyboard traversal.** Replace one
-    Tab stop per row with the standard roving-tabindex pattern; Up/Down moves
-    through the current sorted row order, Home/End reaches the boundaries,
-    Enter retains canonical open, and focus remains stable after re-sort or
-    removal. Reuse `lib/libraryTreeNav.ts` arithmetic where it fits, but do not
-    reintroduce hierarchy-only Left/Right disclosure semantics in a flat sort.
-    This is explicitly booked from Claude's 2026-08-15 PR #140 review rather
-    than being left implicit under L1.4.
+4a. [x] ~~**PR D follow-up — Details roving keyboard traversal.**~~ Shipped
+    2026-08-15 (Claude/Fable): roving tabindex (exactly one row in the Tab
+    order — last-focused, else current item, else first), Up/Down through the
+    CURRENT sorted order with clamping, Home/End, Enter keeps canonical open,
+    arrows preventDefault so the global prev/next-dataset nav never
+    double-fires, focus survives re-sort (the moved <tr> keeps focus) and
+    removal (nearest-survivor recovery, LibraryTree's contract). Left/Right
+    deliberately bubble untouched — `detailsNavIndex` is a tiny flat helper in
+    lib/libraryDetails.ts rather than a reuse of libraryTreeNav's
+    hierarchy-only arithmetic, exactly per this booking. 10 new tests (pure
+    arithmetic + real-useGlobalShortcuts component traversal).
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
     confirmed L0.26 behavior over the Details renderer: flat result list with
     full `Folder / Workbook / Child` breadcrumbs, normal open behavior, and

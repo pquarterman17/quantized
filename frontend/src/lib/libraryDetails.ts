@@ -129,6 +129,23 @@ function valueOf(row: LibraryDetailsRow, key: LibraryDetailsSortKey): string | n
   return row[key];
 }
 
+/** Flat roving-focus arithmetic for the Details table (plan follow-up 4a):
+ *  Up/Down step through the CURRENT (sorted) row order, Home/End reach the
+ *  boundaries, everything clamps — no wrap, matching the tree's roving
+ *  focus. Deliberately NOT lib/libraryTreeNav.ts: that module's Left/Right
+ *  disclosure semantics are hierarchy-only and must not reappear in a flat
+ *  sort (the 4a booking is explicit about this). Null = not a navigation
+ *  key, or nothing to move to — the caller leaves focus (and the keystroke's
+ *  defaultPrevented state) alone so unrelated keys keep bubbling. */
+export function detailsNavIndex(count: number, index: number, key: string): number | null {
+  if (count === 0) return null;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  if (key === "ArrowUp") return Math.max(0, index - 1);
+  if (key === "ArrowDown") return Math.min(count - 1, index < 0 ? 0 : index + 1);
+  return null;
+}
+
 export function sortLibraryDetailsRows(
   rows: readonly LibraryDetailsRow[],
   key: LibraryDetailsSortKey,
