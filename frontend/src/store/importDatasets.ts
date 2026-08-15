@@ -30,13 +30,21 @@ import { create } from "zustand";
 import { importFile, uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
-import { planOriginFolders } from "../lib/originFolders";
+import { planOriginImport } from "../lib/originFolders";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { techniqueOf } from "../lib/techniqueDefaults";
-import { isLazyBookEntry, isPrimaryBookMarker, type DataStruct, type Technique } from "../lib/types";
+import {
+  isLazyBookEntry,
+  isPrimaryBookMarker,
+  type DataStruct,
+  type Dataset,
+  type Technique,
+} from "../lib/types";
+import { deriveWorkbooks } from "../lib/workbooks";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { TOAST_ACTION_TTL, toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
+import { nextWorkbookId } from "./workbookIds";
 
 // Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
 // source of truth for "is a batch import running right now". A standalone
@@ -202,32 +210,41 @@ function addFromPayload(
       }
       newIds.push(id);
     }
-    // item 4: organize the imported books into a project folder that mirrors
-    // Origin's Project Explorer (origin_folder_path) → book → sheet, instead of
-    // dumping N workbooks flat into the Library.
+    // item 4 / LIBRARY_WORKBOOK_UX_PLAN PR A3: organize the imported books
+    // into a project folder that mirrors Origin's Project Explorer
+    // (origin_folder_path), and give each book its own workbook (L0.1/L0.2)
+    // — no more per-book folder standing in for it.
     const newIdSet = new Set(newIds);
     const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
-    const plan = planOriginFolders(stem, projectDatasets, nextFolderId);
+    const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId);
     set((s) => ({
       folders: [...s.folders, ...plan.folders],
+      workbooks: [...s.workbooks, ...plan.workbooks],
       expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
       datasets: s.datasets.map((d) =>
-        plan.membership[d.id] ? { ...d, folderId: plan.membership[d.id] } : d,
+        newIdSet.has(d.id)
+          ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
+          : d,
       ),
     }));
   } else {
     delete data.books;
     delete data.book_source;
     const id = nextDatasetId();
-    get().addDataset({
-      id,
-      name: origin.name,
-      data,
-      ...src,
-      ...importRoles(data),
-      importedAt,
-    });
+    const dsInput: Dataset = { id, name: origin.name, data, ...src, ...importRoles(data), importedAt };
+    get().addDataset(dsInput);
     newIds.push(id);
+    // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
+    // (L0.2), or per book for a single-book Origin project (its origin_book
+    // metadata already survived onto dsInput.data.metadata — the `books`
+    // branch above only fires for length > 1). deriveWorkbooks decides
+    // which, the SAME way a reload would, so import-time creation and
+    // load-time derivation can never disagree (the plan's consistency gate).
+    const derived = deriveWorkbooks([dsInput], [], nextWorkbookId);
+    set((s) => ({
+      workbooks: [...s.workbooks, ...derived.workbooks],
+      datasets: s.datasets.map((d) => (d.id === id ? { ...d, workbookId: derived.membership[id] } : d)),
+    }));
   }
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
   if (fidelity) {
