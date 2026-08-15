@@ -881,9 +881,8 @@ Recommended PR A decomposition:
 
 1. [x] ~~**PR A1 — pure workbook model and legacy migration.**~~ (2026-08-14)
    Shipped `8a6d0e6`/`c1adf97`/`914042e` — see `## Completed`.
-2. [ ] **PR A2 — workspace/store persistence.** Thread `workbooks[]` through
-   `WorkspaceState`, `LoadedWorkspace`, serialization/parsing, `loadWorkspace`,
-   history/reset, autosave, and architecture tests. Preserve all v1-v3 inputs.
+2. [x] ~~**PR A2 — workspace/store persistence.**~~ (2026-08-14) Shipped
+   `e41308d`/`64af36c` — see `## Completed`.
 3. [ ] **PR A3 — import assignment.** Make one source file create one workbook;
    assign all sheets/books according to the confirmed file boundary; convert
    Origin multi-sheet surrogate folders without leaving duplicate
@@ -1024,6 +1023,22 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- ~~**PR A2 — workspace/store persistence**~~ (2026-08-14) — `.dwk` bumped to
+  v4 (accepts v1–v4): `workbooks[]` + per-dataset `workbookId` serialize; ONE
+  parse path for every version (sanitize → `reconcileWorkbookRefs` with a
+  deterministic collision-guarded `wbm-N` counter) so legacy docs derive and
+  v4 docs repair through identical code. Store: `AppState.workbooks` with the
+  explicit `loadWorkspace` reset line (partial-`set()` leak guarded by test),
+  clearAll via the same path, `workbooks` in `HistorySnapshot`. Append/merge
+  strips incoming `workbookId` (counted, `droppedWorkbookRefs`) pending A4's
+  real transfer. Autosave verified flowing through the shared serializer.
+  Ratchet tolls paid: `lib/workspaceOrigin.ts` extraction (workspace.ts pin
+  633 → 609) + `store/datasetMeta.ts` extraction (useApp.ts pin 2868 → 2835),
+  all four extracted actions keep their `recordHistory` calls. v1
+  group-string docs deliberately derive root-placed workbooks (pinned by
+  test; A3 owns placement polish). Gate: 6,515 tests, lint 0 errors, build +
+  bundle green; adversarial review found no defects. Commits `e41308d`,
+  `64af36c`.
 - ~~**PR A1 — pure workbook model and legacy migration**~~ (2026-08-14) —
   `lib/workbooks.ts` (383 lines, pure): `WorkbookNode`, `deriveWorkbooks`
   (stem-scoped Origin grouping identical to `originSheetGroups`' partition,
