@@ -52,6 +52,26 @@ function glyphAndMeta(node: ArtifactNode, datasetName: string): { glyph: string;
   }
 }
 
+/** Hover title — kind-specific, wording IDENTICAL to each kind's flat
+ *  section (EditableFiguresSection / SavedFiguresSection / PagesSection /
+ *  ReportsSection), so the tree row and the search-mode section describe the
+ *  same object the same way — and so the E2E journeys' title-based locators
+ *  (figure-document-roundtrip et al.) address either rendering unchanged. A
+ *  generic `open "name"` dropped the kind — worse hover text, and the reason
+ *  four save/reopen journeys went red in tree mode. */
+function openTitle(node: ArtifactNode): string {
+  switch (node.kind) {
+    case "editable-figure":
+      return `open editable figure "${node.name}"`;
+    case "publication-figure":
+      return `open publication figure "${node.name}"${node.entity.live ? "" : " (frozen data)"} in Publication Preview`;
+    case "page":
+      return `open saved page "${node.name}"`;
+    case "report":
+      return `open report "${node.name}"`;
+  }
+}
+
 export default function ArtifactRow({ node, depth }: Props) {
   const datasetId =
     node.kind === "editable-figure" ? node.entity.bindings.datasetId
@@ -65,7 +85,7 @@ export default function ArtifactRow({ node, depth }: Props) {
       className="qzk-fig-item"
       data-lib-row={node.key}
       style={depth ? { marginLeft: depth * 14 } : undefined}
-      title={`open "${node.name}"`}
+      title={openTitle(node)}
       onClick={() => openLibraryNode(node)}
     >
       <span className="qzk-fig-name">{glyph} {node.name}</span>

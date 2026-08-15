@@ -102,6 +102,25 @@ export interface LibraryPanelSlice {
   setWorkbookLastChild: (workbookId: string, childKey: string) => void;
 }
 
+/** PR C: the active dataset's workbook is always disclosed — activation
+ *  means "show me this sheet", and a collapsed parent workbook would hide
+ *  the very row that's now active/selected in the tree. One-directional:
+ *  activation expands, only the user's own toggle collapses (and a
+ *  collapsed workbook offers no sheet row to activate, so the two never
+ *  fight). Spread into `focusedRebindPatch` (windows.ts) so setActive AND
+ *  rebindWindow's focused-drop path both get it; import-time creation has
+ *  its own parallel rule in store/importDatasets.ts. Lives here, beside the
+ *  `expandedWorkbookIds` state it patches, not in the zero-headroom
+ *  windows.ts. */
+export function workbookDisclosurePatch(
+  s: AppState,
+  ds: { workbookId?: string } | undefined,
+): Partial<AppState> {
+  return ds?.workbookId != null && !s.expandedWorkbookIds.includes(ds.workbookId)
+    ? { expandedWorkbookIds: [...s.expandedWorkbookIds, ds.workbookId] }
+    : {};
+}
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 
 export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): LibraryPanelSlice {
