@@ -4,6 +4,7 @@
 
 import type { FigureDoc } from "./figuredoc";
 import type { FigureDocument } from "./figureDocument";
+import { byOrder } from "./order";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type { PageDocument } from "./pageDocument";
 import type { ReportEntry } from "./report";
@@ -72,7 +73,14 @@ interface DraftNode extends Omit<LibraryNodeBase, "children"> {
   entity: FolderNode | WorkbookNode | Dataset | OriginFigureEntry | FigureDocument | FigureDoc | PageDocument | ReportEntry;
   children: DraftNode[];
   section: number;
-  order: number;
+  /** The entity's own sort key where one exists (folders/workbooks/
+   *  worksheets), else a synthetic insertion index (artifact kinds). KEPT
+   *  optional so lib/order.ts's `byOrder` applies its canonical semantics:
+   *  an unkeyed item sinks AFTER every keyed sibling — the invariant PR A4's
+   *  append path relies on for "appended lands at the end", and what today's
+   *  foldertree-driven Library already does. Never substitute an array index
+   *  for a missing key; that interleaves instead of sinking. */
+  order: number | undefined;
   sequence: number;
 }
 
@@ -83,12 +91,12 @@ const EMPTY_SOURCE: LibrarySourceStatus = {
   usedPlacementFallback: false,
 };
 
-function numericOrder(value: number | undefined, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
 function compareDraft(a: DraftNode, b: DraftNode): number {
-  return a.section - b.section || a.order - b.order || a.sequence - b.sequence;
+  // Section first (kind bands), then the app's canonical order comparator
+  // (keyed ascending, unkeyed sinks last), then insertion order as the
+  // deterministic tiebreak — the same stable result `byOrder` + a stable
+  // sort gives the existing Library.
+  return a.section - b.section || byOrder(a, b) || a.sequence - b.sequence;
 }
 
 /** Dataset ids used by an Origin graph, scoped to the siblings from the same
@@ -159,7 +167,7 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     name: string,
     parentKey: LibraryNodeKey | null,
     section: number,
-    order: number,
+    order: number | undefined,
     source: LibrarySourceStatus = EMPTY_SOURCE,
   ): DraftNode => {
     const key = keyOf(kind, entity.id);
@@ -172,7 +180,7 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     return node;
   };
 
-  input.folders.forEach((folder, index) => {
+  input.folders.forEach((folder) => {
     let parentKey: LibraryNodeKey | null = null;
     const seen = new Set([folder.id]);
     let ancestorId = folder.parentId;
@@ -191,26 +199,26 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     } else if (!invalidCycle && folder.parentId) {
       warnings.push(`folder "${folder.name}" referenced missing parent "${folder.parentId}"; placed at root`);
     }
-    add("folder", folder, folder.name, parentKey, 0, numericOrder(folder.order, index));
+    add("folder", folder, folder.name, parentKey, 0, folder.order);
   });
 
-  input.workbooks.forEach((workbook, index) => {
+  input.workbooks.forEach((workbook) => {
     const parentKey = workbook.folderId && folderById.has(workbook.folderId)
       ? keyOf("folder", workbook.folderId)
       : null;
     if (workbook.folderId && !folderById.has(workbook.folderId)) {
       warnings.push(`workbook "${workbook.name}" referenced missing folder "${workbook.folderId}"; placed at root`);
     }
-    add("workbook", workbook, workbook.name, parentKey, 1, numericOrder(workbook.order, index));
+    add("workbook", workbook, workbook.name, parentKey, 1, workbook.order);
   });
 
-  input.datasets.forEach((dataset, index) => {
+  input.datasets.forEach((dataset) => {
     const validWorkbook = dataset.workbookId && workbookById.has(dataset.workbookId);
     const parentKey = validWorkbook ? keyOf("workbook", dataset.workbookId!) : null;
     if (dataset.workbookId && !validWorkbook) {
       warnings.push(`worksheet "${dataset.name}" referenced missing workbook "${dataset.workbookId}"; placed at root`);
     }
-    add("worksheet", dataset, dataset.name, parentKey, 0, numericOrder(dataset.order, index), {
+    add("worksheet", dataset, dataset.name, parentKey, 0, dataset.order, {
       datasetIds: [dataset.id], missingDatasetIds: [], usedPlacementFallback: false,
     });
   });
@@ -238,18 +246,24 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     return { parentKey, source: { datasetIds, missingDatasetIds, usedPlacementFallback } };
   };
 
+  // Artifact sections start at 2, DISJOINT from workbooks (section 1): a
+  // cross-workbook artifact placed at a shared folder must follow the
+  // folder's workbooks, never interleave with them. Inside a workbook the
+  // L0.16 band order is unchanged (worksheets 0, then figures, pages,
+  // reports). Artifacts pass their insertion index as `order` — every
+  // artifact is keyed, so byOrder keeps them insertion-ordered.
   (input.originFigures ?? []).forEach((figure, index) => {
     const sourceIds = originSourceIds(figure, input.originFigures ?? [], input.datasets);
     const owner = ownerForSources(sourceIds, figure.siblingIds);
-    add("origin-figure", figure, figureLabel(figure), owner.parentKey, 1, index, owner.source);
+    add("origin-figure", figure, figureLabel(figure), owner.parentKey, 2, index, owner.source);
   });
   (input.editableFigures ?? []).forEach((figure, index) => {
     const owner = ownerForSources(figure.bindings.datasetId ? [figure.bindings.datasetId] : []);
-    add("editable-figure", figure, figure.name, owner.parentKey, 2, index, owner.source);
+    add("editable-figure", figure, figure.name, owner.parentKey, 3, index, owner.source);
   });
   (input.publicationFigures ?? []).forEach((figure, index) => {
     const owner = ownerForSources(figure.datasetId ? [figure.datasetId] : []);
-    add("publication-figure", figure, figure.name, owner.parentKey, 3, index, owner.source);
+    add("publication-figure", figure, figure.name, owner.parentKey, 4, index, owner.source);
   });
 
   const editableById = new Map((input.editableFigures ?? []).map((figure) => [figure.id, figure]));
@@ -266,11 +280,11 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     if (missingFigureIds.length > 0) {
       warnings.push(`page "${page.name}" referenced missing figure(s): ${[...new Set(missingFigureIds)].join(", ")}`);
     }
-    add("page", page, page.name, owner.parentKey, 4, index, owner.source);
+    add("page", page, page.name, owner.parentKey, 5, index, owner.source);
   });
   (input.reports ?? []).forEach((report, index) => {
     const owner = ownerForSources(report.datasetId ? [report.datasetId] : []);
-    add("report", report, report.name, owner.parentKey, 5, index, owner.source);
+    add("report", report, report.name, owner.parentKey, 6, index, owner.source);
   });
 
   const roots: DraftNode[] = [];

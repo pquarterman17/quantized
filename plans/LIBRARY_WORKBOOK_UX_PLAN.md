@@ -606,7 +606,7 @@ and adversarially reviews before merge. No separate Opus hop is spawned.
 | A2 workspace/store persistence | Claude | Claude Sonnet 5 | Sonnet reliability review; Opus only if migration rules change | Broad persistence plumbing, but mechanically bounded once A1 is fixed. |
 | A3 import-to-workbook assignment | Claude | Claude Sonnet 5 | ChatGPT-Sol usability/Origin-hierarchy review | Import provenance and Origin grouping need reliability; visible hierarchy needs UX review. |
 | A4 append/merge integrity | Claude | Claude Sonnet 5 high | Claude Opus 5 adversarial reference review | ID/folder/workbook rewrites can silently corrupt appended projects. |
-| B canonical hierarchy view model | ChatGPT-Sol (reassigned 2026-08-14 while Claude continued A3-A4) | GPT-5.6 Terra for the bounded pure TypeScript slice | Claude Sonnet reviews integration after A4 rebase | Implemented in an isolated worktree so Claude could continue the reliability-heavy import/merge foundation concurrently. |
+| B canonical hierarchy view model | ChatGPT-Sol (owner decision 2026-08-14 FIRST flipped implementation to Claude; owner superseded it the same day by having Sol implement B in a parallel worktree while Claude ran A3-A4 — both decisions kept on record) | GPT-5.6 Terra for the bounded pure TypeScript slice | Claude (Fable) adversarial review + fixes at merge (PR #138) | Implemented in an isolated worktree so Claude could continue the reliability-heavy import/merge foundation concurrently. |
 | C Origin-like tree renderer | Claude, from ChatGPT-Sol's UX contract | Claude Sonnet 5; Haiku only for isolated tests/CSS | ChatGPT-Sol keyboard/mouse review | Settled UI behavior is routine once the interaction contract is fixed. |
 | D Details view + preference | Claude, from ChatGPT-Sol's UX contract | Claude Sonnet 5 | ChatGPT-Sol usability review | Standard desktop UI and persistence can be implemented cheaply from the written spec. |
 | E tile Library workspace | ChatGPT-Sol | GPT-5.6 Terra high for bounded components; Sol high for integration | GPT-5.6 Sol high for visual acceptance; Sonnet for persistence defects | Spatial interaction and responsive usability are where ChatGPT effort has the highest return. |
@@ -625,7 +625,9 @@ and adversarially reviews before merge. No separate Opus hop is spawned.
 
 1. ChatGPT-Sol owns UX decisions, mockups, interaction acceptance, and only the
    cross-surface frontend implementation where its strengths materially
-   matter—primarily B, E, and G. It should not
+   matter—primarily B, E, and G (B's ownership was flipped to Claude by owner
+   decision on 2026-08-14 and superseded the same day — Sol implemented it in
+   a parallel worktree; the flip-and-supersede stays on record). It should not
    spend scarce tokens on repetitive serializers, standard tables/trees,
    fixtures, or CSS once a contract is written; Claude Sonnet implements
    C/D/L from the detailed handoff.
@@ -663,9 +665,12 @@ and adversarially reviews before merge. No separate Opus hop is spawned.
 1. **Claude first — A1.** Use a short Claude Opus 5 contract review, then
    Claude Sonnet 5 implementation. Stop after the pure schema/migration slice
    is tested; do not fold A2-A4 into one oversized PR.
-2. ~~**B next — ChatGPT-Sol implements in parallel.**~~ Completed as a pure
-   hierarchy plus focused tests in an isolated worktree. B does not reach into
-   workspace persistence, rendering, or import mutation owned by A2-A4/C-E.
+2. ~~**B next — ChatGPT-Sol reviews the IA contract, Claude implements.**~~
+   Superseded by owner the same day it was decided: Sol implemented B itself
+   in an isolated worktree (PR #138) while Claude ran A2-A4; Fable performed
+   the adversarial review + two red-proven fixes at merge. B does not reach
+   into workspace persistence, rendering, or import mutation owned by
+   A2-A4/C-E.
 3. **Claude in parallel — A2-A4.** These primarily touch workspace/store,
    import planning, and append/merge boundaries, while B stays in the Library
    view-model files. Rebase B onto A4 before the renderer stack begins.
@@ -1077,6 +1082,18 @@ back to the owner. No Library implementation is authorized by this pause.
   and collapsed subtrees. Targeted tests, ESLint, typecheck, architecture
   ratchet, production build, and bundle budget pass. No renderer/store/import
   mutation is included; PR C-D/E consume this model after rebase onto A4.
+  **Adversarial review at merge (Claude/Fable, PR #138): two CONFIRMED
+  findings, both red-proven and fixed** — (1) ordering reimplemented instead
+  of reusing `lib/order.byOrder`, so unkeyed items interleaved by array index
+  rather than sinking after keyed siblings, breaking A4's append-at-end
+  invariant and diverging from today's foldertree ordering (fixed:
+  `compareDraft` now composes section → `byOrder` → insertion sequence);
+  (2) origin-figures shared section 1 with workbooks, so a folder-placed
+  cross-workbook figure interleaved with the folder's workbooks (fixed:
+  artifact sections shifted to 2-6, disjoint from workbooks). Interim
+  standing debt, accepted: `useLibraryTree` still drives the live UI — TWO
+  view models coexist until PR C replaces the old one; C's contract must
+  include that replacement so the duplication window closes.
 - ~~**PR A2 — workspace/store persistence**~~ (2026-08-14) — `.dwk` bumped to
   v4 (accepts v1–v4): `workbooks[]` + per-dataset `workbookId` serialize; ONE
   parse path for every version (sanitize → `reconcileWorkbookRefs` with a
@@ -1112,6 +1129,15 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-14 — Claude (Fable):** Adversarial review of PR #138 (slice B)
+  before merge. Verified the rebase claim (branch sits on main's tip), every
+  consumed API (`figureLayerFamily`, `figureLabel`, `FigureDoc`/`PageDocument`/
+  `ReportEntry` fields), and the placement rules against L0.16/L0.21/L0.44.
+  Two confirmed findings fixed with red-proven tests (byOrder parity;
+  workbook/artifact section separation — see the Completed B entry). Amended
+  this PR's plan edits to PRESERVE the B ownership decision history (the
+  original flip-to-Claude and its same-day supersession are both on record)
+  rather than rewriting it. Full gate re-run before merge.
 - **2026-08-14 — ChatGPT-Sol:** Confirmed Claude's A1/A2 work on `main`, then
   started B in the isolated `sol/library-hierarchy-b` worktree while Claude
   continued A3/A4. Reconciled the routing table to reflect that parallel split

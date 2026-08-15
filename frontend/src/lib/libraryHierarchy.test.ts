@@ -95,6 +95,44 @@ describe("buildLibraryHierarchy", () => {
     expect(datasets).toEqual(originalDatasets);
   });
 
+  it("sinks unkeyed order after keyed siblings (lib/order byOrder parity — A4 append-at-end)", () => {
+    // lib/order.ts's byOrder is the app's canonical comparator: an item with
+    // no `order` key sinks AFTER any keyed sibling (insertion-stable among
+    // unkeyed). PR A4 deliberately leaves appended workbooks unkeyed and
+    // documents that byOrder therefore lands them at the END — the hierarchy
+    // must agree, not interleave unkeyed items by their array index.
+    const workbooks = [
+      workbook("appended", undefined, undefined), // unkeyed, index 0
+      workbook("keyed", undefined, 10), // keyed high, index 1
+    ];
+    const datasets = [
+      dataset("u1", "keyed", undefined), // unkeyed, index 0
+      dataset("k1", "keyed", 5), // keyed, index 1
+      dataset("u2", "keyed", undefined), // unkeyed, index 2 (insertion after u1)
+    ];
+    const result = buildLibraryHierarchy({ folders: [], workbooks, datasets });
+    expect(result.roots.map((node) => node.key)).toEqual(["workbook:keyed", "workbook:appended"]);
+    expect(result.byKey.get("workbook:keyed")?.children.map((node) => node.key)).toEqual([
+      "worksheet:k1", "worksheet:u1", "worksheet:u2",
+    ]);
+  });
+
+  it("sorts a folder-placed cross-workbook artifact after the folder's workbooks", () => {
+    // A cross-workbook Origin figure lands at the shared folder (L0.44); it
+    // must follow the folder's own workbooks, never interleave with them.
+    const folders = [folder("shared", null)];
+    const workbooks = [workbook("wa", "shared", 5), workbook("wb", "shared", 6)];
+    const datasets = [
+      dataset("da", "wa", 0, "BookA"),
+      dataset("db", "wb", 0, "BookB"),
+    ];
+    const figure = originFigure("cross", "da", ["da", "db"], ["BookA", "BookB"]);
+    const result = buildLibraryHierarchy({ folders, workbooks, datasets, originFigures: [figure] });
+    expect(result.byKey.get("folder:shared")?.children.map((node) => node.key)).toEqual([
+      "workbook:wa", "workbook:wb", "origin-figure:cross",
+    ]);
+  });
+
   it("places a cross-workbook page at the nearest shared folder", () => {
     const folders = [folder("shared", null), folder("left", "shared"), folder("right", "shared")];
     const workbooks = [workbook("a", "left"), workbook("b", "right")];
