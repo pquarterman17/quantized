@@ -509,7 +509,11 @@ build, and focused interaction coverage where appropriate.
    without importing renderer concerns into the store.
 3. [ ] **PR C — Origin-like tree renderer.** Implement the approved disclosure,
    double-click, remembered-child, selection, keyboard, and context-menu
-   behavior.
+   behavior. Also owns the L0.46 bulk-import behavior (re-booked from A3
+   2026-08-14): folder selection first exists here, enabling
+   import-into-selected-folder by default plus the optional **Create Folder
+   for This Import** suggestion that never creates folders without
+   confirmation.
 4. [ ] **PR D — view preference and details renderer.** Add persisted view mode
    and prove state continuity between tree and details.
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
@@ -883,14 +887,10 @@ Recommended PR A decomposition:
    Shipped `8a6d0e6`/`c1adf97`/`914042e` — see `## Completed`.
 2. [x] ~~**PR A2 — workspace/store persistence.**~~ (2026-08-14) Shipped
    `e41308d`/`64af36c` — see `## Completed`.
-3. [ ] **PR A3 — import assignment.** Make one source file create one workbook;
-   assign all sheets/books according to the confirmed file boundary; convert
-   Origin multi-sheet surrogate folders without leaving duplicate
-   `Folder -> Book folder -> Workbook` nesting. Also owns the L0.46
-   bulk-import behavior: import into the selected folder by default, with the
-   optional **Create Folder for This Import** suggestion that never creates
-   folders without confirmation. (L0.46 booked here 2026-08-14 — previously
-   had no owning slice.)
+3. [x] ~~**PR A3 — import assignment.**~~ (2026-08-14) Shipped `152c3d8` —
+   see `## Completed`. L0.46 was NOT part of this ship — it requires a
+   folder-selection concept that does not exist pre-renderer; re-booked into
+   PR C (below).
 4. [x] ~~**PR A4 — append/merge reference integrity.**~~ (2026-08-14) Shipped
    `aa789bc` — see `## Completed`.
 
@@ -1021,6 +1021,29 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- ~~**PR A3 — import assignment**~~ (2026-08-14) — every import now creates
+  its workbook at import time, correct BY CONSTRUCTION: `planOriginImport`
+  (evolved `planOriginFolders`) resolves Project-Explorer folder placement
+  only and delegates the workbook layer to `deriveWorkbooks` — the exact
+  function a reload uses — so import-time creation and load-time derivation
+  cannot drift (the consistency gate asserts partition + placement equality
+  after stripping and re-deriving). Multi-sheet books get NO surrogate
+  folder any more (sheets sit in their path folder; one workbook per book,
+  single-sheet included); the single-file branch derives its one workbook
+  the same way, covering path, upload, and single-book-Origin (the primary
+  DataStruct carries `origin_book`) cases. Legacy conversion:
+  `applyWorkbookMigration` (workbooks.ts) wraps the parse-time
+  derivation and now APPLIES A1's `convertedFolderIds` — the surrogate
+  folder is dropped, its occupants re-homed to its parent — with a test
+  asserting a converted v3 doc equals a fresh A3 import structurally;
+  workspace.ts net-shrank (pin 609 → 592). Interim visual note: until PR C
+  renders workbooks, multi-sheet Origin sheets show flat in their path
+  folder. Seam fix (orchestrator): the `useApp.test.ts` Project-Explorer
+  mirror test updated + strengthened to assert the workbook layer.
+  Deferrals: L0.46 → PR C; `importFilesAppended`'s merged dataset stays
+  workbook-less (self-heal proven by test). Gate: 6,547 tests combined
+  with A4, lint 0 errors, build + bundle green. Commits
+  `c0b26f8`/`0560b55`/`1537154`/`0a942c2` + seam `152c3d8`.
 - ~~**PR A4 — append/merge reference integrity**~~ (2026-08-14) — real
   workbook transfer through Append Project, superseding A2's blanket strip:
   every incoming workbook referenced by ≥1 appended dataset transfers under
