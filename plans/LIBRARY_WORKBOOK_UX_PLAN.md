@@ -521,8 +521,12 @@ build, and focused interaction coverage where appropriate.
    folder offer, and the full L0.25 select/open contract for every node
    kind. Workbook Delete shipped DISABLED with a stable reason pending
    PR M's dependency-aware Trash (owner-reviewer boundary; see Completed).
-4. [x] ~~**PR D — view preference and details renderer.**~~ Implemented on the
-   ChatGPT-Sol review branch 2026-08-15, pending PR review: persisted Tree /
+4. [x] ~~**PR D — view preference and details renderer.**~~ Shipped 2026-08-15
+   (PR #140, merge `a8bb751`; ChatGPT-Sol implemented, Claude/Fable blocking
+   review cleared in one fix round — P1 Details Delete-leak closed via the
+   shared `requestDatasetRemoval` path with five real-hook regressions, P2
+   flat-when-sorted, P3s booked/fixed; full gate + Playwright 39/39
+   independently verified at merge): persisted Tree /
    Details preference; visible disabled Tiles handoff to PR E; sortable Details
    projection over the canonical hierarchy; Name, Type, Folder/Workbook,
    dimensions, data type, source, import/modified time, and tags; compact
@@ -1190,6 +1194,12 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-15 — Claude (Fable):** PR D shipped (PR #140 merged `a8bb751`,
+  owner-directed un-draft + merge after the fix round cleared my blocking
+  review; all three threads resolved). Firmed row 4's entry from
+  pending-review to shipped. Next per the confirmed order: PR D2 (search
+  results surface) and the newly booked 4a (Details roving keyboard
+  traversal) are both unblocked; E (tiles) waits on its mockup approval.
 - **2026-08-15 — Claude (Fable):** PR C shipped (PR #139 merged `d35b1e7`,
   owner-directed merge after all 11 review threads resolved). Ticked row 3
   of the implementation sequence and wrote the Completed entry covering the
