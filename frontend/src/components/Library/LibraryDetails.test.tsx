@@ -174,3 +174,132 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
     expect(state.selectedIds).toEqual(["d1"]);
   });
 });
+
+describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () => {
+  const navDatasets = [
+    dataset("d1", "one.csv", 0),
+    dataset("d2", "two.csv", 1),
+    { ...dataset("solo", "active.csv", 2), workbookId: undefined },
+  ];
+
+  function GlobalHarness() {
+    useGlobalShortcuts();
+    const { hierarchy: liveHierarchy } = useLibraryHierarchyModel();
+    return <LibraryDetails hierarchy={liveHierarchy} />;
+  }
+
+  const row = (key: string): HTMLElement => document.querySelector(`[data-lib-row="${key}"]`) as HTMLElement;
+  const rowKeys = (): Array<string | null> =>
+    [...document.querySelectorAll("tbody tr")].map((tr) => tr.getAttribute("data-lib-row"));
+  const tabStops = (): Array<string | null> =>
+    [...document.querySelectorAll('tbody tr[tabindex="0"]')].map((tr) => tr.getAttribute("data-lib-row"));
+
+  beforeEach(() => {
+    useApp.setState({
+      folders: [],
+      workbooks: [{ id: "w", name: "Run" }],
+      datasets: navDatasets,
+      originFigures: [], editableFigures: [], figureDocs: [], pages: [], reports: [],
+      librarySelection: null,
+      activeId: "solo",
+      selectedIds: [],
+      trash: [],
+      history: [],
+      confirmRemove: false,
+    });
+  });
+
+  it("the roving row is the component's ONLY sequential tab stop — the scroll wrapper is not in the Tab order (P1 review fix)", () => {
+    const { container } = render(<GlobalHarness />);
+    // Manual order: keyed root worksheet "solo" (order 2) sorts before the
+    // unkeyed workbook (byOrder sinks unkeyed after keyed siblings).
+    expect(rowKeys()).toEqual(["worksheet:solo", "workbook:w", "worksheet:d1", "worksheet:d2"]);
+    // The FULL component tab sequence, not just tbody rows: everything with
+    // a non-negative tabindex (native buttons excluded — the sort headers
+    // are toolbar controls, not table entry points... they ARE focusable
+    // buttons, so enumerate explicitly what precedes the row).
+    const sequentialStops = [...container.querySelectorAll('[tabindex="0"]')];
+    expect(sequentialStops).toHaveLength(1); // no wrapper stop before the row
+    expect(sequentialStops[0]?.getAttribute("data-lib-row")).toBe("worksheet:solo");
+    expect(container.querySelector(".qzk-details-scroll")?.hasAttribute("tabindex")).toBe(false);
+    act(() => row("worksheet:d2").focus());
+    expect(tabStops()).toEqual(["worksheet:d2"]); // the rove moved
+  });
+
+  it("harness control: an arrow that misses the component entirely DOES step the global nav (so the assertions below mean something)", () => {
+    render(<GlobalHarness />);
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(useApp.getState().activeId).not.toBe("solo");
+  });
+
+  it("Delete on a focused sort-header button never reaches the global dataset handler (retrospective-audit P1)", () => {
+    render(<GlobalHarness />);
+    const header = screen.getByRole("button", { name: "Name" });
+    header.focus();
+    fireEvent.keyDown(header, { key: "Delete" });
+    fireEvent.keyDown(header, { key: "Backspace" });
+    const s = useApp.getState();
+    expect(s.datasets).toHaveLength(3);
+    expect(s.trash).toHaveLength(0);
+  });
+
+  it("a SINGLE wrapper-targeted ArrowDown leaves the active dataset unchanged (P1 review fix, belt)", () => {
+    // One arrow, deliberately: a down-then-up pair is vacuous — the global
+    // navigator wraps, so solo -> d1 -> solo passes WITH the leak present
+    // (caught during this review round by flipping the assertion first).
+    const { container } = render(<GlobalHarness />);
+    const wrapper = container.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.keyDown(wrapper, { key: "ArrowDown" });
+    expect(useApp.getState().activeId).toBe("solo");
+  });
+
+  it("Up/Down traverse and clamp; Home/End jump; the active dataset never changes (global nav gated)", () => {
+    render(<GlobalHarness />);
+    row("worksheet:solo").focus();
+    fireEvent.keyDown(row("worksheet:solo"), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(row("workbook:w"));
+    fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+    expect(document.activeElement).toBe(row("worksheet:d2"));
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" }); // clamp at the last row
+    expect(document.activeElement).toBe(row("worksheet:d2"));
+    fireEvent.keyDown(document.activeElement as Element, { key: "Home" });
+    expect(document.activeElement).toBe(row("worksheet:solo"));
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowUp" }); // clamp at the first row
+    expect(document.activeElement).toBe(row("worksheet:solo"));
+    expect(useApp.getState().activeId).toBe("solo"); // the global prev/next-dataset arrows never fired
+  });
+
+  it("Left/Right are NOT navigation here — no disclosure semantics in a flat table", () => {
+    render(<GlobalHarness />);
+    row("worksheet:d1").focus();
+    fireEvent.keyDown(row("worksheet:d1"), { key: "ArrowLeft" });
+    fireEvent.keyDown(row("worksheet:d1"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(row("worksheet:d1")); // focus never moved
+  });
+
+  it("arrows follow the CURRENT sorted order, and focus survives the re-sort on the same row", () => {
+    render(<GlobalHarness />);
+    row("worksheet:d2").focus(); // two.csv
+    fireEvent.click(screen.getByRole("button", { name: "Name" })); // sort by name asc
+    expect(document.activeElement).toBe(row("worksheet:d2")); // the moved <tr> keeps focus
+    expect(rowKeys()).toEqual(["worksheet:solo", "worksheet:d1", "workbook:w", "worksheet:d2"]); // active/one/Run/two
+    fireEvent.keyDown(row("worksheet:d2"), { key: "ArrowUp" });
+    expect(document.activeElement).toBe(row("workbook:w")); // the SORTED predecessor, not the manual one
+  });
+
+  it("Enter still opens canonically from a roved-to row", () => {
+    render(<GlobalHarness />);
+    row("workbook:w").focus();
+    fireEvent.keyDown(row("workbook:w"), { key: "ArrowDown" });
+    fireEvent.keyDown(document.activeElement as Element, { key: "Enter" });
+    expect(useApp.getState().activeId).toBe("d1"); // opened the worksheet the rove landed on
+  });
+
+  it("focus lands on the nearest surviving row after the focused row is deleted", () => {
+    render(<GlobalHarness />);
+    row("worksheet:d1").focus();
+    fireEvent.keyDown(row("worksheet:d1"), { key: "Delete" });
+    expect(useApp.getState().datasets.some((d) => d.id === "d1")).toBe(false);
+    expect(document.activeElement?.getAttribute("data-lib-row")).toBe("worksheet:d2"); // same position, next row
+  });
+});

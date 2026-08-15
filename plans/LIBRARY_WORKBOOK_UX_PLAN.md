@@ -490,6 +490,12 @@ Library presentation without changing organization or duplicating objects.
     continuity remains a PR E acceptance gate.
 - [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
+  - [ ] Booking (2026-08-15 retrospective audit): artifact-row context menus
+    and registry Delete actions (the "later PR (L0.39/L0.40)" promised at
+    the consume-only Delete sites in LibraryTree.tsx/LibraryDetails.tsx)
+    have no owning slice — assign at the next kickoff (candidates: D2 while
+    it touches Details rows, or E's shared-action pass). Until assigned,
+    those sites correctly consume the keystroke and do nothing.
 - [x] **L1.5 Wide tile surface design:** produced thorough mockups and confirmed
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
@@ -535,14 +541,23 @@ build, and focused interaction coverage where appropriate.
    claim global L1.4 interaction parity: Details context menus, rename/move,
    and drag/drop still need the shared-action follow-through in their owning
    slices, and Tiles remains PR E.
-4a. [ ] **PR D follow-up — Details roving keyboard traversal.** Replace one
-    Tab stop per row with the standard roving-tabindex pattern; Up/Down moves
-    through the current sorted row order, Home/End reaches the boundaries,
-    Enter retains canonical open, and focus remains stable after re-sort or
-    removal. Reuse `lib/libraryTreeNav.ts` arithmetic where it fits, but do not
-    reintroduce hierarchy-only Left/Right disclosure semantics in a flat sort.
-    This is explicitly booked from Claude's 2026-08-15 PR #140 review rather
-    than being left implicit under L1.4.
+4a. [x] **PR D follow-up — Details roving keyboard traversal.** Implemented
+    in PR #141, pending review (Claude/Fable, 2026-08-15): roving tabindex
+    (exactly one sequential tab stop in the table — last-focused row, else
+    current item, else first; the scroll wrapper is OUT of the Tab order per
+    the PR #141 review's P1), Up/Down through the CURRENT sorted order with
+    clamping, Home/End, Enter keeps canonical open, handled nav keys
+    preventDefault so the global prev/next-dataset navigation never fires
+    from inside the table — including non-row targets within the table area
+    (belt). Focus survives re-sort (the moved <tr> keeps focus) and removal
+    (nearest-survivor recovery). Left/Right deliberately bubble untouched;
+    `detailsNavIndex` is a tiny flat helper, not a libraryTreeNav reuse.
+    Coverage: 3 pure-arithmetic tests, 8 component tests with the real
+    useGlobalShortcuts hook (incl. a harness-validity control and a
+    deliberately single-arrow leak regression — a down-then-up pair is
+    vacuous because the global navigator wraps), and 1 real-browser @core
+    Playwright journey (details-keyboard.spec.ts) proving the actual browser
+    tab sequence jsdom cannot.
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
     confirmed L0.26 behavior over the Details renderer: flat result list with
     full `Folder / Workbook / Child` breadcrumbs, normal open behavior, and
@@ -1050,6 +1065,20 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- ~~**PR D — view preference and details renderer**~~ (2026-08-15, PR #140,
+  merge `a8bb751`; ChatGPT-Sol implemented, Claude/Fable reviewed) — persisted
+  Tree/Details preference (localStorage, fails safe), sortable Details
+  projection over the canonical hierarchy (sort works on a projected copy —
+  never rewrites manual order), narrow-panel container-query fallback,
+  Tiles visible-but-disabled pending PR E, selection/search/focus continuity
+  across the renderer swap incl. ancestor re-disclosure returning to Tree.
+  One blocking review round: P1 Details rows leaked Delete/Backspace to the
+  global selection-based handler (fixed via the shared
+  `lib/datasetRemoval.ts` path with five real-hook regressions), P2
+  flat-when-sorted indentation, P3 "Unresolved" Source labeling; roving
+  keyboard traversal explicitly booked as follow-up 4a (shipped separately
+  via PR #141). Gate at merge: 6,743 vitest, lint 0 errors, tsc clean,
+  bundle 3.4 kB under budget, Playwright 39/39.
 - ~~**PR C — Origin-like tree renderer**~~ (2026-08-15, PR #139, merge
   `d35b1e7`) — the Library tree now renders folder → workbook → children
   over PR B's hierarchy; `useLibraryTree` retired (two-view-models debt

@@ -81,6 +81,15 @@ function isEditorTarget(el: Element | null): boolean {
   return true; // nested control or non-row target — never this container's
 }
 
+/** A genuine text-editing control, whose Delete/Backspace/arrows are native
+ *  editing keys the container must never touch. Distinct from a nested
+ *  BUTTON/drag-handle (retrospective-audit P1): those don't handle Delete or
+ *  arrows at all, so an unconsumed keystroke on them bubbles to the global
+ *  selection-based handlers and can remove or switch an UNRELATED dataset. */
+function isTextEditorTarget(el: Element): boolean {
+  return el.matches("input, textarea, select, [contenteditable='true']");
+}
+
 /** A folder's whole-subtree DATASET count (independent of the new
  *  hierarchy — this is the same lens lib/foldertree-driven folder bulk
  *  actions already use, unaffected by workbook nesting). Byte-identical to
@@ -144,8 +153,17 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
     // P2 fix: a nested editor/control owns its own keystrokes — see
     // isEditorTarget's doc. Must run before Escape too: an editor's own
     // Escape (rename input's onKeyDown) stays its own, never ALSO blurring
-    // the row out from under it.
-    if (isEditorTarget(e.target as Element)) return;
+    // the row out from under it. Retrospective-audit P1: a nested
+    // NON-EDITOR control (drag handle, "⋯"/reorder/figure buttons) doesn't
+    // handle Delete or bare arrows itself, so those are consumed here —
+    // never left to reach the global handlers and act on an unrelated
+    // dataset. Enter/Space/Tab pass untouched (button activation).
+    if (isEditorTarget(e.target as Element)) {
+      const isDestructiveOrNav =
+        e.key === "Delete" || e.key === "Backspace" || e.key === "ArrowUp" || e.key === "ArrowDown";
+      if (isDestructiveOrNav && !isTextEditorTarget(e.target as Element)) e.preventDefault();
+      return;
+    }
     if (e.key === "Escape") {
       (document.activeElement as HTMLElement | null)?.blur();
       return;

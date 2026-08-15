@@ -1,7 +1,8 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { openLibraryNode } from "./libraryOpen";
 import {
+  detailsNavIndex,
   libraryDetailsRows,
   sortLibraryDetailsRows,
   type LibraryDetailsSortDirection,
@@ -48,6 +49,61 @@ export default function LibraryDetails({ hierarchy }: Props) {
     [hierarchy, sortKey, direction],
   );
 
+  // Roving tabindex (plan follow-up 4a): exactly ONE row is in the Tab order
+  // at a time — the last-focused row, else the current-item row, else the
+  // first. Up/Down/Home/End move real DOM focus through the CURRENT (sorted)
+  // row order via detailsNavIndex; a re-sort moves the focused <tr> element,
+  // and the browser keeps focus on a moved element, so `focusKey` survives a
+  // sort untouched.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const prevRowsRef = useRef(rows);
+  const keyIndex = (key: string | null): number => (key == null ? -1 : rows.findIndex((r) => r.node.key === key));
+  const selectedRow = rows.find((r) => isSelected(r.node, selectedIds, selection));
+  const rovingKey = (focusKey != null && keyIndex(focusKey) >= 0 ? focusKey : null) ?? selectedRow?.node.key ?? rows[0]?.node.key ?? null;
+
+  const focusRowAt = (index: number): void => {
+    const key = rows[index]?.node.key;
+    if (key == null) return;
+    (scrollRef.current?.querySelector(`[data-lib-row="${CSS.escape(key)}"]`) as HTMLElement | null)?.focus();
+  };
+
+  // Focus survives removal of the focused row (same contract as
+  // LibraryTree.tsx): when the row that held focus is gone after a re-render
+  // and the DOM orphaned focus to <body>, land on the nearest surviving row
+  // by its PREVIOUS position — never steal focus that moved elsewhere.
+  useEffect(() => {
+    if (focusKey != null && keyIndex(focusKey) < 0 && document.activeElement === document.body) {
+      const prevIdx = prevRowsRef.current.findIndex((r) => r.node.key === focusKey);
+      focusRowAt(Math.min(Math.max(prevIdx, 0), rows.length - 1));
+    }
+    prevRowsRef.current = rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed off the row list only
+  }, [rows]);
+
+  const onNavKeyDown = (event: React.KeyboardEvent): void => {
+    const target = (event.target as Element).closest("[data-lib-row]");
+    if (!target) {
+      // P1 review fix, belt half: a keystroke inside the table area that
+      // didn't land on a row — the focusable sort-header buttons are the
+      // real-browser case — must not reach the global handlers: nav keys
+      // would step the dataset navigator, Delete/Backspace would remove the
+      // selected/active dataset (retrospective-audit P1). Consumed here;
+      // Enter/Space pass untouched so header buttons still activate.
+      const destructive = event.key === "Delete" || event.key === "Backspace";
+      if (destructive || detailsNavIndex(rows.length, -1, event.key) != null) event.preventDefault();
+      return;
+    }
+    // 4a booking: NO Left/Right — disclosure is a hierarchy gesture and this
+    // is a flat (possibly sorted) table; those keys bubble on untouched.
+    const next = detailsNavIndex(rows.length, keyIndex(target.getAttribute("data-lib-row")), event.key);
+    if (next == null) return;
+    // preventDefault also gates the window-level single-key handlers (the
+    // global prev/next-dataset arrows honor defaultPrevented) and page scroll.
+    event.preventDefault();
+    focusRowAt(next);
+  };
+
   const sortBy = (key: LibraryDetailsSortKey) => {
     if (sortKey === key) setDirection((value) => (value === "asc" ? "desc" : "asc"));
     else {
@@ -66,8 +122,14 @@ export default function LibraryDetails({ hierarchy }: Props) {
           </button>
         )}
       </div>
-      <div className="qzk-details-scroll" tabIndex={0} aria-label="Library details table">
-        <table className="qzk-details-table">
+      {/* P1 review fix: the scroll wrapper is NOT in the Tab order — the
+       *  roving row is this component's single sequential tab stop, so
+       *  keyboard entry lands directly on the current row and a focused
+       *  wrapper can never leak Up/Down past onNavKeyDown's row check to
+       *  the global dataset navigator. The accessible name lives on the
+       *  <table> itself, where it labels a real role. */}
+      <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
+        <table className="qzk-details-table" aria-label="Library details table">
           <thead>
             <tr>
               {COLUMNS.map((column) => (
@@ -89,9 +151,10 @@ export default function LibraryDetails({ hierarchy }: Props) {
                   className={selected ? "selected" : undefined}
                   data-lib-row={row.node.key}
                   data-ds-id={row.node.kind === "worksheet" ? row.node.entityId : undefined}
-                  tabIndex={0}
+                  tabIndex={row.node.key === rovingKey ? 0 : -1}
                   aria-selected={selected}
                   title={title}
+                  onFocus={() => setFocusKey(row.node.key)}
                   onClick={() => selectNode(row.node)}
                   onDoubleClick={() => openLibraryNode(row.node)}
                   onContextMenu={() => selectNode(row.node)}
