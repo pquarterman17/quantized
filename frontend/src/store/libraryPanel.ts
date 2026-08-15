@@ -70,9 +70,12 @@ export interface LibrarySelection {
 }
 
 /** What's being drag-sourced right now (module-internal drag, not an OS file
- *  drop) — null when no drag is in flight. */
+ *  drop) — null when no drag is in flight. "workbook" (PR C review fix)
+ *  replaces the retired dataset→folder gesture as the thing FolderRow's
+ *  resting drop-candidate highlight now reacts to for worksheet placement —
+ *  a plain "dataset" drag no longer marks any folder as a candidate. */
 export interface ActiveDrag {
-  kind: "dataset" | "folder";
+  kind: "dataset" | "folder" | "workbook";
   id: string;
 }
 

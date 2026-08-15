@@ -1,16 +1,22 @@
 // A single Library dataset row: name (double-click to rename), sparkline, footer
 // (meta + reorder/duplicate/remove), then tag chips. Each row owns its own
 // inline-edit state. Extracted from Library so the list can render rows inside
-// the folder tree without duplicating the markup. Also a drop-between reorder
-// target (project-organization plan item 3b): dragging another dataset row
-// over the top/bottom half of this one shows a thin indicator and, on drop,
-// reorders within (or moves into) THIS row's own folder — see lib/foldertree's
-// dropEdgeAt/resolveDropBeforeId for the pure hit-testing.
+// the folder tree without duplicating the markup.
 //
 // GUI_INTERACTION_PLAN #13: the drag GESTURE starts only from the grip handle
 // (`.qzk-drag-handle`, the only `draggable` element) — the rest of the row
 // keeps its normal select/open behaviour. The full context menu moved to
-// datasetRowMenu.ts (this file sits at the 400-line ceiling).
+// datasetRowMenu.ts (this file sits at the 400-line ceiling). The handle's
+// DATASET_DND payload is still a live drag SOURCE for the plot-window rebind
+// drop target (WindowCanvas.tsx/PlotWindowFrame.tsx) — only the Library-
+// internal row-as-drop-target behavior below was retired (PR C review fix):
+// this row no longer accepts a DATASET_DND drop itself (it used to reorder/
+// move-into-a-folder via lib/foldertree's moveDatasetToFolder), because the
+// tree places a worksheet by its WORKBOOK (lib/libraryHierarchy.ts), not its
+// own `folderId` — the dropped-here `order`/`folderId` write was invisible
+// in the tree and diverged from the workbook's real placement, the same
+// defect class FolderRow's retired dataset-onto-folder drop had. Moving a
+// worksheet between workbooks is the split-workbook workflow (PR J).
 //
 // GUI_INTERACTION #8: keyboard-reachable context menu — `tabIndex` + the
 // ContextMenu key (or Shift+F10) opens the SAME menu the "⋯" resting-cue
@@ -29,7 +35,6 @@ import { DATASET_DND } from "./dnd";
 import { recordWorkbookOpen } from "./libraryOpen";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
-import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import RecomputedMark from "./RecomputedMark";
 import { useApp } from "../../store/useApp";
@@ -86,7 +91,6 @@ export default function DatasetRow({
   const renameDataset = useApp((s) => s.renameDataset);
   const addDatasetTag = useApp((s) => s.addDatasetTag);
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
-  const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const folders = useApp((s) => s.folders);
   const setActiveDrag = useApp((s) => s.setActiveDrag);
 
@@ -94,9 +98,6 @@ export default function DatasetRow({
   const [rename, setRename] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  // Drop-between indicator (plan item 3b): which edge of THIS row a dragged
-  // dataset is currently hovering, or null when no drag is over this row.
-  const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);
@@ -161,33 +162,11 @@ export default function DatasetRow({
     <div
       className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
         sheetNumber ? " qzk-ds-sheet" : ""
-      }${dropEdge ? ` drop-${dropEdge}` : ""}`}
+      }`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
       tabIndex={0}
       onKeyDown={onRowKeyDown}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
-        e.preventDefault(); // required every dragover to keep the drop legal
-        const edge = dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
-        if (edge !== dropEdge) setDropEdge(edge);
-      }}
-      onDragLeave={() => setDropEdge(null)}
-      onDrop={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
-        e.preventDefault();
-        e.stopPropagation(); // don't let it bubble to FolderRow/Library's file dropzone
-        const edge = dropEdge ?? dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
-        setDropEdge(null);
-        const draggedId = e.dataTransfer.getData(DATASET_DND);
-        if (!draggedId || draggedId === d.id) return; // no-op: dropped onto itself
-        // Reorder within THIS row's own folder (or move into it, if the dragged
-        // dataset lived elsewhere — "moves into the between-position's folder").
-        const folderId = d.folderId ?? null;
-        const siblingIds = folderDatasets(useApp.getState().datasets, folderId).map((x) => x.id);
-        const beforeId = resolveDropBeforeId(siblingIds, d.id, edge);
-        moveDatasetToFolder(draggedId, folderId, beforeId);
-      }}
       onClick={onRowClick}
       onContextMenu={onContextMenu}
     >

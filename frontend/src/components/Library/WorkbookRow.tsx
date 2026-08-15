@@ -13,9 +13,17 @@
 // Rename has no dedicated gesture on the row (double-click is reserved for
 // open, unlike FolderRow) — it's reached only through the context menu's
 // "Rename…", which opens the same inline input FolderRow uses.
+//
+// PR C review fix: the row is now a WORKBOOK_DND drag SOURCE (FolderRow.tsx
+// is the drop target) — the replacement for the retired worksheet→folder
+// drag, since folder placement is owned by the workbook, not any one
+// worksheet's own `folderId`. Same grip-handle-only convention as
+// FolderRow/DatasetRow (GUI_INTERACTION #13 sub-item 1): the drag can only
+// start from `.qzk-drag-handle`, never the row body's select/open click.
 
 import { useState } from "react";
 
+import { WORKBOOK_DND } from "./dnd";
 import { openLibraryNode } from "./libraryOpen";
 import { buildWorkbookRowMenu } from "./workbookRowMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
@@ -35,6 +43,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
   const toggle = useApp((s) => s.toggleWorkbookExpanded);
   const selection = useApp((s) => s.librarySelection);
   const renameWorkbook = useApp((s) => s.renameWorkbook);
+  const setActiveDrag = useApp((s) => s.setActiveDrag);
   const [rename, setRename] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const selected = selection?.kind === "workbook" && selection.id === workbook.id;
@@ -76,6 +85,26 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
       }}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+      {/* Dedicated drag handle (mirrors FolderRow/DatasetRow) — the ONLY
+       *  draggable element, so a drag only ever starts here. */}
+      <span
+        className="qzk-drag-handle"
+        draggable={rename == null}
+        tabIndex={0}
+        role="button"
+        aria-label="Drag to move"
+        title="Drag to move"
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData(WORKBOOK_DND, workbook.id);
+          e.dataTransfer.effectAllowed = "move";
+          setActiveDrag({ kind: "workbook", id: workbook.id });
+        }}
+        onDragEnd={() => setActiveDrag(null)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        ⠿
+      </span>
       <button
         className="qzk-menu-btn"
         title="More actions"

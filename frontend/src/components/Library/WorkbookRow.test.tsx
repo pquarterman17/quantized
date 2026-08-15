@@ -4,9 +4,10 @@
 // remembered child.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkbookRow from "./WorkbookRow";
+import { WORKBOOK_DND } from "./dnd";
 import { buildLibraryHierarchy, type LibraryNode } from "../../lib/libraryHierarchy";
 import type { Dataset } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
@@ -130,5 +131,49 @@ describe("WorkbookRow — context menu (L0.36)", () => {
     render(<WorkbookRow node={node()} depth={0} expanded={false} hasChildren />);
     fireEvent.click(screen.getByTitle("More actions"));
     expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+});
+
+describe("WorkbookRow — drag starts only from the handle (PR C review fix: WORKBOOK_DND drag source)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      workbooks: [wb("w1")],
+      datasets: [ds("d1", "w1")],
+      folders: [],
+      librarySelection: null,
+      activeDrag: null,
+    });
+  });
+
+  const node = () => workbookNode(useApp.getState().workbooks, useApp.getState().datasets, "w1");
+
+  function fireDragStart(el: Element, dataTransfer: unknown) {
+    const evt = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+    fireEvent(el, evt);
+  }
+
+  it("does not arm a drag from the row body — only the grip handle", () => {
+    const { container } = render(<WorkbookRow node={node()} depth={0} expanded={false} hasChildren />);
+    const row = container.querySelector(".qzk-workbook-row")!;
+    const handle = container.querySelector(".qzk-drag-handle")!;
+    expect(row.getAttribute("draggable")).not.toBe("true");
+    expect(handle.getAttribute("draggable")).toBe("true");
+
+    const setData = vi.fn();
+    fireDragStart(row, { setData });
+    expect(setData).not.toHaveBeenCalled();
+
+    fireDragStart(handle, { setData });
+    expect(setData).toHaveBeenCalledWith(WORKBOOK_DND, "w1");
+  });
+
+  it("flags activeDrag on dragstart, clears it on dragend", () => {
+    const { container } = render(<WorkbookRow node={node()} depth={0} expanded={false} hasChildren />);
+    const handle = container.querySelector(".qzk-drag-handle")!;
+    fireDragStart(handle, { setData: () => {} });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "workbook", id: "w1" });
+    fireEvent.dragEnd(handle);
+    expect(useApp.getState().activeDrag).toBeNull();
   });
 });

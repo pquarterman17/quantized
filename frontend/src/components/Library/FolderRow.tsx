@@ -1,9 +1,17 @@
 // A folder header in the Library tree (project-organization plan item 3). Caret
 // toggles expand; double-click (or the menu) renames inline; the count chip is
 // the folder's whole-subtree dataset count. It's also a drop target — dragging a
-// dataset row onto it moves that dataset into this folder (whole-row target, no
-// split). Context menu: New subfolder, Rename, Delete (reparent — a delete
-// re-homes contents, never destroys datasets). Indent is inline (depth * step).
+// WORKBOOK row onto it moves that workbook (and every member worksheet's
+// folderId with it) into this folder (whole-row target, no split). Context
+// menu: New subfolder, Rename, Delete (reparent — a delete re-homes contents,
+// never destroys datasets). Indent is inline (depth * step).
+//
+// PR C review fix: the worksheet→folder drag (a lone DatasetRow dropped
+// here) is RETIRED — the tree places a worksheet by its WORKBOOK
+// (lib/libraryHierarchy.ts), not its own `folderId`, so a dataset-only
+// folderId move was invisible in the tree (visual snap-back) and diverged
+// from the workbook's real placement. Moving a single worksheet to another
+// workbook/folder is the split-workbook workflow (PR J), not a drag here.
 //
 // Folder headers ADDITIONALLY accept a dragged folder (plan item 3b): the thin
 // top/bottom edge bands reposition the dragged folder as a SIBLING of this one
@@ -36,7 +44,7 @@
 
 import { useState } from "react";
 
-import { DATASET_DND, FOLDER_DND } from "./dnd";
+import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { buildFolderRowMenu } from "./folderRowMenu";
 import ContextMenu from "../overlays/ContextMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
@@ -67,7 +75,7 @@ interface Props {
 export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
   const renameFolder = useApp((s) => s.renameFolder);
-  const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
+  const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
   const moveFolder = useApp((s) => s.moveFolder);
   const activeDrag = useApp((s) => s.activeDrag);
   const setActiveDrag = useApp((s) => s.setActiveDrag);
@@ -82,15 +90,19 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const [dropPointer, setDropPointer] = useState<{ x: number; y: number } | null>(null);
   // Resting "candidate" highlight (sub-item 2b): true for every OTHER legal
   // drop target the instant a drag starts, not only the one under the
-  // pointer. A dataset drag accepts any folder; a folder drag excludes
+  // pointer. A workbook drag accepts any folder; a folder drag excludes
   // itself and its own descendants (moveFolder's own cycle guard, mirrored
   // here so the resting highlight never advertises a drop it would silently
-  // reject). Folders don't change mid-drag, so a one-time getState() read is
-  // enough — only `activeDrag` needs to be reactive.
+  // reject). A dataset drag is NOT a candidate (PR C review fix: worksheet
+  // placement follows its workbook, never a direct folder drop). Folders
+  // don't change mid-drag, so a one-time getState() read is enough — only
+  // `activeDrag` needs to be reactive.
   const isDropCandidate =
     activeDrag != null &&
-    (activeDrag.kind === "dataset" ||
-      (activeDrag.id !== folder.id && !isSelfOrDescendant(useApp.getState().folders, activeDrag.id, folder.id)));
+    (activeDrag.kind === "workbook" ||
+      (activeDrag.kind === "folder" &&
+        activeDrag.id !== folder.id &&
+        !isSelfOrDescendant(useApp.getState().folders, activeDrag.id, folder.id)));
   // Folder Properties (sub-item 4): a fixed paint value for the picked accent
   // name, or undefined for the neutral default look.
   const folderColorCss = ACCENT_SWATCHES.find((a) => a.id === folder.color)?.c;
@@ -143,7 +155,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         setMenu({ x: e.clientX, y: e.clientY });
       }}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes(DATASET_DND)) {
+        if (e.dataTransfer.types.includes(WORKBOOK_DND)) {
           e.preventDefault();
           if (dropZone !== "into") setDropZone("into");
           setDropPointer({ x: e.clientX, y: e.clientY });
@@ -162,12 +174,12 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         const zone = dropZone ?? dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
         setDropZone(null);
         setDropPointer(null);
-        if (e.dataTransfer.types.includes(DATASET_DND)) {
-          const id = e.dataTransfer.getData(DATASET_DND);
+        if (e.dataTransfer.types.includes(WORKBOOK_DND)) {
+          const id = e.dataTransfer.getData(WORKBOOK_DND);
           if (!id) return;
           e.preventDefault();
           e.stopPropagation();
-          moveDatasetToFolder(id, folder.id);
+          moveWorkbookToFolder(id, folder.id);
           expand();
           return;
         }
