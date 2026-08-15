@@ -480,8 +480,14 @@ Library presentation without changing organization or duplicating objects.
   one canonical hierarchy and use the same IDs.
 - [ ] **L1.2 View selector:** provide Tiles / Tree / Details controls and
   remember the user's choice in preferences.
+  - [x] PR D supplies persisted Tree / Details choice and keeps Tiles visible
+    but disabled with an explanatory tooltip; PR E owns enabling Tiles only
+    after its approved wide Library workspace exists.
 - [ ] **L1.3 State continuity:** switching views preserves selection, active
   workbook/child, expansion where applicable, search, and keyboard focus.
+  - [x] PR D proves continuity between Tree and Details, including disclosure
+    of a focused Details child's ancestors when returning to Tree. Tiles
+    continuity remains a PR E acceptance gate.
 - [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
 - [x] **L1.5 Wide tile surface design:** produced thorough mockups and confirmed
@@ -515,8 +521,24 @@ build, and focused interaction coverage where appropriate.
    folder offer, and the full L0.25 select/open contract for every node
    kind. Workbook Delete shipped DISABLED with a stable reason pending
    PR M's dependency-aware Trash (owner-reviewer boundary; see Completed).
-4. [ ] **PR D — view preference and details renderer.** Add persisted view mode
-   and prove state continuity between tree and details.
+4. [x] ~~**PR D — view preference and details renderer.**~~ Implemented on the
+   ChatGPT-Sol review branch 2026-08-15, pending PR review: persisted Tree /
+   Details preference; visible disabled Tiles handoff to PR E; sortable Details
+   projection over the canonical hierarchy; Name, Type, Folder/Workbook,
+   dimensions, data type, source, import/modified time, and tags; compact
+   narrow-panel fallback; and selection/search/focus continuity tests.
+   Temporary sorting never mutates canonical manual order. This does **not**
+   claim global L1.4 interaction parity: Details context menus, rename/move,
+   and drag/drop still need the shared-action follow-through in their owning
+   slices, and Tiles remains PR E.
+4a. [ ] **PR D follow-up — Details roving keyboard traversal.** Replace one
+    Tab stop per row with the standard roving-tabindex pattern; Up/Down moves
+    through the current sorted row order, Home/End reaches the boundaries,
+    Enter retains canonical open, and focus remains stable after re-sort or
+    removal. Reuse `lib/libraryTreeNav.ts` arithmetic where it fits, but do not
+    reintroduce hierarchy-only Left/Right disclosure semantics in a flat sort.
+    This is explicitly booked from Claude's 2026-08-15 PR #140 review rather
+    than being left implicit under L1.4.
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
     confirmed L0.26 behavior over the Details renderer: flat result list with
     full `Folder / Workbook / Child` breadcrumbs, normal open behavior, and
@@ -1353,3 +1375,27 @@ back to the owner. No Library implementation is authorized by this pause.
   Opus-designated contract/review roles execute inline in the owner's Fable
   session. (6) Launched PR A1: Fable-designed contract, Sonnet worktree
   implementation, adversarial review before merge.
+- **2026-08-15 — ChatGPT-Sol:** Implemented PR D's bounded Tree / Details
+  slice for Claude review. Added a persisted cross-project view preference,
+  a sortable metadata table over the same canonical hierarchy used by Tree,
+  compact sidebar behavior, and renderer-switch continuity for selection,
+  search, ancestor disclosure, and real DOM focus. Kept Tiles visible but
+  disabled because its approved wide workspace belongs to PR E. Explicitly
+  left L1.4 open: this slice selects and opens Details rows, but does not
+  pretend native-browser right-click, rename/move, or drag/drop are parity.
+  Verification on the implementation branch: 24 focused tests plus the full
+  frontend suite (6,743 tests / 452 files after review fixes), targeted
+  ESLint, TypeScript typecheck, and production build/bundle guard all pass;
+  Details remains a lazy 5.54 kB chunk and eager output remains 3.4 kB under
+  budget.
+- **2026-08-15 — ChatGPT-Sol, PR #140 review fixes:** Addressed Claude's
+  blocking Details review. Delete/Backspace is now owned by the focused row:
+  worksheets use the shared confirmed-removal path (including enclosing
+  multi-selection), while every non-worksheet consumes the key so the global
+  active-dataset fallback cannot delete unrelated data. Column-sorted Details
+  rows render flat instead of retaining misleading hierarchy indentation, and
+  unresolved Origin figures say **Unresolved** in Source. Added five real
+  global-shortcut regressions plus sort/source coverage. Explicitly booked
+  roving Details arrow navigation as PR D follow-up 4a. Verification: 76
+  targeted tests, full 6,743-test frontend suite, ESLint, typecheck, and build
+  all pass; eager output is 3.4 kB under budget.

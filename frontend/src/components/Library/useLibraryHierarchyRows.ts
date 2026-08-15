@@ -10,11 +10,19 @@ import {
   buildLibraryHierarchy,
   flattenLibraryHierarchy,
   type FlatLibraryNode,
+  type LibraryHierarchy,
   type LibraryNodeKey,
 } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 
-export function useLibraryHierarchyRows(): FlatLibraryNode[] {
+export interface LibraryHierarchyModel {
+  hierarchy: LibraryHierarchy;
+  rows: FlatLibraryNode[];
+}
+
+/** Build the hierarchy once for renderers that need both the complete model
+ * and the disclosure-filtered tree rows (Details and Tree respectively). */
+export function useLibraryHierarchyModel(): LibraryHierarchyModel {
   const folders = useApp((s) => s.folders);
   const workbooks = useApp((s) => s.workbooks);
   const datasets = useApp((s) => s.datasets);
@@ -48,5 +56,13 @@ export function useLibraryHierarchyRows(): FlatLibraryNode[] {
     return keys;
   }, [expandedFolders, expandedWorkbookIds]);
 
-  return useMemo(() => flattenLibraryHierarchy(hierarchy, expandedKeys), [hierarchy, expandedKeys]);
+  const rows = useMemo(() => flattenLibraryHierarchy(hierarchy, expandedKeys), [hierarchy, expandedKeys]);
+  return useMemo(() => ({ hierarchy, rows }), [hierarchy, rows]);
+}
+
+/** Compatibility hook for the tree harness and small consumers that only
+ * need visible rows. Library.tsx uses useLibraryHierarchyModel so it does not
+ * build the canonical hierarchy twice when Details is available. */
+export function useLibraryHierarchyRows(): FlatLibraryNode[] {
+  return useLibraryHierarchyModel().rows;
 }

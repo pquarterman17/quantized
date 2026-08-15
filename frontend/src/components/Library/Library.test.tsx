@@ -4,7 +4,7 @@
 // in tree mode, that the flat Figures section is hidden then (no duplication),
 // and that it reappears in the flat no-folders mode.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
@@ -13,6 +13,7 @@ import type { OriginFigureEntry } from "../../lib/originFigures";
 import { createPageDocument } from "../../lib/pageDocument";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
+import { LIBRARY_VIEW_PREFS_KEY } from "../../lib/libraryViewPrefs";
 import { useApp } from "../../store/useApp";
 
 const dsWith = (id: string, folderId?: string): Dataset => ({
@@ -41,15 +42,19 @@ const figEntry = (id: string, datasetId: string | null, name: string): OriginFig
 });
 
 beforeEach(() => {
+  localStorage.removeItem(LIBRARY_VIEW_PREFS_KEY);
   useApp.setState({
     datasets: [],
     folders: [],
+    workbooks: [],
     expandedFolders: [],
+    expandedWorkbookIds: [],
     originFigures: [],
     originFidelity: [],
     smartFolders: [],
     activeId: null,
     selectedIds: [],
+    librarySelection: null,
   });
 });
 
@@ -296,5 +301,35 @@ describe("Library — smart-folder query grammar in the filter box (item 9)", ()
     render(<Library />);
     expect(screen.getByText("Smart folders")).toBeInTheDocument();
     expect(screen.getByText("☆ Loops")).toBeInTheDocument();
+  });
+});
+
+describe("Library — Tree / Details renderer continuity (PR D)", () => {
+  it("restores the preference and preserves selection, query, and focused item", async () => {
+    const dataset = { ...dsWith("beta.csv"), workbookId: "w1" };
+    localStorage.setItem(LIBRARY_VIEW_PREFS_KEY, JSON.stringify({ mode: "details" }));
+    useApp.setState({
+      datasets: [dataset],
+      workbooks: [{ id: "w1", name: "Run" }],
+    });
+    render(<Library />);
+
+    await screen.findByLabelText("Library details table");
+    expect(screen.getByRole("button", { name: "Details" })).toHaveAttribute("aria-pressed", "true");
+    const row = screen.getByText("beta.csv").closest("tr") as HTMLTableRowElement;
+    fireEvent.click(row);
+    row.focus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    await waitFor(() => expect(document.querySelector('[data-ds-id="beta.csv"]')).not.toBeNull());
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+    await waitFor(() => expect(document.activeElement).toHaveAttribute("data-ds-id", "beta.csv"));
+    expect(JSON.parse(localStorage.getItem(LIBRARY_VIEW_PREFS_KEY) ?? "{}")).toEqual({ mode: "tree" });
+
+    const filter = screen.getByPlaceholderText(/Filter/);
+    fireEvent.change(filter, { target: { value: "beta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(filter).toHaveValue("beta");
+    expect(screen.getByText("beta.csv")).toBeInTheDocument();
   });
 });

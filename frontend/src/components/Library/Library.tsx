@@ -18,7 +18,7 @@
 // the true-empty state; each hides while the tree renders so nothing is
 // ever a Library item twice.
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
@@ -28,7 +28,8 @@ import OriginFidelitySection from "./OriginFidelitySection";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
 import SmartFoldersSection from "./SmartFoldersSection";
-import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
+import LibraryViewSelector from "./LibraryViewSelector";
+import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath, folderPathLabel } from "../../lib/foldertree";
@@ -37,6 +38,12 @@ import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
 import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
+import {
+  loadLibraryViewMode,
+  saveLibraryViewMode,
+  type LibraryViewMode,
+} from "../../lib/libraryViewPrefs";
+import type { LibraryNodeKey } from "../../lib/libraryHierarchy";
 
 const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
 const PagesSection = lazy(() => import("./PagesSection"));
@@ -45,6 +52,7 @@ const PagesSection = lazy(() => import("./PagesSection"));
 // eager-bundle budget; the pure hierarchy build itself stays eager via
 // useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
 const LibraryTree = lazy(() => import("./LibraryTree"));
+const LibraryDetails = lazy(() => import("./LibraryDetails"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -69,9 +77,65 @@ export default function Library() {
   const revealTarget = useApp((s) => s.revealTarget);
   const clearReveal = useApp((s) => s.clearReveal);
   const startResize = useLibraryResize();
-  const rows = useLibraryHierarchyRows();
+  const { hierarchy, rows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [viewMode, setViewMode] = useState<LibraryViewMode>(loadLibraryViewMode);
+  const pendingFocusKey = useRef<string | null>(null);
+  const lastFocusedRowKey = useRef<string | null>(null);
+
+  const changeViewMode = (next: LibraryViewMode) => {
+    if (next === viewMode) return;
+    const focused = document.activeElement?.closest?.("[data-lib-row], [data-ds-id]");
+    const current = useApp.getState();
+    const selectedKey = current.librarySelection
+      ? `${current.librarySelection.kind}:${current.librarySelection.id}`
+      : current.selectedIds[0]
+        ? `worksheet:${current.selectedIds[0]}`
+        : null;
+    pendingFocusKey.current = focused?.getAttribute("data-lib-row")
+      ?? (focused?.getAttribute("data-ds-id") ? `worksheet:${focused.getAttribute("data-ds-id")}` : null)
+      ?? selectedKey
+      ?? lastFocusedRowKey.current;
+
+    // A Details row can select a child whose Tree ancestors are collapsed.
+    // Disclose those ancestors before returning to Tree so the same current
+    // item remains visible and navigable after the renderer swap.
+    if (next === "tree" && pendingFocusKey.current) {
+      let parentKey = hierarchy.byKey.get(pendingFocusKey.current as LibraryNodeKey)?.parentKey ?? null;
+      while (parentKey) {
+        const parent = hierarchy.byKey.get(parentKey);
+        if (!parent) break;
+        if (parent.kind === "folder" && !expandedFolders.includes(parent.entityId)) toggleFolderExpanded(parent.entityId);
+        if (parent.kind === "workbook" && !expandedWorkbookIds.includes(parent.entityId)) toggleWorkbookExpanded(parent.entityId);
+        parentKey = parent.parentKey;
+      }
+    }
+    saveLibraryViewMode(next);
+    setViewMode(next);
+  };
+
+  // Preserve real keyboard focus across the lazy renderer swap. A few short
+  // animation-frame retries cover Suspense without introducing timers or
+  // stealing focus after the user has already moved elsewhere.
+  useEffect(() => {
+    const key = pendingFocusKey.current;
+    if (!key) return;
+    let frame = 0;
+    let attempts = 0;
+    const tryFocus = () => {
+      const selector = key.startsWith("worksheet:")
+        ? `[data-ds-id="${CSS.escape(key.slice("worksheet:".length))}"]`
+        : `[data-lib-row="${CSS.escape(key)}"]`;
+      const target = document.querySelector(selector) as HTMLElement | null;
+      if (target) {
+        target.focus();
+        pendingFocusKey.current = null;
+      } else if (++attempts < 5) frame = requestAnimationFrame(tryFocus);
+    };
+    frame = requestAnimationFrame(tryFocus);
+    return () => cancelAnimationFrame(frame);
+  }, [viewMode, rows]);
 
   // "Show in folder" (plan #13 sub-item 2; PR C adds the workbook step): a
   // dataset id posted to `revealTarget` clears the filter, expands every
@@ -168,11 +232,17 @@ export default function Library() {
 
   // Body: the tree whenever there's anything to show and no active search
   // (PR C); a search query always collapses to a flat filtered list.
-  const inTree = query.trim() === "" && rows.length > 0;
+  const inHierarchy = query.trim() === "" && rows.length > 0;
   let body: React.ReactNode;
   if (query.trim() !== "") {
     body = shown.map((d) => row(d, 0, folders.length > 0));
-  } else if (inTree) {
+  } else if (inHierarchy && viewMode === "details") {
+    body = (
+      <Suspense fallback={null}>
+        <LibraryDetails hierarchy={hierarchy} />
+      </Suspense>
+    );
+  } else if (inHierarchy) {
     body = (
       <Suspense fallback={null}>
         <LibraryTree rows={rows} onFilterTag={setQuery} />
@@ -196,6 +266,12 @@ export default function Library() {
         if (e.currentTarget === e.target) setDragging(false);
       }}
       onDrop={onDrop}
+      onFocusCapture={(event) => {
+        const focused = (event.target as Element).closest("[data-lib-row], [data-ds-id]");
+        if (!focused) return;
+        lastFocusedRowKey.current = focused.getAttribute("data-lib-row")
+          ?? (focused.getAttribute("data-ds-id") ? `worksheet:${focused.getAttribute("data-ds-id")}` : null);
+      }}
     >
       <div className="qzk-lib-head">
         <span className="qzk-lib-title">Library</span>
@@ -215,6 +291,8 @@ export default function Library() {
           </button>
         </div>
       </div>
+
+      <LibraryViewSelector mode={viewMode} onChange={changeViewMode} />
 
       <div style={{ display: "flex", gap: 4 }}>
         <input
@@ -246,12 +324,12 @@ export default function Library() {
       {/* Sections whose items are now tree children (workbook worksheets,
        *  figures, pages, reports) hide while the tree renders — search mode
        *  and the true-empty state are the only remaining flat-list surfaces. */}
-      {!inTree && <FiguresSection />}
+      {!inHierarchy && <FiguresSection />}
       <OriginFidelitySection />
-      {!inTree && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
-      {!inTree && <SavedFiguresSection />}
-      {!inTree && <Suspense fallback={null}><PagesSection /></Suspense>}
-      {!inTree && <ReportsSection />}
+      {!inHierarchy && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
+      {!inHierarchy && <SavedFiguresSection />}
+      {!inHierarchy && <Suspense fallback={null}><PagesSection /></Suspense>}
+      {!inHierarchy && <ReportsSection />}
       <BookFamiliesSection />
       <SmartFoldersSection onFilterTag={setQuery} />
 

@@ -143,10 +143,54 @@ body {
 /* ── library ── */
 /* position:relative anchors the panel-width resizer (below) to this panel's
    own box rather than the nearest positioned ancestor further up the tree. */
-.qzk-library { position: relative; background: var(--surface-1); border-right: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }
+.qzk-library { position: relative; container-type: inline-size; background: var(--surface-1); border-right: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }
 .qzk-library.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
 .qzk-lib-head { display: flex; align-items: center; justify-content: space-between; padding: 2px; }
 .qzk-lib-title { font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
+/* PR D: renderer selector is deliberately textual at this stage — all three
+   choices remain recognizable at the Library's 160 px minimum width. Tiles
+   is visible-but-disabled until PR E supplies its wide workspace. */
+.qzk-lib-view-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }
+.qzk-lib-view-option { min-width: 0; padding: 4px 3px; border: 0; border-right: 1px solid var(--border-soft); background: var(--surface-2); color: var(--text-dim); font-size: var(--type-nano); cursor: default; }
+.qzk-lib-view-option:last-child { border-right: 0; }
+.qzk-lib-view-option:hover:not(:disabled) { color: var(--text); background: var(--surface-3); }
+.qzk-lib-view-option[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); font-weight: var(--weight-semibold); }
+.qzk-lib-view-option:focus-visible { position: relative; outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-lib-view-option:disabled { color: var(--text-faint); opacity: 0.55; }
+
+/* PR D Details renderer. The table retains every requested comparison field
+   in the DOM, while container queries progressively hide lower-priority
+   columns in the narrow sidebar. The compact Name cell repeats location and
+   dimensions, so narrow mode remains useful instead of becoming a clipped
+   desktop table. PR E can expose every column in the wide Library workspace. */
+.qzk-details-wrap { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.qzk-details-tools { min-height: 20px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-details-manual { border: 0; padding: 2px 4px; background: none; color: var(--accent); font-size: inherit; cursor: default; }
+.qzk-details-manual:hover { text-decoration: underline; }
+.qzk-details-scroll { min-width: 0; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
+.qzk-details-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-details-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--type-nano); }
+.qzk-details-table th { position: sticky; top: 0; z-index: 1; padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; }
+.qzk-details-table th button { width: 100%; overflow: hidden; padding: 5px 6px; border: 0; background: none; color: var(--text-faint); font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+.qzk-details-table th button:hover { color: var(--text); background: var(--surface-3); }
+.qzk-details-table td { overflow: hidden; padding: 5px 6px; border-bottom: 1px solid var(--border-soft); color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
+.qzk-details-table tbody tr { cursor: default; }
+.qzk-details-table tbody tr:hover { background: var(--surface-2); }
+.qzk-details-table tbody tr.selected { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.qzk-details-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-details-name { width: 65%; color: var(--text) !important; }
+.qzk-details-name > span { margin-right: 4px; }
+.qzk-details-name small { display: block; overflow: hidden; margin-top: 2px; color: var(--text-faint); font-size: inherit; text-overflow: ellipsis; }
+.qzk-details-medium, .qzk-details-wide { display: none; }
+@container (min-width: 300px) {
+  .qzk-details-name { width: 48%; }
+  .qzk-details-medium { display: table-cell; }
+  .qzk-details-name small { display: none; }
+}
+@container (min-width: 680px) {
+  .qzk-details-name { width: auto; }
+  .qzk-details-wide { display: table-cell; }
+}
 .qzk-ds { border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface-2); padding: 8px 9px; cursor: default; display: flex; flex-direction: column; gap: 5px; }
 .qzk-ds:hover { border-color: var(--border); }
 /* GUI_INTERACTION #8: rows are keyboard-focusable (ContextMenu key/Shift+F10
