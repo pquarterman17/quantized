@@ -62,6 +62,25 @@ describe("ElectrochemistryTab", () => {
     expect(electrochemOhmicDrop).toHaveBeenCalledWith(1e-3, 50);
   });
 
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(electrochemNernst).mockResolvedValue({
+      E: 0.8883,
+      E0: 0.77,
+      n: 1,
+      Q: 0.01,
+      T: 298.15,
+    });
+    render(<ElectrochemistryTab />);
+
+    fireEvent.click(screen.getAllByText("=")[0]);
+    const line = await screen.findByText(/E = .* V/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "E⁰" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getByLabelText("E⁰"), { target: { value: "0.5" } });
+    expect(screen.queryByText(/E = .* V/)).not.toBeInTheDocument();
+  });
+
   it("surfaces API errors", async () => {
     vi.mocked(electrochemNernst).mockRejectedValue(new Error("Q must be positive"));
     render(<ElectrochemistryTab />);

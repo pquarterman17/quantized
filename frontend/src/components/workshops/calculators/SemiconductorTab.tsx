@@ -28,12 +28,10 @@ import {
   Field,
   ROW,
   fmtNum,
-  makeCardRunner,
   resultLine,
-  type CardResult,
+  useCard,
+  withTouch,
 } from "./shared";
-
-const runCard = makeCardRunner("Semiconductor");
 
 // Material presets (300 K) mirrored from calc.semiconductor.materialPresets so
 // the dropdowns auto-fill without a round-trip. Eg [eV], eps_r, me*, mh*.
@@ -224,20 +222,31 @@ const DEFAULTS: Vals = Object.fromEntries(
 
 export default function SemiconductorTab() {
   const [vals, setVals] = useState<Vals>(DEFAULTS);
-  const [results, setResults] = useState<Record<number, CardResult>>({});
+  // One useCard per CARDS entry, called directly (not inside a callback) so
+  // the hook order stays fixed across renders — CARDS is a static,
+  // module-level array whose length never changes.
+  const cards = [
+    useCard("Semiconductor"), // 0 Intrinsic carrier concentration
+    useCard("Semiconductor"), // 1 Carrier concentrations
+    useCard("Semiconductor"), // 2 Depletion width (p-n junction)
+    useCard("Semiconductor"), // 3 Transport (diffusion coefficient & length)
+    useCard("Semiconductor"), // 4 Fermi level (relative to Eᵢ)
+    useCard("Semiconductor"), // 5 Debye screening length
+    useCard("Semiconductor"), // 6 Built-in potential (p-n junction)
+    useCard("Semiconductor"), // 7 Sheet carrier density
+    useCard("Semiconductor"), // 8 Thermal velocity
+    useCard("Semiconductor"), // 9 Hall coefficient (mixed conduction)
+    useCard("Semiconductor"), // 10 Mobility (Caughey-Thomas, Si)
+  ];
 
   const set = (id: string) => (v: string) => setVals((s) => ({ ...s, [id]: v }));
   const num = (id: string) => Number(vals[id]);
 
   function run(idx: number, card: CardSpec): Promise<void> {
-    return runCard(
-      (r) => setResults((s) => ({ ...s, [idx]: r })),
-      card.title,
-      () => card.compute(num),
-    );
+    return cards[idx].run(card.title, () => card.compute(num));
   }
 
-  function pickMaterial(card: CardSpec, name: string): void {
+  function pickMaterial(idx: number, card: CardSpec, name: string): void {
     const m = MATERIALS[name];
     if (!m || !card.material) return;
     setVals((s) => {
@@ -245,6 +254,7 @@ export default function SemiconductorTab() {
       for (const f of card.material ?? []) next[f.to] = String(m[f.from]);
       return next;
     });
+    cards[idx].touch();
   }
 
   return (
@@ -257,7 +267,7 @@ export default function SemiconductorTab() {
                 className="qz-select"
                 defaultValue=""
                 aria-label={`${card.title} material preset`}
-                onChange={(e) => e.target.value && pickMaterial(card, e.target.value)}
+                onChange={(e) => e.target.value && pickMaterial(idx, card, e.target.value)}
               >
                 <option value="">(manual)</option>
                 {MAT_NAMES.map((n) => (
@@ -272,7 +282,7 @@ export default function SemiconductorTab() {
                 key={f.id}
                 label={f.label}
                 value={vals[f.id]}
-                onChange={set(f.id)}
+                onChange={withTouch(cards[idx].touch, set(f.id))}
                 width={f.width}
                 unit={f.unit}
               />
@@ -281,7 +291,7 @@ export default function SemiconductorTab() {
               =
             </Button>
           </div>
-          {resultLine(results[idx] ?? null)}
+          {resultLine(cards[idx].result)}
         </Card>
       ))}
     </div>

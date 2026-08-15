@@ -128,6 +128,24 @@ describe("CrystalTab — interplanar angle", () => {
     );
   });
 
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(crystalInterplanarAngle).mockResolvedValue({
+      angle_deg: 45.0,
+      d1: 3.8387,
+      d2: 2.7154,
+      system: "cubic",
+    });
+    openCrystalTab();
+    // The angle card's "=" is the 3rd on the page (d-spacing, cell volume, angle).
+    fireEvent.click(screen.getAllByText("=")[2]);
+    const line = await screen.findByText(/φ = 45.*°/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "h1" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getByLabelText("h1"), { target: { value: "2" } });
+    expect(screen.queryByText(/φ = 45.*°/)).not.toBeInTheDocument();
+  });
+
   it("surfaces an error for zero Miller indices", async () => {
     vi.mocked(crystalInterplanarAngle).mockRejectedValue(
       new Error("Miller indices (h, k, l) must not all be zero"),

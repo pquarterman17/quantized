@@ -109,6 +109,36 @@ describe("ThinFilmTab", () => {
     expect(await screen.findByText("thickness and time must be positive")).toBeInTheDocument();
   });
 
+  it("editing an input invalidates the displayed deposition-rate result (provenance contract, GrowthCards)", async () => {
+    vi.mocked(thinFilmDepositionRate).mockResolvedValue({ rate: 16.6667, rate_nm_per_min: 100 });
+    render(<ThinFilmTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+    const line = await screen.findByText(/rate = .* Å\/s · .* nm\/min/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "t" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("t")[0], { target: { value: "2000" } });
+    expect(screen.queryByText(/rate = .* Å\/s · .* nm\/min/)).not.toBeInTheDocument();
+  });
+
+  it("editing an input invalidates the displayed Stoney-stress result (provenance contract, FilmCards)", async () => {
+    vi.mocked(thinFilmStoneyStress).mockResolvedValue({
+      stress: 7.5231e9,
+      stress_MPa: 7523.15,
+      stress_GPa: 7.5231,
+    });
+    render(<ThinFilmTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[8]);
+    const line = await screen.findByText(/σ = .* MPa · .* GPa/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "R" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("R")[0], { target: { value: "20" } });
+    expect(screen.queryByText(/σ = .* MPa · .* GPa/)).not.toBeInTheDocument();
+  });
+
   it("computes the Sauerbrey areal mass and sensitivity factor", async () => {
     vi.mocked(thinFilmSauerbrey).mockResolvedValue({
       areal_mass: 1.7668e-7,

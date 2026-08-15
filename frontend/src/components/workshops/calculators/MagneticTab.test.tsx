@@ -126,4 +126,24 @@ describe("MagneticTab", () => {
     expect(await screen.findByText(/at least 3/)).toBeInTheDocument();
     expect(magneticCurieWeissFit).not.toHaveBeenCalled();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(magneticMomentConvert).mockResolvedValue({
+      emu: 1e-3,
+      am2: 1e-6,
+      mu_b: 1.078e17,
+      m_cgs: null,
+      m_si: null,
+      mu_b_per_atom: null,
+    });
+    render(<MagneticTab />);
+
+    fireEvent.click(screen.getByText("Convert"));
+    const line = await screen.findByText(/emu = .* A·m² = .* µ_B/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "m" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("m")[0], { target: { value: "5e-3" } });
+    expect(screen.queryByText(/emu = .* A·m² = .* µ_B/)).not.toBeInTheDocument();
+  });
 });

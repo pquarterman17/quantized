@@ -20,12 +20,10 @@ import {
   Field,
   ROW,
   fmtNum,
-  makeCardRunner,
   resultLine,
-  type CardResult,
+  useCard,
+  withTouch,
 } from "./shared";
-
-const run = makeCardRunner("Vacuum");
 
 // Molecular diameter (m) per gas species — sets d in λ = kT/(√2 π d² P).
 const GAS_OPTIONS = [
@@ -43,43 +41,43 @@ export default function VacuumTab() {
   const [mfpP, setMfpP] = useState("1e-4");
   const [mfpT, setMfpT] = useState("300");
   const [mfpGas, setMfpGas] = useState("3.64e-10");
-  const [c1, setC1] = useState<CardResult>(null);
+  const c1 = useCard("Vacuum");
 
   // Card 2 — monolayer formation time.
   const [monoP, setMonoP] = useState("1.33e-4");
-  const [c2, setC2] = useState<CardResult>(null);
+  const c2 = useCard("Vacuum");
 
   // Card 3 — sputter yield (lookup).
   const [syMat, setSyMat] = useState("Si");
   const [syIon, setSyIon] = useState("Ar");
   const [syE, setSyE] = useState("500");
-  const [c3, setC3] = useState<CardResult>(null);
+  const c3 = useCard("Vacuum");
 
   // Card 4 — pump-down estimate.
   const [pV, setPV] = useState("50");
   const [pS, setPS] = useState("100");
   const [pP0, setPP0] = useState("1e5");
   const [pPf, setPPf] = useState("1e-4");
-  const [c4, setC4] = useState<CardResult>(null);
+  const c4 = useCard("Vacuum");
 
   // Card 5 — Knudsen number.
   const [knMfp, setKnMfp] = useState("1e-4");
   const [knL, setKnL] = useState("0.025");
-  const [c5, setC5] = useState<CardResult>(null);
+  const c5 = useCard("Vacuum");
 
   // Card 6 — gas-flow conductance (tube).
   const [gfP1, setGfP1] = useState("1e-3");
   const [gfP2, setGfP2] = useState("1e-5");
   const [gfD, setGfD] = useState("0.025");
   const [gfL, setGfL] = useState("0.5");
-  const [c6, setC6] = useState<CardResult>(null);
+  const c6 = useCard("Vacuum");
 
   return (
     <div style={{ marginTop: 12 }}>
       <Card title="Mean free path">
         <div style={ROW}>
-          <Field label="P" value={mfpP} onChange={setMfpP} unit="Pa" width={72} />
-          <Field label="T" value={mfpT} onChange={setMfpT} unit="K" width={64} />
+          <Field label="P" value={mfpP} onChange={withTouch(c1.touch, setMfpP)} unit="Pa" width={72} />
+          <Field label="T" value={mfpT} onChange={withTouch(c1.touch, setMfpT)} unit="K" width={64} />
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span className="qzk-field-lbl" style={{ margin: 0 }}>
               Gas
@@ -87,14 +85,17 @@ export default function VacuumTab() {
             <Select
               options={GAS_OPTIONS}
               value={mfpGas}
-              onChange={(e) => setMfpGas(e.target.value)}
+              onChange={(e) => {
+                setMfpGas(e.target.value);
+                c1.touch();
+              }}
             />
           </span>
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, "Mean free path", async () => {
+              void c1.run("Mean free path", async () => {
                 const r = await vacuumMeanFreePath(Number(mfpP), Number(mfpT), Number(mfpGas));
                 return `λ = ${fmtNum(r.mfp)} m (${fmtNum(r.mfpMm)} mm)`;
               })
@@ -103,17 +104,17 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c1)}
+        {resultLine(c1.result)}
       </Card>
 
       <Card title="Monolayer formation time">
         <div style={ROW}>
-          <Field label="P" value={monoP} onChange={setMonoP} unit="Pa" />
+          <Field label="P" value={monoP} onChange={withTouch(c2.touch, setMonoP)} unit="Pa" />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, "Monolayer formation time", async () => {
+              void c2.run("Monolayer formation time", async () => {
                 const r = await vacuumMonolayerTime(Number(monoP));
                 return `t_mono = ${fmtNum(r.tMono)} s`;
               })
@@ -122,19 +123,19 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c2)}
+        {resultLine(c2.result)}
       </Card>
 
       <Card title="Sputter yield (lookup)">
         <div style={ROW}>
-          <Field label="Target" value={syMat} onChange={setSyMat} numeric={false} width={72} />
-          <Field label="Ion" value={syIon} onChange={setSyIon} numeric={false} width={56} />
-          <Field label="E" value={syE} onChange={setSyE} unit="eV" width={72} />
+          <Field label="Target" value={syMat} onChange={withTouch(c3.touch, setSyMat)} numeric={false} width={72} />
+          <Field label="Ion" value={syIon} onChange={withTouch(c3.touch, setSyIon)} numeric={false} width={56} />
+          <Field label="E" value={syE} onChange={withTouch(c3.touch, setSyE)} unit="eV" width={72} />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, "Sputter yield", async () => {
+              void c3.run("Sputter yield", async () => {
                 const r = await vacuumSputterYield(syMat, Number(syE), syIon);
                 return Number.isNaN(r.Y)
                   ? `Y(${syMat}/${syIon}) = N/A (out of table)`
@@ -145,22 +146,22 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c3)}
+        {resultLine(c3.result)}
       </Card>
 
       <Card title="Pump-down estimate">
         <div style={ROW}>
-          <Field label="V" value={pV} onChange={setPV} unit="L" width={64} />
-          <Field label="S" value={pS} onChange={setPS} unit="L/s" width={64} />
+          <Field label="V" value={pV} onChange={withTouch(c4.touch, setPV)} unit="L" width={64} />
+          <Field label="S" value={pS} onChange={withTouch(c4.touch, setPS)} unit="L/s" width={64} />
         </div>
         <div style={{ ...ROW, marginTop: 8 }}>
-          <Field label="P0" value={pP0} onChange={setPP0} unit="Pa" width={72} />
-          <Field label="Pf" value={pPf} onChange={setPPf} unit="Pa" width={72} />
+          <Field label="P0" value={pP0} onChange={withTouch(c4.touch, setPP0)} unit="Pa" width={72} />
+          <Field label="Pf" value={pPf} onChange={withTouch(c4.touch, setPPf)} unit="Pa" width={72} />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, "Pump-down estimate", async () => {
+              void c4.run("Pump-down estimate", async () => {
                 const r = await vacuumPumpDownTime(
                   Number(pV),
                   Number(pS),
@@ -174,18 +175,18 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c4)}
+        {resultLine(c4.result)}
       </Card>
 
       <Card title="Knudsen number">
         <div style={ROW}>
-          <Field label="MFP" value={knMfp} onChange={setKnMfp} unit="m" width={72} />
-          <Field label="L" value={knL} onChange={setKnL} unit="m" width={72} />
+          <Field label="MFP" value={knMfp} onChange={withTouch(c5.touch, setKnMfp)} unit="m" width={72} />
+          <Field label="L" value={knL} onChange={withTouch(c5.touch, setKnL)} unit="m" width={72} />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, "Knudsen number", async () => {
+              void c5.run("Knudsen number", async () => {
                 const r = await vacuumKnudsen(Number(knMfp), Number(knL));
                 return `Kn = ${fmtNum(r.Kn)} [${r.regime} flow]`;
               })
@@ -194,22 +195,22 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c5)}
+        {resultLine(c5.result)}
       </Card>
 
       <Card title="Gas-flow conductance (tube)">
         <div style={ROW}>
-          <Field label="P1" value={gfP1} onChange={setGfP1} unit="Pa" width={72} />
-          <Field label="P2" value={gfP2} onChange={setGfP2} unit="Pa" width={72} />
+          <Field label="P1" value={gfP1} onChange={withTouch(c6.touch, setGfP1)} unit="Pa" width={72} />
+          <Field label="P2" value={gfP2} onChange={withTouch(c6.touch, setGfP2)} unit="Pa" width={72} />
         </div>
         <div style={{ ...ROW, marginTop: 8 }}>
-          <Field label="d" value={gfD} onChange={setGfD} unit="m" width={72} />
-          <Field label="L" value={gfL} onChange={setGfL} unit="m" width={72} />
+          <Field label="d" value={gfD} onChange={withTouch(c6.touch, setGfD)} unit="m" width={72} />
+          <Field label="L" value={gfL} onChange={withTouch(c6.touch, setGfL)} unit="m" width={72} />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC6, "Gas-flow conductance", async () => {
+              void c6.run("Gas-flow conductance", async () => {
                 const r = await vacuumGasFlow(
                   Number(gfP1),
                   Number(gfP2),
@@ -225,7 +226,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c6)}
+        {resultLine(c6.result)}
       </Card>
     </div>
   );

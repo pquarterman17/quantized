@@ -5,6 +5,8 @@
 // tab owns its own local state (exactly as the per-tab copies did) and
 // composes these. The rendered DOM is identical to the former private copies.
 
+import { useCallback, useRef, useState } from "react";
+
 import { copyText } from "../../../lib/clipboard";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
@@ -123,24 +125,63 @@ export function parseXYPairs(text: string): { x: number[]; y: number[] } {
   return { x, y };
 }
 
-/** Build one tab's card-calculation runner, bound to its history domain:
- *  success records to the calc history; failure surfaces the API error
- *  inline (never a toast — matches the MATLAB cards). */
-export function makeCardRunner(domain: string) {
-  return async function runCalc(
-    setter: (r: CardResult) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  };
+/** One card's result state under the DIRACULATOR_AUDIT provenance contract:
+ *  a displayed result is either CURRENT for the visible inputs or gone.
+ *
+ *  - `run(label, fn)` executes a calculation under a monotonically
+ *    increasing per-card request id: a completion (success OR error) whose
+ *    id is no longer the latest is dropped outright — an older in-flight
+ *    request can never overwrite a newer result, and never records a
+ *    misleading history entry (history is written only by the completion
+ *    that also owns the display).
+ *  - `touch()` is wired into every input change on the card: it clears the
+ *    displayed result/error AND bumps the request id, so a pending request
+ *    that was issued for the OLD inputs is disowned before it completes.
+ *    Inputs deliberately stay editable while a request is pending (the
+ *    audit's decision point): editing invalidates rather than blocks.
+ *
+ *  Success records to the calc history; failure surfaces the API error
+ *  inline (never a toast — matches the MATLAB cards). The retired
+ *  `makeCardRunner` had neither ordering nor invalidation: two overlapping
+ *  runs completed in network order, and results survived input edits. */
+export function useCard(domain: string) {
+  const [result, setResult] = useState<CardResult>(null);
+  const seq = useRef(0);
+  const run = useCallback(
+    async (label: string, fn: (isCurrent: () => boolean) => Promise<string>): Promise<void> => {
+      const id = ++seq.current;
+      // For fns with side-effects beyond the returned text (e.g. chaining a
+      // value into another card's input): gate them on isCurrent() so a
+      // disowned completion can't overwrite state the user has since edited.
+      const isCurrent = (): boolean => seq.current === id;
+      try {
+        const text = await fn(isCurrent);
+        if (seq.current !== id) return; // superseded — a newer run/touch owns this card
+        setResult({ text });
+        useCalcHistory.getState().record({ domain, label, summary: text });
+      } catch (e) {
+        if (seq.current !== id) return;
+        setResult({ text: e instanceof Error ? e.message : "calculation failed", err: true });
+      }
+    },
+    [domain],
+  );
+  const touch = useCallback((): void => {
+    seq.current++;
+    setResult((r) => (r == null ? r : null));
+  }, []);
+  return { result, setResult, run, touch } as const;
 }
+
+/** Wrap a Field's setState so the owning card's result invalidates on every
+ *  edit — the standard way to wire `useCard.touch` into inputs:
+ *  `onChange={withTouch(c1.touch, setD0)}`. */
+export const withTouch =
+  (touch: () => void, set: (v: string) => void) =>
+  (v: string): void => {
+    set(v);
+    touch();
+  };
 
 /** Copy-to-clipboard button for a calculator result (⧉ glyph — the same
  *  convention as Inspector/MetadataCard's "⧉ Copy metadata"). One mechanism,

@@ -77,9 +77,10 @@ describe("XrayTab", () => {
 
     fireEvent.click(screen.getByText("="));
     await screen.findByText("1.5406");
-    // wavelength_from_energy ignores the wavelength arg server-side, but the
-    // client still sends whatever λ is currently in shared state (unchanged).
-    expect(xrayCalc).toHaveBeenCalledWith("wavelength_from_energy", 1.5406, 3.1356, 1);
+    // DIRACULATOR_AUDIT P2 (useCalculators.xrayCompute): hidden fields are
+    // never validated or forwarded — a mode that doesn't need wavelength
+    // sends the documented neutral values (w=0, n=1), not stale shared state.
+    expect(xrayCalc).toHaveBeenCalledWith("wavelength_from_energy", 0, 3.1356, 1);
   });
 
   it("surfaces a Bragg conversion error inline", async () => {
@@ -123,5 +124,26 @@ describe("XrayTab", () => {
     await vi.waitFor(() => {
       expect(xrayCalc).toHaveBeenCalledWith("wavelength_from_energy", 0, 8.0478);
     });
+  });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(neutronCalc).mockResolvedValue({
+      wavelength_a: 1.8,
+      energy_mev: 25.25,
+      velocity_m_s: 2197.8,
+      temperature_k: 293.0,
+    });
+    openXrayTab();
+
+    fireEvent.click(screen.getByText("Convert"));
+    const line = await screen.findByText(/λ = .* Å · E = .* meV · v = .* m\/s · T = .* K/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the neutron card's own value field (default "1.8") — the result
+    // no longer matches the inputs.
+    fireEvent.change(screen.getByDisplayValue("1.8"), { target: { value: "2.5" } });
+    expect(
+      screen.queryByText(/λ = .* Å · E = .* meV · v = .* m\/s · T = .* K/),
+    ).not.toBeInTheDocument();
   });
 });

@@ -20,30 +20,28 @@ import {
   Field,
   ROW,
   fmtNum,
-  makeCardRunner,
   parseList,
   resultLine,
-  type CardResult,
+  useCard,
+  withTouch,
 } from "../shared";
-
-const runCalc = makeCardRunner("Thin Film");
 
 /** Card 6 — Kiessig thickness. */
 export function KiessigCard() {
   const [kDq, setKDq] = useState("0.0628");
   const [kSld, setKSld] = useState("");
-  const [c6, setC6] = useState<CardResult>(null);
+  const c6 = useCard("Thin Film");
 
   return (
     <Card title="Kiessig thickness">
       <div style={ROW}>
-        <Field label="ΔQ" value={kDq} onChange={setKDq} unit="Å⁻¹" width={72} />
-        <Field label="SLD" value={kSld} onChange={setKSld} unit="Å⁻² (opt)" width={72} />
+        <Field label="ΔQ" value={kDq} onChange={withTouch(c6.touch, setKDq)} unit="Å⁻¹" width={72} />
+        <Field label="SLD" value={kSld} onChange={withTouch(c6.touch, setKSld)} unit="Å⁻² (opt)" width={72} />
         <Button
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC6, "Kiessig thickness", async () => {
+            void c6.run("Kiessig thickness", async () => {
               const sld = kSld.trim() === "" ? undefined : Number(kSld);
               const r = await thinFilmKiessig(Number(kDq), sld);
               const corr = Number.isNaN(r.Qc) ? "" : ` (Qc = ${fmtNum(r.Qc)} Å⁻¹)`;
@@ -54,7 +52,7 @@ export function KiessigCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c6)}
+      {resultLine(c6.result)}
     </Card>
   );
 }
@@ -63,7 +61,7 @@ export function KiessigCard() {
 export function MultilayerThermalCard() {
   const [mlD, setMlD] = useState("100, 50");
   const [mlK, setMlK] = useState("1.4, 148");
-  const [c7, setC7] = useState<CardResult>(null);
+  const c7 = useCard("Thin Film");
 
   return (
     <Card title="Multilayer thermal conductivity">
@@ -71,14 +69,14 @@ export function MultilayerThermalCard() {
         <Field
           label="d (nm)"
           value={mlD}
-          onChange={setMlD}
+          onChange={withTouch(c7.touch, setMlD)}
           width={120}
           numeric={false}
         />
         <Field
           label="k (W/m/K)"
           value={mlK}
-          onChange={setMlK}
+          onChange={withTouch(c7.touch, setMlK)}
           width={120}
           numeric={false}
         />
@@ -86,7 +84,7 @@ export function MultilayerThermalCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC7, "Multilayer thermal conductivity", async () => {
+            void c7.run("Multilayer thermal conductivity", async () => {
               const r = await thinFilmMultilayerThermal(parseList(mlD), parseList(mlK));
               return `k⊥ = ${fmtNum(r.k_series)} · k∥ = ${fmtNum(r.k_parallel)} W/m/K`;
             })
@@ -95,7 +93,7 @@ export function MultilayerThermalCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c7)}
+      {resultLine(c7.result)}
     </Card>
   );
 }
@@ -105,25 +103,25 @@ export function ProjectedRangeCard() {
   const [prIon, setPrIon] = useState("Ar");
   const [prTarget, setPrTarget] = useState("Si");
   const [prE, setPrE] = useState("100");
-  const [c8, setC8] = useState<CardResult>(null);
+  const c8 = useCard("Thin Film");
 
   return (
     <Card title="Projected range (LSS)">
       <div style={ROW}>
-        <Field label="ion" value={prIon} onChange={setPrIon} width={56} numeric={false} />
+        <Field label="ion" value={prIon} onChange={withTouch(c8.touch, setPrIon)} width={56} numeric={false} />
         <Field
           label="target"
           value={prTarget}
-          onChange={setPrTarget}
+          onChange={withTouch(c8.touch, setPrTarget)}
           width={56}
           numeric={false}
         />
-        <Field label="E" value={prE} onChange={setPrE} unit="keV" width={64} />
+        <Field label="E" value={prE} onChange={withTouch(c8.touch, setPrE)} unit="keV" width={64} />
         <Button
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC8, "Projected range (LSS)", async () => {
+            void c8.run("Projected range (LSS)", async () => {
               const r = await thinFilmProjectedRange(prIon, prTarget, Number(prE));
               return `Rp = ${fmtNum(r.Rp)} nm · ΔRp = ${fmtNum(r.deltaRp)} nm`;
             })
@@ -132,7 +130,7 @@ export function ProjectedRangeCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c8)}
+      {resultLine(c8.result)}
     </Card>
   );
 }
@@ -144,21 +142,21 @@ export function StoneyStressCard() {
   const [stTs, setStTs] = useState("500e-6");
   const [stTf, setStTf] = useState("100e-9");
   const [stR, setStR] = useState("10");
-  const [c9, setC9] = useState<CardResult>(null);
+  const c9 = useCard("Thin Film");
 
   return (
     <Card title="Stoney stress">
       <div style={ROW}>
-        <Field label="Es" value={stEs} onChange={setStEs} unit="Pa" width={64} />
-        <Field label="νs" value={stNu} onChange={setStNu} width={48} />
-        <Field label="ts" value={stTs} onChange={setStTs} unit="m" width={64} />
-        <Field label="tf" value={stTf} onChange={setStTf} unit="m" width={64} />
-        <Field label="R" value={stR} onChange={setStR} unit="m" width={56} />
+        <Field label="Es" value={stEs} onChange={withTouch(c9.touch, setStEs)} unit="Pa" width={64} />
+        <Field label="νs" value={stNu} onChange={withTouch(c9.touch, setStNu)} width={48} />
+        <Field label="ts" value={stTs} onChange={withTouch(c9.touch, setStTs)} unit="m" width={64} />
+        <Field label="tf" value={stTf} onChange={withTouch(c9.touch, setStTf)} unit="m" width={64} />
+        <Field label="R" value={stR} onChange={withTouch(c9.touch, setStR)} unit="m" width={56} />
         <Button
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC9, "Stoney stress", async () => {
+            void c9.run("Stoney stress", async () => {
               const r = await thinFilmStoneyStress(
                 Number(stEs),
                 Number(stNu),
@@ -173,7 +171,7 @@ export function StoneyStressCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c9)}
+      {resultLine(c9.result)}
     </Card>
   );
 }
@@ -185,21 +183,21 @@ export function ThermalMismatchCard() {
   const [tmDT, setTmDT] = useState("-500");
   const [tmE, setTmE] = useState("");
   const [tmNu, setTmNu] = useState("0.3");
-  const [c10, setC10] = useState<CardResult>(null);
+  const c10 = useCard("Thin Film");
 
   return (
     <Card title="Thermal-mismatch strain">
       <div style={ROW}>
-        <Field label="αf" value={tmAf} onChange={setTmAf} unit="1/K" width={64} />
-        <Field label="αs" value={tmAs} onChange={setTmAs} unit="1/K" width={64} />
-        <Field label="ΔT" value={tmDT} onChange={setTmDT} unit="K" width={56} />
-        <Field label="E" value={tmE} onChange={setTmE} unit="Pa (opt)" width={64} />
-        <Field label="ν" value={tmNu} onChange={setTmNu} width={48} />
+        <Field label="αf" value={tmAf} onChange={withTouch(c10.touch, setTmAf)} unit="1/K" width={64} />
+        <Field label="αs" value={tmAs} onChange={withTouch(c10.touch, setTmAs)} unit="1/K" width={64} />
+        <Field label="ΔT" value={tmDT} onChange={withTouch(c10.touch, setTmDT)} unit="K" width={56} />
+        <Field label="E" value={tmE} onChange={withTouch(c10.touch, setTmE)} unit="Pa (opt)" width={64} />
+        <Field label="ν" value={tmNu} onChange={withTouch(c10.touch, setTmNu)} width={48} />
         <Button
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC10, "Thermal-mismatch strain", async () => {
+            void c10.run("Thermal-mismatch strain", async () => {
               const e = tmE.trim() === "" ? undefined : Number(tmE);
               const r = await thinFilmThermalMismatch(
                 Number(tmAf),
@@ -218,7 +216,7 @@ export function ThermalMismatchCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c10)}
+      {resultLine(c10.result)}
     </Card>
   );
 }
@@ -229,20 +227,20 @@ export function SauerbreyCard() {
   const [sfF0, setSfF0] = useState("5e6");
   const [sfArea, setSfArea] = useState("");
   const [sfRho, setSfRho] = useState("");
-  const [c11, setC11] = useState<CardResult>(null);
+  const c11 = useCard("Thin Film");
 
   return (
     <Card title="Sauerbrey (QCM)">
       <div style={ROW}>
-        <Field label="Δf" value={sfDf} onChange={setSfDf} unit="Hz" width={64} />
-        <Field label="f₀" value={sfF0} onChange={setSfF0} unit="Hz" width={72} />
-        <Field label="A" value={sfArea} onChange={setSfArea} unit="cm² (opt)" width={72} />
-        <Field label="ρ" value={sfRho} onChange={setSfRho} unit="g/cm³ (opt)" width={80} />
+        <Field label="Δf" value={sfDf} onChange={withTouch(c11.touch, setSfDf)} unit="Hz" width={64} />
+        <Field label="f₀" value={sfF0} onChange={withTouch(c11.touch, setSfF0)} unit="Hz" width={72} />
+        <Field label="A" value={sfArea} onChange={withTouch(c11.touch, setSfArea)} unit="cm² (opt)" width={72} />
+        <Field label="ρ" value={sfRho} onChange={withTouch(c11.touch, setSfRho)} unit="g/cm³ (opt)" width={80} />
         <Button
           variant="primary"
           size="sm"
           onClick={() =>
-            void runCalc(setC11, "Sauerbrey (QCM)", async () => {
+            void c11.run("Sauerbrey (QCM)", async () => {
               const area = sfArea.trim() === "" ? undefined : Number(sfArea);
               const density = sfRho.trim() === "" ? undefined : Number(sfRho);
               const r = await thinFilmSauerbrey(Number(sfDf), Number(sfF0), area, density);
@@ -257,7 +255,7 @@ export function SauerbreyCard() {
           Calculate
         </Button>
       </div>
-      {resultLine(c11)}
+      {resultLine(c11.result)}
     </Card>
   );
 }

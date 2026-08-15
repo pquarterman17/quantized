@@ -1,16 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getSubstrates, substrateMismatch } from "../../../lib/api";
-import { substratesCriticalThickness } from "../../../lib/api/substrates";
-import SubstratesTab, { type SubstrateInfo } from "./SubstratesTab";
-
-vi.mock("../../../lib/api", () => ({
-  getSubstrates: vi.fn(),
-  substrateMismatch: vi.fn(),
-}));
+import {
+  getSubstrates,
+  substrateMismatch,
+  substratesCriticalThickness,
+  type SubstrateInfo,
+} from "../../../lib/api/substrates";
+import SubstratesTab from "./SubstratesTab";
 
 vi.mock("../../../lib/api/substrates", () => ({
+  getSubstrates: vi.fn(),
+  substrateMismatch: vi.fn(),
   substratesCriticalThickness: vi.fn(),
 }));
 
@@ -155,5 +156,41 @@ describe("SubstratesTab", () => {
     await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
 
     expect(screen.getByLabelText("mismatch percent")).toHaveValue("-0.74264");
+  });
+
+  it("editing a_film invalidates the displayed mismatch (provenance contract)", async () => {
+    render(<SubstratesTab />);
+    await screen.findByText("SrTiO3(100)");
+    fireEvent.click(screen.getByText("SrTiO3(100)"));
+
+    fireEvent.click(screen.getByText("Mismatch"));
+    await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "3.9" } });
+    expect(screen.queryByText(/compressive/)).not.toBeInTheDocument();
+  });
+
+  it("editing an MB input invalidates the critical-thickness result; re-selecting a substrate invalidates the mismatch", async () => {
+    vi.mocked(substratesCriticalThickness).mockResolvedValue({
+      h_c: 26.6115,
+      h_c_nm: 2.66115,
+      mismatch: 0.01,
+      b: 4.0,
+      nu: 0.3,
+    });
+    render(<SubstratesTab />);
+    await screen.findByText("SrTiO3(100)");
+    fireEvent.click(screen.getByText("SrTiO3(100)"));
+
+    fireEvent.click(screen.getByText("Calculate"));
+    await screen.findByText(/h_c = .* Å = .* nm/);
+    fireEvent.change(screen.getByLabelText("Poisson ratio"), { target: { value: "0.25" } });
+    expect(screen.queryByText(/h_c = /)).not.toBeInTheDocument();
+
+    // Selection change invalidates the mismatch card (a_sub changed).
+    fireEvent.click(screen.getByText("Mismatch"));
+    await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Si(100)"));
+    expect(screen.queryByText(/compressive/)).not.toBeInTheDocument();
   });
 });

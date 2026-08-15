@@ -76,6 +76,39 @@ describe("DiffusionTab", () => {
     expect(await screen.findByText("T must be positive")).toBeInTheDocument();
   });
 
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(diffusionLength).mockResolvedValue({
+      L: 6e-5,
+      L_um: 0.6,
+      L_nm: 600,
+      D: 1e-12,
+      t: 3600,
+    });
+    render(<DiffusionTab />);
+
+    fireEvent.click(screen.getAllByText("=")[1]);
+    const line = await screen.findByText(/L = .* µm/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "t" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("t")[0], { target: { value: "7200" } });
+    expect(screen.queryByText(/L = .* µm/)).not.toBeInTheDocument();
+  });
+
+  it("a stale in-flight completion cannot resurrect after an input edit", async () => {
+    let resolveCalc!: (v: Awaited<ReturnType<typeof diffusionLength>>) => void;
+    vi.mocked(diffusionLength).mockImplementation(
+      () => new Promise((res) => (resolveCalc = res)),
+    );
+    render(<DiffusionTab />);
+
+    fireEvent.click(screen.getAllByText("=")[1]); // pending...
+    fireEvent.change(screen.getAllByLabelText("t")[0], { target: { value: "7200" } }); // ...edited
+    resolveCalc({ L: 6e-5, L_um: 0.6, L_nm: 600, D: 1e-12, t: 3600 });
+    await Promise.resolve(); // let the disowned completion settle
+    expect(screen.queryByText(/L = .* µm/)).not.toBeInTheDocument();
+  });
+
   it("computes the constant-source (erfc) diffusion profile", async () => {
     vi.mocked(diffusionCProfile).mockResolvedValue({
       c: 4.795e17,
