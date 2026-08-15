@@ -223,6 +223,25 @@ describe("buildLibraryHierarchy", () => {
     ]));
   });
 
+  it("orders unkeyed Origin sheets by sheet number, not insertion order (L0.16 source order)", () => {
+    // The backend's book fan-out order is NOT guaranteed sheet-ordered — that
+    // is exactly why lib/grouping.ts's originSheetGroups sorts by sheet
+    // number ("even if the list order doesn't"). Fresh Origin sheets carry no
+    // Dataset.order, so without an explicit tiebreak the tree would render
+    // whatever order the array happened to arrive in. A user-keyed `order`
+    // still outranks the sheet number (byOrder first), preserving manual
+    // reordering.
+    const datasets = [
+      dataset("s3", "wb", undefined, "Book4@3"),
+      dataset("s1", "wb", undefined, "Book4"),
+      dataset("s2", "wb", undefined, "Book4@2"),
+    ];
+    const result = buildLibraryHierarchy({ folders: [], workbooks: [workbook("wb")], datasets });
+    expect(result.byKey.get("workbook:wb")?.children.map((node) => node.key)).toEqual([
+      "worksheet:s1", "worksheet:s2", "worksheet:s3",
+    ]);
+  });
+
   it("keeps identical ids in different entity kinds distinct", () => {
     const editable = createFigureDocument({
       id: "same", name: "same", datasetId: "same", view: defaultPlotView(),

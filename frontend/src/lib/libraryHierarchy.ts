@@ -4,6 +4,7 @@
 
 import type { FigureDoc } from "./figuredoc";
 import type { FigureDocument } from "./figureDocument";
+import { originSheetNumber } from "./grouping";
 import { byOrder } from "./order";
 import { figureLabel, figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type { PageDocument } from "./pageDocument";
@@ -81,6 +82,13 @@ interface DraftNode extends Omit<LibraryNodeBase, "children"> {
    *  foldertree-driven Library already does. Never substitute an array index
    *  for a missing key; that interleaves instead of sinking. */
   order: number | undefined;
+  /** Kind-specific ordering between `byOrder` and insertion order. Origin
+   *  sheets use their sheet number (L0.16 source order) because the backend's
+   *  book fan-out order is NOT guaranteed — the same reason
+   *  lib/grouping.ts's `originSheetGroups` sorts by sheet number. Every
+   *  other kind passes 0, making this a no-op for them. A user-keyed
+   *  `order` still outranks it (byOrder compares first). */
+  tiebreak: number;
   sequence: number;
 }
 
@@ -93,10 +101,11 @@ const EMPTY_SOURCE: LibrarySourceStatus = {
 
 function compareDraft(a: DraftNode, b: DraftNode): number {
   // Section first (kind bands), then the app's canonical order comparator
-  // (keyed ascending, unkeyed sinks last), then insertion order as the
-  // deterministic tiebreak — the same stable result `byOrder` + a stable
-  // sort gives the existing Library.
-  return a.section - b.section || byOrder(a, b) || a.sequence - b.sequence;
+  // (keyed ascending, unkeyed sinks last), then the kind-specific tiebreak
+  // (Origin sheet number — see DraftNode.tiebreak), then insertion order —
+  // the same stable result `byOrder` + a stable sort gives the existing
+  // Library.
+  return a.section - b.section || byOrder(a, b) || a.tiebreak - b.tiebreak || a.sequence - b.sequence;
 }
 
 /** Dataset ids used by an Origin graph, scoped to the siblings from the same
@@ -169,11 +178,12 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     section: number,
     order: number | undefined,
     source: LibrarySourceStatus = EMPTY_SOURCE,
+    tiebreak = 0,
   ): DraftNode => {
     const key = keyOf(kind, entity.id);
     const node: DraftNode = {
       key, entityId: entity.id, kind, name, parentKey, depth: 0,
-      children: [], source, section, order, sequence: sequence++, entity,
+      children: [], source, section, order, tiebreak, sequence: sequence++, entity,
     };
     if (drafts.has(key)) warnings.push(`duplicate ${kind} id "${entity.id}"; last item won`);
     drafts.set(key, node);
@@ -220,7 +230,7 @@ export function buildLibraryHierarchy(input: LibraryHierarchyInput): LibraryHier
     }
     add("worksheet", dataset, dataset.name, parentKey, 0, dataset.order, {
       datasetIds: [dataset.id], missingDatasetIds: [], usedPlacementFallback: false,
-    });
+    }, originSheetNumber(dataset));
   });
 
   const ownerForSources = (requestedIds: readonly string[], fallbackIds: readonly string[] = []) => {
