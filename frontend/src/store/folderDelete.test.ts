@@ -112,12 +112,20 @@ describe("deleteFolder — workbook-aware, atomic (PR #139 review)", () => {
     expect(resolveImportTargetFolderId(useApp.getState)).toBeUndefined(); // its folder is gone -> root
   });
 
-  it("one Undo restores the folder, workbook placement, member folderIds, and selection together", () => {
+  it("one Undo restores the folder, workbook placement, member folderIds, AND expansion state together", () => {
     useApp.getState().deleteFolder("child", "cascade");
     useApp.getState().undo();
     const s = useApp.getState();
     expect(s.folders.map((f) => f.id).sort()).toEqual(["child", "grandchild", "parent"]);
     expect(s.workbooks.find((w) => w.id === "book")!.folderId).toBe("child");
     for (const id of ["s1", "s2"]) expect(s.datasets.find((d) => d.id === id)!.folderId).toBe("child");
+    // Retrospective-audit fix: expandedFolders is .dwk-persistent project
+    // data and now rides HistorySnapshot — an undone delete restores the
+    // folder EXPANDED, exactly as it was, not collapsed.
+    expect(s.expandedFolders.sort()).toEqual(["child", "grandchild", "parent"]);
+    // librarySelection is deliberately NOT restored (documented transient
+    // exclusion; E2 owns its persistence) — it stays wherever the delete
+    // retargeted it, which is always a live folder or null, never dangling.
+    expect(s.librarySelection).toBeNull();
   });
 });

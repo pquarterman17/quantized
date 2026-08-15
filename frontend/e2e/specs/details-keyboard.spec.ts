@@ -34,7 +34,9 @@ test("Details view: one tab stop, arrow traversal, Enter opens; global dataset n
   // P1 fix: the wrapper is NOT in the Tab order; the roving row is the
   // table's single sequential stop.
   await expect(page.locator(".qzk-details-scroll")).not.toHaveAttribute("tabindex", /.+/);
-  await expect(page.locator('.qzk-details-wrap [tabindex="0"]')).toHaveCount(1);
+  // Two stops since the header-roving follow-on: one header button + one row.
+  await expect(page.locator('.qzk-details-wrap [tabindex="0"]')).toHaveCount(2);
+  await expect(page.locator('.qzk-details-wrap thead [tabindex="0"]')).toHaveCount(1);
 
   const activeBefore = await activeId(page); // dataset-b, from import auto-activation
   const rows = page.locator("tbody tr");

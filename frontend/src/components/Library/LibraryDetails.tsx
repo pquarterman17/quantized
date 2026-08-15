@@ -57,6 +57,23 @@ export default function LibraryDetails({ hierarchy }: Props) {
   // sort untouched.
   const scrollRef = useRef<HTMLDivElement>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  // Sol's PR #141 follow-on: the EIGHT sort headers were eight more Tab
+  // stops. Same roving pattern as the rows — one header in the Tab order
+  // (the last-focused, else the current sort column, else the first);
+  // Left/Right move focus between headers, clamping at the ends. The
+  // component's full sequential tab surface is now exactly two stops:
+  // the header row and the data row.
+  const [headerKey, setHeaderKey] = useState<string | null>(null);
+  const rovingHeader = (headerKey != null && COLUMNS.some((c) => c.key === headerKey) ? headerKey : null)
+    ?? (sortKey !== "manual" && COLUMNS.some((c) => c.key === sortKey) ? sortKey : COLUMNS[0].key);
+  const onHeaderKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const idx = COLUMNS.findIndex((c) => c.key === (event.target as Element).closest("th")?.getAttribute("data-col"));
+    if (idx < 0) return;
+    event.preventDefault();
+    const next = Math.min(COLUMNS.length - 1, Math.max(0, idx + (event.key === "ArrowRight" ? 1 : -1)));
+    (scrollRef.current?.querySelector(`th[data-col="${COLUMNS[next].key}"] button`) as HTMLElement | null)?.focus();
+  };
   const prevRowsRef = useRef(rows);
   const keyIndex = (key: string | null): number => (key == null ? -1 : rows.findIndex((r) => r.node.key === key));
   const selectedRow = rows.find((r) => isSelected(r.node, selectedIds, selection));
@@ -133,8 +150,14 @@ export default function LibraryDetails({ hierarchy }: Props) {
           <thead>
             <tr>
               {COLUMNS.map((column) => (
-                <th key={column.key} className={column.className} scope="col" aria-sort={sortKey === column.key ? (direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button type="button" onClick={() => sortBy(column.key)}>
+                <th key={column.key} data-col={column.key} className={column.className} scope="col" aria-sort={sortKey === column.key ? (direction === "asc" ? "ascending" : "descending") : "none"}>
+                  <button
+                    type="button"
+                    tabIndex={column.key === rovingHeader ? 0 : -1}
+                    onFocus={() => setHeaderKey(column.key)}
+                    onKeyDown={onHeaderKeyDown}
+                    onClick={() => sortBy(column.key)}
+                  >
                     {column.label}{sortKey === column.key ? (direction === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                 </th>

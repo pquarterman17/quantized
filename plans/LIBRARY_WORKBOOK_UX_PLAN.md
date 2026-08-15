@@ -541,8 +541,8 @@ build, and focused interaction coverage where appropriate.
    claim global L1.4 interaction parity: Details context menus, rename/move,
    and drag/drop still need the shared-action follow-through in their owning
    slices, and Tiles remains PR E.
-4a. [x] **PR D follow-up — Details roving keyboard traversal.** Implemented
-    in PR #141, pending review (Claude/Fable, 2026-08-15): roving tabindex
+4a. [x] ~~**PR D follow-up — Details roving keyboard traversal.**~~ Shipped
+    2026-08-15 (PR #141, merge `f6a345b`) (Claude/Fable, 2026-08-15): roving tabindex
     (exactly one sequential tab stop in the table — last-focused row, else
     current item, else first; the scroll wrapper is OUT of the Tab order per
     the PR #141 review's P1), Up/Down through the CURRENT sorted order with
@@ -1222,6 +1222,21 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-08-15 — Claude (Fable):** PR #141 merged (`f6a345b`, owner-directed
+  after Sol's follow-up review cleared; both outdated threads resolved).
+  Keyboard/selection hardening slice opened as the follow-on
+  (claude/keyboard-selection-hardening): retrospective-audit fixes — the
+  architecture guard now parses AppState's own fields (127 newly-visible
+  fields classified; `expandedFolders` joined HistorySnapshot so an undone
+  folder delete restores expanded), six L0.25 selection-invariant violators
+  closed (addDataset/loadWorkspace/duplicateDataset/splitDatasetByColumn/
+  window-focus family/trash-restore edge) with a per-writer invariant suite,
+  seven pre-existing Delete/arrow-leak surfaces fixed (ErrorRolesCard +
+  SmartFolders focusGuard adoption, PreviewOverlay hitboxes, Map ROI bars,
+  WorksheetPane boundary, SlotGrid empty slots, recents-span click-focus),
+  and Sol's #141 follow-on: Details sort headers rove (component tab surface
+  is now exactly two stops).
 
 - **2026-08-15 — Claude (Fable):** PR D shipped (PR #140 merged `a8bb751`,
   owner-directed un-draft + merge after the fix round cleared my blocking

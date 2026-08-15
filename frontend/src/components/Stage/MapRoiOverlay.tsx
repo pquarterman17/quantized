@@ -319,6 +319,14 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           style={{ ...barPosition(rectPx, plotRect(payload, w, h)), pointerEvents: barPointerEvents(dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          // Retrospective-audit P1 fix: the bar's buttons (axis toggle, ✕
+          // remove, Clear) sit OUTSIDE the canvas that owns the ROI/ruler
+          // keydown, so Delete/Backspace/arrows on a Tab-focused button
+          // leaked to the global handlers and removed/switched the DATASET.
+          // No-op consume — same contract as the canvas's own keydown.
+          onKeyDown={(e) => {
+            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+          }}
         >
           <CommitBar
             preview={preview}
@@ -345,6 +353,10 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           style={{ ...barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h)), pointerEvents: barPointerEvents(rulerState.dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          // Same retrospective-audit consume as the ROI bar above.
+          onKeyDown={(e) => {
+            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+          }}
         >
           <CommitBar
             preview={rulerState.preview}

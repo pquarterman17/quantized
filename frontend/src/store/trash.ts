@@ -133,6 +133,11 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
           expandedWorkbookIds,
           trash,
           activeId: s.activeId ?? id,
+          // L0.25 coherence (retrospective-audit fix): when this restore IS
+          // an activation (nothing was active), the tree selection yields,
+          // like every other activation path. A restore into a library with
+          // a live active dataset leaves the selection alone.
+          ...(s.activeId == null ? { librarySelection: null } : {}),
         };
       });
       return true;

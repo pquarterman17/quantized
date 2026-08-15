@@ -83,6 +83,14 @@ export interface HistorySnapshot {
   editableFigures: AppState["editableFigures"];
   pages: AppState["pages"];
   folders: AppState["folders"];
+  // Retrospective-audit fix (2026-08-15): `expandedFolders` round-trips into
+  // `.dwk` v2 — it is persistent project data, not transient UI state like
+  // `expandedWorkbookIds` (whose E2-owned exclusion is documented in
+  // architecture.test.ts). `folderDeletePatch` prunes it under
+  // recordHistory("delete folder"), and without this field an undone folder
+  // delete restored the folder COLLAPSED — the exact half-restored-state
+  // failure this file's header warns about (the savedRois incident).
+  expandedFolders: AppState["expandedFolders"];
   // LIBRARY_WORKBOOK_UX_PLAN PR A2 — persistent Library organization, same
   // class as `folders` right above it (not yet mutated by any action; wired
   // here now so the FIRST mutating action in a later PR inherits undo for
@@ -126,6 +134,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     editableFigures: s.editableFigures,
     pages: s.pages,
     folders: s.folders,
+    expandedFolders: s.expandedFolders,
     workbooks: s.workbooks,
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,

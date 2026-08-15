@@ -105,9 +105,11 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   </span>
                 )}
                 <span className="qz-shortcut">{relativeTime(r.at, Date.now())}</span>
+                {/* Retrospective-audit P2 fix: no tabIndex — a click on a
+                    tabindex'd span focuses it, and this click unmounts the
+                    span: focus fell to <body>, arming the global Delete. */}
                 <span
                   role="button"
-                  tabIndex={-1}
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
                   className="qz-shortcut"

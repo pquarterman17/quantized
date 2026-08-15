@@ -165,9 +165,13 @@ export default function SlotGrid({
       }
       return;
     }
-    if ((e.key === "Delete" || e.key === "Backspace") && slot.source) {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      // Retrospective-audit P1 fix: consumed unconditionally — an EMPTY slot
+      // is still focusable, and its unconsumed Delete leaked to the global
+      // handler and removed the active DATASET. No-op when there's nothing
+      // to clear.
       e.preventDefault();
-      onClear(i);
+      if (slot.source) onClear(i);
     }
     // F3.5: Shift+Arrow moves the FOCUSED panel one grid step in that
     // direction (mirrors the spreadsheet "move selected row" idiom) — a
@@ -182,6 +186,13 @@ export default function SlotGrid({
       onMoveSlot(i, target);
       const grid = e.currentTarget.parentElement;
       (grid?.querySelector<HTMLElement>(`[data-slot-index="${target}"]`))?.focus();
+      return;
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // Retrospective-audit fix: only Shift+Arrow means anything on a slot;
+      // BARE arrows leaked to the global prev/next-dataset stepper. Consume
+      // until slot-to-slot focus navigation owns them.
+      e.preventDefault();
     }
   };
 

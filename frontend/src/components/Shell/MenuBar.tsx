@@ -157,9 +157,12 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                       >
                         <span className="qzk-menu-trunc">{r.name}</span>
                         <span className="qz-shortcut">{relativeTime(r.at, now)}</span>
+                        {/* Retrospective-audit P2 fix: no tabIndex — any
+                            tabindex makes an element click-focusable, and
+                            this click unmounts the span: focus fell to
+                            <body>, arming the global Delete. */}
                         <span
                           role="button"
-                          tabIndex={-1}
                           aria-label={`Remove ${r.name} from recent`}
                           title="Remove from recent"
                           className="qz-shortcut"

@@ -78,6 +78,9 @@ function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string |
     focusedWindowId: id,
     activeId: datasetId,
     selectedIds: datasetId ? [datasetId] : [],
+    // L0.25 coherence (retrospective-audit fix): window focus is a dataset
+    // activation — clears the tree selection like focusedRebindPatch does.
+    librarySelection: null,
     ...hydrateView(view),
     ...focusTransientReset(),
   };
