@@ -90,6 +90,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
+import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { recomputeStaleFits } from "./recalcFits";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
@@ -317,7 +318,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -694,10 +695,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   renameDataset: (id: string, name: string) => void;
   addFormula: (id: string, name: string, expr: string) => void;
   removeFormula: (id: string, index: number) => void;
-  setDatasetNotes: (id: string, notes: string) => void;
-  addDatasetTag: (id: string, tag: string) => void;
-  removeDatasetTag: (id: string, tag: string) => void;
-  setDatasetGroup: (id: string, group: string) => void;
   // Folder tree (project-organization plan item 1). Thin wrappers over
   // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
   createFolder: (parentId: string | null, name?: string) => string;
@@ -929,6 +926,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createGraphBuilderSlice(set, get),
   ...createCorrectionsSlice(set, get),
   ...createCellEditSlice(set, get),
+  ...createDatasetMetaSlice(set, get),
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
@@ -2008,51 +2006,6 @@ export const useApp = create<AppState>((set, get) => ({
       };
     });
     get().touchDataset(id); // recalc graph (#1): data changed
-  },
-  // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
-  // on the object (round-trips through .dwk) rather than the transient view state.
-  setDatasetNotes: (id, notes) => {
-    get().recordHistory("edit notes");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, notes: notes.trim() ? notes : undefined } : d,
-      ),
-    }));
-  },
-  // Add a trimmed, de-duplicated tag to a dataset (blank or duplicate = no-op).
-  addDatasetTag: (id, tag) => {
-    get().recordHistory("add tag");
-    set((s) => {
-      const t = tag.trim();
-      if (!t) return {};
-      return {
-        datasets: s.datasets.map((d) => {
-          if (d.id !== id) return d;
-          const tags = d.tags ?? [];
-          return tags.includes(t) ? d : { ...d, tags: [...tags, t] };
-        }),
-      };
-    });
-  },
-  // Remove a tag; the list drops to undefined when it empties (keeps .dwk clean).
-  removeDatasetTag: (id, tag) => {
-    get().recordHistory("remove tag");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id || !d.tags) return d;
-        const tags = d.tags.filter((x) => x !== tag);
-        return { ...d, tags: tags.length ? tags : undefined };
-      }),
-    }));
-  },
-  // Assign a dataset to a (trimmed) group; blank clears it back to Ungrouped.
-  setDatasetGroup: (id, group) => {
-    get().recordHistory("set group");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
-      ),
-    }));
   },
   // ── Folder tree (project-organization plan item 1) ──────────────────────
   // All five delegate to the pure lib/foldertree ops; the store only supplies

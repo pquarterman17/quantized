@@ -160,7 +160,16 @@ const STORE_PINS: Record<string, number> = {
   // gadgetCursorResult) — a field-for-field duplicate of windows.ts's
   // `focusTransientReset()` — replaced with `...focusTransientReset()`,
   // funding the new `techniqueViewMemory` restore line at a net loss.
-  "/store/useApp.ts": 2868,
+  // 2868 -> 2835 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A2): the dataset
+  // notes/tags/group actions (setDatasetNotes/addDatasetTag/removeDatasetTag/
+  // setDatasetGroup — a cohesive, store-free-of-closures-over-anything-else
+  // block, the same shape store/cellEdit.ts was) moved verbatim to the new
+  // store/datasetMeta.ts, funding the new `workbooks: WorkbookNode[]` field
+  // (AppState + initial state + loadWorkspace's explicit `ws.workbooks ?? []`
+  // return line — omitting that line would silently leak the PREVIOUS
+  // project's workbooks into a newly opened one, since `set()` merges a
+  // partial state).
+  "/store/useApp.ts": 2835,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
