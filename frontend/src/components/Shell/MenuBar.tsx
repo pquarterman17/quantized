@@ -12,6 +12,7 @@ import type { RecentFile } from "../../lib/recentFiles";
 import { relativeTime } from "../../lib/recentFiles";
 import { withSectionHeaders } from "../../lib/menuSections";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
 
 // Top-level menus and the action group each shows. "Help" is built in below.
@@ -83,7 +84,11 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   const forget = (e: React.MouseEvent, name: string) => {
     // Removing a stale entry must not also re-import it.
     e.stopPropagation();
-    useApp.getState().removeRecent(name);
+    // Hardening review fix: the ✕ span's ancestor <button> unmounts with the
+    // entry, and Chromium then drops focus to <body> — arming the global
+    // Delete against the active dataset. removeRowSafely's contract: focus a
+    // SURVIVING container synchronously in the same click. The nav persists.
+    removeRowSafely(navRef.current, () => useApp.getState().removeRecent(name));
   };
 
   function title(label: string) {
@@ -103,7 +108,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   const now = Date.now();
 
   return (
-    <nav className="qzk-menubar" ref={navRef}>
+    <nav className="qzk-menubar" ref={navRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
       {MENUS.map((m) => {
         const items = allActions.filter((a) => a.group === m.group);
         const isFile = m.group === "File";
@@ -157,9 +162,12 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                       >
                         <span className="qzk-menu-trunc">{r.name}</span>
                         <span className="qz-shortcut">{relativeTime(r.at, now)}</span>
+                        {/* Retrospective-audit P2 fix: no tabIndex — any
+                            tabindex makes an element click-focusable, and
+                            this click unmounts the span: focus fell to
+                            <body>, arming the global Delete. */}
                         <span
                           role="button"
-                          tabIndex={-1}
                           aria-label={`Remove ${r.name} from recent`}
                           title="Remove from recent"
                           className="qz-shortcut"

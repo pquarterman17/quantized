@@ -6,9 +6,10 @@
 // Hidden until the first smart folder exists (create one from the Library
 // filter's ☆ button, or ＋ here afterwards).
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import DatasetRow from "./DatasetRow";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { folderPathLabel } from "../../lib/foldertree";
 import { smartFolderMembers } from "../../lib/smartfolders";
 import { useApp } from "../../store/useApp";
@@ -47,6 +48,11 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
   // Collapsed by default — a broad query can match much of the library, and
   // the count chip already answers "how many" at a glance.
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+  // Retrospective-audit P1 fix: the × button unmounts its own row on click —
+  // without the focusGuard pair, focus dropped to <body> and the next
+  // Delete/Backspace removed the active DATASET (focusGuard.ts's incident
+  // class, unwired here).
+  const containerRef = useRef<HTMLDivElement>(null);
 
   if (smartFolders.length === 0) return null;
 
@@ -59,7 +65,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
     });
 
   return (
-    <div className="qzk-lib-group">
+    <div className="qzk-lib-group" ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
       <div style={{ display: "flex", alignItems: "stretch" }}>
         <span className="qzk-lib-title" style={{ flex: 1, padding: "4px 6px" }}>
           Smart folders
@@ -109,7 +115,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
               <button
                 className="qz-btn qz-ghost qz-sm"
                 title="Delete smart folder (datasets are untouched)"
-                onClick={() => removeSmartFolder(sf.id)}
+                onClick={() => removeRowSafely(containerRef.current, () => removeSmartFolder(sf.id))}
               >
                 ×
               </button>

@@ -9,7 +9,10 @@
 // literal — inference runs when the USER asks for it, and its result is an
 // ordinary editable list afterwards, not a hidden decision.
 
+import { useRef } from "react";
+
 import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Button, Card, Select } from "../primitives";
@@ -21,6 +24,12 @@ const SIDES: { value: ErrorSide; label: string }[] = [
 ];
 
 export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
+  // Retrospective-audit P1 fix: this was the ONE decor card in its class
+  // (shades/shapes/ref-lines/annotations/error-roles) without the
+  // lib/focusGuard wiring — clicking a row's ✕ unmounted the focused span,
+  // dropped focus to <body>, and the next Delete removed the active DATASET
+  // (the exact incident focusGuard.ts's header documents).
+  const containerRef = useRef<HTMLDivElement>(null);
   const setErrorRoles = useApp((s) => s.setErrorRoles);
   const detectErrorRoles = useApp((s) => s.detectErrorRoles);
   const setStatus = useApp((s) => s.setStatus);
@@ -47,6 +56,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
       count={roles.length || undefined}
       helpTopic="Import wizard"
     >
+      <div ref={containerRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer}>
       {roles.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           No error columns bound. Detect them from the column names, or pair one
@@ -94,7 +104,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
               aria-label={`Remove error role for ${labels[r.channel]}`}
               title="Remove this binding (the column itself is untouched)"
               className="qz-shortcut"
-              onClick={() => setErrorRoles(active.id, roles.filter((_, k) => k !== i))}
+              onClick={() => removeRowSafely(containerRef.current, () => setErrorRoles(active.id, roles.filter((_, k) => k !== i)))}
             >
               ✕
             </span>
@@ -120,6 +130,7 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
         >
           Detect from names
         </Button>
+      </div>
       </div>
     </Card>
   );

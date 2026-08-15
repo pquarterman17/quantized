@@ -14,12 +14,13 @@
 // nothing more — no automatic cleanup, no "tidy up your recents", because a
 // share that is merely unmounted must never be treated as a deleted file.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
 import { relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { reopenRecent } from "../../lib/reopenRecent";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
+import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
 import { useWorkingPaths } from "../../store/workingPaths";
 
@@ -57,6 +58,7 @@ function useRecentStates(recent: RecentFile[]): Record<string, PathState> {
 export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recent = useApp((s) => s.recent);
   const removeRecent = useApp((s) => s.removeRecent);
+  const homeRef = useRef<HTMLDivElement>(null);
   const paths = useWorkingPaths((s) => s.paths);
   const setPinned = useWorkingPaths((s) => s.setPinned);
   // Not `usePath`: a `use`-prefixed local reads as a React hook (and trips
@@ -66,7 +68,11 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const states = useRecentStates(recent);
 
   return (
-    <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
+    // tabIndex/keydown: hardening review fix — the recents ✕ removal needs a
+    // SURVIVING focus anchor (removeRowSafely) + a stray-Delete absorber, or
+    // Chromium orphans focus to <body> and the next Delete removes the
+    // active dataset (lib/focusGuard.ts's incident class).
+    <div ref={homeRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
         <button className="qz-btn" onClick={onImport} style={{ width: "100%" }}>
           ⊞ Import data…
@@ -105,13 +111,15 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   </span>
                 )}
                 <span className="qz-shortcut">{relativeTime(r.at, Date.now())}</span>
+                {/* Retrospective-audit P2 fix: no tabIndex — a click on a
+                    tabindex'd span focuses it, and this click unmounts the
+                    span: focus fell to <body>, arming the global Delete. */}
                 <span
                   role="button"
-                  tabIndex={-1}
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
                   className="qz-shortcut"
-                  onClick={() => removeRecent(r.name)}
+                  onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r.name))}
                 >
                   ✕
                 </span>

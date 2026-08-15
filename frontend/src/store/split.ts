@@ -154,6 +154,7 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
         activeId: firstChild.id,
         worksheetId: null,
         selectedIds: children.map((c) => c.id),
+        librarySelection: null, // L0.25 coherence (retrospective-audit fix)
         stageTab: nextStageTab(firstChild, s.stageTab),
         ...datasetViewDefaults(firstChild),
         ...focusTransientReset(),

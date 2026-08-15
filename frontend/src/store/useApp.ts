@@ -1097,6 +1097,11 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
+      // L0.25 coherence (retrospective-audit fix): a fresh dataset selection
+      // displaces the tree's folder/workbook selection — import targeting
+      // read librarySelection BEFORE this point (importTargetFolder.ts), so
+      // clearing here never disturbs where the batch landed.
+      librarySelection: null,
       // Keep the focused document binding aligned with the newly imported data.
       plotWindows: rebindFocusedPlotWindow(s.plotWindows, s.focusedWindowId, { ...snapshotView(s), ...defaults }, ds),
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
@@ -1608,6 +1613,15 @@ export const useApp = create<AppState>((set, get) => ({
         // TypeScript won't catch a missing key in an object literal here).
         workbooks: ws.workbooks ?? [],
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
+        // L0.25 coherence (retrospective-audit fix): the incoming document
+        // fully replaces the library, so the PREVIOUS project's transient
+        // tree selection/workbook disclosure must not survive into it — a
+        // stale librarySelection could name a folder id that doesn't exist
+        // here and feed import targeting a dangling id. (A2's lesson: every
+        // partial-set() field needs its explicit loadWorkspace reset line.)
+        librarySelection: null,
+        expandedWorkbookIds: [],
+        workbookLastChild: {},
         activeId: active,
         // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
         worksheetId: null,
@@ -1867,6 +1881,7 @@ export const useApp = create<AppState>((set, get) => ({
         activeId: clone.id,
         worksheetId: null, // item 15: the clone becomes the plot AND worksheet target
         selectedIds: [clone.id],
+        librarySelection: null, // L0.25 coherence (retrospective-audit fix)
         stageTab: nextStageTab(clone, s.stageTab),
         xKey: null,
         yKeys: null,

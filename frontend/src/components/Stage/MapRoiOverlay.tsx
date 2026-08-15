@@ -29,6 +29,7 @@
 // own split so neither file re-derives them.
 
 import { Button } from "../primitives";
+import { removeRowSafely } from "../../lib/focusGuard";
 import type { MapPayload } from "../../lib/mapdata";
 import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler } from "../../lib/roi";
 import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
@@ -234,9 +235,16 @@ export interface MapRoiOverlayProps {
   /** The sector-wedge hook's full state (RSM_CUTS_PLAN item 12) — same
    *  grouped-object convention as `rulerState`, for the same reason. */
   wedgeState: UseMapSectorWedgeState;
+  /** Surviving focus target for removeRowSafely — the map canvas (owns the
+   *  ROI/ruler keydown), which outlives both commit bars. Hardening review
+   *  fix: the bars' ✕/Clear buttons unmount their own bar on click; without
+   *  this anchor Chromium orphaned focus to <body>, arming the global
+   *  Delete against the active dataset (lib/focusGuard.ts's incident). */
+  focusAnchor?: () => HTMLElement | null;
 }
 
 export default function MapRoiOverlay(props: MapRoiOverlayProps) {
+  const anchor = () => props.focusAnchor?.() ?? null;
   const {
     payload,
     w,
@@ -319,6 +327,14 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           style={{ ...barPosition(rectPx, plotRect(payload, w, h)), pointerEvents: barPointerEvents(dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          // Retrospective-audit P1 fix: the bar's buttons (axis toggle, ✕
+          // remove, Clear) sit OUTSIDE the canvas that owns the ROI/ruler
+          // keydown, so Delete/Backspace/arrows on a Tab-focused button
+          // leaked to the global handlers and removed/switched the DATASET.
+          // No-op consume — same contract as the canvas's own keydown.
+          onKeyDown={(e) => {
+            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+          }}
         >
           <CommitBar
             preview={preview}
@@ -331,8 +347,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             statsBusy={statsBusy}
             apiStats={apiStats}
             statsError={statsError}
-            onClearStats={onClearStats}
-            onRemove={onRemove}
+            onClearStats={() => removeRowSafely(anchor(), onClearStats)}
+            onRemove={() => removeRowSafely(anchor(), onRemove)}
             removeLabel="Remove this box"
             axes={boxNames}
           />
@@ -345,6 +361,10 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
           style={{ ...barPosition(boundsOfPoints(rulerPx), plotRect(payload, w, h)), pointerEvents: barPointerEvents(rulerState.dragging) }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          // Same retrospective-audit consume as the ROI bar above.
+          onKeyDown={(e) => {
+            if (["Delete", "Backspace", "ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+          }}
         >
           <CommitBar
             preview={rulerState.preview}
@@ -357,8 +377,8 @@ export default function MapRoiOverlay(props: MapRoiOverlayProps) {
             statsBusy={rulerState.statsBusy}
             apiStats={rulerState.apiStats}
             statsError={rulerState.statsError}
-            onClearStats={rulerState.clearStats}
-            onRemove={rulerState.remove}
+            onClearStats={() => removeRowSafely(anchor(), rulerState.clearStats)}
+            onRemove={() => removeRowSafely(anchor(), rulerState.remove)}
             removeLabel="Remove this ruler"
             axes={rulerNames}
           />

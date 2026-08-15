@@ -218,9 +218,13 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
     // a non-negative tabindex (native buttons excluded — the sort headers
     // are toolbar controls, not table entry points... they ARE focusable
     // buttons, so enumerate explicitly what precedes the row).
+    // Hardening follow-on (Sol's #141 note): the eight sort headers rove
+    // too, so the component's WHOLE sequential tab surface is exactly two
+    // stops — one header button and one data row. No wrapper stop.
     const sequentialStops = [...container.querySelectorAll('[tabindex="0"]')];
-    expect(sequentialStops).toHaveLength(1); // no wrapper stop before the row
-    expect(sequentialStops[0]?.getAttribute("data-lib-row")).toBe("worksheet:solo");
+    expect(sequentialStops).toHaveLength(2);
+    expect(sequentialStops[0]?.closest("th")?.getAttribute("data-col")).toBe("name");
+    expect(sequentialStops[1]?.getAttribute("data-lib-row")).toBe("worksheet:solo");
     expect(container.querySelector(".qzk-details-scroll")?.hasAttribute("tabindex")).toBe(false);
     act(() => row("worksheet:d2").focus());
     expect(tabStops()).toEqual(["worksheet:d2"]); // the rove moved
@@ -230,6 +234,21 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
     render(<GlobalHarness />);
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
     expect(useApp.getState().activeId).not.toBe("solo");
+  });
+
+  it("sort headers rove: one header tab stop, Left/Right traverse and clamp (Sol's #141 follow-on)", () => {
+    const { container } = render(<GlobalHarness />);
+    expect(container.querySelectorAll('thead [tabindex="0"]')).toHaveLength(1);
+    const headerBtn = (key: string): HTMLElement =>
+      container.querySelector(`th[data-col="${key}"] button`) as HTMLElement;
+    headerBtn("name").focus();
+    fireEvent.keyDown(headerBtn("name"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(headerBtn("type"));
+    expect(container.querySelectorAll('thead [tabindex="0"]')).toHaveLength(1); // the rove moved, count didn't
+    fireEvent.keyDown(headerBtn("type"), { key: "ArrowLeft" });
+    fireEvent.keyDown(headerBtn("name"), { key: "ArrowLeft" }); // clamp at the first header
+    expect(document.activeElement).toBe(headerBtn("name"));
+    expect(useApp.getState().activeId).toBe("solo"); // horizontal keys never touch the dataset list
   });
 
   it("Delete on a focused sort-header button never reaches the global dataset handler (retrospective-audit P1)", () => {

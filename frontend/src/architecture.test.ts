@@ -735,6 +735,109 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // Worksheet selection slice: row selection per window (UI state)
   worksheetSelections: "row selection per worksheet window; UI state, not persistent edit",
 
+  // shell/layout UI state (retrospective-audit sweep: fields declared directly on AppState, newly visible to this guard)
+  leftCollapsed: "left panel collapsed; shell layout UI",
+  rightCollapsed: "right panel collapsed; shell layout UI",
+  stageTab: "Plot/Worksheet stage tab; shell navigation UI",
+  openReportId: "which report window is open; UI open state",
+  prefsOpen: "Preferences dialog visibility; UI state",
+  cmdkOpen: "Command Palette visibility; UI state",
+  shortcutsOpen: "shortcuts sheet visibility; UI state",
+  textFormatHelpOpen: "text-format help visibility; UI state",
+  status: "status-bar text; transient announcement, not data",
+
+  // persisted user preferences (own localStorage lifecycle via store/prefs.ts, not project edits)
+  theme: "prefs",
+  accent: "prefs",
+  density: "prefs",
+  palette: "prefs",
+  reduceMotion: "prefs",
+  wheelZoom: "prefs",
+  defaultTrace: "prefs",
+  defaultLineWidth: "prefs",
+  defaultGrid: "prefs",
+  copyFigureTransparent: "prefs",
+  antialias: "prefs",
+  sigFigs: "prefs",
+  notation: "prefs",
+  confirmRemove: "prefs",
+  excludedDisplay: "prefs",
+  originBookClickOpens: "prefs",
+  defaultPanelFit: "prefs",
+  recalcMode: "prefs (manual/auto recalculation)",
+
+  // workshop/dialog visibility flags (transient UI, all *Open)
+  hysteresisOpen: "workshop/dialog visibility; UI state",
+  reflectivityOpen: "workshop/dialog visibility; UI state",
+  baselineOpen: "workshop/dialog visibility; UI state",
+  magToolsOpen: "workshop/dialog visibility; UI state",
+  rsmOpen: "workshop/dialog visibility; UI state",
+  datasetMathOpen: "workshop/dialog visibility; UI state",
+  distributionOpen: "workshop/dialog visibility; UI state",
+  dataFilterOpen: "workshop/dialog visibility; UI state",
+  statsChooserOpen: "workshop/dialog visibility; UI state",
+  peakWizardOpen: "workshop/dialog visibility; UI state",
+  importWizardOpen: "workshop/dialog visibility; UI state",
+  pipelineOpen: "workshop/dialog visibility; UI state",
+  figureBuilderOpen: "workshop/dialog visibility; UI state",
+  figurePageOpen: "workshop/dialog visibility; UI state",
+  waterfallOpen: "workshop/dialog visibility; UI state",
+  reflViewOpen: "workshop/dialog visibility; UI state",
+  columnSwitcherOpen: "workshop/dialog visibility; UI state",
+
+  // consumed cross-workflow seeds
+  figureDocSeed: "seeded figure doc; consumed on use",
+  reflectivitySeed: "seeded reflectivity workshop input; consumed on use",
+  statStageSeed: "seeded stat-stage input; consumed on use",
+
+  // analysis working scratch (same class as mapRoi/mapRuler above: survives interaction, cleared on dataset switch, not edit history)
+  plotTool: "analysis tool/gadget working scratch",
+  regionPicked: "analysis tool/gadget working scratch",
+  integral: "analysis tool/gadget working scratch",
+  fwhmResult: "analysis tool/gadget working scratch",
+  qfitRoi: "analysis tool/gadget working scratch",
+  qfitModel: "analysis tool/gadget working scratch",
+  qfitBusy: "analysis tool/gadget working scratch",
+  qfitResult: "analysis tool/gadget working scratch",
+  qfitError: "analysis tool/gadget working scratch",
+  gadgetMode: "analysis tool/gadget working scratch",
+  gadgetBusy: "analysis tool/gadget working scratch",
+  gadgetError: "analysis tool/gadget working scratch",
+  gadgetIntegrateResult: "analysis tool/gadget working scratch",
+  gadgetStatsResult: "analysis tool/gadget working scratch",
+  gadgetDerivResult: "analysis tool/gadget working scratch",
+  derivOverlay: "analysis tool/gadget working scratch",
+  gadgetFftPreview: "analysis tool/gadget working scratch",
+  gadgetCursors: "analysis tool/gadget working scratch",
+  gadgetCursorResult: "analysis tool/gadget working scratch",
+  fitOverlay: "analysis tool/gadget working scratch",
+  peakOverlay: "analysis tool/gadget working scratch",
+  baselineOverlay: "analysis tool/gadget working scratch",
+  peakWizardEdit: "analysis tool/gadget working scratch",
+  baselineAnchorEdit: "analysis tool/gadget working scratch",
+
+  // derived/dirty-tracking and runtime state
+  staleDatasets: "derived recalculation dirty set; recomputed, not authored",
+  staleFits: "derived fit dirty set; recomputed, not authored",
+  macroRecording: "macro recorder armed flag; runtime state",
+  macroSteps: "in-progress macro recording buffer; runtime state",
+  pipelineRunning: "pipeline execution flag; runtime state",
+
+  // map render settings (technique-view class, like techniqueViewMemory)
+  mapMethod: "map interpolation method; view setting outside PlotView",
+  mapRes: "map resolution; view setting outside PlotView",
+  contourOn: "contour overlay toggle; view setting outside PlotView",
+  contourLevelCount: "contour levels; view setting outside PlotView",
+  contourScale: "contour scale; view setting outside PlotView",
+
+  // pre-existing exclusions preserved as-is by the guard widening (status-quo; review deliberately deferred)
+  composition: "multi-panel facet/break arrangement; cleared on dataset switch today — if arrangements become persistent, revisit undo coverage",
+
+  // parser false positives (nested inline object types inside AppState)
+  selection: "worksheet row selection; deliberately outside the verbatim snapshot — restorePatch liveness-filters it specially on undo/redo",
+  label: "parser false positive",
+  code: "parser false positive",
+  typed: "parser false positive",
   // Parser false positives from interface comments / nested types.
   // The regex-based interface parser cannot reliably distinguish these from real fields.
   // They appear in comments or nested type definitions but not as top-level store fields.
@@ -773,9 +876,15 @@ describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
       if (!path.includes("/store/") || !path.endsWith(".ts")) continue;
       if (path.endsWith(".test.ts")) continue;
 
-      // Find all `export interface XXXSlice { ... }` blocks
-      // Greedy match the interface body to capture everything until the closing brace
-      const interfacePattern = /export\s+interface\s+\w+Slice\s*{([\s\S]*?)^}/gm;
+      // Find all `export interface XXXSlice { ... }` blocks — AND AppState
+      // itself (retrospective-audit fix: fields declared DIRECTLY on
+      // AppState — datasets, activeId, folders, expandedFolders, … — were
+      // invisible to this guard, so its "exhaustive" claim held only by
+      // hand-maintained coincidence; `expandedFolders` slipped through
+      // unclassified while folderDeletePatch mutated it under recordHistory).
+      // Greedy match the interface body to capture everything until the
+      // closing brace.
+      const interfacePattern = /export\s+interface\s+(?:\w+Slice|AppState)\b[^{]*{([\s\S]*?)^}/gm;
       let interfaceMatch;
       while ((interfaceMatch = interfacePattern.exec(src)) !== null) {
         const interfaceBody = interfaceMatch[1];
@@ -814,11 +923,28 @@ describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
       }
     }
 
+    // Retrospective-audit fix: the AppState singleton plot-view fields are
+    // captured INSIDE HistorySnapshot's `view: PlotView` field (snapshotView
+    // collects them; hydrateView restores them). Parse PlotView's own key
+    // list so those ~46 fields are recognized as covered BY NAME instead of
+    // hand-maintaining a parallel exclusion list that would rot.
+    const plotviewSrc = sources().find(([p]) => p.endsWith("/lib/plotview.ts"))?.[1] ?? "";
+    const plotViewBody = /export interface PlotView\s*{([\s\S]*?)^}/m.exec(plotviewSrc)?.[1] ?? "";
+    const viewFields = new Set<string>();
+    const viewFieldPattern = /^\s*(\w+)\??\s*:/gm;
+    let viewMatch;
+    while ((viewMatch = viewFieldPattern.exec(plotViewBody)) !== null) viewFields.add(viewMatch[1]);
+    if (viewFields.size < 30) throw new Error("PlotView parse degraded — guard would silently weaken");
+
     // Classify every field
     const uncovered: string[] = [];
     for (const field of appStateFields) {
       if (historyFields.has(field)) {
         // Field is in HistorySnapshot — good.
+        continue;
+      }
+      if (viewFields.has(field)) {
+        // Captured inside the `view: PlotView` snapshot field — good.
         continue;
       }
       if (HISTORY_EXCLUDED[field as keyof typeof HISTORY_EXCLUDED]) {

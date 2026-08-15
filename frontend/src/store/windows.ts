@@ -78,6 +78,9 @@ function _focusHandoff(extra: Partial<AppState>, id: string, datasetId: string |
     focusedWindowId: id,
     activeId: datasetId,
     selectedIds: datasetId ? [datasetId] : [],
+    // L0.25 (audit fix): focus onto a BOUND dataset is an activation and
+    // clears the tree selection; an unbound window leaves it (import target).
+    ...(datasetId ? { librarySelection: null } : {}),
     ...hydrateView(view),
     ...focusTransientReset(),
   };

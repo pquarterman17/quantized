@@ -151,6 +151,16 @@ export default function PreviewOverlay({
               onSelect(e.id);
               return;
             }
+            // Retrospective-audit P1 fix: a focused hitbox owns Delete and
+            // bare arrows even though it has no action for them yet — an
+            // unconsumed keystroke here reached the GLOBAL handlers and
+            // removed/switched the active DATASET while the user was aiming
+            // at a legend or annotation. No-op consume, same contract as the
+            // map ROI/worksheet surfaces.
+            if (ev.key === "Delete" || ev.key === "Backspace" || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+              ev.preventDefault();
+              return;
+            }
             if (isContextMenuKeyEvent(ev)) {
               ev.preventDefault();
               const r = ev.currentTarget.getBoundingClientRect();

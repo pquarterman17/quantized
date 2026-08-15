@@ -87,7 +87,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // number.
   const onKeyDown = (e: React.KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+    // SELECT included (review fix): the filter bar's <select>s use arrows
+    // natively — same exemption set as useGlobalShortcuts' isEditing.
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
     const accel = e.metaKey || e.ctrlKey;
     if (accel && e.key === "c") { e.preventDefault(); view.blockOps.copyBlock(); }
     else if (accel && e.key === "x") { e.preventDefault(); view.blockOps.cutBlock(); }
@@ -96,8 +98,20 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
     else if (e.key === "Delete" || e.key === "Backspace") {
       // Delete clears CONTENT, matching every spreadsheet. Removing rows is a
       // structural edit and stays an explicit button — one stray keypress
-      // should not renumber the sheet.
-      if (view.blockOps.hasBlock) { e.preventDefault(); view.blockOps.clearBlock(); }
+      // should not renumber the sheet. Retrospective-audit P1 fix: consumed
+      // UNCONDITIONALLY — with no block selected (a Tab-focused toolbar
+      // button or sheet tab), the unconsumed keystroke leaked to the global
+      // handler and deleted a dataset the pane may not even display
+      // (GUI_INTERACTION #14: a worksheet window can browse a non-active
+      // dataset). Own the key; no-op when there's nothing to clear.
+      e.preventDefault();
+      if (view.blockOps.hasBlock) view.blockOps.clearBlock();
+    }
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // No grid arrow-navigation exists yet — but unconsumed bare arrows on
+      // a focused toolbar button/sheet tab stepped the GLOBAL active-dataset
+      // list (retrospective audit). Consume until cell navigation owns them.
+      e.preventDefault();
     }
   };
 

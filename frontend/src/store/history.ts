@@ -83,6 +83,14 @@ export interface HistorySnapshot {
   editableFigures: AppState["editableFigures"];
   pages: AppState["pages"];
   folders: AppState["folders"];
+  // Retrospective-audit fix (2026-08-15): `expandedFolders` round-trips into
+  // `.dwk` v2 — it is persistent project data, not transient UI state like
+  // `expandedWorkbookIds` (whose E2-owned exclusion is documented in
+  // architecture.test.ts). `folderDeletePatch` prunes it under
+  // recordHistory("delete folder"), and without this field an undone folder
+  // delete restored the folder COLLAPSED — the exact half-restored-state
+  // failure this file's header warns about (the savedRois incident).
+  expandedFolders: AppState["expandedFolders"];
   // LIBRARY_WORKBOOK_UX_PLAN PR A2 — persistent Library organization, same
   // class as `folders` right above it (not yet mutated by any action; wired
   // here now so the FIRST mutating action in a later PR inherits undo for
@@ -126,6 +134,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     editableFigures: s.editableFigures,
     pages: s.pages,
     folders: s.folders,
+    expandedFolders: s.expandedFolders,
     workbooks: s.workbooks,
     smartFolders: s.smartFolders,
     savedPlotSpecs: s.savedPlotSpecs,
@@ -163,6 +172,26 @@ function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppState> {
     // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
     ...navigationView(s),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
+    // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH
+    // invariant violator): the snapshot restores `selectedIds` verbatim, so
+    // a non-empty restored dataset selection displaces the live tree
+    // selection; and a surviving tree selection must still NAME something in
+    // the restored state — undoing a folder's creation while it was selected
+    // otherwise left a dangling id feeding import targeting.
+    librarySelection: (() => {
+      if (snap.selectedIds.length > 0) return null;
+      const sel = s.librarySelection;
+      if (!sel) return null;
+      const alive =
+        sel.kind === "folder" ? snap.folders.some((f) => f.id === sel.id)
+        : sel.kind === "workbook" ? snap.workbooks.some((w) => w.id === sel.id)
+        : sel.kind === "origin-figure" ? snap.originFigures.some((f) => f.id === sel.id)
+        : sel.kind === "editable-figure" ? snap.editableFigures.some((f) => f.id === sel.id)
+        : sel.kind === "publication-figure" ? snap.figureDocs.some((f) => f.id === sel.id)
+        : sel.kind === "page" ? snap.pages.some((pg) => pg.id === sel.id)
+        : snap.reports.some((r) => r.id === sel.id);
+      return alive ? sel : null;
+    })(),
     plotWindows: snap.plotWindows.map((w) =>
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
     ),
