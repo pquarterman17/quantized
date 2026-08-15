@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getConstants, neutronCalc, xrayCalc } from "../../../lib/api";
+import { setFormatOpts } from "../../../lib/format";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
@@ -81,6 +82,50 @@ describe("XrayTab", () => {
     // never validated or forwarded — a mode that doesn't need wavelength
     // sends the documented neutral values (w=0, n=1), not stale shared state.
     expect(xrayCalc).toHaveBeenCalledWith("wavelength_from_energy", 0, 3.1356, 1);
+  });
+
+  it("invalid text left in the HIDDEN wavelength/order fields cannot block the energy-only modes (DIRACULATOR_AUDIT P2)", async () => {
+    vi.mocked(xrayCalc).mockResolvedValue({ result: 8.048, unit: "keV", description: "E from λ" });
+    openXrayTab();
+
+    // Poison both fields while they are visible (Bragg mode)...
+    fireEvent.change(screen.getByDisplayValue("1.5406"), { target: { value: "abc" } });
+    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "xyz" } });
+
+    // ...then switch to each standalone energy mode: the calc must succeed,
+    // sending the documented neutral values instead of the poisoned state.
+    for (const mode of ["energy_from_wavelength", "wavelength_from_energy"]) {
+      vi.mocked(xrayCalc).mockClear();
+      fireEvent.change(screen.getByLabelText("x-ray conversion"), { target: { value: mode } });
+      fireEvent.click(screen.getByText("="));
+      expect(await screen.findByText("8.048")).toBeInTheDocument();
+      expect(xrayCalc).toHaveBeenCalledWith(mode, 0, 3.1356, 1);
+    }
+  });
+
+  it("a low sig-figs display preference cannot degrade the chained → λ wavelength (DIRACULATOR_AUDIT P2)", async () => {
+    setFormatOpts(3, "auto"); // aggressive display rounding: 1.540598 would show as 1.54
+    try {
+      vi.mocked(xrayCalc).mockResolvedValue({ result: 1.540598, unit: "Å", description: "λ from E" });
+      openXrayTab();
+
+      fireEvent.click(screen.getByText("→ λ"));
+      await vi.waitFor(() => {
+        // The wavelength INPUT carries the full backend precision, not the
+        // display text — display sig-figs never alter a chained calculation.
+        expect(screen.getByDisplayValue("1.540598")).toBeInTheDocument();
+      });
+
+      // And the next Bragg calc consumes that full-precision value. (The
+      // DISPLAY is rounded to 3 sig-figs — that's fine; the API call is not.)
+      vi.mocked(xrayCalc).mockResolvedValue({ result: 28.44, unit: "deg", description: "2θ" });
+      fireEvent.click(screen.getByText("="));
+      await vi.waitFor(() => {
+        expect(xrayCalc).toHaveBeenLastCalledWith("2theta_from_d", 1.540598, 3.1356, 1);
+      });
+    } finally {
+      setFormatOpts(6, "auto"); // restore the default for the rest of the suite
+    }
   });
 
   it("surfaces a Bragg conversion error inline", async () => {
