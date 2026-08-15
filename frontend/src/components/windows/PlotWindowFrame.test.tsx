@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
-import { DATASET_DND } from "../Library/useLibraryTree";
+import { DATASET_DND } from "../Library/dnd";
 import PlotWindowFrame from "./PlotWindowFrame";
 
 const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({

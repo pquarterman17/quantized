@@ -20,7 +20,7 @@ describe("workbookActions slice", () => {
     useApp.setState({
       datasets: [ds("d1", "w1"), ds("d2", "w1"), ds("d3", "w2")],
       workbooks: [wb("w1"), wb("w2")],
-      folders: [{ id: "f1", name: "Folder 1", parentId: null }],
+      folders: [{ id: "f1", name: "Folder 1", parentId: null, order: 0 }],
       activeId: null,
       selectedIds: [],
       trash: [],

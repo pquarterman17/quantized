@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 
+import { recordWorkbookOpen } from "./libraryOpen";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { originPreviewDataUrl } from "../../lib/originPreview";
@@ -24,6 +25,14 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
   const figures = useApp((s) => s.originFigures);
   const datasets = useApp((s) => s.datasets);
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
+  // PR C: the workbook owning this figure's bound dataset, for L0.6's
+  // remembered-child recording — undefined when unresolved or unowned
+  // (a cross-workbook/root placement never "remembers" a single workbook).
+  const ownerWorkbookId = datasets.find((ds) => ds.id === entry.datasetId)?.workbookId;
+  const openAndRemember = (opts?: { newWindow?: boolean }) => {
+    applyOriginFigure(entry.id, opts);
+    recordWorkbookOpen(ownerWorkbookId, `origin-figure:${entry.id}`);
+  };
   const [showSavedPreview, setShowSavedPreview] = useState(false);
   const savedPreviewSrc = originPreviewDataUrl(entry.figure.saved_preview);
   const previewActionLabel = showSavedPreview
@@ -44,10 +53,11 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
       <div className="qzk-fig-row">
       <button
         className="qzk-fig-item"
+        data-lib-row={`origin-figure:${entry.id}`}
         disabled={!resolved}
         title={title}
         style={depth ? { marginLeft: depth * 14 } : undefined}
-        onClick={() => applyOriginFigure(entry.id)}
+        onClick={() => openAndRemember()}
       >
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
         <span className="qzk-fig-meta">
@@ -58,7 +68,7 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
         className="qz-icon-btn"
         title="Open in a new graph window"
         disabled={!resolved}
-        onClick={() => applyOriginFigure(entry.id, { newWindow: true })}
+        onClick={() => openAndRemember({ newWindow: true })}
       >
         ⊞
       </button>

@@ -285,7 +285,7 @@ describe("WindowCanvas — cross-window link groups (item 13)", () => {
 // events with a stub dataTransfer + explicit client coordinates.
 function datasetTransfer(id: string) {
   return {
-    types: ["application/x-qz-dataset"], // DATASET_DND (useLibraryTree)
+    types: ["application/x-qz-dataset"], // DATASET_DND (Library/dnd.ts)
     getData: (t: string) => (t === "application/x-qz-dataset" ? id : ""),
     setData: () => {},
   };

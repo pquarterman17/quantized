@@ -22,8 +22,7 @@
 // scale flyouts opened "way off" and closed before the pointer could reach
 // them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
 // vertically when the flyout would overflow the viewport.
-// Stacking: root 2100 / flyout 2101, above InteractionHints (1200) and
-// .qz-tip (2000, platform.css); see ContextMenu.test.tsx's stacking test.
+// Stacking: root 2100 / flyout 2101, above InteractionHints (1200) and .qz-tip (2000, platform.css); see ContextMenu.test.tsx's stacking test.
 // GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
 // `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
 // Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
@@ -56,7 +55,7 @@ export type ContextMenuItem =
   | { header: string }
   | { swatches: Swatch[] }
   | { label: string; submenu: ContextMenuItem[]; disabled?: boolean }
-  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean };
+  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; title?: string }; // title: disabled-reason tooltip (L0.36)
 
 interface Props {
   x: number;
@@ -323,6 +322,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
             }}
             className={`qzk-menu-item${it.danger ? " danger" : ""}`}
             disabled={it.disabled}
+            title={it.title}
             role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
             aria-checked={it.checked === undefined ? undefined : it.checked}
             aria-disabled={it.disabled || undefined}

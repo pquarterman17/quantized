@@ -29,7 +29,7 @@ import { type PlotWindow, type WindowGeometry } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { snapMovePosition, snapResizeSize } from "../../lib/windowSnap";
 import { useApp } from "../../store/useApp";
-import { DATASET_DND } from "../Library/useLibraryTree";
+import { DATASET_DND } from "../Library/dnd";
 import { Badge } from "../primitives";
 import WindowTitleButtons from "./WindowTitleButtons";
 

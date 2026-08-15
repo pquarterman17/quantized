@@ -8,7 +8,10 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
+import { createFigureDocument } from "../../lib/figureDocument";
 import type { OriginFigureEntry } from "../../lib/originFigures";
+import { createPageDocument } from "../../lib/pageDocument";
+import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
@@ -51,7 +54,10 @@ beforeEach(() => {
 });
 
 describe("Library — figures nested in the tree", () => {
-  it("renders a figure inside the tree and hides the flat Figures section (folders exist)", () => {
+  // PR C: LibraryTree is a lazy chunk (bundle-size budget, MAIN_PLAN #29 —
+  // same idiom as EditableFiguresSection/PagesSection) — its content awaits
+  // the Suspense resolve, so tree-content assertions use findBy* here.
+  it("renders a figure inside the tree and hides the flat Figures section (folders exist)", async () => {
     useApp.setState({
       datasets: [dsWith("a", "f1")],
       folders: [folder("f1", "Project")],
@@ -61,13 +67,13 @@ describe("Library — figures nested in the tree", () => {
       selectedIds: ["a"],
     });
     render(<Library />);
-    expect(screen.getByText("Project")).toBeInTheDocument(); // folder header
+    expect(await screen.findByText("Project")).toBeInTheDocument(); // folder header
     expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeInTheDocument(); // figure row
     // The flat "Figures" section header must be absent in tree mode (no dup).
     expect(screen.queryByText("Figures")).not.toBeInTheDocument();
   });
 
-  it("shows figures in the flat Figures section when there are no folders", () => {
+  it("PR C: still renders as a tree (not the flat Figures section) even with no folders — the library is non-empty", async () => {
     useApp.setState({
       datasets: [dsWith("a")],
       originFigures: [figEntry("g1", "a", "MokeGraph")],
@@ -75,8 +81,12 @@ describe("Library — figures nested in the tree", () => {
       selectedIds: ["a"],
     });
     render(<Library />);
-    expect(screen.getByText("Figures")).toBeInTheDocument(); // flat section header present
-    expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeInTheDocument();
+    // The old "flat mode when no folders" trigger is retired: any non-empty
+    // library renders the tree, so the flat "Figures" section header stays
+    // hidden and the figure appears as a tree row instead (root-level, since
+    // there's no workbook to nest it under in this legacy-shaped fixture).
+    expect(await screen.findByRole("button", { name: /MokeGraph/ })).toBeInTheDocument();
+    expect(screen.queryByText("Figures")).not.toBeInTheDocument();
   });
 });
 
@@ -100,7 +110,7 @@ describe("Library — group-chip UI retired (item 6)", () => {
     expect(screen.queryByText("All groups")).not.toBeInTheDocument();
   });
 
-  it("never splits the list into collapsible group sections — falls back to a flat list", () => {
+  it("never splits the list into collapsible group sections — falls back to a flat list", async () => {
     useApp.setState({
       datasets: [grouped("a", "Batch A"), grouped("b", "Batch B")],
       activeId: "a",
@@ -108,14 +118,15 @@ describe("Library — group-chip UI retired (item 6)", () => {
     });
     render(<Library />);
     // Both datasets render as plain rows, not headed by a "Batch A"/"Batch B"
-    // collapsible section (the retired qzk-group-head rendering).
+    // collapsible section (the retired qzk-group-head rendering). PR C:
+    // LibraryTree is a lazy chunk (MAIN_PLAN #29) — await its Suspense resolve.
+    expect(await screen.findByText("a")).toBeInTheDocument();
+    expect(screen.getByText("b")).toBeInTheDocument();
     expect(screen.queryByText("Batch A")).not.toBeInTheDocument();
     expect(screen.queryByText("Batch B")).not.toBeInTheDocument();
-    expect(screen.getByText("a")).toBeInTheDocument();
-    expect(screen.getByText("b")).toBeInTheDocument();
   });
 
-  it("still renders normally (fallback intact) once folders exist alongside a stray .group", () => {
+  it("still renders normally (fallback intact) once folders exist alongside a stray .group", async () => {
     useApp.setState({
       datasets: [grouped("a", "Batch A"), dsWith("b", "f1")],
       folders: [folder("f1", "F1")],
@@ -124,7 +135,7 @@ describe("Library — group-chip UI retired (item 6)", () => {
       selectedIds: ["a"],
     });
     render(<Library />);
-    expect(screen.getByText("F1")).toBeInTheDocument(); // folder header renders
+    expect(await screen.findByText("F1")).toBeInTheDocument(); // folder header renders
     expect(screen.getByText("a")).toBeInTheDocument(); // un-foldered dataset still shown at root
     expect(screen.getByText("b")).toBeInTheDocument(); // foldered dataset shown nested
   });
@@ -165,6 +176,67 @@ describe("Library — Show in folder reveal (GUI_INTERACTION_PLAN #13 sub-item 2
     });
     expect(useApp.getState().revealTarget).toBeNull();
     expect(useApp.getState().selectedIds).toEqual([]);
+  });
+
+  // PR C: the reveal effect now also expands the dataset's WORKBOOK, not
+  // just its ancestor folders — otherwise the row would be selected but
+  // invisible (a collapsed workbook's children don't render).
+  it("PR C: also expands the dataset's workbook", () => {
+    useApp.setState({
+      datasets: [{ ...dsWith("a", "f1"), workbookId: "w1" }],
+      workbooks: [{ id: "w1", name: "wb", folderId: "f1" }],
+      folders: [{ id: "f1", name: "F1", parentId: null, order: 0 }],
+      expandedFolders: [],
+      expandedWorkbookIds: [],
+      activeId: null,
+      selectedIds: [],
+    });
+    render(<Library />);
+    act(() => {
+      useApp.getState().requestReveal("a");
+    });
+    expect(useApp.getState().expandedFolders).toContain("f1");
+    expect(useApp.getState().expandedWorkbookIds).toContain("w1");
+    expect(useApp.getState().selectedIds).toEqual(["a"]);
+  });
+});
+
+// PR C: the tree owns worksheets/figures/editable figures/publication
+// figures/pages/reports whenever it renders — their flat sections must hide
+// then, and reappear once a search query forces the flat list.
+describe("Library — sections hidden in tree mode, present in search mode (PR C)", () => {
+  const editableFig = createFigureDocument({ id: "fig1", name: "My Figure", datasetId: "a", view: defaultPlotView() });
+  const page = createPageDocument({ id: "pg1", name: "My Page", rows: 1, cols: 1 });
+  const report = { id: "rep1", name: "My Report", datasetId: "a", report: { rows: [] } as never };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [dsWith("a")],
+      folders: [],
+      workbooks: [],
+      editableFigures: [editableFig],
+      figureDocs: [],
+      pages: [page],
+      reports: [report],
+      activeId: "a",
+      selectedIds: ["a"],
+    });
+  });
+
+  it("hides the flat sections while the tree renders (library non-empty, no search)", () => {
+    render(<Library />);
+    expect(screen.queryByText("Editable figures")).not.toBeInTheDocument();
+    expect(screen.queryByText("Saved pages")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reports")).not.toBeInTheDocument();
+  });
+
+  it("shows the flat sections once a search query is active", async () => {
+    render(<Library />);
+    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "nonsense-query" } });
+    // EditableFiguresSection/PagesSection are lazy — await the Suspense resolve.
+    expect(await screen.findByText("Editable figures")).toBeInTheDocument();
+    expect(await screen.findByText("Saved pages")).toBeInTheDocument();
+    expect(screen.getByText("Reports")).toBeInTheDocument();
   });
 });
 

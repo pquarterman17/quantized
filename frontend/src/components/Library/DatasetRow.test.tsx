@@ -6,7 +6,7 @@ import { folderDatasets } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
-import { DATASET_DND } from "./useLibraryTree";
+import { DATASET_DND } from "./dnd";
 
 // GUI_INTERACTION #8: "Remove"/"Remove N selected" now confirm first.
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -127,6 +127,40 @@ describe("DatasetRow activation routing (WORKSHEET_PLAN item 15 — origin book 
     fireEvent.click(container.querySelector(".qzk-ds")!);
     expect(useApp.getState().activeId).toBe("sheet1");
     expect(useApp.getState().worksheetId).toBeNull();
+  });
+});
+
+describe("DatasetRow — PR C: librarySelection clearing + workbookLastChild", () => {
+  const inWorkbook: Dataset = { ...plain, id: "wd1", workbookId: "w1" };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [inWorkbook],
+      activeId: null,
+      selectedIds: [],
+      librarySelection: { kind: "folder", id: "f1" },
+      workbookLastChild: {},
+    });
+  });
+
+  it("a plain click clears any folder/workbook selection and records the opened child", () => {
+    const { container } = render(<DatasetRow dataset={inWorkbook} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!);
+    expect(useApp.getState().librarySelection).toBeNull();
+    expect(useApp.getState().workbookLastChild.w1).toBe("worksheet:wd1");
+  });
+
+  it("a ctrl-click (multi-select toggle) also clears librarySelection", () => {
+    const { container } = render(<DatasetRow dataset={inWorkbook} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!, { ctrlKey: true });
+    expect(useApp.getState().librarySelection).toBeNull();
+    expect(useApp.getState().selectedIds).toContain("wd1");
+  });
+
+  it("a dataset with no workbookId doesn't record workbookLastChild", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!);
+    expect(useApp.getState().workbookLastChild).toEqual({});
   });
 });
 

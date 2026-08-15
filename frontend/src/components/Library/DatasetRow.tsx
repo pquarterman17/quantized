@@ -7,28 +7,27 @@
 // reorders within (or moves into) THIS row's own folder — see lib/foldertree's
 // dropEdgeAt/resolveDropBeforeId for the pure hit-testing.
 //
-// GUI_INTERACTION_PLAN #13: the drag GESTURE now starts only from the grip
-// handle (`.qzk-drag-handle`, the only element carrying `draggable`) — the
-// rest of the row keeps its normal select/open behaviour and never arms a
-// drag. This changes the drag SOURCE affordance only; onDragOver/onDrop
-// (the drop-target logic above) are untouched. The full context menu moved
-// to datasetRowMenu.ts (component-ceiling ratchet — this file sits at the
-// 400-line pin).
+// GUI_INTERACTION_PLAN #13: the drag GESTURE starts only from the grip handle
+// (`.qzk-drag-handle`, the only `draggable` element) — the rest of the row
+// keeps its normal select/open behaviour. The full context menu moved to
+// datasetRowMenu.ts (this file sits at the 400-line ceiling).
 //
-// GUI_INTERACTION #8: the row is now a keyboard-reachable context-menu
-// target — `tabIndex` + the ContextMenu key (or Shift+F10) opens the SAME
-// menu anchored at the row, and a "⋯" resting-cue button (hidden until
-// hover/focus, mirroring the drag handle's own reveal rule) opens it too,
-// so right-click is never the only way in. Most menu items now come from
-// `lib/contextActions.ts`'s dataset registry via `datasetRowMenu.ts` — this
-// row only supplies the two genuinely local UI hooks (inline rename/tag
-// inputs) the registry can't own itself.
+// GUI_INTERACTION #8: keyboard-reachable context menu — `tabIndex` + the
+// ContextMenu key (or Shift+F10) opens the SAME menu the "⋯" resting-cue
+// button and right-click do. Most items come from `lib/contextActions.ts`'s
+// dataset registry via `datasetRowMenu.ts`; this row only supplies the two
+// local UI hooks (inline rename/tag inputs) the registry can't own itself.
+//
+// Reused inside the Library TREE (LIBRARY_WORKBOOK_UX_PLAN PR C) as the
+// worksheet row — see LibraryTree.tsx's dispatcher and this row's own
+// onRowClick (records L0.6's remembered workbook child on open).
 
 import { useState } from "react";
 
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
+import { DATASET_DND } from "./dnd";
+import { recordWorkbookOpen } from "./libraryOpen";
 import Sparkline from "./Sparkline";
-import { DATASET_DND } from "./useLibraryTree";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
@@ -47,10 +46,9 @@ interface Props {
   canMoveDown: boolean;
   /** Click a tag chip to filter the library to that tag. */
   onFilterTag: (tag: string) => void;
-  /** Sheet number (>1) when this dataset is a non-first sheet of a multi-sheet
-   *  Origin pseudo-book group (`lib/grouping.originSheetGroups`) — renders a
-   *  subtle indent + "sheet N" chip so the parent/child relation reads at a
-   *  glance. Undefined for ordinary datasets and for a group's parent (sheet 1). */
+  /** Sheet number (>1) for a non-first sheet of a multi-sheet Origin pseudo-book
+   *  group (`lib/grouping.originSheetGroups`) — renders a "sheet N" chip.
+   *  Undefined for ordinary datasets and a group's parent (sheet 1). */
   sheetNumber?: number;
   /** Indent depth in the folder tree (0 = root); shifts the row right so nesting
    *  reads at a glance. Undefined outside the tree view. */
@@ -114,10 +112,13 @@ export default function DatasetRow({
   // the plotted dataset. Routes through `activateFromLibrary` (item 15), not
   // `setActive` directly, so an Origin-project row opens its Worksheet instead
   // of rebinding the focused plot window, per the `originBookClickOpens` pref.
+  // PR C: clears librarySelection (a dataset row can't coexist with a
+  // folder/workbook selection) and records L0.6's remembered workbook child.
   const onRowClick = (e: React.MouseEvent) => {
+    useApp.getState().setLibrarySelection(null);
     if (e.shiftKey) selectRange(d.id);
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
-    else activateFromLibrary(d.id);
+    else { activateFromLibrary(d.id); recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`); }
   };
 
   // Right-click: if this row isn't already in the selection, select it first so

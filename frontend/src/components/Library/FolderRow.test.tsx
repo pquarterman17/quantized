@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
-import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
+import { DATASET_DND, FOLDER_DND } from "./dnd";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { childFolders } from "../../lib/foldertree";
 import type { Dataset, FolderNode } from "../../lib/types";
@@ -387,6 +387,24 @@ describe("FolderRow — drop-candidate resting highlight + floating drop label (
     const row = container.querySelector(".qzk-folder-head")!;
     fireDrag(row, "dragover", 0, datasetTransfer("d1"));
     expect(screen.getByText("Move inside a")).toBeInTheDocument();
+  });
+});
+
+describe("FolderRow — PR C: click marks it current for import targeting (L0.46)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [], librarySelection: null });
+  });
+
+  it("a click sets librarySelection to this folder, alongside the existing toggle-expand behavior", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-folder-head")!);
+    expect(useApp.getState().librarySelection).toEqual({ kind: "folder", id: "a" });
+    expect(useApp.getState().expandedFolders).toContain("a");
+  });
+
+  it("carries the roving-focus data-lib-row anchor", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    expect(container.querySelector('[data-lib-row="folder:a"]')).toBeInTheDocument();
   });
 });
 

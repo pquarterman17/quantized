@@ -36,8 +36,8 @@
 
 import { useState } from "react";
 
+import { DATASET_DND, FOLDER_DND } from "./dnd";
 import { buildFolderRowMenu } from "./folderRowMenu";
-import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
 import ContextMenu from "../overlays/ContextMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import {
@@ -129,8 +129,14 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
       }${isDropCandidate && !dropZone ? " drop-candidate" : ""}`}
       style={{ paddingLeft: 6 + depth * 14 }}
+      data-lib-row={`folder:${folder.id}`}
       tabIndex={0}
-      onClick={() => toggle(folder.id)}
+      // L0.46: a folder click ALSO marks it "current" for import targeting
+      // (librarySelection) — the first place folder selection exists at all.
+      onClick={() => {
+        toggle(folder.id);
+        useApp.getState().setLibrarySelection({ kind: "folder", id: folder.id });
+      }}
       onKeyDown={onHeaderKeyDown}
       onContextMenu={(e) => {
         e.preventDefault();
