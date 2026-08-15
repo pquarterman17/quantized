@@ -381,3 +381,89 @@ export function reconcileWorkbookRefs(
     warnings: [...warnings, ...derived.warnings],
   };
 }
+
+export interface WorkbookMigrationResult {
+  datasets: Dataset[];
+  folders: FolderNode[];
+  expandedFolders: string[];
+  workbooks: WorkbookNode[];
+  warnings: string[];
+}
+
+/**
+ * The v4 parse-time workbook step (PR A3): repair/derive workbook membership
+ * for every dataset via `reconcileWorkbookRefs` (a LOCAL deterministic
+ * `wbm-N` id counter, skipping any id a v4 doc's `workbooks[]` already used —
+ * re-parsing the same document twice must yield byte-identical workbook ids,
+ * the plan's round-trip acceptance gate), THEN converts every book-surrogate
+ * folder that derivation identified (`convertedFolderIds`, A1's rule 2) into
+ * its replacement workbook: the folder is dropped from `folders` and
+ * `expandedFolders`, and every dataset that sat in it is re-homed to the
+ * folder's own parent. The confirmed L0.1 hierarchy has no book-level folder
+ * any more — only path folder -> workbook — so a clean conversion produces
+ * exactly what a fresh PR A3 import of the same project would (see
+ * lib/originFolders.ts's `planOriginImport`, which shares this module's
+ * `deriveWorkbooks` for that same reason).
+ *
+ * Extracted out of `lib/workspace.ts`'s `parseWorkspace` (PR A3) so that
+ * zero-headroom module's pin can shrink instead of grow for the new
+ * conversion step.
+ *
+ * MUTATES `datasets` in place (`d.workbookId`, and `d.folderId` for a
+ * converted folder's former occupants) — the same in-place style
+ * `parseWorkspace` already uses for every other optional dataset field — and
+ * returns the SAME array reference. `folders`/`expandedFolders` are treated
+ * as read-only inputs; the result carries fresh filtered arrays.
+ *
+ * Clean conversions are the confirmed L0.1 structure, not an anomaly, so they
+ * get no migration warning of their own — a large legacy project could have
+ * dozens of them. `reconcileWorkbookRefs`'s own anomaly warnings (spread
+ * Origin sheets, a dangling `workbookId`) still flow through unchanged.
+ */
+export function applyWorkbookMigration(
+  datasets: Dataset[],
+  folders: readonly FolderNode[],
+  expandedFolders: readonly string[],
+  sanitizedWorkbooks: readonly WorkbookNode[],
+): WorkbookMigrationResult {
+  const usedWorkbookIds = new Set(sanitizedWorkbooks.map((w) => w.id));
+  let seq = 0;
+  const genWorkbookId = (): string => {
+    let id: string;
+    do {
+      seq++;
+      id = `wbm-${seq}`;
+    } while (usedWorkbookIds.has(id));
+    usedWorkbookIds.add(id);
+    return id;
+  };
+
+  const result = reconcileWorkbookRefs(datasets, sanitizedWorkbooks, folders, genWorkbookId);
+  for (const d of datasets) d.workbookId = result.membership[d.id];
+
+  const convertedIds = new Set(result.convertedFolderIds);
+  if (convertedIds.size === 0) {
+    return {
+      datasets,
+      folders: [...folders],
+      expandedFolders: [...expandedFolders],
+      workbooks: result.workbooks,
+      warnings: result.warnings,
+    };
+  }
+
+  const convertedParent = new Map(
+    folders.filter((f) => convertedIds.has(f.id)).map((f) => [f.id, f.parentId ?? undefined]),
+  );
+  for (const d of datasets) {
+    if (d.folderId && convertedParent.has(d.folderId)) d.folderId = convertedParent.get(d.folderId);
+  }
+
+  return {
+    datasets,
+    folders: folders.filter((f) => !convertedIds.has(f.id)),
+    expandedFolders: expandedFolders.filter((id) => !convertedIds.has(id)),
+    workbooks: result.workbooks,
+    warnings: result.warnings,
+  };
+}

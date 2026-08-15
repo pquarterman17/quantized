@@ -279,7 +279,13 @@ const MODULE_PINS: Record<string, number> = {
   // new v4 `workbooks[]` wiring (WORKSPACE_VERSION bump + WorkspaceState/
   // LoadedWorkspace/WorkspaceDoc fields + the parseWorkspace
   // sanitizeWorkbooks/reconcileWorkbookRefs call site + serializer lines).
-  "/lib/workspace.ts": 609,
+  // 609 -> 592 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A3): the inline
+  // genWorkbookId closure + reconcileWorkbookRefs call + membership-apply
+  // loop moved verbatim to the new lib/workbooks.ts `applyWorkbookMigration`,
+  // which also now applies A1's surrogate-folder conversion (dropping a
+  // converted folder from folders/expandedFolders and re-homing its former
+  // occupants) — a NET SHRINK even with the new conversion step folded in.
+  "/lib/workspace.ts": 592,
   "/lib/plotview.ts": 978,
 };
 

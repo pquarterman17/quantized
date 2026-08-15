@@ -184,3 +184,150 @@ describe("parseWorkspace workbooks (v4, LIBRARY_WORKBOOK_UX_PLAN PR A2)", () => 
     expect(ws.datasets).toEqual([]);
   });
 });
+
+// PR A3: applyWorkbookMigration's surrogate-folder conversion. A pre-A3
+// (v1-v3) document that used a folder as a multi-sheet Origin book's
+// surrogate — planOriginFolders's old shape, one folder per multi-sheet book
+// under its parent — is CONVERTED, not merely derived: the folder disappears
+// and its sheets land in the folder that used to be its PARENT, exactly the
+// structure a fresh PR A3 import of the same project would produce.
+describe("parseWorkspace surrogate-folder conversion (v1-v3, LIBRARY_WORKBOOK_UX_PLAN PR A3)", () => {
+  it("a clean surrogate folder is converted: gone from folders/expandedFolders, sheets re-homed, no warning", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [
+        { ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF" },
+        { ...makeDataset("s2", "Proj:Book4@2", { originBook: "Book4@2" }), folderId: "bookF" },
+      ],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4", parentId: "proj", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF"],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    expect(ws.folders.map((f) => f.id)).toEqual(["proj"]); // "bookF" is gone
+    expect(ws.expandedFolders).toEqual(["proj"]); // and out of expandedFolders too
+    expect(ws.datasets.every((d) => d.folderId === "proj")).toBe(true); // re-homed to the parent
+    expect(ws.workbooks).toHaveLength(1);
+    const wb = ws.workbooks[0];
+    expect(wb.originBook).toBe("Book4");
+    expect(wb.folderId).toBe("proj");
+    expect(ws.datasets.every((d) => d.workbookId === wb.id)).toBe(true);
+    // Clean conversion: no warning (a big legacy project would spam dozens).
+    expect(ws.migrationWarnings).toEqual([]);
+  });
+
+  it("a clean conversion produces the SAME structure a fresh PR A3 import of the equivalent project would", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [
+        { ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF" },
+        { ...makeDataset("s2", "Proj:Book4@2", { originBook: "Book4@2" }), folderId: "bookF" },
+      ],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4", parentId: "proj", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF"],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    // A fresh import would: keep only the "Proj" folder (no book-surrogate
+    // folder), place the workbook AND every sheet directly at "Proj", one
+    // workbook covering both sheets. The converted legacy doc matches.
+    expect(ws.folders).toHaveLength(1);
+    expect(ws.folders[0].name).toBe("Proj");
+    expect(ws.workbooks).toHaveLength(1);
+    expect(ws.datasets.map((d) => d.folderId)).toEqual([ws.folders[0].id, ws.folders[0].id]);
+    expect(ws.datasets.map((d) => d.workbookId)).toEqual([ws.workbooks[0].id, ws.workbooks[0].id]);
+  });
+
+  it("a renamed surrogate folder is NOT converted — stays, no dataset re-homed", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [
+        { ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF" },
+        { ...makeDataset("s2", "Proj:Book4@2", { originBook: "Book4@2" }), folderId: "bookF" },
+      ],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4 (renamed)", parentId: "proj", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF"],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    expect(ws.folders.map((f) => f.id).sort()).toEqual(["bookF", "proj"]);
+    expect(ws.expandedFolders.sort()).toEqual(["bookF", "proj"]);
+    expect(ws.datasets.every((d) => d.folderId === "bookF")).toBe(true); // A1's fallback placement
+  });
+
+  it("a surrogate folder with an extra occupant is NOT converted", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [
+        { ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF" },
+        { ...makeDataset("s2", "Proj:Book4@2", { originBook: "Book4@2" }), folderId: "bookF" },
+        { ...makeDataset("other", "unrelated.csv"), folderId: "bookF" },
+      ],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4", parentId: "proj", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF"],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    expect(ws.folders.map((f) => f.id).sort()).toEqual(["bookF", "proj"]);
+    expect(ws.datasets.find((d) => d.id === "s1")!.folderId).toBe("bookF");
+  });
+
+  it("a surrogate folder with a child folder is NOT converted", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 3,
+      datasets: [
+        { ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF" },
+        { ...makeDataset("s2", "Proj:Book4@2", { originBook: "Book4@2" }), folderId: "bookF" },
+      ],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4", parentId: "proj", order: 0 },
+        { id: "child", name: "Sub", parentId: "bookF", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF", "child"],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    expect(ws.folders.map((f) => f.id).sort()).toEqual(["bookF", "child", "proj"]);
+    expect(ws.datasets.every((d) => d.folderId === "bookF")).toBe(true);
+  });
+
+  it("a v4 doc is untouched — no re-conversion, no re-derivation", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 4,
+      datasets: [{ ...makeDataset("s1", "Proj:Book4", { originBook: "Book4" }), folderId: "bookF", workbookId: "w1" }],
+      folders: [
+        { id: "proj", name: "Proj", parentId: null, order: 0 },
+        { id: "bookF", name: "Book4", parentId: "proj", order: 0 },
+      ],
+      expandedFolders: ["proj", "bookF"],
+      workbooks: [{ id: "w1", name: "Book4", folderId: "bookF" }],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+
+    // "bookF" survives — v4's already-valid membership means the surrogate
+    // was never even looked at by reconcileWorkbookRefs's orphan path.
+    expect(ws.folders.map((f) => f.id).sort()).toEqual(["bookF", "proj"]);
+    expect(ws.expandedFolders.sort()).toEqual(["bookF", "proj"]);
+    expect(ws.datasets[0].folderId).toBe("bookF");
+    expect(ws.workbooks).toEqual([{ id: "w1", name: "Book4", folderId: "bookF" }]);
+  });
+});

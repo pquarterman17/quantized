@@ -28,7 +28,7 @@ import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
-import { reconcileWorkbookRefs, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
+import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import type {
   BookSource,
@@ -515,42 +515,25 @@ export function parseWorkspace(
   const dsIds = new Set(datasets.map((d) => d.id));
   const folderIds = new Set(folders.map((f) => f.id));
   const migrationWarnings: string[] = [];
-  // Workbooks (v4, LIBRARY_WORKBOOK_UX_PLAN PR A2). ONE path for every
-  // version: sanitize whatever `workbooks[]` the doc carries (absent on a
-  // v1-v3 doc -> []), then reconcileWorkbookRefs repairs only the ORPHANED
-  // datasets (every dataset on a v1-v3 doc, since none carry a workbookId
-  // yet) via deriveWorkbooks's grouping rules (L0.2 one source file -> one
-  // workbook). An already-valid v4 membership is never rewritten. `genId` is
-  // a LOCAL deterministic counter, never Date.now()-based like the store's
-  // nextFolderId/nextDatasetId — re-parsing one document twice must yield
-  // byte-identical workbook ids (the plan's round-trip acceptance gate), and
-  // it skips any id a crafted v4 doc already used so the two can't collide.
-  // NOTE (deliberate, pinned in workspace.workbooks.test.ts): a v1 doc whose
-  // only organization is `Dataset.group` strings has no `folderId` at this
-  // point either — that promotion happens later, in the STORE's
-  // `loadWorkspace` (`migrateGroupsToFolders`) — so this derivation sees no
-  // folders yet and places such workbooks at the Library root. Membership is
-  // still correct; PR A3 owns any placement polish.
-  const workbooksSanitized = sanitizeWorkbooks(o.workbooks, folderIds);
-  const usedWorkbookIds = new Set(workbooksSanitized.map((w) => w.id));
-  let workbookIdSeq = 0;
-  const genWorkbookId = (): string => {
-    let id: string;
-    do {
-      workbookIdSeq++;
-      id = `wbm-${workbookIdSeq}`;
-    } while (usedWorkbookIds.has(id));
-    usedWorkbookIds.add(id);
-    return id;
-  };
-  const workbookResult = reconcileWorkbookRefs(datasets, workbooksSanitized, folders, genWorkbookId);
-  for (const d of datasets) d.workbookId = workbookResult.membership[d.id];
-  const workbooks = workbookResult.workbooks;
-  migrationWarnings.push(...workbookResult.warnings);
   const selectedIds = stringsIn(o.selectedIds, dsIds);
   const activeId =
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
-  const expandedFolders = stringsIn(o.expandedFolders, folderIds);
+  const rawExpandedFolders = stringsIn(o.expandedFolders, folderIds);
+  // Workbooks (v4, LIBRARY_WORKBOOK_UX_PLAN PR A2/A3). ONE path for every
+  // version: sanitize whatever `workbooks[]` the doc carries (absent on a
+  // v1-v3 doc -> []), then lib/workbooks.ts's `applyWorkbookMigration`
+  // repairs/derives membership for every dataset AND converts any pre-A3
+  // book-surrogate folder into its replacement workbook (dropping the
+  // folder, re-homing its former occupants to its parent) — see that
+  // function's doc for the deterministic `wbm-N` id counter and the v1
+  // group-string caveat (no folders exist yet at parse time, so such a
+  // doc's derived workbooks land at the Library root — still correct, just
+  // unplaced; folder promotion happens later, in the STORE's
+  // `loadWorkspace` -> `migrateGroupsToFolders`).
+  const workbooksSanitized = sanitizeWorkbooks(o.workbooks, folderIds);
+  const migration = applyWorkbookMigration(datasets, folders, rawExpandedFolders, workbooksSanitized);
+  const workbooks = migration.workbooks;
+  migrationWarnings.push(...migration.warnings);
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
@@ -576,11 +559,11 @@ export function parseWorkspace(
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
   return {
     datasets,
-    folders,
+    folders: migration.folders,
     workbooks,
     activeId,
     selectedIds,
-    expandedFolders,
+    expandedFolders: migration.expandedFolders,
     originFigures,
     originFidelity,
     smartFolders,
