@@ -1208,16 +1208,30 @@ describe("useApp importFiles", () => {
 
     const st = useApp.getState();
     const byName = new Map(st.folders.map((f) => [f.name, f]));
-    // Moke → {Raw normalized, Sub subtraction → Book4}
+    // Moke → {Raw normalized, Sub subtraction} — PR A3: a multi-sheet book is
+    // a first-class WORKBOOK now, never a "Book4" surrogate folder; its
+    // sheets sit directly in the Project Explorer path folder.
     expect(st.folders.map((f) => f.name).sort()).toEqual(
-      ["Book4", "Moke", "Raw normalized", "Sub subtraction"].sort(),
+      ["Moke", "Raw normalized", "Sub subtraction"].sort(),
     );
     expect(byName.get("Raw normalized")!.parentId).toBe(byName.get("Moke")!.id);
-    expect(byName.get("Book4")!.parentId).toBe(byName.get("Sub subtraction")!.id);
+    expect(byName.get("Sub subtraction")!.parentId).toBe(byName.get("Moke")!.id);
     const at = (name: string) => st.datasets.find((d) => d.name === name)!.folderId;
     expect(at("Moke:Book1")).toBe(byName.get("Raw normalized")!.id);
-    expect(at("Moke:Book4")).toBe(byName.get("Book4")!.id); // sheet nested in its workbook folder
-    expect(at("Moke:Book4@2")).toBe(byName.get("Book4")!.id);
+    expect(at("Moke:Book4")).toBe(byName.get("Sub subtraction")!.id);
+    expect(at("Moke:Book4@2")).toBe(byName.get("Sub subtraction")!.id);
+    // The workbook layer that replaced the surrogate: one per book, the
+    // multi-sheet Book4 holding all three sheets, placed in its path folder.
+    const wbOf = (name: string) => st.datasets.find((d) => d.name === name)!.workbookId!;
+    const book4 = st.workbooks.find((w) => w.id === wbOf("Moke:Book4"))!;
+    expect(book4.originBook).toBe("Book4");
+    expect(book4.folderId).toBe(byName.get("Sub subtraction")!.id);
+    expect(wbOf("Moke:Book4@2")).toBe(book4.id);
+    expect(wbOf("Moke:Book4@3")).toBe(book4.id);
+    expect(wbOf("Moke:Book1")).not.toBe(book4.id);
+    expect(st.workbooks.find((w) => w.id === wbOf("Moke:Book1"))!.folderId).toBe(
+      byName.get("Raw normalized")!.id,
+    );
   });
 
   it("continues past a bad file and reports the failure", async () => {
