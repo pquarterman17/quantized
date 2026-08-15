@@ -181,6 +181,12 @@ body {
 .qzk-details-name > span { margin-right: 4px; }
 .qzk-details-name small { display: block; overflow: hidden; margin-top: 2px; color: var(--text-faint); font-size: inherit; text-overflow: ellipsis; }
 .qzk-details-medium, .qzk-details-wide { display: none; }
+/* PR D2 search-results reveal action ("Show in Library") — link-styled like
+   the Manual order control; always visible (the action is the point of the
+   results surface, narrow panel included). */
+.qzk-details-actions { width: 1%; }
+.qzk-details-reveal { border: 0; padding: 2px 4px; background: none; color: var(--accent); font: inherit; white-space: nowrap; cursor: default; }
+.qzk-details-reveal:hover { text-decoration: underline; }
 @container (min-width: 300px) {
   .qzk-details-name { width: 48%; }
   .qzk-details-medium { display: table-cell; }

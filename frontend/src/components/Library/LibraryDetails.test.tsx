@@ -322,3 +322,98 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
     expect(document.activeElement?.getAttribute("data-lib-row")).toBe("worksheet:d2"); // same position, next row
   });
 });
+
+describe("LibraryDetails — search-results surface (PR D2, L0.26)", () => {
+  const searchDatasets = [
+    dataset("d1", "moke-loop.csv", 0),
+    dataset("d2", "xrd-scan.csv", 1),
+  ];
+  const searchHierarchy = buildLibraryHierarchy({
+    folders: [{ id: "f1", name: "Growth", parentId: null, order: 0 }],
+    workbooks: [{ id: "w", name: "MokeRun", folderId: "f1" }],
+    datasets: searchDatasets,
+  });
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: searchDatasets,
+      workbooks: [{ id: "w", name: "MokeRun", folderId: "f1" }],
+      folders: [{ id: "f1", name: "Growth", parentId: null, order: 0 }],
+      selectedIds: [],
+      librarySelection: null,
+      activeId: null,
+      revealTarget: null,
+    });
+  });
+
+  it("filters project-wide (workbook AND worksheet match by name) with full breadcrumbs, flat indent", () => {
+    render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="moke" />);
+    const keys = [...document.querySelectorAll("tbody tr")].map((tr) => tr.getAttribute("data-lib-row"));
+    expect(keys).toEqual(["workbook:w", "worksheet:d1"]); // xrd-scan excluded
+    expect(screen.getByText("2 matches")).toBeInTheDocument();
+    // Full breadcrumb: the worksheet row carries its Folder / Workbook path.
+    const wsRow = screen.getByText("moke-loop.csv").closest("tr")!;
+    expect(wsRow.querySelector(".qzk-details-name small")).toHaveTextContent("Growth / MokeRun");
+    // Flat: no hierarchy indent even in manual order (breadcrumbs carry location).
+    expect(screen.getByText("moke-loop.csv").closest("td")).toHaveStyle({ paddingLeft: "8px" });
+  });
+
+  it("open behavior is the node's normal open (worksheet activates); selection uses the L0.25 contract", () => {
+    render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="moke" />);
+    const wsRow = screen.getByText("moke-loop.csv").closest("tr")!;
+    fireEvent.click(wsRow);
+    expect(useApp.getState().selectedIds).toEqual(["d1"]);
+    fireEvent.doubleClick(wsRow);
+    expect(useApp.getState().activeId).toBe("d1");
+    // A workbook result selects through librarySelection (mutual exclusion holds).
+    fireEvent.click(screen.getByText("MokeRun").closest("tr")!);
+    const s = useApp.getState();
+    expect(s.librarySelection).toEqual({ kind: "workbook", id: "w" });
+    expect(s.selectedIds).toEqual([]);
+  });
+
+  it("Show in Library fires the callback with the row's node and never also selects/opens the row", () => {
+    const onShow = vi.fn();
+    render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="moke" onShowInLibrary={onShow} />);
+    const wsRow = screen.getByText("moke-loop.csv").closest("tr")!;
+    const btn = wsRow.querySelector(".qzk-details-reveal") as HTMLElement;
+    fireEvent.click(btn);
+    expect(onShow).toHaveBeenCalledOnce();
+    expect(onShow.mock.calls[0][0].key).toBe("worksheet:d1");
+    expect(useApp.getState().selectedIds).toEqual([]); // stopPropagation held
+  });
+
+  it("Enter on the focused reveal button activates the button, not the row's open", () => {
+    const onShow = vi.fn();
+    render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="moke" onShowInLibrary={onShow} />);
+    const btn = screen.getByText("moke-loop.csv").closest("tr")!.querySelector(".qzk-details-reveal") as HTMLElement;
+    btn.focus();
+    fireEvent.keyDown(btn, { key: "Enter" });
+    // The row's Enter handler stood down: no open happened…
+    expect(useApp.getState().activeId).toBeNull();
+    // …and the keystroke stayed available for the button's own activation
+    // (jsdom doesn't synthesize click-from-Enter; a real browser does).
+    fireEvent.click(btn);
+    expect(onShow).toHaveBeenCalledOnce();
+  });
+
+  it("no matches renders the empty note; without a query the table is the ordinary Details renderer", () => {
+    const { rerender } = render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="zzz" />);
+    expect(screen.getByText("No matches")).toBeInTheDocument();
+    expect(screen.getByText("0 matches")).toBeInTheDocument();
+    rerender(<LibraryDetails hierarchy={searchHierarchy} />);
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+    expect(screen.getByText(/items$/)).toBeInTheDocument();
+    expect(document.querySelector(".qzk-details-reveal")).toBeNull(); // no reveal column outside search
+  });
+
+  it("roving traversal works over the filtered result order", () => {
+    render(<LibraryDetails hierarchy={searchHierarchy} searchQuery="moke" />);
+    const rowEl = (key: string): HTMLElement => document.querySelector(`[data-lib-row="${key}"]`) as HTMLElement;
+    rowEl("workbook:w").focus();
+    fireEvent.keyDown(rowEl("workbook:w"), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(rowEl("worksheet:d1"));
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" }); // clamp at last result
+    expect(document.activeElement).toBe(rowEl("worksheet:d1"));
+  });
+});

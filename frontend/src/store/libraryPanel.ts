@@ -86,9 +86,12 @@ export interface ActiveDrag {
 export interface LibraryPanelSlice {
   libraryPanelWidth: number;
   revealTarget: string | null;
-  /** Ask the Library tree to clear its filter, expand the dataset's ancestor
-   *  folders, scroll to it, and select it (plan #13 sub-item 2). */
-  requestReveal: (datasetId: string) => void;
+  /** Ask the Library to clear its filter, expand the target's collapsed
+   *  ancestors, select it (L0.25), and scroll it into view (plan #13
+   *  sub-item 2; PR D2 generalizes it for L0.26's search "Show in Library").
+   *  Accepts a canonical `kind:id` LibraryNodeKey for any node kind, or a
+   *  bare dataset id (the pre-D2 callers — treated as `worksheet:<id>`). */
+  requestReveal: (target: string) => void;
   /** Consumed by Library.tsx once the reveal has run. */
   clearReveal: () => void;
   updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
@@ -131,7 +134,7 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
   return {
     libraryPanelWidth: initialWidth,
     revealTarget: null,
-    requestReveal: (datasetId) => set({ revealTarget: datasetId }),
+    requestReveal: (target) => set({ revealTarget: target }),
     clearReveal: () => set({ revealTarget: null }),
     updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
     activeDrag: null,

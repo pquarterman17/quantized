@@ -208,8 +208,9 @@ describe("Library — Show in folder reveal (GUI_INTERACTION_PLAN #13 sub-item 2
 
 // PR C: the tree owns worksheets/figures/editable figures/publication
 // figures/pages/reports whenever it renders — their flat sections must hide
-// then, and reappear once a search query forces the flat list.
-describe("Library — sections hidden in tree mode, present in search mode (PR C)", () => {
+// then. PR D2 (L0.26): search no longer resurrects the UNFILTERED sections —
+// the project-wide results surface covers every kind WITH the query applied.
+describe("Library — sections hidden in tree mode AND search mode (PR C / PR D2)", () => {
   const editableFig = createFigureDocument({ id: "fig1", name: "My Figure", datasetId: "a", view: defaultPlotView() });
   const page = createPageDocument({ id: "pg1", name: "My Page", rows: 1, cols: 1 });
   const report = { id: "rep1", name: "My Report", datasetId: "a", report: { rows: [] } as never };
@@ -235,13 +236,80 @@ describe("Library — sections hidden in tree mode, present in search mode (PR C
     expect(screen.queryByText("Reports")).not.toBeInTheDocument();
   });
 
-  it("shows the flat sections once a search query is active", async () => {
+  it("search renders the flat results surface, NOT the unfiltered sections (PR D2)", async () => {
     render(<Library />);
-    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "nonsense-query" } });
-    // EditableFiguresSection/PagesSection are lazy — await the Suspense resolve.
-    expect(await screen.findByText("Editable figures")).toBeInTheDocument();
-    expect(await screen.findByText("Saved pages")).toBeInTheDocument();
-    expect(screen.getByText("Reports")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "my" } });
+    // The results table (lazy LibraryDetails) carries the matches — every
+    // artifact kind, query APPLIED — while the legacy section headers stay
+    // hidden (they were unfiltered lists).
+    expect(await screen.findByLabelText("Library details table")).toBeInTheDocument();
+    expect(screen.getByText("My Figure")).toBeInTheDocument();
+    expect(screen.getByText("My Page")).toBeInTheDocument();
+    expect(screen.getByText("My Report")).toBeInTheDocument();
+    expect(screen.queryByText("Editable figures")).not.toBeInTheDocument();
+    expect(screen.queryByText("Saved pages")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reports")).not.toBeInTheDocument();
+    // The query really is applied: the dataset "a" doesn't match "my".
+    expect(screen.queryByText(/^a$/)).not.toBeInTheDocument();
+  });
+});
+
+// PR D2 (L0.26): the search results' "Show in Library" — and the generalized
+// reveal signal behind it — work for EVERY hierarchy node kind, not just
+// worksheets: clear the query, expand collapsed ancestors, select per L0.25.
+describe("Library — project-wide search + Show in Library reveal (PR D2)", () => {
+  const editableFig = createFigureDocument({ id: "fig1", name: "Loop Figure", datasetId: "a", view: defaultPlotView() });
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ ...dsWith("a", "f1"), workbookId: "w1", name: "loop.dat" }],
+      workbooks: [{ id: "w1", name: "Run", folderId: "f1" }],
+      folders: [folder("f1", "Growth")],
+      editableFigures: [editableFig],
+      expandedFolders: [],
+      expandedWorkbookIds: [],
+      activeId: null,
+      selectedIds: [],
+      librarySelection: null,
+      revealTarget: null,
+    });
+  });
+
+  it("Show in Library on an artifact result clears the query, expands its ancestors, and selects it", async () => {
+    render(<Library />);
+    const input = screen.getByPlaceholderText(/Filter/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "loop figure" } });
+    const figRow = (await screen.findByText("Loop Figure")).closest("tr")!;
+    fireEvent.click(figRow.querySelector(".qzk-details-reveal") as HTMLElement);
+
+    expect(input.value).toBe(""); // search cleared — back to the hierarchy
+    const s = useApp.getState();
+    expect(s.librarySelection).toEqual({ kind: "editable-figure", id: "fig1" });
+    expect(s.revealTarget).toBeNull();
+    // The observable reveal contract: whatever the figure's parent chain is,
+    // every collapsed ancestor is now disclosed, so its row RENDERS in the
+    // tree the query cleared back to.
+    expect(await screen.findByRole("button", { name: /Loop Figure/ })).toBeInTheDocument();
+  });
+
+  it("a kind:id reveal request expands the target worksheet's folder AND workbook ancestors", () => {
+    render(<Library />);
+    act(() => {
+      useApp.getState().requestReveal("worksheet:a");
+    });
+    const s = useApp.getState();
+    expect(s.expandedFolders).toContain("f1");
+    expect(s.expandedWorkbookIds).toContain("w1");
+    expect(s.selectedIds).toEqual(["a"]);
+    expect(s.revealTarget).toBeNull();
+  });
+
+  it("search matches artifacts and workbooks by name project-wide", async () => {
+    render(<Library />);
+    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "run" } });
+    expect(await screen.findByLabelText("Library details table")).toBeInTheDocument();
+    expect(screen.getByText("Run")).toBeInTheDocument(); // the workbook itself is a result
+    expect(screen.queryByText("loop.dat")).not.toBeInTheDocument(); // non-matching worksheet excluded
   });
 });
 
