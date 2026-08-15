@@ -387,7 +387,9 @@ async function runImport<T>(
   get().setStatus(summary);
   if (added > 0) {
     const offer = batchOverlayOffer(get, createdIds);
-    const folderOffer = offer ? null : batchFolderOffer(get, createdIds);
+    // P2 review fix: `added` (files actually imported), not createdIds.length
+    // (datasets created) — a multi-book Origin file inflates the latter.
+    const folderOffer = offer ? null : batchFolderOffer(get, createdIds, added);
     if (offer) {
       // The offer toast states "imported" itself, so it replaces (not
       // supplements) the plain success toast below — two toasts saying the

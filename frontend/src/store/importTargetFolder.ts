@@ -45,12 +45,28 @@ export interface BatchFolderOffer {
  *  offer — never create without the click — a folder under the import's
  *  target holding the batch. Mutually exclusive with the batch-overlay
  *  offer (PLOT_WORKFLOW_PLAN item 4): the caller only checks this when the
- *  overlay offer didn't qualify, so the two action toasts never stack. */
-export function batchFolderOffer(get: SliceGet, createdIds: readonly string[]): BatchFolderOffer | null {
-  if (createdIds.length < 2) return null;
+ *  overlay offer didn't qualify, so the two action toasts never stack.
+ *
+ *  `fileCount` (P2 review fix) is the batch's successfully-imported FILE
+ *  count (runImport's own `added` counter, store/importDatasets.ts) — NOT
+ *  `createdIds.length`, which counts DATASETS. A single multi-book Origin
+ *  file legitimately creates N datasets that share a common `${stem}:`
+ *  prefix by construction (every book-derived name is stamped with the
+ *  SAME import stem), so `createdIds.length` alone cannot tell "N plain
+ *  files" apart from "1 file that fanned out to N books" — the doc comment
+ *  above always claimed the fan-out case "never qualifies", but nothing
+ *  actually enforced that until this check. `createdIds.length !==
+ *  fileCount` now catches it directly; only a batch of PLAIN files (one
+ *  dataset per file, by construction) can ever have the two counts equal. */
+export function batchFolderOffer(
+  get: SliceGet,
+  createdIds: readonly string[],
+  fileCount: number,
+): BatchFolderOffer | null {
+  if (fileCount < 2 || createdIds.length !== fileCount) return null;
   const idSet = new Set(createdIds);
   const datasets = get().datasets.filter((d) => idSet.has(d.id));
-  if (datasets.length !== createdIds.length) return null; // an Origin book fan-out
+  if (datasets.length !== createdIds.length) return null; // liveness: one was deleted mid-import
   const stems = datasets.map((d) => d.name.replace(/\.[^.]+$/, ""));
   const prefix = longestCommonPrefix(stems);
   if (prefix.length < 3) return null;

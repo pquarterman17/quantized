@@ -78,28 +78,49 @@ describe("longestCommonPrefix", () => {
 describe("batchFolderOffer", () => {
   it("qualifies a >=2 file batch with a shared prefix", () => {
     useApp.setState({ datasets: [ds("d1", "scan_1.dat"), ds("d2", "scan_2.dat")] });
-    const offer = batchFolderOffer(useApp.getState, ["d1", "d2"]);
+    const offer = batchFolderOffer(useApp.getState, ["d1", "d2"], 2);
     expect(offer).toEqual({ prefix: "scan", ids: ["d1", "d2"] });
+  });
+
+  it("qualifies a 3-file batch too, not just exactly 2", () => {
+    useApp.setState({
+      datasets: [ds("d1", "scan_1.dat"), ds("d2", "scan_2.dat"), ds("d3", "scan_3.dat")],
+    });
+    const offer = batchFolderOffer(useApp.getState, ["d1", "d2", "d3"], 3);
+    expect(offer).toEqual({ prefix: "scan", ids: ["d1", "d2", "d3"] });
   });
 
   it("does not qualify a single file", () => {
     useApp.setState({ datasets: [ds("d1", "scan_1.dat")] });
-    expect(batchFolderOffer(useApp.getState, ["d1"])).toBeNull();
+    expect(batchFolderOffer(useApp.getState, ["d1"], 1)).toBeNull();
   });
 
   it("does not qualify when the prefix is under 3 chars", () => {
     useApp.setState({ datasets: [ds("d1", "a1.dat"), ds("d2", "a2.dat")] });
-    expect(batchFolderOffer(useApp.getState, ["d1", "d2"])).toBeNull();
+    expect(batchFolderOffer(useApp.getState, ["d1", "d2"], 2)).toBeNull();
   });
 
-  it("does not qualify an Origin book fan-out (more created ids than resolvable datasets)", () => {
+  it("does not qualify when a created id no longer resolves to a live dataset (deleted mid-import)", () => {
     useApp.setState({ datasets: [ds("d1", "scan_1.dat")] }); // only 1 of 2 ids resolves
-    expect(batchFolderOffer(useApp.getState, ["d1", "d2"])).toBeNull();
+    expect(batchFolderOffer(useApp.getState, ["d1", "d2"], 2)).toBeNull();
+  });
+
+  // P2 review fix: the reviewer's exact negative case. A single Origin
+  // project FILE fanning out to several books creates several DATASETS
+  // whose names all share the SAME `${stem}:` prefix by construction — the
+  // OLD guard (`datasets.length !== createdIds.length`) only caught a
+  // dataset deleted mid-import, never this. `fileCount` (1, not 3) is what
+  // actually distinguishes it from a real 3-plain-file batch below.
+  it("does not qualify a single Origin file's book fan-out, even though the book names share a prefix", () => {
+    useApp.setState({
+      datasets: [ds("d1", "Moke:Book1"), ds("d2", "Moke:Book2"), ds("d3", "Moke:Book3")],
+    });
+    expect(batchFolderOffer(useApp.getState, ["d1", "d2", "d3"], 1)).toBeNull();
   });
 
   it("ignores extension when comparing stems", () => {
     useApp.setState({ datasets: [ds("d1", "run_a.xye"), ds("d2", "run_b.dat")] });
-    expect(batchFolderOffer(useApp.getState, ["d1", "d2"])?.prefix).toBe("run");
+    expect(batchFolderOffer(useApp.getState, ["d1", "d2"], 2)?.prefix).toBe("run");
   });
 });
 

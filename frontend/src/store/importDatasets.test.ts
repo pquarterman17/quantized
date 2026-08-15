@@ -569,4 +569,37 @@ describe("L0.46 — batch folder suggestion (never creates without the click)", 
     expect(actionToasts).toHaveLength(1);
     expect(actionToasts[0].action!.label).toBe("Overlay");
   });
+
+  it("offers a folder for 3 plain files sharing a prefix too, not just 2", async () => {
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat", "scan_3.dat"));
+    const withAction = useToasts.getState().toasts.find((t) => t.action);
+    expect(withAction?.msg).toBe('3 files imported — create folder "scan"?');
+  });
+
+  // P2 review fix — the reviewer's exact negative case: a SINGLE Origin
+  // project file fanning out to several books creates several DATASETS
+  // whose names all share the SAME "<stem>:" prefix by construction (every
+  // book-derived dataset is named `${stem}:${label}`) — before the fix this
+  // passed the (wrong) "an Origin fan-out never qualifies" guard and got a
+  // bogus folder offer stacked on top of the project folder planOriginImport
+  // already created for it.
+  it("does NOT offer a folder for a multi-book Origin project (one FILE, several created datasets)", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...payload(),
+      books: [
+        { ...payload(), metadata: { origin_book: "Book1" } },
+        { ...payload(), metadata: { origin_book: "Book2" } },
+        { ...payload(), metadata: { origin_book: "Book3" } },
+      ],
+    });
+    await useApp.getState().importFiles(files("Moke.opj"));
+    // The fan-out really happened (proves this isn't a false negative from a
+    // parse failure) — 3 datasets from 1 file, names sharing a long prefix.
+    expect(useApp.getState().datasets.map((d) => d.name).sort()).toEqual([
+      "Moke:Book1",
+      "Moke:Book2",
+      "Moke:Book3",
+    ]);
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+  });
 });
