@@ -84,10 +84,16 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
       const n = memberCount(t);
       return {
         title: `Delete "${t.node.entity.name}"?`,
+        // P1 fix: say exactly what happens. The WORKBOOK GROUPING is gone
+        // for good the moment this runs (deleteWorkbook removes the
+        // WorkbookNode outright) — only the member worksheets are
+        // recoverable, and restoring one later (store/trash.ts's
+        // restoreFromTrash self-heal) gives it a fresh workbook of its own
+        // rather than reconstituting this one.
         message:
           n > 0
-            ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored from there.`
-            : "This workbook has no worksheets.",
+            ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
+            : "This workbook has no worksheets; the grouping is removed for good.",
         confirmLabel: "Delete",
       };
     },

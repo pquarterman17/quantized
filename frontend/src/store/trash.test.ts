@@ -99,3 +99,41 @@ describe("trash slice", () => {
     expect(useApp.getState().trash).toEqual([]);
   });
 });
+
+describe("restoreFromTrash — workbook self-heal (P1 fix: dangling workbookId)", () => {
+  const wbDs = (id: string, workbookId: string): Dataset => ({ ...ds(id), workbookId });
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [], activeId: null, selectedIds: [], trash: [], folders: [], workbooks: [] });
+  });
+
+  it("restoring a member of a DELETED workbook re-derives a fresh LIVE workbook (no dangling id)", () => {
+    useApp.setState({
+      datasets: [wbDs("a", "wb1")],
+      workbooks: [{ id: "wb1", name: "Book" }],
+    });
+    useApp.getState().deleteWorkbook("wb1"); // sends "a" to trash, then removes the WorkbookNode
+    expect(useApp.getState().workbooks).toHaveLength(0);
+
+    expect(useApp.getState().restoreFromTrash("a")).toBe(true);
+    const restored = useApp.getState().datasets.find((d) => d.id === "a")!;
+    expect(restored.workbookId).toBeTruthy();
+    expect(restored.workbookId).not.toBe("wb1"); // the deleted id never comes back
+    const live = useApp.getState().workbooks.find((w) => w.id === restored.workbookId);
+    expect(live).toBeDefined(); // no dangling reference
+  });
+
+  it("restoring a dataset trashed alone (its workbook still exists) keeps its original membership, no new workbook", () => {
+    useApp.setState({
+      datasets: [wbDs("a", "wb1"), wbDs("b", "wb1")],
+      workbooks: [{ id: "wb1", name: "Book" }],
+    });
+    useApp.getState().removeDataset("a"); // plain delete — the workbook is untouched
+    expect(useApp.getState().workbooks).toHaveLength(1);
+
+    expect(useApp.getState().restoreFromTrash("a")).toBe(true);
+    const restored = useApp.getState().datasets.find((d) => d.id === "a")!;
+    expect(restored.workbookId).toBe("wb1"); // membership preserved
+    expect(useApp.getState().workbooks).toHaveLength(1); // no new workbook created
+  });
+});

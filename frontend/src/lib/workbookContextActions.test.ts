@@ -91,6 +91,9 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     const t = target({ id: "w1", name: "W" }, [ds]);
     const spec = deleteAction.confirm!(t);
     expect(spec.message).toContain("1 worksheet");
+    // P1 fix: the copy must not imply the WORKBOOK itself survives restore —
+    // it doesn't (deleteWorkbook removes the WorkbookNode outright).
+    expect(spec.message).toContain("grouping itself is removed for good");
   });
 
   it("runs deleteWorkbook after confirmation", async () => {
