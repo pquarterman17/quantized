@@ -8,29 +8,21 @@
 import { removeDatasetsPatch } from "./removeDatasets";
 import type { AppState } from "./useApp";
 
-/** L0.45 fail-closed gate (PR #139 review): the human-readable reason
- *  workbook Delete is unavailable, or null when it may run. Deleting a
- *  workbook trashes only Dataset snapshots — recovered Origin figures,
- *  reports, and publication/editable figure bindings that reference a
- *  member would be pruned UNRECOVERABLY — so while any such dependent
- *  exists the command is disabled with this reason (PR M owns the
- *  dependency-aware Trash that will lift it). Plot-window bindings and
- *  Origin fidelity records deliberately do NOT block: both already follow
- *  plain dataset-delete semantics (windows rebind; fidelity is derived
- *  import metadata), and blocking on them would disable Delete for every
- *  currently-plotted workbook. Shared by the menu registry
- *  (lib/workbookContextActions.ts) and re-checked inside `deleteWorkbook`
- *  itself so no caller can bypass the gate. */
-export function workbookDeleteBlockers(s: AppState, workbookId: string): string | null {
-  const members = new Set(s.datasets.filter((d) => d.workbookId === workbookId).map((d) => d.id));
-  const refs = (id: string | null | undefined) => id != null && members.has(id);
-  const n =
-    s.originFigures.filter((f) => refs(f.datasetId)).length +
-    s.reports.filter((r) => refs(r.datasetId)).length +
-    s.figureDocs.filter((f) => refs(f.datasetId)).length +
-    s.editableFigures.filter((f) => refs(f.bindings.datasetId)).length;
-  if (n === 0) return null;
-  return `${n} dependent figure${n === 1 ? "" : "s"}/report${n === 1 ? "" : "s"} would be lost — available after dependency-aware Trash (PR M)`;
+/** L0.45 fail-closed gate (PR #139 review, round 3): workbook Delete is
+ *  disabled UNCONDITIONALLY until PR M's dependency-aware Trash. Even with
+ *  zero dependent artifacts, Trash today stores only individual Dataset
+ *  snapshots — deleting a workbook loses the grouping itself (id, name,
+ *  order, folder, source provenance, membership), and restoring sheets one
+ *  at a time re-derives SEPARATE workbooks. That contradicts L0.45's "the
+ *  workbook moves to recoverable Trash", so the command stays visible but
+ *  disabled with this stable reason (disable-don't-remove, L0.36) rather
+ *  than shipping a partial second Trash format inside PR C. Individual
+ *  worksheet Delete is unaffected. Shared by the menu registry
+ *  (lib/workbookContextActions.ts), the tree's Delete-key path, and
+ *  `deleteWorkbook` itself, so no caller can bypass the gate; PR M lifts it
+ *  by making this return null when the atomic workbook package exists. */
+export function workbookDeleteBlockers(_s: AppState, _workbookId: string): string | null {
+  return "Workbook Delete arrives with dependency-aware Trash (PR M)";
 }
 
 export interface WorkbookActionsSlice {
@@ -41,11 +33,11 @@ export interface WorkbookActionsSlice {
    *  action so search/reveal/smart-folders — every legacy consumer that still
    *  reads `Dataset.folderId` directly — stay in sync. */
   moveWorkbookToFolder: (id: string, folderId: string | null) => void;
-  /** L0.22/L0.45: the visible command is "Delete"; members route through the
-   *  SAME recoverable Trash path a plain dataset delete uses (store/trash.ts)
-   *  in ONE atomic update under ONE history entry (one Delete, one Undo).
-   *  Fail-closed on dependents via `workbookDeleteBlockers` — the M-owned
-   *  dependency review is deliberately NOT built here (PR M). */
+  /** L0.22/L0.45: fail-closed no-op until PR M lifts
+   *  `workbookDeleteBlockers` (see its doc). The body below is the intended
+   *  post-M shape — ONE atomic update under ONE history entry via the shared
+   *  removeDatasetsPatch — but M must ALSO make Trash workbook-aware before
+   *  enabling it, or restore still can't rebuild the grouping. */
   deleteWorkbook: (id: string) => void;
 }
 

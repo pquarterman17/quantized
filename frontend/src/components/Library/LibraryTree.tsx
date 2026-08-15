@@ -25,6 +25,7 @@ import WorkbookRow from "./WorkbookRow";
 import { openLibraryNode } from "./libraryOpen";
 import { childFolders, folderDatasets } from "../../lib/foldertree";
 import { folderDeleteActions, runContextAction } from "../../lib/contextActions";
+import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
@@ -187,15 +188,29 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
         });
         return;
       }
-      // Worksheet rows defer to the global dataset handler — clicking one
-      // put it in selectedIds, so removeSelected() removes exactly it. EVERY
-      // other row kind consumes the key here (P1 review fix): an artifact/
-      // origin-figure/mismatched-selection row has no dataset selection of
-      // its own, so falling through would hand Delete to removeSelected()
-      // and remove an UNRELATED active worksheet. Artifact deletion routes
-      // through a registry action when a later PR defines one (L0.39/L0.40);
-      // until then a safely-swallowed keystroke is the contract.
-      if (node.kind !== "worksheet") e.preventDefault();
+      // Worksheet rows (round-3 P1 fix): the tree consumes Delete here too
+      // and targets the FOCUSED row explicitly — roving focus moves without
+      // changing selectedIds, so deferring to the global selection-based
+      // handler could remove a DIFFERENT dataset (the stale selection, or
+      // the active plot as its fallback). A focused row that's part of the
+      // live multi-selection deletes the whole selection (Ctrl/Cmd batch
+      // semantics preserved); otherwise exactly this row. The shared
+      // lib/datasetRemoval.ts helper keeps confirmRemove/status/toast/
+      // Trash/one-Undo identical to the global path.
+      if (node.kind === "worksheet") {
+        e.preventDefault();
+        const ids = useApp.getState().selectedIds;
+        requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
+        return;
+      }
+      // Every remaining row kind consumes the key (P1 review fix): an
+      // artifact/origin-figure/mismatched-selection row has no dataset
+      // selection of its own, so falling through would hand Delete to the
+      // global handler against an UNRELATED dataset. Artifact deletion
+      // routes through a registry action when a later PR defines one
+      // (L0.39/L0.40); until then a safely-swallowed keystroke is the
+      // contract.
+      e.preventDefault();
       return;
     }
     if (e.key === "Enter") {

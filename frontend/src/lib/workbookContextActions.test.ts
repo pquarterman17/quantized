@@ -96,13 +96,18 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     expect(spec.message).toContain("grouping itself is removed for good");
   });
 
-  it("runs deleteWorkbook after confirmation", async () => {
+  it("Delete renders disabled with the stable PR M reason, and even a forced run() cannot mutate (round 3)", async () => {
     vi.mocked(askConfirm).mockResolvedValue(true);
     useApp.setState({ workbooks: [{ id: "w1", name: "W" }], datasets: [] });
     const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
-    const item = menuItemFor(deleteAction, target({ id: "w1", name: "W" }));
+    const t = target({ id: "w1", name: "W" });
+    expect(deleteAction.enabled?.(t)).toBe(false);
+    expect(deleteAction.disabledReason?.(t)).toBe("Workbook Delete arrives with dependency-aware Trash (PR M)");
+    // Registry convention keeps run() dispatchable on disabled items (the UI
+    // enforces disabled) — the store action itself fails closed regardless.
+    const item = menuItemFor(deleteAction, t);
     item.run();
     await Promise.resolve();
-    expect(useApp.getState().workbooks).toEqual([]);
+    expect(useApp.getState().workbooks).toEqual([{ id: "w1", name: "W" }]);
   });
 });

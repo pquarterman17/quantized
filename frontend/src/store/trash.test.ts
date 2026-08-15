@@ -110,12 +110,18 @@ describe("restoreFromTrash — workbook self-heal (P1 fix: dangling workbookId)"
     });
   });
 
-  it("restoring a member of a DELETED workbook re-derives a fresh LIVE workbook (no dangling id)", () => {
+  it("restoring a dataset whose workbook no longer exists re-derives a fresh LIVE workbook (no dangling id)", () => {
+    // Round 3: workbook Delete is disabled until PR M, so this dangling
+    // state can no longer be produced through deleteWorkbook — but it still
+    // arises from legacy/corrupt documents and historical deletes, which is
+    // exactly what the self-heal exists for. Produce it directly: trash the
+    // member, then drop its WorkbookNode.
     useApp.setState({
       datasets: [wbDs("a", "wb1")],
       workbooks: [{ id: "wb1", name: "Book" }],
     });
-    useApp.getState().deleteWorkbook("wb1"); // sends "a" to trash, then removes the WorkbookNode
+    useApp.getState().removeDataset("a"); // to Trash
+    useApp.setState({ workbooks: [] }); // the workbook id "a" names is gone
     expect(useApp.getState().workbooks).toHaveLength(0);
 
     expect(useApp.getState().restoreFromTrash("a")).toBe(true);

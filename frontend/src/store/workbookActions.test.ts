@@ -6,12 +6,8 @@ import { useApp } from "./useApp";
 import { workbookDeleteBlockers } from "./workbookActions";
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView } from "../lib/plotview";
-import type { ReportEntry } from "../lib/report";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
-
-type AppOriginFigure = ReturnType<typeof useApp.getState>["originFigures"][number];
-type AppFigureDoc = ReturnType<typeof useApp.getState>["figureDocs"][number];
 
 const wb = (id: string, folderId?: string): WorkbookNode => ({ id, name: `wb-${id}`, folderId });
 const ds = (id: string, workbookId?: string, folderId?: string): Dataset => ({
@@ -92,91 +88,38 @@ describe("workbookActions slice", () => {
     });
   });
 
-  describe("deleteWorkbook", () => {
-    it("routes every member dataset through Trash (recoverable) and removes the node", () => {
-      useApp.getState().deleteWorkbook("w1");
-      const s = useApp.getState();
-      expect(s.workbooks.map((w) => w.id)).toEqual(["w2"]);
-      expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
-      expect(s.trash.map((e) => e.dataset.id).sort()).toEqual(["d1", "d2"]);
-    });
-
-    it("a workbook with no members just removes the node (no Trash entries)", () => {
-      useApp.setState({ workbooks: [...useApp.getState().workbooks, wb("empty")] });
-      useApp.getState().deleteWorkbook("empty");
-      expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w1", "w2"]);
-      expect(useApp.getState().trash).toHaveLength(0);
-    });
-
-    it("is a no-op for an unknown id", () => {
-      useApp.getState().deleteWorkbook("nope");
-      expect(useApp.getState().workbooks).toHaveLength(2);
-      expect(useApp.getState().history).toHaveLength(0);
-    });
-
-    it("ONE history entry — a single Undo restores the workbook node AND its member datasets together (PR #139 review)", () => {
-      useApp.getState().deleteWorkbook("w1");
-      expect(useApp.getState().history.length).toBe(1); // one Delete, one Undo
-      useApp.getState().undo();
-      const s = useApp.getState();
-      expect(s.workbooks.map((w) => w.id).sort()).toEqual(["w1", "w2"]);
-      expect(s.datasets.map((d) => d.id).sort()).toEqual(["d1", "d2", "d3"]);
-      expect(s.datasets.filter((d) => d.workbookId === "w1").map((d) => d.id).sort()).toEqual(["d1", "d2"]); // membership intact
-    });
-  });
-
-  describe("deleteWorkbook — L0.45 dependent gate (PR #139 review)", () => {
-    // A dependent artifact referencing ANY member disables Delete entirely:
-    // the state must be unchanged afterwards (no trash, no history snapshot)
-    // and workbookDeleteBlockers names the reason the menu shows. One case
-    // per artifact kind the gate covers.
-    const originFig = (datasetId: string): AppOriginFigure => ({
-      id: "g1",
-      stem: "Moke",
-      datasetId,
-      siblingIds: [datasetId],
-      figure: { name: "G", x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [] },
-    });
-    const report = (datasetId: string): ReportEntry => ({
-      id: "r1",
-      name: "R",
-      datasetId,
-      report: { title: "R", sections: [] },
-    });
-    const pubFig = (datasetId: string): AppFigureDoc => ({
-      id: "p1",
-      name: "P",
-      datasetId,
-      live: true,
-      config: { xKey: null, yKeys: null, xScale: "linear", yScale: "linear", title: "", xLabel: "", yLabel: "", style: "line", fmt: "png", dpi: 150, overrides: null, seriesStyles: null },
-    });
-
-    const dependents: Array<[string, () => void]> = [
-      ["recovered Origin figure", () => useApp.setState({ originFigures: [originFig("d1")] })],
-      ["report", () => useApp.setState({ reports: [report("d2")] })],
-      ["publication figure binding", () => useApp.setState({ figureDocs: [pubFig("d1")] })],
-      ["editable figure binding", () => useApp.setState({
+  describe("deleteWorkbook — fail-closed until PR M (PR #139 review, round 3)", () => {
+    // Both prior reviews drew this boundary: EITHER an atomic workbook-aware
+    // Trash package OR disable until PR M. Trash today stores only Dataset
+    // snapshots, so even a dependent-free delete loses the grouping — the
+    // command is therefore disabled unconditionally, and the store action
+    // fails closed so no caller can bypass the UI gate.
+    it("reports the stable disabled reason regardless of dependents", () => {
+      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBe(
+        "Workbook Delete arrives with dependency-aware Trash (PR M)",
+      );
+      useApp.setState({
         editableFigures: [createFigureDocument({ id: "e1", name: "E", datasetId: "d1", view: defaultPlotView() })],
-      })],
-    ];
-
-    it.each(dependents)("a %s referencing a member disables Delete — state unchanged", (_kind, seed) => {
-      seed();
-      const before = useApp.getState().datasets;
+      });
       expect(workbookDeleteBlockers(useApp.getState(), "w1")).toMatch(/PR M/);
+    });
+
+    it("a direct deleteWorkbook call leaves state byte-for-byte unchanged — zero dependents included", () => {
+      const before = useApp.getState();
       useApp.getState().deleteWorkbook("w1");
       const s = useApp.getState();
-      expect(s.workbooks.map((w) => w.id)).toEqual(["w1", "w2"]);
-      expect(s.datasets).toBe(before); // untouched — not even a new array
+      expect(s.workbooks).toBe(before.workbooks); // untouched references, not just equal values
+      expect(s.datasets).toBe(before.datasets);
       expect(s.trash).toHaveLength(0);
       expect(s.history).toHaveLength(0); // no snapshot recorded for a refused delete
     });
 
-    it("dependents on a DIFFERENT workbook's members do not block", () => {
-      useApp.setState({ reports: [report("d3")] }); // d3 belongs to w2
-      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBeNull();
-      useApp.getState().deleteWorkbook("w1");
-      expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w2"]);
+    it("ordinary standalone worksheet delete -> Trash -> restore stays green (unchanged path)", () => {
+      useApp.getState().removeDatasets(["d3"]);
+      expect(useApp.getState().trash.map((e) => e.dataset.id)).toEqual(["d3"]);
+      useApp.getState().restoreFromTrash("d3");
+      expect(useApp.getState().datasets.some((d) => d.id === "d3")).toBe(true);
+      expect(useApp.getState().trash).toHaveLength(0);
     });
   });
 });

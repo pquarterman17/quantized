@@ -20,6 +20,7 @@ import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
 import { askConfirm } from "../overlays/ConfirmDialog";
+import { askParams } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
@@ -27,6 +28,10 @@ import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 // are destructive registry entries, confirmed via the shared ConfirmDialog —
 // stub it like every other askConfirm-gated test does (see FolderRow.test.tsx).
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+// Round 3: lib/datasetRemoval.ts honors Preferences ▸ "Confirm before
+// removing data" through ParamDialog's askParams — stubbed for the
+// cancelled-confirmation regression.
+vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
 
 const fld = (id: string, parentId: string | null = null): FolderNode => ({ id, name: id, parentId, order: 0 });
 const wb = (id: string, folderId?: string): WorkbookNode => ({ id, name: id, folderId });
@@ -243,18 +248,22 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
       librarySelection: null,
       activeId: "solo",
       selectedIds: ["solo"],
+      trash: [],
+      history: [],
+      confirmRemove: false,
     });
     vi.mocked(askConfirm).mockReset().mockResolvedValue(true);
   });
 
-  it("Delete on a selected workbook row runs the workbook's own confirm flow — the unrelated worksheet survives", async () => {
+  it("Delete on a selected workbook row is consumed WITHOUT a confirm or any mutation (round 3: disabled until PR M)", () => {
     render(<Harness />);
     fireEvent.click(workbookRow("w1")); // WorkbookRow.select: librarySelection = {kind:"workbook", id:"w1"}
     fireEvent.keyDown(workbookRow("w1"), { key: "Delete" });
-    expect(askConfirm).toHaveBeenCalledOnce();
-    await act(() => Promise.resolve());
-    expect(useApp.getState().workbooks.find((w) => w.id === "w1")).toBeUndefined();
-    expect(useApp.getState().datasets.some((d) => d.id === "solo")).toBe(true); // survives
+    expect(askConfirm).not.toHaveBeenCalled(); // never confirm-then-no-op
+    const s = useApp.getState();
+    expect(s.workbooks.some((w) => w.id === "w1")).toBe(true); // workbook survives
+    expect(s.datasets).toHaveLength(2); // nothing removed, nothing trashed
+    expect(s.datasets.some((d) => d.id === "solo")).toBe(true);
   });
 
   it("Backspace on a selected folder row runs the folder's own (reparent) confirm flow", async () => {
@@ -267,12 +276,15 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     expect(useApp.getState().datasets.some((d) => d.id === "solo")).toBe(true); // survives
   });
 
-  it("Delete on a focused worksheet row still falls through to the global dataset handler (unchanged)", () => {
-    useApp.setState({ expandedWorkbookIds: ["w1"] });
+  it("Delete on a focused worksheet row removes exactly THAT row (round 3: focused-row targeting, not the global selection)", () => {
+    useApp.setState({ expandedWorkbookIds: ["w1"], confirmRemove: false });
     render(<Harness />);
     worksheetRow("d1").focus();
     fireEvent.keyDown(worksheetRow("d1"), { key: "Delete" });
-    expect(askConfirm).not.toHaveBeenCalled(); // LibraryTree didn't intercept it
+    const s = useApp.getState();
+    expect(s.datasets.some((d) => d.id === "d1")).toBe(false); // the focused row went
+    expect(s.datasets.some((d) => d.id === "solo")).toBe(true); // the selected/active one did NOT
+    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
   });
 });
 
@@ -401,6 +413,89 @@ describe("LibraryTree — button row anchors (ArtifactRow/FigureRow) are the con
     worksheetRow("d1").focus();
     fireEvent.keyDown(worksheetRow("d1"), { key: "ArrowDown" });
     expect(useApp.getState().activeId).toBe("solo"); // unchanged: one keystroke, one handler
+  });
+});
+
+describe("LibraryTree — focused-worksheet Delete targets the FOCUSED row (round-3 P1 fix, real global hook mounted)", () => {
+  // Roving arrows move DOM focus WITHOUT changing selectedIds/librarySelection,
+  // so deferring worksheet Delete to the global selection-based handler could
+  // remove a different dataset entirely (the stale selection, or the active
+  // plot as its fallback). The tree now consumes the key and routes an
+  // explicit id list through the shared lib/datasetRemoval.ts helper.
+  function GlobalHarness() {
+    useGlobalShortcuts();
+    const rows = useLibraryHierarchyRows();
+    return <LibraryTree rows={rows} onFilterTag={noop} />;
+  }
+
+  beforeEach(() => {
+    useApp.setState({
+      folders: [],
+      workbooks: [wb("w1")],
+      datasets: [ds("d1", "w1"), ds("d2", "w1"), ds("solo")],
+      originFigures: [],
+      editableFigures: [createFigureDocument({ id: "fig1", name: "My Figure", datasetId: "d1", view: defaultPlotView() })],
+      expandedWorkbookIds: ["w1"],
+      librarySelection: null,
+      workbookLastChild: {},
+      activeId: "solo",
+      selectedIds: [],
+      trash: [],
+      history: [],
+      confirmRemove: false,
+    });
+    vi.mocked(askParams).mockReset();
+  });
+
+  it("reviewer scenario 1: artifact selected (selection empty) + active solo + focus d1 + Delete removes ONLY d1", () => {
+    render(<GlobalHarness />);
+    fireEvent.click(document.querySelector('[data-lib-row="editable-figure:fig1"]') as HTMLElement); // clears selectedIds
+    expect(useApp.getState().selectedIds).toEqual([]);
+    worksheetRow("d1").focus();
+    fireEvent.keyDown(worksheetRow("d1"), { key: "Delete" });
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id).sort()).toEqual(["d2", "solo"]); // solo (the activeId fallback victim) survives
+    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
+  });
+
+  it("reviewer scenario 2: worksheet A selected, focus B, Delete removes B — not A", () => {
+    render(<GlobalHarness />);
+    fireEvent.click(worksheetRow("d1")); // selects A (d1)
+    worksheetRow("d2").focus();
+    fireEvent.keyDown(worksheetRow("d2"), { key: "Backspace" });
+    const s = useApp.getState();
+    expect(s.datasets.some((d) => d.id === "d1")).toBe(true); // A survives
+    expect(s.datasets.some((d) => d.id === "d2")).toBe(false); // B went
+    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d2"]);
+  });
+
+  it("a focused worksheet inside a Ctrl/Cmd multi-selection deletes the whole selection together", () => {
+    render(<GlobalHarness />);
+    fireEvent.click(worksheetRow("d1"));
+    fireEvent.click(worksheetRow("d2"), { ctrlKey: true }); // selection = [d1, d2]
+    expect(useApp.getState().selectedIds.sort()).toEqual(["d1", "d2"]);
+    worksheetRow("d2").focus();
+    fireEvent.keyDown(worksheetRow("d2"), { key: "Delete" });
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["solo"]);
+    expect(s.trash.map((t) => t.dataset.id).sort()).toEqual(["d1", "d2"]);
+    expect(s.history).toHaveLength(1); // one batch, one Undo
+  });
+
+  it("a cancelled confirmation changes nothing — datasets, Trash, history, selection", async () => {
+    useApp.setState({ confirmRemove: true });
+    vi.mocked(askParams).mockResolvedValue(false as never); // cancel
+    render(<GlobalHarness />);
+    fireEvent.click(worksheetRow("d1"));
+    worksheetRow("d1").focus();
+    fireEvent.keyDown(worksheetRow("d1"), { key: "Delete" });
+    expect(askParams).toHaveBeenCalledOnce();
+    await act(() => Promise.resolve());
+    const s = useApp.getState();
+    expect(s.datasets).toHaveLength(3);
+    expect(s.trash).toHaveLength(0);
+    expect(s.history).toHaveLength(0);
+    expect(s.selectedIds).toEqual(["d1"]);
   });
 });
 
