@@ -83,7 +83,17 @@ export default function LibraryDetails({ hierarchy }: Props) {
 
   const onNavKeyDown = (event: React.KeyboardEvent): void => {
     const target = (event.target as Element).closest("[data-lib-row]");
-    if (!target) return; // a header sort button etc. — not row navigation
+    if (!target) {
+      // P1 review fix, belt half: a keystroke inside the table area that
+      // didn't land on a row — the focusable sort-header buttons are the
+      // real-browser case — must not reach the global handlers: nav keys
+      // would step the dataset navigator, Delete/Backspace would remove the
+      // selected/active dataset (retrospective-audit P1). Consumed here;
+      // Enter/Space pass untouched so header buttons still activate.
+      const destructive = event.key === "Delete" || event.key === "Backspace";
+      if (destructive || detailsNavIndex(rows.length, -1, event.key) != null) event.preventDefault();
+      return;
+    }
     // 4a booking: NO Left/Right — disclosure is a hierarchy gesture and this
     // is a flat (possibly sorted) table; those keys bubble on untouched.
     const next = detailsNavIndex(rows.length, keyIndex(target.getAttribute("data-lib-row")), event.key);
@@ -112,8 +122,14 @@ export default function LibraryDetails({ hierarchy }: Props) {
           </button>
         )}
       </div>
-      <div className="qzk-details-scroll" tabIndex={0} aria-label="Library details table" ref={scrollRef} onKeyDown={onNavKeyDown}>
-        <table className="qzk-details-table">
+      {/* P1 review fix: the scroll wrapper is NOT in the Tab order — the
+       *  roving row is this component's single sequential tab stop, so
+       *  keyboard entry lands directly on the current row and a focused
+       *  wrapper can never leak Up/Down past onNavKeyDown's row check to
+       *  the global dataset navigator. The accessible name lives on the
+       *  <table> itself, where it labels a real role. */}
+      <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
+        <table className="qzk-details-table" aria-label="Library details table">
           <thead>
             <tr>
               {COLUMNS.map((column) => (

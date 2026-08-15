@@ -149,8 +149,13 @@ describe("LibraryTree — keyboard traversal (Up/Down/Left/Right/Enter)", () => 
   it("Down/Up are no-ops at either end of the flattened list", () => {
     render(<Harness />);
     folderRow("f1").focus();
-    fireEvent.keyDown(folderRow("f1"), { key: "ArrowUp" });
+    fireEvent.keyDown(folderRow("f1"), { key: "ArrowUp" }); // clamp at the FIRST row
     expect(document.activeElement).toBe(folderRow("f1"));
+    // Retrospective-audit fix: the name promised BOTH ends but only the top
+    // was asserted — also clamp ArrowDown at the LAST row.
+    workbookRow("w1").focus();
+    fireEvent.keyDown(workbookRow("w1"), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(workbookRow("w1"));
   });
 
   it("Escape blurs the focused row", () => {
@@ -377,6 +382,8 @@ describe("LibraryTree — button row anchors (ArtifactRow/FigureRow) are the con
       librarySelection: null,
       activeId: "solo",
       selectedIds: ["solo"],
+      trash: [],
+      history: [],
       confirmRemove: false, // Delete would remove immediately if it fell through
     });
     vi.mocked(askConfirm).mockReset().mockResolvedValue(true);
@@ -413,6 +420,36 @@ describe("LibraryTree — button row anchors (ArtifactRow/FigureRow) are the con
     worksheetRow("d1").focus();
     fireEvent.keyDown(worksheetRow("d1"), { key: "ArrowDown" });
     expect(useApp.getState().activeId).toBe("solo"); // unchanged: one keystroke, one handler
+  });
+
+  it("Delete/arrows on nested NON-editor controls (drag handle, menu button, figure buttons) are consumed — never the global handler's (retrospective-audit P1)", () => {
+    render(<GlobalHarness />);
+    const before = useApp.getState().datasets.length;
+    const controls = [
+      workbookRow("w1").querySelector(".qzk-drag-handle") as HTMLElement,
+      workbookRow("w1").querySelector(".qzk-menu-btn") as HTMLElement,
+      figureRow().parentElement?.querySelector(".qz-icon-btn") as HTMLElement, // FigureRow's ⊞
+    ];
+    for (const el of controls) {
+      el.focus();
+      fireEvent.keyDown(el, { key: "Delete" });
+      fireEvent.keyDown(el, { key: "ArrowDown" });
+    }
+    const s = useApp.getState();
+    expect(s.datasets).toHaveLength(before); // nothing deleted
+    expect(s.activeId).toBe("solo"); // nothing stepped
+    expect(s.trash ?? []).toHaveLength(0);
+  });
+
+  it("arrows INSIDE a rename input still move the text cursor natively (text-editor exemption survives)", () => {
+    render(<GlobalHarness />);
+    fireEvent.contextMenu(workbookRow("w1"));
+    fireEvent.click(screen.getByText("Rename…"));
+    const input = document.querySelector(".qzk-folder-rename") as HTMLInputElement;
+    input.focus();
+    const evt = fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(evt).toBe(true); // not preventDefault'd by the container — native editing keeps it
+    expect(document.activeElement).toBe(input);
   });
 });
 

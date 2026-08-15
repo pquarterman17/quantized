@@ -209,14 +209,48 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
     });
   });
 
-  it("exactly ONE row is in the Tab order (roving tabindex)", () => {
-    render(<GlobalHarness />);
+  it("the roving row is the component's ONLY sequential tab stop — the scroll wrapper is not in the Tab order (P1 review fix)", () => {
+    const { container } = render(<GlobalHarness />);
     // Manual order: keyed root worksheet "solo" (order 2) sorts before the
     // unkeyed workbook (byOrder sinks unkeyed after keyed siblings).
     expect(rowKeys()).toEqual(["worksheet:solo", "workbook:w", "worksheet:d1", "worksheet:d2"]);
-    expect(tabStops()).toEqual(["worksheet:solo"]); // first row by default
+    // The FULL component tab sequence, not just tbody rows: everything with
+    // a non-negative tabindex (native buttons excluded — the sort headers
+    // are toolbar controls, not table entry points... they ARE focusable
+    // buttons, so enumerate explicitly what precedes the row).
+    const sequentialStops = [...container.querySelectorAll('[tabindex="0"]')];
+    expect(sequentialStops).toHaveLength(1); // no wrapper stop before the row
+    expect(sequentialStops[0]?.getAttribute("data-lib-row")).toBe("worksheet:solo");
+    expect(container.querySelector(".qzk-details-scroll")?.hasAttribute("tabindex")).toBe(false);
     act(() => row("worksheet:d2").focus());
     expect(tabStops()).toEqual(["worksheet:d2"]); // the rove moved
+  });
+
+  it("harness control: an arrow that misses the component entirely DOES step the global nav (so the assertions below mean something)", () => {
+    render(<GlobalHarness />);
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(useApp.getState().activeId).not.toBe("solo");
+  });
+
+  it("Delete on a focused sort-header button never reaches the global dataset handler (retrospective-audit P1)", () => {
+    render(<GlobalHarness />);
+    const header = screen.getByRole("button", { name: "Name" });
+    header.focus();
+    fireEvent.keyDown(header, { key: "Delete" });
+    fireEvent.keyDown(header, { key: "Backspace" });
+    const s = useApp.getState();
+    expect(s.datasets).toHaveLength(3);
+    expect(s.trash).toHaveLength(0);
+  });
+
+  it("a SINGLE wrapper-targeted ArrowDown leaves the active dataset unchanged (P1 review fix, belt)", () => {
+    // One arrow, deliberately: a down-then-up pair is vacuous — the global
+    // navigator wraps, so solo -> d1 -> solo passes WITH the leak present
+    // (caught during this review round by flipping the assertion first).
+    const { container } = render(<GlobalHarness />);
+    const wrapper = container.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.keyDown(wrapper, { key: "ArrowDown" });
+    expect(useApp.getState().activeId).toBe("solo");
   });
 
   it("Up/Down traverse and clamp; Home/End jump; the active dataset never changes (global nav gated)", () => {
