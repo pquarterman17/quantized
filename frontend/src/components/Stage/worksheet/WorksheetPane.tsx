@@ -87,7 +87,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // number.
   const onKeyDown = (e: React.KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+    // SELECT included (review fix): the filter bar's <select>s use arrows
+    // natively — same exemption set as useGlobalShortcuts' isEditing.
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
     const accel = e.metaKey || e.ctrlKey;
     if (accel && e.key === "c") { e.preventDefault(); view.blockOps.copyBlock(); }
     else if (accel && e.key === "x") { e.preventDefault(); view.blockOps.cutBlock(); }

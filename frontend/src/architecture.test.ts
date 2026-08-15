@@ -834,7 +834,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   composition: "multi-panel facet/break arrangement; cleared on dataset switch today — if arrangements become persistent, revisit undo coverage",
 
   // parser false positives (nested inline object types inside AppState)
-  selection: "parser false positive",
+  selection: "worksheet row selection; deliberately outside the verbatim snapshot — restorePatch liveness-filters it specially on undo/redo",
   label: "parser false positive",
   code: "parser false positive",
   typed: "parser false positive",
@@ -884,7 +884,7 @@ describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
       // unclassified while folderDeletePatch mutated it under recordHistory).
       // Greedy match the interface body to capture everything until the
       // closing brace.
-      const interfacePattern = /export\s+interface\s+(?:\w+Slice|AppState\b[^{]*)\s*{([\s\S]*?)^}/gm;
+      const interfacePattern = /export\s+interface\s+(?:\w+Slice|AppState)\b[^{]*{([\s\S]*?)^}/gm;
       let interfaceMatch;
       while ((interfaceMatch = interfacePattern.exec(src)) !== null) {
         const interfaceBody = interfaceMatch[1];

@@ -104,6 +104,26 @@ describe("selection mutual exclusion — every writer that establishes a dataset
     expect(invariantHolds()).toBe(true); // selectedIds untouched by restore
   });
 
+  it("undo is the SEVENTH writer (hardening review fix): a restored dataset selection displaces the tree selection, and a dangling tree selection dies", () => {
+    // Snapshot with selectedIds non-empty, then select a folder, then undo:
+    useApp.setState({ selectedIds: ["d1"], librarySelection: null });
+    useApp.getState().recordHistory("probe");
+    useApp.getState().setLibrarySelection({ kind: "folder", id: "f1" }); // clears selectedIds
+    useApp.getState().undo();
+    expect(useApp.getState().selectedIds).toEqual(["d1"]); // snapshot restored
+    expect(useApp.getState().librarySelection).toBeNull(); // displaced
+    expect(invariantHolds()).toBe(true);
+
+    // Undo past a selected folder's creation: the selection must not dangle.
+    useApp.setState({ selectedIds: [], librarySelection: null, history: [], future: [] });
+    useApp.getState().recordHistory("before folder"); // snapshot WITHOUT f2
+    useApp.setState({ folders: [...useApp.getState().folders, { id: "f2", name: "F2", parentId: null, order: 1 }] });
+    useApp.getState().setLibrarySelection({ kind: "folder", id: "f2" });
+    useApp.getState().undo(); // f2 gone from the restored state
+    expect(useApp.getState().folders.some((f) => f.id === "f2")).toBe(false);
+    expect(useApp.getState().librarySelection).toBeNull(); // no dangling import target
+  });
+
   it("the documented chokepoints still hold (regression net for the writers fixed earlier)", () => {
     useApp.getState().selectIds(["d1"]);
     expect(invariantHolds()).toBe(true);

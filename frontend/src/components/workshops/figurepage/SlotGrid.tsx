@@ -180,9 +180,12 @@ export default function SlotGrid({
     // presses keep moving the same panel, the same way onMoveSlot's caller
     // (useFigurePage) follows selection.
     if (e.shiftKey && slot.source && e.key in SHIFT_ARROW_DIRECTION) {
+      // preventDefault BEFORE the edge check (review fix): the global
+      // dataset stepper doesn't exclude shiftKey, so an unconsumed
+      // Shift+Arrow at a grid edge switched the active dataset mid-layout.
+      e.preventDefault();
       const target = gridNeighborIndex(i, cols, rows, SHIFT_ARROW_DIRECTION[e.key]);
       if (target === null) return;
-      e.preventDefault();
       onMoveSlot(i, target);
       const grid = e.currentTarget.parentElement;
       (grid?.querySelector<HTMLElement>(`[data-slot-index="${target}"]`))?.focus();
