@@ -58,6 +58,22 @@ function keyOfRow(el: Element | null): string | null {
   return dsId ? `worksheet:${dsId}` : null;
 }
 
+/** P2 fix — keyboard hijack: true when `el` is a nested editable control
+ *  (rename/tag input, the "⋯" menu button, the drag handle, …) OR any other
+ *  descendant that ISN'T the row's own anchor element itself. A row anchor
+ *  is always a plain, non-interactive `<div>`, so these are really the same
+ *  test twice for robustness: `keyOfRow`'s `.closest()` resolves ANY
+ *  descendant (including a nested rename `<input>`) to its ancestor row,
+ *  which is what let Enter in a rename input both commit AND open the row,
+ *  and let arrow keys escape a text editor as roving-focus navigation. Only
+ *  a keystroke whose target IS one of the row anchors is this container's
+ *  to handle. */
+function isEditorTarget(el: Element | null): boolean {
+  if (!el) return true;
+  if (el.matches("input, textarea, select, button, [contenteditable='true']")) return true;
+  return !(el.hasAttribute("data-lib-row") || el.hasAttribute("data-ds-id"));
+}
+
 /** A folder's whole-subtree DATASET count (independent of the new
  *  hierarchy — this is the same lens lib/foldertree-driven folder bulk
  *  actions already use, unaffected by workbook nesting). Byte-identical to
@@ -118,6 +134,11 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // P2 fix: a nested editor/control owns its own keystrokes — see
+    // isEditorTarget's doc. Must run before Escape too: an editor's own
+    // Escape (rename input's onKeyDown) stays its own, never ALSO blurring
+    // the row out from under it.
+    if (isEditorTarget(e.target as Element)) return;
     if (e.key === "Escape") {
       (document.activeElement as HTMLElement | null)?.blur();
       return;

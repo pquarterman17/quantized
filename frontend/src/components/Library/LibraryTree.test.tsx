@@ -273,3 +273,57 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     expect(askConfirm).not.toHaveBeenCalled(); // LibraryTree didn't intercept it
   });
 });
+
+describe("LibraryTree — keyboard hijack guard: nested controls own their own keys (P2 fix)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      folders: [],
+      workbooks: [wb("w1")],
+      datasets: [ds("d1", "w1")],
+      expandedWorkbookIds: [],
+      librarySelection: null,
+      workbookLastChild: {},
+      activeId: null,
+    });
+  });
+
+  const openRename = (): HTMLInputElement => {
+    fireEvent.contextMenu(workbookRow("w1"));
+    fireEvent.click(screen.getByText("Rename…"));
+    return document.querySelector(".qzk-folder-rename") as HTMLInputElement;
+  };
+
+  it("Enter inside a rename input commits the rename WITHOUT also opening the row", () => {
+    render(<Harness />);
+    const input = openRename();
+    fireEvent.change(input, { target: { value: "Renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useApp.getState().workbooks.find((w) => w.id === "w1")!.name).toBe("Renamed");
+    expect(useApp.getState().activeId).toBeNull(); // NOT also opened/activated
+  });
+
+  it("ArrowDown inside a rename input does not move roving tree focus", () => {
+    render(<Harness />);
+    const input = openRename();
+    input.focus();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(input); // focus stayed in the input
+  });
+
+  it("Escape inside a rename input cancels the rename WITHOUT the container also blurring it via a second handler", () => {
+    render(<Harness />);
+    const input = openRename();
+    fireEvent.keyDown(input, { key: "Escape" });
+    // The rename input's own handler ran (setRename(null) unmounts it);
+    // nothing here asserts document.activeElement, since the input itself
+    // is gone — the point is the workbook's name is untouched.
+    expect(useApp.getState().workbooks.find((w) => w.id === "w1")!.name).toBe("w1");
+  });
+
+  it("Enter on the row anchor itself still opens (unaffected by the guard)", () => {
+    render(<Harness />);
+    workbookRow("w1").focus();
+    fireEvent.keyDown(workbookRow("w1"), { key: "Enter" });
+    expect(useApp.getState().activeId).toBe("d1");
+  });
+});
