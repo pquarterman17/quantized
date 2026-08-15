@@ -8,15 +8,16 @@
 //
 // `mergeWorkspace` joins a freshly-PARSED `.dwk` (`LoadedWorkspace`, the
 // output of `lib/workspace.ts`'s `parseWorkspace`) into the CURRENTLY loaded
-// library — additive, never a replace (that's `loadWorkspace`). Only the
-// flat `datasets[]` list is merged in; every workspace-LEVEL structure on the
-// incoming doc (folders, workbooks, originFigures, smartFolders, reports,
-// macroSteps, figureDocs, plotWindows, activeId, selectedIds, expandedFolders,
-// recalcMode, focusedWindowId, savedPlotSpecs, savedRois) is deliberately
-// never read here — the store action built on top of this
-// (`useApp.appendWorkspace`) doesn't touch the destination folder tree, view
-// state, or window layout either, so merging those in would create
-// structures the store then silently ignores.
+// library — additive, never a replace (that's `loadWorkspace`). The flat
+// `datasets[]` list AND the incoming `workbooks[]` are merged in
+// (LIBRARY_WORKBOOK_UX_PLAN PR A4 — see the `Dataset.workbookId` row below);
+// every OTHER workspace-LEVEL structure on the incoming doc (folders,
+// originFigures, smartFolders, reports, macroSteps, figureDocs, plotWindows,
+// activeId, selectedIds, expandedFolders, recalcMode, focusedWindowId,
+// savedPlotSpecs, savedRois) is still deliberately never read here — the
+// store action built on top of this (`useApp.appendWorkspace`) doesn't touch
+// the destination folder tree, view state, or window layout either, so
+// merging those in would create structures the store then silently ignores.
 //
 // The reference-field matrix (every place a .dwk can point at a dataset id,
 // and how each is handled by an append):
@@ -33,17 +34,40 @@
 //     `droppedFolderRefs`) so the dataset lands at the Library root — the
 //     same graceful degrade `foldertree.pruneOrphans` already gives a
 //     dataset whose folder didn't survive validation.
-//   - `Dataset.workbookId` (LIBRARY_WORKBOOK_UX_PLAN PR A2) — points into
-//     `WorkspaceState.workbooks`, which this merge never imports, for the
-//     EXACT reason `folderId` above doesn't: real cross-project workbook
-//     transfer (rewritten ids, preserved membership, the whole bundle) is PR
-//     A4's contract, not this one's. Every incoming `workbookId` is
-//     therefore stripped (counted in `droppedWorkbookRefs`) so an appended
-//     dataset never points at a workbook that doesn't exist on this side.
-//     It arrives workbook-LESS, exactly like a brand-new import — the next
-//     `.dwk` load re-derives a fresh single-dataset workbook for it via
-//     `lib/workbooks.ts`'s `reconcileWorkbookRefs` (an orphan with no
-//     `workbookId` at all, same as any legacy v1-v3 dataset).
+//   - `Dataset.workbookId` (LIBRARY_WORKBOOK_UX_PLAN PR A4 — supersedes A2's
+//     blanket strip) — points into `incoming.workbooks`, which A2 never
+//     imported because "real cross-project workbook transfer is PR A4's
+//     contract, not this one's". A4 IS that contract: every incoming
+//     workbook referenced by >=1 incoming dataset TRANSFERS, under a FRESH
+//     id from `genWorkbookId` — never the incoming id, collision or not
+//     (the same "pasted/appended content can never share an id with its
+//     source" guarantee the plan's L0.23/L0.24 and cross-session transfer
+//     requirements ask for cross-instance Copy/Paste, applied here to
+//     append too). Freshness is guaranteed by `currentWorkbookIds`, a
+//     caller-supplied snapshot of the DESTINATION's existing workbook ids —
+//     this module only ever receives `Dataset[]` for `current` (no
+//     `WorkbookNode[]`), and a time-seeded generator's output must never be
+//     assumed collision-free on its own, so the collision check is explicit
+//     here rather than delegated to `genWorkbookId`. A transferred
+//     workbook's `folderId` is CLEARED (the destination folder tree is
+//     never merged in, so a transferred workbook always lands at the
+//     Library ROOT — the plan's sanctioned degrade for PR A4, not a special
+//     case) and `order` is left undefined, which `lib/order.ts`'s `byOrder`
+//     sinks after any keyed root-level sibling — "appended lands at the
+//     end" without this pure function needing the destination's full
+//     `WorkbookNode[]` (only its id set). `name`/`source`/`importedAt`/
+//     `originBook` carry over unchanged (provenance). Each transferred
+//     dataset's `workbookId` is remapped through the resulting old-id ->
+//     new-id table. A workbook referenced by ZERO incoming datasets is
+//     memberless clutter and is NOT transferred at all. A dataset whose
+//     `workbookId` names no incoming workbook (a hand-edited/corrupt `.dwk`
+//     — a document that went through `parseWorkspace` always has total
+//     membership via `reconcileWorkbookRefs`) is cleared, same as A2, but
+//     `droppedWorkbookRefs` now counts ONLY this unresolvable case —
+//     NARROWED from A2's "every incoming ref, unconditionally" now that
+//     most refs resolve via real transfer. Deliberate contract change, not
+//     a weakening: A2's blanket-strip assertions are replaced by the
+//     transfer assertions below (see workspaceMerge.test.ts).
 //   - `OriginFigureEntry.datasetId`/`.siblingIds`, `ReportEntry.datasetId`,
 //     `FigureDoc.datasetId`, `PlotWindow.datasetId`, `WorkspaceState.activeId`/
 //     `.selectedIds` — all live in workspace-level structures that are never
@@ -60,6 +84,7 @@
 
 import type { Dataset } from "./types";
 import type { LoadedWorkspace } from "./workspace";
+import type { WorkbookNode } from "./workbooks";
 
 export interface WorkspaceMergeResult {
   /** `current` followed by the incoming datasets, id/name-deduped. Neither
@@ -82,25 +107,44 @@ export interface WorkspaceMergeResult {
   /** `folderId` memberships dropped because the destination folder tree is
    *  never merged in — see the field matrix above. */
   droppedFolderRefs: number;
-  /** `workbookId` memberships stripped because real cross-project workbook
-   *  transfer is PR A4's contract, not this one's — see the field matrix
-   *  above. Every appended dataset arrives workbook-less. */
+  /** `workbookId` refs that resolved to NO incoming workbook (a
+   *  hand-edited/corrupt `.dwk`) — see the field matrix above.
+   *  NARROWED as of PR A4: this used to count EVERY incoming `workbookId`
+   *  (A2's blanket strip); now it only counts genuinely unresolvable ones,
+   *  because a resolvable `workbookId` gets real transfer (see
+   *  `workbooks` below), not a strip. */
   droppedWorkbookRefs: number;
+  /** Incoming workbooks referenced by >=1 incoming dataset, transferred
+   *  with fresh ids (never the incoming id) and landed at the Library root
+   *  (`folderId` cleared). A memberless incoming workbook (zero incoming
+   *  datasets reference it) is dropped, not transferred. See the field
+   *  matrix above for the full transfer contract. */
+  workbooks: WorkbookNode[];
 }
 
-/** Merge `incoming`'s datasets into `current` (Origin's "Append Project").
- *  Pure: `genId` supplies fresh ids the exact same way `foldertree
- *  .migrateGroupsToFolders`'s `genId` parameter does (the store passes its
- *  `nextDatasetId`), so this stays testable without a store. Two passes —
- *  first assign every incoming dataset a collision-free id (so a `bgRef`
- *  that forward-references a LATER incoming dataset still resolves), then
- *  build the final objects (dedupe the name, remap/drop `bgRef`, drop
- *  `folderId`). See `WorkspaceMergeResult`'s doc for the full reference
+/** Merge `incoming`'s datasets AND workbooks into `current` (Origin's
+ *  "Append Project"). Pure: `genId`/`genWorkbookId` supply fresh ids the
+ *  exact same way `foldertree.migrateGroupsToFolders`'s `genId` parameter
+ *  does (the store passes its `nextDatasetId`/`nextWorkbookId`), so this
+ *  stays testable without a store. `currentWorkbookIds` is the destination's
+ *  existing workbook id set — this module never receives the destination's
+ *  `WorkbookNode[]` (only `current: Dataset[]`), so freshness for the
+ *  transferred workbooks is guaranteed against this explicit set rather than
+ *  assumed from `genWorkbookId`'s output.
+ *
+ *  Three passes — first assign every incoming dataset a collision-free id
+ *  (so a `bgRef` that forward-references a LATER incoming dataset still
+ *  resolves), then assign every TRANSFERRED workbook a collision-free fresh
+ *  id, then build the final dataset objects (dedupe the name, remap/drop
+ *  `bgRef`, drop `folderId`, remap/clear `workbookId` through the workbook
+ *  id table). See `WorkspaceMergeResult`'s doc for the full reference
  *  matrix this reconciles. */
 export function mergeWorkspace(
   current: Dataset[],
   incoming: LoadedWorkspace,
   genId: () => string,
+  currentWorkbookIds: ReadonlySet<string>,
+  genWorkbookId: () => string,
 ): WorkspaceMergeResult {
   const usedIds = new Set(current.map((d) => d.id));
   const usedNames = new Set(current.map((d) => d.name));
@@ -127,7 +171,41 @@ export function mergeWorkspace(
     idMap.set(d.id, id);
   }
 
-  // Pass 2: dedupe the name, remap/drop bgRef, drop folderId + workbookId.
+  // Pass 1b: workbook transfer. Only a workbook with >=1 incoming member
+  // transfers (a memberless incoming workbook is dropped as clutter); every
+  // transferred workbook gets a FRESH id, unconditionally — see the header's
+  // `Dataset.workbookId` row for why this differs from pass 1's
+  // collision-only dataset id policy. `usedWorkbookIds` seeds from the
+  // caller-supplied `currentWorkbookIds` and grows with every id minted
+  // here, so two workbooks transferred in the SAME append can't collide with
+  // each other either.
+  const referencedWorkbookIds = new Set<string>();
+  for (const d of incoming.datasets) {
+    if (d.workbookId) referencedWorkbookIds.add(d.workbookId);
+  }
+  const usedWorkbookIds = new Set(currentWorkbookIds);
+  // Incoming workbook id -> fresh id (last write wins on a duplicate
+  // incoming id — the same degrade pass 1's idMap gives a duplicated dataset
+  // id, never a crash).
+  const workbookIdMap = new Map<string, string>();
+  const workbooks: WorkbookNode[] = [];
+  for (const w of incoming.workbooks) {
+    if (!referencedWorkbookIds.has(w.id)) continue; // memberless -> not transferred
+    let freshId = genWorkbookId();
+    while (usedWorkbookIds.has(freshId)) freshId = genWorkbookId();
+    usedWorkbookIds.add(freshId);
+    workbookIdMap.set(w.id, freshId);
+    const node: WorkbookNode = { id: freshId, name: w.name };
+    if (w.source) node.source = w.source;
+    if (w.importedAt) node.importedAt = w.importedAt;
+    if (w.originBook) node.originBook = w.originBook;
+    // folderId and order are intentionally omitted: Library root, sinks
+    // after any keyed sibling (see the header's `Dataset.workbookId` row).
+    workbooks.push(node);
+  }
+
+  // Pass 2: dedupe the name, remap/drop bgRef, drop folderId, remap/clear
+  // workbookId through the workbook id table built above.
   let renamed = 0;
   let droppedBgRefs = 0;
   let droppedFolderRefs = 0;
@@ -146,7 +224,14 @@ export function mergeWorkspace(
 
     const next: Dataset = { ...d, id, name, folderId: undefined, workbookId: undefined };
     if (d.folderId !== undefined) droppedFolderRefs++;
-    if (d.workbookId !== undefined) droppedWorkbookRefs++;
+    if (d.workbookId !== undefined) {
+      const newWbId = workbookIdMap.get(d.workbookId);
+      if (newWbId) {
+        next.workbookId = newWbId;
+      } else {
+        droppedWorkbookRefs++; // unresolvable — hand-edited/corrupt .dwk
+      }
+    }
     if (d.bgRef) {
       const target = idMap.get(d.bgRef.datasetId);
       if (target) {
@@ -166,5 +251,6 @@ export function mergeWorkspace(
     droppedBgRefs,
     droppedFolderRefs,
     droppedWorkbookRefs,
+    workbooks,
   };
 }
