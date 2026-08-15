@@ -96,6 +96,7 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
 
         let dataset = entry.dataset;
         let workbooks = s.workbooks;
+        let expandedWorkbookIds = s.expandedWorkbookIds;
         const hasLiveWorkbook = dataset.workbookId != null && s.workbooks.some((w) => w.id === dataset.workbookId);
         if (!hasLiveWorkbook) {
           // P1 fix: deleteWorkbook (store/workbookActions.ts) removes the
@@ -120,11 +121,16 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
           const derived = deriveWorkbooks([dataset], s.folders, nextWorkbookId);
           workbooks = [...s.workbooks, ...derived.workbooks];
           dataset = { ...dataset, workbookId: derived.membership[dataset.id] };
+          // The fresh workbook starts expanded (same rule as import-time
+          // creation, store/importDatasets.ts) — a restore whose row hides
+          // behind a collapsed disclosure would look like a failed restore.
+          expandedWorkbookIds = [...new Set([...expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])];
         }
 
         return {
           datasets: [...s.datasets, dataset],
           workbooks,
+          expandedWorkbookIds,
           trash,
           activeId: s.activeId ?? id,
         };

@@ -154,6 +154,15 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   const nextView = { ...snapshotView(s), ...viewPatch };
   return {
     activeId: id,
+    // PR C: the active dataset's workbook is always disclosed — activation
+    // means "show me this sheet", and a collapsed parent workbook would hide
+    // the very row that's now active/selected in the tree. One-directional:
+    // activation expands, only the user's own toggle collapses (and a
+    // collapsed workbook offers no sheet row to activate, so the two never
+    // fight).
+    ...(ds?.workbookId != null && !s.expandedWorkbookIds.includes(ds.workbookId)
+      ? { expandedWorkbookIds: [...s.expandedWorkbookIds, ds.workbookId] }
+      : {}),
     // A full plot-intent activation always drops any worksheet-only override
     // (item 15) — the plot it now shows IS `id`, so the Worksheet tab's
     // `worksheetId ?? activeId` fallback already tracks it; a stale override

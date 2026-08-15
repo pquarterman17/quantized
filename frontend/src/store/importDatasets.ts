@@ -223,6 +223,12 @@ function addFromPayload(
       folders: [...s.folders, ...plan.folders],
       workbooks: [...s.workbooks, ...plan.workbooks],
       expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
+      // A workbook created by this import starts expanded — the workbook-
+      // layer sibling of `plan.expanded` above, and the tree-mode analogue
+      // of the old flat list where a fresh import's rows were immediately
+      // visible. Collapsed-by-default stays the rule for everything a user
+      // didn't just create (L0.5 disclosure semantics untouched).
+      expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...plan.workbooks.map((w) => w.id)])],
       datasets: s.datasets.map((d) =>
         newIdSet.has(d.id)
           ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
@@ -248,6 +254,10 @@ function addFromPayload(
     const derived = deriveWorkbooks([dsInput], [], nextWorkbookId);
     set((s) => ({
       workbooks: [...s.workbooks, ...derived.workbooks],
+      // Freshly created workbook starts expanded — same rule (and reason) as
+      // the Origin branch above: the sheet the user just imported must be
+      // visible in the tree, not hidden behind a collapsed disclosure.
+      expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])],
       datasets: s.datasets.map((d) => (d.id === id ? { ...d, workbookId: derived.membership[id] } : d)),
     }));
   }

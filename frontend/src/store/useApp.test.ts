@@ -735,6 +735,24 @@ describe("useApp multi-select + removeSelected", () => {
     expect(useApp.getState().librarySelection).toBeNull();
   });
 
+  // PR C tree renderer: activation always discloses the active sheet's parent
+  // workbook — a collapsed workbook would otherwise hide the very row that
+  // just became active (the same focusedRebindPatch chokepoint as above, so
+  // setActive AND rebindWindow's focused-drop path both get it).
+  it("setActive expands the activated dataset's workbook", () => {
+    const wb = three().map((d) => (d.id === "d2" ? { ...d, workbookId: "wb2" } : d));
+    useApp.setState({ datasets: wb, expandedWorkbookIds: [] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().expandedWorkbookIds).toContain("wb2");
+  });
+
+  it("setActive leaves an already-expanded workbook list untouched (no duplicate entry)", () => {
+    const wb = three().map((d) => (d.id === "d2" ? { ...d, workbookId: "wb2" } : d));
+    useApp.setState({ datasets: wb, expandedWorkbookIds: ["wb2"] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().expandedWorkbookIds).toEqual(["wb2"]);
+  });
+
   it("toggleSelected clears librarySelection", () => {
     useApp.setState({ datasets: three(), selectedIds: [], librarySelection: { kind: "folder", id: "f1" } });
     useApp.getState().toggleSelected("d1");

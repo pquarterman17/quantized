@@ -104,7 +104,10 @@ describe("restoreFromTrash — workbook self-heal (P1 fix: dangling workbookId)"
   const wbDs = (id: string, workbookId: string): Dataset => ({ ...ds(id), workbookId });
 
   beforeEach(() => {
-    useApp.setState({ datasets: [], activeId: null, selectedIds: [], trash: [], folders: [], workbooks: [] });
+    useApp.setState({
+      datasets: [], activeId: null, selectedIds: [], trash: [], folders: [], workbooks: [],
+      expandedWorkbookIds: [],
+    });
   });
 
   it("restoring a member of a DELETED workbook re-derives a fresh LIVE workbook (no dangling id)", () => {
@@ -121,6 +124,10 @@ describe("restoreFromTrash — workbook self-heal (P1 fix: dangling workbookId)"
     expect(restored.workbookId).not.toBe("wb1"); // the deleted id never comes back
     const live = useApp.getState().workbooks.find((w) => w.id === restored.workbookId);
     expect(live).toBeDefined(); // no dangling reference
+    // PR C: the fresh workbook starts expanded (same rule as import-time
+    // creation) — a restored row hidden behind a collapsed disclosure would
+    // look like a failed restore.
+    expect(useApp.getState().expandedWorkbookIds).toContain(restored.workbookId);
   });
 
   it("restoring a dataset trashed alone (its workbook still exists) keeps its original membership, no new workbook", () => {
