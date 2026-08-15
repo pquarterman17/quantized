@@ -86,6 +86,7 @@ function dataTypeOf(node: LibraryNode): string {
 }
 
 function sourceOf(node: LibraryNode): string {
+  if (node.kind === "origin-figure" && node.entity.datasetId == null) return "Unresolved";
   if (node.source.missingDatasetIds.length > 0) return "Missing data";
   if (node.kind === "worksheet") {
     if (node.entity.pending) return "On demand";

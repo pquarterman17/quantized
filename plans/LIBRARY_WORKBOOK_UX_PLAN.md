@@ -531,6 +531,14 @@ build, and focused interaction coverage where appropriate.
    claim global L1.4 interaction parity: Details context menus, rename/move,
    and drag/drop still need the shared-action follow-through in their owning
    slices, and Tiles remains PR E.
+4a. [ ] **PR D follow-up — Details roving keyboard traversal.** Replace one
+    Tab stop per row with the standard roving-tabindex pattern; Up/Down moves
+    through the current sorted row order, Home/End reaches the boundaries,
+    Enter retains canonical open, and focus remains stable after re-sort or
+    removal. Reuse `lib/libraryTreeNav.ts` arithmetic where it fits, but do not
+    reintroduce hierarchy-only Left/Right disclosure semantics in a flat sort.
+    This is explicitly booked from Claude's 2026-08-15 PR #140 review rather
+    than being left implicit under L1.4.
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
     confirmed L0.26 behavior over the Details renderer: flat result list with
     full `Folder / Workbook / Child` breadcrumbs, normal open behavior, and
@@ -1376,6 +1384,18 @@ back to the owner. No Library implementation is authorized by this pause.
   left L1.4 open: this slice selects and opens Details rows, but does not
   pretend native-browser right-click, rename/move, or drag/drop are parity.
   Verification on the implementation branch: 24 focused tests plus the full
-  frontend suite (6,737 tests / 452 files), targeted ESLint, TypeScript
-  typecheck, and production build/bundle guard all pass; Details remains a
-  lazy 5.26 kB chunk and eager output remains 3.5 kB under budget.
+  frontend suite (6,743 tests / 452 files after review fixes), targeted
+  ESLint, TypeScript typecheck, and production build/bundle guard all pass;
+  Details remains a lazy 5.54 kB chunk and eager output remains 3.4 kB under
+  budget.
+- **2026-08-15 — ChatGPT-Sol, PR #140 review fixes:** Addressed Claude's
+  blocking Details review. Delete/Backspace is now owned by the focused row:
+  worksheets use the shared confirmed-removal path (including enclosing
+  multi-selection), while every non-worksheet consumes the key so the global
+  active-dataset fallback cannot delete unrelated data. Column-sorted Details
+  rows render flat instead of retaining misleading hierarchy indentation, and
+  unresolved Origin figures say **Unresolved** in Source. Added five real
+  global-shortcut regressions plus sort/source coverage. Explicitly booked
+  roving Details arrow navigation as PR D follow-up 4a. Verification: 76
+  targeted tests, full 6,743-test frontend suite, ESLint, typecheck, and build
+  all pass; eager output is 3.4 kB under budget.

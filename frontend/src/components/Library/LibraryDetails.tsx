@@ -8,6 +8,7 @@ import {
   type LibraryDetailsSortKey,
 } from "../../lib/libraryDetails";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
+import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -95,13 +96,32 @@ export default function LibraryDetails({ hierarchy }: Props) {
                   onDoubleClick={() => openLibraryNode(row.node)}
                   onContextMenu={() => selectNode(row.node)}
                   onKeyDown={(event) => {
+                    // Match LibraryTree's focused-row contract: a Details row
+                    // owns Delete/Backspace before the window-level fallback
+                    // can target stale selectedIds (or the active plot). Only
+                    // worksheets have an enabled delete flow in this slice;
+                    // every other kind consumes the key until its canonical
+                    // registry action is available through L1.4.
+                    if (event.key === "Delete" || event.key === "Backspace") {
+                      event.preventDefault();
+                      if (row.node.kind === "worksheet") {
+                        const ids = useApp.getState().selectedIds;
+                        requestDatasetRemoval(
+                          ids.length > 0 && ids.includes(row.node.entityId) ? ids : [row.node.entityId],
+                        );
+                      }
+                      return;
+                    }
                     if (event.key === "Enter") {
                       event.preventDefault();
                       openLibraryNode(row.node);
                     }
                   }}
                 >
-                  <td className="qzk-details-name" style={{ paddingLeft: 8 + row.node.depth * 10 } as CSSProperties}>
+                  <td
+                    className="qzk-details-name"
+                    style={{ paddingLeft: sortKey === "manual" ? 8 + row.node.depth * 10 : 8 } as CSSProperties}
+                  >
                     <span aria-hidden="true">{row.node.kind === "folder" ? "▦" : row.node.kind === "workbook" ? "▤" : "·"}</span>
                     <span>{row.node.name}</span>
                     <small>{row.location} · {row.dimensions}</small>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { libraryDetailsRows, sortLibraryDetailsRows } from "./libraryDetails";
 import { buildLibraryHierarchy } from "./libraryHierarchy";
+import type { OriginFigureEntry } from "./originFigures";
 import type { Dataset } from "./types";
 
 function dataset(id: string, name: string, workbookId: string, order: number): Dataset {
@@ -56,5 +57,34 @@ describe("Library Details projection", () => {
     expect(sortLibraryDetailsRows(manual, "manual", "asc").map((row) => row.node.key)).toEqual([
       "workbook:w", "worksheet:b", "worksheet:a",
     ]);
+  });
+
+  it("labels an Origin figure with no resolved dataset instead of implying it can open", () => {
+    const unresolved: OriginFigureEntry = {
+      id: "g",
+      stem: "project",
+      datasetId: null,
+      siblingIds: ["b"],
+      figure: {
+        name: "Graph",
+        x_from: 0,
+        x_to: 1,
+        x_log: false,
+        y_from: 0,
+        y_to: 1,
+        y_log: false,
+        n_curves: 1,
+        annotations: [],
+        source_hint: "MissingBook",
+      },
+    };
+    const hierarchy = buildLibraryHierarchy({
+      folders: [],
+      workbooks: [{ id: "w", name: "Run" }],
+      datasets: [dataset("b", "beta.csv", "w", 0)],
+      originFigures: [unresolved],
+    });
+    const row = libraryDetailsRows(hierarchy).find((item) => item.node.kind === "origin-figure");
+    expect(row?.source).toBe("Unresolved");
   });
 });
