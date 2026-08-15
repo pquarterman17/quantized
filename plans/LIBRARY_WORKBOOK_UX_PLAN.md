@@ -891,10 +891,8 @@ Recommended PR A decomposition:
    optional **Create Folder for This Import** suggestion that never creates
    folders without confirmation. (L0.46 booked here 2026-08-14 — previously
    had no owning slice.)
-4. [ ] **PR A4 — append/merge reference integrity.** Define collision-free
-   workbook/folder transfer and rewrite dataset/workbook/internal references,
-   or explicitly land appended workbooks at root with warnings. Never retain a
-   dangling `workbookId`.
+4. [x] ~~**PR A4 — append/merge reference integrity.**~~ (2026-08-14) Shipped
+   `aa789bc` — see `## Completed`.
 
 PR A acceptance gates:
 
@@ -1023,6 +1021,22 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- ~~**PR A4 — append/merge reference integrity**~~ (2026-08-14) — real
+  workbook transfer through Append Project, superseding A2's blanket strip:
+  every incoming workbook referenced by ≥1 appended dataset transfers under
+  an unconditionally FRESH id (freshness guaranteed against an explicit
+  `currentWorkbookIds` set, never assumed from the generator), lands at the
+  Library root (`folderId` cleared; `order` undefined — verified `byOrder`
+  sinks it after keyed siblings, giving L0.35 append-at-end for free) with
+  name/source/importedAt/originBook preserved; dataset `workbookId` remapped
+  through the old→new table; unresolvable refs cleared + counted
+  (`droppedWorkbookRefs` narrowed to that case); memberless incoming
+  workbooks dropped; store append threads `workbooks` + root-placement
+  status note; undo restores the pre-append list via HistorySnapshot. Ran
+  parallel with A3 under a strict file partition (prep commit `796f12f`
+  supplied the shared `store/workbookIds.ts` generator). Gate: 6,527 tests,
+  lint 0 errors, build + bundle green; adversarial review found no defects.
+  Commit `aa789bc`.
 - ~~**PR A2 — workspace/store persistence**~~ (2026-08-14) — `.dwk` bumped to
   v4 (accepts v1–v4): `workbooks[]` + per-dataset `workbookId` serialize; ONE
   parse path for every version (sanitize → `reconcileWorkbookRefs` with a

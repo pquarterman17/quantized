@@ -15,6 +15,7 @@ import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
+import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -57,10 +58,14 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   toast(msg, "ok");
 }
 
-/** Append Project (MAIN_PLAN #16): join a freshly-parsed .dwk's flat dataset
- *  list into the currently loaded library. See lib/workspace.mergeWorkspace
- *  for the full reference-field matrix of what is (and deliberately isn't)
- *  merged in. */
+/** Append Project (MAIN_PLAN #16, workbook transfer LIBRARY_WORKBOOK_UX_PLAN
+ *  PR A4): join a freshly-parsed .dwk's flat dataset list AND its referenced
+ *  workbooks into the currently loaded library. See
+ *  lib/workspaceMerge.mergeWorkspace for the full reference-field matrix of
+ *  what is (and deliberately isn't) merged in. `recordHistory` runs BEFORE
+ *  the mutation, and `workbooks` is already part of `HistorySnapshot`
+ *  (history.ts), so undo restores the pre-append workbook list for free —
+ *  same as it already does for `datasets`. */
 export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): void {
   const n = ws.datasets.length;
   if (n === 0) {
@@ -68,8 +73,19 @@ export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorks
     return;
   }
   get().recordHistory("append workspace");
-  const { datasets, renamed } = mergeWorkspace(get().datasets, ws, nextDatasetId);
-  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)`;
-  set({ datasets, status: msg });
+  const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
+  const { datasets, renamed, workbooks } = mergeWorkspace(
+    get().datasets,
+    ws,
+    nextDatasetId,
+    currentWorkbookIds,
+    nextWorkbookId,
+  );
+  const wbNote =
+    workbooks.length > 0
+      ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
+      : "";
+  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
+  set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
   toast(msg, "ok");
 }
