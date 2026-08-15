@@ -63,6 +63,12 @@ interface Props {
    *  location isn't otherwise visible (the tree view already shows it via
    *  nesting). Undefined = no caption rendered. */
   folderCaption?: string;
+  /** L0.25 (PR #139 review) — set by LibraryTree only: plain click SELECTS
+   *  (selectIds, no plot change), double-click/Enter OPENS; right-click/
+   *  menu-key select without activating. Ctrl/Cmd + Shift keep their
+   *  app-wide meaning in both modes. Unset (flat/search): the established
+   *  plot-intent click (item 15) is unchanged — L0.26 "normal open". */
+  treeMode?: boolean;
 }
 
 export default function DatasetRow({
@@ -76,6 +82,7 @@ export default function DatasetRow({
   sheetNumber,
   depth = 0,
   folderCaption,
+  treeMode = false,
 }: Props) {
   // Staleness badge (#4): amber when this dataset's corrections or fit await
   // recalculation (manual mode) — click runs the dirty set now.
@@ -86,6 +93,7 @@ export default function DatasetRow({
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
+  const selectIds = useApp((s) => s.selectIds);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
@@ -116,19 +124,30 @@ export default function DatasetRow({
   // PR C: records L0.6's remembered workbook child. L0.25 librarySelection
   // clearing now lives at the STORE level (activateFromLibrary/
   // toggleSelected/selectRange/setActive), not re-implemented here.
+  const open = () => {
+    activateFromLibrary(d.id);
+    recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`);
+  };
   const onRowClick = (e: React.MouseEvent) => {
     if (e.shiftKey) selectRange(d.id);
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
-    else { activateFromLibrary(d.id); recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`); }
+    // L0.25 tree mode: a plain click selects WITHOUT touching the plot; the
+    // open (double-click here, Enter via LibraryTree) is a separate gesture.
+    else if (treeMode) selectIds([d.id]);
+    else open();
   };
 
-  // Right-click: if this row isn't already in the selection, select it first so
-  // the menu acts on what the user sees highlighted, then open the menu. Same
-  // routing as a plain click (item 15) — selecting a row for its context menu
-  // shouldn't itself plot an Origin book any more than clicking it does.
+  // Right-click/menu-key: a not-yet-selected row is selected first so the
+  // menu acts on what's highlighted — via selectIds in tree mode (never
+  // changes the active plot, L0.25), via plain-click routing (item 15) flat.
+  const selectForMenu = () => {
+    if (selected) return;
+    if (treeMode) selectIds([d.id]);
+    else activateFromLibrary(d.id);
+  };
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!selected) activateFromLibrary(d.id);
+    selectForMenu();
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -138,7 +157,7 @@ export default function DatasetRow({
   const onRowKeyDown = (e: React.KeyboardEvent) => {
     if (!isContextMenuKeyEvent(e)) return;
     e.preventDefault();
-    if (!selected) activateFromLibrary(d.id);
+    selectForMenu();
     const r = e.currentTarget.getBoundingClientRect();
     setMenu({ x: r.left + 8, y: r.bottom });
   };
@@ -168,6 +187,8 @@ export default function DatasetRow({
       tabIndex={0}
       onKeyDown={onRowKeyDown}
       onClick={onRowClick}
+      // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.
+      onDoubleClick={treeMode ? open : undefined}
       onContextMenu={onContextMenu}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}

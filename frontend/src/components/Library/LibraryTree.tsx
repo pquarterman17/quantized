@@ -59,19 +59,25 @@ function keyOfRow(el: Element | null): string | null {
 }
 
 /** P2 fix — keyboard hijack: true when `el` is a nested editable control
- *  (rename/tag input, the "⋯" menu button, the drag handle, …) OR any other
- *  descendant that ISN'T the row's own anchor element itself. A row anchor
- *  is always a plain, non-interactive `<div>`, so these are really the same
- *  test twice for robustness: `keyOfRow`'s `.closest()` resolves ANY
- *  descendant (including a nested rename `<input>`) to its ancestor row,
- *  which is what let Enter in a rename input both commit AND open the row,
- *  and let arrow keys escape a text editor as roving-focus navigation. Only
- *  a keystroke whose target IS one of the row anchors is this container's
- *  to handle. */
+ *  (rename/tag input, the "⋯" menu button, the drag handle, …) or any other
+ *  descendant that ISN'T the row's own anchor element itself. `keyOfRow`'s
+ *  `.closest()` resolves ANY descendant (including a nested rename
+ *  `<input>`) to its ancestor row, which is what let Enter in a rename
+ *  input both commit AND open the row, and let arrow keys escape a text
+ *  editor as roving-focus navigation. Only a keystroke whose target IS one
+ *  of the row anchors is this container's to handle.
+ *
+ *  The anchor identity test runs FIRST and wins (P1 review fix): an
+ *  ArtifactRow/FigureRow anchor is itself a `<button data-lib-row>`, so an
+ *  element-kind test alone misclassified those anchors as nested controls —
+ *  the container then ignored their arrows/Delete, which fell through to
+ *  the GLOBAL dataset shortcuts and could remove an unrelated active
+ *  worksheet. "Is the anchor" and "is interactive" are independent facts;
+ *  only a non-anchor interactive descendant is someone else's keystroke. */
 function isEditorTarget(el: Element | null): boolean {
   if (!el) return true;
-  if (el.matches("input, textarea, select, button, [contenteditable='true']")) return true;
-  return !(el.hasAttribute("data-lib-row") || el.hasAttribute("data-ds-id"));
+  if (el.hasAttribute("data-lib-row") || el.hasAttribute("data-ds-id")) return false;
+  return true; // nested control or non-row target — never this container's
 }
 
 /** A folder's whole-subtree DATASET count (independent of the new
@@ -162,7 +168,13 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
       const sel = useApp.getState().librarySelection;
       if (sel && sel.kind === "workbook" && node.kind === "workbook" && sel.id === node.entityId) {
         e.preventDefault();
-        runContextAction(workbookDeleteActions[0], { node, onRename: () => {} });
+        // Honor the same L0.45 gate the menu shows disabled (a keystroke
+        // must never confirm-then-no-op; registry convention keeps run()
+        // dispatchable for disabled items, so the caller checks).
+        const del = workbookDeleteActions[0];
+        const target = { node, onRename: () => {} };
+        if (del.enabled?.(target) === false) return;
+        runContextAction(del, target);
         return;
       }
       if (sel && sel.kind === "folder" && node.kind === "folder" && sel.id === node.entityId) {
@@ -175,7 +187,16 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
         });
         return;
       }
-      return; // worksheet/figure/… row, or a stale librarySelection: defer to the global dataset handler
+      // Worksheet rows defer to the global dataset handler — clicking one
+      // put it in selectedIds, so removeSelected() removes exactly it. EVERY
+      // other row kind consumes the key here (P1 review fix): an artifact/
+      // origin-figure/mismatched-selection row has no dataset selection of
+      // its own, so falling through would hand Delete to removeSelected()
+      // and remove an UNRELATED active worksheet. Artifact deletion routes
+      // through a registry action when a later PR defines one (L0.39/L0.40);
+      // until then a safely-swallowed keystroke is the contract.
+      if (node.kind !== "worksheet") e.preventDefault();
+      return;
     }
     if (e.key === "Enter") {
       e.preventDefault();
@@ -218,10 +239,11 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
                 canMoveDown={false}
                 onFilterTag={onFilterTag}
                 depth={node.depth}
+                treeMode
               />
             );
           case "origin-figure":
-            return <FigureRow key={node.key} entry={node.entity} depth={node.depth} />;
+            return <FigureRow key={node.key} entry={node.entity} depth={node.depth} treeMode />;
           default:
             return <ArtifactRow key={node.key} node={node} depth={node.depth} />;
         }

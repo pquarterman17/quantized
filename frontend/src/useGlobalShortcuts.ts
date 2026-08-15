@@ -109,8 +109,13 @@ export function useGlobalShortcuts(): void {
         }
       }
       // Single-key tool / nav shortcuts (design interaction layer) — only with no
-      // modifier held and not while typing in a field.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && !isEditing(e.target)) {
+      // modifier held and not while typing in a field. `!e.defaultPrevented`
+      // extends the Delete branch's documented protocol (above) to this
+      // branch too (PR #139 review): LibraryTree's roving focus preventDefaults
+      // the arrows it handles, and without this gate the SAME keystroke also
+      // stepped the global prev/next-dataset navigation — two handlers, one
+      // key press.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditing(e.target)) {
         const s = useApp.getState();
         switch (e.key) {
           case "a":

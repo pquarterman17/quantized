@@ -12,13 +12,18 @@ type SliceGet = () => AppState;
 
 /** The currently-selected Library folder, or the selected workbook's
  *  folder, else root (undefined) — resolved ONCE per batch by the caller
- *  (librarySelection doesn't change mid-batch) and reused for every file. */
+ *  (librarySelection doesn't change mid-batch) and reused for every file.
+ *  An ARTIFACT selection (L0.25 widened the kind union) targets root: an
+ *  artifact names no folder of its own, and guessing one through its
+ *  bindings would make import placement depend on which figure happened to
+ *  be highlighted. */
 export function resolveImportTargetFolderId(get: SliceGet): string | undefined {
   const s = get();
   const sel = s.librarySelection;
   if (!sel) return undefined;
   if (sel.kind === "folder") return sel.id;
-  return s.workbooks.find((w) => w.id === sel.id)?.folderId;
+  if (sel.kind === "workbook") return s.workbooks.find((w) => w.id === sel.id)?.folderId;
+  return undefined;
 }
 
 /** Longest prefix shared by every string, trimmed of trailing separators. */

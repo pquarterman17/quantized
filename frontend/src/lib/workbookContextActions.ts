@@ -21,6 +21,7 @@ import type { ContextAction } from "./contextActions";
 import type { LibraryNode } from "./libraryHierarchy";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { workbookDeleteBlockers } from "../store/workbookActions";
 
 export interface WorkbookActionTarget {
   node: Extract<LibraryNode, { kind: "workbook" }>;
@@ -80,6 +81,12 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
     id: "workbook.delete",
     label: "Delete",
     destructive: true,
+    // L0.45 fail-closed (PR #139 review): disabled — with the reason — while
+    // any recovered figure/report/binding depends on a member worksheet;
+    // deleteWorkbook re-checks the same gate so the key shortcut can't
+    // bypass it. PR M's dependency-aware Trash lifts this.
+    enabled: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) == null,
+    disabledReason: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) ?? "",
     confirm: (t) => {
       const n = memberCount(t);
       return {

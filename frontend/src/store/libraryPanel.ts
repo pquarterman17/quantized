@@ -61,11 +61,15 @@
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import type { AppState } from "./useApp";
 
-/** L0.46/L0.5-L0.6: what the Library tree currently has "current" for import
- *  targeting and workbook selection — the folder/workbook kinds `selectedIds`
- *  cannot express. */
+/** L0.46/L0.5-L0.6/L0.25: what the Library tree currently has "current" for
+ *  import targeting and selection — every node kind `selectedIds` cannot
+ *  express. Worksheets are the one deliberate exception: their selection IS
+ *  `selectedIds` (the app-wide dataset multi-selection, with Ctrl/Cmd toggle
+ *  and Shift range), and the two stay mutually exclusive at the store
+ *  chokepoints — a non-null librarySelection clears selectedIds and vice
+ *  versa — so the tree always shows exactly one coherent current item. */
 export interface LibrarySelection {
-  kind: "folder" | "workbook";
+  kind: "folder" | "workbook" | "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report";
   id: string;
 }
 

@@ -3,8 +3,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
-import type { WorkbookNode } from "../lib/workbooks";
+import { workbookDeleteBlockers } from "./workbookActions";
+import { createFigureDocument } from "../lib/figureDocument";
+import { defaultPlotView } from "../lib/plotview";
+import type { ReportEntry } from "../lib/report";
 import type { Dataset } from "../lib/types";
+import type { WorkbookNode } from "../lib/workbooks";
+
+type AppOriginFigure = ReturnType<typeof useApp.getState>["originFigures"][number];
+type AppFigureDoc = ReturnType<typeof useApp.getState>["figureDocs"][number];
 
 const wb = (id: string, folderId?: string): WorkbookNode => ({ id, name: `wb-${id}`, folderId });
 const ds = (id: string, workbookId?: string, folderId?: string): Dataset => ({
@@ -21,6 +28,10 @@ describe("workbookActions slice", () => {
       datasets: [ds("d1", "w1"), ds("d2", "w1"), ds("d3", "w2")],
       workbooks: [wb("w1"), wb("w2")],
       folders: [{ id: "f1", name: "Folder 1", parentId: null, order: 0 }],
+      originFigures: [],
+      editableFigures: [],
+      figureDocs: [],
+      reports: [],
       activeId: null,
       selectedIds: [],
       trash: [],
@@ -103,14 +114,69 @@ describe("workbookActions slice", () => {
       expect(useApp.getState().history).toHaveLength(0);
     });
 
-    it("is undoable — two undo presses restore the datasets and the workbook node", () => {
+    it("ONE history entry — a single Undo restores the workbook node AND its member datasets together (PR #139 review)", () => {
       useApp.getState().deleteWorkbook("w1");
-      expect(useApp.getState().history.length).toBe(2); // removeDatasets + delete workbook
-      useApp.getState().undo(); // restores the workbook node
-      useApp.getState().undo(); // restores the member datasets (out of Trash)
+      expect(useApp.getState().history.length).toBe(1); // one Delete, one Undo
+      useApp.getState().undo();
       const s = useApp.getState();
       expect(s.workbooks.map((w) => w.id).sort()).toEqual(["w1", "w2"]);
       expect(s.datasets.map((d) => d.id).sort()).toEqual(["d1", "d2", "d3"]);
+      expect(s.datasets.filter((d) => d.workbookId === "w1").map((d) => d.id).sort()).toEqual(["d1", "d2"]); // membership intact
+    });
+  });
+
+  describe("deleteWorkbook — L0.45 dependent gate (PR #139 review)", () => {
+    // A dependent artifact referencing ANY member disables Delete entirely:
+    // the state must be unchanged afterwards (no trash, no history snapshot)
+    // and workbookDeleteBlockers names the reason the menu shows. One case
+    // per artifact kind the gate covers.
+    const originFig = (datasetId: string): AppOriginFigure => ({
+      id: "g1",
+      stem: "Moke",
+      datasetId,
+      siblingIds: [datasetId],
+      figure: { name: "G", x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [] },
+    });
+    const report = (datasetId: string): ReportEntry => ({
+      id: "r1",
+      name: "R",
+      datasetId,
+      report: { title: "R", sections: [] },
+    });
+    const pubFig = (datasetId: string): AppFigureDoc => ({
+      id: "p1",
+      name: "P",
+      datasetId,
+      live: true,
+      config: { xKey: null, yKeys: null, xScale: "linear", yScale: "linear", title: "", xLabel: "", yLabel: "", style: "line", fmt: "png", dpi: 150, overrides: null, seriesStyles: null },
+    });
+
+    const dependents: Array<[string, () => void]> = [
+      ["recovered Origin figure", () => useApp.setState({ originFigures: [originFig("d1")] })],
+      ["report", () => useApp.setState({ reports: [report("d2")] })],
+      ["publication figure binding", () => useApp.setState({ figureDocs: [pubFig("d1")] })],
+      ["editable figure binding", () => useApp.setState({
+        editableFigures: [createFigureDocument({ id: "e1", name: "E", datasetId: "d1", view: defaultPlotView() })],
+      })],
+    ];
+
+    it.each(dependents)("a %s referencing a member disables Delete — state unchanged", (_kind, seed) => {
+      seed();
+      const before = useApp.getState().datasets;
+      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toMatch(/PR M/);
+      useApp.getState().deleteWorkbook("w1");
+      const s = useApp.getState();
+      expect(s.workbooks.map((w) => w.id)).toEqual(["w1", "w2"]);
+      expect(s.datasets).toBe(before); // untouched — not even a new array
+      expect(s.trash).toHaveLength(0);
+      expect(s.history).toHaveLength(0); // no snapshot recorded for a refused delete
+    });
+
+    it("dependents on a DIFFERENT workbook's members do not block", () => {
+      useApp.setState({ reports: [report("d3")] }); // d3 belongs to w2
+      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBeNull();
+      useApp.getState().deleteWorkbook("w1");
+      expect(useApp.getState().workbooks.map((w) => w.id)).toEqual(["w2"]);
     });
   });
 });

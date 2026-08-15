@@ -67,37 +67,40 @@ function nodeOf(kind: Artifact["kind"], key: LibraryNodeKey, input: Partial<Libr
 }
 
 describe("ArtifactRow — open + workbookLastChild recording", () => {
-  it("editable figure: opens and shows the bound dataset name", () => {
+  it("editable figure: double-click opens and shows the bound dataset name (single click selects — L0.25)", () => {
     const node = nodeOf("editable-figure", "editable-figure:fig1");
     render(<ArtifactRow node={node} depth={0} />);
     expect(screen.getByText("d1.dat")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /My Figure/ }));
+    expect(useApp.getState().librarySelection).toEqual({ kind: "editable-figure", id: "fig1" });
+    expect(useApp.getState().workbookLastChild).toEqual({}); // click did NOT open
+    fireEvent.doubleClick(screen.getByRole("button", { name: /My Figure/ }));
     expect(useApp.getState().workbookLastChild.w1).toBe("editable-figure:fig1");
   });
 
-  it("publication figure: shows its style as meta and opens", () => {
+  it("publication figure: shows its style as meta; double-click opens", () => {
     const node = nodeOf("publication-figure", "publication-figure:pub1");
     render(<ArtifactRow node={node} depth={0} />);
     expect(screen.getByText("line")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /My Pub/ }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: /My Pub/ }));
     expect(useApp.getState().workbookLastChild.w1).toBe("publication-figure:pub1");
   });
 
-  it("page: shows rows×cols as meta and opens", () => {
+  it("page: shows rows×cols as meta; double-click opens", () => {
     const node = nodeOf("page", "page:pg1");
     render(<ArtifactRow node={node} depth={0} />);
     expect(screen.getByText("2×3")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /My Page/ }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: /My Page/ }));
     // A page isn't nested under a workbook in this fixture (no source
     // dataset link), so nothing should be recorded.
     expect(useApp.getState().workbookLastChild).toEqual({});
   });
 
-  it("report: shows the bound dataset name and opens", () => {
+  it("report: shows the bound dataset name; double-click opens", () => {
     const node = nodeOf("report", "report:rep1");
     render(<ArtifactRow node={node} depth={0} />);
     expect(screen.getByText("d1.dat")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /My Report/ }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: /My Report/ }));
     expect(useApp.getState().openReportId).toBe("rep1");
     expect(useApp.getState().workbookLastChild.w1).toBe("report:rep1");
   });

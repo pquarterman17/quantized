@@ -436,11 +436,11 @@ describe("FolderRow — PR C: click marks it current for import targeting (L0.46
     useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [], librarySelection: null });
   });
 
-  it("a click sets librarySelection to this folder, alongside the existing toggle-expand behavior", () => {
+  it("a body click sets librarySelection ONLY — expansion is the caret's alone (L0.25, PR #139 review)", () => {
     const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
     fireEvent.click(container.querySelector(".qzk-folder-head")!);
     expect(useApp.getState().librarySelection).toEqual({ kind: "folder", id: "a" });
-    expect(useApp.getState().expandedFolders).toContain("a");
+    expect(useApp.getState().expandedFolders).not.toContain("a"); // body click no longer expands
   });
 
   it("carries the roving-focus data-lib-row anchor", () => {

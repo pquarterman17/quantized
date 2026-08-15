@@ -15,11 +15,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryTree from "./LibraryTree";
 import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
 import { createFigureDocument } from "../../lib/figureDocument";
+import type { OriginFigureEntry } from "../../lib/originFigures";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import type { WorkbookNode } from "../../lib/workbooks";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 // P1 fix — Delete/Backspace routing: workbookDeleteActions[0]/folderDeleteActions[0]
 // are destructive registry entries, confirmed via the shared ConfirmDialog —
@@ -325,5 +327,212 @@ describe("LibraryTree — keyboard hijack guard: nested controls own their own k
     workbookRow("w1").focus();
     fireEvent.keyDown(workbookRow("w1"), { key: "Enter" });
     expect(useApp.getState().activeId).toBe("d1");
+  });
+});
+
+describe("LibraryTree — button row anchors (ArtifactRow/FigureRow) are the container's keys, not the global handler's (P1 fix)", () => {
+  // Reviewer's scenario, with the REAL global shortcut hook mounted: the
+  // ArtifactRow/FigureRow anchor is itself a <button data-lib-row>, so an
+  // element-kind editor test misclassified it as a nested control and the
+  // container ignored its keystrokes — arrows then reached the global
+  // prev/next-dataset navigation and Delete/Backspace reached
+  // removeSelected(), acting on an UNRELATED active dataset.
+  const originEntry: OriginFigureEntry = {
+    id: "g1",
+    stem: "Moke",
+    datasetId: "d1",
+    siblingIds: ["d1"],
+    figure: { name: "MokeGraph", x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [] },
+  };
+
+  function GlobalHarness() {
+    useGlobalShortcuts();
+    const rows = useLibraryHierarchyRows();
+    return <LibraryTree rows={rows} onFilterTag={noop} />;
+  }
+
+  const artifactRow = (): HTMLElement => document.querySelector('[data-lib-row="editable-figure:fig1"]') as HTMLElement;
+  const figureRow = (): HTMLElement => document.querySelector('[data-lib-row="origin-figure:g1"]') as HTMLElement;
+
+  beforeEach(() => {
+    useApp.setState({
+      folders: [],
+      workbooks: [wb("w1")],
+      datasets: [ds("d1", "w1"), ds("solo")],
+      originFigures: [originEntry],
+      editableFigures: [createFigureDocument({ id: "fig1", name: "My Figure", datasetId: "d1", view: defaultPlotView() })],
+      expandedWorkbookIds: ["w1"],
+      librarySelection: null,
+      activeId: "solo",
+      selectedIds: ["solo"],
+      confirmRemove: false, // Delete would remove immediately if it fell through
+    });
+    vi.mocked(askConfirm).mockReset().mockResolvedValue(true);
+  });
+
+  it.each([
+    ["ArtifactRow", artifactRow],
+    ["Origin FigureRow", figureRow],
+  ])("arrows on a focused %s move roving tree focus without changing the active dataset", (_kind, row) => {
+    render(<GlobalHarness />);
+    row().focus();
+    fireEvent.keyDown(row(), { key: "ArrowUp" });
+    expect(useApp.getState().activeId).toBe("solo"); // global dataset nav did NOT step
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown" });
+    expect(useApp.getState().activeId).toBe("solo");
+    expect(document.activeElement?.hasAttribute("data-lib-row") || document.activeElement?.hasAttribute("data-ds-id")).toBe(true);
+  });
+
+  it.each([
+    ["ArtifactRow", "Delete", artifactRow],
+    ["ArtifactRow", "Backspace", artifactRow],
+    ["Origin FigureRow", "Delete", figureRow],
+    ["Origin FigureRow", "Backspace", figureRow],
+  ])("%s consumes %s — the active/selected dataset survives", (_kind, key, row) => {
+    render(<GlobalHarness />);
+    row().focus();
+    fireEvent.keyDown(row(), { key });
+    expect(useApp.getState().datasets.some((d) => d.id === "solo")).toBe(true);
+    expect(useApp.getState().datasets).toHaveLength(2); // nothing was removed
+  });
+
+  it("arrows on a focused WORKSHEET row also stay roving-focus only (defaultPrevented now gates the global nav)", () => {
+    render(<GlobalHarness />);
+    worksheetRow("d1").focus();
+    fireEvent.keyDown(worksheetRow("d1"), { key: "ArrowDown" });
+    expect(useApp.getState().activeId).toBe("solo"); // unchanged: one keystroke, one handler
+  });
+});
+
+describe("LibraryTree — L0.25 select/open/disclosure contract, every node kind (PR #139 review)", () => {
+  // Table-driven per the review: single-click changes SELECTION but never the
+  // active content; double-click (and Enter, covered per-kind below) opens;
+  // the caret toggles without selecting or opening; right-click selects; and
+  // switching among rows leaves exactly ONE coherent current item.
+  const originEntry: OriginFigureEntry = {
+    id: "g1",
+    stem: "Moke",
+    datasetId: "d1",
+    siblingIds: ["d1"],
+    figure: { name: "MokeGraph", x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [] },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      folders: [fld("f1")],
+      workbooks: [wb("w1", "f1")],
+      datasets: [ds("d1", "w1"), ds("solo")],
+      originFigures: [originEntry],
+      editableFigures: [createFigureDocument({ id: "fig1", name: "My Figure", datasetId: "d1", view: defaultPlotView() })],
+      figureDocs: [],
+      pages: [],
+      reports: [{ id: "rep1", name: "My Report", datasetId: "d1", report: { title: "R", sections: [] } }],
+      expandedFolders: ["f1"],
+      expandedWorkbookIds: ["w1"],
+      librarySelection: null,
+      workbookLastChild: {},
+      activeId: "solo",
+      selectedIds: ["solo"],
+      openReportId: null,
+    });
+  });
+
+  const row = (key: string): HTMLElement => document.querySelector(`[data-lib-row="${key}"]`) as HTMLElement;
+
+  // [kind, key, expected librarySelection after a single click]
+  const librarySelectionKinds: Array<[string, string, { kind: string; id: string }]> = [
+    ["folder", "folder:f1", { kind: "folder", id: "f1" }],
+    ["workbook", "workbook:w1", { kind: "workbook", id: "w1" }],
+    ["origin-figure", "origin-figure:g1", { kind: "origin-figure", id: "g1" }],
+    ["editable-figure", "editable-figure:fig1", { kind: "editable-figure", id: "fig1" }],
+    ["report", "report:rep1", { kind: "report", id: "rep1" }],
+  ];
+
+  it.each(librarySelectionKinds)("%s: single click selects (one coherent current item) and never touches the active plot", (_kind, key, expected) => {
+    render(<Harness />);
+    fireEvent.click(row(key));
+    const s = useApp.getState();
+    expect(s.librarySelection).toEqual(expected);
+    expect(s.selectedIds).toEqual([]); // librarySelection displaced the dataset selection
+    expect(s.activeId).toBe("solo"); // active content untouched
+  });
+
+  it.each(librarySelectionKinds)("%s: right-click selects before its menu", (_kind, key, expected) => {
+    render(<Harness />);
+    fireEvent.contextMenu(row(key));
+    expect(useApp.getState().librarySelection).toEqual(expected);
+    expect(useApp.getState().activeId).toBe("solo");
+  });
+
+  it("worksheet: single click selects (selectedIds — the dataset selection IS its selection) without re-plotting", () => {
+    render(<Harness />);
+    fireEvent.click(worksheetRow("d1"));
+    const s = useApp.getState();
+    expect(s.selectedIds).toEqual(["d1"]);
+    expect(s.librarySelection).toBeNull(); // displaced the other direction
+    expect(s.activeId).toBe("solo"); // click did NOT open/plot
+  });
+
+  it("worksheet: double-click opens (activates) and records the remembered child", () => {
+    render(<Harness />);
+    fireEvent.doubleClick(worksheetRow("d1"));
+    expect(useApp.getState().activeId).toBe("d1");
+    expect(useApp.getState().workbookLastChild.w1).toBe("worksheet:d1");
+  });
+
+  it("worksheet: Enter opens via the container", () => {
+    render(<Harness />);
+    worksheetRow("d1").focus();
+    fireEvent.keyDown(worksheetRow("d1"), { key: "Enter" });
+    expect(useApp.getState().activeId).toBe("d1");
+  });
+
+  it("editable-figure: double-click opens exactly once and records the remembered child", () => {
+    render(<Harness />);
+    fireEvent.doubleClick(row("editable-figure:fig1"));
+    expect(useApp.getState().workbookLastChild.w1).toBe("editable-figure:fig1");
+  });
+
+  it("report: Enter opens via the container (setOpenReport)", () => {
+    render(<Harness />);
+    row("report:rep1").focus();
+    fireEvent.keyDown(row("report:rep1"), { key: "Enter" });
+    expect(useApp.getState().openReportId).toBe("rep1");
+  });
+
+  it("folder: the caret toggles disclosure WITHOUT selecting; a body double-click is the folder's open (toggle)", () => {
+    render(<Harness />);
+    const caret = row("folder:f1").querySelector(".qzk-group-caret") as HTMLElement;
+    fireEvent.click(caret);
+    expect(useApp.getState().expandedFolders).not.toContain("f1"); // collapsed
+    expect(useApp.getState().librarySelection).toBeNull(); // caret never selects
+    fireEvent.click(caret);
+    expect(useApp.getState().expandedFolders).toContain("f1");
+    fireEvent.doubleClick(row("folder:f1"));
+    expect(useApp.getState().expandedFolders).not.toContain("f1"); // body dbl-click = open = toggle
+  });
+
+  it("switching folder -> workbook -> worksheet rows leaves exactly one coherent current item at each step", () => {
+    render(<Harness />);
+    fireEvent.click(row("folder:f1"));
+    expect(useApp.getState().librarySelection).toEqual({ kind: "folder", id: "f1" });
+    fireEvent.click(row("workbook:w1"));
+    expect(useApp.getState().librarySelection).toEqual({ kind: "workbook", id: "w1" });
+    expect(useApp.getState().selectedIds).toEqual([]);
+    fireEvent.click(worksheetRow("d1"));
+    expect(useApp.getState().librarySelection).toBeNull();
+    expect(useApp.getState().selectedIds).toEqual(["d1"]);
+    fireEvent.click(row("origin-figure:g1"));
+    expect(useApp.getState().librarySelection).toEqual({ kind: "origin-figure", id: "g1" });
+    expect(useApp.getState().selectedIds).toEqual([]);
+  });
+
+  it("Ctrl/Cmd and Shift dataset multi-selection keep their meaning in the tree and displace librarySelection", () => {
+    useApp.setState({ expandedWorkbookIds: ["w1"], librarySelection: { kind: "workbook", id: "w1" } });
+    render(<Harness />);
+    fireEvent.click(worksheetRow("d1"), { ctrlKey: true }); // toggle into the multi-selection
+    const s = useApp.getState();
+    expect(s.selectedIds).toContain("d1");
+    expect(s.librarySelection).toBeNull(); // store chokepoint keeps ONE current item
   });
 });

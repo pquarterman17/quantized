@@ -144,7 +144,8 @@ test("ordered scatter survives Publication Preview save/reopen and real PDF/SVG/
     (window as unknown as { __qz: { useApp: { getState: () => { editableFigures: unknown[] } } } }).__qz.useApp.getState().editableFigures.length,
   )).toBe(1);
 
-  await page.getByTitle('open editable figure "Graph Builder plot"').click();
+  // L0.25 (PR #139): in the tree a single click SELECTS a figure row; double-click opens.
+  await page.getByTitle('open editable figure "Graph Builder plot"').dblclick();
   const reopenedPreview = figureRequest(page, "figure-hitmap");
   await runPaletteCommand(page, "Publication preview");
   await reopenedPreview;

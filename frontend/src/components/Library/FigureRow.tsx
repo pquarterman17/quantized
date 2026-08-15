@@ -18,12 +18,24 @@ import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import OriginSavedPreviewWindow from "./OriginSavedPreviewWindow";
 
-export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEntry; depth?: number }) {
+export default function FigureRow({ entry, depth = 0, treeMode = false }: {
+  entry: OriginFigureEntry;
+  depth?: number;
+  /** L0.25 (PR #139 review) — set by LibraryTree only: single click SELECTS
+   *  (librarySelection, visible highlight), double-click/Enter opens;
+   *  right-click selects. Unset (flat FiguresSection): the established
+   *  click-applies behavior is unchanged. The ⊞/▦/G/▣ buttons keep their
+   *  one-click actions in both modes — they're commands, not the row. */
+  treeMode?: boolean;
+}) {
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
   const openOriginFigureSource = useApp((s) => s.openOriginFigureSource);
   const remakeOriginFigure = useApp((s) => s.remakeOriginFigure);
   const figures = useApp((s) => s.originFigures);
   const datasets = useApp((s) => s.datasets);
+  const selection = useApp((s) => s.librarySelection);
+  const selected = treeMode && selection?.kind === "origin-figure" && selection.id === entry.id;
+  const select = () => useApp.getState().setLibrarySelection({ kind: "origin-figure", id: entry.id });
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
   // PR C: the workbook owning this figure's bound dataset, for L0.6's
   // remembered-child recording — undefined when unresolved or unowned
@@ -52,12 +64,14 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
     <div className="qzk-origin-figure-row">
       <div className="qzk-fig-row">
       <button
-        className="qzk-fig-item"
+        className={`qzk-fig-item${selected ? " selected" : ""}`}
         data-lib-row={`origin-figure:${entry.id}`}
         disabled={!resolved}
         title={title}
         style={depth ? { marginLeft: depth * 14 } : undefined}
-        onClick={() => openAndRemember()}
+        onClick={() => (treeMode ? select() : openAndRemember())}
+        onDoubleClick={treeMode ? () => openAndRemember() : undefined}
+        onContextMenu={treeMode ? select : undefined}
       >
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
         <span className="qzk-fig-meta">

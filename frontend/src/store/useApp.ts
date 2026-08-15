@@ -31,7 +31,6 @@ import {
 } from "../lib/pipeline";
 import {
   createFolder as treeCreateFolder,
-  deleteFolder as treeDeleteFolder,
   migrateGroupsToFolders,
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
@@ -75,7 +74,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { pruneWindowDatasetRefs, rebindFocusedPlotWindow, syncDatasetWindowDocuments, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow, syncDatasetWindowDocuments, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -92,13 +91,15 @@ import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
+import { folderDeletePatch } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { recomputeStaleFits } from "./recalcFits";
+import { removeDatasetsPatch } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
-import { createFigureLifecycleSlice, pruneEditableFigureRefs, type FigureLifecycleSlice } from "./figureLifecycle";
+import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
@@ -108,7 +109,7 @@ import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel"
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
-import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
+import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
 import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
@@ -123,12 +124,7 @@ import { analysisData, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeEx
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
-import {
-  createOriginImportSlice,
-  pruneOriginFidelityRefs,
-  pruneOriginFigureRefs,
-  type OriginImportSlice,
-} from "./originImport";
+import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
 import type {
   Annotation,
@@ -1752,7 +1748,10 @@ export const useApp = create<AppState>((set, get) => ({
   selectIds: (ids) =>
     set((s) => {
       const live = new Set(s.datasets.map((d) => d.id));
-      return { selectedIds: [...new Set(ids)].filter((id) => live.has(id)) };
+      const selectedIds = [...new Set(ids)].filter((id) => live.has(id));
+      // L0.25 coherence chokepoint (like activateFromLibrary/toggleSelected):
+      // a live dataset selection displaces the tree's librarySelection.
+      return { selectedIds, ...(selectedIds.length > 0 ? { librarySelection: null } : {}) };
     }),
   // DELEGATES to removeDatasets (like removeSelected below) rather than
   // repeating its ~25 lines of reference pruning — the single-id path had
@@ -1781,24 +1780,7 @@ export const useApp = create<AppState>((set, get) => ({
   removeDatasets: (ids) => {
     get().recordHistory("remove datasets");
     get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
-    set((s) => {
-      if (ids.length === 0) return {};
-      const drop = new Set(ids);
-      const datasets = s.datasets.filter((d) => !drop.has(d.id));
-      const activeId =
-        s.activeId && !drop.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
-      const worksheetId = s.worksheetId && drop.has(s.worksheetId) ? null : s.worksheetId;
-      const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
-      const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
-      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, drop);
-      const reports = pruneReportRefs(s.reports, drop);
-      const figureDocs = s.figureDocs.map((f) =>
-        f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
-      );
-      const editableFigures = pruneEditableFigureRefs(s.editableFigures, drop);
-      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
-    });
+    set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook — see store/removeDatasets.ts
   },
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
@@ -2013,7 +1995,7 @@ export const useApp = create<AppState>((set, get) => ({
     return id;
   },
   renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
-  deleteFolder: (id, mode = "reparent") => (get().recordHistory("delete folder"), set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode))),
+  deleteFolder: (id, mode = "reparent") => (get().recordHistory("delete folder"), set((s) => folderDeletePatch(s, id, mode))),
   moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
   moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
   toggleFolderExpanded: (id) =>

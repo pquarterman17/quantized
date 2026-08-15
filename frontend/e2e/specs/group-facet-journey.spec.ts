@@ -213,7 +213,7 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
   // ── Reopen from the Library (real UI) ────────────────────────────────────
   const row = page.getByTitle(`open editable figure "${saved.name}"`);
   await expect(row, "the saved figure has a Library row to reopen from").toBeVisible();
-  await row.click();
+  await row.dblclick(); // L0.25 (PR #139): single click selects; double-click opens
   await expect
     .poll(() => page.evaluate(
       (id) => (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: { document?: { id: string } }[] } } } })
@@ -247,7 +247,7 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
   // ── Reopen a second time, and re-derive Publication Preview from the
   //    reopened WINDOW (target: "window", not "new-editable" this time —
   //    the same palette-command path export-roundtrip.spec.ts exercises). ──
-  await row.click();
+  await row.dblclick(); // L0.25 (PR #139): single click selects; double-click opens
   await expect
     .poll(() => page.evaluate(
       (id) => (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: { document?: { id: string } }[] } } } })

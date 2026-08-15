@@ -6,9 +6,10 @@
 // generic name+glyph+meta row here would be strictly worse for them. These
 // four kinds had no equivalent tree row at all before this PR — only a flat
 // Library SECTION (EditableFiguresSection etc.) — so there's nothing
-// established to preserve; a single click opens via the shared
-// `openLibraryNode` dispatcher (the SAME action each section's own "open"
-// button already calls), which also records L0.6's workbookLastChild.
+// established to preserve; per L0.25 a single click SELECTS and double-click/
+// Enter opens via the shared `openLibraryNode` dispatcher (the SAME action
+// each section's own "open" button already calls), which also records L0.6's
+// workbookLastChild.
 //
 // Deliberately no context menu yet: L0.39/L0.40 name new commands for these
 // kinds, but only the WORKBOOK menu has a settled contract in this PR — see
@@ -78,15 +79,23 @@ export default function ArtifactRow({ node, depth }: Props) {
       : node.kind === "report" ? node.entity.datasetId
       : null;
   const datasetName = useDatasetName(datasetId);
+  const selection = useApp((s) => s.librarySelection);
+  const selected = selection?.kind === node.kind && selection.id === node.entityId;
   const { glyph, meta } = glyphAndMeta(node, datasetName);
+  // L0.25 (PR #139 review): single click SELECTS (librarySelection now
+  // carries artifact kinds), double-click — and Enter, via LibraryTree —
+  // opens; right-click selects (its menu arrives with L0.39/L0.40).
+  const select = () => useApp.getState().setLibrarySelection({ kind: node.kind, id: node.entityId });
 
   return (
     <button
-      className="qzk-fig-item"
+      className={`qzk-fig-item${selected ? " selected" : ""}`}
       data-lib-row={node.key}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       title={openTitle(node)}
-      onClick={() => openLibraryNode(node)}
+      onClick={select}
+      onDoubleClick={() => openLibraryNode(node)}
+      onContextMenu={select}
     >
       <span className="qzk-fig-name">{glyph} {node.name}</span>
       <span className="qzk-fig-meta">{meta}</span>

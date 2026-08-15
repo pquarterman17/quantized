@@ -1,5 +1,8 @@
-// A folder header in the Library tree (project-organization plan item 3). Caret
-// toggles expand; double-click (or the menu) renames inline; the count chip is
+// A folder header in the Library tree (project-organization plan item 3).
+// L0.25 (PR #139 review): the caret is the ONLY expand/collapse target; a
+// body click selects (librarySelection, visible highlight); a body
+// double-click toggles (a folder's "open"); double-click on the NAME renames
+// inline (stopPropagation wins over the row open); the count chip is
 // the folder's whole-subtree dataset count. It's also a drop target — dragging a
 // WORKBOOK row onto it moves that workbook (and every member worksheet's
 // folderId with it) into this folder (whole-row target, no split). Context
@@ -74,6 +77,7 @@ interface Props {
 
 export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
+  const selection = useApp((s) => s.librarySelection);
   const renameFolder = useApp((s) => s.renameFolder);
   const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
   const moveFolder = useApp((s) => s.moveFolder);
@@ -107,6 +111,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   // name, or undefined for the neutral default look.
   const folderColorCss = ACCENT_SWATCHES.find((a) => a.id === folder.color)?.c;
 
+  const selected = selection?.kind === "folder" && selection.id === folder.id;
   const commit = () => {
     if (rename != null) renameFolder(folder.id, rename);
     setRename(null);
@@ -114,6 +119,8 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const expand = () => {
     if (!expanded) toggle(folder.id);
   };
+  // L0.46: selection marks this folder "current" for import targeting.
+  const select = () => useApp.getState().setLibrarySelection({ kind: "folder", id: folder.id });
 
   // GUI_INTERACTION #8: every item's label/gating/run now lives in the
   // shared `lib/contextActions.ts` folder registry — rebuilt on every render
@@ -127,6 +134,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const onHeaderKeyDown = (e: React.KeyboardEvent) => {
     if (!isContextMenuKeyEvent(e)) return;
     e.preventDefault();
+    select(); // context-menu key selects first, same as right-click
     const r = e.currentTarget.getBoundingClientRect();
     setMenu({ x: r.left + 8, y: r.bottom });
   };
@@ -137,21 +145,24 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
 
   return (
     <div
-      className={`qzk-folder-head${dropZone === "into" ? " dropinto" : ""}${
+      className={`qzk-folder-head${selected ? " selected" : ""}${dropZone === "into" ? " dropinto" : ""}${
         dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
       }${isDropCandidate && !dropZone ? " drop-candidate" : ""}`}
       style={{ paddingLeft: 6 + depth * 14 }}
       data-lib-row={`folder:${folder.id}`}
       tabIndex={0}
-      // L0.46: a folder click ALSO marks it "current" for import targeting
-      // (librarySelection) — the first place folder selection exists at all.
-      onClick={() => {
-        toggle(folder.id);
-        useApp.getState().setLibrarySelection({ kind: "folder", id: folder.id });
-      }}
+      // L0.25 (PR #139 review): a body click SELECTS only — disclosure is
+      // the caret's alone (below, same isolation as WorkbookRow's); a body
+      // double-click is the folder's "open" (toggle). Right-click selects
+      // BEFORE showing its menu so the menu always acts on the highlighted
+      // row. The name span's own double-click rename stopPropagation()s and
+      // wins over the row-level open, matching its visible affordance.
+      onClick={select}
+      onDoubleClick={() => toggle(folder.id)}
       onKeyDown={onHeaderKeyDown}
       onContextMenu={(e) => {
         e.preventDefault();
+        select();
         setMenu({ x: e.clientX, y: e.clientY });
       }}
       onDragOver={(e) => {
@@ -239,12 +250,26 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         aria-label="More actions"
         onClick={(e) => {
           e.stopPropagation();
+          select(); // the "⋯" menu acts on the highlighted row, like right-click
           openMenuAt(e.currentTarget);
         }}
       >
         ⋯
       </button>
-      <span className="qzk-group-caret" style={folderColorCss ? { color: folderColorCss } : undefined}>
+      {/* L0.25: the caret is the ONLY expand/collapse click target — it
+       *  toggles without selecting or opening (stopPropagation on both). */}
+      <span
+        className="qzk-group-caret"
+        role="button"
+        tabIndex={-1}
+        aria-label={expanded ? "Collapse folder" : "Expand folder"}
+        style={folderColorCss ? { color: folderColorCss } : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle(folder.id);
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
         {expanded ? "▾" : "▸"}
       </span>
       {rename != null ? (

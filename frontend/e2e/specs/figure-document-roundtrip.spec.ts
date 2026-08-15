@@ -161,7 +161,7 @@ test("an editable figure survives save, window close, and reopen byte-for-byte @
   // that the old fallback then "fixed" by clicking something else entirely.
   const row = page.locator(`[title="open editable figure \\"${savedDocument.name}\\""]`).first();
   await expect(row, "the saved figure has a Library row to reopen from").toBeVisible();
-  await row.click();
+  await row.dblclick(); // L0.25 (PR #139): single click selects; double-click opens
 
   await expect
     .poll(() => page.evaluate((id) =>
