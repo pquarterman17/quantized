@@ -1223,6 +1223,16 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-15 — Claude (Fable):** Hardening slice SHIPPED (PR #142 merged
+  `51df7cc`, owner-directed after a high-effort self-review round found and
+  fixed 8 further defects in the slice itself — including undo/redo as a
+  SEVENTH L0.25 selection-invariant writer, an arrow-consume that broke the
+  worksheet filter <select>s, and two ineffective span fixes replaced with
+  the real focusGuard pattern). Awaiting: `plans/diraculator-audit_plan.md`
+  and a diraculator PR the owner referenced — neither exists in the repo,
+  any branch, Drive, or mail yet; a watch is armed. Owner directive on
+  record: work the audit plan critically when it appears, make the
+  diraculator PR CI-ready, do NOT merge it.
 - **2026-08-15 — Claude (Fable):** PR #141 merged (`f6a345b`, owner-directed
   after Sol's follow-up review cleared; both outdated threads resolved).
   Keyboard/selection hardening slice opened as the follow-on
