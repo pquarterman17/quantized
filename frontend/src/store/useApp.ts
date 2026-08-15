@@ -93,6 +93,7 @@ import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder"
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
+import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { recomputeStaleFits } from "./recalcFits";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
@@ -319,7 +320,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -942,6 +943,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPageDocumentsSlice(set, get),
   ...createRoisSlice(set, get),
   ...createRoiCutsPanelSlice(set),
+  ...createWorkbookActionsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1753,32 +1755,13 @@ export const useApp = create<AppState>((set, get) => ({
       const live = new Set(s.datasets.map((d) => d.id));
       return { selectedIds: [...new Set(ids)].filter((id) => live.has(id)) };
     }),
-  removeDataset: (id) => {
-    get().recordHistory("remove dataset");
-    get().sendToTrash(get().datasets.filter((d) => d.id === id)); // #32 trash
-    set((s) => {
-      const datasets = s.datasets.filter((d) => d.id !== id);
-      const activeId =
-        s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
-      // item 15: drop a worksheet-only override pointing at the removed
-      // dataset — else the Worksheet tab would strand on a dead id.
-      const worksheetId = s.worksheetId === id ? null : s.worksheetId;
-      const selectedIds = s.selectedIds.filter((x) => x !== id);
-      const removed = new Set([id]);
-      const originFigures = pruneOriginFigureRefs(s.originFigures, removed);
-      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, removed);
-      const reports = pruneReportRefs(s.reports, removed);
-      const figureDocs = s.figureDocs.map((f) =>
-        f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
-      );
-      const editableFigures = pruneEditableFigureRefs(s.editableFigures, removed);
-      // A removed dataset nulls any window bound to it (MULTI_PLOT_PLAN
-      // decision #4) / drops out of any panel window's list (item 19) — the
-      // window shows an empty state, never force-closed.
-      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, removed);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
-    });
-  },
+  // DELEGATES to removeDatasets (like removeSelected below) rather than
+  // repeating its ~25 lines of reference pruning — the single-id path had
+  // drifted into its own near-identical copy of the same block; this was the
+  // fourth copy removeSelected's own delegation was meant to head off. The
+  // only observable difference is the recordHistory label ("remove datasets"
+  // instead of "remove dataset"), which no test asserts on.
+  removeDataset: (id) => get().removeDatasets([id]),
   // Delete key: remove every selected dataset (falling back to the active one
   // if nothing is multi-selected); reselect the first survivor so the plot
   // recovers. DELEGATES to removeDatasets rather than repeating its ~25 lines

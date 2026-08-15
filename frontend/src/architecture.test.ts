@@ -169,7 +169,16 @@ const STORE_PINS: Record<string, number> = {
   // return line — omitting that line would silently leak the PREVIOUS
   // project's workbooks into a newly opened one, since `set()` merges a
   // partial state).
-  "/store/useApp.ts": 2835,
+  // 2835 -> 2817 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR C): `removeDataset`
+  // was a ~25-line near-duplicate of `removeDatasets` (the same drift class
+  // `removeSelected`'s own delegation was meant to head off — see that
+  // action's comment) — replaced with `removeDataset: (id) =>
+  // get().removeDatasets([id])`. Funded the new store/workbookActions.ts
+  // slice (renameWorkbook/moveWorkbookToFolder/deleteWorkbook — the tree
+  // renderer's first workbook mutations), composed in exactly like
+  // datasetMeta.ts: one import line + one `WorkbookActionsSlice` word on the
+  // extends clause + one spread line. Net still well down.
+  "/store/useApp.ts": 2818,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -652,6 +661,13 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
   revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
   activeDrag: "active drag state for Library folder drag feedback; transient",
+  // LIBRARY_WORKBOOK_UX_PLAN PR C: tree UI state. The plan's E2 milestone
+  // (session restoration) explicitly owns persisting workbook expansion,
+  // selection, and the remembered child — undoing them here would be a
+  // second, premature persistence path that E2 would then have to reconcile.
+  expandedWorkbookIds: "Library tree workbook disclosure state; transient, E2 persists it",
+  librarySelection: "Library tree folder/workbook selection; transient, E2 persists it",
+  workbookLastChild: "L0.6 remembered workbook child per workbook id; transient, E2 persists it",
 
   // originImport slice: ephemeral seeds
   originWorksheetSeed: "pending worksheet from Origin import; consumed on apply, not persistent",

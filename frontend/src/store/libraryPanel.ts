@@ -37,9 +37,37 @@
 //     tint) reads it non-reactively where a per-row render doesn't need to
 //     re-run on every OTHER row's drag, and reactively where the whole-tree
 //     highlight does.
+//
+// LIBRARY_WORKBOOK_UX_PLAN PR C additions (all three transient — E2 owns
+// persistence, per the plan's PR sequence; see architecture.test.ts's
+// HISTORY_EXCLUDED for the matching justification):
+//   - `expandedWorkbookIds` — the tree renderer's workbook disclosure state,
+//     the workbook-layer sibling of `expandedFolders` (folders live on
+//     useApp.ts already; workbooks land here to avoid touching that
+//     zero-headroom file for UI-only state).
+//   - `librarySelection` — the tree's folder/workbook selection. Deliberately
+//     NOT a third parallel selection array: dataset selection stays
+//     `selectedIds` (useApp.ts) exactly as today, and this field only covers
+//     the two kinds `selectedIds` cannot express. Selecting a dataset row
+//     clears it (DatasetRow.tsx's click handler) so the two never disagree
+//     about what's current.
+//   - `workbookLastChild` — L0.6's "double-click reopens the remembered
+//     child": workbook id -> the last-opened child's canonical
+//     LibraryNodeKey. Written by `components/Library/libraryOpen.ts`'s
+//     `openLibraryNode` (the single open dispatcher every row funnels
+//     through) so every open path — tree, reused DatasetRow/FigureRow,
+//     the new light artifact rows — records the same way.
 
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import type { AppState } from "./useApp";
+
+/** L0.46/L0.5-L0.6: what the Library tree currently has "current" for import
+ *  targeting and workbook selection — the folder/workbook kinds `selectedIds`
+ *  cannot express. */
+export interface LibrarySelection {
+  kind: "folder" | "workbook";
+  id: string;
+}
 
 /** What's being drag-sourced right now (module-internal drag, not an OS file
  *  drop) — null when no drag is in flight. */
@@ -60,6 +88,15 @@ export interface LibraryPanelSlice {
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
+  /** PR C — workbook disclosure state (transient; E2 persists it). */
+  expandedWorkbookIds: string[];
+  toggleWorkbookExpanded: (id: string) => void;
+  /** PR C — current folder/workbook selection (transient; E2 persists it). */
+  librarySelection: LibrarySelection | null;
+  setLibrarySelection: (selection: LibrarySelection | null) => void;
+  /** PR C — L0.6 remembered workbook child, workbook id -> LibraryNodeKey. */
+  workbookLastChild: Record<string, string>;
+  setWorkbookLastChild: (workbookId: string, childKey: string) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -73,5 +110,17 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
     activeDrag: null,
     setActiveDrag: (activeDrag) => set({ activeDrag }),
+    expandedWorkbookIds: [],
+    toggleWorkbookExpanded: (id) =>
+      set((s) => ({
+        expandedWorkbookIds: s.expandedWorkbookIds.includes(id)
+          ? s.expandedWorkbookIds.filter((x) => x !== id)
+          : [...s.expandedWorkbookIds, id],
+      })),
+    librarySelection: null,
+    setLibrarySelection: (librarySelection) => set({ librarySelection }),
+    workbookLastChild: {},
+    setWorkbookLastChild: (workbookId, childKey) =>
+      set((s) => ({ workbookLastChild: { ...s.workbookLastChild, [workbookId]: childKey } })),
   };
 }
