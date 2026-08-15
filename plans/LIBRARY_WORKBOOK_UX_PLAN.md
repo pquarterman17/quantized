@@ -508,13 +508,13 @@ build, and focused interaction coverage where appropriate.
    renderer-independent hierarchy over folders, workbooks, worksheets, and
    heterogeneous artifacts without importing renderer concerns into the
    store. Tree/Details/Tiles wiring remains PR C-D/E.
-3. [ ] **PR C — Origin-like tree renderer.** Implement the approved disclosure,
-   double-click, remembered-child, selection, keyboard, and context-menu
-   behavior. Also owns the L0.46 bulk-import behavior (re-booked from A3
-   2026-08-14): folder selection first exists here, enabling
-   import-into-selected-folder by default plus the optional **Create Folder
-   for This Import** suggestion that never creates folders without
-   confirmation.
+3. [x] ~~**PR C — Origin-like tree renderer.**~~ Shipped 2026-08-15 (PR #139,
+   merge `d35b1e7`) after three review rounds — disclosure/double-click/
+   remembered-child/selection/keyboard/context-menu behavior over the PR B
+   hierarchy, `useLibraryTree` retired, L0.46 import targeting + batch
+   folder offer, and the full L0.25 select/open contract for every node
+   kind. Workbook Delete shipped DISABLED with a stable reason pending
+   PR M's dependency-aware Trash (owner-reviewer boundary; see Completed).
 4. [ ] **PR D — view preference and details renderer.** Add persisted view mode
    and prove state continuity between tree and details.
 4b. [ ] **PR D2 — project-wide search results surface.** Implement the
@@ -1024,6 +1024,45 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- ~~**PR C — Origin-like tree renderer**~~ (2026-08-15, PR #139, merge
+  `d35b1e7`) — the Library tree now renders folder → workbook → children
+  over PR B's hierarchy; `useLibraryTree` retired (two-view-models debt
+  closed). L0.5/L0.6 workbook semantics, registry context menu with
+  disabled-with-reason placeholders, roving keyboard focus, L0.46 import
+  targeting + never-without-a-click batch folder offer, first workbook
+  mutations (rename/move; Delete see below). Three ChatGPT-Sol review
+  rounds, every finding verified-then-fixed (Claude/Fable):
+  **R1** — Delete-key misfire (selection chokepoints made mutually
+  exclusive), trash-restore workbookId self-heal, worksheet→folder drag
+  retired for workbook→folder drag, keyboard-hijack guard, Origin fan-out
+  folder-offer guard (fileCount, not dataset count). Plus a finding the
+  gate missed: the E2E suite was 1/39 on the branch (freshly created
+  workbooks rendered collapsed, hiding the just-imported sheet — owner
+  decision: collapsed-by-default stays, import-created workbooks start
+  expanded and activation discloses; `workbookDisclosurePatch` in
+  libraryPanel.ts) + kind-specific artifact hover titles restored.
+  **R2** — anchor-identity-first keyboard guard (ArtifactRow/FigureRow
+  anchors are buttons) AND `useGlobalShortcuts`' single-key branch now
+  honors `defaultPrevented` (arrows double-fired dataset nav for every
+  row); `folderDeletePatch` (store/folderDelete.ts) makes folder deletion
+  atomic across folders/workbooks/datasets/expansion/selection; full
+  L0.25 select/open/caret contract for all seven node kinds (tree-mode
+  only; flat/search keeps item-15 plot-intent clicks per L0.26),
+  `librarySelection` widened to artifact kinds, `.selected` style added
+  (workbook's class previously had no CSS rule). **R3** — workbook Delete
+  disabled UNCONDITIONALLY until PR M (grouping loss = the dependency;
+  `workbookDeleteBlockers` returns the stable reason, action fails closed
+  byte-identically); focused-worksheet Delete targets the FOCUSED row via
+  the shared `lib/datasetRemoval.ts` helper (also used by the global
+  fallback — confirmRemove/toast/Trash/one-Undo can't drift). Ratchet
+  tolls paid downward throughout (useApp 2818 → 2798, windows 749 → 745).
+  Gate at merge: 6,729 vitest, lint 0 errors, tsc clean, 897.4 kB
+  (5.9 kB under budget), Playwright 39/39 across chromium-100/125/200 —
+  process note: E2E is now part of the working gate; one earlier "green"
+  E2E ran against a stale bundle after a masked tsc failure (strict
+  chaining now used). Deferrals booked: single-worksheet move → PR J;
+  one-at-a-time restore regrouping + workbook-aware Trash → PR M;
+  artifact context menus → L0.39/L0.40 owner.
 - ~~**PR A3 — import assignment**~~ (2026-08-14) — every import now creates
   its workbook at import time, correct BY CONSTRUCTION: `planOriginImport`
   (evolved `planOriginFolders`) resolves Project-Explorer folder placement
@@ -1129,6 +1168,13 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-15 — Claude (Fable):** PR C shipped (PR #139 merged `d35b1e7`,
+  owner-directed merge after all 11 review threads resolved). Ticked row 3
+  of the implementation sequence and wrote the Completed entry covering the
+  three review rounds. Next per the confirmed order: PR D (view preference +
+  details renderer) / D2 (search results surface). PR M inherits two booked
+  obligations from C: the workbook-aware Trash package that lifts
+  `workbookDeleteBlockers`, and one-at-a-time restore regrouping.
 - **2026-08-14 — Claude (Fable):** Adversarial review of PR #138 (slice B)
   before merge. Verified the rebase claim (branch sits on main's tip), every
   consumed API (`figureLayerFamily`, `figureLabel`, `FigureDoc`/`PageDocument`/
