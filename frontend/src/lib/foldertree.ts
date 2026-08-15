@@ -47,8 +47,8 @@ export function subtreeIds(folders: FolderNode[], id: string): Set<string> {
 /**
  * Every dataset anywhere in folder `id`'s subtree, in tree RENDER order (each
  * level emits its child folders' subtrees first, then its own datasets —
- * matching useLibraryTree's buildTreeRows), so a folder bulk op (item 8) walks
- * datasets in the same order the Library shows them.
+ * matching the Library tree's own folder-subtree order), so a folder bulk op
+ * (item 8) walks datasets in the same order the Library shows them.
  */
 export function subtreeDatasets(
   folders: FolderNode[],

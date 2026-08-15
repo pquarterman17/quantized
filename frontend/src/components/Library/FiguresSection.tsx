@@ -1,8 +1,10 @@
 // Library sidebar section (plan item 18): every graph window recovered from an
-// imported Origin project, listed as a restorable plot-state snapshot. Shown as
-// a flat collapsible section only when the library has NO folders — once folders
-// exist the figures nest inside the tree under their project folder (see
-// Library.tsx / useLibraryTree), so this section is hidden to avoid duplication.
+// imported Origin project, listed as a restorable plot-state snapshot. Shown
+// as a flat collapsible section only while the tree ISN'T rendering (search
+// mode, or an empty library) — once the tree renders (LIBRARY_WORKBOOK_UX_PLAN
+// PR C: whenever the Library is non-empty and there's no search query) each
+// figure nests inside it via LibraryTree.tsx/FigureRow.tsx, so this section is
+// hidden to avoid duplication.
 
 import { useState } from "react";
 

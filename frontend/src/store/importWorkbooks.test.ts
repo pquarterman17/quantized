@@ -49,6 +49,7 @@ beforeEach(() => {
     activeId: null,
     selectedIds: [],
     expandedFolders: [],
+    expandedWorkbookIds: [],
     originFigures: [],
     originFidelity: [],
     history: [],
@@ -103,6 +104,37 @@ describe("single-file import creates one workbook (L0.2)", () => {
     expect(st.workbooks).toHaveLength(1);
     expect(st.workbooks[0].originBook).toBe("Book1");
     expect(st.datasets[0].workbookId).toBe(st.workbooks[0].id);
+  });
+});
+
+describe("a workbook created by an import starts expanded (PR C tree disclosure)", () => {
+  // The tree-mode analogue of the flat list's "a fresh import's row is
+  // immediately visible": with expandedWorkbookIds starting [], a collapsed
+  // fresh workbook would hide the just-imported sheet behind its disclosure
+  // arrow (the E2E-suite regression this pins). Only workbooks the import
+  // CREATES expand — pre-existing ones keep their user-set state.
+  it("single-file import expands the derived workbook", async () => {
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const st = useApp.getState();
+    expect(st.workbooks).toHaveLength(1);
+    expect(st.expandedWorkbookIds).toContain(st.workbooks[0].id);
+  });
+
+  it("Origin multi-book import expands every workbook it created, and only those", async () => {
+    useApp.setState({
+      workbooks: [{ id: "wb-old", name: "Existing" }],
+      expandedWorkbookIds: [], // user had collapsed the pre-existing book
+    });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1", ["Proj"]), book("Book2", ["Proj"])],
+    });
+    await useApp.getState().importFiles([fakeFile("Two.opj")]);
+    const st = useApp.getState();
+    const created = st.workbooks.filter((w) => w.id !== "wb-old");
+    expect(created.length).toBeGreaterThan(0);
+    for (const w of created) expect(st.expandedWorkbookIds).toContain(w.id);
+    expect(st.expandedWorkbookIds).not.toContain("wb-old");
   });
 });
 

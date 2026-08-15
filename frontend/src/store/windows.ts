@@ -37,7 +37,7 @@ import {
 } from "../lib/plotview";
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { plotIntentStageTab } from "../lib/stagetab";
-import type { Dataset } from "../lib/types";
+import { workbookDisclosurePatch } from "./libraryPanel";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { createPlotWindowDocument, plotWindowDatasetId, plotWindowView, syncPlotWindow } from "./windowDocuments";
@@ -135,10 +135,6 @@ export function focusTransientReset(): Partial<AppState> {
  *  counts as a change — there's no prior view worth preserving. */
 export { datasetViewDefaults } from "./windowDefaults";
 
-/** `datasetViewDefaults`'s `prevDs` lookup (a window's prior dataset). */
-const prevDataset = (s: AppState, id: string | null): Dataset | undefined =>
-  s.datasets.find((d) => d.id === id);
-
 /** The full state patch for rebinding the FOCUSED window to dataset `id` —
  *  `setActive`'s entire body, hoisted so `rebindWindow`'s focused-target path
  *  (item 14) applies the IDENTICAL semantics without the pin pre-step (an
@@ -148,18 +144,19 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
   const ds = s.datasets.find((d) => d.id === id);
   // Item 5: capture the OUTGOING view into its technique's memory slot
   // before computing the incoming patch (unused on the no-op path below).
-  const prevDs = prevDataset(s, s.activeId);
+  const prevDs = s.datasets.find((d) => d.id === s.activeId);
   const memory = captureTechniqueView(prevDs, s, s.techniqueViewMemory);
   const viewPatch = s.activeId === id ? {} : datasetViewDefaults(ds, prevDs, memory);
   const nextView = { ...snapshotView(s), ...viewPatch };
   return {
     activeId: id,
+    ...workbookDisclosurePatch(s, ds), // PR C: activation discloses the sheet's workbook
     // A full plot-intent activation always drops any worksheet-only override
     // (item 15) — the plot it now shows IS `id`, so the Worksheet tab's
     // `worksheetId ?? activeId` fallback already tracks it; a stale override
     // would otherwise strand the worksheet on the PREVIOUS browse target.
     worksheetId: null,
-    selectedIds: [id], // plain click collapses the selection to this one row
+    selectedIds: [id], librarySelection: null, // L0.25: setActive exits folder/workbook selection too
     // MULTI_PLOT_PLAN item 4: scoped to the FOCUSED window — it rebinds that
     // window's dataset (unfocused windows keep whatever they're pinned to,
     // decision #4).
@@ -487,7 +484,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // A background window's view is at rest in its record: rebind + reset
         // it to the same/memory-derived defaults, leaving focus untouched.
         const ds = s.datasets.find((d) => d.id === datasetId);
-        const priorDs = prevDataset(s, win.datasetId);
+        const priorDs = s.datasets.find((d) => d.id === win.datasetId);
         const currentView = plotWindowView(win);
         const memory = captureTechniqueView(priorDs, currentView, s.techniqueViewMemory); // item 5
         const reboundView = { ...currentView, ...datasetViewDefaults(ds, priorDs, memory) };

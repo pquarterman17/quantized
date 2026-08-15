@@ -265,6 +265,16 @@ describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click open
     expect(s.plotWindows[0].datasetId).toBe("csv");
   });
 
+  // P1 fix (L0.25 selection coherence): the worksheet-intent branch has its
+  // own `set()` call (it returns before falling through to setActive), so it
+  // needs its OWN librarySelection clear — this is the one activation path
+  // focusedRebindPatch's clear (windows.ts) doesn't cover.
+  it("the worksheet-intent branch also clears librarySelection", () => {
+    useApp.setState({ librarySelection: { kind: "workbook", id: "w1" } });
+    useApp.getState().activateFromLibrary("b1");
+    expect(useApp.getState().librarySelection).toBeNull();
+  });
+
   it("a non-Origin dataset behaves exactly like setActive (plot-intent, unaffected by item 15)", () => {
     useApp.getState().activateFromLibrary("csv");
     const s = useApp.getState();
@@ -711,6 +721,53 @@ describe("useApp multi-select + removeSelected", () => {
     useApp.setState({ datasets: three(), activeId: "d3", selectedIds: ["d3"] });
     useApp.getState().selectRange("d1");
     expect(useApp.getState().selectedIds).toEqual(["d1", "d2", "d3"]);
+  });
+
+  // P1 fix (delete-shortcut misfire / L0.25 selection coherence): every
+  // dataset-selection chokepoint clears a lingering folder/workbook
+  // selection, so a stale librarySelection can never survive alongside a
+  // freshly-selected dataset (see store/libraryPanel.ts's setLibrarySelection
+  // for the reverse direction, and LibraryTree.test.tsx for the end-to-end
+  // Delete-key regression this closes).
+  it("setActive (via focusedRebindPatch, shared by every activation path) clears librarySelection", () => {
+    useApp.setState({ datasets: three(), librarySelection: { kind: "workbook", id: "w1" } });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().librarySelection).toBeNull();
+  });
+
+  // PR C tree renderer: activation always discloses the active sheet's parent
+  // workbook — a collapsed workbook would otherwise hide the very row that
+  // just became active (the same focusedRebindPatch chokepoint as above, so
+  // setActive AND rebindWindow's focused-drop path both get it).
+  it("setActive expands the activated dataset's workbook", () => {
+    const wb = three().map((d) => (d.id === "d2" ? { ...d, workbookId: "wb2" } : d));
+    useApp.setState({ datasets: wb, expandedWorkbookIds: [] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().expandedWorkbookIds).toContain("wb2");
+  });
+
+  it("setActive leaves an already-expanded workbook list untouched (no duplicate entry)", () => {
+    const wb = three().map((d) => (d.id === "d2" ? { ...d, workbookId: "wb2" } : d));
+    useApp.setState({ datasets: wb, expandedWorkbookIds: ["wb2"] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().expandedWorkbookIds).toEqual(["wb2"]);
+  });
+
+  it("toggleSelected clears librarySelection", () => {
+    useApp.setState({ datasets: three(), selectedIds: [], librarySelection: { kind: "folder", id: "f1" } });
+    useApp.getState().toggleSelected("d1");
+    expect(useApp.getState().librarySelection).toBeNull();
+  });
+
+  it("selectRange clears librarySelection", () => {
+    useApp.setState({
+      datasets: three(),
+      activeId: "d1",
+      selectedIds: ["d1"],
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    useApp.getState().selectRange("d3");
+    expect(useApp.getState().librarySelection).toBeNull();
   });
 
   it("removeSelected removes every selected dataset and reselects a survivor", () => {

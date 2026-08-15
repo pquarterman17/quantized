@@ -56,6 +56,10 @@ export interface ContextAction<T> {
   group?: string;
   /** Gates enabled/disabled — the item still SHOWS, greyed + inert. */
   enabled?: (t: T) => boolean;
+  /** L0.36: "disable unavailable commands with a short reason rather than
+   *  removing them unpredictably" — shown as the disabled item's tooltip.
+   *  Only consulted when `enabled` returns false. */
+  disabledReason?: (t: T) => string;
   /** Omits the item entirely (vs. merely disabling it) — e.g. "Show in
    *  folder" for a root-level dataset, where a disabled entry would just be
    *  confusing rather than informative. */
@@ -97,10 +101,12 @@ export function runContextAction<T>(a: ContextAction<T>, t: T): void {
  *  it out (callers filter via `buildMenuItems`, which never emits nulls). */
 export function actionMenuItem<T>(a: ContextAction<T>, t: T): ContextMenuItem | null {
   if (a.hidden?.(t)) return null;
+  const disabled = a.enabled ? !a.enabled(t) : false;
   return {
     label: resolveLabel(a, t),
     run: () => runContextAction(a, t),
-    disabled: a.enabled ? !a.enabled(t) : false,
+    disabled,
+    title: disabled ? a.disabledReason?.(t) : undefined,
     danger: a.destructive || a.danger || undefined,
     checked: a.checked ? a.checked(t) : undefined,
   };

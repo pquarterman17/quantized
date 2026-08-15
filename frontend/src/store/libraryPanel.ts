@@ -37,14 +37,49 @@
 //     tint) reads it non-reactively where a per-row render doesn't need to
 //     re-run on every OTHER row's drag, and reactively where the whole-tree
 //     highlight does.
+//
+// LIBRARY_WORKBOOK_UX_PLAN PR C additions (all three transient — E2 owns
+// persistence, per the plan's PR sequence; see architecture.test.ts's
+// HISTORY_EXCLUDED for the matching justification):
+//   - `expandedWorkbookIds` — the tree renderer's workbook disclosure state,
+//     the workbook-layer sibling of `expandedFolders` (folders live on
+//     useApp.ts already; workbooks land here to avoid touching that
+//     zero-headroom file for UI-only state).
+//   - `librarySelection` — the tree's folder/workbook selection. Deliberately
+//     NOT a third parallel selection array: dataset selection stays
+//     `selectedIds` (useApp.ts) exactly as today, and this field only covers
+//     the two kinds `selectedIds` cannot express. Selecting a dataset row
+//     clears it (DatasetRow.tsx's click handler) so the two never disagree
+//     about what's current.
+//   - `workbookLastChild` — L0.6's "double-click reopens the remembered
+//     child": workbook id -> the last-opened child's canonical
+//     LibraryNodeKey. Written by `components/Library/libraryOpen.ts`'s
+//     `openLibraryNode` (the single open dispatcher every row funnels
+//     through) so every open path — tree, reused DatasetRow/FigureRow,
+//     the new light artifact rows — records the same way.
 
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import type { AppState } from "./useApp";
 
+/** L0.46/L0.5-L0.6/L0.25: what the Library tree currently has "current" for
+ *  import targeting and selection — every node kind `selectedIds` cannot
+ *  express. Worksheets are the one deliberate exception: their selection IS
+ *  `selectedIds` (the app-wide dataset multi-selection, with Ctrl/Cmd toggle
+ *  and Shift range), and the two stay mutually exclusive at the store
+ *  chokepoints — a non-null librarySelection clears selectedIds and vice
+ *  versa — so the tree always shows exactly one coherent current item. */
+export interface LibrarySelection {
+  kind: "folder" | "workbook" | "origin-figure" | "editable-figure" | "publication-figure" | "page" | "report";
+  id: string;
+}
+
 /** What's being drag-sourced right now (module-internal drag, not an OS file
- *  drop) — null when no drag is in flight. */
+ *  drop) — null when no drag is in flight. "workbook" (PR C review fix)
+ *  replaces the retired dataset→folder gesture as the thing FolderRow's
+ *  resting drop-candidate highlight now reacts to for worksheet placement —
+ *  a plain "dataset" drag no longer marks any folder as a candidate. */
 export interface ActiveDrag {
-  kind: "dataset" | "folder";
+  kind: "dataset" | "folder" | "workbook";
   id: string;
 }
 
@@ -60,6 +95,34 @@ export interface LibraryPanelSlice {
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
+  /** PR C — workbook disclosure state (transient; E2 persists it). */
+  expandedWorkbookIds: string[];
+  toggleWorkbookExpanded: (id: string) => void;
+  /** PR C — current folder/workbook selection (transient; E2 persists it). */
+  librarySelection: LibrarySelection | null;
+  setLibrarySelection: (selection: LibrarySelection | null) => void;
+  /** PR C — L0.6 remembered workbook child, workbook id -> LibraryNodeKey. */
+  workbookLastChild: Record<string, string>;
+  setWorkbookLastChild: (workbookId: string, childKey: string) => void;
+}
+
+/** PR C: the active dataset's workbook is always disclosed — activation
+ *  means "show me this sheet", and a collapsed parent workbook would hide
+ *  the very row that's now active/selected in the tree. One-directional:
+ *  activation expands, only the user's own toggle collapses (and a
+ *  collapsed workbook offers no sheet row to activate, so the two never
+ *  fight). Spread into `focusedRebindPatch` (windows.ts) so setActive AND
+ *  rebindWindow's focused-drop path both get it; import-time creation has
+ *  its own parallel rule in store/importDatasets.ts. Lives here, beside the
+ *  `expandedWorkbookIds` state it patches, not in the zero-headroom
+ *  windows.ts. */
+export function workbookDisclosurePatch(
+  s: AppState,
+  ds: { workbookId?: string } | undefined,
+): Partial<AppState> {
+  return ds?.workbookId != null && !s.expandedWorkbookIds.includes(ds.workbookId)
+    ? { expandedWorkbookIds: [...s.expandedWorkbookIds, ds.workbookId] }
+    : {};
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -73,5 +136,31 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
     activeDrag: null,
     setActiveDrag: (activeDrag) => set({ activeDrag }),
+    expandedWorkbookIds: [],
+    toggleWorkbookExpanded: (id) =>
+      set((s) => ({
+        expandedWorkbookIds: s.expandedWorkbookIds.includes(id)
+          ? s.expandedWorkbookIds.filter((x) => x !== id)
+          : [...s.expandedWorkbookIds, id],
+      })),
+    librarySelection: null,
+    // L0.25 selection coherence (P1 fix): the tree's folder/workbook
+    // selection and the dataset selection are mutually exclusive. Setting a
+    // non-null librarySelection ALWAYS clears selectedIds here — the single
+    // chokepoint — rather than relying on every row component that can
+    // trigger a folder/workbook select (WorkbookRow.select/FolderRow's
+    // onClick, today; anything added later) to remember to clear it itself.
+    // The reverse direction (activating/selecting a dataset clears
+    // librarySelection) lives at ITS OWN chokepoints: activateFromLibrary/
+    // toggleSelected/selectRange (useApp.ts) and focusedRebindPatch
+    // (windows.ts, shared by setActive). Together the two directions close
+    // the gap that let a stale worksheet selectedIds/activeId survive
+    // alongside a freshly-selected workbook/folder — LibraryTree.tsx's own
+    // Delete/Backspace handling is the other half of that fix.
+    setLibrarySelection: (librarySelection) =>
+      set({ librarySelection, ...(librarySelection ? { selectedIds: [] } : {}) }),
+    workbookLastChild: {},
+    setWorkbookLastChild: (workbookId, childKey) =>
+      set((s) => ({ workbookLastChild: { ...s.workbookLastChild, [workbookId]: childKey } })),
   };
 }

@@ -254,7 +254,7 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   // ── Reopen from the Library (real UI) ──────────────────────────────────
   const row = page.getByTitle(`open editable figure "${savedDocument.name}"`);
   await expect(row, "the saved figure has a Library row to reopen from").toBeVisible();
-  await row.click();
+  await row.dblclick(); // L0.25 (PR #139): single click selects; double-click opens
   await expect
     .poll(() => page.evaluate(
       (id) => (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: { document?: { id: string } }[] } } } })

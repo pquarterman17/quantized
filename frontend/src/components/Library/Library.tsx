@@ -1,30 +1,35 @@
 // Left panel: dataset list with sparklines. Import via the file picker or by
 // dragging files onto the panel; click a row to activate. Datasets organize
-// into a folder tree (project-organization plan); the legacy flat `group`
-// string is a read-only compat field only — migrated into folders on load
-// (lib/foldertree.migrateGroupsToFolders), never rendered as its own UI here
-// (item 6 — one organizational model, not two).
+// into a folder -> workbook -> worksheet tree (LIBRARY_WORKBOOK_UX_PLAN);
+// the legacy flat `group` string is a read-only compat field only —
+// migrated into folders on load (lib/foldertree.migrateGroupsToFolders),
+// never rendered as its own UI here (item 6 — one organizational model).
 //
 // GUI_INTERACTION_PLAN #13: also hosts the multi-select bar, the panel-width
 // resize handle, and the "Show in folder" reveal effect (a dataset id posted
 // to the store's `revealTarget` — see store/libraryPanel.ts — is consumed
-// here: clear the filter, expand the dataset's ancestor folders, select it,
-// scroll it into view).
+// here: clear the filter, expand the dataset's ancestor folders AND its
+// workbook (PR C), select it, scroll it into view).
+//
+// PR C: the tree renders whenever the library has ANYTHING to show and no
+// search query is active (`rows.length > 0` — post-A3 every import creates a
+// workbook, so the old "only when folders exist" trigger under-fired). The
+// flat section list (FiguresSection etc.) is reserved for search results and
+// the true-empty state; each hides while the tree renders so nothing is
+// ever a Library item twice.
 
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
-import FigureRow from "./FigureRow";
 import FiguresSection from "./FiguresSection";
 import MultiSelectBar from "./MultiSelectBar";
 import OriginFidelitySection from "./OriginFidelitySection";
-import FolderRow from "./FolderRow";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
 import SmartFoldersSection from "./SmartFoldersSection";
+import { useLibraryHierarchyRows } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
-import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath, folderPathLabel } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
@@ -35,6 +40,11 @@ import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 
 const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
 const PagesSection = lazy(() => import("./PagesSection"));
+// PR C: LibraryTree pulls in WorkbookRow/ArtifactRows/the workbook menu
+// registry/FolderRow — lazy like the two sections above (MAIN_PLAN #29's
+// eager-bundle budget; the pure hierarchy build itself stays eager via
+// useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
+const LibraryTree = lazy(() => import("./LibraryTree"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -53,18 +63,21 @@ export default function Library() {
   const addSmartFolder = useApp((s) => s.addSmartFolder);
   const expandedFolders = useApp((s) => s.expandedFolders);
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
+  const expandedWorkbookIds = useApp((s) => s.expandedWorkbookIds);
+  const toggleWorkbookExpanded = useApp((s) => s.toggleWorkbookExpanded);
   const selectIds = useApp((s) => s.selectIds);
   const revealTarget = useApp((s) => s.revealTarget);
   const clearReveal = useApp((s) => s.clearReveal);
   const startResize = useLibraryResize();
-  const treeRows = useLibraryTree();
+  const rows = useLibraryHierarchyRows();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
 
-  // "Show in folder" (plan #13 sub-item 2): a dataset id posted to
-  // `revealTarget` clears the filter, expands every ancestor folder that
-  // isn't already open, selects the row, and scrolls it into view — then
-  // clears the signal. A stale/removed dataset id just clears silently.
+  // "Show in folder" (plan #13 sub-item 2; PR C adds the workbook step): a
+  // dataset id posted to `revealTarget` clears the filter, expands every
+  // ancestor folder AND the dataset's own workbook that isn't already open,
+  // selects the row, and scrolls it into view — then clears the signal. A
+  // stale/removed dataset id just clears silently.
   useEffect(() => {
     if (!revealTarget) return;
     const id = revealTarget;
@@ -74,6 +87,9 @@ export default function Library() {
     setQuery("");
     for (const f of folderPath(folders, ds.folderId ?? null)) {
       if (!expandedFolders.includes(f.id)) toggleFolderExpanded(f.id);
+    }
+    if (ds.workbookId && !expandedWorkbookIds.includes(ds.workbookId)) {
+      toggleWorkbookExpanded(ds.workbookId);
     }
     selectIds([id]);
     requestAnimationFrame(() => {
@@ -150,27 +166,18 @@ export default function Library() {
     />
   );
 
-  // Body: a folder tree when folders exist (and no active search), else the
-  // flat list. A search query always collapses to a flat filtered list.
-  const inTree = query.trim() === "" && folders.length > 0;
+  // Body: the tree whenever there's anything to show and no active search
+  // (PR C); a search query always collapses to a flat filtered list.
+  const inTree = query.trim() === "" && rows.length > 0;
   let body: React.ReactNode;
   if (query.trim() !== "") {
     body = shown.map((d) => row(d, 0, folders.length > 0));
   } else if (inTree) {
-    body = treeRows.map((r) => {
-      if (r.kind === "folder")
-        return (
-          <FolderRow
-            key={r.id}
-            folder={r.folder}
-            depth={r.depth}
-            count={r.count}
-            expanded={r.expanded}
-          />
-        );
-      if (r.kind === "figure") return <FigureRow key={r.id} entry={r.entry} depth={r.depth} />;
-      return row(r.dataset, r.depth);
-    });
+    body = (
+      <Suspense fallback={null}>
+        <LibraryTree rows={rows} onFilterTag={setQuery} />
+      </Suspense>
+    );
   } else {
     body = shown.map((d) => row(d));
   }
@@ -236,29 +243,31 @@ export default function Library() {
 
       <MultiSelectBar />
 
+      {/* Sections whose items are now tree children (workbook worksheets,
+       *  figures, pages, reports) hide while the tree renders — search mode
+       *  and the true-empty state are the only remaining flat-list surfaces. */}
       {!inTree && <FiguresSection />}
       <OriginFidelitySection />
-      <Suspense fallback={null}><EditableFiguresSection /></Suspense>
-      <SavedFiguresSection />
-      <Suspense fallback={null}><PagesSection /></Suspense>
-      <ReportsSection />
+      {!inTree && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
+      {!inTree && <SavedFiguresSection />}
+      {!inTree && <Suspense fallback={null}><PagesSection /></Suspense>}
+      {!inTree && <ReportsSection />}
       <BookFamiliesSection />
       <SmartFoldersSection onFilterTag={setQuery} />
 
       {body}
 
-      {shown.length === 0 && folders.length === 0 && (
-        // MAIN #38: an empty Library is the most common launch state, so it
-        // gets the resume-work surface rather than a one-line hint. A filtered
-        // no-match is a different situation and keeps its plain message.
-        datasets.length === 0 ? (
-          <HomeScreen onImport={onImport} />
-        ) : (
-          <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
-            No matches
-          </div>
-        )
+      {query.trim() !== "" && shown.length === 0 && (
+        <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
+          No matches
+        </div>
       )}
+      {/* MAIN #38: an empty Library is the most common launch state, so it
+       *  gets the resume-work surface. `rows.length === 0` (nothing at all —
+       *  no dataset/folder/workbook/figure/page/report) is the only way to
+       *  reach here with no active search, since any dataset always yields
+       *  at least a root worksheet row. */}
+      {query.trim() === "" && rows.length === 0 && <HomeScreen onImport={onImport} />}
       {/* Panel-width drag-resize (plan #13 sub-item 5) — a thin strip at the
        *  right edge; drag streams --lw live, release persists to qz.prefs. */}
       <div

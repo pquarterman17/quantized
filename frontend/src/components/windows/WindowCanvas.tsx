@@ -32,7 +32,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../store/useApp";
 import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
-import { DATASET_DND } from "../Library/useLibraryTree";
+import { DATASET_DND } from "../Library/dnd";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";

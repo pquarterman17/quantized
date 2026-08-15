@@ -90,13 +90,13 @@ export function sanitizePanelLayout(v: unknown): PanelLayout {
 // The grab surface is each PanelCell's header row (window furniture, like an
 // MDI title bar — NOT the uPlot canvas, which keeps its normal box-zoom/pan
 // in every tool mode). Same dataTransfer-payload idiom as `dragaxis.
-// encodeChannelDrag`/`decodeChannelDrag` and `useLibraryTree.DATASET_DND`:
+// encodeChannelDrag`/`decodeChannelDrag` and `dnd.DATASET_DND`:
 // a JSON payload behind its own MIME type so a drop target can tell this
 // drag apart from a channel-chip drag, a Library row drag, or an OS file
 // drop via `dataTransfer.types`.
 
 /** dataTransfer MIME type for an internal panel-cell reorder drag. Distinct
- *  from `CHANNEL_DND` (dragaxis.ts), `DATASET_DND` (useLibraryTree.ts), and
+ *  from `CHANNEL_DND` (dragaxis.ts), `DATASET_DND` (Library/dnd.ts), and
  *  `PANEL_SOURCE_MIME` (figurepage/SlotGrid.tsx). */
 export const PANEL_CELL_DND = "application/x-qz-panel-cell";
 

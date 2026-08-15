@@ -6,12 +6,11 @@
 
 import { useEffect } from "react";
 
-import { askParams } from "./components/overlays/ParamDialog";
 import { cancelActiveGesture } from "./lib/gestureCancel";
+import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
 import { loadInteractionPrefs } from "./store/prefs";
-import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
 
 export function useGlobalShortcuts(): void {
@@ -45,21 +44,10 @@ export function useGlobalShortcuts(): void {
         const s = useApp.getState();
         if (s.datasets.length === 0) return;
         e.preventDefault();
-        const n = s.selectedIds.length || (s.activeId ? 1 : 0);
-        const doRemove = () => {
-          s.removeSelected();
-          const msg = `removed ${n} dataset${n === 1 ? "" : "s"}`;
-          s.setStatus(msg);
-          toast(msg);
-        };
-        // Preferences ▸ Interaction ▸ Confirm before removing data.
-        if (s.confirmRemove) {
-          void askParams(`Remove ${n} dataset${n === 1 ? "" : "s"}?`, []).then((ok) => {
-            if (ok) doRemove();
-          });
-        } else {
-          doRemove();
-        }
+        // PR #139 round 3: the confirm/remove/announce flow moved to the
+        // shared lib/datasetRemoval.ts helper so LibraryTree's focused-row
+        // Delete and this selection-based fallback can never drift.
+        requestDatasetRemoval(s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : []);
         return;
       }
       // Esc: universal plot-tool cancel (GUI_INTERACTION #9). A capture-phase
@@ -109,8 +97,13 @@ export function useGlobalShortcuts(): void {
         }
       }
       // Single-key tool / nav shortcuts (design interaction layer) — only with no
-      // modifier held and not while typing in a field.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && !isEditing(e.target)) {
+      // modifier held and not while typing in a field. `!e.defaultPrevented`
+      // extends the Delete branch's documented protocol (above) to this
+      // branch too (PR #139 review): LibraryTree's roving focus preventDefaults
+      // the arrows it handles, and without this gate the SAME keystroke also
+      // stepped the global prev/next-dataset navigation — two handlers, one
+      // key press.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditing(e.target)) {
         const s = useApp.getState();
         switch (e.key) {
           case "a":

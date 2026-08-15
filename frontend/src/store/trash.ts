@@ -13,8 +13,10 @@
 // Raw SOURCE FILES are never involved. Trash holds the in-memory Dataset
 // records the app already had; nothing on disk is moved, renamed or deleted.
 
+import { deriveWorkbooks } from "../lib/workbooks";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
+import { nextWorkbookId } from "./workbookIds";
 
 export interface TrashEntry {
   /** Epoch ms the entry was trashed. */
@@ -85,15 +87,54 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
       if (!entry) return false;
       // Restoring is itself an undoable edit — it changes the library.
       get().recordHistory("restore from trash");
-      set((s) => ({
+      set((s) => {
+        const trash = s.trash.filter((e) => e.dataset.id !== id);
         // Guard against an id that came back some other way (a re-import, an
-        // undo) while it was sitting in the trash: never create a duplicate.
-        datasets: s.datasets.some((d) => d.id === id)
-          ? s.datasets
-          : [...s.datasets, entry.dataset],
-        trash: s.trash.filter((e) => e.dataset.id !== id),
-        activeId: s.activeId ?? id,
-      }));
+        // undo) while it was sitting in the trash: never create a duplicate,
+        // and never spend a workbook derivation on it either.
+        if (s.datasets.some((d) => d.id === id)) return { trash };
+
+        let dataset = entry.dataset;
+        let workbooks = s.workbooks;
+        let expandedWorkbookIds = s.expandedWorkbookIds;
+        const hasLiveWorkbook = dataset.workbookId != null && s.workbooks.some((w) => w.id === dataset.workbookId);
+        if (!hasLiveWorkbook) {
+          // P1 fix: deleteWorkbook (store/workbookActions.ts) removes the
+          // WorkbookNode once every member dataset is trashed, so restoring
+          // ONE of its worksheets here would otherwise carry a workbookId
+          // naming nothing — dangling until the next .dwk load's
+          // reconcileWorkbookRefs happened to repair it. Self-heal the SAME
+          // way (deriveWorkbooks), in-store, the instant it comes back —
+          // mirrors store/importDatasets.ts's addFromPayload single-file
+          // path, the load-time self-heal this borrows the exact call shape
+          // from. A dataset that never had a workbookId at all (a pre-
+          // workbook document, or a synthetic test fixture) hits this same
+          // branch and gets one for the first time — consistent with every
+          // OTHER dataset in a v4 document always having a live workbook.
+          //
+          // KNOWN DEGRADE: restoring sheets of one deleted workbook ONE AT A
+          // TIME (the Trash panel's only restore granularity today) gives
+          // each its own fresh workbook rather than regrouping them back
+          // together — acceptable; a save/reopen re-derives the grouping
+          // from source metadata, and PR M's dependency review is the
+          // eventual real fix for workbook-aware trash/restore.
+          const derived = deriveWorkbooks([dataset], s.folders, nextWorkbookId);
+          workbooks = [...s.workbooks, ...derived.workbooks];
+          dataset = { ...dataset, workbookId: derived.membership[dataset.id] };
+          // The fresh workbook starts expanded (same rule as import-time
+          // creation, store/importDatasets.ts) — a restore whose row hides
+          // behind a collapsed disclosure would look like a failed restore.
+          expandedWorkbookIds = [...new Set([...expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])];
+        }
+
+        return {
+          datasets: [...s.datasets, dataset],
+          workbooks,
+          expandedWorkbookIds,
+          trash,
+          activeId: s.activeId ?? id,
+        };
+      });
       return true;
     },
 

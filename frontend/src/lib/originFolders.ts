@@ -86,15 +86,22 @@ function folderPath(d: Dataset): string[] {
  * @param genFolderId   supplies fresh folder ids (the store's `nextFolderId`).
  * @param genWorkbookId supplies fresh workbook ids (`store/workbookIds.ts`'s
  *                      `nextWorkbookId`).
+ * @param parentFolderId L0.46: the project folder's parent — the currently
+ *                      selected Library folder (or its selected workbook's
+ *                      folder), so an Origin project import lands under the
+ *                      target folder instead of always at the Library root.
+ *                      Defaults to root (`null`), preserving every existing
+ *                      caller/test.
  */
 export function planOriginImport(
   stem: string,
   datasets: Dataset[],
   genFolderId: () => string,
   genWorkbookId: () => string,
+  parentFolderId: string | null = null,
 ): OriginImportPlan {
   const projectId = genFolderId();
-  const folders: FolderNode[] = [{ id: projectId, name: stem || "Project", parentId: null, order: 0 }];
+  const folders: FolderNode[] = [{ id: projectId, name: stem || "Project", parentId: parentFolderId, order: 0 }];
   const folderMembership: Record<string, string> = {};
   const expanded: string[] = [projectId];
 

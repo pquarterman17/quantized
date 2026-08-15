@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
-import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
+import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { childFolders } from "../../lib/foldertree";
 import type { Dataset, FolderNode } from "../../lib/types";
@@ -32,6 +32,13 @@ function datasetTransfer(id: string) {
   return {
     types: [DATASET_DND],
     getData: (t: string) => (t === DATASET_DND ? id : ""),
+    setData: () => {},
+  };
+}
+function workbookTransfer(id: string) {
+  return {
+    types: [WORKBOOK_DND],
+    getData: (t: string) => (t === WORKBOOK_DND ? id : ""),
     setData: () => {},
   };
 }
@@ -81,7 +88,7 @@ const ds = (id: string, folderId?: string): Dataset => ({
 
 const baseProps = { depth: 0, count: 0, expanded: false };
 
-describe("FolderRow — dataset drop (pre-existing whole-row target)", () => {
+describe("FolderRow — dataset drop RETIRED (PR C review fix: worksheet placement follows its workbook)", () => {
   beforeEach(() => {
     useApp.setState({
       datasets: [ds("d1")],
@@ -90,12 +97,33 @@ describe("FolderRow — dataset drop (pre-existing whole-row target)", () => {
     });
   });
 
-  it("moves a dropped dataset into this folder and expands it", () => {
+  it("ignores a dropped dataset — no folderId change, no auto-expand", () => {
     const { container } = render(<FolderRow folder={fld("target", null, 0)} {...baseProps} />);
     const row = container.querySelector(".qzk-folder-head")!;
     fireDrag(row, "drop", 0, datasetTransfer("d1"));
-    expect(useApp.getState().datasets[0].folderId).toBe("target");
-    expect(useApp.getState().expandedFolders).toContain("target");
+    expect(useApp.getState().datasets[0].folderId).toBeUndefined();
+    expect(useApp.getState().expandedFolders).not.toContain("target");
+  });
+});
+
+describe("FolderRow — workbook drop (PR C review fix: replaces the retired worksheet→folder gesture)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ ...ds("d1"), workbookId: "wb1" }],
+      workbooks: [{ id: "wb1", name: "Book" }],
+      folders: [fld("target", null, 0)],
+      expandedFolders: [],
+    });
+  });
+
+  it("moves the dropped workbook — and its member worksheet's folderId with it — into this folder, and expands it", () => {
+    const { container } = render(<FolderRow folder={fld("target", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    fireDrag(row, "drop", 0, workbookTransfer("wb1"));
+    const s = useApp.getState();
+    expect(s.workbooks.find((w) => w.id === "wb1")!.folderId).toBe("target");
+    expect(s.datasets.find((d) => d.id === "d1")!.folderId).toBe("target");
+    expect(s.expandedFolders).toContain("target");
   });
 });
 
@@ -347,14 +375,20 @@ describe("FolderRow — drop-candidate resting highlight + floating drop label (
     });
   });
 
-  it("gets the resting 'drop-candidate' class the moment a dataset drag starts elsewhere", () => {
+  it("gets the resting 'drop-candidate' class the moment a WORKBOOK drag starts elsewhere", () => {
     const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
     const row = container.querySelector(".qzk-folder-head")!;
     expect(row).not.toHaveClass("drop-candidate");
-    act(() => useApp.setState({ activeDrag: { kind: "dataset", id: "d1" } }));
+    act(() => useApp.setState({ activeDrag: { kind: "workbook", id: "wb1" } }));
     expect(row).toHaveClass("drop-candidate");
     act(() => useApp.setState({ activeDrag: null }));
     expect(row).not.toHaveClass("drop-candidate");
+  });
+
+  it("a dataset drag no longer marks folders as drop candidates (PR C review fix)", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    act(() => useApp.setState({ activeDrag: { kind: "dataset", id: "d1" } }));
+    expect(container.querySelector(".qzk-folder-head")).not.toHaveClass("drop-candidate");
   });
 
   it("does not mark itself, or a dragged folder's own descendant, as a candidate", () => {
@@ -382,11 +416,36 @@ describe("FolderRow — drop-candidate resting highlight + floating drop label (
     expect(screen.queryByText("Move inside b")).not.toBeInTheDocument();
   });
 
-  it("labels a dataset drop as 'Move inside' the target folder", () => {
+  it("labels a workbook drop as 'Move inside' the target folder", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    fireDrag(row, "dragover", 0, workbookTransfer("wb1"));
+    expect(screen.getByText("Move inside a")).toBeInTheDocument();
+  });
+
+  it("a dataset dragover no longer shows a drop label (PR C review fix)", () => {
     const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
     const row = container.querySelector(".qzk-folder-head")!;
     fireDrag(row, "dragover", 0, datasetTransfer("d1"));
-    expect(screen.getByText("Move inside a")).toBeInTheDocument();
+    expect(screen.queryByText("Move inside a")).not.toBeInTheDocument();
+  });
+});
+
+describe("FolderRow — PR C: click marks it current for import targeting (L0.46)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [], librarySelection: null });
+  });
+
+  it("a body click sets librarySelection ONLY — expansion is the caret's alone (L0.25, PR #139 review)", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-folder-head")!);
+    expect(useApp.getState().librarySelection).toEqual({ kind: "folder", id: "a" });
+    expect(useApp.getState().expandedFolders).not.toContain("a"); // body click no longer expands
+  });
+
+  it("carries the roving-focus data-lib-row anchor", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    expect(container.querySelector('[data-lib-row="folder:a"]')).toBeInTheDocument();
   });
 });
 

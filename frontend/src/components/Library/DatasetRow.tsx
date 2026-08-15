@@ -1,36 +1,40 @@
 // A single Library dataset row: name (double-click to rename), sparkline, footer
 // (meta + reorder/duplicate/remove), then tag chips. Each row owns its own
 // inline-edit state. Extracted from Library so the list can render rows inside
-// the folder tree without duplicating the markup. Also a drop-between reorder
-// target (project-organization plan item 3b): dragging another dataset row
-// over the top/bottom half of this one shows a thin indicator and, on drop,
-// reorders within (or moves into) THIS row's own folder — see lib/foldertree's
-// dropEdgeAt/resolveDropBeforeId for the pure hit-testing.
+// the folder tree without duplicating the markup.
 //
-// GUI_INTERACTION_PLAN #13: the drag GESTURE now starts only from the grip
-// handle (`.qzk-drag-handle`, the only element carrying `draggable`) — the
-// rest of the row keeps its normal select/open behaviour and never arms a
-// drag. This changes the drag SOURCE affordance only; onDragOver/onDrop
-// (the drop-target logic above) are untouched. The full context menu moved
-// to datasetRowMenu.ts (component-ceiling ratchet — this file sits at the
-// 400-line pin).
+// GUI_INTERACTION_PLAN #13: the drag GESTURE starts only from the grip handle
+// (`.qzk-drag-handle`, the only `draggable` element) — the rest of the row
+// keeps its normal select/open behaviour. The full context menu moved to
+// datasetRowMenu.ts (this file sits at the 400-line ceiling). The handle's
+// DATASET_DND payload is still a live drag SOURCE for the plot-window rebind
+// drop target (WindowCanvas.tsx/PlotWindowFrame.tsx) — only the Library-
+// internal row-as-drop-target behavior below was retired (PR C review fix):
+// this row no longer accepts a DATASET_DND drop itself (it used to reorder/
+// move-into-a-folder via lib/foldertree's moveDatasetToFolder), because the
+// tree places a worksheet by its WORKBOOK (lib/libraryHierarchy.ts), not its
+// own `folderId` — the dropped-here `order`/`folderId` write was invisible
+// in the tree and diverged from the workbook's real placement, the same
+// defect class FolderRow's retired dataset-onto-folder drop had. Moving a
+// worksheet between workbooks is the split-workbook workflow (PR J).
 //
-// GUI_INTERACTION #8: the row is now a keyboard-reachable context-menu
-// target — `tabIndex` + the ContextMenu key (or Shift+F10) opens the SAME
-// menu anchored at the row, and a "⋯" resting-cue button (hidden until
-// hover/focus, mirroring the drag handle's own reveal rule) opens it too,
-// so right-click is never the only way in. Most menu items now come from
-// `lib/contextActions.ts`'s dataset registry via `datasetRowMenu.ts` — this
-// row only supplies the two genuinely local UI hooks (inline rename/tag
-// inputs) the registry can't own itself.
+// GUI_INTERACTION #8: keyboard-reachable context menu — `tabIndex` + the
+// ContextMenu key (or Shift+F10) opens the SAME menu the "⋯" resting-cue
+// button and right-click do. Most items come from `lib/contextActions.ts`'s
+// dataset registry via `datasetRowMenu.ts`; this row only supplies the two
+// local UI hooks (inline rename/tag inputs) the registry can't own itself.
+//
+// Reused inside the Library TREE (LIBRARY_WORKBOOK_UX_PLAN PR C) as the
+// worksheet row — see LibraryTree.tsx's dispatcher and this row's own
+// onRowClick (records L0.6's remembered workbook child on open).
 
 import { useState } from "react";
 
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
+import { DATASET_DND } from "./dnd";
+import { recordWorkbookOpen } from "./libraryOpen";
 import Sparkline from "./Sparkline";
-import { DATASET_DND } from "./useLibraryTree";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
-import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import RecomputedMark from "./RecomputedMark";
 import { useApp } from "../../store/useApp";
@@ -47,10 +51,9 @@ interface Props {
   canMoveDown: boolean;
   /** Click a tag chip to filter the library to that tag. */
   onFilterTag: (tag: string) => void;
-  /** Sheet number (>1) when this dataset is a non-first sheet of a multi-sheet
-   *  Origin pseudo-book group (`lib/grouping.originSheetGroups`) — renders a
-   *  subtle indent + "sheet N" chip so the parent/child relation reads at a
-   *  glance. Undefined for ordinary datasets and for a group's parent (sheet 1). */
+  /** Sheet number (>1) for a non-first sheet of a multi-sheet Origin pseudo-book
+   *  group (`lib/grouping.originSheetGroups`) — renders a "sheet N" chip.
+   *  Undefined for ordinary datasets and a group's parent (sheet 1). */
   sheetNumber?: number;
   /** Indent depth in the folder tree (0 = root); shifts the row right so nesting
    *  reads at a glance. Undefined outside the tree view. */
@@ -60,6 +63,12 @@ interface Props {
    *  location isn't otherwise visible (the tree view already shows it via
    *  nesting). Undefined = no caption rendered. */
   folderCaption?: string;
+  /** L0.25 (PR #139 review) — set by LibraryTree only: plain click SELECTS
+   *  (selectIds, no plot change), double-click/Enter OPENS; right-click/
+   *  menu-key select without activating. Ctrl/Cmd + Shift keep their
+   *  app-wide meaning in both modes. Unset (flat/search): the established
+   *  plot-intent click (item 15) is unchanged — L0.26 "normal open". */
+  treeMode?: boolean;
 }
 
 export default function DatasetRow({
@@ -73,6 +82,7 @@ export default function DatasetRow({
   sheetNumber,
   depth = 0,
   folderCaption,
+  treeMode = false,
 }: Props) {
   // Staleness badge (#4): amber when this dataset's corrections or fit await
   // recalculation (manual mode) — click runs the dirty set now.
@@ -83,12 +93,12 @@ export default function DatasetRow({
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
+  const selectIds = useApp((s) => s.selectIds);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
   const addDatasetTag = useApp((s) => s.addDatasetTag);
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
-  const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const folders = useApp((s) => s.folders);
   const setActiveDrag = useApp((s) => s.setActiveDrag);
 
@@ -96,9 +106,6 @@ export default function DatasetRow({
   const [rename, setRename] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  // Drop-between indicator (plan item 3b): which edge of THIS row a dragged
-  // dataset is currently hovering, or null when no drag is over this row.
-  const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);
@@ -114,19 +121,33 @@ export default function DatasetRow({
   // the plotted dataset. Routes through `activateFromLibrary` (item 15), not
   // `setActive` directly, so an Origin-project row opens its Worksheet instead
   // of rebinding the focused plot window, per the `originBookClickOpens` pref.
+  // PR C: records L0.6's remembered workbook child. L0.25 librarySelection
+  // clearing now lives at the STORE level (activateFromLibrary/
+  // toggleSelected/selectRange/setActive), not re-implemented here.
+  const open = () => {
+    activateFromLibrary(d.id);
+    recordWorkbookOpen(d.workbookId, `worksheet:${d.id}`);
+  };
   const onRowClick = (e: React.MouseEvent) => {
     if (e.shiftKey) selectRange(d.id);
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
-    else activateFromLibrary(d.id);
+    // L0.25 tree mode: a plain click selects WITHOUT touching the plot; the
+    // open (double-click here, Enter via LibraryTree) is a separate gesture.
+    else if (treeMode) selectIds([d.id]);
+    else open();
   };
 
-  // Right-click: if this row isn't already in the selection, select it first so
-  // the menu acts on what the user sees highlighted, then open the menu. Same
-  // routing as a plain click (item 15) — selecting a row for its context menu
-  // shouldn't itself plot an Origin book any more than clicking it does.
+  // Right-click/menu-key: a not-yet-selected row is selected first so the
+  // menu acts on what's highlighted — via selectIds in tree mode (never
+  // changes the active plot, L0.25), via plain-click routing (item 15) flat.
+  const selectForMenu = () => {
+    if (selected) return;
+    if (treeMode) selectIds([d.id]);
+    else activateFromLibrary(d.id);
+  };
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!selected) activateFromLibrary(d.id);
+    selectForMenu();
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -136,7 +157,7 @@ export default function DatasetRow({
   const onRowKeyDown = (e: React.KeyboardEvent) => {
     if (!isContextMenuKeyEvent(e)) return;
     e.preventDefault();
-    if (!selected) activateFromLibrary(d.id);
+    selectForMenu();
     const r = e.currentTarget.getBoundingClientRect();
     setMenu({ x: r.left + 8, y: r.bottom });
   };
@@ -160,34 +181,14 @@ export default function DatasetRow({
     <div
       className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
         sheetNumber ? " qzk-ds-sheet" : ""
-      }${dropEdge ? ` drop-${dropEdge}` : ""}`}
+      }`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
       tabIndex={0}
       onKeyDown={onRowKeyDown}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
-        e.preventDefault(); // required every dragover to keep the drop legal
-        const edge = dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
-        if (edge !== dropEdge) setDropEdge(edge);
-      }}
-      onDragLeave={() => setDropEdge(null)}
-      onDrop={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
-        e.preventDefault();
-        e.stopPropagation(); // don't let it bubble to FolderRow/Library's file dropzone
-        const edge = dropEdge ?? dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
-        setDropEdge(null);
-        const draggedId = e.dataTransfer.getData(DATASET_DND);
-        if (!draggedId || draggedId === d.id) return; // no-op: dropped onto itself
-        // Reorder within THIS row's own folder (or move into it, if the dragged
-        // dataset lived elsewhere — "moves into the between-position's folder").
-        const folderId = d.folderId ?? null;
-        const siblingIds = folderDatasets(useApp.getState().datasets, folderId).map((x) => x.id);
-        const beforeId = resolveDropBeforeId(siblingIds, d.id, edge);
-        moveDatasetToFolder(draggedId, folderId, beforeId);
-      }}
       onClick={onRowClick}
+      // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.
+      onDoubleClick={treeMode ? open : undefined}
       onContextMenu={onContextMenu}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}

@@ -13,7 +13,7 @@ import { defaultDenseChannels } from "./plotdata";
 import type { Dataset } from "./types";
 
 /** dataTransfer MIME type for an internal channel-chip drag. Distinct from
- *  `DATASET_DND` (Library row drag, components/Library/useLibraryTree.ts) and
+ *  `DATASET_DND` (Library row drag, components/Library/dnd.ts) and
  *  OS file drops, so drop targets can tell them apart via `types`. */
 export const CHANNEL_DND = "application/x-qz-channel";
 

@@ -1,0 +1,121 @@
+// The workbook context-menu registry (LIBRARY_WORKBOOK_UX_PLAN PR C, L0.36).
+// A sibling of contextActions.ts (near its 500-line ceiling) rather than
+// another block inside it — same "registry array + a builder splices the
+// dynamic per-folder Move-to list in" shape as the dataset/folder registries,
+// just in its own file. Disabled items carry a `disabledReason` (L0.36:
+// "disable ... with a short reason rather than removing them
+// unpredictably") — `contextActions.ts`'s `actionMenuItem` renders that as
+// the item's tooltip.
+//
+// L0.36's full command set is: Open, Browse, Quick Plot/Configure Quick
+// Plot, Quick Plot With..., Reimport, Copy, Paste, Duplicate, Rename, Move,
+// Reveal Source, Properties, Delete. This PR ships only what has a settled
+// contract today (Open/Rename/Move/Reveal Source/Delete) plus disabled
+// placeholders for the three features named by a later PR (Quick
+// Plot/Browse/Properties) so the command stays discoverable without
+// pretending it works. Reimport/Copy/Paste/Duplicate/Quick Plot With... have
+// no contract yet and are simply absent rather than disabled-guessed.
+
+import { openLibraryNode } from "../components/Library/libraryOpen";
+import type { ContextAction } from "./contextActions";
+import type { LibraryNode } from "./libraryHierarchy";
+import { toast } from "../store/toasts";
+import { useApp } from "../store/useApp";
+import { workbookDeleteBlockers } from "../store/workbookActions";
+
+export interface WorkbookActionTarget {
+  node: Extract<LibraryNode, { kind: "workbook" }>;
+  /** Local UI: open this row's own inline rename input. */
+  onRename: () => void;
+}
+
+const memberCount = (t: WorkbookActionTarget): number =>
+  t.node.children.filter((c) => c.kind === "worksheet").length;
+
+export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
+  { id: "workbook.open", label: "Open", run: (t) => openLibraryNode(t.node) },
+  {
+    id: "workbook.quickPlot",
+    label: "Quick Plot",
+    enabled: () => false,
+    disabledReason: () => "arrives with Quick Plot (PR F)",
+    run: () => {},
+  },
+  {
+    id: "workbook.browse",
+    label: "Browse",
+    enabled: () => false,
+    disabledReason: () => "arrives with the Library workspace (PR E)",
+    run: () => {},
+  },
+  { id: "workbook.rename", label: "Rename…", run: (t) => t.onRename() },
+];
+
+export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [
+  {
+    id: "workbook.revealSource",
+    label: "Reveal Source",
+    enabled: (t) => t.node.entity.source != null,
+    disabledReason: () => "no source path recorded",
+    run: (t) => {
+      // No OS-level "show in file explorer" integration exists yet (the
+      // dataset menu doesn't have one either — L0.38 books it as a future
+      // command). Surface the path through the app's own status/toast
+      // channel rather than pretending a filesystem reveal happened.
+      const path = t.node.entity.source!.path;
+      useApp.getState().setStatus(`source: ${path}`);
+      toast(path);
+    },
+  },
+  {
+    id: "workbook.properties",
+    label: "Properties…",
+    enabled: () => false,
+    disabledReason: () => "arrives with Details/Properties (PR D)",
+    run: () => {},
+  },
+];
+
+export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
+  {
+    id: "workbook.delete",
+    label: "Delete",
+    destructive: true,
+    // L0.45 fail-closed (PR #139 review): disabled — with the reason — while
+    // any recovered figure/report/binding depends on a member worksheet;
+    // deleteWorkbook re-checks the same gate so the key shortcut can't
+    // bypass it. PR M's dependency-aware Trash lifts this.
+    enabled: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) == null,
+    disabledReason: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) ?? "",
+    confirm: (t) => {
+      const n = memberCount(t);
+      return {
+        title: `Delete "${t.node.entity.name}"?`,
+        // P1 fix: say exactly what happens. The WORKBOOK GROUPING is gone
+        // for good the moment this runs (deleteWorkbook removes the
+        // WorkbookNode outright) — only the member worksheets are
+        // recoverable, and restoring one later (store/trash.ts's
+        // restoreFromTrash self-heal) gives it a fresh workbook of its own
+        // rather than reconstituting this one.
+        message:
+          n > 0
+            ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
+            : "This workbook has no worksheets; the grouping is removed for good.",
+        confirmLabel: "Delete",
+      };
+    },
+    run: (t) => {
+      useApp.getState().deleteWorkbook(t.node.entity.id);
+      toast(`deleted "${t.node.entity.name}"`);
+    },
+  },
+];
+
+/** Every fixed workbook action, flat — for a caller that wants the whole set
+ *  without the dynamic per-folder Move-to list (workbookRowMenu.ts splices
+ *  that in, matching datasetRowMenu.ts's own pattern). */
+export const workbookActions: ContextAction<WorkbookActionTarget>[] = [
+  ...workbookCoreActions,
+  ...workbookSourceActions,
+  ...workbookDeleteActions,
+];
