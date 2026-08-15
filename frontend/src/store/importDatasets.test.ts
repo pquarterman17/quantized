@@ -438,3 +438,135 @@ describe("batch-import overlay offer (PLOT_WORKFLOW_PLAN #4)", () => {
     expect(plotSelectedTogether).not.toHaveBeenCalled();
   });
 });
+
+describe("L0.46 — import lands in the selected folder", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  beforeEach(() => {
+    useApp.setState({ librarySelection: null, workbooks: [] });
+  });
+
+  it("no selection: the dataset and its workbook land at the Library root", async () => {
+    await useApp.getState().importFiles(files("a.csv"));
+    const ds = useApp.getState().datasets[0];
+    expect(ds.folderId).toBeUndefined();
+    expect(useApp.getState().workbooks.find((w) => w.id === ds.workbookId)?.folderId).toBeUndefined();
+  });
+
+  it("a selected folder: the dataset AND its workbook get that folderId", async () => {
+    useApp.setState({
+      folders: [{ id: "f1", name: "Target", parentId: null, order: 0 }],
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    await useApp.getState().importFiles(files("a.csv"));
+    const ds = useApp.getState().datasets[0];
+    expect(ds.folderId).toBe("f1");
+    expect(useApp.getState().workbooks.find((w) => w.id === ds.workbookId)?.folderId).toBe("f1");
+  });
+
+  it("a selected workbook: imports into THAT workbook's folder, not a new one", async () => {
+    useApp.setState({
+      folders: [{ id: "f1", name: "Target", parentId: null, order: 0 }],
+      workbooks: [{ id: "w0", name: "Existing", folderId: "f1" }],
+      librarySelection: { kind: "workbook", id: "w0" },
+    });
+    await useApp.getState().importFiles(files("a.csv"));
+    expect(useApp.getState().datasets[0].folderId).toBe("f1");
+  });
+
+  it("a selected root-level workbook (no folderId): imports to root", async () => {
+    useApp.setState({
+      workbooks: [{ id: "w0", name: "Existing" }],
+      librarySelection: { kind: "workbook", id: "w0" },
+    });
+    await useApp.getState().importFiles(files("a.csv"));
+    expect(useApp.getState().datasets[0].folderId).toBeUndefined();
+  });
+
+  it("the SAME target applies to every file in the batch", async () => {
+    useApp.setState({
+      folders: [{ id: "f1", name: "Target", parentId: null, order: 0 }],
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    vi.mocked(uploadFile).mockResolvedValueOnce(payload()).mockResolvedValueOnce(payload());
+    await useApp.getState().importFiles(files("a.csv", "b.csv"));
+    expect(useApp.getState().datasets.every((d) => d.folderId === "f1")).toBe(true);
+  });
+});
+
+describe("L0.46 — batch folder suggestion (never creates without the click)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  beforeEach(() => {
+    // A shared prefix batch must NOT also qualify for the overlay offer, or
+    // the overlay wins and this offer never appears — keep every dataset
+    // "generic" (no technique) here. Explicit reset: the previous describe
+    // block's tests set librarySelection/workbooks, and the file's top-level
+    // beforeEach doesn't touch either (only datasets/folders/activeId/
+    // selectedIds/toasts).
+    vi.mocked(uploadFile).mockResolvedValue(payload());
+    useApp.setState({ librarySelection: null, workbooks: [] });
+  });
+
+  it("offers a folder-creation toast for a shared filename-stem prefix", async () => {
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat"));
+    const withAction = useToasts.getState().toasts.find((t) => t.action);
+    expect(withAction?.msg).toBe('2 files imported — create folder "scan"?');
+    expect(withAction!.action!.label).toBe('Create folder "scan"');
+  });
+
+  it("does NOT create the folder until the action is clicked", async () => {
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat"));
+    expect(useApp.getState().folders).toEqual([]);
+  });
+
+  it("clicking the action creates the folder and moves the batch's workbooks into it", async () => {
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat"));
+    const withAction = useToasts.getState().toasts.find((t) => t.action)!;
+    withAction.action!.onClick();
+
+    const s = useApp.getState();
+    expect(s.folders).toHaveLength(1);
+    const folder = s.folders[0];
+    expect(folder.name).toBe("scan");
+    expect(s.datasets.every((d) => d.folderId === folder.id)).toBe(true);
+    expect(s.workbooks.every((w) => w.folderId === folder.id)).toBe(true);
+  });
+
+  it("the new folder lands under the import's target, not always root", async () => {
+    useApp.setState({
+      folders: [{ id: "parent", name: "Parent", parentId: null, order: 0 }],
+      librarySelection: { kind: "folder", id: "parent" },
+    });
+    await useApp.getState().importFiles(files("scan_1.dat", "scan_2.dat"));
+    useToasts.getState().toasts.find((t) => t.action)!.action!.onClick();
+    const newFolder = useApp.getState().folders.find((f) => f.id !== "parent")!;
+    expect(newFolder.parentId).toBe("parent");
+  });
+
+  it("no offer when the shared prefix is under 3 characters", async () => {
+    await useApp.getState().importFiles(files("a1.dat", "a2.dat"));
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+    expect(toastMsgs()).toContain("imported 2 files");
+  });
+
+  it("no offer when the filenames share no common prefix", async () => {
+    await useApp.getState().importFiles(files("alpha.dat", "beta.dat"));
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+  });
+
+  it("no offer for a single file", async () => {
+    await useApp.getState().importFiles(files("scan_001.dat"));
+    expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
+  });
+
+  it("the overlay offer wins when both would qualify (never stacks two action toasts)", async () => {
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(payload("xrd.powder"))
+      .mockResolvedValueOnce(payload("xrd.powder"));
+    await useApp.getState().importFiles(files("scan_1.xye", "scan_2.xye"));
+    const actionToasts = useToasts.getState().toasts.filter((t) => t.action);
+    expect(actionToasts).toHaveLength(1);
+    expect(actionToasts[0].action!.label).toBe("Overlay");
+  });
+});

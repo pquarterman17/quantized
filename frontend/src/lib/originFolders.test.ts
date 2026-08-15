@@ -155,6 +155,44 @@ describe("planOriginImport", () => {
     expect(plan.workbookMembership.u1).toBe(plan.workbooks[0].id);
   });
 
+  // L0.46 (LIBRARY_WORKBOOK_UX_PLAN PR C): the project folder lands UNDER
+  // the currently-selected target folder instead of always at the Library
+  // root, when the caller passes one.
+  it("parentFolderId: the project folder nests under the given target", () => {
+    const plan = planOriginImport(
+      "Moke",
+      [ds("Moke", "d1", "Book1")],
+      genFolder,
+      genWorkbook,
+      "target-folder",
+    );
+    expect(plan.folders[0].parentId).toBe("target-folder");
+  });
+
+  it("parentFolderId defaults to root, preserving every existing caller", () => {
+    const plan = planOriginImport("Moke", [ds("Moke", "d1", "Book1")], genFolder, genWorkbook);
+    expect(plan.folders[0].parentId).toBeNull();
+  });
+
+  it("parentFolderId=null is equivalent to omitting it", () => {
+    const plan = planOriginImport("Moke", [ds("Moke", "d1", "Book1")], genFolder, genWorkbook, null);
+    expect(plan.folders[0].parentId).toBeNull();
+  });
+
+  it("nested Project Explorer path folders still nest under the (now non-root) project folder", () => {
+    const plan = planOriginImport(
+      "Moke",
+      [ds("Moke", "d1", "Book1", ["Raw"])],
+      genFolder,
+      genWorkbook,
+      "target-folder",
+    );
+    const project = plan.folders[0];
+    expect(project.parentId).toBe("target-folder");
+    const raw = plan.folders[1];
+    expect(raw.parentId).toBe(project.id); // unaffected — still nests under the project, not the target directly
+  });
+
   it("workbook membership is TOTAL: every input dataset appears in both maps exactly once", () => {
     const datasets = [
       ds("P", "d1", "Book1", ["Raw"]),

@@ -41,6 +41,7 @@ import {
   type Technique,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
+import { batchFolderOffer, createFolderForBatch, resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { TOAST_ACTION_TTL, toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
@@ -140,15 +141,16 @@ export function pathBasename(path: string): string {
 
 /** Expand ONE parsed payload into datasets. Extracted verbatim from the old
  *  `importFiles` body so the Origin branch keeps behaving exactly as before;
- *  the only addition is threading `origin.source` onto every dataset it
- *  creates. Throws on failure — callers own the per-file error summary.
- *  Returns the created dataset id(s) (item 4's batch-overlay offer needs
- *  them to know what a batch actually landed). */
+ *  the only additions are threading `origin.source` onto every dataset it
+ *  creates and L0.46's import-target folder. Throws on failure — callers own
+ *  the per-file error summary. Returns the created dataset id(s) (item 4's
+ *  batch-overlay offer needs them to know what a batch actually landed). */
 function addFromPayload(
   set: SliceSet,
   get: SliceGet,
   data: DataStruct,
   origin: ImportOrigin,
+  targetFolderId: string | undefined,
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
@@ -216,7 +218,7 @@ function addFromPayload(
     // — no more per-book folder standing in for it.
     const newIdSet = new Set(newIds);
     const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
-    const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId);
+    const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId, targetFolderId ?? null);
     set((s) => ({
       folders: [...s.folders, ...plan.folders],
       workbooks: [...s.workbooks, ...plan.workbooks],
@@ -231,7 +233,10 @@ function addFromPayload(
     delete data.books;
     delete data.book_source;
     const id = nextDatasetId();
-    const dsInput: Dataset = { id, name: origin.name, data, ...src, ...importRoles(data), importedAt };
+    const dsInput: Dataset = {
+      id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
+      ...(targetFolderId ? { folderId: targetFolderId } : {}),
+    };
     get().addDataset(dsInput);
     newIds.push(id);
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
@@ -328,6 +333,8 @@ async function runImport<T>(
       : `Importing ${describe(items[0])}…`;
   const opId = beginOp(label(0), () => controller.abort());
   useImportBatch.setState({ running: true });
+  // L0.46: resolved ONCE per batch — librarySelection doesn't change mid-batch.
+  const targetFolderId = resolveImportTargetFolderId(get);
 
   let added = 0;
   let lastError = "";
@@ -344,7 +351,7 @@ async function runImport<T>(
       get().setStatus(`importing ${describe(item)}…`);
       try {
         const { data, origin } = await load(item, controller.signal);
-        createdIds.push(...addFromPayload(set, get, data, origin));
+        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -380,15 +387,30 @@ async function runImport<T>(
   get().setStatus(summary);
   if (added > 0) {
     const offer = batchOverlayOffer(get, createdIds);
+    const folderOffer = offer ? null : batchFolderOffer(get, createdIds);
     if (offer) {
       // The offer toast states "imported" itself, so it replaces (not
       // supplements) the plain success toast below — two toasts saying the
-      // same thing back to back is noise, not confirmation.
+      // same thing back to back is noise, not confirmation. If BOTH the
+      // overlay and folder offers would qualify, the overlay wins (L0.46 —
+      // never stack two action toasts for one batch).
       toast(
         `${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`,
         "ok",
         {
           action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
+          ttlMs: TOAST_ACTION_TTL,
+        },
+      );
+    } else if (folderOffer) {
+      toast(
+        `${folderOffer.ids.length} files imported — create folder "${folderOffer.prefix}"?`,
+        "ok",
+        {
+          action: {
+            label: `Create folder "${folderOffer.prefix}"`,
+            onClick: () => createFolderForBatch(get, folderOffer.prefix, folderOffer.ids, targetFolderId),
+          },
           ttlMs: TOAST_ACTION_TTL,
         },
       );
