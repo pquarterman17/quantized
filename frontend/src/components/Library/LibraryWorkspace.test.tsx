@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
@@ -301,6 +301,100 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Plot (make active)" }));
     expect(useApp.getState().activeId).toBe("a");
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("right-click on a tile INSIDE the multi-selection preserves it and offers the bulk actions", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1"), worksheet("b", "w1")],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    act(() => useApp.getState().selectIds(["a", "b"]));
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "a.csv, Worksheet" }), {
+      clientX: 20,
+      clientY: 30,
+    });
+
+    // The tree's selectForMenu contract: a right-click on an ALREADY-selected
+    // row keeps the enclosing selection (that's how "Remove N selected" /
+    // merge / panel actions stay reachable), matching the tile Delete key.
+    expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
+    expect(screen.getByRole("menuitem", { name: "Remove 2 selected" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Overlay in one plot" })).toBeInTheDocument();
+  });
+
+  it("a multi-selection stage action from a tile menu returns to the Stage (owner decision)", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1"), worksheet("b", "w1")],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+    act(() => useApp.getState().selectIds(["a", "b"]));
+    const windowsBefore = useApp.getState().plotWindows.length;
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "a.csv, Worksheet" }), {
+      clientX: 20,
+      clientY: 30,
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Overlay in one plot" }));
+
+    expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("tile 'Plot (make active)' keeps plot intent for an Origin-book dataset (no worksheet-tab detour)", () => {
+    const onClose = vi.fn();
+    const originSheet = worksheet("ob", "w1");
+    originSheet.data.metadata = { origin_book: "Book1" };
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [originSheet],
+      librarySelection: { kind: "workbook", id: "w1" },
+      stageTab: "plot",
+      originBookClickOpens: "worksheet", // the default pref
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "ob.csv, Worksheet" }), {
+      clientX: 20,
+      clientY: 30,
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Plot (make active)" }));
+
+    // dataset.plot is the UNCONDITIONAL plot-intent action (setActive's
+    // documented contract) — the stage-return hook must only close the
+    // workspace, never re-route through activateFromLibrary's
+    // originBookClickOpens="worksheet" path.
+    expect(useApp.getState().activeId).toBe("ob");
+    expect(useApp.getState().stageTab).toBe("plot");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("the folder tile menu states the SUBTREE dataset count, matching the tree's destructive confirm", () => {
+    useApp.setState({
+      folders: [{ id: "f1", name: "Trip", parentId: null, order: 0 }],
+      workbooks: [{ id: "w1", name: "Run", folderId: "f1" }],
+      datasets: [
+        { ...worksheet("a", "w1"), folderId: "f1" },
+        { ...worksheet("b", "w1"), folderId: "f1" },
+      ],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "Trip, Folder" }), {
+      clientX: 20,
+      clientY: 30,
+    });
+
+    // The tree passes subtreeCount (datasets in the whole subtree) — 2 here,
+    // not the 1 direct hierarchy child (the workbook). A wrong count on a
+    // delete confirm is a destructive-action honesty bug.
+    expect(screen.getByRole("menuitem", { name: "Delete folder + 2 dataset(s)" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Select all in folder (2)" })).toBeInTheDocument();
   });
 
   it("opens the same workbook menu from the keyboard and Browse enters it", () => {

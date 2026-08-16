@@ -1639,3 +1639,21 @@ back to the owner. No Library implementation is authorized by this pause.
   workspace. Artifact lifecycle menus remain the explicit E-b2 boundary so
   their rename/duplicate/delete dependency policies can be centralized rather
   than copied from four flat sections.
+- **2026-08-16 — Claude review of PR #147 (E-b1), three fixes pushed to the
+  branch:** (1) `openTileMenu` selected the tile unconditionally, collapsing
+  any enclosing multi-selection before the menu built — the bulk actions
+  (Remove N selected, merge, panels, plot-together) were unreachable from
+  Tiles and the menu disagreed with the tile Delete key's enclosing-selection
+  rule; it now mirrors the tree's `selectForMenu` (an already-selected tile
+  keeps the selection). (2) The worksheet menu's `onStageOpen` was wired to
+  the full `openFromTile` re-open, so "Plot (make active)" / "Plot in new
+  window" re-dispatched `activateFromLibrary` after their own plot-intent
+  open — detouring Origin-book datasets (default `originBookClickOpens:
+  "worksheet"`) onto the worksheet tab; the hook is now close-only
+  (`stageReturn`), and the multi-select stage actions (panels, merge,
+  plot-together) also stage-return per the PR #145 owner decision. (3) The
+  folder tile menu passed direct hierarchy-child count where the tree passes
+  the whole-subtree DATASET count — the destructive "Delete folder + N
+  dataset(s)" confirm stated wrong numbers whenever the folder held
+  workbooks; `subtreeCount` is hoisted to `lib/foldertree.ts` and shared.
+  All three were proven red first; four regression tests added.

@@ -5,6 +5,7 @@
 
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
+import { subtreeCount } from "../../lib/foldertree";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { buildDatasetRowMenu } from "./datasetRowMenu";
@@ -14,6 +15,13 @@ import { buildWorkbookRowMenu } from "./workbookRowMenu";
 export interface TileMenuHooks {
   browse: (node: LibraryNode) => void;
   open: (node: LibraryNode) => void;
+  /** Close the workspace and return to the Stage AFTER an action that
+   *  already performed its own plot-intent open (dataset.plot,
+   *  plotInNewWindow, panels, plot-selected-together). Deliberately NOT
+   *  `open`: re-dispatching openLibraryNode would route Origin-book
+   *  datasets through activateFromLibrary's originBookClickOpens=
+   *  "worksheet" detour, undoing setActive's unconditional plot intent. */
+  stageReturn: () => void;
 }
 
 function renameDialog(title: string, name: string, commit: (value: string) => void): void {
@@ -47,7 +55,7 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       index >= 0 && index < state.datasets.length - 1,
       () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameDataset(node.entityId, name)),
       () => tagDialog(node.entityId, node.name),
-      hooks.open.bind(null, node),
+      hooks.stageReturn,
     );
   }
   if (node.kind === "workbook") {
@@ -57,9 +65,14 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
     () => hooks.open(node));
   }
   if (node.kind === "folder") {
+    // The SUBTREE dataset count, exactly what the tree passes (LibraryTree's
+    // FolderRow) — the folder menu's "Select all (N)" gating and the
+    // destructive "Delete folder + N dataset(s)" confirm state dataset
+    // counts, not direct-child tile counts (a workbook child is 1 tile but
+    // many datasets).
     return buildFolderRowMenu(
       node.entity,
-      node.children.length,
+      subtreeCount(state.folders, state.datasets, node.entityId),
       () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameFolder(node.entityId, name)),
       () => hooks.browse(node),
     );

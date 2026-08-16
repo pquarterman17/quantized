@@ -167,7 +167,11 @@ export interface DatasetActionTarget {
   /** Local UI: open this row's own inline rename/tag input. */
   onRename: () => void;
   onAddTag: () => void;
-  /** Tile workspace only: reveal a Stage-target action after it runs. */
+  /** Tile workspace only (undefined in the tree): return to the Stage after
+   *  an action whose visible result is a plot (plot, plotInNewWindow,
+   *  panels, merge, plot-together) — the PR #145 stage-return decision. MUST
+   *  only close/reveal, never re-open: the action already performed its open,
+   *  and a re-open detours Origin books via activateFromLibrary's tab path. */
   onStageOpen?: () => void;
 }
 
@@ -262,7 +266,10 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.mergeSelected",
     label: (t) => `Merge ${t.selectedIds.length} selected`,
     hidden: (t) => !multiSelected(t),
-    run: () => useApp.getState().mergeSelected(),
+    run: (t) => {
+      void useApp.getState().mergeSelected();
+      t.onStageOpen?.();
+    },
   },
   ...(
     [
@@ -279,6 +286,7 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       run: (t) => {
         const s = useApp.getState();
         s.focusWindow(s.createPanelWindow([...t.selectedIds], layout));
+        t.onStageOpen?.();
       },
     }),
   ),
@@ -291,7 +299,10 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.plotSelectedTogether",
     label: "Plot selected together",
     hidden: (t) => !multiSelected(t),
-    run: (t) => void plotSelectedTogether(t.selectedIds),
+    run: (t) => {
+      void plotSelectedTogether(t.selectedIds);
+      t.onStageOpen?.();
+    },
   },
 ];
 

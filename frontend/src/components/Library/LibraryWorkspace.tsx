@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { fmtNum } from "../../lib/format";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
@@ -209,8 +210,15 @@ export default function LibraryWorkspace({ onClose }: Props) {
   };
 
   const openTileMenu = (node: LibraryNode, x: number, y: number): void => {
-    selectLibraryNode(node);
-    const menuItems = buildLibraryTileMenu(node, { browse: selectOrBrowse, open: openFromTile });
+    // The tree's selectForMenu contract (DatasetRow): a right-click on a tile
+    // ALREADY inside the multi-selection keeps that selection, so the bulk
+    // actions (Remove N selected, merge, panels) stay reachable and the menu
+    // agrees with the tile Delete key's enclosing-selection rule. Any other
+    // tile is selected first, same as the tree.
+    const alreadyInSelection =
+      node.kind === "worksheet" && useApp.getState().selectedIds.includes(node.entityId);
+    if (!alreadyInSelection) selectLibraryNode(node);
+    const menuItems = buildLibraryTileMenu(node, { browse: selectOrBrowse, open: openFromTile, stageReturn: close });
     if (menuItems) setMenu({ x, y, items: menuItems });
   };
 
@@ -282,7 +290,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
                   openTileMenu(node, event.clientX, event.clientY);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                  if (isContextMenuKeyEvent(event)) {
                     event.preventDefault();
                     const rect = event.currentTarget.getBoundingClientRect();
                     openTileMenu(node, rect.left + 8, rect.bottom);
