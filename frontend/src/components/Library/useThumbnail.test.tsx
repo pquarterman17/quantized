@@ -7,7 +7,7 @@
 
 import { act, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
@@ -19,6 +19,7 @@ import {
   type ThumbnailResult,
 } from "../../lib/thumbnailCache";
 import { resolveThumbnailRequest } from "../../lib/thumbnailRequest";
+import { registerDefaultThumbnailGenerators } from "../../lib/thumbnailGenerators";
 import { useThumbnail, type ThumbnailState } from "./useThumbnail";
 
 const thumb = (url: string): ThumbnailResult => ({ url, width: 160, height: 120 });
@@ -36,6 +37,8 @@ function Probe({ node, onState }: { node: LibraryNode; onState: (s: ThumbnailSta
 
 beforeEach(() => {
   useApp.setState({ datasets: [], editableFigures: [] });
+  unregisterThumbnailGenerator("report");
+  unregisterThumbnailGenerator("editable-figure");
 });
 
 afterEach(() => {
@@ -43,6 +46,8 @@ afterEach(() => {
   unregisterThumbnailGenerator("report");
   unregisterThumbnailGenerator("editable-figure");
 });
+
+afterAll(() => registerDefaultThumbnailGenerators());
 
 /** The fingerprint the hook itself will compute for `node` against the
  *  CURRENT store — used to pre-seed the cache in the sync-serve test. */

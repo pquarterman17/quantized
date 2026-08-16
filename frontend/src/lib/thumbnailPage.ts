@@ -9,6 +9,9 @@
 
 import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
 import { panelReferencesFigure } from "./thumbnailRequest";
+import { plotSvgBody, svgResult } from "./thumbnailSvg";
+import type { FigureDocument } from "./figureDocument";
+import type { Dataset } from "./types";
 
 const W = 160;
 const H = 120;
@@ -54,6 +57,32 @@ export async function generatePageThumbnail(
   if (node.kind !== "page") throw new Error(`page generator got "${node.kind}"`);
   if (signal.aborted) throw new DOMException("aborted", "AbortError");
   const page = node.entity;
+  const referenceCount = page.panels.filter(panelReferencesFigure).length;
+  const figures = deps.slice(0, referenceCount);
+  const datasets = deps.slice(referenceCount).filter((dep): dep is Dataset => !!dep && "data" in dep && "pending" in dep);
+  let figureCursor = 0;
+  const safeRows = Math.max(1, page.rows);
+  const safeCols = Math.max(1, page.cols);
+  const gap = 8;
+  const pad = 10;
+  const cellW = (320 - pad * 2 - gap * (safeCols - 1)) / safeCols;
+  const cellH = (180 - pad * 2 - gap * (safeRows - 1)) / safeRows;
+  const panels = page.panels.map((panel, index) => {
+    const candidate = panelReferencesFigure(panel) ? figures[figureCursor++] : undefined;
+    const figure = candidate && "bindings" in candidate && "plot" in candidate ? candidate as FigureDocument : undefined;
+    const dataset = figure?.bindings.datasetId
+      ? datasets.find((candidate) => candidate.id === figure.bindings.datasetId)
+      : undefined;
+    const data = figure?.data.mode === "frozen" ? figure.data.snapshot : dataset?.data;
+    const col = index % safeCols;
+    const row = Math.floor(index / safeCols);
+    const box = { x: pad + col * (cellW + gap), y: pad + row * (cellH + gap), width: cellW, height: cellH };
+    if (candidate && !data) {
+      return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="4" fill="#9a9a9a" fill-opacity="0.55"/>`;
+    }
+    return plotSvgBody(data, figure?.bindings.xKey, figure?.bindings.yKeys, box);
+  }).join("");
+  if (panels) return svgResult(panels, page.name);
   let referenced = 0;
   return pageThumbnailSvg(
     page.rows,

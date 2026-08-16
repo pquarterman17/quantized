@@ -683,9 +683,19 @@ build, and focused interaction coverage where appropriate.
        honest static placeholder. One REFERENCE generator (page → panel-grid
        SVG data-URL, pure and jsdom-testable) proves the pipe end-to-end;
        E-c2 owns real preview visuals and the generator set.*
-     - [ ] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
+     - [~] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
        analysis/page/report previews; loading/empty/error appearance; visual
        hierarchy, sizing, hover behavior, readability.
+       *Implementation started 2026-08-16 on
+       `sol/library-ec2-preview-ux`, after PR #149's dependency-aware cache
+       fix merged. The bounded preview vocabulary uses lightweight canonical
+       SVG generation rather than mounting the full plot engine per tile:
+       editable/publication/recovered-Origin figures render real source or
+       frozen data, pages compose their referenced figures panel-by-panel,
+       and reports summarize their first natural content blocks. Tiles share
+       clear loading, unavailable-source, unsupported, and error treatments,
+       kind badges, restrained hover emphasis, and reduced-motion behavior.
+       E-c3 virtualization remains explicitly outside this slice.*
      - [ ] **E-c3 (Claude): large-Library safeguards.** Virtualization +
        large-library fixtures; preserve selection, keyboard navigation, and
        "Show in Library"; performance and regression testing.
@@ -1767,3 +1777,12 @@ back to the owner. No Library implementation is authorized by this pause.
   my new test, an empty-string-figureId deps-cursor desync (now a shared
   predicate + pin test), and two O(store)-per-tile resolve inefficiencies
   (WeakMap-memoized by-id maps; generator-less kinds skip resolution).
+- **2026-08-16 — ChatGPT-Sol, E-c2 implementation checkpoint:** Started the
+  visible preview layer on `sol/library-ec2-preview-ux` after verifying PR
+  #149's repaired request contract. Added dependency-keyed, lightweight SVG
+  previews for editable/publication/recovered-Origin figures, multi-panel
+  pages, and reports; retained the existing compact worksheet table. Added a
+  common loading/error/missing-source visual language, artifact-kind badges,
+  restrained hover treatment, and reduced-motion support. The full plotting
+  engine is deliberately not mounted inside tiles; E-c3 virtualization and
+  large-Library fixtures remain Claude's next slice after review/merge.
