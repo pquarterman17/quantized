@@ -183,10 +183,21 @@ body {
 .qzk-details-medium, .qzk-details-wide { display: none; }
 /* PR D2 search-results reveal action ("Show in Library") — link-styled like
    the Manual order control; always visible (the action is the point of the
-   results surface, narrow panel included). */
-.qzk-details-actions { width: 1%; }
+   results surface, narrow panel included). Review round 2: table-layout:fixed
+   + hidden cell overflow means the column needs a REAL width (set on the th —
+   fixed layout sizes columns from the first row) or the button clips outside
+   its cell at the default 210px panel. Narrow containers get a compact glyph;
+   ≥300px containers get the full text. The accessible name is always on the
+   button itself. */
+.qzk-details-actions { width: 28px; }
 .qzk-details-reveal { border: 0; padding: 2px 4px; background: none; color: var(--accent); font: inherit; white-space: nowrap; cursor: default; }
 .qzk-details-reveal:hover { text-decoration: underline; }
+.qzk-details-reveal .qzk-reveal-text { display: none; }
+@container (min-width: 300px) {
+  .qzk-details-actions { width: 112px; }
+  .qzk-details-reveal .qzk-reveal-text { display: inline; }
+  .qzk-details-reveal .qzk-reveal-glyph { display: none; }
+}
 @container (min-width: 300px) {
   .qzk-details-name { width: 48%; }
   .qzk-details-medium { display: table-cell; }

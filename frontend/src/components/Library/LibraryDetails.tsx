@@ -174,8 +174,10 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
               ))}
               {/* D2: the reveal-action column — a header cell with no sort
                *  button, so the header roving arithmetic (COLUMNS-indexed)
-               *  never sees it. */}
-              {searching && <th scope="col" aria-label="Show in Library" />}
+               *  never sees it. The class is load-bearing (review round 2):
+               *  table-layout:fixed takes COLUMN widths from the first row,
+               *  so the actions width must live on this th, not the tds. */}
+              {searching && <th scope="col" className="qzk-details-actions" aria-label="Show in Library" />}
             </tr>
           </thead>
           <tbody>
@@ -245,6 +247,8 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                       <button
                         type="button"
                         className="qzk-details-reveal"
+                        aria-label="Show in Library"
+                        title="Show in Library"
                         tabIndex={row.node.key === rovingKey ? 0 : -1}
                         onClick={(event) => {
                           event.stopPropagation(); // never also select/open the row
@@ -252,7 +256,12 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                         }}
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
-                        Show in Library
+                        {/* Compact glyph at narrow container widths, full text
+                         *  at ≥300px — the accessible name lives on the button
+                         *  either way (review round 2: the text button clipped
+                         *  outside its cell at the default 210px panel). */}
+                        <span className="qzk-reveal-glyph" aria-hidden="true">⌖</span>
+                        <span className="qzk-reveal-text">Show in Library</span>
                       </button>
                     </td>
                   )}

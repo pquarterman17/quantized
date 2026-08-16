@@ -40,6 +40,28 @@ test("search spans the project, results open normally, Show in Library reveals @
   // The non-matching import is not in the results.
   await expect(page.locator("tbody").getByText("dataset-b.csv")).toHaveCount(0);
 
+  // Review round 2: `toBeVisible()` cannot catch PARTIAL clipping — the
+  // original text button's right edge extended ~10px past its cell at the
+  // default 210px panel. Assert the complete action sits INSIDE its cell,
+  // at the default narrow width (compact glyph variant) AND at a widened
+  // panel (full-text variant past the 300px container breakpoint).
+  const assertRevealContained = async (): Promise<void> => {
+    const btn = page.locator(".qzk-details-reveal").first();
+    const cell = page.locator("td.qzk-details-actions").first();
+    const b = (await btn.boundingBox())!;
+    const c = (await cell.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(c.x - 0.5);
+    expect(b.x + b.width).toBeLessThanOrEqual(c.x + c.width + 0.5);
+    expect(b.y).toBeGreaterThanOrEqual(c.y - 0.5);
+    expect(b.y + b.height).toBeLessThanOrEqual(c.y + c.height + 0.5);
+    // The button keeps its accessible name in both variants.
+    await expect(btn).toHaveAccessibleName("Show in Library");
+  };
+  await assertRevealContained(); // default 210px panel — the reported clip
+  await page.evaluate(() => document.documentElement.style.setProperty("--lw", "420px"));
+  await assertRevealContained(); // widened panel — the full-text variant
+  await page.evaluate(() => document.documentElement.style.removeProperty("--lw"));
+
   // Opening a result uses its normal open behavior (worksheet -> activate).
   const wsRow = page.locator('tbody tr[data-ds-id]').first();
   await wsRow.dblclick();
