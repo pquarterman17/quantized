@@ -574,8 +574,14 @@ build, and focused interaction coverage where appropriate.
     2026-08-14 — L0.26 previously had no owning slice.)
 5. [ ] **PR E — tile-browser workspace (stacked sub-slices).** Implement the
    approved wide-surface behavior and interaction parity.
-   - [~] **E-a — shell + canonical browsing (ChatGPT-Sol, 2026-08-15):**
-     implemented on `sol/library-e-wide-shell`, pending PR/review. Tiles
+   - [x] ~~**E-a — shell + canonical browsing (ChatGPT-Sol, 2026-08-15)**~~ —
+     SHIPPED 2026-08-16 (PR #145, merge `b18471a`, owner-directed merge after
+     the Claude review + the owner-decision commit `c6df54a`). **Merged with
+     three review findings OPEN by owner choice** — now tracked follow-ups on
+     main for Sol's fix round (see change log 2026-08-16): focused-tile
+     Delete leak (P1 — the tile must own Delete like Tree/Details rows),
+     workspace Escape stealing the keystroke from the command palette /
+     context menus (P2), pending-worksheet tiles showing 0 × 0 (P2). Tiles
      replaces Stage only; the Tree remains mounted; the active plot is not
      mutated. Folder/workbook tiles browse their canonical children; child
      selection uses `selectLibraryNode`, double-click/Enter uses
@@ -1307,6 +1313,18 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-16 — Claude (Fable):** PR #145 (E-a) merged on the owner's
+  instruction (`b18471a`) with CI green on `c6df54a`. The owner chose to
+  merge with the three Claude-review findings still open; they are now LIVE
+  ON MAIN and are the first order of business for the E-a fix round (or
+  E-b's opening commits): **(1) P1** focused-tile Delete falls through to
+  the selection-based global fallback and deletes an unrelated dataset
+  (red-proven; recoverable via Trash/undo, which bounds the severity);
+  **(2) P2** the workspace's document-level Escape closes the workspace
+  under an open command palette or context menu; **(3) P2** pending
+  (on-demand) worksheet tiles render "0 rows × 0 columns". Repro shapes are
+  in the PR #145 review comment. The stage-target-open owner decision
+  shipped inside the same merge (`c6df54a`).
 - **2026-08-16 — Claude (Fable):** Owner decision recorded and implemented on
   `sol/library-e-wide-shell` (PR #145): stage-target opens from a tile return
   to the plot (see the E-a row). Implementation: `opensInStage` beside the
