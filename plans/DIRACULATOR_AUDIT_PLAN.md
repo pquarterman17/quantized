@@ -1,6 +1,6 @@
 # DiraCulator Calculator Audit Plan
 
-**Status:** Implemented; OPEN follow-ups tracked below — owner MATLAB freeze run, history input-snapshot capture, critical-thickness formula decision, Scherrer port  
+**Status:** MERGED (PR #143, merge `ebe06c3`, 2026-08-16); OPEN follow-ups tracked below — owner MATLAB freeze run, history input-snapshot capture, critical-thickness formula decision, Scherrer port  
 **Created:** 2026-08-15  
 **Updated:** 2026-08-15 — P2s, P1 provenance, P3 splits shipped; 93-case freeze campaign staged  
 **Repository:** `C:\Users\patri\git\quantized`  
@@ -310,4 +310,10 @@ line ceilings, dependency policy, and frontend conventions are checked together.
     staged scaffolding until the owner freeze, and the history
     input-snapshot remainder is an unchecked acceptance-gate item rather
     than a Completed-log footnote.
+- 2026-08-16 — **Merged** as PR #143 (`ebe06c3`) on the owner's instruction,
+  after review round 2 (Energy→λ helper provenance + doc reconciliation) was
+  verified-then-fixed and CI-green (run 918). The stacked PR #144 (D2)
+  merged immediately after (`565bf08`). The Open follow-ups section above
+  remains the live tracker — most immediately the owner MATLAB freeze run
+  that turns the 93 staged skips into real parity evidence.
 

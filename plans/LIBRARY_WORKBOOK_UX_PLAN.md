@@ -500,8 +500,8 @@ Library presentation without changing organization or duplicating objects.
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
 - [x] **L1.6 Search-results design:** confirmed flat Details-style results with
-  full breadcrumbs and **Show in Library** in L0.26. Implemented by PR D2
-  (2026-08-15, stacked branch pending owner review).
+  full breadcrumbs and **Show in Library** in L0.26. Shipped by PR D2
+  (2026-08-16, PR #144, merge `565bf08`).
 - [x] **L1.7 Heterogeneous-child design:** confirmed ordering, preview, open,
   source, and context-menu behavior in L0.16-L0.21 and L0.38-L0.40.
   Implementation remains open.
@@ -558,9 +558,9 @@ build, and focused interaction coverage where appropriate.
     vacuous because the global navigator wraps), and 1 real-browser @core
     Playwright journey (details-keyboard.spec.ts) proving the actual browser
     tab sequence jsdom cannot.
-4b. [x] ~~**PR D2 — project-wide search results surface.**~~ Implemented
-    2026-08-15 (branch `claude/library-d2-search`, stacked PR pending owner
-    review — NOT merged): the confirmed L0.26 behavior over the Details
+4b. [x] ~~**PR D2 — project-wide search results surface.**~~ Shipped
+    2026-08-16 (PR #144, merge `565bf08`; one ChatGPT-Sol review round —
+    Show-in-Library clipping — verified-then-fixed): the confirmed L0.26 behavior over the Details
     renderer — flat result list spanning EVERY hierarchy node kind with full
     `Folder / Workbook / Child` breadcrumbs, normal per-kind open, and a
     per-row **Show in Library** that clears the query and reveals the item
@@ -1068,9 +1068,9 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
-- **PR D2 — project-wide search results surface** (2026-08-15, branch
-  `claude/library-d2-search`, STACKED on the diraculator-audit branch per the
-  owner's instruction; PR open, deliberately unmerged) — search now spans the
+- ~~**PR D2 — project-wide search results surface**~~ (2026-08-16, PR #144,
+  merge `565bf08`; stacked on the diraculator-audit branch per the owner, both
+  merged in order on the owner's instruction) — search now spans the
   project (L0.26): `lib/librarySearch.ts` extends the smart-folder grammar to
   every hierarchy node kind (worksheets keep name/tag/format; other kinds are
   a name-only surface, so `tag:`/`format:` terms honestly exclude them), and
@@ -1089,7 +1089,15 @@ back to the owner. No Library implementation is authorized by this pause.
   wide matching), rewritten PR C sections-in-search test to the D2 contract,
   and a real-browser @core journey (library-search.spec.ts) at all three
   zoom scales. Gate: tsc clean, lint 0 errors, vitest 6,818, bundle 2.0 kB
-  under budget, Playwright 45/45.
+  under budget, Playwright 45/45. One Sol review round pre-merge
+  (verified-then-fixed, `af3dbac`): the Show-in-Library action clipped
+  outside its cell at the default 210px panel — root cause one layer deeper
+  than reported (table-layout:fixed sizes columns from the header row, and
+  the actions th carried no class, so the 1% td width never applied); fixed
+  with a real column width per container size + compact ⌖ glyph variant at
+  narrow widths (accessible name on the button), and a RED-PROVEN
+  real-browser containment assertion at 210px/420px panels across the zoom
+  matrix. Final gate: vitest 6,820, Playwright 45/45.
 
 - ~~**PR D — view preference and details renderer**~~ (2026-08-15, PR #140,
   merge `a8bb751`; ChatGPT-Sol implemented, Claude/Fable reviewed) — persisted
@@ -1249,6 +1257,11 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-16 — Claude (Fable):** PRs #143 (diraculator audit) and #144
+  (D2) merged in stack order on the owner's instruction (`ebe06c3`,
+  `565bf08`; #144's base retargeted to main after #143 landed). Both had one
+  ChatGPT-Sol review round each, verified-then-fixed and CI-green before the
+  merge. D2's plan rows updated from pending-review to shipped.
 - **2026-08-15 — Claude (Fable):** PR D2 implemented on
   `claude/library-d2-search`, stacked on the diraculator-audit branch per the
   owner ("stack it as a PR, we'll deal with the merge of both later") — PR
