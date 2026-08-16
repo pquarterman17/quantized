@@ -1,31 +1,30 @@
-// Calculators workshop — state hook. Two tools backed by golden calc helpers:
-// a unit converter (/api/reference/convert → calc.unit_convert, with dimensional,
-// temperature-offset, and photon-energy / H↔B bridges) and a physical-constants
-// reference (/api/reference/constants → calc.constants, CODATA). The unit
-// converter's category -> unit table (/api/reference/unit-categories) is
-// fetched once and drives both the from/to pickers and the photon/thermal
-// energy panel's 5-quantity readout. Pure orchestration.
+// Calculators workshop — the composing state hook. The four shared-state
+// domains each live in their own bounded hook (DIRACULATOR_AUDIT P3 split:
+// useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc — every setter
+// carries the P1 provenance contract); this file owns only the tab selector,
+// the constants fetch, the composition, and the cross-panel handoffs. The
+// facade is stable: consumers keep importing `useCalculators`,
+// `CalculatorsState`, and the domain metadata from THIS module.
 
 import { useEffect, useState } from "react";
 
-import {
-  convertUnits,
-  crystalCell,
-  crystalDSpacing,
-  getConstants,
-  sldFromFormula,
-  xrayCalc,
-} from "../../../lib/api";
-import type { SldFormulaResult } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { getUnitCategories } from "../../../lib/api/reference";
-import type { UnitCategoryDef } from "../../../lib/api/reference";
-import { useCalcHistory } from "../../../store/calcHistory";
+import { getConstants } from "../../../lib/api";
+import { useCrystalCalc, type CrystalCalcState } from "./useCrystalCalc";
+import { useSldCalc, type SldCalcState } from "./useSldCalc";
+import { useUnitsCalc, type UnitsCalcState } from "./useUnitsCalc";
+import { useXrayCalc, type XrayCalcState } from "./useXrayCalc";
 
-// Fallback used only until the categories fetch resolves (offline-safe
-// default matching the backend's "photon_energy" category, so the panel is
-// usable immediately rather than blank on first paint).
-const PHOTON_ENERGY_FALLBACK = ["eV", "nm", "cm^-1", "THz", "K"];
+// Facade re-exports — the domain metadata/type surface tabs have always
+// imported from "./useCalculators" (kept working across the P3 split).
+export { QUICK_PAIRS } from "./useUnitsCalc";
+export { ANODE_PRESETS, XRAY_MODES, type XrayResult } from "./useXrayCalc";
+export {
+  assembleCell,
+  CRYSTAL_SYSTEMS,
+  type CellAngle,
+  type CrystalForm,
+} from "./useCrystalCalc";
+export { NEUTRON_WAVELENGTHS, SLD_PRESETS, WAVELENGTHS, type SldForm } from "./useSldCalc";
 
 // Original shared-state tabs + self-contained domain tabs (each owns its own
 // hook; only the union member is needed here for the panel's tab selector).
@@ -51,226 +50,15 @@ export type CalcTab =
   | "thinfilm"
   | "magnetic";
 
-export type CellAngle = "alpha" | "beta" | "gamma";
-
-/** Crystal systems for the d-spacing calculator: the lattice lengths (beyond `a`)
- *  and the lattice angles each one needs shown in the form. (`a` is always shown;
- *  hexagonal fixes γ=120 implicitly, rhombohedral sets α=β=γ.) */
-export const CRYSTAL_SYSTEMS: {
-  value: string;
-  label: string;
-  lengths: ("b" | "c")[];
-  angles: CellAngle[];
-}[] = [
-  { value: "cubic", label: "Cubic", lengths: [], angles: [] },
-  { value: "tetragonal", label: "Tetragonal", lengths: ["c"], angles: [] },
-  { value: "hexagonal", label: "Hexagonal", lengths: ["c"], angles: [] },
-  { value: "rhombohedral", label: "Rhombohedral", lengths: [], angles: ["alpha"] },
-  { value: "orthorhombic", label: "Orthorhombic", lengths: ["b", "c"], angles: [] },
-  { value: "monoclinic", label: "Monoclinic", lengths: ["b", "c"], angles: ["beta"] },
-  { value: "triclinic", label: "Triclinic", lengths: ["b", "c"], angles: ["alpha", "beta", "gamma"] },
-];
-
-export interface CrystalForm {
-  system: string;
-  a: string;
-  b: string;
-  c: string;
-  alpha: string;
-  beta: string;
-  gamma: string;
-  h: string;
-  k: string;
-  l: string;
-  formula: string;
-  z: string;
-}
-
-/** Resolve the full cell (lengths + angles, numeric) from the form + the active
- *  system: unused lengths default to `a`; unused angles to 90; hexagonal fixes
- *  γ=120 and rhombohedral sets α=β=γ. Throws on a non-numeric field. */
-export function assembleCell(f: CrystalForm): {
-  a: number;
-  b: number;
-  c: number;
-  alpha: number;
-  beta: number;
-  gamma: number;
-} {
-  const spec = CRYSTAL_SYSTEMS.find((s) => s.value === f.system);
-  const num = (s: string, label: string): number => {
-    const v = Number(s);
-    if (!Number.isFinite(v)) throw new Error(`enter a numeric ${label}`);
-    return v;
-  };
-  const a = num(f.a, "a");
-  const b = spec?.lengths.includes("b") ? num(f.b, "b") : a;
-  const c = spec?.lengths.includes("c") ? num(f.c, "c") : a;
-  const alpha = spec?.angles.includes("alpha") ? num(f.alpha, "α") : 90;
-  let beta = spec?.angles.includes("beta") ? num(f.beta, "β") : 90;
-  let gamma = spec?.angles.includes("gamma") ? num(f.gamma, "γ") : 90;
-  if (f.system === "hexagonal") gamma = 120;
-  if (f.system === "rhombohedral") {
-    beta = alpha;
-    gamma = alpha;
-  }
-  return { a, b, c, alpha, beta, gamma };
-}
-
-/** Bragg / Q / energy scalar conversions: backend mode + the unit of the
- *  value it takes in. `needsWavelength: false` marks the energy<->wavelength
- *  standalone modes, where the wavelength field isn't part of the input. */
-export const XRAY_MODES: {
-  value: string;
-  label: string;
-  inUnit: string;
-  needsWavelength?: boolean;
-}[] = [
-  { value: "2theta_from_d", label: "d → 2θ", inUnit: "Å" },
-  { value: "d_from_2theta", label: "2θ → d", inUnit: "°" },
-  { value: "theta_from_d", label: "d → θ", inUnit: "Å" },
-  { value: "d_from_theta", label: "θ → d", inUnit: "°" },
-  { value: "q_from_2theta", label: "2θ → Q", inUnit: "°" },
-  { value: "2theta_from_q", label: "Q → 2θ", inUnit: "1/Å" },
-  { value: "q_from_d", label: "d → Q", inUnit: "Å" },
-  { value: "d_from_q", label: "Q → d", inUnit: "1/Å" },
-  { value: "energy_from_wavelength", label: "λ → E", inUnit: "Å", needsWavelength: false },
-  { value: "wavelength_from_energy", label: "E → λ", inUnit: "keV", needsWavelength: false },
-];
-
-/** Common characteristic X-ray wavelengths (Å) as one-click presets (rounded
- *  — SLD tab quick-picks, where sub-mÅ precision doesn't matter). */
-export const WAVELENGTHS: { label: string; a: number }[] = [
-  { label: "Cu Kα", a: 1.5406 },
-  { label: "Mo Kα", a: 0.7107 },
-  { label: "Co Kα", a: 1.789 },
-  { label: "Cr Kα", a: 2.2897 },
-];
-
-/** Precise characteristic-line wavelengths (Å) for the Bragg/Q converter's
- *  anode presets. More precise than `WAVELENGTHS` above — textbook 2θ
- *  comparisons want the resolved Kα1 line (or the Kα1/Kα2-weighted average
- *  for "Cu Kα"), not a rounded quick-pick. */
-export const ANODE_PRESETS: { label: string; a: number }[] = [
-  { label: "Cu Kα1", a: 1.540598 },
-  { label: "Cu Kα", a: 1.5418 },
-  { label: "Co Kα1", a: 1.788996 },
-  { label: "Mo Kα1", a: 0.7093187 },
-  { label: "Cr Kα1", a: 2.289726 },
-  { label: "Fe Kα1", a: 1.936041 },
-  { label: "Ag Kα1", a: 0.5594075 },
-];
-
-export interface XrayResult {
-  result: number;
-  unit: string;
-  description: string;
-}
-
-/** Common neutron wavelengths (Å): thermal (2200 m/s) + a couple of cold lines. */
-export const NEUTRON_WAVELENGTHS: { label: string; a: number }[] = [
-  { label: "Thermal", a: 1.798 },
-  { label: "4.75 Å", a: 4.75 },
-  { label: "5 Å", a: 5.0 },
-  { label: "6 Å", a: 6.0 },
-];
-
-/** One-click material presets for the SLD calculator (formula + mass density). */
-export const SLD_PRESETS: { label: string; formula: string; density: number }[] = [
-  { label: "Si", formula: "Si", density: 2.33 },
-  { label: "SiO₂", formula: "SiO2", density: 2.65 },
-  { label: "Al₂O₃", formula: "Al2O3", density: 3.95 },
-  { label: "Fe", formula: "Fe", density: 7.87 },
-  { label: "H₂O", formula: "H2O", density: 1.0 },
-  { label: "D₂O", formula: "D2O", density: 1.11 },
-];
-
-export interface SldForm {
-  formula: string;
-  density: string;
-  neutronWavelength: string;
-  xrayWavelength: string;
-}
-
-/** Common conversions offered as one-click chips (all supported by the backend).
- *  `category` switches the active category so the from/to pickers land on
- *  units that are actually offered together. */
-export const QUICK_PAIRS: { label: string; from: string; to: string; category: string }[] = [
-  { label: "Oe → T", from: "Oe", to: "T", category: "magnetic_field" },
-  { label: "T → G", from: "T", to: "G", category: "magnetic_field" },
-  { label: "eV → nm", from: "eV", to: "nm", category: "photon_energy" },
-  { label: "eV → THz", from: "eV", to: "THz", category: "photon_energy" },
-  { label: "K → C", from: "K", to: "C", category: "temperature" },
-  { label: "J → eV", from: "J", to: "eV", category: "energy" },
-  { label: "GPa → bar", from: "GPa", to: "bar", category: "pressure" },
-  { label: "Ang → nm", from: "Ang", to: "nm", category: "length" },
-];
-
-export interface CalculatorsState {
+export interface CalculatorsState
+  extends UnitsCalcState,
+    XrayCalcState,
+    CrystalCalcState,
+    SldCalcState {
   tab: CalcTab;
   setTab: (t: CalcTab) => void;
-  // Unit converter
-  value: string;
-  from: string;
-  to: string;
-  result: number | null;
-  description: string | null;
-  error: string | null;
-  busy: boolean;
-  setValue: (v: string) => void;
-  setFrom: (v: string) => void;
-  setTo: (v: string) => void;
-  setPair: (from: string, to: string, category?: string) => void;
-  convert: () => Promise<void>;
-  // Unit converter — category picker (drives the from/to Select options)
-  unitCategories: UnitCategoryDef[] | null;
-  category: string;
-  setCategory: (id: string) => void;
-  swapUnits: () => void;
-  // Unit converter — photon/thermal energy panel (all 5 quantities at once)
-  peValue: string;
-  peFrom: string;
-  peResults: Record<string, number> | null;
-  peError: string | null;
-  peBusy: boolean;
-  setPeValue: (v: string) => void;
-  setPeFrom: (u: string) => void;
-  peCompute: () => Promise<void>;
   // Constants
   constants: Record<string, number> | null;
-  // X-ray / neutron (Bragg, Q↔2θ, energy↔wavelength)
-  xrayMode: string;
-  wavelength: string;
-  xrayValue: string;
-  xrayOrder: string;
-  xrayResult: XrayResult | null;
-  xrayError: string | null;
-  xrayBusy: boolean;
-  setXrayMode: (m: string) => void;
-  setWavelength: (v: string) => void;
-  setXrayValue: (v: string) => void;
-  setXrayOrder: (v: string) => void;
-  xrayCompute: () => Promise<void>;
-  // Crystallography (d-spacing from lattice + Miller indices)
-  crystal: CrystalForm;
-  crResult: { d: number; system: string } | null;
-  crError: string | null;
-  crBusy: boolean;
-  updCrystal: (patch: Partial<CrystalForm>) => void;
-  crCompute: () => Promise<void>;
-  // Cell volume + theoretical density (same lattice; optional formula + Z)
-  cellResult: { volume: number; molar_mass?: number; density?: number } | null;
-  cellError: string | null;
-  cellBusy: boolean;
-  cellCompute: () => Promise<void>;
-  // SLD from formula (neutron + X-ray, real + imaginary/absorption)
-  sld: SldForm;
-  sldResult: SldFormulaResult | null;
-  sldError: string | null;
-  sldBusy: boolean;
-  updSld: (patch: Partial<SldForm>) => void;
-  setSldPreset: (formula: string, density: number) => void;
-  sldCompute: () => Promise<void>;
   // Cross-panel hooks — hand a computed value to a related shared-state tab.
   sendDToXray: () => void; // Crystal d-spacing → X-ray tab (d → 2θ → Q)
   sendFormulaToCrystal: () => void; // SLD formula → Crystal cell-volume/density (molar mass)
@@ -279,50 +67,12 @@ export interface CalculatorsState {
 
 export function useCalculators(): CalculatorsState {
   const [tab, setTab] = useState<CalcTab>("units");
-  const [value, setValue] = useState("1");
-  const [from, setFrom] = useState("Oe");
-  const [to, setTo] = useState("T");
-  const [result, setResult] = useState<number | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [constants, setConstants] = useState<Record<string, number> | null>(null);
-  const [xrayMode, setXrayMode] = useState("2theta_from_d");
-  const [wavelength, setWavelength] = useState("1.5406"); // Cu Kα
-  const [xrayValue, setXrayValue] = useState("3.1356"); // Si(111) d
-  const [xrayOrder, setXrayOrder] = useState("1"); // diffraction order n
-  const [xrayResult, setXrayResult] = useState<XrayResult | null>(null);
-  const [xrayError, setXrayError] = useState<string | null>(null);
-  const [xrayBusy, setXrayBusy] = useState(false);
-  const [crystal, setCrystal] = useState<CrystalForm>({
-    system: "cubic", a: "5.4309", b: "5.4309", c: "5.4309",
-    alpha: "90", beta: "90", gamma: "90", h: "1", k: "1", l: "1",
-    formula: "Si", z: "8",
-  });
-  const [crResult, setCrResult] = useState<{ d: number; system: string } | null>(null);
-  const [crError, setCrError] = useState<string | null>(null);
-  const [crBusy, setCrBusy] = useState(false);
-  const [cellResult, setCellResult] = useState<
-    { volume: number; molar_mass?: number; density?: number } | null
-  >(null);
-  const [cellError, setCellError] = useState<string | null>(null);
-  const [cellBusy, setCellBusy] = useState(false);
-  const [sld, setSld] = useState<SldForm>({
-    formula: "Si",
-    density: "2.33",
-    neutronWavelength: "1.798",
-    xrayWavelength: "1.5406", // Cu Kα (matches the X-ray-tab presets)
-  });
-  const [sldResult, setSldResult] = useState<SldFormulaResult | null>(null);
-  const [sldError, setSldError] = useState<string | null>(null);
-  const [sldBusy, setSldBusy] = useState(false);
-  const [unitCategories, setUnitCategories] = useState<UnitCategoryDef[] | null>(null);
-  const [category, setCategoryState] = useState("magnetic_field"); // matches from="Oe"/to="T"
-  const [peValue, setPeValue] = useState("1");
-  const [peFrom, setPeFrom] = useState("eV");
-  const [peResults, setPeResults] = useState<Record<string, number> | null>(null);
-  const [peError, setPeError] = useState<string | null>(null);
-  const [peBusy, setPeBusy] = useState(false);
+
+  const units = useUnitsCalc();
+  const xray = useXrayCalc();
+  const crystal = useCrystalCalc();
+  const sldCalc = useSldCalc();
 
   useEffect(() => {
     let cancelled = false;
@@ -338,341 +88,50 @@ export function useCalculators(): CalculatorsState {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    getUnitCategories()
-      .then((r) => {
-        if (!cancelled) setUnitCategories(r.categories);
-      })
-      .catch(() => {
-        /* offline — from/to Selects fall back to free-text-less empty lists */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const setPair = (f: string, t: string, cat?: string): void => {
-    setFrom(f);
-    setTo(t);
-    if (cat) setCategoryState(cat);
-    setResult(null);
-    setDescription(null);
-    setError(null);
-  };
-
-  const setCategory = (id: string): void => {
-    setCategoryState(id);
-    const units = unitCategories?.find((c) => c.id === id)?.units;
-    if (units && units.length > 0) {
-      setFrom(units[0].value);
-      setTo(units[1]?.value ?? units[0].value);
-    }
-    setResult(null);
-    setDescription(null);
-    setError(null);
-  };
-
-  const swapUnits = (): void => {
-    setFrom(to);
-    setTo(from);
-    setResult(null);
-    setDescription(null);
-    setError(null);
-  };
-
-  async function convert(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      const v = Number(value);
-      if (!Number.isFinite(v)) throw new Error("enter a numeric value");
-      const res = await convertUnits(v, from, to);
-      const out = typeof res.result === "number" ? res.result : null;
-      setResult(out);
-      setDescription(typeof res.info?.description === "string" ? res.info.description : null);
-      if (out != null) {
-        useCalcHistory.getState().record({
-          domain: "Units",
-          label: "Unit conversion",
-          summary: `${value} ${from} = ${fmtNum(out)} ${to}`,
-        });
-      }
-    } catch (e) {
-      setResult(null);
-      setError(e instanceof Error ? e.message : "conversion failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Photon/thermal energy: show all 5 interchangeable quantities (eV, nm,
-  // cm^-1, THz, K) for one entered value at once, rather than one from/to
-  // pair at a time — every non-`peFrom` unit is converted independently
-  // (the backend routes each through a common energy hub, so this works
-  // regardless of which quantity was entered).
-  async function peCompute(): Promise<void> {
-    setPeBusy(true);
-    setPeError(null);
-    try {
-      const v = Number(peValue);
-      if (!Number.isFinite(v)) throw new Error("enter a numeric value");
-      const photonUnits =
-        unitCategories?.find((c) => c.id === "photon_energy")?.units.map((u) => u.value) ??
-        PHOTON_ENERGY_FALLBACK;
-      const targets = photonUnits.filter((u) => u !== peFrom);
-      const responses = await Promise.all(targets.map((u) => convertUnits(v, peFrom, u)));
-      const out: Record<string, number> = { [peFrom]: v };
-      targets.forEach((u, i) => {
-        const r = responses[i].result;
-        if (typeof r === "number") out[u] = r;
-      });
-      setPeResults(out);
-      useCalcHistory.getState().record({
-        domain: "Units",
-        label: "Photon/thermal energy",
-        summary: Object.entries(out)
-          .map(([u, val]) => `${u}=${fmtNum(val)}`)
-          .join(" · "),
-      });
-    } catch (e) {
-      setPeResults(null);
-      setPeError(e instanceof Error ? e.message : "conversion failed");
-    } finally {
-      setPeBusy(false);
-    }
-  }
-
-  async function xrayCompute(): Promise<void> {
-    setXrayBusy(true);
-    setXrayError(null);
-    try {
-      const w = Number(wavelength);
-      const v = Number(xrayValue);
-      const n = Number(xrayOrder);
-      if (!Number.isFinite(w) || !Number.isFinite(v)) {
-        throw new Error("enter numeric wavelength and value");
-      }
-      if (!Number.isInteger(n) || n < 1) {
-        throw new Error("order n must be a positive integer");
-      }
-      const r = await xrayCalc(xrayMode, w, v, n);
-      setXrayResult(r);
-      useCalcHistory.getState().record({
-        domain: "Xray",
-        label: XRAY_MODES.find((m) => m.value === xrayMode)?.label ?? xrayMode,
-        summary: `${fmtNum(r.result)} ${r.unit}`,
-      });
-    } catch (e) {
-      setXrayResult(null);
-      setXrayError(e instanceof Error ? e.message : "calculation failed");
-    } finally {
-      setXrayBusy(false);
-    }
-  }
-
-  const updCrystal = (patch: Partial<CrystalForm>): void =>
-    setCrystal((s) => ({ ...s, ...patch }));
-
-  async function crCompute(): Promise<void> {
-    setCrBusy(true);
-    setCrError(null);
-    try {
-      const cell = assembleCell(crystal);
-      const h = Number(crystal.h);
-      const k = Number(crystal.k);
-      const l = Number(crystal.l);
-      if ([h, k, l].some((v) => !Number.isFinite(v))) {
-        throw new Error("enter numeric Miller indices");
-      }
-      // Hexagonal also carries the derived 4-index Miller-Bravais i = -(h+k)
-      // (backend re-validates it); every other system omits it.
-      const i = crystal.system === "hexagonal" ? -(h + k) : undefined;
-      const r = await crystalDSpacing({
-        system: crystal.system,
-        ...cell,
-        h,
-        k,
-        l,
-        ...(i !== undefined ? { i } : {}),
-      });
-      setCrResult(r);
-      useCalcHistory.getState().record({
-        domain: "Crystal",
-        label: "d-spacing",
-        summary: `d = ${fmtNum(r.d)} Å (${r.system}, hkl=${h} ${k} ${l})`,
-      });
-    } catch (e) {
-      setCrResult(null);
-      setCrError(e instanceof Error ? e.message : "calculation failed");
-    } finally {
-      setCrBusy(false);
-    }
-  }
-
-  async function cellCompute(): Promise<void> {
-    setCellBusy(true);
-    setCellError(null);
-    try {
-      const cell = assembleCell(crystal);
-      const formula = crystal.formula.trim();
-      const z = Number(crystal.z);
-      if (formula && !(Number.isFinite(z) && z >= 1)) {
-        throw new Error("Z must be an integer ≥ 1");
-      }
-      const r = await crystalCell({ ...cell, ...(formula ? { formula, z } : {}) });
-      setCellResult(r);
-      useCalcHistory.getState().record({
-        domain: "Crystal",
-        label: "Cell volume & density",
-        summary:
-          `V = ${fmtNum(r.volume)} Å³` +
-          (r.density != null ? ` · ρ = ${fmtNum(r.density)} g/cm³` : ""),
-      });
-    } catch (e) {
-      setCellResult(null);
-      setCellError(e instanceof Error ? e.message : "calculation failed");
-    } finally {
-      setCellBusy(false);
-    }
-  }
-
-  const updSld = (patch: Partial<SldForm>): void => setSld((s) => ({ ...s, ...patch }));
-
-  const setSldPreset = (formula: string, density: number): void => {
-    setSld((s) => ({ ...s, formula, density: String(density) }));
-    setSldResult(null);
-    setSldError(null);
-  };
-
   // ── Cross-panel hooks ──────────────────────────────────────────────────────
+  // The target-domain setters already invalidate their panel's shown result
+  // (the P1 provenance contract), so a handoff never leaves a stale display.
+
   // Crystal d-spacing → X-ray tab: seed the d→2θ conversion with the computed d
-  // (then 2θ→Q is one more click). No-op until a d has been computed.
+  // (then 2θ→Q is one more click). No-op until a d has been computed. Lossless:
+  // String(d), never the fmtNum display text.
   const sendDToXray = (): void => {
-    if (!crResult) return;
-    setXrayValue(String(crResult.d));
-    setXrayMode("2theta_from_d");
-    setXrayOrder("1");
-    setXrayResult(null);
-    setXrayError(null);
+    if (!crystal.crResult) return;
+    xray.setXrayValue(String(crystal.crResult.d));
+    xray.setXrayMode("2theta_from_d");
+    xray.setXrayOrder("1");
     setTab("xray");
   };
 
   // SLD formula → Crystal tab: the same material's molar mass feeds the
   // cell-volume/theoretical-density calc (molar-mass → cell-vol).
   const sendFormulaToCrystal = (): void => {
-    const formula = sld.formula.trim();
+    const formula = sldCalc.sld.formula.trim();
     if (!formula) return;
-    setCrystal((s) => ({ ...s, formula }));
-    setCellResult(null);
-    setCellError(null);
+    crystal.updCrystal({ formula });
     setTab("crystal");
   };
 
   // Crystal formula + theoretical density → SLD tab: use the crystallographic
-  // density in the SLD calc instead of a literature value.
+  // density in the SLD calc instead of a literature value. Lossless handoff.
   const sendCellToSld = (): void => {
-    if (!cellResult || cellResult.density == null) return;
-    const formula = crystal.formula.trim();
-    setSld((s) => ({
-      ...s,
-      formula: formula || s.formula,
-      density: String(cellResult.density),
-    }));
-    setSldResult(null);
-    setSldError(null);
+    if (!crystal.cellResult || crystal.cellResult.density == null) return;
+    const formula = crystal.crystal.formula.trim();
+    sldCalc.updSld({
+      ...(formula ? { formula } : {}),
+      density: String(crystal.cellResult.density),
+    });
     setTab("sld");
   };
 
-  async function sldCompute(): Promise<void> {
-    setSldBusy(true);
-    setSldError(null);
-    try {
-      const density = Number(sld.density);
-      const nw = Number(sld.neutronWavelength);
-      const xw = Number(sld.xrayWavelength);
-      if (!sld.formula.trim()) throw new Error("enter a chemical formula");
-      if (!(density > 0)) throw new Error("enter a positive density");
-      if (!(nw > 0 && xw > 0)) throw new Error("enter positive wavelengths");
-      const r = await sldFromFormula({
-        formula: sld.formula.trim(),
-        density,
-        neutron_wavelength: nw,
-        xray_wavelength: xw,
-      });
-      setSldResult(r);
-      useCalcHistory.getState().record({
-        domain: "Sld",
-        label: "SLD from formula",
-        summary:
-          `${r.formula}: SLD_n = ${fmtNum(r.neutron.sld_real)}, ` +
-          `SLD_x = ${fmtNum(r.xray.sld_real)} ×10⁻⁶ Å⁻²`,
-      });
-    } catch (e) {
-      setSldResult(null);
-      setSldError(e instanceof Error ? e.message : "calculation failed");
-    } finally {
-      setSldBusy(false);
-    }
-  }
-
   return {
+    ...units,
+    ...xray,
+    ...crystal,
+    ...sldCalc,
     tab,
     setTab,
-    value,
-    from,
-    to,
-    result,
-    description,
-    error,
-    busy,
-    setValue,
-    setFrom,
-    setTo,
-    setPair,
-    convert,
-    unitCategories,
-    category,
-    setCategory,
-    swapUnits,
-    peValue,
-    peFrom,
-    peResults,
-    peError,
-    peBusy,
-    setPeValue,
-    setPeFrom,
-    peCompute,
     constants,
-    xrayMode,
-    wavelength,
-    xrayValue,
-    xrayOrder,
-    xrayResult,
-    xrayError,
-    xrayBusy,
-    setXrayMode,
-    setWavelength,
-    setXrayValue,
-    setXrayOrder,
-    xrayCompute,
-    crystal,
-    crResult,
-    crError,
-    crBusy,
-    updCrystal,
-    crCompute,
-    cellResult,
-    cellError,
-    cellBusy,
-    cellCompute,
-    sld,
-    sldResult,
-    sldError,
-    sldBusy,
-    updSld,
-    setSldPreset,
-    sldCompute,
     sendDToXray,
     sendFormulaToCrystal,
     sendCellToSld,

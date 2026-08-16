@@ -67,4 +67,17 @@ describe("OpticsTab", () => {
     fireEvent.click(screen.getAllByText("Calculate")[3]);
     expect(await screen.findByText("rho must be positive")).toBeInTheDocument();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(opticsFresnel).mockResolvedValue({ Rs: 0.0922, Rp: 0.0085, Ts: 0.9078, Tp: 0.9915 });
+    render(<OpticsTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+    const line = await screen.findByText(/Rs = .* · Rp = .*/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "n₁" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("n₁")[0], { target: { value: "1.2" } });
+    expect(screen.queryByText(/Rs = .* · Rp = .*/)).not.toBeInTheDocument();
+  });
 });

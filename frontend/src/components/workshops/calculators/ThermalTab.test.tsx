@@ -61,4 +61,22 @@ describe("ThermalTab", () => {
     fireEvent.click(screen.getAllByText("=")[0]);
     expect(await screen.findByText("temperature must be positive")).toBeInTheDocument();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(thermalWiedemannFranz).mockResolvedValue({
+      kappa: 439.2,
+      sigma: 6e5,
+      temperature: 300,
+      lorenz: 2.44e-8,
+    });
+    render(<ThermalTab />);
+
+    fireEvent.click(screen.getAllByText("=")[0]);
+    const line = await screen.findByText(/κ = .* W\/\(m·K\)/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "σ" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getByLabelText("σ"), { target: { value: "7e5" } });
+    expect(screen.queryByText(/κ = .* W\/\(m·K\)/)).not.toBeInTheDocument();
+  });
 });

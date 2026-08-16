@@ -20,13 +20,11 @@ import {
   Field,
   ROW,
   fmtNum,
-  makeCardRunner,
   parseXYPairs,
   resultLine,
-  type CardResult,
+  useCard,
+  withTouch,
 } from "./shared";
-
-const run = makeCardRunner("Electrical");
 
 const NM_TO_CM = 1e-7;
 
@@ -35,51 +33,57 @@ export default function ElectricalTab() {
   const [rs, setRs] = useState("100");
   const [thick, setThick] = useState("10");
   const [rho1, setRho1] = useState("1e-4");
-  const [c1, setC1] = useState<CardResult>(null);
+  const c1 = useCard("Electrical");
 
   // Card 2 — conductivity.
   const [rho2, setRho2] = useState("1e-4");
-  const [c2, setC2] = useState<CardResult>(null);
+  const c2 = useCard("Electrical");
 
   // Card 3 — mobility.
   const [rho3, setRho3] = useState("1e-2");
   const [n3, setN3] = useState("1e17");
-  const [c3, setC3] = useState<CardResult>(null);
+  const c3 = useCard("Electrical");
 
   // Card 4 — current density.
   const [cur, setCur] = useState("1e-3");
   const [area, setArea] = useState("1");
-  const [c4, setC4] = useState<CardResult>(null);
+  const c4 = useCard("Electrical");
 
   // Card 5 — Hall effect (t in nm).
   const [vH, setVH] = useState("1e-3");
   const [hallI, setHallI] = useState("1e-3");
   const [hallB, setHallB] = useState("1");
   const [hallT, setHallT] = useState("100");
-  const [c5, setC5] = useState<CardResult>(null);
+  const c5 = useCard("Electrical");
 
   // Card 6 — Hall sweep (paste H, R_xy), t in nm, optional sigma for mobility.
   const [hsText, setHsText] = useState("");
   const [hsT, setHsT] = useState("100");
   const [hsSigma, setHsSigma] = useState("");
-  const [c6, setC6] = useState<CardResult>(null);
+  const c6 = useCard("Electrical");
 
   // Card 7 — van der Pauw (Ra, Rb; optional thickness in nm).
   const [vdpRa, setVdpRa] = useState("1.0");
   const [vdpRb, setVdpRb] = useState("1.0");
   const [vdpT, setVdpT] = useState("");
-  const [c7, setC7] = useState<CardResult>(null);
+  const c7 = useCard("Electrical");
 
   return (
     <div style={{ marginTop: 12 }}>
       <Card title="Resistivity / Sheet resistance">
         <div style={ROW}>
-          <Field label="Rs" value={rs} onChange={setRs} unit="Ω/sq" />
-          <Field label="t" value={thick} onChange={setThick} unit="nm" ariaLabel="Rs/rho thickness" />
+          <Field label="Rs" value={rs} onChange={withTouch(c1.touch, setRs)} unit="Ω/sq" />
+          <Field
+            label="t"
+            value={thick}
+            onChange={withTouch(c1.touch, setThick)}
+            unit="nm"
+            ariaLabel="Rs/rho thickness"
+          />
           <Button
             size="sm"
             onClick={() =>
-              void run(setC1, "Resistivity / Sheet resistance", async () => {
+              void c1.run("Resistivity / Sheet resistance", async () => {
                 const r = await electricalResistivity(Number(rs), Number(thick) * NM_TO_CM);
                 return `ρ = ${fmtNum(r.rho)} Ω·cm`;
               })
@@ -89,11 +93,11 @@ export default function ElectricalTab() {
           </Button>
         </div>
         <div style={{ ...ROW, marginTop: 8 }}>
-          <Field label="ρ" value={rho1} onChange={setRho1} unit="Ω·cm" />
+          <Field label="ρ" value={rho1} onChange={withTouch(c1.touch, setRho1)} unit="Ω·cm" />
           <Button
             size="sm"
             onClick={() =>
-              void run(setC1, "Resistivity / Sheet resistance", async () => {
+              void c1.run("Resistivity / Sheet resistance", async () => {
                 const r = await electricalSheetResistance(Number(rho1), Number(thick) * NM_TO_CM);
                 return `Rs = ${fmtNum(r.Rs)} Ω/sq`;
               })
@@ -102,17 +106,17 @@ export default function ElectricalTab() {
             ρ → Rs
           </Button>
         </div>
-        {resultLine(c1)}
+        {resultLine(c1.result)}
       </Card>
 
       <Card title="Conductivity">
         <div style={ROW}>
-          <Field label="ρ" value={rho2} onChange={setRho2} unit="Ω·cm" />
+          <Field label="ρ" value={rho2} onChange={withTouch(c2.touch, setRho2)} unit="Ω·cm" />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, "Conductivity", async () => {
+              void c2.run("Conductivity", async () => {
                 const r = await electricalConductivity(Number(rho2));
                 return `σ = ${fmtNum(r.sigma)} S/cm`;
               })
@@ -121,18 +125,18 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {resultLine(c2)}
+        {resultLine(c2.result)}
       </Card>
 
       <Card title="Mobility">
         <div style={ROW}>
-          <Field label="ρ" value={rho3} onChange={setRho3} unit="Ω·cm" />
-          <Field label="n" value={n3} onChange={setN3} unit="cm⁻³" />
+          <Field label="ρ" value={rho3} onChange={withTouch(c3.touch, setRho3)} unit="Ω·cm" />
+          <Field label="n" value={n3} onChange={withTouch(c3.touch, setN3)} unit="cm⁻³" />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, "Mobility", async () => {
+              void c3.run("Mobility", async () => {
                 const r = await electricalMobility(Number(rho3), Number(n3));
                 return `μ = ${fmtNum(r.mu)} cm²/(V·s)`;
               })
@@ -141,18 +145,18 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {resultLine(c3)}
+        {resultLine(c3.result)}
       </Card>
 
       <Card title="Current density">
         <div style={ROW}>
-          <Field label="I" value={cur} onChange={setCur} unit="A" />
-          <Field label="A" value={area} onChange={setArea} unit="cm²" />
+          <Field label="I" value={cur} onChange={withTouch(c4.touch, setCur)} unit="A" />
+          <Field label="A" value={area} onChange={withTouch(c4.touch, setArea)} unit="cm²" />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, "Current density", async () => {
+              void c4.run("Current density", async () => {
                 const r = await electricalCurrentDensity(Number(cur), Number(area));
                 return `J = ${fmtNum(r.J)} A/cm²`;
               })
@@ -161,20 +165,20 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {resultLine(c4)}
+        {resultLine(c4.result)}
       </Card>
 
       <Card title="Hall effect">
         <div style={ROW}>
-          <Field label="V_H" value={vH} onChange={setVH} unit="V" width={72} />
-          <Field label="I" value={hallI} onChange={setHallI} unit="A" width={72} />
+          <Field label="V_H" value={vH} onChange={withTouch(c5.touch, setVH)} unit="V" width={72} />
+          <Field label="I" value={hallI} onChange={withTouch(c5.touch, setHallI)} unit="A" width={72} />
         </div>
         <div style={{ ...ROW, marginTop: 8 }}>
-          <Field label="B" value={hallB} onChange={setHallB} unit="T" width={72} />
+          <Field label="B" value={hallB} onChange={withTouch(c5.touch, setHallB)} unit="T" width={72} />
           <Field
             label="t"
             value={hallT}
-            onChange={setHallT}
+            onChange={withTouch(c5.touch, setHallT)}
             unit="nm"
             width={72}
             ariaLabel="Hall effect thickness"
@@ -183,7 +187,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, "Hall effect", async () => {
+              void c5.run("Hall effect", async () => {
                 const r = await electricalHall(
                   Number(vH),
                   Number(hallI),
@@ -199,7 +203,7 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {resultLine(c5)}
+        {resultLine(c5.result)}
       </Card>
 
       <Card title="Hall sweep (paste H, R_xy)">
@@ -211,7 +215,10 @@ export default function ElectricalTab() {
           className="qz-input"
           style={{ width: "100%", minHeight: 80, fontFamily: "var(--font-mono)" }}
           value={hsText}
-          onChange={(e) => setHsText(e.target.value)}
+          onChange={(e) => {
+            setHsText(e.target.value);
+            c6.touch();
+          }}
           placeholder={"-1, -0.002\n0, 0.0005\n1, 0.0025\n..."}
           aria-label="Hall sweep H, R_xy data"
         />
@@ -219,7 +226,7 @@ export default function ElectricalTab() {
           <Field
             label="t"
             value={hsT}
-            onChange={setHsT}
+            onChange={withTouch(c6.touch, setHsT)}
             unit="nm (opt)"
             width={72}
             ariaLabel="Hall sweep thickness"
@@ -227,7 +234,7 @@ export default function ElectricalTab() {
           <Field
             label="σ"
             value={hsSigma}
-            onChange={setHsSigma}
+            onChange={withTouch(c6.touch, setHsSigma)}
             unit="S/cm (opt)"
             width={80}
             ariaLabel="Hall sweep sigma"
@@ -236,7 +243,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC6, "Hall sweep", async () => {
+              void c6.run("Hall sweep", async () => {
                 const { x: field, y: hallResistance } = parseXYPairs(hsText);
                 if (field.length < 2) throw new Error("paste at least 2 valid H, R_xy rows");
                 const t = hsT.trim() === "" ? undefined : Number(hsT) * NM_TO_CM;
@@ -258,17 +265,17 @@ export default function ElectricalTab() {
             Fit
           </Button>
         </div>
-        {resultLine(c6)}
+        {resultLine(c6.result)}
       </Card>
 
       <Card title="Van der Pauw">
         <div style={ROW}>
-          <Field label="Ra" value={vdpRa} onChange={setVdpRa} unit="Ω" width={64} />
-          <Field label="Rb" value={vdpRb} onChange={setVdpRb} unit="Ω" width={64} />
+          <Field label="Ra" value={vdpRa} onChange={withTouch(c7.touch, setVdpRa)} unit="Ω" width={64} />
+          <Field label="Rb" value={vdpRb} onChange={withTouch(c7.touch, setVdpRb)} unit="Ω" width={64} />
           <Field
             label="t"
             value={vdpT}
-            onChange={setVdpT}
+            onChange={withTouch(c7.touch, setVdpT)}
             unit="nm (opt)"
             width={72}
             ariaLabel="Van der Pauw thickness"
@@ -277,7 +284,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC7, "Van der Pauw", async () => {
+              void c7.run("Van der Pauw", async () => {
                 const t = vdpT.trim() === "" ? undefined : Number(vdpT) * NM_TO_CM;
                 const r = await electricalVanDerPauw(Number(vdpRa), Number(vdpRb), t);
                 let s = `Rs = ${fmtNum(r.Rs)} Ω/sq`;
@@ -289,7 +296,7 @@ export default function ElectricalTab() {
             Calculate
           </Button>
         </div>
-        {resultLine(c7)}
+        {resultLine(c7.result)}
       </Card>
     </div>
   );

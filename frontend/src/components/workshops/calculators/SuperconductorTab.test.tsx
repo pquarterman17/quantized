@@ -104,4 +104,24 @@ describe("SuperconductorTab", () => {
     fireEvent.click(screen.getAllByText("Calculate")[2]);
     expect(await screen.findByText(/must be below Tc/)).toBeInTheDocument();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(scBcsGap).mockResolvedValue({
+      delta0: 1.406,
+      ratio: 3.528,
+      deltaT: 1.36,
+      Tc: 9.25,
+      T: 4.2,
+    });
+    render(<SuperconductorTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+    const line = await screen.findByText(/Δ₀ = .* meV/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "T_c" field (the label repeats on other cards) —
+    // the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("T_c")[0], { target: { value: "10" } });
+    expect(screen.queryByText(/Δ₀ = .* meV/)).not.toBeInTheDocument();
+  });
 });

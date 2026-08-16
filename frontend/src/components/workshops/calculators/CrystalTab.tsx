@@ -9,10 +9,8 @@ import { useState } from "react";
 import { Button, NumberField, SegmentedControl, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
-import { Card, CopyButton, ROW, makeCardRunner, resultLine, type CardResult } from "./shared";
+import { Card, CopyButton, ROW, resultLine, useCard, withTouch } from "./shared";
 import { assembleCell, CRYSTAL_SYSTEMS, type CalculatorsState, type CellAngle } from "./useCalculators";
-
-const runAngle = makeCardRunner("Crystal");
 
 const ANGLE_GLYPH: Record<CellAngle, string> = { alpha: "α", beta: "β", gamma: "γ" };
 
@@ -36,7 +34,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const [ah2, setAh2] = useState("1");
   const [ak2, setAk2] = useState("1");
   const [al2, setAl2] = useState("0");
-  const [angleResult, setAngleResult] = useState<CardResult>(null);
+  const angleCard = useCard("Crystal");
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
   const kNum = Number(c.crystal.k);
@@ -231,20 +229,20 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
           <span className="qzk-field-lbl" style={{ margin: 0 }}>
             hkl₁
           </span>
-          <NumberField value={ah1} width={40} onChange={setAh1} aria-label="h1" />
-          <NumberField value={ak1} width={40} onChange={setAk1} aria-label="k1" />
-          <NumberField value={al1} width={40} onChange={setAl1} aria-label="l1" />
+          <NumberField value={ah1} width={40} onChange={withTouch(angleCard.touch, setAh1)} aria-label="h1" />
+          <NumberField value={ak1} width={40} onChange={withTouch(angleCard.touch, setAk1)} aria-label="k1" />
+          <NumberField value={al1} width={40} onChange={withTouch(angleCard.touch, setAl1)} aria-label="l1" />
           <span className="qzk-field-lbl" style={{ margin: 0 }}>
             hkl₂
           </span>
-          <NumberField value={ah2} width={40} onChange={setAh2} aria-label="h2" />
-          <NumberField value={ak2} width={40} onChange={setAk2} aria-label="k2" />
-          <NumberField value={al2} width={40} onChange={setAl2} aria-label="l2" />
+          <NumberField value={ah2} width={40} onChange={withTouch(angleCard.touch, setAh2)} aria-label="h2" />
+          <NumberField value={ak2} width={40} onChange={withTouch(angleCard.touch, setAk2)} aria-label="k2" />
+          <NumberField value={al2} width={40} onChange={withTouch(angleCard.touch, setAl2)} aria-label="l2" />
           <Button
             variant="primary"
             size="sm"
             onClick={() =>
-              void runAngle(setAngleResult, "Interplanar angle", async () => {
+              void angleCard.run("Interplanar angle", async () => {
                 const cell = assembleCell(c.crystal);
                 const h1v = Number(ah1);
                 const k1v = Number(ak1);
@@ -272,7 +270,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             =
           </Button>
         </div>
-        {resultLine(angleResult)}
+        {resultLine(angleCard.result)}
       </Card>
     </div>
   );

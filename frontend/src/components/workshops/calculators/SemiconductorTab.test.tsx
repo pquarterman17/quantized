@@ -98,4 +98,23 @@ describe("SemiconductorTab", () => {
     fireEvent.click(button(8));
     expect(await screen.findByText("m_star must be positive")).toBeInTheDocument();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(semiconductorIntrinsic).mockResolvedValue({
+      ni: 8.88e9,
+      Nc: 2.82e19,
+      Nv: 1.83e19,
+      Eg: 1.12,
+      T: 300,
+    });
+    render(<SemiconductorTab />);
+
+    fireEvent.click(button(0));
+    const line = await screen.findByText(/nᵢ = .* cm⁻³/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "Eg" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("Eg")[0], { target: { value: "1.5" } });
+    expect(screen.queryByText(/nᵢ = .* cm⁻³/)).not.toBeInTheDocument();
+  });
 });

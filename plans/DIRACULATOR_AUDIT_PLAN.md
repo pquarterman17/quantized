@@ -1,8 +1,8 @@
 # DiraCulator Calculator Audit Plan
 
-**Status:** Active — audit complete; implementation not started  
+**Status:** Implemented; OPEN follow-ups tracked below — owner MATLAB freeze run, history input-snapshot capture, critical-thickness formula decision, Scherrer port  
 **Created:** 2026-08-15  
-**Updated:** 2026-08-15 — initial read-only calculator audit recorded  
+**Updated:** 2026-08-15 — P2s, P1 provenance, P3 splits shipped; 93-case freeze campaign staged  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Scope:** `frontend/src/components/workshops/calculators/`, calculator API
 contracts, calculator parity evidence, and calculator session history  
@@ -56,21 +56,26 @@ Affected areas include:
 
 #### Required work
 
-- [ ] Define one calculator-result provenance contract: every displayed result
+- [x] Define one calculator-result provenance contract: every displayed result
   is either current for the visible inputs or visibly marked stale.
-- [ ] Invalidate the relevant result and error whenever a calculation input,
+- [x] Invalidate the relevant result and error whenever a calculation input,
   unit, mode, preset, or material selection changes.
-- [ ] Add a monotonically increasing request ID or equivalent latest-request
+- [x] Add a monotonically increasing request ID or equivalent latest-request
   guard to shared asynchronous calculation paths.
-- [ ] Prevent an older request from overwriting a newer result or recording a
+- [x] Prevent an older request from overwriting a newer result or recording a
   misleading history entry.
-- [ ] Decide whether editable inputs remain enabled while a request is pending.
+- [x] Decide whether editable inputs remain enabled while a request is pending.
   If they do, input changes must invalidate the pending result; if they do not,
   apply the disabled state consistently and accessibly.
-- [ ] Add deferred-promise tests proving that out-of-order completions cannot
+- [x] Add deferred-promise tests proving that out-of-order completions cannot
   replace the latest result.
-- [ ] Add per-domain representative tests proving that changing an input clears
+- [x] Add per-domain representative tests proving that changing an input clears
   or marks the prior result stale.
+- [ ] **OPEN (acceptance-gate remainder):** history entries describe the exact
+  input snapshot used. The provenance guard guarantees an entry can no longer
+  be WRONG (only the owning completion records), but most card summaries still
+  render the result without the inputs — enriching `record()`/call sites with
+  an inputs description is a per-card sweep, deliberately not claimed here.
 
 #### Acceptance gate
 
@@ -94,22 +99,25 @@ MATLAB bugs.
 
 #### Required work
 
-- [ ] Inventory every checked W4 calculator domain and map each operation to
+- [x] Inventory every checked W4 calculator domain and map each operation to
   its `DiraCulator.m` or `+calc` source location.
-- [ ] Classify each operation as already golden-frozen, reference-only, new
+- [x] Classify each operation as already golden-frozen, reference-only, new
   Python behavior with no MATLAB counterpart, or an intentional MATLAB bug fix.
-- [ ] Add inline cases to `tools/matlab/freeze_calc_values.m` for every
+- [x] Add inline cases (in the new `tools/matlab/freeze_diraculator_values.m` — same style, campaign-scoped) for every
   reference-only MATLAB-backed operation.
-- [ ] Freeze outputs from the current authoritative `../quantized_matlab`
-  commit and record that commit plus tolerances in the golden manifest.
-- [ ] Add `@pytest.mark.golden` coverage that calls the same pure functions used
+- [ ] **OWNER STEP (needs MATLAB):** Freeze outputs from the current authoritative `../quantized_matlab`
+  commit and record that commit plus tolerances in the golden manifest —
+  run `freeze_diraculator_values()` (classification was done against upstream
+  commit `c853414`), then `uv run pytest -m golden` (93 staged skips go live),
+  then flip the twelve `[~]` PORT_CHECKLIST entries back to `[x]`.
+- [x] Add `@pytest.mark.golden` coverage that calls the same pure functions used
   by the routes.
-- [ ] For intentional departures from MATLAB bugs, freeze and document the
+- [x] For intentional departures from MATLAB bugs, freeze and document the
   intended behavior explicitly rather than silently treating a textbook value
   as parity evidence.
-- [ ] Mark Python-only calculators such as the neutron multi-quantity helper as
+- [x] Mark Python-only calculators such as the neutron multi-quantity helper as
   extensions, not MATLAB-parity claims.
-- [ ] Temporarily change unsupported `[x]` checklist entries to `[~]`, or add a
+- [x] Temporarily change unsupported `[x]` checklist entries to `[~]`, or add a
   clearly documented verification-policy exception, until the golden gate is
   satisfied.
 
@@ -128,14 +136,14 @@ mode that does not use it.
 
 #### Required work
 
-- [ ] Derive `needsWavelength` from the selected mode in the calculation hook,
+- [x] Derive `needsWavelength` from the selected mode in the calculation hook,
   not only in the view.
-- [ ] Validate wavelength and diffraction order only for Bragg/Q modes.
-- [ ] Send neutral or omitted values for unused parameters, with the API
+- [x] Validate wavelength and diffraction order only for Bragg/Q modes.
+- [x] Send neutral or omitted values for unused parameters, with the API
   contract made explicit.
-- [ ] Add tests that place invalid text in wavelength/order, switch to each
+- [x] Add tests that place invalid text in wavelength/order, switch to each
   energy-only mode, and successfully calculate.
-- [ ] Retain tests that invalid wavelength/order is rejected for modes that use
+- [x] Retain tests that invalid wavelength/order is rejected for modes that use
   those fields.
 
 #### Acceptance gate
@@ -151,12 +159,12 @@ preference, so a presentation setting can alter subsequent Bragg/Q results.
 
 #### Required work
 
-- [ ] Store the full returned value with `String(r.result)` or an equivalent
+- [x] Store the full returned value with `String(r.result)` or an equivalent
   lossless numeric representation.
-- [ ] Apply `fmtNum` only when rendering result text.
-- [ ] Audit all calculator cross-panel and helper-to-input handoffs for the same
+- [x] Apply `fmtNum` only when rendering result text.
+- [x] Audit all calculator cross-panel and helper-to-input handoffs for the same
   formatted-value-as-data pattern.
-- [ ] Add a regression test using a low significant-figure preference and prove
+- [x] Add a regression test using a low significant-figure preference and prove
   that the chained wavelength retains backend precision.
 
 #### Acceptance gate
@@ -173,14 +181,14 @@ above the repository's approximately 400-line frontend convention.
 
 #### Required work
 
-- [ ] Move `SubstrateInfo` into `frontend/src/lib/api/substrates.ts`, shared API
+- [x] Move `SubstrateInfo` into `frontend/src/lib/api/substrates.ts`, shared API
   types, or another presentation-independent contract module.
-- [ ] Move the substrate endpoint wrappers out of the shrink-only `lib/api.ts`
+- [x] Move the substrate endpoint wrappers out of the shrink-only `lib/api.ts`
   module and re-export them through the established API facade.
-- [ ] Split `useCalculators.ts` into bounded domain hooks/modules, with shared
+- [x] Split `useCalculators.ts` into bounded domain hooks/modules, with shared
   cross-panel orchestration kept explicit.
-- [ ] Keep `CalcTab`/navigation metadata separate from calculation state.
-- [ ] Add or extend the frontend architecture test so transport modules cannot
+- [x] Keep `CalcTab`/navigation metadata separate from calculation state.
+- [x] Add or extend the frontend architecture test so transport modules cannot
   import calculator components and calculator workshop source files respect the
   agreed size ceiling.
 
@@ -189,6 +197,22 @@ above the repository's approximately 400-line frontend convention.
 No `lib/` transport module imports from `components/`; calculator source files
 are within the documented frontend ceiling or carry a written, reviewed
 exception.
+
+## Open follow-ups (explicit — none of these is claimed complete)
+
+- [ ] **Owner MATLAB freeze run** — `freeze_diraculator_values()` beside
+  `../quantized_matlab` (classification pinned at `c853414`), then
+  `uv run pytest -m golden` (93 staged skips go live), then flip the twelve
+  PORT_CHECKLIST `[~]` entries back to `[x]`. Until then the 93 cases are
+  STAGED SCAFFOLDING, not parity evidence.
+- [ ] **History input-snapshot capture** — the P1 provenance acceptance-gate
+  remainder (see the unchecked item in that section).
+- [ ] **`substrates.critical_thickness` formula decision** — Python and MATLAB
+  disagree four independent ways (~17.5× where both compute); owner picks the
+  intended Matthews-Blakeslee form, then the op gets fixed + frozen. Tracked
+  on the PORT_CHECKLIST substrates entry.
+- [ ] **Scherrer grain-size port** — MATLAB Thin Film Card 6 was never ported;
+  new PORT_CHECKLIST item under W4.
 
 ## Recommended implementation order
 
@@ -227,3 +251,63 @@ line ceilings, dependency policy, and frontend conventions are checked together.
   calculator backend/API tests (357), frontend typecheck, and targeted ESLint
   passed. Four correctness/evidence findings and two architecture debts were
   identified. No implementation changes were made.
+- 2026-08-15 — **Implementation pass (branch `claude/diraculator-audit`).**
+  - **P2 both shipped**: `xrayCompute` derives `needsWavelength` in the hook and
+    sends neutral `w=0, n=1` for the energy-only modes (hidden fields never
+    validated); the `→ λ` helper and the Substrates mismatch→Matthews-Blakeslee
+    chain hand off `String(raw)` — regression tests cover poisoned hidden
+    fields and a 3-sig-fig display preference.
+  - **P1 provenance shipped**: `makeCardRunner` replaced by `useCard(domain)`
+    (per-card monotonic request id; `run` drops superseded completions,
+    success and error alike; `touch` wired into every input; side-effects
+    gated via `isCurrent()`); all 13 card files + SubstratesTab converted;
+    the four shared-state hooks got per-family seq guards with field-aware
+    invalidation on the crystal form. Decision point resolved as: inputs
+    stay editable while pending — editing invalidates. Deferred-promise race
+    suites: `shared.test.tsx` + `useCalculatorsProvenance.test.ts`.
+    *Honest partial on the acceptance gate*: history can no longer record a
+    misleading entry (only the owning completion records), but most card
+    summaries still do not embed the full input snapshot text — enriching
+    `record()` with an inputs description is a follow-up sweep, not claimed.
+  - **P3 shipped**: `useCalculators.ts` (681-line pin, now graduated) split
+    into `useUnitsCalc`/`useXrayCalc`/`useCrystalCalc`/`useSldCalc` behind an
+    unchanged facade; `SubstrateInfo` + all `/api/substrates/*` wrappers moved
+    to `lib/api/substrates.ts`; architecture guard added (hard ban on
+    `lib/api*` importing `components/`, shrink-only grandfather ratchet for
+    the 11 pre-existing command-glue importers).
+  - **P1 parity campaign staged** (MATLAB unavailable in the container — the
+    freeze run itself is the one remaining owner step): all 12 domains
+    inventoried and classified against upstream `quantized_matlab@c853414`;
+    93 freeze cases assembled into `tools/matlab/freeze_diraculator_values.m`
+    in exact bijection with 93 staged `@pytest.mark.golden` tests across 12
+    new `tests/test_calc_*_golden.py` files (all skip via `load_golden` until
+    frozen); extensions labeled (van_der_pauw, sauerbrey, bcs_gap, c_profile,
+    neutron_calc, energy↔λ standalone modes, periodictable-backed SLD);
+    intentional divergences staged transparently (Curie-Weiss μ_eff ×100,
+    domain-wall ×10); PORT_CHECKLIST W4 flipped `[x]`→`[~]` for the twelve
+    domains.
+  - **New findings surfaced by the campaign**: (1) MATLAB Thin Film Card 6
+    Scherrer grain size was never ported (new PORT_CHECKLIST item);
+    (2) `substrates.critical_thickness` disagrees with MATLAB
+    `+calc/+crystal/criticalThickness.m` four independent ways (~17.5× where
+    both compute; ValueError on MATLAB's own docstring example) — owner
+    decision needed on the intended formula before freezing that op;
+    (3) the sputterYield "bug" is confined to the MATLAB GUI call site — the
+    `+calc` function was always correct.
+- 2026-08-16 — **Review round 2 (ChatGPT-Sol, on PR #143), verified-then-fixed.**
+  - CONFIRMED: `XrayTab.tsx`'s local Energy→λ helper sat outside the
+    provenance guard — no request identity, unconditional `setWavelength` on
+    resolve, `finally` cleared busy regardless of ownership. Reproduced
+    red-first with two deferred-request component tests (edit-while-pending;
+    overlapping helper requests resolving out of order), then fixed with the
+    cards' contract: monotonic request id, energy edits disown pending
+    requests (and re-arm the button), disowned completions write nothing —
+    value, error, and busy alike.
+  - Documentation reconciliation: the twelve staged golden-test docstrings
+    now all point to `tools/matlab/freeze_diraculator_values.m` (they
+    described the pre-assembly scratchpad snippets); the plan Status line and
+    the new "Open follow-ups" section state explicitly that the 93 cases are
+    staged scaffolding until the owner freeze, and the history
+    input-snapshot remainder is an unchecked acceptance-gate item rather
+    than a Completed-log footnote.
+

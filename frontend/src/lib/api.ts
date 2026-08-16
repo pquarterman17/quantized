@@ -12,7 +12,6 @@
 // `api/crystallography.ts`; this file is pinned shrink-only in
 // `architecture.test.ts`.
 
-import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { deleteJSON, getJSON, postBlob, postDownload, postForm, postJSON } from "./api/http";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type { FigureOverrides } from "./figureOverrides";
@@ -704,24 +703,8 @@ export function electrochemDoubleLayer(
   return postJSON("/api/electrochemistry/double-layer-capacitance", { epsilon, d, area });
 }
 
-// ── Substrates (calc.substrates) ────────────────────────────────────────────
-/** Built-in substrate reference table. */
-export function getSubstrates(): Promise<{ substrates: SubstrateInfo[] }> {
-  return getJSON("/api/substrates");
-}
-
-/** One substrate by name. */
-export function getSubstrate(name: string): Promise<SubstrateInfo> {
-  return getJSON(`/api/substrates/${encodeURIComponent(name)}`);
-}
-
-/** Epitaxial lattice mismatch f = (a_film − a_sub)/a_sub. */
-export function substrateMismatch(
-  aFilm: number,
-  aSub: number,
-): Promise<{ mismatch: number; mismatchPct: number; description: string }> {
-  return postJSON("/api/substrates/mismatch", { a_film: aFilm, a_sub: aSub });
-}
+// ── Substrates: ALL /api/substrates/* wrappers + SubstrateInfo live in
+// api/substrates.ts (imported directly — not re-exported here). ─────────────
 
 // ── Semiconductor device physics (calc.semiconductor) ───────────────────────
 /** n_i = √(N_c N_v)·exp(−E_g/2k_BT) (cm⁻³). */

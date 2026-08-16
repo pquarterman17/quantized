@@ -7,30 +7,14 @@
 
 import { useEffect, useState } from "react";
 
-import { getSubstrates, substrateMismatch } from "../../../lib/api";
-import { substratesCriticalThickness } from "../../../lib/api/substrates";
+import {
+  getSubstrates,
+  substrateMismatch,
+  substratesCriticalThickness,
+  type SubstrateInfo,
+} from "../../../lib/api/substrates";
 import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
-import { Card, resultLine, type CardResult } from "./shared";
-
-const DOMAIN = "Substrates";
-
-/** One substrate row from the reference table (mirrors calc.substrates dict). */
-export interface SubstrateInfo {
-  name: string;
-  formula: string;
-  orientation: string;
-  a: number | null;
-  b: number | null;
-  c: number | null;
-  alpha: number | null;
-  beta: number | null;
-  gamma: number | null;
-  thermalExpansion: number;
-  dielectric: number;
-  density: number;
-  latticeType: string;
-}
+import { Card, resultLine, useCard } from "./shared";
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -55,13 +39,13 @@ export default function SubstratesTab() {
 
   // Lattice-mismatch mini-calculator (substrate a_sub = selected.a).
   const [aFilm, setAFilm] = useState("3.876");
-  const [mm, setMm] = useState<CardResult>(null);
+  const mm = useCard("Substrates");
 
   // Matthews-Blakeslee critical thickness, chained off the mismatch above.
   const [mbMismatchPct, setMbMismatchPct] = useState("1.0");
   const [mbB, setMbB] = useState("4.0");
   const [mbNu, setMbNu] = useState("0.3");
-  const [mb, setMb] = useState<CardResult>(null);
+  const mb = useCard("Substrates");
 
   useEffect(() => {
     let cancelled = false;
@@ -102,29 +86,29 @@ export default function SubstratesTab() {
             s.formula.toLowerCase().includes(q),
         );
 
-  async function runMismatch() {
+  async function runMismatch(): Promise<void> {
     if (!selected || selected.a == null) {
-      setMm({ text: `${selected?.name ?? "substrate"} has no lattice parameter`, err: true });
+      mm.setResult({ text: `${selected?.name ?? "substrate"} has no lattice parameter`, err: true });
       return;
     }
     const af = Number(aFilm);
     if (!Number.isFinite(af) || af <= 0) {
-      setMm({ text: "a_film must be a positive number", err: true });
+      mm.setResult({ text: "a_film must be a positive number", err: true });
       return;
     }
-    try {
-      const r = await substrateMismatch(af, selected.a);
-      const text = `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
-      setMm({ text });
-      setMbMismatchPct(fmtNum(r.mismatchPct));
-      useCalcHistory.getState().record({
-        domain: DOMAIN,
-        label: `Lattice mismatch vs ${selected.name}`,
-        summary: text,
-      });
-    } catch {
-      setMm({ text: "calculation failed", err: true });
-    }
+    await mm.run(`Lattice mismatch vs ${selected.name}`, async (isCurrent) => {
+      const r = await substrateMismatch(af, selected.a as number);
+      // DIRACULATOR_AUDIT P2: lossless — this value chains into the Matthews-
+      // Blakeslee input below; display sig-figs must not alter that result.
+      // Writing it edits mb's input, so mb's shown result is invalidated too.
+      // Gated on isCurrent: a disowned completion must not overwrite an f the
+      // user typed while this request was pending.
+      if (isCurrent()) {
+        setMbMismatchPct(String(r.mismatchPct));
+        mb.touch();
+      }
+      return `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
+    });
   }
 
   async function runCriticalThickness(): Promise<void> {
@@ -132,21 +116,13 @@ export default function SubstratesTab() {
     const b = Number(mbB);
     const nu = Number(mbNu);
     if (!Number.isFinite(fPct) || fPct === 0) {
-      setMb({ text: "enter a non-zero mismatch %", err: true });
+      mb.setResult({ text: "enter a non-zero mismatch %", err: true });
       return;
     }
-    try {
+    await mb.run("Matthews-Blakeslee critical thickness", async () => {
       const r = await substratesCriticalThickness(fPct / 100, b, nu);
-      const text = `h_c = ${fmtNum(r.h_c)} Å = ${fmtNum(r.h_c_nm)} nm`;
-      setMb({ text });
-      useCalcHistory.getState().record({
-        domain: DOMAIN,
-        label: "Matthews-Blakeslee critical thickness",
-        summary: text,
-      });
-    } catch (e) {
-      setMb({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
+      return `h_c = ${fmtNum(r.h_c)} Å = ${fmtNum(r.h_c_nm)} nm`;
+    });
   }
 
   const isAmorphous = selected?.latticeType === "amorphous";
@@ -169,7 +145,7 @@ export default function SubstratesTab() {
             style={{ display: "flex", justifyContent: "space-between", width: "100%", marginBottom: 2 }}
             onClick={() => {
               setSelected(s);
-              setMm(null);
+              mm.touch(); // a_sub changed — any shown mismatch is stale
             }}
           >
             <span>
@@ -228,7 +204,10 @@ export default function SubstratesTab() {
                   className="qz-input"
                   style={{ width: 90 }}
                   value={aFilm}
-                  onChange={(e) => setAFilm(e.target.value)}
+                  onChange={(e) => {
+                    setAFilm(e.target.value);
+                    mm.touch();
+                  }}
                   aria-label="a_film"
                 />
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
@@ -238,7 +217,7 @@ export default function SubstratesTab() {
                   Mismatch
                 </button>
               </span>
-              {resultLine(mm)}
+              {resultLine(mm.result)}
             </Card>
           )}
 
@@ -252,7 +231,10 @@ export default function SubstratesTab() {
                   className="qz-input"
                   style={{ width: 70 }}
                   value={mbMismatchPct}
-                  onChange={(e) => setMbMismatchPct(e.target.value)}
+                  onChange={(e) => {
+                    setMbMismatchPct(e.target.value);
+                    mb.touch();
+                  }}
                   aria-label="mismatch percent"
                 />
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
@@ -265,7 +247,10 @@ export default function SubstratesTab() {
                   className="qz-input"
                   style={{ width: 56 }}
                   value={mbB}
-                  onChange={(e) => setMbB(e.target.value)}
+                  onChange={(e) => {
+                    setMbB(e.target.value);
+                    mb.touch();
+                  }}
                   aria-label="Burgers vector b"
                 />
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
@@ -278,14 +263,17 @@ export default function SubstratesTab() {
                   className="qz-input"
                   style={{ width: 48 }}
                   value={mbNu}
-                  onChange={(e) => setMbNu(e.target.value)}
+                  onChange={(e) => {
+                    setMbNu(e.target.value);
+                    mb.touch();
+                  }}
                   aria-label="Poisson ratio"
                 />
                 <button className="qz-btn" onClick={() => void runCriticalThickness()}>
                   Calculate
                 </button>
               </span>
-              {resultLine(mb)}
+              {resultLine(mb.result)}
             </Card>
           )}
         </div>

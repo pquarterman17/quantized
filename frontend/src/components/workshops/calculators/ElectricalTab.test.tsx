@@ -121,6 +121,19 @@ describe("ElectricalTab", () => {
     expect(electricalHallSweep).not.toHaveBeenCalled();
   });
 
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(electricalResistivity).mockResolvedValue({ rho: 0.01 });
+    render(<ElectricalTab />);
+
+    fireEvent.click(screen.getByText("Rs → ρ"));
+    const line = await screen.findByText(/ρ = .* Ω·cm/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "Rs" field — the result no longer matches the inputs.
+    fireEvent.change(screen.getByLabelText("Rs"), { target: { value: "200" } });
+    expect(screen.queryByText(/ρ = .* Ω·cm/)).not.toBeInTheDocument();
+  });
+
   it("computes van der Pauw sheet resistance", async () => {
     vi.mocked(electricalVanDerPauw).mockResolvedValue({ Rs: 4.53236, Ra: 1.0, Rb: 1.0 });
     render(<ElectricalTab />);

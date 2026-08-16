@@ -73,4 +73,25 @@ describe("VacuumTab", () => {
     fireEvent.click(screen.getAllByText("Calculate")[0]);
     expect(await screen.findByText("P, T and d must be positive")).toBeInTheDocument();
   });
+
+  it("editing an input invalidates the displayed result (provenance contract)", async () => {
+    vi.mocked(vacuumMeanFreePath).mockResolvedValue({
+      mfp: 70.36,
+      mfpMm: 70360,
+      mfpUm: 7.036e7,
+      P: 1e-4,
+      T: 300,
+      d: 3.64e-10,
+    });
+    render(<VacuumTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+    const line = await screen.findByText(/λ = .* m/);
+    expect(line).toBeInTheDocument();
+
+    // Edit the card's own "P" field (label repeats on the Monolayer card) —
+    // the result no longer matches the inputs.
+    fireEvent.change(screen.getAllByLabelText("P")[0], { target: { value: "2e-4" } });
+    expect(screen.queryByText(/λ = .* m/)).not.toBeInTheDocument();
+  });
 });

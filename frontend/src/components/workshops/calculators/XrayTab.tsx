@@ -5,7 +5,7 @@
 // "→ X-ray" cross-panel hand-off keeps working); the Neutron card is
 // self-contained, following the newer per-tab-owns-its-state convention.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button, NumberField, Pill, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
@@ -16,9 +16,7 @@ import {
   XRAY_MODES,
   type CalculatorsState,
 } from "./useCalculators";
-import { Card, CopyButton, ROW, makeCardRunner, resultLine, type CardResult } from "./shared";
-
-const runNeutron = makeCardRunner("Neutron");
+import { Card, CopyButton, ROW, resultLine, useCard, withTouch } from "./shared";
 
 const NEUTRON_QUANTITIES: { value: string; label: string; unit: string }[] = [
   { value: "wavelength", label: "λ — wavelength", unit: "Å" },
@@ -30,30 +28,47 @@ const NEUTRON_QUANTITIES: { value: string; label: string; unit: string }[] = [
 export default function XrayTab({ c }: { c: CalculatorsState }) {
   // Energy(keV) → wavelength(Å) helper for the Bragg/Q card's λ field: a
   // small local scratch value, not part of the shared conversion state.
+  // Review round 2: the helper carries the SAME provenance contract as the
+  // cards — a monotonic request id; editing the energy disowns any pending
+  // request (and re-arms the button), and a disowned completion writes
+  // nothing: not the wavelength, not the error, not the busy flag.
   const [fromEnergy, setFromEnergy] = useState("8.0478"); // Cu Kα1 ≈ 8.0478 keV
   const [energyBusy, setEnergyBusy] = useState(false);
   const [energyError, setEnergyError] = useState<string | null>(null);
+  const energySeq = useRef(0);
+  const onFromEnergyChange = (v: string): void => {
+    setFromEnergy(v);
+    energySeq.current++; // a pending request now answers a question no longer asked
+    setEnergyError(null);
+    setEnergyBusy(false);
+  };
 
   // Neutron card — self-contained local state.
   const [nQuantity, setNQuantity] = useState("wavelength");
   const [nValue, setNValue] = useState("1.8"); // Å, near-thermal
-  const [nResult, setNResult] = useState<CardResult>(null);
+  const nCard = useCard("Neutron");
 
   const mode = XRAY_MODES.find((m) => m.value === c.xrayMode);
   const needsWavelength = mode?.needsWavelength !== false;
 
   async function applyEnergyAsWavelength(): Promise<void> {
+    const id = ++energySeq.current;
     setEnergyBusy(true);
     setEnergyError(null);
     try {
       const e = Number(fromEnergy);
       if (!Number.isFinite(e)) throw new Error("enter a numeric energy");
       const r = await xrayCalc("wavelength_from_energy", 0, e);
-      c.setWavelength(fmtNum(r.result));
+      if (energySeq.current !== id) return; // superseded — the λ belongs to an OLD energy
+      // DIRACULATOR_AUDIT P2: store the LOSSLESS value — fmtNum honors the
+      // 1-12 sig-fig display preference, and a presentation setting must
+      // never alter a chained scientific input (Bragg/Q downstream).
+      c.setWavelength(String(r.result));
     } catch (err) {
+      if (energySeq.current !== id) return;
       setEnergyError(err instanceof Error ? err.message : "conversion failed");
     } finally {
-      setEnergyBusy(false);
+      if (energySeq.current === id) setEnergyBusy(false);
     }
   }
 
@@ -95,7 +110,7 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
               <span className="qzk-field-lbl" style={{ margin: 0 }}>
                 or from E
               </span>
-              <NumberField value={fromEnergy} width={72} onChange={setFromEnergy} />
+              <NumberField value={fromEnergy} width={72} onChange={onFromEnergyChange} />
               <span style={{ color: "var(--text-faint)" }}>keV</span>
               <Button variant="ghost" size="sm" disabled={energyBusy} onClick={() => void applyEnergyAsWavelength()}>
                 → λ
@@ -135,11 +150,14 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
         <Select
           options={NEUTRON_QUANTITIES.map((q) => ({ value: q.value, label: q.label }))}
           value={nQuantity}
-          onChange={(e) => setNQuantity(e.target.value)}
+          onChange={(e) => {
+            setNQuantity(e.target.value);
+            nCard.touch();
+          }}
           aria-label="neutron input quantity"
         />
         <div style={{ ...ROW, marginTop: 8 }}>
-          <NumberField value={nValue} width={100} onChange={setNValue} />
+          <NumberField value={nValue} width={100} onChange={withTouch(nCard.touch, setNValue)} />
           <span style={{ color: "var(--text-faint)" }}>
             {NEUTRON_QUANTITIES.find((q) => q.value === nQuantity)?.unit ?? ""}
           </span>
@@ -147,7 +165,7 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
             variant="primary"
             size="sm"
             onClick={() =>
-              void runNeutron(setNResult, "Neutron conversion", async () => {
+              void nCard.run("Neutron conversion", async () => {
                 const v = Number(nValue);
                 if (!Number.isFinite(v)) throw new Error("enter a numeric value");
                 const r = await neutronCalc(nQuantity, v);
@@ -164,13 +182,20 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
         {nQuantity === "wavelength" && (
           <div style={{ ...ROW, marginTop: 8 }}>
             {NEUTRON_WAVELENGTHS.map((w) => (
-              <Pill key={w.label} active={Number(nValue) === w.a} onClick={() => setNValue(String(w.a))}>
+              <Pill
+                key={w.label}
+                active={Number(nValue) === w.a}
+                onClick={() => {
+                  setNValue(String(w.a));
+                  nCard.touch();
+                }}
+              >
                 {w.label}
               </Pill>
             ))}
           </div>
         )}
-        {resultLine(nResult)}
+        {resultLine(nCard.result)}
       </Card>
     </div>
   );

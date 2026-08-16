@@ -359,7 +359,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/lib/originFigures.ts": 793,
   "/components/Stage/useMultiPanelStage.ts": 791,
   "/components/Stage/useStatStage.ts": 704,
-  "/components/workshops/calculators/useCalculators.ts": 681,
+  // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
+  // P3 split moved each shared-state domain to its own bounded hook
+  // (useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc, all under the
+  // general ceiling); the facade file keeps only tab state, the constants
+  // fetch, composition, and the cross-panel handoffs.
   "/lib/roiMath.ts": 664,
   "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
   "/lib/plotdata.ts": 658,
@@ -425,6 +429,67 @@ describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {
       }
     }
     expect(stale, "the pin list must shrink as files are extracted").toEqual([]);
+  });
+});
+
+// lib/ layering guard (DIRACULATOR_AUDIT P3, 2026-08-15). Two tiers:
+//
+// 1. The TRANSPORT layer (lib/api.ts + lib/api/) must NEVER import from
+//    components/ — lib/api.ts importing SubstrateInfo from SubstratesTab.tsx
+//    made a UI file the owner of a wire contract. Wire types live beside
+//    their wrappers (lib/api/substrates.ts is the template). Hard ban.
+// 2. The rest of lib/ carries a RATCHET: eleven command/menu-glue modules
+//    (discovered 2026-08-15) import UI primitives (askParams/askConfirm,
+//    ContextMenuItem) — UI-adjacent orchestration that predates this guard.
+//    They are grandfathered; NEW lib files must not import components/, and
+//    a grandfathered file that drops the import must leave the list.
+const LIB_UI_GRANDFATHERED = new Set([
+  "./lib/contextActions.ts",
+  "./lib/datasetRemoval.ts",
+  "./lib/exportFigureCommand.ts",
+  "./lib/exportPageCommand.ts",
+  "./lib/menuKeyboardNav.ts",
+  "./lib/pageSetupCommand.ts",
+  "./lib/paletteContextActions.ts",
+  "./lib/plotMenu.ts",
+  "./lib/plotToolbarDefs.ts",
+  "./lib/workbookContextActions.ts",
+  "./lib/worksheetTransformCommands.ts",
+]);
+
+describe("lib/ layering guard (DIRACULATOR_AUDIT P3)", () => {
+  const importsComponents = (src: string): boolean =>
+    /from\s+["'][^"']*components\//.test(src);
+  const libFiles = () => sources().filter(([p]) => p.startsWith("./lib/"));
+
+  it("the transport layer (lib/api.ts + lib/api/) never imports from components/", () => {
+    const bad = libFiles()
+      .filter(([p]) => p === "./lib/api.ts" || p.startsWith("./lib/api/"))
+      .filter(([, src]) => importsComponents(src))
+      .map(([p]) => p);
+    expect(
+      bad,
+      "move the wire type/contract into lib (lib/api/substrates.ts is the template)",
+    ).toEqual([]);
+  });
+
+  it("no NEW lib/ module imports from components/ (grandfathered set only shrinks)", () => {
+    const bad = libFiles()
+      .filter(([p]) => !LIB_UI_GRANDFATHERED.has(p))
+      .filter(([, src]) => importsComponents(src))
+      .map(([p]) => p);
+    expect(
+      bad,
+      "lib is the lower layer — inject the UI dependency from the caller instead",
+    ).toEqual([]);
+  });
+
+  it("the grandfathered list stays honest — a file that dropped the import leaves the list", () => {
+    const stale = [...LIB_UI_GRANDFATHERED].filter((key) => {
+      const entry = libFiles().find(([p]) => p === key);
+      return entry == null || !importsComponents(entry[1]);
+    });
+    expect(stale, "remove from LIB_UI_GRANDFATHERED (ratchet down)").toEqual([]);
   });
 });
 
