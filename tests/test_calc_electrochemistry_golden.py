@@ -2,8 +2,7 @@
 
 STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_electrochemistry_*.json``
 golden fixtures that do not exist yet in this checkout -- ``load_golden`` skips
-cleanly until the owner runs MATLAB against ``tools/matlab/freeze_calc_values.m``
-(extended with the sections in ``freeze_dira_echem_diff_substrates.m``) and
+cleanly until the owner runs MATLAB against ``tools/matlab/freeze_diraculator_values.m`` and
 commits the frozen JSON.
 
 Every MATLAB ``calc.electrochemistry.*`` struct also carries a ``.latex``

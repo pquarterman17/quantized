@@ -1,8 +1,7 @@
 """Golden parity vs MATLAB ``+calc/+vacuum`` (DiraCulator ``buildVacuumTab``).
 
 Staged by the DIRACULATOR_AUDIT P1 campaign: freeze cases live in
-``tools/matlab/freeze_dira_film_super_vacuum.m`` (not yet merged into
-``freeze_calc_values.m``), so every test here SKIPS until the owner runs
+``tools/matlab/freeze_diraculator_values.m``, so every test here SKIPS until the owner runs
 MATLAB and commits ``tests/golden/calc_dira_vacuum_*.json``.
 
 ``calc.vacuum`` output keys already match the MATLAB struct field names

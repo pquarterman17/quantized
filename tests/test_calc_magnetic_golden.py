@@ -1,8 +1,7 @@
 """Magnetic calculators (calc.magnetic) -- golden parity vs quantized_matlab.
 
 DIRACULATOR_AUDIT P1 evidence. Golden fixtures are STAGED: run
-tools/matlab/freeze_calc_values.m (with the "Magnetic" section from
-freeze_dira_xray_mag_optics.m merged in) against ../quantized_matlab, then
+tools/matlab/freeze_diraculator_values.m against ../quantized_matlab, then
 these tests exercise for real; until then they SKIP via load_golden.
 
 Classification (see calc/magnetic.py module docstring for the full
