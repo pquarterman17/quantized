@@ -1,8 +1,20 @@
 // E-c1: the visible-only thumbnail scheduler. Owns the React side of the
 // lib/thumbnailCache contract: IntersectionObserver-gated generation,
-// AbortController cancellation on unmount/entity-change/scroll-out, and
-// the revision check that keeps a late result from a replaced entity out
-// of the UI (the useCard provenance pattern, applied to tiles).
+// AbortController cancellation, and the fingerprint check that keeps a
+// late result from a replaced entity OR dependency out of the UI (the
+// useCard provenance pattern, applied to tiles).
+//
+// CANCELLATION PROMISE (narrowed per Sol review, PR #149): generation is
+// aborted on unmount and whenever the request fingerprint changes
+// mid-flight — entity or any dependency replaced. Visibility is STICKY by
+// design: once a tile has been seen, scrolling it back out does NOT abort
+// or discard — the work is already paid for and the LRU owns retention.
+//
+// DEPENDENCY-AWARE INVALIDATION: the hook subscribes to the store slices
+// previews are transitively live against (datasets, editable figures) and
+// re-resolves the canonical ThumbnailRequest on every change, so editing a
+// figure regenerates the pages that reference it, and replacing a source
+// dataset regenerates the live figures bound to it.
 //
 // States a consumer renders:
 //   unsupported — no generator for this kind; keep the static placeholder
@@ -11,17 +23,18 @@
 //   ready       — cached or freshly generated image
 //   error       — generation failed (E-c2 owns the visual treatment)
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import {
   getCachedThumbnail,
-  revisionOf,
   setCachedThumbnail,
   thumbnailGeneratorFor,
   type ThumbnailResult,
 } from "../../lib/thumbnailCache";
 import { registerDefaultThumbnailGenerators } from "../../lib/thumbnailGenerators";
+import { resolveThumbnailRequest } from "../../lib/thumbnailRequest";
+import { useApp } from "../../store/useApp";
 
 registerDefaultThumbnailGenerators(); // idempotent
 
@@ -32,20 +45,16 @@ export type ThumbnailState =
   | { status: "ready"; result: ThumbnailResult }
   | { status: "error" };
 
-/** True once `el` has intersected the viewport (sticky — a generated
- *  thumbnail stays generated when scrolled back out). Environments without
- *  IntersectionObserver (jsdom, ancient WebViews) degrade to eager
- *  generation: correctness first, laziness where the platform allows. */
+/** True once `el` has intersected the viewport (sticky — see the header's
+ *  cancellation promise). Environments without IntersectionObserver
+ *  (jsdom, ancient WebViews) degrade to eager generation: correctness
+ *  first, laziness where the platform allows. */
 function useBecameVisible(ref: RefObject<HTMLElement | null>): boolean {
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
   useEffect(() => {
     if (visible) return;
     const el = ref.current;
     if (!el) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) setVisible(true);
     });
@@ -57,39 +66,55 @@ function useBecameVisible(ref: RefObject<HTMLElement | null>): boolean {
 
 export function useThumbnail(node: LibraryNode, ref: RefObject<HTMLElement | null>): ThumbnailState {
   const generator = thumbnailGeneratorFor(node.kind);
-  const revision = revisionOf(node);
   const visible = useBecameVisible(ref);
-  const cached = generator ? getCachedThumbnail(node.key, revision) : null;
+  // The store slices previews are transitively live against. Subscribing
+  // (not getState) is the invalidation mechanism: a replaced dependency
+  // re-renders this hook with a new fingerprint.
+  const datasets = useApp((s) => s.datasets);
+  const editableFigures = useApp((s) => s.editableFigures);
+  // Null for generator-less kinds: hook-order rules keep the subscriptions,
+  // but an unsupported tile never pays for dependency resolution.
+  const request = useMemo(
+    () => (generator ? resolveThumbnailRequest(node, { datasets, editableFigures }) : null),
+    [generator, node, datasets, editableFigures],
+  );
+  const cached = request ? getCachedThumbnail(node.key, request.fingerprint) : null;
 
-  // Async outcome for THIS key+revision only. A keyed record (not a bare
-  // status) makes staleness structural: a leftover state from the previous
-  // entity revision simply doesn't match and is ignored below.
-  const [outcome, setOutcome] = useState<{ key: string; revision: number; state: ThumbnailState } | null>(null);
+  // Async outcome for THIS key+fingerprint only. A keyed record (not a
+  // bare status) makes staleness structural: a leftover state from a
+  // previous fingerprint simply doesn't match and is ignored below.
+  const [outcome, setOutcome] = useState<{ key: string; fingerprint: string; state: ThumbnailState } | null>(null);
 
   useEffect(() => {
-    if (!generator || !visible) return;
-    if (getCachedThumbnail(node.key, revision)) return; // sync path below serves it
+    if (!generator || !request || !visible) return;
+    if (getCachedThumbnail(request.node.key, request.fingerprint)) return; // sync path below serves it
     const controller = new AbortController();
-    setOutcome({ key: node.key, revision, state: { status: "loading" } });
-    generator(node, controller.signal).then(
+    const { key } = request.node;
+    const { fingerprint } = request;
+    setOutcome({ key, fingerprint, state: { status: "loading" } });
+    generator(request, controller.signal).then(
       (result) => {
         if (controller.signal.aborted) return;
-        setCachedThumbnail(node.key, revision, result);
-        setOutcome({ key: node.key, revision, state: { status: "ready", result } });
+        setCachedThumbnail(key, fingerprint, result);
+        setOutcome({ key, fingerprint, state: { status: "ready", result } });
       },
       () => {
         if (controller.signal.aborted) return; // cancellation is not an error
-        setOutcome({ key: node.key, revision, state: { status: "error" } });
+        setOutcome({ key, fingerprint, state: { status: "error" } });
       },
     );
     return () => controller.abort();
-    // `node` is captured for the generator call but keyed by (key, revision):
-    // a rebuilt hierarchy node wrapping the SAME entity must not regenerate.
+    // Keyed by (key, fingerprint), NOT the request object: a hierarchy
+    // rebuild wraps the same entities in a fresh node/request, and an
+    // unchanged fingerprint must not abort-and-restart a mid-flight run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generator, visible, node.key, revision]);
+  }, [generator, visible, request?.node.key, request?.fingerprint]);
 
-  // Late-result guard belt: render whatever matches the CURRENT key+revision.
-  const current = outcome && outcome.key === node.key && outcome.revision === revision ? outcome.state : null;
+  // Late-result guard belt: render whatever matches the CURRENT request.
+  const current =
+    outcome && request && outcome.key === node.key && outcome.fingerprint === request.fingerprint
+      ? outcome.state
+      : null;
 
   if (!generator) return UNSUPPORTED;
   if (cached) return { status: "ready", result: cached };

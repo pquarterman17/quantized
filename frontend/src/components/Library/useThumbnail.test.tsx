@@ -7,17 +7,18 @@
 
 import { act, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import { useApp } from "../../store/useApp";
 import {
   clearThumbnailCache,
   registerThumbnailGenerator,
   setCachedThumbnail,
-  revisionOf,
   unregisterThumbnailGenerator,
   type ThumbnailResult,
 } from "../../lib/thumbnailCache";
+import { resolveThumbnailRequest } from "../../lib/thumbnailRequest";
 import { useThumbnail, type ThumbnailState } from "./useThumbnail";
 
 const thumb = (url: string): ThumbnailResult => ({ url, width: 160, height: 120 });
@@ -33,10 +34,22 @@ function Probe({ node, onState }: { node: LibraryNode; onState: (s: ThumbnailSta
   return <div ref={ref} data-status={state.status} />;
 }
 
+beforeEach(() => {
+  useApp.setState({ datasets: [], editableFigures: [] });
+});
+
 afterEach(() => {
   clearThumbnailCache();
   unregisterThumbnailGenerator("report");
+  unregisterThumbnailGenerator("editable-figure");
 });
+
+/** The fingerprint the hook itself will compute for `node` against the
+ *  CURRENT store — used to pre-seed the cache in the sync-serve test. */
+const liveFingerprint = (node: LibraryNode): string => {
+  const { datasets, editableFigures } = useApp.getState();
+  return resolveThumbnailRequest(node, { datasets, editableFigures }).fingerprint;
+};
 
 describe("useThumbnail — E-c1 scheduler contract", () => {
   it("reports unsupported for a kind with no generator (tile keeps its static placeholder)", () => {
@@ -49,7 +62,7 @@ describe("useThumbnail — E-c1 scheduler contract", () => {
     const generator = vi.fn();
     registerThumbnailGenerator("report", generator);
     const node = reportNode({ id: "r1" });
-    setCachedThumbnail(node.key, revisionOf(node), thumb("cached"));
+    setCachedThumbnail(node.key, liveFingerprint(node), thumb("cached"));
 
     const states: ThumbnailState[] = [];
     render(<Probe node={node} onState={(s) => states.push(s)} />);
@@ -77,7 +90,7 @@ describe("useThumbnail — E-c1 scheduler contract", () => {
   it("aborts the in-flight generation on unmount and discards its late result", async () => {
     const captured: { signal?: AbortSignal } = {};
     let release: (r: ThumbnailResult) => void = () => {};
-    const generator = vi.fn((_node: LibraryNode, signal: AbortSignal) => {
+    const generator = vi.fn((_request: unknown, signal: AbortSignal) => {
       captured.signal = signal;
       return new Promise<ThumbnailResult>((resolve) => { release = resolve; });
     });
@@ -117,6 +130,58 @@ describe("useThumbnail — E-c1 scheduler contract", () => {
       expect(s?.status === "ready" && s.result.url === "v2").toBe(true);
     });
     expect(generator).toHaveBeenCalledTimes(2);
+  });
+
+  it("a replaced DEPENDENCY under an unchanged entity regenerates (Sol review, case 2)", async () => {
+    const generator = vi.fn().mockResolvedValueOnce(thumb("v1")).mockResolvedValueOnce(thumb("v2"));
+    registerThumbnailGenerator("editable-figure", generator);
+    const figureEntity = { id: "f1", bindings: { datasetId: "d1" } };
+    const node = ({ key: "editable-figure:f1", entityId: "f1", kind: "editable-figure", name: "F",
+      parentKey: null, depth: 0, children: [], entity: figureEntity,
+      source: { datasetIds: ["d1"], missingDatasetIds: [], usedPlacementFallback: false } } as unknown as LibraryNode);
+    act(() => useApp.setState({ datasets: [{ id: "d1" } as never], editableFigures: [] }));
+
+    const states: ThumbnailState[] = [];
+    render(<Probe node={node} onState={(s) => states.push(s)} />);
+    await waitFor(() => expect(states.at(-1)?.status).toBe("ready"));
+
+    // Reimport/pending-load replaces the DATASET object; the figure entity is untouched.
+    act(() => useApp.setState({ datasets: [{ id: "d1" } as never] }));
+    await waitFor(() => {
+      const s = states.at(-1);
+      expect(s?.status === "ready" && s.result.url === "v2").toBe(true);
+    });
+    expect(generator).toHaveBeenCalledTimes(2);
+  });
+
+  it("a late result for the OLD dependency fingerprint neither renders nor poisons the new one (Sol review, case 3)", async () => {
+    const pending: Array<(r: ThumbnailResult) => void> = [];
+    const generator = vi.fn(() => new Promise<ThumbnailResult>((resolve) => pending.push(resolve)));
+    registerThumbnailGenerator("editable-figure", generator);
+    const figureEntity = { id: "f1", bindings: { datasetId: "d1" } };
+    const node = ({ key: "editable-figure:f1", entityId: "f1", kind: "editable-figure", name: "F",
+      parentKey: null, depth: 0, children: [], entity: figureEntity,
+      source: { datasetIds: ["d1"], missingDatasetIds: [], usedPlacementFallback: false } } as unknown as LibraryNode);
+    act(() => useApp.setState({ datasets: [{ id: "d1" } as never], editableFigures: [] }));
+
+    const states: ThumbnailState[] = [];
+    render(<Probe node={node} onState={(s) => states.push(s)} />);
+    // Wait on STATE the calls commit to (the pending-resolver array), not on
+    // the mock call itself — the architecture weak-wait ratchet's rule.
+    await waitFor(() => expect(pending.length).toBe(1));
+
+    act(() => useApp.setState({ datasets: [{ id: "d1" } as never] })); // dep replaced mid-flight
+    await waitFor(() => expect(pending.length).toBe(2));
+
+    await act(async () => pending[0]!(thumb("old"))); // the OLD run resolves late
+    const afterOld = states.at(-1);
+    expect(afterOld?.status === "ready" && afterOld.result.url === "old").toBe(false);
+
+    await act(async () => pending[1]!(thumb("new")));
+    await waitFor(() => {
+      const s = states.at(-1);
+      expect(s?.status === "ready" && s.result.url === "new").toBe(true);
+    });
   });
 
   it("a rejecting generator reports error, not a crash or a stuck loading state", async () => {

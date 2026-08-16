@@ -7,12 +7,13 @@
 //   plot/table/analysis renderers; E-c1 ships the contract plus one
 //   reference generator to prove the pipe). A kind with no generator is
 //   "unsupported" — callers keep their existing static placeholder.
-// - REVISION-KEYED invalidation: the store replaces an entity object on
-//   every mutation (zustand immutability), so object identity IS the
-//   revision. `revisionOf` tags each distinct entity object with a
-//   monotonic id via a WeakMap — cheap, exact, and GC-safe. A cached
-//   thumbnail is valid only while its node's entity keeps the same tag;
-//   any store update that touches the entity invalidates it implicitly.
+// - FINGERPRINT-KEYED invalidation: the store replaces objects on every
+//   mutation (zustand immutability), so object identity is the revision
+//   primitive (`entityRevision`, a WeakMap tag — cheap, exact, GC-safe).
+//   A cache entry's fingerprint joins the tags of the entity AND every
+//   preview-relevant dependency (referenced figures, live source
+//   datasets — Sol review, PR #149), so touching ANY of them invalidates
+//   implicitly. `lib/thumbnailRequest.ts` owns dependency resolution.
 // - BOUNDED LRU: tiles scroll through arbitrarily large Libraries (E-c3),
 //   so the cache holds a fixed number of entries and evicts
 //   least-recently-USED (get refreshes recency). Ownership is module-level
@@ -28,24 +29,39 @@ export interface ThumbnailResult {
   height: number;
 }
 
-/** Generation is async and MUST honor `signal`: the hook aborts when the
- *  tile leaves the viewport, unmounts, or the entity changes mid-flight.
- *  Generators reject (any error, including AbortError) → the hook reports
- *  "error" (or discards silently on abort); they never return partial
- *  results. */
-export type ThumbnailGenerator = (node: LibraryNode, signal: AbortSignal) => Promise<ThumbnailResult>;
+/** The resolved unit of generation (Sol review, PR #149): the node PLUS
+ *  every preview-relevant dependency object (referenced figures, live
+ *  source datasets), and the fingerprint composed from ALL of their
+ *  revisions. The generator renders from `node`/`deps` — the exact
+ *  objects the fingerprint was formed from — so key and render can never
+ *  disagree. Assembled by `lib/thumbnailRequest.resolveThumbnailRequest`. */
+export interface ThumbnailRequest {
+  node: LibraryNode;
+  /** Ordered resolved dependency entities; null marks a missing reference
+   *  (a panel whose figure is gone), which the fingerprint encodes as a
+   *  stable sentinel. */
+  deps: readonly (object | null)[];
+  fingerprint: string;
+}
+
+/** Generation is async and MUST honor `signal`: the hook aborts on unmount
+ *  and whenever the request fingerprint changes mid-flight (entity OR any
+ *  dependency replaced). Generators reject (any error, including
+ *  AbortError) → the hook reports "error" (or discards silently on abort);
+ *  they never return partial results. */
+export type ThumbnailGenerator = (request: ThumbnailRequest, signal: AbortSignal) => Promise<ThumbnailResult>;
 
 // ── revision tagging ─────────────────────────────────────────────────────
 
 let nextRevision = 1;
 const revisionTags = new WeakMap<object, number>();
 
-/** The node's cache revision: a stable tag for the entity OBJECT. Replacing
- *  the entity in the store (any mutation) yields a new object and therefore
- *  a new revision; an untouched entity keeps its tag across re-renders and
- *  hierarchy rebuilds. */
-export function revisionOf(node: LibraryNode): number {
-  const entity = node.entity as object;
+/** A stable tag for one store OBJECT. The store replaces objects on every
+ *  mutation (zustand immutability), so a replaced entity/dependency gets a
+ *  new tag while an untouched one keeps its tag across re-renders and
+ *  hierarchy rebuilds. The fingerprint of a request is these tags joined —
+ *  see lib/thumbnailRequest.ts. */
+export function entityRevision(entity: object): number {
   let tag = revisionTags.get(entity);
   if (tag == null) {
     tag = nextRevision++;
@@ -59,7 +75,7 @@ export function revisionOf(node: LibraryNode): number {
 const MAX_ENTRIES = 300;
 
 interface CacheEntry {
-  revision: number;
+  fingerprint: string;
   result: ThumbnailResult;
 }
 
@@ -67,11 +83,11 @@ interface CacheEntry {
  *  head is always the least recently used. */
 const cache = new Map<string, CacheEntry>();
 
-export function getCachedThumbnail(key: string, revision: number): ThumbnailResult | null {
+export function getCachedThumbnail(key: string, fingerprint: string): ThumbnailResult | null {
   const entry = cache.get(key);
   if (!entry) return null;
-  if (entry.revision !== revision) {
-    cache.delete(key); // stale revision — drop, never serve
+  if (entry.fingerprint !== fingerprint) {
+    cache.delete(key); // stale fingerprint — drop, never serve
     return null;
   }
   cache.delete(key);
@@ -79,9 +95,9 @@ export function getCachedThumbnail(key: string, revision: number): ThumbnailResu
   return entry.result;
 }
 
-export function setCachedThumbnail(key: string, revision: number, result: ThumbnailResult): void {
+export function setCachedThumbnail(key: string, fingerprint: string, result: ThumbnailResult): void {
   cache.delete(key);
-  cache.set(key, { revision, result });
+  cache.set(key, { fingerprint, result });
   while (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
     if (oldest == null) break;

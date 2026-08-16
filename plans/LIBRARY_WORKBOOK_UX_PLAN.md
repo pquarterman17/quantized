@@ -1744,3 +1744,23 @@ back to the owner. No Library implementation is authorized by this pause.
   reference generator (page panel-grid SVG) proving generation → cache →
   tile end-to-end. E-c2 (Sol) owns the real preview visuals; E-c3 (Claude)
   owns virtualization. PR pending.
+- **2026-08-16 — Claude, E-c1 round 2 (Sol review response):** Sol's blocking
+  finding was correct — object identity of the PRIMARY entity is not a
+  complete thumbnail revision, because previews are transitively live (a
+  page renders referenced figures; a live figure renders its source
+  dataset). Reworked the contract red-first per the review: cache keys are
+  now dependency FINGERPRINTS (`lib/thumbnailRequest.resolveThumbnailRequest`
+  composes the entity revision with the ordered revisions of referenced
+  figures and live source datasets, missing references as stable sentinels),
+  and the generator receives the SAME resolved request the fingerprint was
+  formed from, so key and render cannot disagree. Sol's three requested
+  probes proven red then green (figure-edit regenerates page thumbnails;
+  dataset replacement regenerates live-figure thumbnails; a late old-
+  fingerprint result neither renders nor poisons the new entry). The
+  "scroll-out cancellation" doc overclaim is narrowed to the truth: abort on
+  unmount and fingerprint change; visibility is sticky by design and the LRU
+  owns retention. NEW DISCIPLINE (also in CLAUDE.md): pre-PR adversarial
+  self-review — its first run on this very diff caught a CI-red weak-wait in
+  my new test, an empty-string-figureId deps-cursor desync (now a shared
+  predicate + pin test), and two O(store)-per-tile resolve inefficiencies
+  (WeakMap-memoized by-id maps; generator-less kinds skip resolution).

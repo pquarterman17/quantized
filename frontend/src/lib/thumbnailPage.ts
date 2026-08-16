@@ -7,8 +7,8 @@
 // read the design-token CSS custom properties, and committing to real
 // colors here would preempt E-c2's visual pass.
 
-import type { LibraryNode } from "./libraryHierarchy";
-import type { ThumbnailResult } from "./thumbnailCache";
+import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
+import { panelReferencesFigure } from "./thumbnailRequest";
 
 const W = 160;
 const H = 120;
@@ -41,17 +41,25 @@ export function pageThumbnailSvg(rows: number, cols: number, filled: readonly bo
 
 /** The registered "page" generator. Synchronous work wrapped in the async
  *  contract; still checks the signal so an abort during the microtask gap
- *  is honored. */
+ *  is honored. Renders from the resolved request — `deps` carries the
+ *  referenced figures in panel order (null = missing reference), the same
+ *  objects the cache fingerprint was formed from — so a panel whose figure
+ *  is GONE draws as empty, and the thumbnail regenerates when any
+ *  referenced figure changes. */
 export async function generatePageThumbnail(
-  node: LibraryNode,
+  request: ThumbnailRequest,
   signal: AbortSignal,
 ): Promise<ThumbnailResult> {
+  const { node, deps } = request;
   if (node.kind !== "page") throw new Error(`page generator got "${node.kind}"`);
   if (signal.aborted) throw new DOMException("aborted", "AbortError");
   const page = node.entity;
+  let referenced = 0;
   return pageThumbnailSvg(
     page.rows,
     page.cols,
-    page.panels.map((panel) => panel.figureId != null),
+    // panelReferencesFigure is the SAME predicate the resolver used to
+    // produce `deps`, so the cursor cannot desynchronize.
+    page.panels.map((panel) => (panelReferencesFigure(panel) ? deps[referenced++] != null : false)),
   );
 }
