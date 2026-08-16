@@ -43,7 +43,8 @@ import {
   saveLibraryViewMode,
   type LibraryViewMode,
 } from "../../lib/libraryViewPrefs";
-import type { LibraryNodeKey } from "../../lib/libraryHierarchy";
+import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
+import { selectLibraryNode } from "./libraryOpen";
 
 const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
 const PagesSection = lazy(() => import("./PagesSection"));
@@ -73,7 +74,6 @@ export default function Library() {
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
   const expandedWorkbookIds = useApp((s) => s.expandedWorkbookIds);
   const toggleWorkbookExpanded = useApp((s) => s.toggleWorkbookExpanded);
-  const selectIds = useApp((s) => s.selectIds);
   const revealTarget = useApp((s) => s.revealTarget);
   const clearReveal = useApp((s) => s.clearReveal);
   const startResize = useLibraryResize();
@@ -137,28 +137,51 @@ export default function Library() {
     return () => cancelAnimationFrame(frame);
   }, [viewMode, rows]);
 
-  // "Show in folder" (plan #13 sub-item 2; PR C adds the workbook step): a
-  // dataset id posted to `revealTarget` clears the filter, expands every
-  // ancestor folder AND the dataset's own workbook that isn't already open,
-  // selects the row, and scrolls it into view — then clears the signal. A
-  // stale/removed dataset id just clears silently.
+  // "Show in Library" (plan #13 sub-item 2; PR C adds the workbook step;
+  // PR D2 generalizes it to EVERY hierarchy node kind for L0.26's search
+  // reveal): the target posted to `revealTarget` — a canonical
+  // `kind:id` LibraryNodeKey, or a bare dataset id (the pre-D2 callers) —
+  // clears the filter, expands every collapsed ancestor folder/workbook,
+  // selects the node per the L0.25 contract, and scrolls its row into view,
+  // then clears the signal. A stale/unknown target just clears silently.
   useEffect(() => {
     if (!revealTarget) return;
-    const id = revealTarget;
+    const key = (revealTarget.includes(":") ? revealTarget : `worksheet:${revealTarget}`) as LibraryNodeKey;
     clearReveal();
-    const ds = datasets.find((d) => d.id === id);
-    if (!ds) return;
+    const node = hierarchy.byKey.get(key);
+    if (!node) return;
     setQuery("");
-    for (const f of folderPath(folders, ds.folderId ?? null)) {
-      if (!expandedFolders.includes(f.id)) toggleFolderExpanded(f.id);
+    const s = useApp.getState();
+    let parentKey = node.parentKey;
+    while (parentKey) {
+      const parent = hierarchy.byKey.get(parentKey);
+      if (!parent) break;
+      if (parent.kind === "folder" && !s.expandedFolders.includes(parent.entityId)) toggleFolderExpanded(parent.entityId);
+      if (parent.kind === "workbook" && !s.expandedWorkbookIds.includes(parent.entityId)) toggleWorkbookExpanded(parent.entityId);
+      parentKey = parent.parentKey;
     }
-    if (ds.workbookId && !expandedWorkbookIds.includes(ds.workbookId)) {
-      toggleWorkbookExpanded(ds.workbookId);
+    // Compatibility half (the pre-D2 contract): a legacy worksheet with a
+    // folderId but no workbook sits at the hierarchy ROOT (nesting is
+    // workbook-driven), so its folder ancestors don't appear in the parent
+    // walk above — expand them from the folder tree exactly as before.
+    if (node.kind === "worksheet") {
+      for (const f of folderPath(folders, node.entity.folderId ?? null)) {
+        if (!useApp.getState().expandedFolders.includes(f.id)) toggleFolderExpanded(f.id);
+      }
     }
-    selectIds([id]);
-    requestAnimationFrame(() => {
-      document.querySelector(`[data-ds-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
-    });
+    selectLibraryNode(node);
+    // The row may be inside a lazy renderer that only mounts after the
+    // query clears — retry across a few frames like the focus-restore
+    // effect above rather than introducing timers.
+    let attempts = 0;
+    const tryScroll = (): void => {
+      const target = document.querySelector(
+        `[data-lib-row="${CSS.escape(key)}"], [data-ds-id="${CSS.escape(node.entityId)}"]`,
+      );
+      if (target) target.scrollIntoView?.({ block: "nearest" }); // absent in jsdom
+      else if (++attempts < 5) requestAnimationFrame(tryScroll);
+    };
+    requestAnimationFrame(tryScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires only on revealTarget
   }, [revealTarget]);
 
@@ -230,12 +253,25 @@ export default function Library() {
     />
   );
 
+  const searchActive = query.trim() !== "";
   // Body: the tree whenever there's anything to show and no active search
-  // (PR C); a search query always collapses to a flat filtered list.
+  // (PR C); a search query renders the PROJECT-WIDE flat Details-style
+  // results surface (PR D2, L0.26) — every hierarchy node kind, full
+  // breadcrumbs, normal open, per-row "Show in Library" — regardless of the
+  // Tree/Details view preference (the preference governs browsing; results
+  // are always the flat table).
   const inHierarchy = query.trim() === "" && rows.length > 0;
+  const showInLibrary = (node: LibraryNode): void => {
+    setQuery("");
+    useApp.getState().requestReveal(node.key);
+  };
   let body: React.ReactNode;
   if (query.trim() !== "") {
-    body = shown.map((d) => row(d, 0, folders.length > 0));
+    body = (
+      <Suspense fallback={null}>
+        <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} />
+      </Suspense>
+    );
   } else if (inHierarchy && viewMode === "details") {
     body = (
       <Suspense fallback={null}>
@@ -322,24 +358,20 @@ export default function Library() {
       <MultiSelectBar />
 
       {/* Sections whose items are now tree children (workbook worksheets,
-       *  figures, pages, reports) hide while the tree renders — search mode
-       *  and the true-empty state are the only remaining flat-list surfaces. */}
-      {!inHierarchy && <FiguresSection />}
-      <OriginFidelitySection />
-      {!inHierarchy && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
-      {!inHierarchy && <SavedFiguresSection />}
-      {!inHierarchy && <Suspense fallback={null}><PagesSection /></Suspense>}
-      {!inHierarchy && <ReportsSection />}
-      <BookFamiliesSection />
+       *  figures, pages, reports) hide while the tree renders — and hide
+       *  during search too (PR D2: the results surface covers every kind
+       *  WITH the query applied; the sections were unfiltered). The
+       *  true-empty state is the only remaining flat-section surface. */}
+      {!inHierarchy && !searchActive && <FiguresSection />}
+      {!searchActive && <OriginFidelitySection />}
+      {!inHierarchy && !searchActive && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
+      {!inHierarchy && !searchActive && <SavedFiguresSection />}
+      {!inHierarchy && !searchActive && <Suspense fallback={null}><PagesSection /></Suspense>}
+      {!inHierarchy && !searchActive && <ReportsSection />}
+      {!searchActive && <BookFamiliesSection />}
       <SmartFoldersSection onFilterTag={setQuery} />
 
       {body}
-
-      {query.trim() !== "" && shown.length === 0 && (
-        <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
-          No matches
-        </div>
-      )}
       {/* MAIN #38: an empty Library is the most common launch state, so it
        *  gets the resume-work surface. `rows.length === 0` (nothing at all —
        *  no dataset/folder/workbook/figure/page/report) is the only way to

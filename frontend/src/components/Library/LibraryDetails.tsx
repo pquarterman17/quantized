@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { openLibraryNode } from "./libraryOpen";
+import { openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import {
   detailsNavIndex,
   libraryDetailsRows,
@@ -9,11 +9,22 @@ import {
   type LibraryDetailsSortKey,
 } from "../../lib/libraryDetails";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
+import { libraryNodeMatches } from "../../lib/librarySearch";
+import { parseQuery } from "../../lib/smartfolders";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { useApp } from "../../store/useApp";
 
 interface Props {
   hierarchy: LibraryHierarchy;
+  /** PR D2 (L0.26): a non-blank query switches this table into the
+   *  project-wide search-results surface — the SAME flat Details projection,
+   *  filtered through lib/librarySearch, rendered without hierarchy indent
+   *  (the breadcrumb columns carry location), plus a per-row
+   *  "Show in Library" reveal. Absent/blank = the ordinary Details renderer. */
+  searchQuery?: string;
+  /** Clears the search and reveals the row's node in its hierarchy (L0.26's
+   *  "Show in Library"). Wired by Library.tsx to the store's reveal signal. */
+  onShowInLibrary?: (node: LibraryNode) => void;
 }
 
 const COLUMNS: Array<{ key: Exclude<LibraryDetailsSortKey, "manual">; label: string; className?: string }> = [
@@ -27,27 +38,26 @@ const COLUMNS: Array<{ key: Exclude<LibraryDetailsSortKey, "manual">; label: str
   { key: "tags", label: "Tags", className: "qzk-details-wide" },
 ];
 
-function selectNode(node: LibraryNode): void {
-  const s = useApp.getState();
-  if (node.kind === "worksheet") s.selectIds([node.entityId]);
-  else s.setLibrarySelection({ kind: node.kind, id: node.entityId });
-}
-
 function isSelected(node: LibraryNode, selectedIds: readonly string[], selection: { kind: string; id: string } | null) {
   return node.kind === "worksheet"
     ? selectedIds.includes(node.entityId)
     : selection?.kind === node.kind && selection.id === node.entityId;
 }
 
-export default function LibraryDetails({ hierarchy }: Props) {
+export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary }: Props) {
   const selectedIds = useApp((s) => s.selectedIds);
   const selection = useApp((s) => s.librarySelection);
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
-  const rows = useMemo(
-    () => sortLibraryDetailsRows(libraryDetailsRows(hierarchy), sortKey, direction),
-    [hierarchy, sortKey, direction],
-  );
+  const searching = searchQuery != null && searchQuery.trim() !== "";
+  const rows = useMemo(() => {
+    let projected = libraryDetailsRows(hierarchy);
+    if (searching) {
+      const terms = parseQuery(searchQuery);
+      projected = projected.filter((row) => libraryNodeMatches(row.node, terms));
+    }
+    return sortLibraryDetailsRows(projected, sortKey, direction);
+  }, [hierarchy, searching, searchQuery, sortKey, direction]);
 
   // Roving tabindex (plan follow-up 4a): exactly ONE row is in the Tab order
   // at a time — the last-focused row, else the current-item row, else the
@@ -132,7 +142,7 @@ export default function LibraryDetails({ hierarchy }: Props) {
   return (
     <div className="qzk-details-wrap">
       <div className="qzk-details-tools">
-        <span>{rows.length.toLocaleString()} items</span>
+        <span>{rows.length.toLocaleString()} {searching ? "matches" : "items"}</span>
         {sortKey !== "manual" && (
           <button type="button" className="qzk-details-manual" onClick={() => { setSortKey("manual"); setDirection("asc"); }}>
             Manual order
@@ -162,6 +172,12 @@ export default function LibraryDetails({ hierarchy }: Props) {
                   </button>
                 </th>
               ))}
+              {/* D2: the reveal-action column — a header cell with no sort
+               *  button, so the header roving arithmetic (COLUMNS-indexed)
+               *  never sees it. The class is load-bearing (review round 2):
+               *  table-layout:fixed takes COLUMN widths from the first row,
+               *  so the actions width must live on this th, not the tds. */}
+              {searching && <th scope="col" className="qzk-details-actions" aria-label="Show in Library" />}
             </tr>
           </thead>
           <tbody>
@@ -178,9 +194,9 @@ export default function LibraryDetails({ hierarchy }: Props) {
                   aria-selected={selected}
                   title={title}
                   onFocus={() => setFocusKey(row.node.key)}
-                  onClick={() => selectNode(row.node)}
+                  onClick={() => selectLibraryNode(row.node)}
                   onDoubleClick={() => openLibraryNode(row.node)}
-                  onContextMenu={() => selectNode(row.node)}
+                  onContextMenu={() => selectLibraryNode(row.node)}
                   onKeyDown={(event) => {
                     // Match LibraryTree's focused-row contract: a Details row
                     // owns Delete/Backspace before the window-level fallback
@@ -199,6 +215,10 @@ export default function LibraryDetails({ hierarchy }: Props) {
                       return;
                     }
                     if (event.key === "Enter") {
+                      // D2: Enter on the focused reveal BUTTON is the
+                      // button's own activation — let the native click fire
+                      // instead of opening the row it sits in.
+                      if ((event.target as Element).closest(".qzk-details-reveal")) return;
                       event.preventDefault();
                       openLibraryNode(row.node);
                     }
@@ -206,7 +226,7 @@ export default function LibraryDetails({ hierarchy }: Props) {
                 >
                   <td
                     className="qzk-details-name"
-                    style={{ paddingLeft: sortKey === "manual" ? 8 + row.node.depth * 10 : 8 } as CSSProperties}
+                    style={{ paddingLeft: !searching && sortKey === "manual" ? 8 + row.node.depth * 10 : 8 } as CSSProperties}
                   >
                     <span aria-hidden="true">{row.node.kind === "folder" ? "▦" : row.node.kind === "workbook" ? "▤" : "·"}</span>
                     <span>{row.node.name}</span>
@@ -219,11 +239,42 @@ export default function LibraryDetails({ hierarchy }: Props) {
                   <td className="qzk-details-medium">{row.source}</td>
                   <td className="qzk-details-wide">{row.modified}</td>
                   <td className="qzk-details-wide">{row.tags}</td>
+                  {searching && (
+                    <td className="qzk-details-actions">
+                      {/* Rides the roving row's tab stop: reachable by Tab
+                       *  only from the focused row (one extra stop while
+                       *  searching, matching the two-stop philosophy). */}
+                      <button
+                        type="button"
+                        className="qzk-details-reveal"
+                        aria-label="Show in Library"
+                        title="Show in Library"
+                        tabIndex={row.node.key === rovingKey ? 0 : -1}
+                        onClick={(event) => {
+                          event.stopPropagation(); // never also select/open the row
+                          onShowInLibrary?.(row.node);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        {/* Compact glyph at narrow container widths, full text
+                         *  at ≥300px — the accessible name lives on the button
+                         *  either way (review round 2: the text button clipped
+                         *  outside its cell at the default 210px panel). */}
+                        <span className="qzk-reveal-glyph" aria-hidden="true">⌖</span>
+                        <span className="qzk-reveal-text">Show in Library</span>
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {searching && rows.length === 0 && (
+          <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
+            No matches
+          </div>
+        )}
       </div>
     </div>
   );

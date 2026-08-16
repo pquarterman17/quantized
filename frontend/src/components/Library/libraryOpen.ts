@@ -20,6 +20,17 @@ export function recordWorkbookOpen(workbookId: string | undefined, key: string):
   useApp.getState().setWorkbookLastChild(workbookId, key);
 }
 
+/** The single "select a Library node" contract (L0.25, shared by Details rows,
+ *  the search-results surface, and the reveal effect): a worksheet's selection
+ *  IS the app-wide dataset selection (`selectedIds`); every other kind selects
+ *  through `librarySelection`. The two stay mutually exclusive at their store
+ *  chokepoints — see store/libraryPanel.ts. */
+export function selectLibraryNode(node: LibraryNode): void {
+  const s = useApp.getState();
+  if (node.kind === "worksheet") s.selectIds([node.entityId]);
+  else s.setLibrarySelection({ kind: node.kind, id: node.entityId });
+}
+
 /** The workbook id a node is nested under, or undefined when it isn't a
  *  workbook child (a folder/root-level item, or a cross-workbook artifact
  *  placed at a shared folder per L0.44). */

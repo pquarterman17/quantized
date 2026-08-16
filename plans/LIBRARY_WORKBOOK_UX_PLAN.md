@@ -500,8 +500,8 @@ Library presentation without changing organization or duplicating objects.
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
 - [x] **L1.6 Search-results design:** confirmed flat Details-style results with
-  full breadcrumbs and **Show in Library** in L0.26. Implementation remains
-  open.
+  full breadcrumbs and **Show in Library** in L0.26. Implemented by PR D2
+  (2026-08-15, stacked branch pending owner review).
 - [x] **L1.7 Heterogeneous-child design:** confirmed ordering, preview, open,
   source, and context-menu behavior in L0.16-L0.21 and L0.38-L0.40.
   Implementation remains open.
@@ -558,11 +558,14 @@ build, and focused interaction coverage where appropriate.
     vacuous because the global navigator wraps), and 1 real-browser @core
     Playwright journey (details-keyboard.spec.ts) proving the actual browser
     tab sequence jsdom cannot.
-4b. [ ] **PR D2 — project-wide search results surface.** Implement the
-    confirmed L0.26 behavior over the Details renderer: flat result list with
-    full `Folder / Workbook / Child` breadcrumbs, normal open behavior, and
-    **Show in Library** reveal. (Booked 2026-08-14 — L0.26 previously had no
-    owning slice.)
+4b. [x] ~~**PR D2 — project-wide search results surface.**~~ Implemented
+    2026-08-15 (branch `claude/library-d2-search`, stacked PR pending owner
+    review — NOT merged): the confirmed L0.26 behavior over the Details
+    renderer — flat result list spanning EVERY hierarchy node kind with full
+    `Folder / Workbook / Child` breadcrumbs, normal per-kind open, and a
+    per-row **Show in Library** that clears the query and reveals the item
+    (the reveal signal generalized to any `kind:id` node key). (Booked
+    2026-08-14 — L0.26 previously had no owning slice.)
 5. [ ] **PR E — tile-browser shell after mockup approval.** Implement the
    approved wide-surface behavior and interaction parity.
 5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
@@ -1065,6 +1068,29 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **PR D2 — project-wide search results surface** (2026-08-15, branch
+  `claude/library-d2-search`, STACKED on the diraculator-audit branch per the
+  owner's instruction; PR open, deliberately unmerged) — search now spans the
+  project (L0.26): `lib/librarySearch.ts` extends the smart-folder grammar to
+  every hierarchy node kind (worksheets keep name/tag/format; other kinds are
+  a name-only surface, so `tag:`/`format:` terms honestly exclude them), and
+  an active query renders LibraryDetails AS the flat results surface in
+  either view mode — full breadcrumbs, flat indent, per-row **Show in
+  Library**, "No matches" state; the unfiltered legacy sections no longer
+  resurface during search. Open stays canonical (`openLibraryNode`);
+  selection routes through the new shared `selectLibraryNode` (L0.25
+  contract). `revealTarget` generalized to any `kind:id` node key (bare
+  dataset ids still work): the reveal effect walks the hierarchy's parent
+  chain (plus the legacy folderId path for workbook-less worksheets),
+  selects per kind, and retry-scrolls across the lazy renderer swap.
+  Coverage: matcher unit suite, 6 results-surface component tests (open/
+  select/reveal/Enter-on-button/empty/roving-over-results), 3 Library
+  integration tests (artifact reveal end-to-end, kind:id reveal, project-
+  wide matching), rewritten PR C sections-in-search test to the D2 contract,
+  and a real-browser @core journey (library-search.spec.ts) at all three
+  zoom scales. Gate: tsc clean, lint 0 errors, vitest 6,818, bundle 2.0 kB
+  under budget, Playwright 45/45.
+
 - ~~**PR D — view preference and details renderer**~~ (2026-08-15, PR #140,
   merge `a8bb751`; ChatGPT-Sol implemented, Claude/Fable reviewed) — persisted
   Tree/Details preference (localStorage, fails safe), sortable Details
@@ -1223,6 +1249,14 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-15 — Claude (Fable):** PR D2 implemented on
+  `claude/library-d2-search`, stacked on the diraculator-audit branch per the
+  owner ("stack it as a PR, we'll deal with the merge of both later") — PR
+  open, unmerged. Ticked row 4b and L1.6; wrote the Completed entry. The
+  L1.4 booking (artifact context menus / registry Delete) remains unassigned
+  — D2 deliberately did NOT absorb it (results rows reuse the same
+  consume-only Delete contract as Details rows). Next per the confirmed
+  order: PR E awaits its mockup approval; PR A is still the top unticked row.
 - **2026-08-15 — Claude (Fable):** Hardening slice SHIPPED (PR #142 merged
   `51df7cc`, owner-directed after a high-effort self-review round found and
   fixed 8 further defects in the slice itself — including undo/redo as a
