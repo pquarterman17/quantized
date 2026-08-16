@@ -639,9 +639,11 @@ build, and focused interaction coverage where appropriate.
        workspace supplies a browse target. Every node kind has a compact,
        factual kind/source summary. E-b remains open for E-b2's shared artifact
        lifecycle menus (the L1.4 gap); Quick Plot remains exclusively PR F.
-     - [~] **E-b2 — shared artifact lifecycle actions (ChatGPT-Sol,
-       2026-08-16):** implemented on `sol/library-eb2-artifact-actions`,
-       pending PR/Claude review. One registry/builder supplies Open, Rename,
+     - [x] **E-b2 — shared artifact lifecycle actions (ChatGPT-Sol,
+       2026-08-16):** merged as PR #148 (`c07b136`) after Claude review
+       verified the recovery wording against real Undo boundaries and closed
+       the booked Delete-keystroke debt on the branch (`279bed5`, see change
+       log). One registry/builder supplies Open, Rename,
        Duplicate, Show source, Properties, and Delete to artifact tiles, Tree
        artifact rows, and Details rows. Editable-figure deletion names affected
        page panels; page/editable deletion preserves the established session
@@ -655,6 +657,19 @@ build, and focused interaction coverage where appropriate.
      cache, visible-only lazy generation, placeholders, cancellation, and
      large-Library fixtures/virtualization boundary. Claude should review cache
      invalidation and cancellation reliability before merge.
+     **OWNER SPLIT (Paige, 2026-08-16):** three stacked slices —
+     - [ ] **E-c1 (Claude): thumbnail/cache infrastructure.** Canonical
+       thumbnail generation + invalidation contract, lazy visible-only
+       loading, cache ownership, failure placeholders. Address the eager
+       bundle budget FIRST (0.2 kB headroom at booking): an extraction pass
+       per the ratchet's own rule (never raise the pin — split/defer to
+       re-open the slack band), not a budget raise.
+     - [ ] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
+       analysis/page/report previews; loading/empty/error appearance; visual
+       hierarchy, sizing, hover behavior, readability.
+     - [ ] **E-c3 (Claude): large-Library safeguards.** Virtualization +
+       large-library fixtures; preserve selection, keyboard navigation, and
+       "Show in Library"; performance and regression testing.
 5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
     selection, remembered workbook children, and workspace placement alongside
     the existing window layout; restore heavy children lazily and add
