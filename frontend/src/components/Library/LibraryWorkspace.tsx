@@ -11,6 +11,7 @@ import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { useApp } from "../../store/useApp";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
+import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
@@ -302,6 +303,11 @@ export default function LibraryWorkspace({ onClose }: Props) {
                     if (node.kind === "worksheet") {
                       const ids = useApp.getState().selectedIds;
                       requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
+                    } else if (isArtifactNode(node)) {
+                      // E-b2: the canonical registry delete (shared confirm +
+                      // dependency warning; fail-closed on recovered Origin
+                      // figures, exactly like the disabled menu item).
+                      deleteArtifactConfirmed(node);
                     }
                   } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
                     event.preventDefault(); moveFocus(event.currentTarget, 1);

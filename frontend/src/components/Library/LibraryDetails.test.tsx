@@ -5,11 +5,13 @@ import LibraryDetails from "./LibraryDetails";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
 import type { Dataset } from "../../lib/types";
+import { askConfirm } from "../overlays/ConfirmDialog";
 import { askParams } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 function dataset(id: string, name: string, order: number): Dataset {
   return {
@@ -120,6 +122,25 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
       confirmRemove: false,
     });
     vi.mocked(askParams).mockReset();
+  });
+
+  it("Delete on a focused artifact row routes to the registry's confirmed delete", () => {
+    vi.mocked(askConfirm).mockReset();
+    vi.mocked(askConfirm).mockResolvedValue(false as never);
+    useApp.setState({ reports: [{ id: "rep1", name: "Fit report", datasetId: "d1", report: { title: "R", sections: [] } }] });
+    render(<GlobalHarness />);
+    row("report:rep1").focus();
+    fireEvent.keyDown(row("report:rep1"), { key: "Delete" });
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Delete "Fit report"?',
+      expect.stringContaining("cannot be recovered"),
+      "Delete",
+      true,
+    );
+    // The declined confirm leaves the report — and the swallowed-key guard
+    // still protects the unrelated active dataset either way.
+    expect(useApp.getState().reports).toHaveLength(1);
+    expect(useApp.getState().datasets.map((item) => item.id).sort()).toEqual(["d1", "d2", "solo"]);
   });
 
   it("consumes Delete on a non-worksheet row instead of deleting the active plot dataset", () => {
