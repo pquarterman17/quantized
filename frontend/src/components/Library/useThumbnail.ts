@@ -6,9 +6,12 @@
 //
 // CANCELLATION PROMISE (narrowed per Sol review, PR #149): generation is
 // aborted on unmount and whenever the request fingerprint changes
-// mid-flight — entity or any dependency replaced. Visibility is STICKY by
-// design: once a tile has been seen, scrolling it back out does NOT abort
-// or discard — the work is already paid for and the LRU owns retention.
+// mid-flight — entity or any dependency replaced. Visibility is STICKY
+// while the tile stays MOUNTED: scrolling within the rendered window never
+// aborts or discards. E-c3's virtualized grid UNMOUNTS tiles far outside
+// the window, which aborts their in-flight generation like any unmount —
+// completed thumbnails survive in the LRU, so a tile scrolled back in is
+// a cache hit, and only not-yet-finished work is redone.
 //
 // DEPENDENCY-AWARE INVALIDATION: the hook subscribes to the store slices
 // previews are transitively live against (datasets, editable figures) and

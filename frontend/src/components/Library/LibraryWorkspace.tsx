@@ -6,14 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
-import { fmtNum } from "../../lib/format";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { useApp } from "../../store/useApp";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
-import { useThumbnail } from "./useThumbnail";
+import TilePreview, { KIND_LABEL } from "./TilePreview";
+import { focusTileWhenRendered, useTileVirtualization } from "./useTileVirtualization";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 
@@ -21,116 +21,10 @@ interface Props {
   onClose: () => void;
 }
 
-const KIND_LABEL: Record<LibraryNode["kind"], string> = {
-  folder: "Folder",
-  workbook: "Workbook",
-  worksheet: "Worksheet",
-  "origin-figure": "Origin figure",
-  "editable-figure": "Editable figure",
-  "publication-figure": "Publication figure",
-  page: "Figure page",
-  report: "Report",
-};
-
-const KIND_GLYPH: Record<LibraryNode["kind"], string> = {
-  folder: "▰",
-  workbook: "▤",
-  worksheet: "▦",
-  "origin-figure": "⌁",
-  "editable-figure": "⌁",
-  "publication-figure": "⌁",
-  page: "▧",
-  report: "≡",
-};
-
 function selectedKey(): LibraryNodeKey | null {
   const s = useApp.getState();
   if (s.librarySelection) return `${s.librarySelection.kind}:${s.librarySelection.id}` as LibraryNodeKey;
   return s.selectedIds[0] ? `worksheet:${s.selectedIds[0]}` : null;
-}
-
-function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksheet" }> }) {
-  if (node.entity.pending) {
-    return (
-      <div className="qzk-tile-placeholder">
-        <span aria-hidden="true">{KIND_GLYPH.worksheet}</span>
-        <small>Data loads when opened</small>
-      </div>
-    );
-  }
-  const columnCount = Math.min(4, node.entity.data.labels.length || node.entity.data.values[0]?.length || 0);
-  const labels = Array.from(
-    { length: columnCount },
-    (_, index) => node.entity.data.labels[index] || `Column ${index + 1}`,
-  );
-  const rows = node.entity.data.values.slice(0, 3);
-  return (
-    <div className="qzk-tile-table" aria-label={`Data preview for ${node.name}`}>
-      <div className="qzk-tile-table-row head">
-        {labels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}
-      </div>
-      {rows.map((row, rowIndex) => (
-        <div className="qzk-tile-table-row" key={rowIndex}>
-          {Array.from({ length: columnCount }, (_, col) => (
-            <span key={col}>{fmtNum(row[col])}</span>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TilePreview({ node }: { node: LibraryNode }) {
-  if (node.kind === "worksheet") return <WorksheetPreview node={node} />;
-  if (node.kind === "folder" || node.kind === "workbook") {
-    const children = node.children.length;
-    return (
-      <div className="qzk-tile-placeholder">
-        <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
-        <small>{children} item{children === 1 ? "" : "s"}</small>
-      </div>
-    );
-  }
-  return <ArtifactPreview node={node} />;
-}
-
-/** E-c2: artifact tiles render through the canonical thumbnail pipe —
- *  visible-only generation, revision-keyed cache, abort on unmount (see
- *  useThumbnail), with a consistent visual language for every lifecycle
- *  state rather than renderer-specific placeholder copy. */
-function ArtifactPreview({ node }: { node: LibraryNode }) {
-  const holderRef = useRef<HTMLDivElement | null>(null);
-  const thumb = useThumbnail(node, holderRef);
-  const missing = node.source.missingDatasetIds.length > 0;
-  const caption = missing
-    ? "Source unavailable"
-    : thumb.status === "error"
-      ? "Preview unavailable"
-      : thumb.status === "unsupported"
-        ? "Preview not available for this item"
-        : thumb.status === "ready"
-          ? null
-          : "Generating preview…";
-  return (
-    <div className={`qzk-tile-placeholder qzk-artifact-preview is-${thumb.status}${missing ? " has-missing-source" : ""}`} ref={holderRef}>
-      {thumb.status === "ready" ? (
-        <img
-          className="qzk-tile-thumb"
-          src={thumb.result.url}
-          width={thumb.result.width}
-          height={thumb.result.height}
-          alt={`Preview of ${node.name}`}
-        />
-      ) : (
-        <>
-          <span className="qzk-preview-kind" aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
-          {thumb.status === "loading" && <span className="qzk-preview-skeleton" aria-hidden="true" />}
-        </>
-      )}
-      {caption && <small role={thumb.status === "error" ? "status" : undefined}>{caption}</small>}
-      <span className="qzk-preview-badge" aria-hidden="true">{KIND_LABEL[node.kind]}</span>
-    </div>
-  );
 }
 
 function parentChain(node: LibraryNode | undefined, byKey: ReadonlyMap<LibraryNodeKey, LibraryNode>): LibraryNode[] {
@@ -182,6 +76,9 @@ export default function LibraryWorkspace({ onClose }: Props) {
   // land on the nearest surviving tile by its PREVIOUS position — never
   // steal focus that legitimately moved elsewhere.
   const prevItemsRef = useRef(items);
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const virt = useTileVirtualization(items.length, scrollRef, gridRef);
   useEffect(() => {
     if (
       rovingKey != null
@@ -189,17 +86,30 @@ export default function LibraryWorkspace({ onClose }: Props) {
       && document.activeElement === document.body
     ) {
       const prevIdx = prevItemsRef.current.findIndex((node) => node.key === rovingKey);
-      const survivor = items[Math.min(Math.max(prevIdx, 0), items.length - 1)];
+      const survivorIdx = Math.min(Math.max(prevIdx, 0), items.length - 1);
+      const survivor = items[survivorIdx];
       if (survivor) {
-        (document.querySelector(`[data-library-tile="${CSS.escape(survivor.key)}"]`) as HTMLElement | null)?.focus();
+        // E-c3: the survivor may be outside the rendered window — bring its
+        // row in, then focus once it exists (rAF retry).
+        virt.ensureVisible(survivorIdx);
+        focusTileWhenRendered(survivor.key);
       }
     }
     prevItemsRef.current = items;
+    // virt.ensureVisible is stable per (virtualized, refs) — not a re-run key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, rovingKey]);
   const currentSelectedKey = selectedKey();
   const selectedInItems = items.some((node) => node.key === currentSelectedKey);
   const rovingInItems = items.some((node) => node.key === rovingKey);
   const tabStopKey = rovingInItems ? rovingKey : selectedInItems ? currentSelectedKey : items[0]?.key ?? null;
+  // E-c3: the window must always contain exactly one tabbable tile — when
+  // the model-level tab stop is scrolled out of the rendered window, the
+  // first rendered tile carries the grid's keyboard entry point instead.
+  const rendered = items.slice(virt.start, virt.end);
+  const effectiveTabStop = rendered.some((node) => node.key === tabStopKey)
+    ? tabStopKey
+    : rendered[0]?.key ?? null;
   const breadcrumbs = useMemo(() => parentChain(container, hierarchy.byKey), [container, hierarchy.byKey]);
 
   const close = useCallback((): void => {
@@ -271,14 +181,33 @@ export default function LibraryWorkspace({ onClose }: Props) {
     if (opensInStage(node)) close();
   };
 
-  const moveFocus = (current: HTMLElement, delta: number): void => {
-    const tiles = [...current.closest(".qzk-tile-grid")!.querySelectorAll<HTMLElement>("[data-library-tile]")];
-    const index = tiles.indexOf(current);
-    tiles[Math.max(0, Math.min(tiles.length - 1, index + delta))]?.focus();
+  // E-c3: navigation is by MODEL index (the linear-list contract, #146),
+  // not by querying rendered DOM — under virtualization the neighbor may
+  // not exist yet, so ensureVisible brings its row in first and the focus
+  // retries across the re-render.
+  const moveFocus = (currentKey: LibraryNodeKey, delta: number): void => {
+    const index = items.findIndex((node) => node.key === currentKey);
+    if (index < 0) return;
+    const target = Math.max(0, Math.min(items.length - 1, index + delta));
+    virt.ensureVisible(target);
+    focusTileWhenRendered(items[target].key);
   };
 
+  // Entering ANY container (mount included — this runs for the null root
+  // container too) lands the window on the current selection if it lives
+  // here, else the top. This is also what resets a stale scrollTop carried
+  // over from a previously-scrolled container: ensureVisible scrolls the
+  // target row in from wherever the section was left.
+  useEffect(() => {
+    if (!virt.virtualized) return;
+    const index = currentSelectedKey ? items.findIndex((node) => node.key === currentSelectedKey) : -1;
+    virt.ensureVisible(Math.max(0, index));
+    // ensureVisible is stable; items/selection captured per container change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerKey, virt.virtualized]);
+
   return (
-    <section className="qzk-library-workspace" aria-label="Library workspace">
+    <section className="qzk-library-workspace" aria-label="Library workspace" ref={scrollRef}>
       <header className="qzk-library-workspace-head">
         <div>
           <div className="qzk-library-workspace-eyebrow">Library</div>
@@ -306,8 +235,14 @@ export default function LibraryWorkspace({ onClose }: Props) {
       {items.length === 0 ? (
         <div className="qzk-library-workspace-empty">This location is empty.</div>
       ) : (
-        <div className="qzk-tile-grid" role="list" aria-label={`${container?.name ?? "Project"} items`}>
-          {items.map((node) => {
+        <div
+          className="qzk-tile-grid"
+          role="list"
+          aria-label={`${container?.name ?? "Project"} items`}
+          ref={gridRef}
+          style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
+        >
+          {rendered.map((node) => {
             const selected = node.key === currentSelectedKey;
             const summary = libraryTileSummary(node);
             return (
@@ -316,7 +251,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
                 role="listitem"
                 data-library-tile={node.key}
                 className={`qzk-library-tile${selected ? " selected" : ""}`}
-                tabIndex={node.key === tabStopKey ? 0 : -1}
+                tabIndex={node.key === effectiveTabStop ? 0 : -1}
                 aria-label={`${node.name}, ${KIND_LABEL[node.kind]}`}
                 onClick={() => selectOrBrowse(node)}
                 onDoubleClick={() => openFromTile(node)}
@@ -345,9 +280,9 @@ export default function LibraryWorkspace({ onClose }: Props) {
                       deleteArtifactConfirmed(node);
                     }
                   } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-                    event.preventDefault(); moveFocus(event.currentTarget, 1);
+                    event.preventDefault(); moveFocus(node.key, 1);
                   } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-                    event.preventDefault(); moveFocus(event.currentTarget, -1);
+                    event.preventDefault(); moveFocus(node.key, -1);
                   }
                 }}
               >

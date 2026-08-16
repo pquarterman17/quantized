@@ -701,9 +701,26 @@ build, and focused interaction coverage where appropriate.
        clear loading, unavailable-source, unsupported, and error treatments,
        kind badges, restrained hover emphasis, and reduced-motion behavior.
        E-c3 virtualization remains explicitly outside this slice.*
-     - [ ] **E-c3 (Claude): large-Library safeguards.** Virtualization +
+     - [~] **E-c3 (Claude): large-Library safeguards.** Virtualization +
        large-library fixtures; preserve selection, keyboard navigation, and
        "Show in Library"; performance and regression testing.
+       *Implemented 2026-08-16 on `claude/quantized-origin-jmp-gaps-vbtfnm`,
+       pending PR. Windowed tile rendering above 80 items (below: DOM
+       byte-identical — every prior workspace test passes unchanged),
+       delegating the clamped row-window math to lib/gridwindow's
+       unit-tested `computeAxisWindow` (the worksheet viewport's helper).
+       Keyboard navigation moved to MODEL-index + ensureVisible +
+       guarded rAF focus retry (never steals focus the user moved
+       elsewhere); every rendered window carries exactly one tabbable
+       tile; entering any container (null root included) lands on the
+       current selection and resets stale scroll; jsdom-deterministic
+       measurement fallbacks are the unit-test contract, real geometry is
+       covered by a 400-item Playwright journey (bounded DOM, live window
+       movement, cross-boundary arrow nav, Escape/reveal). 11 scale tests
+       — 4 proven red by force-disabling virtualization; uniform-row
+       approximation documented in the hook header. TilePreview extracted
+       from LibraryWorkspace (workshop pattern) to stay under the
+       component ceiling.*
 5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
     selection, remembered workbook children, and workspace placement alongside
     the existing window layout; restore heavy children lazily and add
@@ -1810,3 +1827,15 @@ back to the owner. No Library implementation is authorized by this pause.
   wording untouched, CSS token-clean with reduced-motion support, bundle
   unchanged at 814.9 kB. Three probes proven red first
   (`thumbnailPreviewHonesty.test.ts`).
+- **2026-08-16 — Claude, E-c3 implementation (owner split, final slice):**
+  Windowed tile rendering for large Libraries, reusing lib/gridwindow's
+  clamped `computeAxisWindow` rather than new inline math (the pre-push
+  self-review pass caught the duplication AND that the duplicate lacked the
+  helper's shrink-under-scroll clamping — plus a container-change scroll
+  reset, a null-root land-on-selection miss, and a focus-stealing hazard in
+  the deferred focus retry; all four fixed with regression pins before
+  push). Small libraries are structurally unvirtualized: every pre-existing
+  workspace test passes byte-identical. The E-c1 sticky-visibility doc
+  promise is narrowed honestly: virtualized unmount aborts in-flight
+  generation like any unmount; completed thumbnails survive in the LRU.
+  E-c (thumbnails + scale safeguards) is complete pending PR/merge.
