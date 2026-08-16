@@ -598,8 +598,18 @@ build, and focused interaction coverage where appropriate.
      "Escape returns to the UNCHANGED active plot".** Worksheet tiles show the first three row-major data
      rows and up to four real columns plus correct dimensions—never an inferred
      plot. The workspace is lazy-loaded as its own ~5.8 kB chunk.
-     - [~] **E-a1 — merged-review hardening (ChatGPT-Sol, 2026-08-16):**
-       implemented on `sol/library-ea-hardening`, pending PR/Claude review.
+     - [x] ~~**E-a1 — merged-review hardening (ChatGPT-Sol, 2026-08-16)**~~ —
+       SHIPPED 2026-08-16 (PR #146, merge `98ea821`; Claude review satisfied
+       + merge owner-directed). All three post-#145 findings closed and
+       verified against the real chokepoints (cmdkOpen store field, .qzk-ctx
+       menu root, real ContextMenu in tests). The Claude review round added
+       three red-proven pieces on the same branch (`5507693`): nearest-
+       survivor focus recovery after deleting the focused tile (the Tree/
+       Details row contract, now on tiles), the Escape editing exemption
+       aligned with useGlobalShortcuts' isEditing (SELECT + isContentEditable),
+       and the tiles E2E journey updated to the new listitem/dimensionsOf
+       contract (the branch had broken it invisibly — GitHub CI does not run
+       Playwright).
        A focused tile now owns Delete/Backspace through the canonical confirmed
        removal path; command palette, context menu, and active text editing own
        Escape before the workspace; pending worksheets show their true
@@ -1323,6 +1333,14 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-16 — Claude (Fable):** PR #146 (E-a1 hardening) reviewed and
+  merged (`98ea821`) under the owner's overnight handle-everything directive.
+  Sol's three fixes verified genuine; the review round contributed focus
+  recovery on tile deletion, the SELECT/isContentEditable Escape exemption,
+  and the repaired tiles E2E journey (see the E-a1 row). With this, every
+  finding from the PR #145 review is closed; E-b (shared tile actions +
+  L1.4) and E-c (thumbnails/caching/virtualization) are the remaining E
+  slices.
 - **2026-08-16 — Claude (Fable):** PR #145 (E-a) merged on the owner's
   instruction (`b18471a`) with CI green on `c6df54a`. The owner chose to
   merge with the three Claude-review findings still open; they are now LIVE
