@@ -4,6 +4,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { requestDatasetRemoval } from "../../lib/datasetRemoval";
+import { fmtNum } from "../../lib/format";
+import { dimensionsOf } from "../../lib/libraryDetails";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
@@ -41,15 +44,15 @@ function selectedKey(): LibraryNodeKey | null {
   return s.selectedIds[0] ? `worksheet:${s.selectedIds[0]}` : null;
 }
 
-function worksheetDimensions(node: Extract<LibraryNode, { kind: "worksheet" }>): string {
-  // DataStruct.values is row-major (N rows × M value columns); time is a
-  // separate axis vector and labels/units describe the M value columns.
-  const rows = node.entity.data.values.length;
-  const cols = node.entity.data.labels.length || node.entity.data.values[0]?.length || 0;
-  return `${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"} × ${cols.toLocaleString()} ${cols === 1 ? "column" : "columns"}`;
-}
-
 function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksheet" }> }) {
+  if (node.entity.pending) {
+    return (
+      <div className="qzk-tile-placeholder">
+        <span aria-hidden="true">{KIND_GLYPH.worksheet}</span>
+        <small>On demand</small>
+      </div>
+    );
+  }
   const columnCount = Math.min(4, node.entity.data.labels.length || node.entity.data.values[0]?.length || 0);
   const labels = Array.from(
     { length: columnCount },
@@ -64,7 +67,7 @@ function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksh
       {rows.map((row, rowIndex) => (
         <div className="qzk-tile-table-row" key={rowIndex}>
           {Array.from({ length: columnCount }, (_, col) => (
-            <span key={col}>{row[col] == null ? "—" : String(row[col])}</span>
+            <span key={col}>{fmtNum(row[col])}</span>
           ))}
         </div>
       ))}
@@ -132,6 +135,27 @@ export default function LibraryWorkspace({ onClose }: Props) {
 
   const container = containerKey ? hierarchy.byKey.get(containerKey) : undefined;
   const items = container ? container.children : hierarchy.roots;
+
+  // Focus survives removal of the focused tile (the same contract as
+  // LibraryTree/LibraryDetails rows, review round): when the tile that held
+  // focus is gone after a re-render and the DOM orphaned focus to <body>,
+  // land on the nearest surviving tile by its PREVIOUS position — never
+  // steal focus that legitimately moved elsewhere.
+  const prevItemsRef = useRef(items);
+  useEffect(() => {
+    if (
+      rovingKey != null
+      && !items.some((node) => node.key === rovingKey)
+      && document.activeElement === document.body
+    ) {
+      const prevIdx = prevItemsRef.current.findIndex((node) => node.key === rovingKey);
+      const survivor = items[Math.min(Math.max(prevIdx, 0), items.length - 1)];
+      if (survivor) {
+        (document.querySelector(`[data-library-tile="${CSS.escape(survivor.key)}"]`) as HTMLElement | null)?.focus();
+      }
+    }
+    prevItemsRef.current = items;
+  }, [items, rovingKey]);
   const currentSelectedKey = selectedKey();
   const selectedInItems = items.some((node) => node.key === currentSelectedKey);
   const rovingInItems = items.some((node) => node.key === rovingKey);
@@ -159,6 +183,13 @@ export default function LibraryWorkspace({ onClose }: Props) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Same editing predicate as useGlobalShortcuts' isEditing (review round:
+      // SELECT was missing, and isContentEditable covers every contenteditable
+      // form, not only the ="true" spelling).
+      const el = event.target instanceof HTMLElement ? event.target : null;
+      const editing = !!el
+        && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      if (useApp.getState().cmdkOpen || document.querySelector(".qzk-ctx") || editing) return;
       event.preventDefault();
       // This workspace owns the keystroke. Do not also let the window-level
       // plot-tool Escape handler clear an unchanged plot gesture/tool.
@@ -222,14 +253,14 @@ export default function LibraryWorkspace({ onClose }: Props) {
       {items.length === 0 ? (
         <div className="qzk-library-workspace-empty">This location is empty.</div>
       ) : (
-        <div className="qzk-tile-grid" role="grid" aria-label={`${container?.name ?? "Project"} items`}>
+        <div className="qzk-tile-grid" role="list" aria-label={`${container?.name ?? "Project"} items`}>
           {items.map((node) => {
             const selected = node.key === currentSelectedKey;
-            const dimensions = node.kind === "worksheet" ? worksheetDimensions(node) : null;
+            const dimensions = node.kind === "worksheet" ? dimensionsOf(node) : null;
             return (
               <article
                 key={node.key}
-                role="gridcell"
+                role="listitem"
                 data-library-tile={node.key}
                 className={`qzk-library-tile${selected ? " selected" : ""}`}
                 tabIndex={node.key === tabStopKey ? 0 : -1}
@@ -241,6 +272,12 @@ export default function LibraryWorkspace({ onClose }: Props) {
                   if (event.key === "Enter") {
                     event.preventDefault();
                     openFromTile(node);
+                  } else if (event.key === "Delete" || event.key === "Backspace") {
+                    event.preventDefault();
+                    if (node.kind === "worksheet") {
+                      const ids = useApp.getState().selectedIds;
+                      requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
+                    }
                   } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
                     event.preventDefault(); moveFocus(event.currentTarget, 1);
                   } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {

@@ -25,9 +25,9 @@ test("Tiles occupies the main workspace and Escape restores the unchanged plot @
   // The narrow Library remains mounted as navigation while the former Stage
   // area contains a genuine wide tile grid.
   await expect(page.locator(".qzk-library")).toBeVisible();
-  await expect(page.getByRole("gridcell", { name: /dataset-a\.csv, Worksheet/ })).toBeVisible();
+  await expect(page.getByRole("listitem", { name: /dataset-a\.csv, Worksheet/ })).toBeVisible();
   await expect(page.getByLabel(/Data preview for dataset-a\.csv/)).toBeVisible();
-  await expect(page.getByText("Worksheet · 11 rows × 1 column")).toBeVisible();
+  await expect(page.getByText("Worksheet · 11 × 1")).toBeVisible();
   expect(await activeId(page)).toBe(before);
   await page.evaluate(() => (
     window as unknown as { __qz: { useApp: { getState: () => { setPlotTool: (tool: string) => void } } } }
@@ -51,8 +51,8 @@ test("Tiles occupies the main workspace and Escape restores the unchanged plot @
   // workbook — breadcrumb to the project root, then browse into dataset-a's
   // workbook tile and OPEN its worksheet.
   await page.getByRole("navigation", { name: "Library location" }).getByRole("button", { name: "Project" }).click();
-  await page.getByRole("gridcell", { name: /^dataset-a\.csv, Workbook/ }).click();
-  await page.getByRole("gridcell", { name: /dataset-a\.csv, Worksheet/ }).dblclick();
+  await page.getByRole("listitem", { name: /^dataset-a\.csv, Workbook/ }).click();
+  await page.getByRole("listitem", { name: /dataset-a\.csv, Worksheet/ }).dblclick();
   await expect(page.getByLabel("Library workspace")).toHaveCount(0); // back at the plot…
   await expect(page.locator(".qzk-stage-cell")).toBeVisible();
   // …with the OPENED sheet active (not the auto-activated dataset-b import).

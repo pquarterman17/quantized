@@ -69,7 +69,7 @@ function textMetadata(metadata: Record<string, unknown>, keys: readonly string[]
   return "—";
 }
 
-function dimensionsOf(node: LibraryNode): string {
+export function dimensionsOf(node: LibraryNode): string {
   if (node.kind !== "worksheet") return "—";
   const rows = node.entity.pending?.rows ?? node.entity.data.time.length;
   const columns = node.entity.pending?.cols ?? node.entity.data.labels.length;

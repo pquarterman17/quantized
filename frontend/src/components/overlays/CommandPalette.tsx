@@ -82,6 +82,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
+      e.preventDefault();
       setCmdk(false);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
