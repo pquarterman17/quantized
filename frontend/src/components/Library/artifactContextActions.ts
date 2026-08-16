@@ -6,7 +6,7 @@ import { openLibraryNode } from "./libraryOpen";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
-import { buildMenuItems, type MenuEntry } from "../../lib/contextActions";
+import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocument";
 
@@ -120,4 +120,20 @@ export function isArtifactNode(node: LibraryNode): node is ArtifactNode {
 
 export function buildArtifactMenu(node: ArtifactNode, open: () => void = () => openLibraryNode(node)): ContextMenuItem[] {
   return buildMenuItems(artifactActions, { node, open });
+}
+
+/** Delete an artifact through the SAME registry action the lifecycle menu
+ *  uses — looked up BY ID, mirroring `removeDatasetConfirmed` — so the
+ *  shared confirm (and the page-panel dependency warning) cannot be
+ *  bypassed by a Delete keystroke. Honors the action's own `enabled` gate
+ *  (a keystroke must never confirm-then-no-op): a source-managed recovered
+ *  Origin figure is a consumed no-op, exactly like its disabled menu item. */
+export function deleteArtifactConfirmed(node: ArtifactNode): void {
+  const action = artifactActions.find(
+    (entry): entry is ContextAction<ArtifactTarget> => !("separator" in entry) && entry.id === "artifact.delete",
+  );
+  if (!action) throw new Error("artifact.delete missing from the artifact action registry");
+  const target: ArtifactTarget = { node, open: () => openLibraryNode(node) };
+  if (action.enabled && !action.enabled(target)) return;
+  runContextAction(action, target);
 }

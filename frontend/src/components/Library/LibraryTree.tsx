@@ -18,14 +18,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import ArtifactRow from "./ArtifactRows";
-import { buildArtifactMenu, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
+import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
 import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
 import WorkbookRow from "./WorkbookRow";
 import { openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import { subtreeCount } from "../../lib/foldertree";
-import { folderDeleteActions, runContextAction } from "../../lib/contextActions";
+import { folderDeleteActions, isContextMenuKeyEvent, runContextAction } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
@@ -164,7 +164,7 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
     const key = keyOfRow(e.target as Element);
     const idx = indexOfKey(rows, key);
     if (idx < 0) return;
-    if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && isArtifactNode(rows[idx].node)) {
+    if (isContextMenuKeyEvent(e) && isArtifactNode(rows[idx].node)) {
       e.preventDefault();
       const rect = (e.currentTarget.querySelector(rowSelector(rows[idx])) as HTMLElement).getBoundingClientRect();
       setArtifactMenu({ x: rect.left + 8, y: rect.bottom, node: rows[idx].node });
@@ -220,13 +220,20 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
         requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
         return;
       }
-      // Every remaining row kind consumes the key (P1 review fix): an
-      // artifact/origin-figure/mismatched-selection row has no dataset
-      // selection of its own, so falling through would hand Delete to the
-      // global handler against an UNRELATED dataset. Artifact deletion
-      // routes through a registry action when a later PR defines one
-      // (L0.39/L0.40); until then a safely-swallowed keystroke is the
-      // contract.
+      // Artifact rows (E-b2): Delete routes through the SAME registry action
+      // as the lifecycle menu — shared confirm + dependency warning, and the
+      // helper honors the action's `enabled` gate (recovered Origin figures
+      // stay a consumed no-op). This closes the debt the swallowed-keystroke
+      // contract booked ("until a registry action defines one").
+      if (isArtifactNode(node)) {
+        e.preventDefault();
+        deleteArtifactConfirmed(node);
+        return;
+      }
+      // Every remaining row kind consumes the key (P1 review fix): a
+      // mismatched-selection row has no dataset selection of its own, so
+      // falling through would hand Delete to the global handler against an
+      // UNRELATED dataset.
       e.preventDefault();
       return;
     }

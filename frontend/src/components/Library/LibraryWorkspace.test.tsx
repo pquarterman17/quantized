@@ -5,7 +5,10 @@ import LibraryWorkspace from "./LibraryWorkspace";
 import { createPageDocument } from "../../lib/pageDocument";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { askConfirm } from "../overlays/ConfirmDialog";
 import ContextMenu from "../overlays/ContextMenu";
+
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const worksheet = (id: string, workbookId: string): Dataset => ({
   id,
@@ -139,6 +142,26 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     fireEvent.doubleClick(tile);
     expect(useApp.getState().figurePageOpen).toBe(true); // the overlay opened above
     expect(onClose).not.toHaveBeenCalled(); // the workspace stays for more browsing
+  });
+
+  it("Delete on a focused artifact tile routes to the registry's confirmed delete", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true as never);
+    useApp.setState({
+      pages: [createPageDocument({ id: "pg1", name: "Summary Page", rows: 1, cols: 1 })],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const tile = screen.getByRole("listitem", { name: "Summary Page, Figure page" });
+    tile.focus();
+
+    fireEvent.keyDown(tile, { key: "Delete" });
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Delete "Summary Page"?',
+      expect.stringContaining("Undo can restore it"),
+      "Delete",
+      true,
+    );
+    await act(async () => {}); // let the confirmed run resolve
+    expect(useApp.getState().pages).toHaveLength(0);
   });
 
   it("right-clicks an artifact tile into the shared lifecycle menu", () => {

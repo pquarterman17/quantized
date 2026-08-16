@@ -648,6 +648,22 @@ describe("LibraryTree — L0.25 select/open/disclosure contract, every node kind
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
   });
 
+  it("Delete on a focused artifact row routes to the registry's confirmed delete", () => {
+    // The swallowed-keystroke fall-through was explicitly "until a registry
+    // action defines artifact deletion" — E-b2 is that registry, so the key
+    // now routes through the SAME confirm the menu uses.
+    vi.mocked(askConfirm).mockResolvedValue(true as never);
+    render(<Harness />);
+    row("report:rep1").focus();
+    fireEvent.keyDown(row("report:rep1"), { key: "Delete" });
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Delete "My Report"?',
+      expect.stringContaining("cannot be recovered"),
+      "Delete",
+      true,
+    );
+  });
+
   it("folder: the caret toggles disclosure WITHOUT selecting; a body double-click is the folder's open (toggle)", () => {
     render(<Harness />);
     const caret = row("folder:f1").querySelector(".qzk-group-caret") as HTMLElement;

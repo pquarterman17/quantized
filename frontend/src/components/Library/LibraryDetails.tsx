@@ -12,7 +12,7 @@ import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
 import { parseQuery } from "../../lib/smartfolders";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
-import { buildArtifactMenu, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
+import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
@@ -210,9 +210,9 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                     // Match LibraryTree's focused-row contract: a Details row
                     // owns Delete/Backspace before the window-level fallback
                     // can target stale selectedIds (or the active plot). Only
-                    // worksheets have an enabled delete flow in this slice;
-                    // every other kind consumes the key until its canonical
-                    // registry action is available through L1.4.
+                    // worksheets and artifacts (E-b2) route to their
+                    // canonical delete flows; the remaining kinds
+                    // (folder/workbook) consume the key here.
                     if (isContextMenuKeyEvent(event) && isArtifactNode(row.node)) {
                       event.preventDefault();
                       const rect = event.currentTarget.getBoundingClientRect();
@@ -226,6 +226,11 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                         requestDatasetRemoval(
                           ids.length > 0 && ids.includes(row.node.entityId) ? ids : [row.node.entityId],
                         );
+                      } else if (isArtifactNode(row.node)) {
+                        // E-b2: the canonical registry delete (shared confirm
+                        // + dependency warning; fail-closed on source-managed
+                        // recovered Origin figures).
+                        deleteArtifactConfirmed(row.node);
                       }
                       return;
                     }
