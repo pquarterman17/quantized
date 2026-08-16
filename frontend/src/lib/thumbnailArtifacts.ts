@@ -1,9 +1,20 @@
+import { figureChannelSelection } from "./originFigures";
 import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
 import { plotSvgBody, svgResult } from "./thumbnailSvg";
 import type { DataStruct, Dataset } from "./types";
 
+/** The dataset THIS node renders. Origin-figure nodes carry their own
+ *  book-matched `datasetId` while `source.datasetIds` lists the whole
+ *  LAYER FAMILY layer-ascending — a layer-2 node's first dep is layer 1's
+ *  dataset, so "first dep" would preview the wrong book (PR #150 review).
+ *  Editable/publication figures have single-dataset sources; first
+ *  non-null is exact there. */
 function datasetFrom(request: ThumbnailRequest): Dataset | undefined {
-  return request.deps.find((dep): dep is Dataset => !!dep && "data" in dep && "id" in dep);
+  const { node, datasetDeps } = request;
+  if (node.kind === "origin-figure" && node.entity.datasetId != null) {
+    return datasetDeps.find((dep) => dep?.id === node.entity.datasetId) ?? undefined;
+  }
+  return datasetDeps.find((dep) => dep != null) ?? undefined;
 }
 
 function dataFor(request: ThumbnailRequest): DataStruct | undefined {
@@ -21,6 +32,16 @@ function selections(request: ThumbnailRequest): { x: number | null; y: number[] 
   const { node } = request;
   if (node.kind === "editable-figure") return { x: node.entity.bindings.xKey, y: node.entity.bindings.yKeys };
   if (node.kind === "publication-figure") return { x: node.entity.config.xKey, y: node.entity.config.yKeys };
+  if (node.kind === "origin-figure") {
+    // The SAME canonical curve→channel mapping the real apply action uses
+    // (figureChannelSelection) against the node's OWN book-matched dataset
+    // — the preview draws the columns the figure actually plots, and
+    // degrades to the default selection exactly where the apply action
+    // would too (null = nothing mapped).
+    const dataset = datasetFrom(request);
+    const selection = dataset ? figureChannelSelection(node.entity.figure, dataset) : null;
+    if (selection) return { x: selection.xKey, y: selection.yKeys };
+  }
   return { x: null, y: null };
 }
 

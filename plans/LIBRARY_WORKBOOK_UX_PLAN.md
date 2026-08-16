@@ -1786,3 +1786,22 @@ back to the owner. No Library implementation is authorized by this pause.
   restrained hover treatment, and reduced-motion support. The full plotting
   engine is deliberately not mounted inside tiles; E-c3 virtualization and
   large-Library fixtures remain Claude's next slice after review/merge.
+- **2026-08-16 — Claude review of PR #150 (E-c2), three red-proven fixes
+  pushed to the branch:** (1) the page generator's dataset filter probed the
+  OPTIONAL `pending` field (`"pending" in dep`) — false for every normally-
+  loaded dataset — so live-figure panels silently degraded to gray boxes;
+  (2) Origin-figure previews used the first-columns default instead of the
+  figure's decoded curves — now routed through the canonical
+  `figureChannelSelection` (the same mapping the real apply action uses),
+  against the node's OWN book-matched dataset, because `source.datasetIds`
+  lists the whole layer family layer-ascending and a layer-2 node's first
+  dep is layer 1's dataset; (3) the root cause of this bug class — generators
+  shape-sniffing the flat `deps` fingerprint array — is retired:
+  `ThumbnailRequest` now carries TYPED `figureDeps`/`datasetDeps` slices
+  built by the resolver (which knows each dep's type by construction), and
+  both generators consume those. Otherwise the slice verified clean:
+  SVG escaping and data-URL encoding sound, downsampling honest for
+  recognition, frozen/live data routing matches the entity contracts, delete
+  wording untouched, CSS token-clean with reduced-motion support, bundle
+  unchanged at 814.9 kB. Three probes proven red first
+  (`thumbnailPreviewHonesty.test.ts`).
