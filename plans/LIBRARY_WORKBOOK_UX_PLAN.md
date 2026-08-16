@@ -623,13 +623,20 @@ build, and focused interaction coverage where appropriate.
      disabled reasons), complete per-kind summaries/source links, and close
      the booked L1.4 artifact-context-menu gap. Do not implement Quick Plot
      inference here; PR F owns that scientific contract.
-     - [~] **E-b1 — canonical container/data actions (ChatGPT-Sol,
-       2026-08-16):** implemented on `sol/library-eb-actions`, pending stacked
-       PR/Claude review. Mouse right-click and Context Menu/Shift+F10 on folder,
-       workbook, and worksheet tiles now reuse the existing Tree builders and
-       registries; modal fallbacks provide Rename/Add tag where no inline row
-       editor exists. Workbook **Browse** is enabled only where the Tile
-       workspace supplies a browse target. Every node kind now has a compact,
+     - [x] **E-b1 — canonical container/data actions (ChatGPT-Sol,
+       2026-08-16):** merged as PR #147 (`f3ddc28`) after Claude review found
+       and fixed three red-proven defects on the branch (`5616759`): menu
+       right-click no longer collapses the enclosing multi-selection (tree
+       `selectForMenu` parity — bulk actions reachable, Delete-key contract
+       consistent), `onStageOpen` is a close-only `stageReturn` (no
+       `activateFromLibrary` re-open detouring Origin books to the worksheet
+       tab; panels/merge/plot-together also stage-return), and the folder
+       menu states the whole-subtree dataset count (`subtreeCount` hoisted to
+       `lib/foldertree.ts`). Mouse right-click and Context Menu/Shift+F10 on
+       folder, workbook, and worksheet tiles reuse the existing Tree builders
+       and registries; modal fallbacks provide Rename/Add tag where no inline
+       row editor exists. Workbook **Browse** is enabled only where the Tile
+       workspace supplies a browse target. Every node kind has a compact,
        factual kind/source summary. E-b remains open for E-b2's shared artifact
        lifecycle menus (the L1.4 gap); Quick Plot remains exclusively PR F.
    - [ ] **E-c — canonical thumbnails + scale safeguards:** actual editable/
