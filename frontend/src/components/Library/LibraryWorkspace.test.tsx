@@ -5,6 +5,7 @@ import LibraryWorkspace from "./LibraryWorkspace";
 import { createPageDocument } from "../../lib/pageDocument";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
 
 const worksheet = (id: string, workbookId: string): Dataset => ({
   id,
@@ -37,6 +38,8 @@ beforeEach(() => {
     revealTarget: null,
     workbookLastChild: {},
     figurePageOpen: false,
+    cmdkOpen: false,
+    confirmRemove: false,
   });
 });
 
@@ -48,12 +51,12 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     });
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("gridcell", { name: "Magnetic sweep, Workbook" }));
+    fireEvent.click(screen.getByRole("listitem", { name: "Magnetic sweep, Workbook" }));
     expect(useApp.getState().librarySelection).toEqual({ kind: "workbook", id: "w1" });
-    expect(screen.getByRole("grid", { name: "Magnetic sweep items" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Magnetic sweep items" })).toBeInTheDocument();
     expect(screen.getByLabelText("Data preview for run-1.csv")).toBeInTheDocument();
     expect(screen.getByText("Field")).toBeInTheDocument();
-    expect(screen.getByText(/3 rows × 2 columns/)).toBeInTheDocument();
+    expect(screen.getByText(/Worksheet · 3 × 2/)).toBeInTheDocument();
   });
 
   it("single-click selects a child without changing the active plot; double-click opens it", () => {
@@ -64,7 +67,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       activeId: null,
     });
     render(<LibraryWorkspace onClose={vi.fn()} />);
-    const tile = screen.getByRole("gridcell", { name: "a.csv, Worksheet" });
+    const tile = screen.getByRole("listitem", { name: "a.csv, Worksheet" });
 
     fireEvent.click(tile);
     expect(useApp.getState().selectedIds).toEqual(["a"]);
@@ -103,7 +106,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       librarySelection: { kind: "workbook", id: "w1" },
     });
     render(<LibraryWorkspace onClose={onClose} />);
-    const tile = screen.getByRole("gridcell", { name: "a.csv, Worksheet" });
+    const tile = screen.getByRole("listitem", { name: "a.csv, Worksheet" });
 
     fireEvent.doubleClick(tile);
     expect(useApp.getState().activeId).toBe("a"); // the open happened…
@@ -118,7 +121,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       datasets: [worksheet("a", "w1")],
     });
     render(<LibraryWorkspace onClose={onClose} />);
-    const tile = screen.getByRole("gridcell", { name: "Run, Workbook" });
+    const tile = screen.getByRole("listitem", { name: "Run, Workbook" });
     tile.focus();
     fireEvent.keyDown(tile, { key: "Enter" });
     expect(useApp.getState().activeId).toBe("a"); // L0.6 first-worksheet fallback
@@ -131,7 +134,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       pages: [createPageDocument({ id: "pg1", name: "Summary Page", rows: 1, cols: 1 })],
     });
     render(<LibraryWorkspace onClose={onClose} />);
-    const tile = screen.getByRole("gridcell", { name: "Summary Page, Figure page" });
+    const tile = screen.getByRole("listitem", { name: "Summary Page, Figure page" });
 
     fireEvent.doubleClick(tile);
     expect(useApp.getState().figurePageOpen).toBe(true); // the overlay opened above
@@ -146,15 +149,15 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       datasets: [worksheet("a", "w1")],
     });
     render(<LibraryWorkspace onClose={onClose} />);
-    const folderTile = screen.getByRole("gridcell", { name: "Growth, Folder" });
+    const folderTile = screen.getByRole("listitem", { name: "Growth, Folder" });
     fireEvent.click(folderTile); // browse in
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole("gridcell", { name: "Run, Workbook" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: "Run, Workbook" })).toBeInTheDocument();
 
     // Double-click on the folder itself (via breadcrumb-back first): open =
     // toggleFolderExpanded — sidebar disclosure, nothing stage-bound.
     fireEvent.click(screen.getByRole("button", { name: "Project" })); // breadcrumb to root
-    fireEvent.doubleClick(screen.getByRole("gridcell", { name: "Growth, Folder" }));
+    fireEvent.doubleClick(screen.getByRole("listitem", { name: "Growth, Folder" }));
     expect(onClose).not.toHaveBeenCalled();
     expect(useApp.getState().expandedFolders).toContain("f1"); // the toggle ran
   });
@@ -166,11 +169,74 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
       librarySelection: { kind: "workbook", id: "w1" },
     });
     render(<LibraryWorkspace onClose={vi.fn()} />);
-    const first = screen.getByRole("gridcell", { name: "a.csv, Worksheet" });
-    const second = screen.getByRole("gridcell", { name: "b.csv, Worksheet" });
+    const first = screen.getByRole("listitem", { name: "a.csv, Worksheet" });
+    const second = screen.getByRole("listitem", { name: "b.csv, Worksheet" });
     expect(first).toHaveAttribute("tabindex", "0");
     first.focus();
     fireEvent.keyDown(first, { key: "ArrowRight" });
     expect(second).toHaveFocus();
+  });
+
+  it("Delete removes the focused worksheet instead of an unrelated selection", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1"), worksheet("b", "w1")],
+      selectedIds: ["a"],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    const second = screen.getByRole("listitem", { name: "b.csv, Worksheet" });
+    second.focus();
+    fireEvent.keyDown(second, { key: "Delete" });
+
+    expect(useApp.getState().datasets.map((dataset) => dataset.id)).toEqual(["a"]);
+  });
+
+  it("shows true pending dimensions and an on-demand placeholder", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [{
+        ...worksheet("lazy", "w1"),
+        data: { time: [], values: [], labels: [], units: [], metadata: {} },
+        pending: { kind: "path", path: "/run.opj", bookId: "Book2", rows: 5000, cols: 7 },
+      }],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    expect(screen.getByText("On demand")).toBeInTheDocument();
+    expect(screen.getByText(/Worksheet · 5,000 × 7/)).toBeInTheDocument();
+  });
+
+  it("formats preview values with the shared scientific formatter", () => {
+    const data = worksheet("wide", "w1");
+    data.data.values[0][0] = 1e8;
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [data],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    expect(screen.getByText("1.00000e+8")).toBeInTheDocument();
+  });
+
+  it("lets the command palette and context menu own Escape", () => {
+    const onClose = vi.fn();
+    useApp.setState({ cmdkOpen: true });
+    const { rerender } = render(<LibraryWorkspace onClose={onClose} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    useApp.setState({ cmdkOpen: false });
+    rerender(
+      <>
+        <LibraryWorkspace onClose={onClose} />
+        <ContextMenu x={0} y={0} items={[{ label: "Open", run: vi.fn() }]} onClose={vi.fn()} />
+      </>,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

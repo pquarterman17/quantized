@@ -598,6 +598,16 @@ build, and focused interaction coverage where appropriate.
      "Escape returns to the UNCHANGED active plot".** Worksheet tiles show the first three row-major data
      rows and up to four real columns plus correct dimensions—never an inferred
      plot. The workspace is lazy-loaded as its own ~5.8 kB chunk.
+     - [~] **E-a1 — merged-review hardening (ChatGPT-Sol, 2026-08-16):**
+       implemented on `sol/library-ea-hardening`, pending PR/Claude review.
+       A focused tile now owns Delete/Backspace through the canonical confirmed
+       removal path; command palette, context menu, and active text editing own
+       Escape before the workspace; pending worksheets show their true
+       inventory dimensions with an **On demand** placeholder. This also closes
+       the review's inexpensive P3s: preview cells use the shared scientific-
+       number formatter and the linear roving surface exposes honest
+       list/listitem semantics instead of an invalid ARIA grid. Focused
+       regressions cover all three blocking findings.
    - [ ] **E-b — shared actions and heterogeneous preview polish:** give tiles
      the same context-menu/action registry as Tree/Details (including honest
      disabled reasons), complete per-kind summaries/source links, and close
@@ -1587,3 +1597,10 @@ back to the owner. No Library implementation is authorized by this pause.
   roving Details arrow navigation as PR D follow-up 4a. Verification: 76
   targeted tests, full 6,743-test frontend suite, ESLint, typecheck, and build
   all pass; eager output is 3.4 kB under budget.
+- **2026-08-16 — ChatGPT-Sol, E-a1 hardening implementation:** Reconciled the
+  owner-directed PR #145 merge and implemented its three still-open Claude
+  review findings on `sol/library-ea-hardening`: focused-tile deletion, Escape
+  ownership for overlays/editing, and true pending-book dimensions. Included
+  shared numeric formatting and valid linear-list semantics because both were
+  bounded review findings in the same surface. Added focused regression
+  coverage; PR and Claude review remain pending.
