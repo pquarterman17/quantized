@@ -20,8 +20,9 @@ export default function LibraryViewSelector({ mode, onChange }: Props) {
       <button
         type="button"
         className="qzk-lib-view-option"
-        disabled
-        title="Tiles view arrives with the wide Library workspace in the next implementation slice"
+        aria-pressed={mode === "tiles"}
+        title="Tiles view — browse the Library in the main workspace"
+        onClick={() => onChange("tiles")}
       >
         Tiles
       </button>

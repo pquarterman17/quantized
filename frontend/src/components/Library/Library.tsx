@@ -18,7 +18,7 @@
 // the true-empty state; each hides while the tree renders so nothing is
 // ever a Library item twice.
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
@@ -31,6 +31,7 @@ import SmartFoldersSection from "./SmartFoldersSection";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
+import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath, folderPathLabel } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
@@ -38,11 +39,7 @@ import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
 import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
-import {
-  loadLibraryViewMode,
-  saveLibraryViewMode,
-  type LibraryViewMode,
-} from "../../lib/libraryViewPrefs";
+import type { LibraryViewMode } from "../../lib/libraryViewPrefs";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { selectLibraryNode } from "./libraryOpen";
 
@@ -61,7 +58,14 @@ import { askParams } from "../overlays/ParamDialog";
 let demoSeq = 0;
 const ACCEPT = IMPORT_ACCEPT;
 
-export default function Library() {
+interface LibraryProps {
+  /** App owns this while the wide Tiles workspace is available. Tests and
+   *  embedded harnesses may omit it and retain the original local behavior. */
+  viewMode?: LibraryViewMode;
+  onViewModeChange?: (mode: LibraryViewMode) => void;
+}
+
+export default function Library({ viewMode: controlledViewMode, onViewModeChange }: LibraryProps = {}) {
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
@@ -80,62 +84,11 @@ export default function Library() {
   const { hierarchy, rows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [viewMode, setViewMode] = useState<LibraryViewMode>(loadLibraryViewMode);
-  const pendingFocusKey = useRef<string | null>(null);
-  const lastFocusedRowKey = useRef<string | null>(null);
-
-  const changeViewMode = (next: LibraryViewMode) => {
-    if (next === viewMode) return;
-    const focused = document.activeElement?.closest?.("[data-lib-row], [data-ds-id]");
-    const current = useApp.getState();
-    const selectedKey = current.librarySelection
-      ? `${current.librarySelection.kind}:${current.librarySelection.id}`
-      : current.selectedIds[0]
-        ? `worksheet:${current.selectedIds[0]}`
-        : null;
-    pendingFocusKey.current = focused?.getAttribute("data-lib-row")
-      ?? (focused?.getAttribute("data-ds-id") ? `worksheet:${focused.getAttribute("data-ds-id")}` : null)
-      ?? selectedKey
-      ?? lastFocusedRowKey.current;
-
-    // A Details row can select a child whose Tree ancestors are collapsed.
-    // Disclose those ancestors before returning to Tree so the same current
-    // item remains visible and navigable after the renderer swap.
-    if (next === "tree" && pendingFocusKey.current) {
-      let parentKey = hierarchy.byKey.get(pendingFocusKey.current as LibraryNodeKey)?.parentKey ?? null;
-      while (parentKey) {
-        const parent = hierarchy.byKey.get(parentKey);
-        if (!parent) break;
-        if (parent.kind === "folder" && !expandedFolders.includes(parent.entityId)) toggleFolderExpanded(parent.entityId);
-        if (parent.kind === "workbook" && !expandedWorkbookIds.includes(parent.entityId)) toggleWorkbookExpanded(parent.entityId);
-        parentKey = parent.parentKey;
-      }
-    }
-    saveLibraryViewMode(next);
-    setViewMode(next);
-  };
-
-  // Preserve real keyboard focus across the lazy renderer swap. A few short
-  // animation-frame retries cover Suspense without introducing timers or
-  // stealing focus after the user has already moved elsewhere.
-  useEffect(() => {
-    const key = pendingFocusKey.current;
-    if (!key) return;
-    let frame = 0;
-    let attempts = 0;
-    const tryFocus = () => {
-      const selector = key.startsWith("worksheet:")
-        ? `[data-ds-id="${CSS.escape(key.slice("worksheet:".length))}"]`
-        : `[data-lib-row="${CSS.escape(key)}"]`;
-      const target = document.querySelector(selector) as HTMLElement | null;
-      if (target) {
-        target.focus();
-        pendingFocusKey.current = null;
-      } else if (++attempts < 5) frame = requestAnimationFrame(tryFocus);
-    };
-    frame = requestAnimationFrame(tryFocus);
-    return () => cancelAnimationFrame(frame);
-  }, [viewMode, rows]);
+  const { viewMode, changeViewMode, rememberLibraryFocus } = useLibraryViewTransition({
+    controlledMode: controlledViewMode, onModeChange: onViewModeChange,
+    hierarchy, rows, expandedFolders, expandedWorkbookIds,
+    toggleFolderExpanded, toggleWorkbookExpanded,
+  });
 
   // "Show in Library" (plan #13 sub-item 2; PR C adds the workbook step;
   // PR D2 generalizes it to EVERY hierarchy node kind for L0.26's search
@@ -279,6 +232,8 @@ export default function Library() {
       </Suspense>
     );
   } else if (inHierarchy) {
+    // Tiles owns the main workspace; the narrow Library deliberately remains
+    // an Origin-like tree navigator while that workspace is open (L0.15).
     body = (
       <Suspense fallback={null}>
         <LibraryTree rows={rows} onFilterTag={setQuery} />
@@ -302,12 +257,7 @@ export default function Library() {
         if (e.currentTarget === e.target) setDragging(false);
       }}
       onDrop={onDrop}
-      onFocusCapture={(event) => {
-        const focused = (event.target as Element).closest("[data-lib-row], [data-ds-id]");
-        if (!focused) return;
-        lastFocusedRowKey.current = focused.getAttribute("data-lib-row")
-          ?? (focused.getAttribute("data-ds-id") ? `worksheet:${focused.getAttribute("data-ds-id")}` : null);
-      }}
+      onFocusCapture={rememberLibraryFocus}
     >
       <div className="qzk-lib-head">
         <span className="qzk-lib-title">Library</span>

@@ -3,7 +3,7 @@
 // command registry lives in appCommands.ts, the global keymap in
 // useGlobalShortcuts.ts, and the overlay/workshop mounts in AppOverlays.tsx.
 
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import AppOverlays from "./AppOverlays";
 import Inspector from "./components/Inspector/Inspector";
@@ -15,15 +15,38 @@ import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import { buildAppActions } from "./appCommands";
 import { health } from "./lib/api";
+import {
+  loadLibraryViewMode,
+  saveLibraryViewMode,
+  type LibraryViewMode,
+} from "./lib/libraryViewPrefs";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
+
+const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
+  const [libraryViewMode, setLibraryViewMode] = useState<LibraryViewMode>(loadLibraryViewMode);
+  const previousBrowseMode = useRef<Exclude<LibraryViewMode, "tiles">>(
+    libraryViewMode === "details" ? "details" : "tree",
+  );
+
+  const changeLibraryViewMode = (next: LibraryViewMode): void => {
+    if (next !== "tiles") previousBrowseMode.current = next;
+    saveLibraryViewMode(next);
+    setLibraryViewMode(next);
+  };
+
+  const closeLibraryWorkspace = (): void => {
+    // Returning to the plot is also a renderer transition back to the last
+    // compact browse mode; scientific/plot state is untouched.
+    changeLibraryViewMode(previousBrowseMode.current);
+  };
 
   useEffect(() => {
     health()
@@ -62,8 +85,14 @@ export default function App() {
       <TitleBar />
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <div className={mainCls}>
-        <Library />
-        <Stage />
+        <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
+        {libraryViewMode === "tiles" ? (
+          <Suspense fallback={<section className="qzk-library-workspace" aria-label="Library workspace" />}>
+            <LibraryWorkspace onClose={closeLibraryWorkspace} />
+          </Suspense>
+        ) : (
+          <Stage />
+        )}
         <Inspector />
       </div>
       <StatusBar />

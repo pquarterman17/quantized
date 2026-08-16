@@ -13,7 +13,7 @@ describe("Library view preference", () => {
     expect(loadLibraryViewMode()).toBe("tree");
     localStorage.setItem(LIBRARY_VIEW_PREFS_KEY, "not json");
     expect(loadLibraryViewMode()).toBe("tree");
-    localStorage.setItem(LIBRARY_VIEW_PREFS_KEY, JSON.stringify({ mode: "tiles" }));
+    localStorage.setItem(LIBRARY_VIEW_PREFS_KEY, JSON.stringify({ mode: "future-mode" }));
     expect(loadLibraryViewMode()).toBe("tree");
   });
 
@@ -21,5 +21,10 @@ describe("Library view preference", () => {
     saveLibraryViewMode("details");
     expect(loadLibraryViewMode()).toBe("details");
     expect(JSON.parse(localStorage.getItem(LIBRARY_VIEW_PREFS_KEY) ?? "{}")).toEqual({ mode: "details" });
+  });
+
+  it("round-trips the wide Tiles workspace choice (PR E)", () => {
+    saveLibraryViewMode("tiles");
+    expect(loadLibraryViewMode()).toBe("tiles");
   });
 });

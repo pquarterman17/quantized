@@ -1,11 +1,11 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1 implementation begun (PR A1 launched)
+**Status:** Active — milestone 1; PR E-a wide Tile workspace implemented on
+`sol/library-e-wide-shell`, pending Claude review/PR
 **Created:** 2026-08-12  
-**Updated:** 2026-08-14 — owner decisions complete through L0.57 and
-spot-verified in the Claude session (L0.2, L0.45, L0.54, L0.57 re-confirmed
-directly); technical boundary audit adversarially verified against the code
-(all claims exact); PR A1 SHIPPED (`914042e`)
+**Updated:** 2026-08-15 — ChatGPT-Sol implemented PR E-a after PRs #143/#144
+merged; wide workspace, canonical tiles, worksheet previews, selection/open,
+keyboard navigation, and unchanged-plot return are pending review
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -476,18 +476,24 @@ Concept A is the selected direction: an Origin-like mixed child hierarchy
 under each workbook. The application should eventually allow changing the
 Library presentation without changing organization or duplicating objects.
 
-- [ ] **L1.1 Shared item identity:** tile, tree, and details renderers consume
+- [x] **L1.1 Shared item identity:** tile, tree, and details renderers consume
   one canonical hierarchy and use the same IDs.
-- [ ] **L1.2 View selector:** provide Tiles / Tree / Details controls and
+- [x] **L1.2 View selector:** provide Tiles / Tree / Details controls and
   remember the user's choice in preferences.
   - [x] PR D supplies persisted Tree / Details choice and keeps Tiles visible
     but disabled with an explanatory tooltip; PR E owns enabling Tiles only
     after its approved wide Library workspace exists.
+  - [x] PR E-a enables Tiles, persists it through the same preference, and
+    routes it to the wide main workspace rather than the 210 px sidebar.
 - [ ] **L1.3 State continuity:** switching views preserves selection, active
   workbook/child, expansion where applicable, search, and keyboard focus.
   - [x] PR D proves continuity between Tree and Details, including disclosure
     of a focused Details child's ancestors when returning to Tree. Tiles
     continuity remains a PR E acceptance gate.
+  - [x] PR E-a preserves canonical selection and active plot, uses the still-
+    mounted Tree as tile navigation, and returns through Escape/**Back to
+    plot** with a canonical reveal target and focus retry. Thumbnail/rapid-
+    switching cancellation remains E-c.
 - [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
   - [ ] Booking (2026-08-15 retrospective audit): artifact-row context menus
@@ -566,8 +572,36 @@ build, and focused interaction coverage where appropriate.
     per-row **Show in Library** that clears the query and reveals the item
     (the reveal signal generalized to any `kind:id` node key). (Booked
     2026-08-14 — L0.26 previously had no owning slice.)
-5. [ ] **PR E — tile-browser shell after mockup approval.** Implement the
+5. [ ] **PR E — tile-browser workspace (stacked sub-slices).** Implement the
    approved wide-surface behavior and interaction parity.
+   - [~] **E-a — shell + canonical browsing (ChatGPT-Sol, 2026-08-15):**
+     implemented on `sol/library-e-wide-shell`, pending PR/review. Tiles
+     replaces Stage only; the Tree remains mounted; the active plot is not
+     mutated. Folder/workbook tiles browse their canonical children; child
+     selection uses `selectLibraryNode`, double-click/Enter uses
+     `openLibraryNode`, arrows use one roving entry point, breadcrumbs navigate
+     without rewriting hierarchy state, and Escape works even while focus is
+     still in the sidebar. **Owner decision (Paige, 2026-08-16, from the
+     Claude review's decision item): a STAGE-TARGET open from a tile
+     (worksheet activation, Origin figure, editable-figure window, or a
+     workbook resolving to one via L0.6) also returns to the plot — the open
+     must be visible, never hidden behind the workspace; overlay opens
+     (pages/reports/publication figures) keep the workspace open. Implemented
+     by Claude directly on this branch (`opensInStage` in libraryOpen.ts +
+     `openFromTile`), the "changed-plot" counterpart of L0.25's
+     "Escape returns to the UNCHANGED active plot".** Worksheet tiles show the first three row-major data
+     rows and up to four real columns plus correct dimensions—never an inferred
+     plot. The workspace is lazy-loaded as its own ~5.8 kB chunk.
+   - [ ] **E-b — shared actions and heterogeneous preview polish:** give tiles
+     the same context-menu/action registry as Tree/Details (including honest
+     disabled reasons), complete per-kind summaries/source links, and close
+     the booked L1.4 artifact-context-menu gap. Do not implement Quick Plot
+     inference here; PR F owns that scientific contract.
+   - [ ] **E-c — canonical thumbnails + scale safeguards:** actual editable/
+     recovered figure thumbnails, natural analysis previews, revision-keyed
+     cache, visible-only lazy generation, placeholders, cancellation, and
+     large-Library fixtures/virtualization boundary. Claude should review cache
+     invalidation and cancellation reliability before merge.
 5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
     selection, remembered workbook children, and workspace placement alongside
     the existing window layout; restore heavy children lazily and add
@@ -1068,6 +1102,22 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **2026-08-15 — ChatGPT-Sol, PR E-a implementation checkpoint (pending
+  review):** Added the main-workspace Tile browser from the approved L0.15
+  mockup without creating another Library model. `App.tsx` owns the renderer
+  transition; `LibraryWorkspace.tsx` consumes `useLibraryHierarchyModel` plus
+  the shared select/open dispatchers; the sidebar remains an Origin-like Tree.
+  Added persisted Tiles preference, responsive design-token styling, honest
+  row-major worksheet previews, breadcrumbs, roving keyboard navigation, and
+  Escape/**Back to plot** continuity. A real-browser red/green pass caught and
+  fixed two integration defects before review: Escape initially only worked
+  when focus was inside the tile surface, and the worksheet preview initially
+  transposed the row-major DataStruct matrix. Gate at checkpoint: 27 focused
+  Vitest tests; TypeScript and targeted ESLint clean; production build 902.2
+  kB eager (1.1 kB under budget); Playwright Tile journey 3/3 at 100/125/200%.
+  Explicitly deferred to E-b/E-c: shared context menus/actions, true figure/
+  analysis thumbnails, revision caching, cancellation, and virtualization.
+
 - ~~**PR D2 — project-wide search results surface**~~ (2026-08-16, PR #144,
   merge `565bf08`; stacked on the diraculator-audit branch per the owner, both
   merged in order on the owner's instruction) — search now spans the
@@ -1257,6 +1307,15 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-16 — Claude (Fable):** Owner decision recorded and implemented on
+  `sol/library-e-wide-shell` (PR #145): stage-target opens from a tile return
+  to the plot (see the E-a row). Implementation: `opensInStage` beside the
+  canonical open dispatcher (workbooks resolve their L0.6 remembered child),
+  `openFromTile` in LibraryWorkspace, 5 new unit tests (stage vs overlay vs
+  browse), and an extended real-browser tiles journey proving the opened
+  sheet is active with the Stage restored. Sol's three review-round findings
+  (focused-tile Delete leak P1, Escape stolen from overlays P2, pending-dims
+  P2) remain open for the fix round — deliberately not absorbed here.
 - **2026-08-16 — Claude (Fable):** PRs #143 (diraculator audit) and #144
   (D2) merged in stack order on the owner's instruction (`ebe06c3`,
   `565bf08`; #144's base retargeted to main after #143 landed). Both had one
