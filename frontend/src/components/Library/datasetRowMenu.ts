@@ -42,6 +42,7 @@ export function buildDatasetRowMenu(
   canMoveDown: boolean,
   onRename: () => void,
   onAddTag: () => void,
+  onStageOpen?: () => void,
 ): ContextMenuItem[] {
   const { selectedIds } = useApp.getState();
   const selectedCount = selectedIds.length;
@@ -54,6 +55,7 @@ export function buildDatasetRowMenu(
     canMoveDown,
     onRename,
     onAddTag,
+    onStageOpen,
   };
   // Move acts on the whole multi-selection when this row is part of one (bulk
   // move — item 8); otherwise on this row alone.

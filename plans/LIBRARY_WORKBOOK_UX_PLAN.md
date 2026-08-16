@@ -623,6 +623,15 @@ build, and focused interaction coverage where appropriate.
      disabled reasons), complete per-kind summaries/source links, and close
      the booked L1.4 artifact-context-menu gap. Do not implement Quick Plot
      inference here; PR F owns that scientific contract.
+     - [~] **E-b1 — canonical container/data actions (ChatGPT-Sol,
+       2026-08-16):** implemented on `sol/library-eb-actions`, pending stacked
+       PR/Claude review. Mouse right-click and Context Menu/Shift+F10 on folder,
+       workbook, and worksheet tiles now reuse the existing Tree builders and
+       registries; modal fallbacks provide Rename/Add tag where no inline row
+       editor exists. Workbook **Browse** is enabled only where the Tile
+       workspace supplies a browse target. Every node kind now has a compact,
+       factual kind/source summary. E-b remains open for E-b2's shared artifact
+       lifecycle menus (the L1.4 gap); Quick Plot remains exclusively PR F.
    - [ ] **E-c — canonical thumbnails + scale safeguards:** actual editable/
      recovered figure thumbnails, natural analysis previews, revision-keyed
      cache, visible-only lazy generation, placeholders, cancellation, and
@@ -1622,3 +1631,29 @@ back to the owner. No Library implementation is authorized by this pause.
   shared numeric formatting and valid linear-list semantics because both were
   bounded review findings in the same surface. Added focused regression
   coverage; PR and Claude review remain pending.
+- **2026-08-16 — ChatGPT-Sol, E-b1 implementation:** Started the stacked
+  action-parity slice after Claude merged PR #146. Folder/workbook/worksheet
+  tiles now adapt to the canonical Tree menu builders rather than defining a
+  second command set, with both pointer and keyboard menu gestures. Added
+  per-kind factual summaries and activated Workbook Browse only in the Tile
+  workspace. Artifact lifecycle menus remain the explicit E-b2 boundary so
+  their rename/duplicate/delete dependency policies can be centralized rather
+  than copied from four flat sections.
+- **2026-08-16 — Claude review of PR #147 (E-b1), three fixes pushed to the
+  branch:** (1) `openTileMenu` selected the tile unconditionally, collapsing
+  any enclosing multi-selection before the menu built — the bulk actions
+  (Remove N selected, merge, panels, plot-together) were unreachable from
+  Tiles and the menu disagreed with the tile Delete key's enclosing-selection
+  rule; it now mirrors the tree's `selectForMenu` (an already-selected tile
+  keeps the selection). (2) The worksheet menu's `onStageOpen` was wired to
+  the full `openFromTile` re-open, so "Plot (make active)" / "Plot in new
+  window" re-dispatched `activateFromLibrary` after their own plot-intent
+  open — detouring Origin-book datasets (default `originBookClickOpens:
+  "worksheet"`) onto the worksheet tab; the hook is now close-only
+  (`stageReturn`), and the multi-select stage actions (panels, merge,
+  plot-together) also stage-return per the PR #145 owner decision. (3) The
+  folder tile menu passed direct hierarchy-child count where the tree passes
+  the whole-subtree DATASET count — the destructive "Delete folder + N
+  dataset(s)" confirm stated wrong numbers whenever the folder held
+  workbooks; `subtreeCount` is hoisted to `lib/foldertree.ts` and shared.
+  All three were proven red first; four regression tests added.

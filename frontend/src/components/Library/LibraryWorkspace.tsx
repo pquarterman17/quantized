@@ -4,13 +4,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { fmtNum } from "../../lib/format";
-import { dimensionsOf } from "../../lib/libraryDetails";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
+import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { useApp } from "../../store/useApp";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
+import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 
 interface Props {
   onClose: () => void;
@@ -49,7 +52,7 @@ function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksh
     return (
       <div className="qzk-tile-placeholder">
         <span aria-hidden="true">{KIND_GLYPH.worksheet}</span>
-        <small>On demand</small>
+        <small>Data loads when opened</small>
       </div>
     );
   }
@@ -115,6 +118,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
   );
   const lastSelectionKey = useRef<LibraryNodeKey | null>(initialKey);
   const [rovingKey, setRovingKey] = useState<LibraryNodeKey | null>(initialKey);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
 
   // The still-visible sidebar tree is a navigator for this workspace. When
   // its current folder/workbook changes, show that container; selecting a
@@ -205,6 +209,19 @@ export default function LibraryWorkspace({ onClose }: Props) {
     if (node.kind === "folder" || node.kind === "workbook") setContainerKey(node.key);
   };
 
+  const openTileMenu = (node: LibraryNode, x: number, y: number): void => {
+    // The tree's selectForMenu contract (DatasetRow): a right-click on a tile
+    // ALREADY inside the multi-selection keeps that selection, so the bulk
+    // actions (Remove N selected, merge, panels) stay reachable and the menu
+    // agrees with the tile Delete key's enclosing-selection rule. Any other
+    // tile is selected first, same as the tree.
+    const alreadyInSelection =
+      node.kind === "worksheet" && useApp.getState().selectedIds.includes(node.entityId);
+    if (!alreadyInSelection) selectLibraryNode(node);
+    const menuItems = buildLibraryTileMenu(node, { browse: selectOrBrowse, open: openFromTile, stageReturn: close });
+    if (menuItems) setMenu({ x, y, items: menuItems });
+  };
+
   // OWNER DECISION (Paige, 2026-08-16, PR #145 review follow-up): an open
   // whose visible result is a Stage plot (worksheet activation, Origin
   // figure, editable-figure window, or a workbook resolving to one) also
@@ -256,7 +273,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
         <div className="qzk-tile-grid" role="list" aria-label={`${container?.name ?? "Project"} items`}>
           {items.map((node) => {
             const selected = node.key === currentSelectedKey;
-            const dimensions = node.kind === "worksheet" ? dimensionsOf(node) : null;
+            const summary = libraryTileSummary(node);
             return (
               <article
                 key={node.key}
@@ -268,8 +285,16 @@ export default function LibraryWorkspace({ onClose }: Props) {
                 onClick={() => selectOrBrowse(node)}
                 onDoubleClick={() => openFromTile(node)}
                 onFocus={() => setRovingKey(node.key)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  openTileMenu(node, event.clientX, event.clientY);
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (isContextMenuKeyEvent(event)) {
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    openTileMenu(node, rect.left + 8, rect.bottom);
+                  } else if (event.key === "Enter") {
                     event.preventDefault();
                     openFromTile(node);
                   } else if (event.key === "Delete" || event.key === "Backspace") {
@@ -288,14 +313,16 @@ export default function LibraryWorkspace({ onClose }: Props) {
                 <TilePreview node={node} />
                 <div className="qzk-library-tile-copy">
                   <strong title={node.name}>{node.name}</strong>
-                  <span>{KIND_LABEL[node.kind]}{dimensions ? ` · ${dimensions}` : ""}</span>
-                  {node.source.missingDatasetIds.length > 0 && <em>Source unavailable</em>}
+                  <span>{KIND_LABEL[node.kind]} · {summary.primary}</span>
+                  {summary.secondary && <span>{summary.secondary}</span>}
+                  {summary.warning && <em>{summary.warning}</em>}
                 </div>
               </article>
             );
           })}
         </div>
       )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
     </section>
   );
 }

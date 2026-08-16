@@ -23,10 +23,9 @@ import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
 import WorkbookRow from "./WorkbookRow";
 import { openLibraryNode } from "./libraryOpen";
-import { childFolders, folderDatasets } from "../../lib/foldertree";
+import { subtreeCount } from "../../lib/foldertree";
 import { folderDeleteActions, runContextAction } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
-import type { Dataset, FolderNode } from "../../lib/types";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
 import { workbookDeleteActions } from "../../lib/workbookContextActions";
@@ -90,15 +89,6 @@ function isTextEditorTarget(el: Element): boolean {
   return el.matches("input, textarea, select, [contenteditable='true']");
 }
 
-/** A folder's whole-subtree DATASET count (independent of the new
- *  hierarchy — this is the same lens lib/foldertree-driven folder bulk
- *  actions already use, unaffected by workbook nesting). Byte-identical to
- *  the retired useLibraryTree.ts's own `subtreeCount`. */
-function subtreeCount(folders: FolderNode[], datasets: Dataset[], folderId: string): number {
-  let n = folderDatasets(datasets, folderId).length;
-  for (const c of childFolders(folders, folderId)) n += subtreeCount(folders, datasets, c.id);
-  return n;
-}
 
 function toggleExpand(node: LibraryNode): void {
   const s = useApp.getState();

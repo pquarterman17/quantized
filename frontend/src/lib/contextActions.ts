@@ -167,6 +167,12 @@ export interface DatasetActionTarget {
   /** Local UI: open this row's own inline rename/tag input. */
   onRename: () => void;
   onAddTag: () => void;
+  /** Tile workspace only (undefined in the tree): return to the Stage after
+   *  an action whose visible result is a plot (plot, plotInNewWindow,
+   *  panels, merge, plot-together) — the PR #145 stage-return decision. MUST
+   *  only close/reveal, never re-open: the action already performed its open,
+   *  and a re-open detours Origin books via activateFromLibrary's tab path. */
+  onStageOpen?: () => void;
 }
 
 const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
@@ -184,7 +190,10 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.plot",
     label: "Plot (make active)",
     enabled: (t) => !t.active,
-    run: (t) => useApp.getState().setActive(t.dataset.id),
+    run: (t) => {
+      useApp.getState().setActive(t.dataset.id);
+      t.onStageOpen?.();
+    },
   },
   // Multi-plot discoverability: a plain Library click REBINDS the focused
   // window (unless pinned), so there was no direct "plot this dataset in a
@@ -195,7 +204,10 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.plotInNewWindow",
     label: "Plot in new window",
-    run: (t) => void plotInNewWindow(t.dataset.id),
+    run: (t) => {
+      void plotInNewWindow(t.dataset.id);
+      t.onStageOpen?.();
+    },
   },
   { id: "dataset.duplicate", label: "Duplicate", run: (t) => void useApp.getState().duplicateDataset(t.dataset.id) },
   { id: "dataset.rename", label: "Rename…", run: (t) => t.onRename() },
@@ -254,7 +266,10 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.mergeSelected",
     label: (t) => `Merge ${t.selectedIds.length} selected`,
     hidden: (t) => !multiSelected(t),
-    run: () => useApp.getState().mergeSelected(),
+    run: (t) => {
+      void useApp.getState().mergeSelected();
+      t.onStageOpen?.();
+    },
   },
   ...(
     [
@@ -271,6 +286,7 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
       run: (t) => {
         const s = useApp.getState();
         s.focusWindow(s.createPanelWindow([...t.selectedIds], layout));
+        t.onStageOpen?.();
       },
     }),
   ),
@@ -283,7 +299,10 @@ export const datasetMultiSelectActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.plotSelectedTogether",
     label: "Plot selected together",
     hidden: (t) => !multiSelected(t),
-    run: (t) => void plotSelectedTogether(t.selectedIds),
+    run: (t) => {
+      void plotSelectedTogether(t.selectedIds);
+      t.onStageOpen?.();
+    },
   },
 ];
 

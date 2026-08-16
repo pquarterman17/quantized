@@ -25,6 +25,18 @@ export function folderDatasets(datasets: Dataset[], folderId: string | null): Da
   return datasets.filter((d) => (d.folderId ?? null) === folderId).sort(byOrder);
 }
 
+/** A folder's whole-subtree DATASET count — the lens every folder bulk
+ *  action and destructive confirm states its N in ("Select all (N)",
+ *  "Delete folder + N dataset(s)"), independent of workbook nesting (a
+ *  workbook is one tree/tile child but many datasets). Hoisted from
+ *  LibraryTree.tsx so the Tile workspace's folder menu states the SAME
+ *  count as the tree's. */
+export function subtreeCount(folders: FolderNode[], datasets: Dataset[], folderId: string): number {
+  let n = folderDatasets(datasets, folderId).length;
+  for (const c of childFolders(folders, folderId)) n += subtreeCount(folders, datasets, c.id);
+  return n;
+}
+
 /** All ids in the subtree rooted at `id` (inclusive). */
 export function subtreeIds(folders: FolderNode[], id: string): Set<string> {
   const childrenOf = new Map<string | null, FolderNode[]>();
