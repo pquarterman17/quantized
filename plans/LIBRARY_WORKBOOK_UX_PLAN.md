@@ -658,7 +658,10 @@ build, and focused interaction coverage where appropriate.
      large-Library fixtures/virtualization boundary. Claude should review cache
      invalidation and cancellation reliability before merge.
      **OWNER SPLIT (Paige, 2026-08-16):** three stacked slices —
-     - [~] **E-c1 (Claude): thumbnail/cache infrastructure.** Canonical
+     - [x] **E-c1 (Claude): thumbnail/cache infrastructure.** Merged as PR
+       #149 (`07ce588`) after one Sol review round (dependency-aware
+       fingerprints — see the two 2026-08-16 E-c1 change-log entries).
+       Canonical
        thumbnail generation + invalidation contract, lazy visible-only
        loading, cache ownership, failure placeholders. Address the eager
        bundle budget FIRST (0.2 kB headroom at booking): an extraction pass
