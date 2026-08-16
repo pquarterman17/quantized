@@ -683,7 +683,12 @@ build, and focused interaction coverage where appropriate.
        honest static placeholder. One REFERENCE generator (page → panel-grid
        SVG data-URL, pure and jsdom-testable) proves the pipe end-to-end;
        E-c2 owns real preview visuals and the generator set.*
-     - [~] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
+     - [x] **E-c2 (ChatGPT-Sol): tile preview UX.** Merged as PR #150
+       (`a77d5e4`, owner-directed) after one Claude review round — three
+       red-proven fixes on the branch (live-figure page panels, canonical
+       Origin channel selection with book-matched dataset binding, typed
+       `figureDeps`/`datasetDeps` request slices — see the 2026-08-16
+       E-c2 change-log entries). Useful plot/table/
        analysis/page/report previews; loading/empty/error appearance; visual
        hierarchy, sizing, hover behavior, readability.
        *Implementation started 2026-08-16 on
