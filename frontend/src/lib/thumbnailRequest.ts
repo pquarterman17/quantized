@@ -56,21 +56,27 @@ function byId<T extends { id: string }>(items: readonly T[]): Map<string, T> {
 }
 
 export function resolveThumbnailRequest(node: LibraryNode, snapshot: ThumbnailSnapshot): ThumbnailRequest {
-  const deps: (object | null)[] = [];
+  // The resolver KNOWS each dependency's type by construction, so it hands
+  // generators TYPED slices — `deps` stays the ordered fingerprint array,
+  // but no consumer should shape-sniff it (the `"pending" in dep` bug
+  // class, PR #150 review).
+  const figureDeps: (FigureDocument | null)[] = [];
+  const datasetDeps: (Dataset | null)[] = [];
   if (node.kind === "page") {
     const figureById = byId(snapshot.editableFigures);
     for (const panel of node.entity.panels) {
       if (!panelReferencesFigure(panel)) continue;
-      deps.push((panel.figureId && figureById.get(panel.figureId)) || null); // null = missing reference sentinel
+      figureDeps.push((panel.figureId && figureById.get(panel.figureId)) || null); // null = missing reference sentinel
     }
   }
   if (node.kind !== "folder" && node.kind !== "workbook" && node.kind !== "worksheet") {
     const datasetById = byId(snapshot.datasets);
-    for (const id of node.source.datasetIds) deps.push(datasetById.get(id) ?? null);
+    for (const id of node.source.datasetIds) datasetDeps.push(datasetById.get(id) ?? null);
   }
+  const deps: (object | null)[] = [...figureDeps, ...datasetDeps];
   const fingerprint = [
     entityRevision(node.entity as object),
     ...deps.map((dep) => (dep ? entityRevision(dep) : "x")),
   ].join(".");
-  return { node, deps, fingerprint };
+  return { node, deps, figureDeps, datasetDeps, fingerprint };
 }

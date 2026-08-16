@@ -176,12 +176,13 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(img).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
   });
 
-  it("an artifact kind with no generator keeps an honest placeholder caption", () => {
+  it("a report tile renders a natural content preview (E-c2)", async () => {
     useApp.setState({
       reports: [{ id: "rep1", name: "Fit report", datasetId: null, report: { title: "R", sections: [] } }],
     });
     render(<LibraryWorkspace onClose={vi.fn()} />);
-    expect(screen.getByText("Preview arrives in PR E-c2")).toBeInTheDocument();
+    expect(await screen.findByAltText("Preview of Fit report")).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
+    expect(screen.getByText("Report")).toBeInTheDocument();
   });
 
   it("right-clicks an artifact tile into the shared lifecycle menu", () => {

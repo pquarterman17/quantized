@@ -94,10 +94,10 @@ function TilePreview({ node }: { node: LibraryNode }) {
   return <ArtifactPreview node={node} />;
 }
 
-/** E-c1: artifact tiles render through the canonical thumbnail pipe —
+/** E-c2: artifact tiles render through the canonical thumbnail pipe —
  *  visible-only generation, revision-keyed cache, abort on unmount (see
- *  useThumbnail). Deliberately minimal presentation: E-c2 owns the real
- *  preview visuals, loading/error appearance, and sizing. */
+ *  useThumbnail), with a consistent visual language for every lifecycle
+ *  state rather than renderer-specific placeholder copy. */
 function ArtifactPreview({ node }: { node: LibraryNode }) {
   const holderRef = useRef<HTMLDivElement | null>(null);
   const thumb = useThumbnail(node, holderRef);
@@ -107,12 +107,12 @@ function ArtifactPreview({ node }: { node: LibraryNode }) {
     : thumb.status === "error"
       ? "Preview unavailable"
       : thumb.status === "unsupported"
-        ? "Preview arrives in PR E-c2"
+        ? "Preview not available for this item"
         : thumb.status === "ready"
           ? null
           : "Generating preview…";
   return (
-    <div className="qzk-tile-placeholder" ref={holderRef}>
+    <div className={`qzk-tile-placeholder qzk-artifact-preview is-${thumb.status}${missing ? " has-missing-source" : ""}`} ref={holderRef}>
       {thumb.status === "ready" ? (
         <img
           className="qzk-tile-thumb"
@@ -122,9 +122,13 @@ function ArtifactPreview({ node }: { node: LibraryNode }) {
           alt={`Preview of ${node.name}`}
         />
       ) : (
-        <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+        <>
+          <span className="qzk-preview-kind" aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+          {thumb.status === "loading" && <span className="qzk-preview-skeleton" aria-hidden="true" />}
+        </>
       )}
-      {caption && <small>{caption}</small>}
+      {caption && <small role={thumb.status === "error" ? "status" : undefined}>{caption}</small>}
+      <span className="qzk-preview-badge" aria-hidden="true">{KIND_LABEL[node.kind]}</span>
     </div>
   );
 }

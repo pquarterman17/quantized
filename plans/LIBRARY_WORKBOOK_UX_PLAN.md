@@ -683,9 +683,19 @@ build, and focused interaction coverage where appropriate.
        honest static placeholder. One REFERENCE generator (page → panel-grid
        SVG data-URL, pure and jsdom-testable) proves the pipe end-to-end;
        E-c2 owns real preview visuals and the generator set.*
-     - [ ] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
+     - [~] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
        analysis/page/report previews; loading/empty/error appearance; visual
        hierarchy, sizing, hover behavior, readability.
+       *Implementation started 2026-08-16 on
+       `sol/library-ec2-preview-ux`, after PR #149's dependency-aware cache
+       fix merged. The bounded preview vocabulary uses lightweight canonical
+       SVG generation rather than mounting the full plot engine per tile:
+       editable/publication/recovered-Origin figures render real source or
+       frozen data, pages compose their referenced figures panel-by-panel,
+       and reports summarize their first natural content blocks. Tiles share
+       clear loading, unavailable-source, unsupported, and error treatments,
+       kind badges, restrained hover emphasis, and reduced-motion behavior.
+       E-c3 virtualization remains explicitly outside this slice.*
      - [ ] **E-c3 (Claude): large-Library safeguards.** Virtualization +
        large-library fixtures; preserve selection, keyboard navigation, and
        "Show in Library"; performance and regression testing.
@@ -1767,3 +1777,31 @@ back to the owner. No Library implementation is authorized by this pause.
   my new test, an empty-string-figureId deps-cursor desync (now a shared
   predicate + pin test), and two O(store)-per-tile resolve inefficiencies
   (WeakMap-memoized by-id maps; generator-less kinds skip resolution).
+- **2026-08-16 — ChatGPT-Sol, E-c2 implementation checkpoint:** Started the
+  visible preview layer on `sol/library-ec2-preview-ux` after verifying PR
+  #149's repaired request contract. Added dependency-keyed, lightweight SVG
+  previews for editable/publication/recovered-Origin figures, multi-panel
+  pages, and reports; retained the existing compact worksheet table. Added a
+  common loading/error/missing-source visual language, artifact-kind badges,
+  restrained hover treatment, and reduced-motion support. The full plotting
+  engine is deliberately not mounted inside tiles; E-c3 virtualization and
+  large-Library fixtures remain Claude's next slice after review/merge.
+- **2026-08-16 — Claude review of PR #150 (E-c2), three red-proven fixes
+  pushed to the branch:** (1) the page generator's dataset filter probed the
+  OPTIONAL `pending` field (`"pending" in dep`) — false for every normally-
+  loaded dataset — so live-figure panels silently degraded to gray boxes;
+  (2) Origin-figure previews used the first-columns default instead of the
+  figure's decoded curves — now routed through the canonical
+  `figureChannelSelection` (the same mapping the real apply action uses),
+  against the node's OWN book-matched dataset, because `source.datasetIds`
+  lists the whole layer family layer-ascending and a layer-2 node's first
+  dep is layer 1's dataset; (3) the root cause of this bug class — generators
+  shape-sniffing the flat `deps` fingerprint array — is retired:
+  `ThumbnailRequest` now carries TYPED `figureDeps`/`datasetDeps` slices
+  built by the resolver (which knows each dep's type by construction), and
+  both generators consume those. Otherwise the slice verified clean:
+  SVG escaping and data-URL encoding sound, downsampling honest for
+  recognition, frozen/live data routing matches the entity contracts, delete
+  wording untouched, CSS token-clean with reduced-motion support, bundle
+  unchanged at 814.9 kB. Three probes proven red first
+  (`thumbnailPreviewHonesty.test.ts`).

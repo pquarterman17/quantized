@@ -19,7 +19,9 @@
 //   least-recently-USED (get refreshes recency). Ownership is module-level
 //   (one cache per app), with an explicit reset for workspace wipes/tests.
 
+import type { FigureDocument } from "./figureDocument";
 import type { LibraryNode, LibraryNodeKind } from "./libraryHierarchy";
+import type { Dataset } from "./types";
 
 export interface ThumbnailResult {
   /** Renderable image source (data: URL — SVG or canvas PNG). */
@@ -39,8 +41,16 @@ export interface ThumbnailRequest {
   node: LibraryNode;
   /** Ordered resolved dependency entities; null marks a missing reference
    *  (a panel whose figure is gone), which the fingerprint encodes as a
-   *  stable sentinel. */
+   *  stable sentinel. This is the FINGERPRINT array — generators should
+   *  read the TYPED slices below instead of shape-sniffing this one (the
+   *  `"pending" in dep` bug class, PR #150 review). */
   deps: readonly (object | null)[];
+  /** Page nodes: one entry per figure-referencing panel, in panel order
+   *  (null = missing figure). Empty for every other kind. */
+  figureDeps: readonly (FigureDocument | null)[];
+  /** The node's live source datasets in `source.datasetIds` order
+   *  (null = not in the snapshot). */
+  datasetDeps: readonly (Dataset | null)[];
   fingerprint: string;
 }
 
