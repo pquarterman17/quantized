@@ -3,8 +3,7 @@
 STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_thermal_*.json``
 golden fixtures that do not exist yet in this checkout -- ``load_golden``
 skips cleanly until the owner runs MATLAB against
-``tools/matlab/freeze_calc_values.m`` (extended with the sections in
-``freeze_dira_electrical_semi_thermal.m``) and commits the frozen JSON.
+``tools/matlab/freeze_diraculator_values.m`` and commits the frozen JSON.
 
 No ``+calc/+thermal`` package exists in ``quantized_matlab`` -- all three
 formulas are embedded directly in ``buildThermalTab``'s nested callbacks

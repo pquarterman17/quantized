@@ -2,7 +2,7 @@
 // "→ X-ray" hand-off keeps working) + the new self-contained neutron
 // wavelength↔energy↔velocity↔temperature card.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getConstants, neutronCalc, xrayCalc } from "../../../lib/api";
@@ -169,6 +169,45 @@ describe("XrayTab", () => {
     await vi.waitFor(() => {
       expect(xrayCalc).toHaveBeenCalledWith("wavelength_from_energy", 0, 8.0478);
     });
+  });
+
+  it("→ λ helper: editing the energy while pending disowns the stale completion (review round 2)", async () => {
+    let resolveCalc!: (v: { result: number; unit: string; description: string }) => void;
+    vi.mocked(xrayCalc).mockImplementation(() => new Promise((res) => (resolveCalc = res)));
+    openXrayTab();
+
+    fireEvent.click(screen.getByText("→ λ")); // pending for energy 8.0478...
+    fireEvent.change(screen.getByDisplayValue("8.0478"), { target: { value: "9.0" } }); // ...edited
+    resolveCalc({ result: 1.540598, unit: "Å", description: "λ from E" });
+    await act(() => Promise.resolve());
+
+    // The stale completion belongs to the OLD energy: it must not write the
+    // wavelength, surface an error, or leave the helper busy.
+    expect(screen.queryByDisplayValue("1.540598")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("1.5406")).toBeInTheDocument(); // untouched default
+    expect((screen.getByText("→ λ") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("→ λ helper: an older overlapping request never overwrites the newer result (review round 2)", async () => {
+    const pending: Array<(v: { result: number; unit: string; description: string }) => void> = [];
+    vi.mocked(xrayCalc).mockImplementation(() => new Promise((res) => pending.push(res)));
+    openXrayTab();
+
+    fireEvent.click(screen.getByText("→ λ")); // request A (energy 8.0478)
+    // Editing re-arms the helper (invalidation drops busy), enabling a second
+    // request while A is still in flight.
+    fireEvent.change(screen.getByDisplayValue("8.0478"), { target: { value: "9.0" } });
+    fireEvent.click(screen.getByText("→ λ")); // request B (energy 9.0)
+    expect(pending).toHaveLength(2);
+
+    pending[1]({ result: 1.377, unit: "Å", description: "λ from E" }); // B resolves first
+    await act(() => Promise.resolve());
+    expect(screen.getByDisplayValue("1.377")).toBeInTheDocument();
+
+    pending[0]({ result: 1.540598, unit: "Å", description: "λ from E" }); // stale A resolves last
+    await act(() => Promise.resolve());
+    expect(screen.getByDisplayValue("1.377")).toBeInTheDocument(); // B's answer survives
+    expect(screen.queryByDisplayValue("1.540598")).not.toBeInTheDocument();
   });
 
   it("editing an input invalidates the displayed result (provenance contract)", async () => {

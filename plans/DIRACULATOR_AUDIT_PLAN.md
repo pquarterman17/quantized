@@ -1,6 +1,6 @@
 # DiraCulator Calculator Audit Plan
 
-**Status:** Implementation complete except the owner MATLAB freeze run (see Completed)  
+**Status:** Implemented; OPEN follow-ups tracked below — owner MATLAB freeze run, history input-snapshot capture, critical-thickness formula decision, Scherrer port  
 **Created:** 2026-08-15  
 **Updated:** 2026-08-15 — P2s, P1 provenance, P3 splits shipped; 93-case freeze campaign staged  
 **Repository:** `C:\Users\patri\git\quantized`  
@@ -71,6 +71,11 @@ Affected areas include:
   replace the latest result.
 - [x] Add per-domain representative tests proving that changing an input clears
   or marks the prior result stale.
+- [ ] **OPEN (acceptance-gate remainder):** history entries describe the exact
+  input snapshot used. The provenance guard guarantees an entry can no longer
+  be WRONG (only the owning completion records), but most card summaries still
+  render the result without the inputs — enriching `record()`/call sites with
+  an inputs description is a per-card sweep, deliberately not claimed here.
 
 #### Acceptance gate
 
@@ -193,6 +198,22 @@ No `lib/` transport module imports from `components/`; calculator source files
 are within the documented frontend ceiling or carry a written, reviewed
 exception.
 
+## Open follow-ups (explicit — none of these is claimed complete)
+
+- [ ] **Owner MATLAB freeze run** — `freeze_diraculator_values()` beside
+  `../quantized_matlab` (classification pinned at `c853414`), then
+  `uv run pytest -m golden` (93 staged skips go live), then flip the twelve
+  PORT_CHECKLIST `[~]` entries back to `[x]`. Until then the 93 cases are
+  STAGED SCAFFOLDING, not parity evidence.
+- [ ] **History input-snapshot capture** — the P1 provenance acceptance-gate
+  remainder (see the unchecked item in that section).
+- [ ] **`substrates.critical_thickness` formula decision** — Python and MATLAB
+  disagree four independent ways (~17.5× where both compute); owner picks the
+  intended Matthews-Blakeslee form, then the op gets fixed + frozen. Tracked
+  on the PORT_CHECKLIST substrates entry.
+- [ ] **Scherrer grain-size port** — MATLAB Thin Film Card 6 was never ported;
+  new PORT_CHECKLIST item under W4.
+
 ## Recommended implementation order
 
 1. Fix hidden-field validation and precision-preserving handoffs; these are
@@ -273,4 +294,20 @@ line ceilings, dependency policy, and frontend conventions are checked together.
     decision needed on the intended formula before freezing that op;
     (3) the sputterYield "bug" is confined to the MATLAB GUI call site — the
     `+calc` function was always correct.
+- 2026-08-16 — **Review round 2 (ChatGPT-Sol, on PR #143), verified-then-fixed.**
+  - CONFIRMED: `XrayTab.tsx`'s local Energy→λ helper sat outside the
+    provenance guard — no request identity, unconditional `setWavelength` on
+    resolve, `finally` cleared busy regardless of ownership. Reproduced
+    red-first with two deferred-request component tests (edit-while-pending;
+    overlapping helper requests resolving out of order), then fixed with the
+    cards' contract: monotonic request id, energy edits disown pending
+    requests (and re-arm the button), disowned completions write nothing —
+    value, error, and busy alike.
+  - Documentation reconciliation: the twelve staged golden-test docstrings
+    now all point to `tools/matlab/freeze_diraculator_values.m` (they
+    described the pre-assembly scratchpad snippets); the plan Status line and
+    the new "Open follow-ups" section state explicitly that the 93 cases are
+    staged scaffolding until the owner freeze, and the history
+    input-snapshot remainder is an unchecked acceptance-gate item rather
+    than a Completed-log footnote.
 

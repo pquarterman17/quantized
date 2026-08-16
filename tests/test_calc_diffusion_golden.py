@@ -3,8 +3,7 @@
 STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_diffusion_*.json``
 golden fixtures that do not exist yet in this checkout -- ``load_golden``
 skips cleanly until the owner runs MATLAB against
-``tools/matlab/freeze_calc_values.m`` (extended with the sections in
-``freeze_dira_echem_diff_substrates.m``) and commits the frozen JSON.
+``tools/matlab/freeze_diraculator_values.m`` and commits the frozen JSON.
 
 No ``+calc/+diffusion`` package exists in ``quantized_matlab`` -- all three
 formulas are embedded directly in ``buildDiffusionTab``'s nested callbacks
@@ -18,7 +17,7 @@ NOTE (overlap, deliberately not re-frozen here): ``diffusion_length``'s
 named ``tau`` there, ``t`` here). That package op belongs to the
 Semiconductor domain's own audit and is frozen there as
 ``calc_dira_semiconductor_diffusion_length.json``
-(see ``freeze_dira_electrical_semi_thermal.m``); this file freezes the
+(see ``freeze_diraculator_values.m``); this file freezes the
 GUI-embedded formula instead, since that is what ``quantized.calc.diffusion``'s
 own module docstring documents itself against ("Ports the three inline
 MATLAB diffusion formulas verbatim" from ``buildDiffusionTab``, not the

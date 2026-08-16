@@ -3,8 +3,7 @@
 STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_electrical_*.json``
 golden fixtures that do not exist yet in this checkout -- ``load_golden``
 skips cleanly until the owner runs MATLAB against
-``tools/matlab/freeze_calc_values.m`` (extended with the sections in
-``freeze_dira_electrical_semi_thermal.m``) and commits the frozen JSON.
+``tools/matlab/freeze_diraculator_values.m`` and commits the frozen JSON.
 
 Every MATLAB ``calc.electrical.*`` struct also carries a ``.latex`` display
 field that the Python port intentionally omits (pure calc layer, no display
@@ -123,7 +122,7 @@ def test_hall_single_point_matches_matlab(
     """GUI-embedded formula (DiraCulator.m ``doHallEffect``, lines 1681-1707) --
     no ``+calc/+electrical`` file backs ``hall_single_point`` directly, so the
     freeze case replicates the callback inline (see
-    ``freeze_dira_electrical_semi_thermal.m``).
+    ``freeze_diraculator_values.m``).
 
     The GUI reports carrier type via ``calc.semiconductor.hallCoefficient``'s
     ``apparentType`` ('p'/'n'); the Python port reports 'hole'/'electron'
