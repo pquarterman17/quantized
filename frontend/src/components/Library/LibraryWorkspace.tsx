@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
-import { openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 
 interface Props {
@@ -174,6 +174,19 @@ export default function LibraryWorkspace({ onClose }: Props) {
     if (node.kind === "folder" || node.kind === "workbook") setContainerKey(node.key);
   };
 
+  // OWNER DECISION (Paige, 2026-08-16, PR #145 review follow-up): an open
+  // whose visible result is a Stage plot (worksheet activation, Origin
+  // figure, editable-figure window, or a workbook resolving to one) also
+  // RETURNS to the plot — otherwise the open changes the plot invisibly
+  // behind this workspace and the user sees only a selection tint. Overlay
+  // opens (pages, reports, publication figures) render above the tiles and
+  // deliberately keep the workspace open. Recorded in
+  // LIBRARY_WORKBOOK_UX_PLAN's change log alongside `opensInStage`'s note.
+  const openFromTile = (node: LibraryNode): void => {
+    openLibraryNode(node);
+    if (opensInStage(node)) close();
+  };
+
   const moveFocus = (current: HTMLElement, delta: number): void => {
     const tiles = [...current.closest(".qzk-tile-grid")!.querySelectorAll<HTMLElement>("[data-library-tile]")];
     const index = tiles.indexOf(current);
@@ -222,12 +235,12 @@ export default function LibraryWorkspace({ onClose }: Props) {
                 tabIndex={node.key === tabStopKey ? 0 : -1}
                 aria-label={`${node.name}, ${KIND_LABEL[node.kind]}`}
                 onClick={() => selectOrBrowse(node)}
-                onDoubleClick={() => openLibraryNode(node)}
+                onDoubleClick={() => openFromTile(node)}
                 onFocus={() => setRovingKey(node.key)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    openLibraryNode(node);
+                    openFromTile(node);
                   } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
                     event.preventDefault(); moveFocus(event.currentTarget, 1);
                   } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {

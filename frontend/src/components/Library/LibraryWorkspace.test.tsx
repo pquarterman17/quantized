@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
+import { createPageDocument } from "../../lib/pageDocument";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
@@ -31,6 +32,11 @@ beforeEach(() => {
     selectedIds: [],
     librarySelection: null,
     activeId: null,
+    expandedFolders: [],
+    expandedWorkbookIds: [],
+    revealTarget: null,
+    workbookLastChild: {},
+    figurePageOpen: false,
   });
 });
 
@@ -82,6 +88,75 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(useApp.getState().revealTarget).toBe("worksheet:a");
     expect(useApp.getState().activeId).toBe("a");
+  });
+
+  // OWNER DECISION (Paige, 2026-08-16, PR #145 review follow-up): opening a
+  // node whose visible result is a STAGE plot also returns to the plot —
+  // otherwise the open happens invisibly behind the tiles. Overlay opens
+  // (pages/reports/publication figures) keep the workspace open, and plain
+  // browsing (folders) never closes it.
+  it("opening a worksheet tile returns to the plot (stage-target open)", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+    const tile = screen.getByRole("gridcell", { name: "a.csv, Worksheet" });
+
+    fireEvent.doubleClick(tile);
+    expect(useApp.getState().activeId).toBe("a"); // the open happened…
+    expect(onClose).toHaveBeenCalledOnce(); // …and it is VISIBLE: back to the plot
+    expect(useApp.getState().revealTarget).toBe("worksheet:a"); // revealed in the tree
+  });
+
+  it("Enter on a workbook tile resolves its remembered child and returns to the plot", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+    const tile = screen.getByRole("gridcell", { name: "Run, Workbook" });
+    tile.focus();
+    fireEvent.keyDown(tile, { key: "Enter" });
+    expect(useApp.getState().activeId).toBe("a"); // L0.6 first-worksheet fallback
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("opening an overlay-target tile (figure page) keeps the workspace open", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      pages: [createPageDocument({ id: "pg1", name: "Summary Page", rows: 1, cols: 1 })],
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+    const tile = screen.getByRole("gridcell", { name: "Summary Page, Figure page" });
+
+    fireEvent.doubleClick(tile);
+    expect(useApp.getState().figurePageOpen).toBe(true); // the overlay opened above
+    expect(onClose).not.toHaveBeenCalled(); // the workspace stays for more browsing
+  });
+
+  it("browsing never closes the workspace: folder open is a disclosure toggle, not a stage target", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      folders: [{ id: "f1", name: "Growth", parentId: null, order: 0 }],
+      workbooks: [{ id: "w1", name: "Run", folderId: "f1" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+    const folderTile = screen.getByRole("gridcell", { name: "Growth, Folder" });
+    fireEvent.click(folderTile); // browse in
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("gridcell", { name: "Run, Workbook" })).toBeInTheDocument();
+
+    // Double-click on the folder itself (via breadcrumb-back first): open =
+    // toggleFolderExpanded — sidebar disclosure, nothing stage-bound.
+    fireEvent.click(screen.getByRole("button", { name: "Project" })); // breadcrumb to root
+    fireEvent.doubleClick(screen.getByRole("gridcell", { name: "Growth, Folder" }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useApp.getState().expandedFolders).toContain("f1"); // the toggle ran
   });
 
   it("keeps one keyboard entry tile and moves focus with arrow keys", () => {

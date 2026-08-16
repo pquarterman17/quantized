@@ -47,6 +47,28 @@ function openWorkbookRemembered(node: Extract<LibraryNode, { kind: "workbook" }>
   if (target) openLibraryNode(target);
 }
 
+/** True when opening this node lands in the STAGE (a plot window): worksheet
+ *  activation, an Origin figure applied to the active plot, an editable
+ *  figure's plot window (all rendered by WindowCanvas inside Stage) — and a
+ *  workbook, which resolves to its L0.6 remembered child (else its first
+ *  worksheet). Pages, reports, and publication figures open workshop overlays
+ *  that render ABOVE everything; folders only toggle disclosure.
+ *
+ *  OWNER DECISION (Paige, 2026-08-16, PR #145 review follow-up): opening a
+ *  stage-target node from the wide Tile workspace must also RETURN to the
+ *  plot — with the Stage replaced by tiles, the open would otherwise change
+ *  the plot invisibly behind the workspace. This is the "changed-plot"
+ *  counterpart of L0.25's "Escape returns to the UNCHANGED active plot". */
+export function opensInStage(node: LibraryNode): boolean {
+  if (node.kind === "worksheet" || node.kind === "origin-figure" || node.kind === "editable-figure") {
+    return true;
+  }
+  if (node.kind !== "workbook") return false;
+  const lastKey = useApp.getState().workbookLastChild[node.entityId];
+  const target = node.children.find((c) => c.key === lastKey) ?? node.children.find((c) => c.kind === "worksheet");
+  return target ? opensInStage(target) : false;
+}
+
 /** Open one Library node per its kind. Folders toggle expansion (they have no
  *  separate "open"); every other kind performs its canonical open action and
  *  records L0.6 for its owning workbook, if any. */

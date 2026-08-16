@@ -581,7 +581,15 @@ build, and focused interaction coverage where appropriate.
      selection uses `selectLibraryNode`, double-click/Enter uses
      `openLibraryNode`, arrows use one roving entry point, breadcrumbs navigate
      without rewriting hierarchy state, and Escape works even while focus is
-     still in the sidebar. Worksheet tiles show the first three row-major data
+     still in the sidebar. **Owner decision (Paige, 2026-08-16, from the
+     Claude review's decision item): a STAGE-TARGET open from a tile
+     (worksheet activation, Origin figure, editable-figure window, or a
+     workbook resolving to one via L0.6) also returns to the plot — the open
+     must be visible, never hidden behind the workspace; overlay opens
+     (pages/reports/publication figures) keep the workspace open. Implemented
+     by Claude directly on this branch (`opensInStage` in libraryOpen.ts +
+     `openFromTile`), the "changed-plot" counterpart of L0.25's
+     "Escape returns to the UNCHANGED active plot".** Worksheet tiles show the first three row-major data
      rows and up to four real columns plus correct dimensions—never an inferred
      plot. The workspace is lazy-loaded as its own ~5.8 kB chunk.
    - [ ] **E-b — shared actions and heterogeneous preview polish:** give tiles
@@ -1299,6 +1307,15 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Change log
 
+- **2026-08-16 — Claude (Fable):** Owner decision recorded and implemented on
+  `sol/library-e-wide-shell` (PR #145): stage-target opens from a tile return
+  to the plot (see the E-a row). Implementation: `opensInStage` beside the
+  canonical open dispatcher (workbooks resolve their L0.6 remembered child),
+  `openFromTile` in LibraryWorkspace, 5 new unit tests (stage vs overlay vs
+  browse), and an extended real-browser tiles journey proving the opened
+  sheet is active with the Stage restored. Sol's three review-round findings
+  (focused-tile Delete leak P1, Escape stolen from overlays P2, pending-dims
+  P2) remain open for the fix round — deliberately not absorbed here.
 - **2026-08-16 — Claude (Fable):** PRs #143 (diraculator audit) and #144
   (D2) merged in stack order on the owner's instruction (`ebe06c3`,
   `565bf08`; #144's base retargeted to main after #143 landed). Both had one
