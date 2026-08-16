@@ -6,7 +6,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import AppOverlays from "./AppOverlays";
-import Inspector from "./components/Inspector/Inspector";
 import Library from "./components/Library/Library";
 import MenuBar from "./components/Shell/MenuBar";
 import StatusBar from "./components/Shell/StatusBar";
@@ -25,6 +24,10 @@ import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
+// E-c1 bundle pass: ~45 kB of Inspector cards off the pre-paint parse path.
+// The fallback keeps the grid column (same root class) so nothing shifts
+// while the chunk loads; the cards fill in immediately after first paint.
+const Inspector = lazy(() => import("./components/Inspector/Inspector"));
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
@@ -93,7 +96,9 @@ export default function App() {
         ) : (
           <Stage />
         )}
-        <Inspector />
+        <Suspense fallback={<aside className="qzk-inspector" />}>
+          <Inspector />
+        </Suspense>
       </div>
       <StatusBar />
       <CommandPalette actions={actions} />

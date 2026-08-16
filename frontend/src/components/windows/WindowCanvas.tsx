@@ -27,14 +27,18 @@
 // interact with a placeholder), and prune any id no longer in `plotWindows`
 // (a window closed mid-stage stops wasting a drain frame).
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
 import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
 import { DATASET_DND } from "../Library/dnd";
 import PlotStage from "../Stage/PlotStage";
-import BackgroundPlotWindow from "./BackgroundPlotWindow";
+// E-c1 bundle pass: a fresh session has exactly one (focused) window, so the
+// unfocused-window renderer — which drags in the whole alt-modes cluster
+// (BackgroundAltModes -> useStatStage/StatStageCanvas/statRender) — loads on
+// demand, the same way DocumentWindow's Map/Worksheet content already does.
+const BackgroundPlotWindow = lazy(() => import("./BackgroundPlotWindow"));
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";
 import PanelPlotWindow from "./PanelPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
@@ -193,12 +197,14 @@ export default function WindowCanvas() {
               ) : focused ? (
                 <PlotStage />
               ) : (
-                <BackgroundPlotWindow
-                  dataset={dataset}
-                  view={plotWindowView(win)}
-                  bg={win.bg}
-                  linkGroup={win.linkGroup}
-                />
+                <Suspense fallback={null}>
+                  <BackgroundPlotWindow
+                    dataset={dataset}
+                    view={plotWindowView(win)}
+                    bg={win.bg}
+                    linkGroup={win.linkGroup}
+                  />
+                </Suspense>
               )}
             </PlotWindowFrame>
           );

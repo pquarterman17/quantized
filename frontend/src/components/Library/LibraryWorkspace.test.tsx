@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryWorkspace from "./LibraryWorkspace";
 import { createPageDocument } from "../../lib/pageDocument";
 import type { Dataset } from "../../lib/types";
+import { clearThumbnailCache } from "../../lib/thumbnailCache";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import ContextMenu from "../overlays/ContextMenu";
@@ -162,6 +163,25 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     );
     await act(async () => {}); // let the confirmed run resolve
     expect(useApp.getState().pages).toHaveLength(0);
+  });
+
+  it("a page tile renders its generated thumbnail through the canonical cache pipe (E-c1)", async () => {
+    clearThumbnailCache();
+    useApp.setState({
+      pages: [createPageDocument({ id: "pg1", name: "Summary Page", rows: 1, cols: 2 })],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    const img = await screen.findByAltText("Preview of Summary Page");
+    expect(img).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
+  });
+
+  it("an artifact kind with no generator keeps an honest placeholder caption", () => {
+    useApp.setState({
+      reports: [{ id: "rep1", name: "Fit report", datasetId: null, report: { title: "R", sections: [] } }],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    expect(screen.getByText("Preview arrives in PR E-c2")).toBeInTheDocument();
   });
 
   it("right-clicks an artifact tile into the shared lifecycle menu", () => {

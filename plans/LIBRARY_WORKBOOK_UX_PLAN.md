@@ -658,12 +658,28 @@ build, and focused interaction coverage where appropriate.
      large-Library fixtures/virtualization boundary. Claude should review cache
      invalidation and cancellation reliability before merge.
      **OWNER SPLIT (Paige, 2026-08-16):** three stacked slices —
-     - [ ] **E-c1 (Claude): thumbnail/cache infrastructure.** Canonical
+     - [~] **E-c1 (Claude): thumbnail/cache infrastructure.** Canonical
        thumbnail generation + invalidation contract, lazy visible-only
        loading, cache ownership, failure placeholders. Address the eager
        bundle budget FIRST (0.2 kB headroom at booking): an extraction pass
        per the ratchet's own rule (never raise the pin — split/defer to
        re-open the slack band), not a budget raise.
+       *Implemented 2026-08-16 on `claude/quantized-origin-jmp-gaps-vbtfnm`,
+       pending PR. Bundle pass recovered ~88 kB (903.1 → 814.9 kB eager; pin
+       lowered 924,977 → 874,461 per the ratchet) by lazy-loading three
+       runtime-conditional subtrees: Inspector (App.tsx, same-class fallback),
+       StatStage + MultiPanelStage (PlotStage.tsx, MapStage precedent), and
+       BackgroundPlotWindow (WindowCanvas.tsx, drags the alt-modes/stat
+       cluster). Infrastructure: `lib/thumbnailCache.ts` (revision tagging by
+       entity object identity via WeakMap, bounded 300-entry LRU with
+       stale-revision drop, one-generator-per-kind registry with loud double-
+       registration), `useThumbnail` hook (visible-only via
+       IntersectionObserver with degrade-to-eager, AbortController
+       cancellation on unmount/scroll-out, keyed-outcome staleness guard —
+       the useCard provenance pattern), failure → error state, unsupported →
+       honest static placeholder. One REFERENCE generator (page → panel-grid
+       SVG data-URL, pure and jsdom-testable) proves the pipe end-to-end;
+       E-c2 owns real preview visuals and the generator set.*
      - [ ] **E-c2 (ChatGPT-Sol): tile preview UX.** Useful plot/table/
        analysis/page/report previews; loading/empty/error appearance; visual
        hierarchy, sizing, hover behavior, readability.
@@ -1715,3 +1731,16 @@ back to the owner. No Library implementation is authorized by this pause.
   first, plus a green probe pinning the page-panel dependency message.
   NOTE: the eager bundle is 903.1 / 903.3 kB — E-c (thumbnails) will need an
   owner decision on raising the budget.
+- **2026-08-16 — Claude, E-c1 implementation (owner split, first slice):**
+  Resolved the bundle-headroom note above WITHOUT raising the pin: an
+  extraction pass (Inspector, StatStage/MultiPanelStage, BackgroundPlotWindow
+  — all runtime-conditional, per the 2026-08-02 MapStage precedent) recovered
+  ~88 kB and the ratchet's slack rule LOWERED the budget to 874,461 B,
+  leaving a fresh 40 kB band for E-c2/E-c3. Landed the canonical thumbnail
+  infrastructure: revision-keyed cache (entity object identity = revision, so
+  every store mutation invalidates implicitly), bounded LRU, per-kind
+  generator registry, visible-only generation with abort-on-unmount and a
+  keyed staleness guard, error/unsupported placeholder states, and a pure
+  reference generator (page panel-grid SVG) proving generation → cache →
+  tile end-to-end. E-c2 (Sol) owns the real preview visuals; E-c3 (Claude)
+  owns virtualization. PR pending.
