@@ -167,6 +167,8 @@ export interface DatasetActionTarget {
   /** Local UI: open this row's own inline rename/tag input. */
   onRename: () => void;
   onAddTag: () => void;
+  /** Tile workspace only: reveal a Stage-target action after it runs. */
+  onStageOpen?: () => void;
 }
 
 const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
@@ -184,7 +186,10 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     id: "dataset.plot",
     label: "Plot (make active)",
     enabled: (t) => !t.active,
-    run: (t) => useApp.getState().setActive(t.dataset.id),
+    run: (t) => {
+      useApp.getState().setActive(t.dataset.id);
+      t.onStageOpen?.();
+    },
   },
   // Multi-plot discoverability: a plain Library click REBINDS the focused
   // window (unless pinned), so there was no direct "plot this dataset in a
@@ -195,7 +200,10 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.plotInNewWindow",
     label: "Plot in new window",
-    run: (t) => void plotInNewWindow(t.dataset.id),
+    run: (t) => {
+      void plotInNewWindow(t.dataset.id);
+      t.onStageOpen?.();
+    },
   },
   { id: "dataset.duplicate", label: "Duplicate", run: (t) => void useApp.getState().duplicateDataset(t.dataset.id) },
   { id: "dataset.rename", label: "Rename…", run: (t) => t.onRename() },

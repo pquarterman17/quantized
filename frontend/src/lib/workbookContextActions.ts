@@ -27,13 +27,17 @@ export interface WorkbookActionTarget {
   node: Extract<LibraryNode, { kind: "workbook" }>;
   /** Local UI: open this row's own inline rename input. */
   onRename: () => void;
+  /** Tile workspace only: browse this workbook without activating a child. */
+  onBrowse?: () => void;
+  /** Tile workspace only: open and reveal the Stage result. */
+  onOpen?: () => void;
 }
 
 const memberCount = (t: WorkbookActionTarget): number =>
   t.node.children.filter((c) => c.kind === "worksheet").length;
 
 export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
-  { id: "workbook.open", label: "Open", run: (t) => openLibraryNode(t.node) },
+  { id: "workbook.open", label: "Open", run: (t) => t.onOpen ? t.onOpen() : openLibraryNode(t.node) },
   {
     id: "workbook.quickPlot",
     label: "Quick Plot",
@@ -44,9 +48,9 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.browse",
     label: "Browse",
-    enabled: () => false,
-    disabledReason: () => "arrives with the Library workspace (PR E)",
-    run: () => {},
+    enabled: (t) => t.onBrowse != null,
+    disabledReason: () => "available in Tiles view",
+    run: (t) => t.onBrowse?.(),
   },
   { id: "workbook.rename", label: "Rename…", run: (t) => t.onRename() },
 ];

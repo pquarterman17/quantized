@@ -47,10 +47,18 @@ describe("workbook menu — disabled-with-reason items (L0.36)", () => {
     expect(item.title).toBe("arrives with Quick Plot (PR F)");
   });
 
-  it("Browse is always disabled with its PR E reason", () => {
+  it("Browse is disabled outside Tiles with an honest availability reason", () => {
     const item = menuItemFor(find("workbook.browse"), target({ id: "w1", name: "W" }));
     expect(item.disabled).toBe(true);
-    expect(item.title).toBe("arrives with the Library workspace (PR E)");
+    expect(item.title).toBe("available in Tiles view");
+  });
+
+  it("Browse runs the Tile workspace callback when supplied", () => {
+    const onBrowse = vi.fn();
+    const item = menuItemFor(find("workbook.browse"), { ...target({ id: "w1", name: "W" }), onBrowse });
+    expect(item.disabled).toBe(false);
+    item.run();
+    expect(onBrowse).toHaveBeenCalledOnce();
   });
 
   it("Properties is always disabled with its PR D reason", () => {

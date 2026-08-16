@@ -204,6 +204,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     });
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
+    expect(screen.getByText("Data loads when opened")).toBeInTheDocument();
     expect(screen.getByText("On demand")).toBeInTheDocument();
     expect(screen.getByText(/Worksheet · 5,000 × 7/)).toBeInTheDocument();
   });
@@ -277,5 +278,46 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("right-clicks a worksheet into the canonical dataset action menu", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={onClose} />);
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "a.csv, Worksheet" }), {
+      clientX: 20,
+      clientY: 30,
+    });
+
+    expect(screen.getByRole("menuitem", { name: "Plot (make active)" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Rename…" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Remove" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Plot (make active)" }));
+    expect(useApp.getState().activeId).toBe("a");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("opens the same workbook menu from the keyboard and Browse enters it", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const workbook = screen.getByRole("listitem", { name: "Run, Workbook" });
+    workbook.focus();
+
+    fireEvent.keyDown(workbook, { key: "F10", shiftKey: true });
+    const browse = screen.getByRole("menuitem", { name: "Browse" });
+    expect(browse).not.toBeDisabled();
+    fireEvent.click(browse);
+
+    expect(screen.getByRole("list", { name: "Run items" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: "a.csv, Worksheet" })).toBeInTheDocument();
   });
 });

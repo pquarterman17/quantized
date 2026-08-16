@@ -18,9 +18,11 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 export function buildWorkbookRowMenu(
   node: Extract<LibraryNode, { kind: "workbook" }>,
   onRename: () => void,
+  onBrowse?: () => void,
+  onOpen?: () => void,
 ): ContextMenuItem[] {
   const workbook = node.entity;
-  const target: WorkbookActionTarget = { node, onRename };
+  const target: WorkbookActionTarget = { node, onRename, onBrowse, onOpen };
   const { folders, moveWorkbookToFolder } = useApp.getState();
 
   const moveItems: ContextMenuItem[] = [
