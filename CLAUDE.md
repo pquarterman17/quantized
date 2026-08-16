@@ -164,6 +164,19 @@ Practical conventions discovered while porting — follow them to stay green.
 - Hoist `Any | None` to a narrowed typed local before numpy calls.
 - Don't reuse a return-variable's name for a `floating[Any]` loop intermediate.
 
+### Pre-PR self-review discipline (adopted 2026-08-16, after PR #149 round 1)
+- **Simulate the first real consumer before opening a PR** — infrastructure
+  contracts get review-tested by writing the next slice's strawman code
+  against them (the E-c1 miss: a page preview renders figures, so figures
+  belong in the cache key — obvious the moment Sol's generator was sketched).
+- **Cache/invalidation red-team question:** list ALL inputs the rendered
+  output depends on (transitively); each one must be in the cache key.
+- **Doc-promise audit:** every behavioral claim in a header/PR body needs a
+  matching test, or the claim gets narrowed to what the code actually does.
+- **Run the code-review skill (high) on your own diff before opening a PR**
+  and fix what it finds — its first run caught a CI-red weak-wait, a deps-
+  cursor desync, and two O(store)-per-tile inefficiencies pre-push.
+
 ### Test determinism
 - **Evidence standard for flake fixes: `docs/testing.md`.** "It passed N times"
   is weak — 0 failures in n runs bounds the rate at only 3/n, so the 0/90 that

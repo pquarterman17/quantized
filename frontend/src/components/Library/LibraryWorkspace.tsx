@@ -13,6 +13,7 @@ import { useApp } from "../../store/useApp";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
+import { useThumbnail } from "./useThumbnail";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 
@@ -90,10 +91,40 @@ function TilePreview({ node }: { node: LibraryNode }) {
       </div>
     );
   }
+  return <ArtifactPreview node={node} />;
+}
+
+/** E-c1: artifact tiles render through the canonical thumbnail pipe —
+ *  visible-only generation, revision-keyed cache, abort on unmount (see
+ *  useThumbnail). Deliberately minimal presentation: E-c2 owns the real
+ *  preview visuals, loading/error appearance, and sizing. */
+function ArtifactPreview({ node }: { node: LibraryNode }) {
+  const holderRef = useRef<HTMLDivElement | null>(null);
+  const thumb = useThumbnail(node, holderRef);
+  const missing = node.source.missingDatasetIds.length > 0;
+  const caption = missing
+    ? "Source unavailable"
+    : thumb.status === "error"
+      ? "Preview unavailable"
+      : thumb.status === "unsupported"
+        ? "Preview arrives in PR E-c2"
+        : thumb.status === "ready"
+          ? null
+          : "Generating preview…";
   return (
-    <div className="qzk-tile-placeholder">
-      <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
-      <small>{node.source.missingDatasetIds.length ? "Source unavailable" : "Preview arrives in PR E-c"}</small>
+    <div className="qzk-tile-placeholder" ref={holderRef}>
+      {thumb.status === "ready" ? (
+        <img
+          className="qzk-tile-thumb"
+          src={thumb.result.url}
+          width={thumb.result.width}
+          height={thumb.result.height}
+          alt={`Preview of ${node.name}`}
+        />
+      ) : (
+        <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+      )}
+      {caption && <small>{caption}</small>}
     </div>
   );
 }

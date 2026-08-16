@@ -7,7 +7,7 @@
 // and the fetch+compose pipeline now live in PlotViewport.tsx / usePlotPayload.ts
 // — this file is the thin store-reading wrapper around them.)
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 import { facetPanelsOf, spatialPanelsOf } from "../../lib/composition";
@@ -20,13 +20,16 @@ import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import AxisDropZones from "./AxisDropZones";
-import MultiPanelStage from "./MultiPanelStage";
 import PlotStageMenus from "./PlotStageMenus";
 import PlotStageOverlays from "./PlotStageOverlays";
 import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
-import StatStage from "./StatStage";
 import { useAnnotationEdit } from "./useAnnotationEdit";
+
+// E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-
+// conditional alternate modes, never the default-plot first paint.
+const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
+const StatStage = lazy(() => import("./StatStage"));
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
@@ -246,12 +249,12 @@ export default function PlotStage() {
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   if (polarMode && active) return <PolarStage />;
-  if (statMode && active) return <StatStage />;
+  if (statMode && active) return <Suspense fallback={null}><StatStage /></Suspense>;
   if (
     stackMode &&
     (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
   )
-    return <MultiPanelStage />;
+    return <Suspense fallback={null}><MultiPanelStage /></Suspense>;
 
   return (
     <AxisDropZones

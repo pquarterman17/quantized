@@ -22,6 +22,21 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-08-16 — pinned at 874,461 after the E-c1 extraction pass, booked by
+ *  the owner's E-c split ("address the eager bundle budget first" — the
+ *  0.2 kB of remaining headroom was one feature away from red). Three
+ *  runtime-conditional subtrees left the eager graph, each following the
+ *  2026-08-02 MapStage/DocumentWindow precedent: (1) `Inspector` (App.tsx)
+ *  — ~45 kB of cards behind a same-class `<aside>` fallback so the grid
+ *  column never shifts; (2) `StatStage` + `MultiPanelStage` (PlotStage.tsx)
+ *  — alternate stage modes, never the default-plot first paint; (3)
+ *  `BackgroundPlotWindow` (WindowCanvas.tsx) — a fresh session has exactly
+ *  one focused window, and this renderer drags in the whole
+ *  BackgroundAltModes/useStatStage/statRender cluster. Measured 834,461 B
+ *  eager, down from 924,777 B — recovers ~88 kB and re-opens the full
+ *  40 kB slack band for E-c2 (tile previews) and E-c3 (virtualization).
+ *  NEVER raise this — split a panel out or defer a module instead.
+ *
  *  2026-08-02 — pinned at 924,977 after moving the Stage cell's Map/
  *  Worksheet tabs and the MDI `MapWindow`/`WorksheetWindow` document-window
  *  content (`components/windows/DocumentWindow.tsx`) to dynamic imports, plus
@@ -59,7 +74,7 @@ import { fileURLToPath } from "node:url";
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
  *  before first paint. */
-const EAGER_JS_BUDGET = 924_977;
+const EAGER_JS_BUDGET = 874_461;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
