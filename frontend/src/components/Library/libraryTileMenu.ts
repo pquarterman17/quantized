@@ -5,6 +5,7 @@
 
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
+import { buildArtifactMenu, isArtifactNode } from "./artifactContextActions";
 import { subtreeCount } from "../../lib/foldertree";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
@@ -77,5 +78,6 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       () => hooks.browse(node),
     );
   }
+  if (isArtifactNode(node)) return buildArtifactMenu(node, () => hooks.open(node));
   return null;
 }

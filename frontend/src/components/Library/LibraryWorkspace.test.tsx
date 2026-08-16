@@ -141,6 +141,19 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(onClose).not.toHaveBeenCalled(); // the workspace stays for more browsing
   });
 
+  it("right-clicks an artifact tile into the shared lifecycle menu", () => {
+    useApp.setState({
+      pages: [createPageDocument({ id: "pg1", name: "Summary Page", rows: 1, cols: 1 })],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: "Summary Page, Figure page" }));
+    expect(screen.getByRole("menuitem", { name: "Open" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Rename…" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
+  });
+
   it("browsing never closes the workspace: folder open is a disclosure toggle, not a stage target", () => {
     const onClose = vi.fn();
     useApp.setState({

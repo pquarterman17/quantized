@@ -12,7 +12,10 @@ import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
 import { parseQuery } from "../../lib/smartfolders";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
+import { buildArtifactMenu, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
+import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
 
 interface Props {
   hierarchy: LibraryHierarchy;
@@ -49,6 +52,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   const selection = useApp((s) => s.librarySelection);
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
+  const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
   const searching = searchQuery != null && searchQuery.trim() !== "";
   const rows = useMemo(() => {
     let projected = libraryDetailsRows(hierarchy);
@@ -196,7 +200,12 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                   onFocus={() => setFocusKey(row.node.key)}
                   onClick={() => selectLibraryNode(row.node)}
                   onDoubleClick={() => openLibraryNode(row.node)}
-                  onContextMenu={() => selectLibraryNode(row.node)}
+                  onContextMenu={(event) => {
+                    selectLibraryNode(row.node);
+                    if (!isArtifactNode(row.node)) return;
+                    event.preventDefault();
+                    setArtifactMenu({ x: event.clientX, y: event.clientY, node: row.node });
+                  }}
                   onKeyDown={(event) => {
                     // Match LibraryTree's focused-row contract: a Details row
                     // owns Delete/Backspace before the window-level fallback
@@ -204,6 +213,12 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                     // worksheets have an enabled delete flow in this slice;
                     // every other kind consumes the key until its canonical
                     // registry action is available through L1.4.
+                    if (isContextMenuKeyEvent(event) && isArtifactNode(row.node)) {
+                      event.preventDefault();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setArtifactMenu({ x: rect.left + 8, y: rect.bottom, node: row.node });
+                      return;
+                    }
                     if (event.key === "Delete" || event.key === "Backspace") {
                       event.preventDefault();
                       if (row.node.kind === "worksheet") {
@@ -276,6 +291,14 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
           </div>
         )}
       </div>
+      {artifactMenu && (
+        <ContextMenu
+          x={artifactMenu.x}
+          y={artifactMenu.y}
+          items={buildArtifactMenu(artifactMenu.node)}
+          onClose={() => setArtifactMenu(null)}
+        />
+      )}
     </div>
   );
 }

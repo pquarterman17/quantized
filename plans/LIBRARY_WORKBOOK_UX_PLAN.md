@@ -639,6 +639,17 @@ build, and focused interaction coverage where appropriate.
        workspace supplies a browse target. Every node kind has a compact,
        factual kind/source summary. E-b remains open for E-b2's shared artifact
        lifecycle menus (the L1.4 gap); Quick Plot remains exclusively PR F.
+     - [~] **E-b2 — shared artifact lifecycle actions (ChatGPT-Sol,
+       2026-08-16):** implemented on `sol/library-eb2-artifact-actions`,
+       pending PR/Claude review. One registry/builder supplies Open, Rename,
+       Duplicate, Show source, Properties, and Delete to artifact tiles, Tree
+       artifact rows, and Details rows. Editable-figure deletion names affected
+       page panels; page/editable deletion preserves the established session
+       Undo promise; publication/report deletion warns that no in-app recovery
+       exists. Unsupported operations remain visible with reasons: recovered
+       Origin artifacts are source-managed, reports cannot yet be duplicated,
+       and unified artifact Properties is deferred. This closes the booked
+       L1.4 artifact-context-menu gap without pulling Quick Plot forward from F.
    - [ ] **E-c — canonical thumbnails + scale safeguards:** actual editable/
      recovered figure thumbnails, natural analysis previews, revision-keyed
      cache, visible-only lazy generation, placeholders, cancellation, and
@@ -1664,3 +1675,12 @@ back to the owner. No Library implementation is authorized by this pause.
   dataset(s)" confirm stated wrong numbers whenever the folder held
   workbooks; `subtreeCount` is hoisted to `lib/foldertree.ts` and shared.
   All three were proven red first; four regression tests added.
+- **2026-08-16 — ChatGPT-Sol, E-b2 implementation:** Added one artifact
+  lifecycle registry consumed by Tiles, Tree artifact rows (including recovered
+  Origin graphs), and Details. Supported rename/duplicate/delete paths reuse
+  the canonical store actions and their existing Undo boundaries; destructive
+  confirmations distinguish recoverable editable/page artifacts from
+  non-recoverable publication/report artifacts and name page panels affected by
+  editable-figure deletion. Unsupported actions stay discoverable with honest
+  disabled reasons. Focused tests cover pointer and keyboard menu access; PR
+  and Claude review remain pending.

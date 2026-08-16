@@ -632,6 +632,22 @@ describe("LibraryTree — L0.25 select/open/disclosure contract, every node kind
     expect(useApp.getState().openReportId).toBe("rep1");
   });
 
+  it("artifact rows share the lifecycle menu by pointer and keyboard", () => {
+    render(<Harness />);
+    const report = row("report:rep1");
+    fireEvent.contextMenu(report, { clientX: 12, clientY: 18 });
+    expect(screen.getByRole("menuitem", { name: "Open" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toHaveAttribute(
+      "title",
+      "report duplication is not available yet",
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    report.focus();
+    fireEvent.keyDown(report, { key: "F10", shiftKey: true });
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
+  });
+
   it("folder: the caret toggles disclosure WITHOUT selecting; a body double-click is the folder's open (toggle)", () => {
     render(<Harness />);
     const caret = row("folder:f1").querySelector(".qzk-group-caret") as HTMLElement;
