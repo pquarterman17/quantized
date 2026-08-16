@@ -221,6 +221,45 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(screen.getByText("1.00000e+8")).toBeInTheDocument();
   });
 
+  it("focus lands on the nearest surviving tile after the focused tile is deleted (review round)", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1"), worksheet("b", "w1")],
+      librarySelection: { kind: "workbook", id: "w1" },
+      trash: [],
+      history: [],
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const second = screen.getByRole("listitem", { name: "b.csv, Worksheet" });
+    second.focus();
+    fireEvent.keyDown(second, { key: "Delete" });
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]);
+    // The roving contract survives the removal: same position, next tile —
+    // never an orphaned <body> focus feeding the global dataset navigator.
+    expect(document.activeElement).toBe(screen.getByRole("listitem", { name: "a.csv, Worksheet" }));
+  });
+
+  it("Escape while editing (input/textarea/select/contenteditable) never closes the workspace", () => {
+    const onClose = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    render(
+      <>
+        <LibraryWorkspace onClose={onClose} />
+        <select data-testid="probe-select"><option>x</option></select>
+        <input data-testid="probe-input" />
+      </>,
+    );
+    for (const id of ["probe-select", "probe-input"]) {
+      const field = screen.getByTestId(id);
+      field.focus();
+      fireEvent.keyDown(field, { key: "Escape" });
+    }
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("lets the command palette and context menu own Escape", () => {
     const onClose = vi.fn();
     useApp.setState({ cmdkOpen: true });

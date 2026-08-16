@@ -135,6 +135,27 @@ export default function LibraryWorkspace({ onClose }: Props) {
 
   const container = containerKey ? hierarchy.byKey.get(containerKey) : undefined;
   const items = container ? container.children : hierarchy.roots;
+
+  // Focus survives removal of the focused tile (the same contract as
+  // LibraryTree/LibraryDetails rows, review round): when the tile that held
+  // focus is gone after a re-render and the DOM orphaned focus to <body>,
+  // land on the nearest surviving tile by its PREVIOUS position — never
+  // steal focus that legitimately moved elsewhere.
+  const prevItemsRef = useRef(items);
+  useEffect(() => {
+    if (
+      rovingKey != null
+      && !items.some((node) => node.key === rovingKey)
+      && document.activeElement === document.body
+    ) {
+      const prevIdx = prevItemsRef.current.findIndex((node) => node.key === rovingKey);
+      const survivor = items[Math.min(Math.max(prevIdx, 0), items.length - 1)];
+      if (survivor) {
+        (document.querySelector(`[data-library-tile="${CSS.escape(survivor.key)}"]`) as HTMLElement | null)?.focus();
+      }
+    }
+    prevItemsRef.current = items;
+  }, [items, rovingKey]);
   const currentSelectedKey = selectedKey();
   const selectedInItems = items.some((node) => node.key === currentSelectedKey);
   const rovingInItems = items.some((node) => node.key === rovingKey);
@@ -162,8 +183,12 @@ export default function LibraryWorkspace({ onClose }: Props) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      const target = event.target;
-      const editing = target instanceof Element && target.matches("input, textarea, [contenteditable='true']");
+      // Same editing predicate as useGlobalShortcuts' isEditing (review round:
+      // SELECT was missing, and isContentEditable covers every contenteditable
+      // form, not only the ="true" spelling).
+      const el = event.target instanceof HTMLElement ? event.target : null;
+      const editing = !!el
+        && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
       if (useApp.getState().cmdkOpen || document.querySelector(".qzk-ctx") || editing) return;
       event.preventDefault();
       // This workspace owns the keystroke. Do not also let the window-level
