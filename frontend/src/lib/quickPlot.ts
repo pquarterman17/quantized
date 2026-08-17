@@ -217,6 +217,22 @@ export function pickQuickPlotWorksheet(
   return null;
 }
 
+/** Resolve the worksheet a workbook-level Configure Quick Plot action edits.
+ * Unlike Quick Plot itself, configuration intentionally accepts unknown or
+ * currently unplottable data: use the remembered worksheet when present,
+ * otherwise the first worksheet in source order. */
+export function pickConfigureQuickPlotWorksheet(
+  children: readonly LibraryNode[],
+  workbookLastChild: Record<string, string>,
+  workbookId: string,
+): Dataset | null {
+  const rememberedKey = workbookLastChild[workbookId];
+  const remembered = rememberedKey ? children.find((child) => child.key === rememberedKey) : undefined;
+  if (remembered?.kind === "worksheet") return remembered.entity;
+  return children.find((child): child is Extract<LibraryNode, { kind: "worksheet" }> =>
+    child.kind === "worksheet")?.entity ?? null;
+}
+
 /** The new editable figure's name + starting view: the app's normal fresh
  *  view (`defaultPlotView`) overlaid with this dataset's technique-driven
  *  defaults (axis scale, channel/error selection, hidden channels --

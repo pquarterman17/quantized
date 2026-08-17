@@ -1,8 +1,6 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
-
 import { create } from "zustand";
-
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import {
   fftSpectral,
@@ -101,6 +99,7 @@ import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
+import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
@@ -144,7 +143,6 @@ import type {
   RefLine,
   SeriesStyle,
 } from "../lib/types";
-
 /** Recompute a dataset's computed columns from its current base (no-op without
  *  formulas). Routed through after any base-data mutation (cell edit, corrections).
  *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
@@ -152,7 +150,6 @@ import type {
  *  the SAME formula-recompute logic every other base-data mutation here uses. */
 export const recompute = (d: Dataset): Dataset =>
   d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
-
 let _refSeq = 0;
 let _annSeq = 0;
 let _idSeq = 0;
@@ -280,7 +277,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -903,6 +900,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createRecentsSlice(set),
   ...createFigureLifecycleSlice(set, get),
   ...createQuickPlotActionSlice(set, get),
+  ...createQuickFigureBuilderSlice(set, get),
   ...createPageDocumentsSlice(set, get),
   ...createRoisSlice(set, get),
   ...createRoiCutsPanelSlice(set),
