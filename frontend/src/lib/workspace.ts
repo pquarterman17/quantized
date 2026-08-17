@@ -23,7 +23,11 @@ import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { deserializeRois, serializeRois } from "../store/rois";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
-import { parseLibrarySelection, parseWorkbookLastChild } from "./workspaceLibraryPanel";
+import {
+  librarySelectionLiveIds,
+  parseLibrarySelection,
+  parseWorkbookLastChild,
+} from "./workspaceLibraryPanel";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -541,11 +545,13 @@ export function parseWorkspace(
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
-  // PR E2 (lib/workspaceLibraryPanel.ts) — `workbookIds` is the SAME
-  // migrated/sanitized set `workbooks` above already carries, like `dsIds`/
-  // `folderIds`.
+  // PR E2 — `workbookIds` is the same set `workbooks` above already carries.
   const workbookIds = new Set(workbooks.map((w) => w.id));
-  const librarySelection = parseLibrarySelection(o.librarySelection, selectedIds);
+  const librarySelection = parseLibrarySelection(
+    o.librarySelection,
+    selectedIds,
+    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports }),
+  );
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   return {

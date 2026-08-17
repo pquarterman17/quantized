@@ -23,14 +23,51 @@ const LIBRARY_SELECTION_KINDS: ReadonlySet<LibrarySelection["kind"]> = new Set([
   "report",
 ]);
 
+/** One live-id set per `LibrarySelection.kind`, so the id gets checked
+ *  against the RIGHT collection (a "workbook" selection validated against
+ *  folder ids would let a dangling workbook ref through). */
+export type LibrarySelectionLiveIds = Record<LibrarySelection["kind"], ReadonlySet<string>>;
+
+/** Build `LibrarySelectionLiveIds` from the same sanitized collections
+ *  `parseWorkspace` already computed for the rest of the doc — one place to
+ *  extend if a new selectable kind is ever added. `folders` must be the
+ *  doc's FINAL, post-workbook-migration set (`migration.folders`, not the
+ *  pre-migration one), same as everywhere else a "live folder" is meant. */
+export function librarySelectionLiveIds(src: {
+  folders: readonly { id: string }[];
+  workbooks: readonly { id: string }[];
+  originFigures: readonly { id: string }[];
+  editableFigures: readonly { id: string }[];
+  figureDocs: readonly { id: string }[];
+  pages: readonly { id: string }[];
+  reports: readonly { id: string }[];
+}): LibrarySelectionLiveIds {
+  return {
+    folder: new Set(src.folders.map((x) => x.id)),
+    workbook: new Set(src.workbooks.map((x) => x.id)),
+    "origin-figure": new Set(src.originFigures.map((x) => x.id)),
+    "editable-figure": new Set(src.editableFigures.map((x) => x.id)),
+    "publication-figure": new Set(src.figureDocs.map((x) => x.id)),
+    page: new Set(src.pages.map((x) => x.id)),
+    report: new Set(src.reports.map((x) => x.id)),
+  };
+}
+
 /** Validate the persisted Library tree "current" selection. A malformed
- *  kind/id degrades to null rather than throwing. Also enforces the L0.25
- *  mutual-exclusion invariant AT PARSE TIME: a restored `selectedIds` that
- *  came back non-empty always wins, mirroring `setLibrarySelection`'s own
- *  runtime chokepoint (store/libraryPanel.ts). */
+ *  kind/id, OR a well-formed id that names no LIVE entity of that kind (a
+ *  dangling folder/workbook/figure/page/report ref — e.g. a hand-edited
+ *  doc, or one pruned since save), degrades to null rather than throwing —
+ *  the same discipline `workbookLastChild`/`expandedWorkbookIds` below and
+ *  history.ts's `restorePatch` alive-id checks already use; a dangling id
+ *  left in place would otherwise feed straight into import targeting
+ *  (`resolveImportTargetFolderId`) or an open action. Also enforces the
+ *  L0.25 mutual-exclusion invariant AT PARSE TIME: a restored `selectedIds`
+ *  that came back non-empty always wins, mirroring `setLibrarySelection`'s
+ *  own runtime chokepoint (store/libraryPanel.ts). */
 export function parseLibrarySelection(
   v: unknown,
   selectedIds: readonly string[],
+  liveIds: LibrarySelectionLiveIds,
 ): LibrarySelection | null {
   if (selectedIds.length > 0) return null;
   if (typeof v !== "object" || v === null) return null;
@@ -38,8 +75,9 @@ export function parseLibrarySelection(
   if (typeof o.kind !== "string" || !LIBRARY_SELECTION_KINDS.has(o.kind as LibrarySelection["kind"])) {
     return null;
   }
-  if (typeof o.id !== "string" || !o.id) return null;
-  return { kind: o.kind as LibrarySelection["kind"], id: o.id };
+  const kind = o.kind as LibrarySelection["kind"];
+  if (typeof o.id !== "string" || !o.id || !liveIds[kind].has(o.id)) return null;
+  return { kind, id: o.id };
 }
 
 /** Validate the persisted L0.6 remembered-child map: workbook id -> the

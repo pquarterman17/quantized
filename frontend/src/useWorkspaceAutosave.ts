@@ -38,6 +38,12 @@ export type AutosaveState = Pick<
   | "librarySelection"
   | "workbookLastChild"
   | "expandedWorkbookIds"
+  // Post-merge review fix: two more persisted fields with NO trigger here —
+  // renameWorkbook/moveWorkbookToFolder only mutate `workbooks`, and saving/
+  // deleting a named ROI only mutates `savedRois`, so either edit could sit
+  // unsaved until some unrelated field also changed.
+  | "workbooks"
+  | "savedRois"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -60,7 +66,9 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.savedPlotSpecs === prev.savedPlotSpecs &&
     state.librarySelection === prev.librarySelection &&
     state.workbookLastChild === prev.workbookLastChild &&
-    state.expandedWorkbookIds === prev.expandedWorkbookIds
+    state.expandedWorkbookIds === prev.expandedWorkbookIds &&
+    state.workbooks === prev.workbooks &&
+    state.savedRois === prev.savedRois
   );
 }
 

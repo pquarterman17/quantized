@@ -651,9 +651,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
   setFitSpec: (id: string, spec: FitSpec | null) => void;
-  // `skipLayout` (PR E2 "Open Without Layout…") ignores plotWindows/
-  // focusedWindowId/toolWindowLayout, falling through to the same
-  // single-fresh-window default a layout-less doc already gets.
+  // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
+  // focusedWindowId/toolWindowLayout, falling through to the same default.
   loadWorkspace: (ws: WorkspaceState, options?: { skipLayout?: boolean }) => void;
   // Append a second .dwk's datasets into the CURRENT library (Origin's
   // "Append Project", MAIN_PLAN #16) — the additive opposite of
@@ -1574,6 +1573,9 @@ export const useApp = create<AppState>((set, get) => ({
           : (datasets[0]?.id ?? null);
       const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
       const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
+      // L0.25: the [active] fallback below is a store-level synthesis with
+      // no basis in the doc — a non-null librarySelection wins outright.
+      const restoredLibrarySelection = ws.librarySelection ?? null;
       // Plot windows (item 7): restore a persisted layout when the doc has one;
       // the document-aware boundary validates it and clamps dead refs. Otherwise (a v1-v6
       // doc with no `plotWindows`, or a genuinely fresh workspace) collapse
@@ -1583,8 +1585,7 @@ export const useApp = create<AppState>((set, get) => ({
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
       const migrationWarnings = [...(ws.migrationWarnings ?? [])];
-      // skipLayout: an empty `restored` falls through to the same
-      // single-fresh-window path a plotWindows-less doc already takes.
+      // skipLayout: an empty `restored` falls through to the fresh-window path.
       const restored = skipLayout
         ? []
         : sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds, migrationWarnings);
@@ -1621,17 +1622,17 @@ export const useApp = create<AppState>((set, get) => ({
         // TypeScript won't catch a missing key in an object literal here).
         workbooks: ws.workbooks ?? [],
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
-        // L0.25 coherence, now PR E2's persistence: restore what THIS doc
-        // carries (parseWorkspace already sanitized it), never the
-        // PREVIOUS project's stale value.
-        librarySelection: ws.librarySelection ?? null,
+        // L0.25/PR E2: restore what THIS doc carries (parseWorkspace already
+        // sanitized it), never the PREVIOUS project's stale value.
+        librarySelection: restoredLibrarySelection,
         expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
         workbookLastChild: ws.workbookLastChild ?? {},
         activeId: active,
         // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
         worksheetId: null,
         worksheetSelections: {}, // #14: also transient — never round-trips
-        selectedIds: selected.length ? selected : active ? [active] : [],
+        // A restored tree selection wins outright, no [active] synthesis.
+        selectedIds: restoredLibrarySelection ? [] : selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
         originFidelity: ws.originFidelity ?? [],
         smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
@@ -1685,9 +1686,8 @@ export const useApp = create<AppState>((set, get) => ({
         techniqueViewMemory: sanitizeTechniqueViewMemory(ws.techniqueViewMemory),
         plotWindows,
         focusedWindowId,
-        // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by
-        // parseWorkspace. PR E2 skipLayout: OMIT the key (not {}) so
-        // `set()`'s merge leaves the CURRENT session's layout untouched.
+        // #10 item 3: viewport-clamped by parseWorkspace. skipLayout: OMIT
+        // the key so `set()`'s merge leaves the layout untouched.
         ...(skipLayout ? {} : { toolWindowLayout: ws.toolWindowLayout ?? {} }),
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never

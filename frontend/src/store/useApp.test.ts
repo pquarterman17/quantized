@@ -3265,6 +3265,25 @@ describe("useApp loadWorkspace", () => {
     expect(useApp.getState().activeId).toBeNull();
   });
 
+  // L0.25 (post-merge review fix): a restored librarySelection must win
+  // OUTRIGHT — the pre-existing "no persisted selectedIds -> fall back to
+  // [active]" synthesis is a STORE-level convenience with no basis in the
+  // doc, and re-introducing a dataset selection alongside a just-restored
+  // tree selection recreates the exact both-set state every chokepoint
+  // (setLibrarySelection, activateFromLibrary, ...) exists to prevent.
+  it("L0.25: a restored librarySelection wins outright — selectedIds is NOT synthesized to [active] alongside it", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "stale", data: raw }], activeId: "old" });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "first", data: raw }],
+      activeId: "w1", // truthy -- the [active] fallback would otherwise fire
+      selectedIds: [], // the doc itself carries no dataset selection
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    const s = useApp.getState();
+    expect(s.librarySelection).toEqual({ kind: "folder", id: "f1" });
+    expect(s.selectedIds).toEqual([]); // never synthesized to ["w1"]
+  });
+
   // GUI_INTERACTION_PLAN #10 item 3: the ToolWindow layout registry
   // round-trips through loadWorkspace exactly like plotWindows/folders — a
   // legacy doc with no field resets to {} (every window falls back to its

@@ -849,16 +849,17 @@ export function dedupeWindowTitle(baseName: string, existingTitles: readonly str
 }
 
 // LIBRARY_WORKBOOK_UX_PLAN PR E2 ("oversized window coordinates") — how far
-// off the right/bottom edge a restored, non-maximized window's position may
-// sail before its top-left becomes permanently unreachable (a workspace
-// saved on a big monitor must not restore a window the user can never grab
-// back on a smaller one). Mirrors lib/toolwindow.ts's clampToolWindowPos
-// margin discipline, but clamps the UPPER bound only: this function's own
-// pre-existing "clamps non-finite/negative geometry to sane defaults" test
-// pins that a negative x/y is left alone (already a valid on-screen
-// position — partially off the left/top edge, same as any live drag can
-// stop short of); this only guards the direction restoring onto a smaller
-// viewport can actually overflow toward.
+// off the right/bottom edge a restored window's position may sail before
+// its top-left becomes permanently unreachable (a workspace saved on a big
+// monitor must not restore a window the user can never grab back on a
+// smaller one; applies to every winState, see sanitizePlotWindows's doc).
+// Mirrors lib/toolwindow.ts's clampToolWindowPos margin discipline, but
+// clamps the UPPER bound only: this function's own pre-existing "clamps
+// non-finite/negative geometry to sane defaults" test pins that a negative
+// x/y is left alone (already a valid on-screen position — partially off the
+// left/top edge, same as any live drag can stop short of); this only guards
+// the direction restoring onto a smaller viewport can actually overflow
+// toward.
 const RESTORE_POSITION_MARGIN = 40;
 
 function clampRestoreAxis(pos: number, viewport: number): number {
@@ -869,11 +870,12 @@ function clampRestoreAxis(pos: number, viewport: number): number {
 /** Validate persisted plot windows (drop malformed entries; clamp dead
  *  dataset refs to null — never drop the window itself, see decision #4;
  *  clamp geometry to finite, non-negative numbers). `viewport` (PR E2)
- *  additionally clamps a NON-maximized window's restored x/y so its
- *  top-left stays reachable — a maximized window's stored position is only
- *  its "restore to normal" target and is left untouched (maximized/
- *  minimized winState semantics are otherwise unaffected either way);
- *  width/height keep their existing finite-only clamp. Defaults to the real
+ *  additionally clamps every window's restored x/y so its top-left stays
+ *  reachable — INCLUDING a maximized/minimized one: its stored geometry is
+ *  the "restore to normal" target `restoreWindow`/`toggleMaximizeWindow`
+ *  (store/windows.ts) apply verbatim on un-maximize/un-minimize, so leaving
+ *  it unclamped would just recreate an unreachable window one click later.
+ *  Width/height keep their existing finite-only clamp. Defaults to the real
  *  browser window, like lib/toolwindow.ts's `sanitizeToolWindowLayout`, so
  *  callers only override it in tests. Never throws. */
 export function sanitizePlotWindows(
@@ -917,13 +919,9 @@ export function sanitizePlotWindows(
     >;
     const datasetId = typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
     const winState = WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal";
-    // PR E2: only clamp a window whose stored x/y is its live on-screen
-    // position — a maximized window's is merely the "restore to normal"
-    // target, so leave it exactly as saved (see this function's own doc).
-    const rawX = num(g.x, 0);
-    const rawY = num(g.y, 0);
-    const x = winState === "maximized" ? rawX : clampRestoreAxis(rawX, viewport.width);
-    const y = winState === "maximized" ? rawY : clampRestoreAxis(rawY, viewport.height);
+    // PR E2: clamp every winState's stored x/y — see this function's doc.
+    const x = clampRestoreAxis(num(g.x, 0), viewport.width);
+    const y = clampRestoreAxis(num(g.y, 0), viewport.height);
     out.push({
       id: o.id,
       kind,

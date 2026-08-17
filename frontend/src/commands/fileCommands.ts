@@ -227,7 +227,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "open-workspace-safe",
       group: "File",
-      label: "Open Without Layout...",
+      label: "Open without layout…",
       description: "Replace the current session with a saved workspace, skipping its saved window layout.",
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
