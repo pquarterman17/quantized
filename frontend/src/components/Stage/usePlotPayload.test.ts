@@ -9,6 +9,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ErrorBinding } from "../../lib/errorRoles";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { Dataset } from "../../lib/types";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
@@ -216,5 +217,88 @@ describe("usePlotPayload — P3.4 zoom-refetch residual", () => {
       resolveFirstWindow?.(payloadFor("stale-first-window", true, [1, 2]));
     });
     expect(result.current.payload?.series[0].label).toBe("second-window");
+  });
+});
+
+// G4 (usePlotPayload error-honesty fix): a builder-created figure whose user
+// EDITED an error binding (asymmetric pair, X-error, reassigned column) must
+// render those edits in the real figure window, not just the builder
+// preview. `documentErrors` (the focused window's document.bindings.errors,
+// threaded in by PlotStage) becomes the authoritative input to
+// `buildErrorSpans` IFF it contains at least one binding the legacy `errKeys`
+// projection cannot express (`hasRichErrorBindings`); otherwise the existing
+// `active.errorRoles` path stays byte-identical.
+function errorDataset(): Dataset {
+  return {
+    id: "e1",
+    name: "errs",
+    data: {
+      time: [0, 1, 2],
+      values: [
+        [10, 0.5, 0.3, 0.2],
+        [20, 0.6, 0.4, 0.3],
+        [30, 0.7, 0.5, 0.4],
+      ],
+      labels: ["signal", "eplus", "eminus", "legacy"],
+      units: ["", "", "", ""],
+      metadata: {},
+    },
+  };
+}
+
+const ASYMMETRIC_PAIR: ErrorBinding[] = [
+  { channel: 1, target: 0, axis: "y", side: "+" },
+  { channel: 2, target: 0, axis: "y", side: "-" },
+];
+
+function errorParams(overrides: Partial<PlotPayloadParams> = {}): PlotPayloadParams {
+  return baseParams({
+    active: errorDataset(),
+    yKeys: [0],
+    ...overrides,
+  });
+}
+
+describe("usePlotPayload — G4 figure-scoped error honesty", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("errs", false));
+  });
+
+  // t1 (RED-FIRST): a rich document binding NOT present in dataset.errorRoles
+  // must still surface in errorSpans once the fix lands.
+  it("surfaces an asymmetric pair from the focused window's document even when dataset.errorRoles doesn't have it", () => {
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: errorParams({ documentErrors: ASYMMETRIC_PAIR }),
+    });
+    const spans = result.current.errorSpans.get(1);
+    expect(spans).toBeDefined();
+    expect(spans).toEqual([{ axis: "y", plus: [0.5, 0.6, 0.7], minus: [0.3, 0.4, 0.5] }]);
+  });
+
+  // t2, control: a legacy-only document (all y/both) on a dataset whose OWN
+  // errorRoles carry the asymmetric pair -- spans still come from
+  // dataset.errorRoles, unchanged behavior.
+  it("control: a legacy-only document leaves dataset.errorRoles as the source of truth", () => {
+    const ds = errorDataset();
+    ds.errorRoles = ASYMMETRIC_PAIR;
+    const legacyOnlyDocument: ErrorBinding[] = [{ channel: 3, target: 0, axis: "y", side: "both" }];
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: errorParams({ active: ds, documentErrors: legacyOnlyDocument }),
+    });
+    const spans = result.current.errorSpans.get(1);
+    expect(spans).toEqual([{ axis: "y", plus: [0.5, 0.6, 0.7], minus: [0.3, 0.4, 0.5] }]);
+  });
+
+  // t3: the predicate's boundary -- document errors are all y/both (present,
+  // non-empty) but the dataset carries NO errorRoles at all. If the fix
+  // mistakenly activated on "document errors present" rather than "document
+  // errors RICH", this would show the document's y/both binding; it must
+  // stay empty instead, exactly like today's behavior with no document.
+  it("boundary: document errors all y/both -> dataset path used (empty here, not the document's binding)", () => {
+    const legacyOnlyDocument: ErrorBinding[] = [{ channel: 3, target: 0, axis: "y", side: "both" }];
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: errorParams({ documentErrors: legacyOnlyDocument }),
+    });
+    expect(result.current.errorSpans.size).toBe(0);
   });
 });

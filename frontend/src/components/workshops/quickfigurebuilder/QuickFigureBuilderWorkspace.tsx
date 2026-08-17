@@ -23,6 +23,18 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
     ? String(dataset.data.metadata?.["x_column_long"] || dataset.data.metadata?.["x_column_name"] || "Acquisition axis")
     : dataset.data.labels[mapping.xKey];
   const preview = quickFigurePreview(dataset.data, mapping, style);
+  const ready = mappingReady(mapping);
+  const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
+  // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
+  // hidden -- the button itself is also gated on `ready` below). `close()`
+  // unmounts the builder so Stage reappears already focused on the new
+  // window -- the action's own `focusWindow` ran during creation, before
+  // this handler ever calls `close`. A false return (dataset vanished
+  // mid-click) leaves the builder open; the workspace's own missing-source
+  // state (see the parent component below) takes over on the next render.
+  const createFigure = (): void => {
+    if (createQuickFigureFromMapping(dataset.id, mapping, style)) close();
+  };
 
   return (
     <section className="qzk-quick-builder" aria-labelledby="quick-builder-title">
@@ -73,7 +85,15 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>
             <div><dt>Output</dt><dd>Editable figure</dd></div>
           </dl>
-          <button type="button" className="qz-btn qz-primary" disabled>Create Editable Figure</button>
+          <button
+            type="button"
+            className="qz-btn qz-primary"
+            disabled={!ready}
+            title={ready ? undefined : "Assign at least one Y series to create a figure"}
+            onClick={createFigure}
+          >
+            Create Editable Figure
+          </button>
         </section>
       </div>
     </section>

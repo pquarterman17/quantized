@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import {
   categoricalXPayload,
@@ -41,6 +42,14 @@ export interface PlotPayloadParams {
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
+  /** G4 figure-scoped error honesty: the FOCUSED window's document errors
+   *  (`FigureDocument.bindings.errors`), threaded in alongside `errKeys` so
+   *  `errorSpans` below can prefer them over `active.errorRoles` when they
+   *  carry something the legacy `errKeys` projection cannot express (see
+   *  `hasRichErrorBindings`). Undefined (every caller that doesn't thread a
+   *  document -- background/panel windows) behaves exactly like today: the
+   *  dataset's own `errorRoles` decide. */
+  documentErrors?: readonly ErrorBinding[];
   hiddenChannels: number[];
   waterfall: number;
   excludedDisplay: "hide" | "grey";
@@ -378,15 +387,40 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.xLim, active, plotted, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
 
-  // #36: built from Dataset.errorRoles (the canonical contract) — absent for
-  // a dataset with no roles, in which case the legacy symmetric bars stand.
-  const errorSpans = useMemo(
-    () =>
-      active?.errorRoles?.length
-        ? buildErrorSpans(active.data, plotted, active.errorRoles)
-        : new Map<number, ErrorSpan[]>(),
-    [active, plotted],
-  );
+  // #36 / G4: built from Dataset.errorRoles (the canonical contract) by
+  // default — absent for a dataset with no roles, in which case the legacy
+  // symmetric bars stand. G4's figure-scoped error-honesty fix: the FOCUSED
+  // window's OWN document errors (`p.documentErrors`) become the
+  // authoritative source instead, IFF they contain at least one binding the
+  // legacy `errKeys` projection cannot express (`hasRichErrorBindings`) —
+  // an X-error or an asymmetric `+`/`-` half. A document whose errors are
+  // entirely y/both is indistinguishable from what `errKeys` already
+  // carries, so it takes this branch only when there is something genuinely
+  // richer to show; every ORDINARY window's document derives its errors
+  // FROM `errKeys` (`figureDocument.ts`'s `legacyErrorBindings`), so it can
+  // never be rich and this can never flip an existing window's rendering.
+  //
+  // Double-render check (investigated, not just assumed): `errorBars` above
+  // is built from `p.errKeys` regardless of which path wins here, and
+  // `lib/uplotOpts.ts`'s `buildOpts` already excludes any column present in
+  // `errorSpans` from the legacy bars it draws
+  // (`legacyBars = ...filter(([col]) => !args.errorSpans?.has(col))`, see
+  // its own comment: "running both would double-draw the same whisker at a
+  // different thickness"). `buildErrorSpans` itself always evaluates BOTH
+  // the asymmetric-pair and symmetric-binding cases for every plotted
+  // channel — so even when the document-authoritative path is active, a
+  // y/both binding inside `documentErrors` still lands in the resulting
+  // `errorSpans` map, gets excluded from `legacyBars` by that existing
+  // filter, and draws exactly once via `errorSpansPlugin` — the identical
+  // dedupe the dataset-authoritative path already relied on. No new
+  // dedupe logic was needed; the existing column-based filter already
+  // covers a Map built from either source.
+  const useDocumentErrors = hasRichErrorBindings(p.documentErrors);
+  const errorSpans = useMemo(() => {
+    if (!active) return new Map<number, ErrorSpan[]>();
+    const bindings = useDocumentErrors ? p.documentErrors! : active.errorRoles;
+    return bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
+  }, [active, plotted, useDocumentErrors, p.documentErrors]);
 
   return {
     payload,

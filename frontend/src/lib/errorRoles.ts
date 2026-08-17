@@ -177,6 +177,21 @@ export function symmetricBinding(
   return b ? b.channel : null;
 }
 
+/** Does this binding set contain anything the legacy `errKeys` shape (value
+ *  channel -> symmetric-Y error channel) cannot express -- an X-error, or an
+ *  asymmetric (`+`/`-`) half? (plan G4) This is the activation predicate for
+ *  treating a FigureDocument's own `bindings.errors` as authoritative over
+ *  `Dataset.errorRoles` when rendering: a document whose errors are entirely
+ *  legacy-expressible (y/both) is indistinguishable from what `errKeys`
+ *  already carries, so ordinary windows (whose documents only ever derive
+ *  their errors FROM `errKeys` -- see `figureDocument.ts`'s
+ *  `legacyErrorBindings`) never flip to the document-authoritative path.
+ *  Only a document seeded with genuinely richer error data (Quick Figure
+ *  Builder's mapping, or a Graph Builder error well) does. */
+export function hasRichErrorBindings(errors: readonly ErrorBinding[] | undefined): boolean {
+  return !!errors?.some((binding) => binding.axis === "x" || binding.side !== "both");
+}
+
 /** Validate bindings read back from a `.dwk` / template — never trust the slot.
  *  Drops anything referencing a channel the dataset no longer has, which is
  *  what keeps a reapplied template from binding error bars to the wrong column

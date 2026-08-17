@@ -99,6 +99,11 @@ export default function PlotStage() {
   const winLinkGroup = useApp(
     (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
   );
+  // G4: the focused window's own document errors (see usePlotPayload's doc),
+  // looked up the same derived-selector way as `winBg`/`winLinkGroup` above.
+  const focusedDocumentErrors = useApp(
+    (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.errors,
+  );
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
@@ -166,6 +171,7 @@ export default function PlotStage() {
     seriesStyles,
     seriesLabels,
     errKeys,
+    documentErrors: focusedDocumentErrors,
     hiddenChannels,
     waterfall,
     excludedDisplay,
