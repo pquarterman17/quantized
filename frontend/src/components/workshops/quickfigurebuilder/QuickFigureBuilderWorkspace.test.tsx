@@ -55,6 +55,21 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
   });
 
+  it("Escape cancels, but a context menu owns Escape while open", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    const ctx = document.createElement("div");
+    ctx.className = "qzk-ctx";
+    document.body.appendChild(ctx);
+    try {
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
+    } finally {
+      document.body.removeChild(ctx);
+    }
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+  });
+
   it("degrades honestly if the source disappears while open", () => {
     useApp.setState({ datasets: [] });
     render(<QuickFigureBuilderWorkspace />);
