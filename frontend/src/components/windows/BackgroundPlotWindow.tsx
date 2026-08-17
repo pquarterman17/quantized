@@ -29,6 +29,8 @@
 import { useRef } from "react";
 import type uPlot from "uplot";
 
+import type { ErrorBinding } from "../../lib/errorRoles";
+import type { FigureDocument } from "../../lib/figureDocument";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -61,6 +63,14 @@ export interface BackgroundPlotWindowProps {
    *  window point-by-point); it stays non-interactive otherwise. XY-only —
    *  see the module doc. */
   linkGroup?: number | null;
+  /** This window's own canonical `FigureDocument` (G4, Sol review round),
+   *  undefined for a plain (non-editable-figure) window. Threaded into
+   *  `usePlotPayload` as `documentErrors` in the plain-XY path ONLY (below)
+   *  so a G4 figure's figure-scoped rich error bindings (asymmetric / X-
+   *  error) keep rendering identically whether the window is focused
+   *  (`PlotStage`, which reads the SAME `document.bindings.errors`) or not
+   *  — the visible figure must not depend on focus state. */
+  document?: FigureDocument;
 }
 
 export default function BackgroundPlotWindow({
@@ -68,6 +78,7 @@ export default function BackgroundPlotWindow({
   view,
   bg,
   linkGroup,
+  document,
 }: BackgroundPlotWindowProps) {
   if (!dataset) {
     return (
@@ -91,17 +102,34 @@ export default function BackgroundPlotWindow({
       .length >= 2
   )
     return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} />;
-  return <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} />;
+  return (
+    <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} />
+  );
 }
 
 /** The plain-XY background content (items 4/13/18): the SAME
  *  `usePlotPayload` → `PlotViewport` pipeline the focused window uses, fed by
- *  the window's own view; overlays forced null (Key Decision 2). */
+ *  the window's own view; overlays forced null (Key Decision 2).
+ *
+ *  Sol review round (G4): this path used to compute `usePlotPayload`'s
+ *  `errorSpans` (the hook always returns it) but never READ it — only the
+ *  legacy `errorBars` (symmetric-Y-only, from `view.errKeys`) ever reached
+ *  `PlotViewport`. That is a PRE-EXISTING gap, not new to G4: it already
+ *  meant an ordinary dataset's rich `errorRoles` (asymmetric / X-error
+ *  pairs) rendered on the FOCUSED window (`PlotStage`, MAIN #36) but
+ *  silently vanished the moment that same window lost focus. Fixed here by
+ *  actually consuming `errorSpans` (below) AND threading this window's own
+ *  `document.bindings.errors` through as `documentErrors` — the SAME
+ *  authoritative-source rule `PlotStage` applies (see `usePlotPayload.ts`'s
+ *  own doc), so a G4 figure's rich bindings render identically focused or
+ *  not, and an ordinary rich-`errorRoles` window (never document-backed) is
+ *  unaffected — `documentErrors` is simply undefined for it. */
 function BackgroundXYWindow({
   dataset,
   view,
   bg,
   linkGroup,
+  document,
 }: BackgroundPlotWindowProps & { dataset: Dataset }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
@@ -109,30 +137,33 @@ function BackgroundXYWindow({
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const plotRef = useRef<uPlot | null>(null);
+  const documentErrors: readonly ErrorBinding[] | undefined = document?.bindings.errors;
 
-  const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
-    active: dataset,
-    yScale: view.yScale,
-    xScale: view.xScale,
-    xKey: view.xKey,
-    yKeys: view.yKeys,
-    y2Keys: view.y2Keys,
-    seriesOrder: view.seriesOrder,
-    seriesStyles: view.seriesStyles,
-    seriesLabels: view.seriesLabels,
-    errKeys: view.errKeys,
-    hiddenChannels: view.hiddenChannels,
-    waterfall: view.waterfall,
-    excludedDisplay,
-    // Tool overlays are focused-window-only (decision #2) — a background
-    // window never shows a fit/baseline/peak/derivative curve.
-    fitOverlay: null,
-    baselineOverlay: null,
-    peakOverlay: null,
-    derivOverlay: null,
-    selection: null,
-    defaultTrace,
-  });
+  const { displayPayload, plotted, styleList, labelList, errorBars, errorSpans, colorByColumns, hidden } =
+    usePlotPayload({
+      active: dataset,
+      yScale: view.yScale,
+      xScale: view.xScale,
+      xKey: view.xKey,
+      yKeys: view.yKeys,
+      y2Keys: view.y2Keys,
+      seriesOrder: view.seriesOrder,
+      seriesStyles: view.seriesStyles,
+      seriesLabels: view.seriesLabels,
+      errKeys: view.errKeys,
+      documentErrors,
+      hiddenChannels: view.hiddenChannels,
+      waterfall: view.waterfall,
+      excludedDisplay,
+      // Tool overlays are focused-window-only (decision #2) — a background
+      // window never shows a fit/baseline/peak/derivative curve.
+      fitOverlay: null,
+      baselineOverlay: null,
+      peakOverlay: null,
+      derivOverlay: null,
+      selection: null,
+      defaultTrace,
+    });
 
   return (
     <>
@@ -177,6 +208,7 @@ function BackgroundXYWindow({
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
+        errorSpans={errorSpans}
         colorByColumns={colorByColumns}
         hidden={hidden}
         tool="zoom"

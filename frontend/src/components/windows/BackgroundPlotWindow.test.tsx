@@ -13,6 +13,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createFigureDocument, figureDocumentToPlotView } from "../../lib/figureDocument";
 import { defaultPlotView, type PlotView } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -254,5 +255,84 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
     const view = { ...defaultPlotView(), insetMode: true };
     render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
     await waitFor(() => expect(created).toHaveLength(2)); // main viewport + inset
+  });
+});
+
+// Sol review round (G4): BackgroundXYWindow computed `usePlotPayload`'s
+// `errorSpans` (the hook always returns it) but never DESTRUCTURED it, so
+// it never reached `PlotViewport` — a PRE-EXISTING gap (verified against
+// `git show 9ff084a:...BackgroundPlotWindow.tsx` and `55566cd`: neither
+// `errorSpans` nor any `document` prop existed there) that predates G4 and
+// already meant an ordinary dataset's rich `errorRoles` silently vanished
+// the moment its window lost focus. Fixed by consuming `errorSpans` AND
+// threading this window's own `document.bindings.errors` through as
+// `documentErrors`, mirroring PlotStage's own wiring exactly.
+const RICH_DATA: DataStruct = {
+  time: [0, 1, 2, 3],
+  values: [
+    [10, 1, 1],
+    [20, 1, 1],
+    [30, 1, 1],
+    [40, 1, 1],
+  ],
+  labels: ["Y", "ep", "em"],
+  units: ["", "", ""],
+  metadata: {},
+};
+const RICH_DATASET: Dataset = { id: "rich1", name: "rich", data: RICH_DATA };
+
+/** A FigureDocument whose ONLY error data is a rich (asymmetric) pair --
+ *  unrepresentable by the legacy `errKeys` projection, so `view.errKeys`
+ *  ends up empty and `errorBars` (the legacy plugin's input) is empty too.
+ *  Any error-bar rendering here can ONLY come from `errorSpans`. */
+function richErrorDocument() {
+  const seedView = { ...defaultPlotView(), yKeys: [0] };
+  return createFigureDocument({
+    id: "fig-rich",
+    name: "Rich Figure",
+    datasetId: "rich1",
+    view: seedView,
+    mark: "line",
+    errors: [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ],
+  });
+}
+
+describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors survive losing focus", () => {
+  // RED-FIRST: a rich-error FigureDocument must render its error spans
+  // identically whether its window is focused (PlotStage, unaffected by
+  // this change) or NOT (this component) -- the visible figure must not
+  // depend on focus state. Before the fix: `opts.plugins` had length 0 (no
+  // errorSpansPlugin, no errorBarsPlugin either — the legacy `errKeys`
+  // projection cannot express an asymmetric pair at all).
+  it("renders the errorSpansPlugin for a document's asymmetric pair (documentErrors threaded through)", async () => {
+    const document = richErrorDocument();
+    const view = figureDocumentToPlotView(document);
+    render(<BackgroundPlotWindow dataset={RICH_DATASET} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { plugins: unknown[] };
+    expect(opts.plugins).toHaveLength(1); // errorSpansPlugin only (no legacy bars, no color-by)
+  });
+
+  // Without a `document` prop (an ordinary, non-editable-figure window),
+  // behavior is UNCHANGED: no rich source, no plugin.
+  it("without a document prop, an ordinary window with no errKeys still renders no error plugin", async () => {
+    render(<BackgroundPlotWindow dataset={RICH_DATASET} view={defaultPlotView()} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { plugins: unknown[] };
+    expect(opts.plugins).toHaveLength(0);
+  });
+
+  // Control: an ordinary LEGACY (symmetric-Y, errKeys-driven) window's
+  // background rendering is byte-identical unchanged by this fix -- it
+  // never touches `errKeys`/`errorBars`, only adds `errorSpans` consumption.
+  it("control: a legacy symmetric-Y errKeys window still renders via errorBarsPlugin in the background", async () => {
+    const view = { ...defaultPlotView(), yKeys: [0], errKeys: { 0: 1 } };
+    render(<BackgroundPlotWindow dataset={RICH_DATASET} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { plugins: unknown[] };
+    expect(opts.plugins).toHaveLength(1); // errorBarsPlugin (legacy path, untouched)
   });
 });
