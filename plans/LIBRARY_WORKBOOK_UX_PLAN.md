@@ -748,8 +748,13 @@ build, and focused interaction coverage where appropriate.
      and symmetric/asymmetric side; role changes remain exclusive and remove
      invalid dependent bindings. Implemented 2026-08-16 on
      `sol/quick-figure-builder-g2`, pending stacked PR/review.
-   - [ ] **G3 — live canonical preview:** every valid draft change appears in
-     the center preview without creating a parallel figure-state model.
+   - [~] **G3 — live canonical preview (ChatGPT-Sol):** every valid draft
+     change feeds the existing Graph Builder/Stage `PlotPayload`, `ErrorSpan`,
+     and preview renderer contracts. Line, scatter, and line+symbol update
+     live; alternate X, selected Y, and complete symmetric/asymmetric error
+     pairs render from the draft without creating a parallel figure model.
+     Implemented 2026-08-16 on `sol/quick-figure-builder-g3`, pending stacked
+     PR/review.
    - [ ] **G4 — create editable figure:** commit once through the canonical
      FigureDocument lifecycle and open the result as an ordinary editable plot.
    - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty

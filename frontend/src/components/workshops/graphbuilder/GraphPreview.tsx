@@ -27,7 +27,6 @@ import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 import { drawErrorWhiskers } from "./errorBarsCanvas";
 
 const MARGIN = { left: 42, right: 10, top: 10, bottom: 26 };
-
 type Rect = { x: number; y: number; w: number; h: number };
 type XYMark = "scatter" | "line" | "step";
 
@@ -292,6 +291,7 @@ function CanvasHost({ render, theme, accent }: { render: SpecRender; theme: Them
       }
     };
     paint();
+    if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
