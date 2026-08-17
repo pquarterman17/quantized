@@ -768,32 +768,46 @@ build, and focused interaction coverage where appropriate.
 7. [ ] **PR G — Quick Figure Builder mapping slice.** Reuse the canonical
    editable-figure path; ship live preview, mapping, Cancel, and editable
    creation before advanced template management.
-   - [~] **G1 — focused shell and transaction (ChatGPT-Sol):** enable
+   - [x] **G1 — focused shell and transaction (ChatGPT-Sol):** Merged as PR
+     #154 (`32f6660`) after the orchestrated review round fixed one P1
+     red-first — `loadWorkspace` lacked the transient
+     `quickFigureBuilderDatasetId` reset line every sibling transient field
+     carries, pinning the builder over a freshly opened project (fix
+     `04e1eae`) — see the 2026-08-17 G-stack change-log entry. Enable
      worksheet/workbook **Configure Quick Plot…**, open a lazy main-workspace
      surface over the unchanged Tree/Tiles/Stage context, hold only a transient
      source worksheet ID, and make Cancel/Escape a zero-mutation exit. Unknown
      data is deliberately accepted here; a vanished source fails closed.
-     Implemented 2026-08-16 on `sol/quick-figure-builder-g1`, pending Claude
-     review/PR. **Review ruling (2026-08-17):** "Configure Quick Plot…" is
+     **Review ruling (2026-08-17):** "Configure Quick Plot…" is
      ALWAYS enabled when a worksheet exists, even when Quick Plot itself would
      succeed — a deliberate widening of the L0.9 escape-hatch framing, since
      the builder is the manual plotting path (Origin's Plot Setup analogue,
      always reachable), while Quick Plot remains the recognized-data
      shortcut. This supersedes the F-era always-disabled stub contract, whose
      test was replaced in this PR.
-   - [~] **G2 — mapping draft and role assignment (ChatGPT-Sol):** one local
+   - [x] **G2 — mapping draft and role assignment (ChatGPT-Sol):** Merged as
+     PR #155 (`dd9bc1f`) after the review round fixed two P2s red-first (fix
+     `16b02a0`): x-axis error bindings now clear whenever the X assignment
+     changes (the `target: -1` axis sentinel had made them invisible to the
+     dependent-binding cleanup — stale "± for column A" would have rendered
+     as the new X's error), and error bindings dedupe last-write-wins per
+     (target, axis, side) (the render layer's `.find()` silently drew the
+     first duplicate). One local
      mapping state; X/Y/error/ignore roles through drag/drop and native
      keyboard-accessible role menus. Error roles explicitly name axis, target,
      and symmetric/asymmetric side; role changes remain exclusive and remove
-     invalid dependent bindings. Implemented 2026-08-16 on
-     `sol/quick-figure-builder-g2`, pending stacked PR/review.
-   - [~] **G3 — live canonical preview (ChatGPT-Sol):** every valid draft
+     invalid dependent bindings.
+   - [x] **G3 — live canonical preview (ChatGPT-Sol):** Merged as PR #156
+     (`fc48d8e`); review found no P1/P2 — the slice is a genuinely thin
+     adapter over the canonical payload builders (half asymmetric pairs and
+     NaN handling inherited from the shared library, probe-confirmed; the
+     shared `GraphPreview` ResizeObserver guard proven load-bearing by a
+     negative-control revert). Render-level regression pins for the G2 fixes
+     landed with `a2a9460`. Every valid draft
      change feeds the existing Graph Builder/Stage `PlotPayload`, `ErrorSpan`,
      and preview renderer contracts. Line, scatter, and line+symbol update
      live; alternate X, selected Y, and complete symmetric/asymmetric error
      pairs render from the draft without creating a parallel figure model.
-     Implemented 2026-08-16 on `sol/quick-figure-builder-g3`, pending stacked
-     PR/review.
    - [ ] **G4 — create editable figure:** commit once through the canonical
      FigureDocument lifecycle and open the result as an ordinary editable plot.
    - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
@@ -1988,3 +2002,29 @@ back to the owner. No Library implementation is authorized by this pause.
   Lesson for future parallel slices: the ratchet sums across branches —
   budget shared-pinned-file growth at scoping time, or pre-merge the
   second branch locally before its CI run.
+- **2026-08-17 — Claude, G1-G3 orchestrated review + fix round (owner
+  directive: cheaper models implement AND review where possible, Claude
+  orchestrates):** Sol's stacked drafts #154/#155/#156 each got an
+  independent Sonnet reviewer on its incremental diff (standing contract:
+  useful / works / bugs, with probe-test evidence required); Claude
+  adjudicated, a fourth Sonnet agent implemented the accepted findings
+  red-first up the stack, and Claude verified and merged in order
+  (#154 `32f6660` → #155 `dd9bc1f` → #156 `fc48d8e`, after retargeting
+  #154 to main post-PR-F). Findings: G1 one P1 (the `loadWorkspace`
+  transient-reset omission — the A2 lesson's exact bug class; probe showed
+  the builder pinned over a freshly opened project) plus two contract
+  divergences resolved as DOCUMENTED RULINGS with pin tests rather than
+  reverts (Configure always-enabled supersedes the F-era stub contract —
+  recorded at the G1 bullet; the Configure resolver's first-worksheet
+  fallback deliberately diverges from Quick Plot's first-available); G2 two
+  P2s in the pure mapping core (x-error orphaning on X reassignment;
+  duplicate error-binding targets) — both "silently wrong error bars"
+  defects that G3's live preview would have made user-visible, both
+  reproduced red then fixed (`04e1eae`, `16b02a0`); G3 clean (no P1/P2),
+  its reviewer proving the shared `GraphPreview` guard load-bearing via
+  negative-control revert and the preview a true thin adapter; render-level
+  regression pins + dead-CSS sweep landed as `a2a9460`. Stack-tip gate:
+  7,011/7,011 vitest, tsc/eslint clean, build 821.9 kB (32.0 kB under
+  budget); CI + E2E + CodeQL green per PR before each merge. G4
+  (canonical figure creation) and G5 (hardening, incl. the half-pair
+  visibility requirement recorded above) remain open.
