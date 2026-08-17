@@ -11,6 +11,7 @@ import {
   MAP_DATA_REASON,
   NO_PLOTTABLE_COLUMNS_REASON,
   UNSUPPORTED_TECHNIQUE_REASON,
+  pickConfigureQuickPlotWorksheet,
   pickQuickPlotWorksheet,
   quickPlotAvailability,
   quickPlotFigureSeed,
@@ -184,6 +185,30 @@ describe("pickQuickPlotWorksheet", () => {
   it("no worksheets at all resolves to null", () => {
     const children = childrenOf(wb, []);
     expect(pickQuickPlotWorksheet(children, {}, "w1")).toBeNull();
+  });
+});
+
+// 1d(ii): pickConfigureQuickPlotWorksheet's documented divergence from
+// pickQuickPlotWorksheet -- when the remembered child is NOT a worksheet
+// (e.g. a figure), Quick Plot falls back to the first AVAILABLE worksheet
+// (skipping unrecognized ones), while Configure falls back to the literal
+// first worksheet in source order regardless of availability. This is a
+// deliberate contract, not a bug: Configure must work on workbooks with
+// zero recognized sheets.
+describe("pickConfigureQuickPlotWorksheet vs pickQuickPlotWorksheet (documented divergence)", () => {
+  const wb: WorkbookNode = { id: "w1", name: "W" };
+
+  it("remembered child is a figure; sheet1 unrecognized, sheet2 recognized -- Quick Plot skips to sheet2, Configure stays on sheet1", () => {
+    const generic = dataset({
+      id: "sheet1", name: "sheet1.dat", workbookId: "w1",
+      data: { ...dataset({ id: "sheet1" }).data, metadata: { technique: "generic" } },
+    });
+    const recognized = dataset({ id: "sheet2", name: "sheet2.dat", workbookId: "w1" });
+    const children = childrenOf(wb, [generic, recognized]);
+    const remembered = { w1: "editable-figure:fig1" };
+
+    expect(pickQuickPlotWorksheet(children, remembered, "w1")?.id).toBe("sheet2");
+    expect(pickConfigureQuickPlotWorksheet(children, remembered, "w1")?.id).toBe("sheet1");
   });
 });
 

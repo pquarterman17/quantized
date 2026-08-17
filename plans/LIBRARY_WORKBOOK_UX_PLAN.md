@@ -741,7 +741,13 @@ build, and focused interaction coverage where appropriate.
      source worksheet ID, and make Cancel/Escape a zero-mutation exit. Unknown
      data is deliberately accepted here; a vanished source fails closed.
      Implemented 2026-08-16 on `sol/quick-figure-builder-g1`, pending Claude
-     review/PR.
+     review/PR. **Review ruling (2026-08-17):** "Configure Quick Plot…" is
+     ALWAYS enabled when a worksheet exists, even when Quick Plot itself would
+     succeed — a deliberate widening of the L0.9 escape-hatch framing, since
+     the builder is the manual plotting path (Origin's Plot Setup analogue,
+     always reachable), while Quick Plot remains the recognized-data
+     shortcut. This supersedes the F-era always-disabled stub contract, whose
+     test was replaced in this PR.
    - [~] **G2 — mapping draft and role assignment (ChatGPT-Sol):** one local
      mapping state; X/Y/error/ignore roles through drag/drop and native
      keyboard-accessible role menus. Error roles explicitly name axis, target,

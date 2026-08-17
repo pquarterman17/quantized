@@ -26,4 +26,18 @@ describe("QuickFigureBuilderSlice", () => {
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
     expect(useApp.getState().status).toBe("Quick Figure Builder unavailable: worksheet not found");
   });
+
+  // P1: loadWorkspace's return object must reset this field explicitly, same
+  // as worksheetId/openReportId/figureDocSeed/activePlotSpecId — `set()` is a
+  // shallow merge, so an omitted key survives a File > Open. Without the
+  // reset, opening a new project leaves the builder pinned to a dataset id
+  // from the PREVIOUS project ("Worksheet unavailable" over the fresh one).
+  it("loadWorkspace resets the builder target — a fresh project never resumes a stale one", () => {
+    useApp.getState().openQuickFigureBuilder("d1");
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
+
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "first", data: dataset.data }] });
+
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+  });
 });
