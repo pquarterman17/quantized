@@ -7,6 +7,7 @@ import {
   useAcquisitionAxis,
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMapping";
+import { incompleteAsymmetricPairs } from "../../../lib/errorRoles";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -32,6 +33,24 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   // visible reason, never silent) rather than leaving the mismatch between
   // "N Y series" above and what actually renders unexplained.
   const roleFilteredYKeys = mapping.yKeys.filter((ch) => dataset.channelRoles?.[ch]);
+  const incompletePairs = incompleteAsymmetricPairs(mapping.errorBindings);
+  const incompleteErrorNotice = incompletePairs.map((pair) => {
+    const targetName = pair.axis === "x"
+      ? xName
+      : (dataset.data.labels[pair.target] ?? `channel ${pair.target}`);
+    const present = pair.plus !== null
+      ? `+ "${dataset.data.labels[pair.plus]}"`
+      : `− "${dataset.data.labels[pair.minus!]}"`;
+    const missing = pair.plus === null ? "+" : "−";
+    return `${pair.axis.toUpperCase()} error for "${targetName}" has ${present} but is missing ${missing}`;
+  });
+  const createDisabledReason = !ready
+    ? "Assign at least one Y series to create a figure"
+    : roleFilteredYKeys.length > 0
+      ? "Clear the Label/Ignore role from every assigned Y column in the Channels card first"
+      : incompleteErrorNotice.length > 0
+        ? incompleteErrorNotice[0]
+        : undefined;
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
   // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
   // hidden -- the button itself is also gated on `ready` below). `close()`
@@ -81,6 +100,9 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
                 : `${roleFilteredYKeys.length} assigned Y channels are marked Label/Ignore in this worksheet and won't appear on the created figure — clear their roles in the Channels card first.`}
             </p>
           )}
+          {incompleteErrorNotice.map((notice) => (
+            <p className="qzk-quick-builder-notice" role="status" key={notice}>{notice}.</p>
+          ))}
           <GraphPreview render={preview} />
         </section>
 
@@ -103,8 +125,8 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
           <button
             type="button"
             className="qz-btn qz-primary"
-            disabled={!ready}
-            title={ready ? undefined : "Assign at least one Y series to create a figure"}
+            disabled={createDisabledReason !== undefined}
+            title={createDisabledReason}
             onClick={createFigure}
           >
             Create Editable Figure

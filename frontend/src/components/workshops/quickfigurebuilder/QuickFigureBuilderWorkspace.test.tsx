@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -33,6 +33,18 @@ const roleDataset: Dataset = {
     metadata: {},
   },
   channelRoles: { 1: "ignore" },
+};
+
+const asymmetricDataset: Dataset = {
+  id: "d3",
+  name: "asymmetric.csv",
+  data: {
+    time: [0, 1, 2],
+    values: [[2, 0.2, 0.3], [4, 0.4, 0.5], [6, 0.6, 0.7]],
+    labels: ["signal", "signal_err+", "signal_err-"],
+    units: ["V", "V", "V"],
+    metadata: {},
+  },
 };
 
 beforeEach(() => {
@@ -127,6 +139,36 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       '"flagged" is marked Label/Ignore in this worksheet and won\'t appear on the created figure',
     );
+  });
+
+  it("blocks creation for a role-filtered Y until the worksheet role is cleared", () => {
+    useApp.setState({ datasets: [roleDataset], quickFigureBuilderDatasetId: "d2" });
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for flagged" }), { target: { value: "y" } });
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("title", "Clear the Label/Ignore role from every assigned Y column in the Channels card first");
+
+    act(() => useApp.setState({ datasets: [{ ...roleDataset, channelRoles: undefined }] }));
+    expect(createBtn).not.toBeDisabled();
+    fireEvent.click(createBtn);
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+  });
+
+  it("identifies and blocks a half-complete asymmetric error pair", () => {
+    useApp.setState({ datasets: [asymmetricDataset], quickFigureBuilderDatasetId: "d3" });
+    render(<QuickFigureBuilderWorkspace />);
+    const minus = screen.getByRole("combobox", { name: "Role for signal_err-" });
+    fireEvent.change(minus, { target: { value: "unassigned" } });
+
+    expect(screen.getByRole("status")).toHaveTextContent('Y error for "signal" has + "signal_err+" but is missing −');
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("title", 'Y error for "signal" has + "signal_err+" but is missing −');
+
+    fireEvent.change(minus, { target: { value: "error:y:0:-" } });
+    expect(createBtn).not.toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("offers keyboard-accessible X, Y, ignore, and targeted error roles", () => {

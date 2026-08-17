@@ -1,11 +1,10 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1; PR E-a wide Tile workspace implemented on
-`sol/library-e-wide-shell`, pending Claude review/PR
+**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5 release
+hardening in progress
 **Created:** 2026-08-12  
-**Updated:** 2026-08-16 — ChatGPT-Sol started PR G after E-c/E2 completed
-and PR F entered its final merge pass; G1's main-workspace shell, launch
-actions, and cancel-safe transient transaction are implemented pending review
+**Updated:** 2026-08-17 — ChatGPT-Sol delegated the bounded G5 readiness slice;
+G1–G4 are merged and G5 remains in focused hardening
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -840,6 +839,14 @@ build, and focused interaction coverage where appropriate.
      visible builder hint (never change the channel's role behind the user's
      back), but whether a role-carrying channel should be assignable at all,
      or should auto-clear its role on assignment, is still open.
+     - [~] **2026-08-17 — ChatGPT-Sol (delegated implementation):** the
+       builder now identifies half-complete asymmetric pairs by affected
+       columns and blocks creation with a concise reason; explicitly mapped
+       Label/Ignore Y columns likewise block creation without mutating the
+       worksheet role. Focused unit/component coverage covers correction,
+       cancel/no-mutation, and readiness. Remaining G5 work is real-browser
+       keyboard/cancel/error-bar coverage, save/close/reopen proof, and visual
+       acceptance at common desktop sizes.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
