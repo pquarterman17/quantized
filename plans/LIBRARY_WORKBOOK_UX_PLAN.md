@@ -808,10 +808,11 @@ build, and focused interaction coverage where appropriate.
      and preview renderer contracts. Line, scatter, and line+symbol update
      live; alternate X, selected Y, and complete symmetric/asymmetric error
      pairs render from the draft without creating a parallel figure model.
-   - [~] **G4 — create editable figure:** commit once through the canonical
+   - [x] **G4 — create editable figure:** Merged as PR #157 (`f3d2e81`) —
+     see the 2026-08-17 G4 change-log entry for the orchestrated
+     scout/implement/review rounds. Commit once through the canonical
      FigureDocument lifecycle and open the result as an ordinary editable plot.
-     Implemented 2026-08-17 on `claude/g4-quick-figure-create`, pending
-     review/PR: the Create button now runs the canonical quickPlotDataset-
+     The Create button runs the canonical quickPlotDataset-
      shaped commit sequence (pure `quickFigureCommit` converter + a
      `createQuickFigureFromMapping` sibling store slice, ONE undo, name
      dedupe); the seeded view is an explicit-whitelist overlay on
@@ -2048,3 +2049,33 @@ back to the owner. No Library implementation is authorized by this pause.
   budget); CI + E2E + CodeQL green per PR before each merge. G4
   (canonical figure creation) and G5 (hardening, incl. the half-pair
   visibility requirement recorded above) remain open.
+- **2026-08-17 — Claude, G4 orchestrated round (scout → rulings → Sonnet
+  implementation → independent Sonnet review → fix rounds; merged as PR
+  #157, `f3d2e81`):** The scout pass caught the slice's load-bearing gap
+  BEFORE implementation: the Stage payload pipeline read rich error spans
+  only from `Dataset.errorRoles`, so builder-edited bindings would render
+  in the preview and silently vanish in the created figure — fixed with a
+  regression-proof activation predicate (`hasRichErrorBindings`: document
+  errors win only when they carry something the legacy symmetric
+  projection cannot express), mutation-tested (reverting the predicate
+  kills 4 tests). The independent review round (`55566cd`) then caught a
+  P1 inside the fix's own blast radius — the decimation-eligibility gate
+  was blind to document errors, so a rich-error figure on a >10k-row
+  dataset decimated the payload while spans stayed full-resolution,
+  drawing error bars against the wrong points (red-proven on 20k rows) —
+  plus the channelRoles preview/figure parity gap, resolved on the
+  verified branch: `ChannelsCard.changeRole` genuinely relies on
+  `effectiveChannels` filtering explicit lists, so the preview now applies
+  the same filter and the builder hints when a mapped Y channel is
+  role-filtered (the "should explicit assignment override roles?" question
+  is booked under G5). Sol's PR review (`2cd1d3b`) surfaced that
+  background windows never rendered rich spans AT ALL (a pre-G4 gap:
+  dataset-sourced asymmetric bars already vanished on blur) —
+  `BackgroundPlotWindow` now consumes `errorSpans` with each window's own
+  document errors threaded, red-proven focused↔background parity;
+  `PanelCell` noted as a residual (structurally cannot host a figure
+  document). End-to-end parity test committed (builder preview === created
+  figure payload). Final gate: 7,049/7,049 vitest, tsc/eslint clean,
+  824.8 kB bundle (29.1 kB headroom), CI + E2E + CodeQL green pre-merge.
+  G5 remains open (real-browser hardening, half-pair visibility,
+  channelRoles semantic ruling).
