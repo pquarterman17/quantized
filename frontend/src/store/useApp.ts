@@ -1610,6 +1610,7 @@ export const useApp = create<AppState>((set, get) => ({
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
+        quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
