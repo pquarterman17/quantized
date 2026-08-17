@@ -61,14 +61,17 @@ test("a 400-item Tiles view is windowed, scrolls live, and keyboard-navigates ac
     .poll(async () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.libraryTile))
     .toBe(`worksheet:d${lastIndex + 1}`);
 
-  // Escape still returns to the plot AND posts the canonical reveal target
-  // for the current selection ("Show in Library" contract) — asserted, not
-  // just claimed.
+  // Escape still returns to the plot AND performs the canonical reveal for
+  // the current selection ("Show in Library" contract). The `revealTarget`
+  // FIELD is transient — the sidebar tree consumes it and clears it — so
+  // the real-browser assertion is the reveal's observable EFFECT: the
+  // selected workbook's tree row ends up holding focus.
   await page.keyboard.press("Escape");
   await expect(workspace).toHaveCount(0);
   await expect(page.locator(".qzk-stage-cell")).toBeVisible();
-  const revealTarget = await page.evaluate(() => (
-    window as unknown as { __qz: { useApp: { getState: () => { revealTarget: string | null } } } }
-  ).__qz.useApp.getState().revealTarget);
-  expect(revealTarget).toBe("workbook:w1"); // the seeded librarySelection
+  await expect
+    .poll(async () =>
+      page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("data-lib-row")),
+    )
+    .toBe("workbook:w1"); // the seeded librarySelection, revealed in the tree
 });
