@@ -760,7 +760,13 @@ build, and focused interaction coverage where appropriate.
      FigureDocument lifecycle and open the result as an ordinary editable plot.
    - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
      explanation, real-browser keyboard/cancel/error-bar coverage, reopen proof,
-     and visual acceptance at common desktop sizes.
+     and visual acceptance at common desktop sizes. Explicit requirement (G2
+     review, 2026-08-17): surface half-complete asymmetric error pairs (a `+`
+     binding with no `-`, or vice versa) as visible incompleteness in the
+     builder UI -- the render layer (`lib/errorRoles.ts`'s `asymmetricPair`)
+     already excludes half pairs from the plot, so the builder must SAY so
+     rather than staying silent about a binding the user made that never
+     renders.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
