@@ -840,7 +840,8 @@ build, and focused interaction coverage where appropriate.
      back). **Resolved 2026-08-17:** mapping remains available so the conflict
      is understandable, but Create is blocked until the user explicitly clears
      the worksheet role; the builder never mutates source roles implicitly.
-     - [~] **2026-08-17 — ChatGPT-Sol (delegated implementation), PR #158:** the
+     - [x] **2026-08-17 — ChatGPT-Sol (delegated implementation), PR #158
+       (merged `7bb0c76` after the review round below):** the
        builder now identifies half-complete asymmetric pairs by affected
        columns and blocks creation with a concise reason; explicitly mapped
        Label/Ignore Y columns likewise block creation without mutating the
@@ -2110,3 +2111,26 @@ back to the owner. No Library implementation is authorized by this pause.
   824.8 kB bundle (29.1 kB headroom), CI + E2E + CodeQL green pre-merge.
   G5 remains open (real-browser hardening, half-pair visibility,
   channelRoles semantic ruling).
+- **2026-08-17 — Claude, PR #158 (G5 ambiguity slice) review + merge
+  (`7bb0c76`):** Sol's delegated G5 slice reviewed under the orchestration
+  model (Sonnet reviewer, Claude adjudication, Sonnet fix round). The UI
+  layer verified strong — the reviewer RAN both new Chromium journeys
+  against real Chromium (2/2; they assert store state and measured
+  geometry, not appearances), per-target half-pair detection correct
+  including the X-axis path, real aria-describedby wiring, no role
+  mutation, and the plan's channelRoles ruling recorded as the answer to
+  the G4-booked question. One P1, probe-proven then fixed red-first
+  (`1075582`): "blocks creation" was true only at the button — the store
+  action still gated on `mappingReady` alone, so a direct call with a
+  half pair or a role-filtered-only mapping created exactly the
+  silently-empty figure the PR exists to prevent (parallel-readiness
+  drift, introduced and diverged within one PR). Closed with the single
+  shared `canCreateQuickFigure` predicate consumed by both gates; a
+  pre-existing test that was itself seeding a lone `+` binding was
+  corrected. Also: blocked-framing notice copy, joint-condition
+  aria-describedby lists both reasons, scoped selector replaces the CSS
+  `!important`. Final gate: 7,058/7,058 vitest, tsc (app+e2e)/eslint
+  clean, 826.1 kB bundle (27.9 kB headroom), both journeys 2/2 locally,
+  13/13 checks green pre-merge. G5 remains partially open: Claude-owned
+  save/close/reopen/project-reload proof and canonical-state review;
+  final human visual acceptance stays a release-candidate task.
