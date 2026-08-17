@@ -19,10 +19,29 @@ import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
-function target(workbook: WorkbookNode, datasets: Dataset[] = []): WorkbookActionTarget {
+function target(
+  workbook: WorkbookNode,
+  datasets: Dataset[] = [],
+  extra: Partial<WorkbookActionTarget> = {},
+): WorkbookActionTarget {
   const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [workbook], datasets });
   const node = hierarchy.byKey.get(`workbook:${workbook.id}`) as Extract<LibraryNode, { kind: "workbook" }>;
-  return { node, onRename: vi.fn() };
+  return { node, onRename: vi.fn(), ...extra };
+}
+
+function recognizedDataset(id: string, workbookId: string): Dataset {
+  return {
+    id,
+    name: `${id}.dat`,
+    workbookId,
+    data: {
+      time: [0, 1, 2],
+      values: [[1, 10], [2, 20], [3, 30]],
+      labels: ["A", "B"],
+      units: ["", ""],
+      metadata: { technique: "magnetometry.mvsh" },
+    },
+  };
 }
 
 const find = (id: string) => workbookCoreActions.find((a) => a.id === id) ?? workbookSourceActions.find((a) => a.id === id)!;
@@ -37,16 +56,67 @@ function menuItemFor<T>(a: ContextAction<T>, t: T): ActionMenuItem {
 }
 
 beforeEach(() => {
-  useApp.setState({ workbooks: [], datasets: [], trash: [], history: [] });
+  useApp.setState({
+    workbooks: [],
+    datasets: [],
+    trash: [],
+    history: [],
+    editableFigures: [],
+    workbookLastChild: {},
+  });
+});
+
+describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
+  it("enabled for a workbook whose remembered worksheet is recognized", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const d2 = recognizedDataset("d2", "w1");
+    useApp.setState({ workbookLastChild: { w1: "worksheet:d2" } });
+    const item = menuItemFor(find("workbook.quickPlot"), target(wb, [d1, d2]));
+    expect(item.disabled).toBe(false);
+    expect(item.title).toBeUndefined();
+  });
+
+  it("disabled with a precise reason for a generic-only workbook", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const generic: Dataset = {
+      ...recognizedDataset("d1", "w1"),
+      data: { ...recognizedDataset("d1", "w1").data, metadata: { technique: "generic" } },
+    };
+    const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic]));
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe(
+      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+    );
+  });
+
+  it("disabled for an empty workbook", () => {
+    const item = menuItemFor(find("workbook.quickPlot"), target({ id: "w1", name: "W" }));
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe("this workbook has no worksheets");
+  });
+
+  it("run() calls through to quickPlotDataset and invokes onStageOpen when supplied", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ datasets: [d1], workbooks: [wb], history: [], editableFigures: [] });
+    const onStageOpen = vi.fn();
+    const item = menuItemFor(find("workbook.quickPlot"), target(wb, [d1], { onStageOpen }));
+    expect(item.disabled).toBe(false);
+    item.run();
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+    expect(useApp.getState().editableFigures[0].bindings.datasetId).toBe("d1");
+    expect(onStageOpen).toHaveBeenCalledOnce();
+  });
+
+  it("Configure Quick Plot… is always disabled with the PR G stub reason", () => {
+    const item = menuItemFor(find("workbook.configureQuickPlot"), target({ id: "w1", name: "W" }));
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe("arrives with the Quick Figure Builder (PR G)");
+  });
 });
 
 describe("workbook menu — disabled-with-reason items (L0.36)", () => {
-  it("Quick Plot is always disabled with its PR F reason", () => {
-    const item = menuItemFor(find("workbook.quickPlot"), target({ id: "w1", name: "W" }));
-    expect(item.disabled).toBe(true);
-    expect(item.title).toBe("arrives with Quick Plot (PR F)");
-  });
-
   it("Browse is disabled outside Tiles with an honest availability reason", () => {
     const item = menuItemFor(find("workbook.browse"), target({ id: "w1", name: "W" }));
     expect(item.disabled).toBe(true);

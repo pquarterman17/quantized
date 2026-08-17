@@ -20,9 +20,10 @@ export function buildWorkbookRowMenu(
   onRename: () => void,
   onBrowse?: () => void,
   onOpen?: () => void,
+  onStageOpen?: () => void,
 ): ContextMenuItem[] {
   const workbook = node.entity;
-  const target: WorkbookActionTarget = { node, onRename, onBrowse, onOpen };
+  const target: WorkbookActionTarget = { node, onRename, onBrowse, onOpen, onStageOpen };
   const { folders, moveWorkbookToFolder } = useApp.getState();
 
   const moveItems: ContextMenuItem[] = [

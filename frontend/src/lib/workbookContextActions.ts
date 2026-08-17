@@ -19,6 +19,7 @@
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
 import type { LibraryNode } from "./libraryHierarchy";
+import { CONFIGURE_QUICK_PLOT_STUB_REASON, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { workbookDeleteBlockers } from "../store/workbookActions";
@@ -31,6 +32,11 @@ export interface WorkbookActionTarget {
   onBrowse?: () => void;
   /** Tile workspace only: open and reveal the Stage result. */
   onOpen?: () => void;
+  /** Tile workspace only: close the workspace and return to the Stage after
+   *  an action whose visible result is a plot (Quick Plot) -- the SAME
+   *  contract as DatasetActionTarget.onStageOpen (contextActions.ts): the
+   *  action already performed its own open, this only returns the view. */
+  onStageOpen?: () => void;
 }
 
 const memberCount = (t: WorkbookActionTarget): number =>
@@ -41,8 +47,22 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.quickPlot",
     label: "Quick Plot",
+    enabled: (t) =>
+      quickPlotWorkbookGate(t.node.children, useApp.getState().workbookLastChild, t.node.entity.id).enabled,
+    disabledReason: (t) =>
+      quickPlotWorkbookGate(t.node.children, useApp.getState().workbookLastChild, t.node.entity.id).reason,
+    run: (t) => {
+      const picked = pickQuickPlotWorksheet(t.node.children, useApp.getState().workbookLastChild, t.node.entity.id);
+      if (!picked) return; // fail-closed: the menu already disables this when nothing qualifies
+      useApp.getState().quickPlotDataset(picked.id);
+      t.onStageOpen?.();
+    },
+  },
+  {
+    id: "workbook.configureQuickPlot",
+    label: "Configure Quick Plot…",
     enabled: () => false,
-    disabledReason: () => "arrives with Quick Plot (PR F)",
+    disabledReason: () => CONFIGURE_QUICK_PLOT_STUB_REASON,
     run: () => {},
   },
   {
