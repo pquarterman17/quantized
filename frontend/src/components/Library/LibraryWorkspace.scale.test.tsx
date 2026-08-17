@@ -186,6 +186,78 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     expect(document.activeElement).toBe(input); // focus was NOT yanked back to the grid
   });
 
+  it("keyboard survives the focused tile scrolling out of the window (no dead-end on <body>)", async () => {
+    seed(500);
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const section = screen.getByLabelText("Library workspace");
+    const first = renderedTiles()[0];
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    section.scrollTop = 24000; // the focused tile unmounts with its window
+    fireEvent.scroll(section);
+    expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    // Focus must NOT be stranded on <body> — the grid takes it, and an arrow
+    // key resumes navigation from the roving tile's model position.
+    expect(document.activeElement).not.toBe(document.body);
+
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement | null)?.dataset.libraryTile).toBe("worksheet:d1");
+    });
+  });
+
+  it("windowed listitems report their TRUE set size and position to assistive tech", () => {
+    seed(500);
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const section = screen.getByLabelText("Library workspace");
+    section.scrollTop = 4000;
+    fireEvent.scroll(section);
+
+    const tiles = renderedTiles();
+    const firstIndex = Number(tiles[0].dataset.libraryTile!.replace("worksheet:d", ""));
+    expect(tiles[0]).toHaveAttribute("aria-setsize", "500");
+    expect(tiles[0]).toHaveAttribute("aria-posinset", String(firstIndex + 1));
+  });
+
+  it("entering a SMALL container from a deep-scrolled large one still resets the scroll", () => {
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Big run" }, { id: "w2", name: "Small run" }],
+      datasets: [
+        ...Array.from({ length: 300 }, (_, i) => worksheet(i)),
+        ...Array.from({ length: 20 }, (_, i) => ({ ...worksheet(i + 1000), workbookId: "w2" })),
+      ],
+      librarySelection: { kind: "workbook", id: "w1" },
+    });
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const section = screen.getByLabelText("Library workspace");
+    section.scrollTop = 12000;
+    fireEvent.scroll(section);
+
+    fireEvent.click(screen.getByRole("button", { name: "Project" }));
+    fireEvent.click(screen.getByRole("listitem", { name: "Small run, Workbook" }));
+    // The 20-item container is UNVIRTUALIZED — the reset must not be gated
+    // on the virtualized path.
+    expect(section.scrollTop).toBe(0);
+  });
+
+  it("the deferred focus retry stands down when the user focused a DIFFERENT tile meanwhile", async () => {
+    seed(500);
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const tiles = renderedTiles();
+    const last = tiles[tiles.length - 1];
+    last.focus();
+    fireEvent.keyDown(last, { key: "ArrowRight" }); // retry armed for the off-window neighbor
+    // A tile that SURVIVES the ensuing window shift (the shifted window
+    // keeps the rows just above the old tail) — the user clicks it before
+    // the retry's target takes focus.
+    const other = tiles[tiles.length - 3];
+    other.focus();
+
+    await new Promise((resolve) => setTimeout(resolve, 300)); // outlast the retry budget
+    expect(document.activeElement).toBe(other); // never yanked to the retry's target
+  });
+
   it("Escape from a large library still posts the canonical reveal target (Show in Library)", () => {
     const onClose = vi.fn();
     seed(500);

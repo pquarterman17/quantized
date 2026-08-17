@@ -190,18 +190,57 @@ export default function LibraryWorkspace({ onClose }: Props) {
     if (index < 0) return;
     const target = Math.max(0, Math.min(items.length - 1, index + delta));
     virt.ensureVisible(target);
-    focusTileWhenRendered(items[target].key);
+    focusTileWhenRendered(items[target].key, currentKey);
+  };
+
+  // E-c3 review fix: when the FOCUSED tile scrolls out of the rendered
+  // window and unmounts, the browser drops focus to <body> and keyboard
+  // interaction would dead-end. Hand focus to the grid container instead —
+  // it never fights the user's scroll, and its own keydown (below) resumes
+  // navigation from the roving tile's model position.
+  useEffect(() => {
+    if (!virt.virtualized || rovingKey == null) return;
+    if (document.activeElement !== document.body) return;
+    if (!items.some((node) => node.key === rovingKey)) return; // removal — the survivor effect owns it
+    if (document.querySelector(`[data-library-tile="${CSS.escape(rovingKey)}"]`)) return; // still rendered
+    gridRef.current?.focus();
+  }, [virt.virtualized, virt.start, virt.end, items, rovingKey]);
+
+  // Arrow/Enter while the GRID itself holds focus (the scroll-out fallback
+  // above): resume from the roving tile's model position.
+  const onGridKeyDown = (event: React.KeyboardEvent): void => {
+    if (event.target !== gridRef.current || rovingKey == null) return;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault(); moveFocus(rovingKey, 1);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault(); moveFocus(rovingKey, -1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const node = items.find((item) => item.key === rovingKey);
+      if (node) openFromTile(node);
+    }
   };
 
   // Entering ANY container (mount included — this runs for the null root
   // container too) lands the window on the current selection if it lives
   // here, else the top. This is also what resets a stale scrollTop carried
-  // over from a previously-scrolled container: ensureVisible scrolls the
-  // target row in from wherever the section was left.
+  // over from a previously-scrolled container — and it must run for SMALL
+  // (unvirtualized) containers too: the browser only clamps a stale deep
+  // scroll to the small container's own bottom, it never returns to the top.
   useEffect(() => {
-    if (!virt.virtualized) return;
     const index = currentSelectedKey ? items.findIndex((node) => node.key === currentSelectedKey) : -1;
-    virt.ensureVisible(Math.max(0, index));
+    if (virt.virtualized) {
+      virt.ensureVisible(Math.max(0, index));
+      return;
+    }
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    if (index > 0 && currentSelectedKey) {
+      const tile = document.querySelector(`[data-library-tile="${CSS.escape(currentSelectedKey)}"]`);
+      (tile as HTMLElement | null)?.scrollIntoView?.({ block: "nearest" });
+    } else {
+      scrollEl.scrollTop = 0;
+    }
     // ensureVisible is stable; items/selection captured per container change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerKey, virt.virtualized]);
@@ -240,9 +279,12 @@ export default function LibraryWorkspace({ onClose }: Props) {
           role="list"
           aria-label={`${container?.name ?? "Project"} items`}
           ref={gridRef}
+          tabIndex={-1}
+          data-tile-grid-focus
+          onKeyDown={onGridKeyDown}
           style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
         >
-          {rendered.map((node) => {
+          {rendered.map((node, renderedIndex) => {
             const selected = node.key === currentSelectedKey;
             const summary = libraryTileSummary(node);
             return (
@@ -253,6 +295,8 @@ export default function LibraryWorkspace({ onClose }: Props) {
                 className={`qzk-library-tile${selected ? " selected" : ""}`}
                 tabIndex={node.key === effectiveTabStop ? 0 : -1}
                 aria-label={`${node.name}, ${KIND_LABEL[node.kind]}`}
+                aria-setsize={items.length}
+                aria-posinset={virt.start + renderedIndex + 1}
                 onClick={() => selectOrBrowse(node)}
                 onDoubleClick={() => openFromTile(node)}
                 onFocus={() => setRovingKey(node.key)}

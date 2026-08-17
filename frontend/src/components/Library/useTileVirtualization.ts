@@ -31,7 +31,7 @@ const OVERSCAN_ROWS = 2;
 const FALLBACK_VIEWPORT_H = 600;
 const FALLBACK_ROW_H = 200;
 const FALLBACK_COLUMNS = 4;
-const GRID_GAP = 12; // matches .qzk-tile-grid gap
+const FALLBACK_GAP = 12; // .qzk-tile-grid's gap where getComputedStyle is unhelpful (jsdom)
 
 export interface TileWindow {
   start: number;
@@ -55,9 +55,12 @@ function measure(scrollEl: HTMLElement | null, gridEl: HTMLElement | null): Metr
   const tallest = tiles.reduce((max, tile) => Math.max(max, tile.offsetHeight), 0);
   const tileW = tiles[0]?.offsetWidth ?? 0;
   const gridW = gridEl?.clientWidth ?? 0;
+  // The REAL gap, so a CSS density retune can't silently skew the spacers.
+  const gapRaw = gridEl ? Number.parseFloat(getComputedStyle(gridEl).rowGap) : NaN;
+  const gap = Number.isFinite(gapRaw) ? gapRaw : FALLBACK_GAP;
   return {
-    rowH: tallest > 0 ? tallest + GRID_GAP : FALLBACK_ROW_H,
-    columns: tileW > 0 && gridW > 0 ? Math.max(1, Math.floor((gridW + GRID_GAP) / (tileW + GRID_GAP))) : FALLBACK_COLUMNS,
+    rowH: tallest > 0 ? tallest + gap : FALLBACK_ROW_H,
+    columns: tileW > 0 && gridW > 0 ? Math.max(1, Math.floor((gridW + gap) / (tileW + gap))) : FALLBACK_COLUMNS,
     viewportH: scrollEl && scrollEl.clientHeight > 0 ? scrollEl.clientHeight : FALLBACK_VIEWPORT_H,
     gridTop: gridEl?.offsetTop ?? 0,
   };
@@ -81,8 +84,7 @@ export function useTileVirtualization(
     if (!virtualized) return;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
-    const sync = (): void => {
-      setScrollTop(scrollEl.scrollTop);
+    const remeasure = (): void => {
       setMetrics((prev) => {
         const next = measure(scrollEl, gridRef.current);
         return prev.rowH === next.rowH && prev.columns === next.columns
@@ -91,14 +93,21 @@ export function useTileVirtualization(
           : next;
       });
     };
-    sync();
-    scrollEl.addEventListener("scroll", sync, { passive: true });
-    // ResizeObserver is absent in jsdom — the scroll listener plus the
-    // deterministic fallbacks carry the contract there.
-    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sync) : null;
+    // Scroll is the hot path — it reads ONLY scrollTop. Geometry changes
+    // arrive via the ResizeObserver (the scroll container for viewport
+    // changes, the GRID for content-driven row-height changes — e.g. E-c2
+    // thumbnails finishing and growing their tiles). jsdom has neither
+    // real geometry nor ResizeObserver: the initial remeasure() runs the
+    // deterministic-fallback path once, which is the test contract.
+    const onScroll = (): void => setScrollTop(scrollEl.scrollTop);
+    remeasure();
+    setScrollTop(scrollEl.scrollTop);
+    scrollEl.addEventListener("scroll", onScroll, { passive: true });
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(remeasure) : null;
     observer?.observe(scrollEl);
+    if (gridRef.current) observer?.observe(gridRef.current);
     return () => {
-      scrollEl.removeEventListener("scroll", sync);
+      scrollEl.removeEventListener("scroll", onScroll);
       observer?.disconnect();
     };
   }, [virtualized, scrollRef, gridRef]);
@@ -108,7 +117,17 @@ export function useTileVirtualization(
       if (!virtualized) return;
       const scrollEl = scrollRef.current;
       if (!scrollEl) return;
-      const { rowH, columns, viewportH, gridTop } = measure(scrollEl, gridRef.current);
+      const fresh = measure(scrollEl, gridRef.current);
+      // Write the fresh measurement BACK into state (no split brain): after
+      // a container change the spacer math must use the NEW container's row
+      // height immediately, not the previous one's until the next scroll.
+      setMetrics((prev) =>
+        prev.rowH === fresh.rowH && prev.columns === fresh.columns
+          && prev.viewportH === fresh.viewportH && prev.gridTop === fresh.gridTop
+          ? prev
+          : fresh,
+      );
+      const { rowH, columns, viewportH, gridTop } = fresh;
       const row = Math.floor(Math.max(0, index) / columns);
       const rowTop = gridTop + row * rowH;
       const rowBottom = rowTop + rowH;
@@ -148,16 +167,22 @@ export function useTileVirtualization(
 
 /** Focus a tile that may not be rendered yet (ensureVisible just moved the
  *  window): retry across a few animation frames, exactly like close()'s
- *  restoreFocus. Stands down the moment focus belongs to anything OTHER
- *  than a tile or <body> — a user who clicked into an input mid-retry
- *  must never have focus yanked back to the grid. */
-export function focusTileWhenRendered(key: string): void {
+ *  restoreFocus. The retry stands down the moment focus belongs to
+ *  anything it doesn't own — an input the user clicked, OR a DIFFERENT
+ *  tile they focused mid-retry. Focus it may legitimately move FROM:
+ *  <body> (the origin unmounted), the origin element itself (`from`), a
+ *  grid container carrying `data-tile-grid-focus` (the scroll-out
+ *  fallback holder), or the target once rendered. */
+export function focusTileWhenRendered(key: string, from?: string | null): void {
   let attempts = 0;
   const tryFocus = (): void => {
     const active = document.activeElement;
-    const focusIsElsewhere =
-      active instanceof HTMLElement && active !== document.body && !active.hasAttribute("data-library-tile");
-    if (focusIsElsewhere) return;
+    if (active instanceof HTMLElement && active !== document.body) {
+      const activeTile = active.getAttribute("data-library-tile");
+      const owned =
+        activeTile === key || (from != null && activeTile === from) || active.hasAttribute("data-tile-grid-focus");
+      if (!owned) return;
+    }
     const tile = document.querySelector(`[data-library-tile="${CSS.escape(key)}"]`) as HTMLElement | null;
     if (tile) tile.focus();
     else if (++attempts < 8) requestAnimationFrame(tryFocus);

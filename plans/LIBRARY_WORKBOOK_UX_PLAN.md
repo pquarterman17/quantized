@@ -1839,3 +1839,22 @@ back to the owner. No Library implementation is authorized by this pause.
   promise is narrowed honestly: virtualized unmount aborts in-flight
   generation like any unmount; completed thumbnails survive in the LRU.
   E-c (thumbnails + scale safeguards) is complete pending PR/merge.
+- **2026-08-17 — Claude, PR #151 (E-c3) owner-directed critical review round
+  before merge:** A fresh max-effort adversarial pass on my own PR found 8
+  issues; all fixed with the four testable ones proven red first. The two
+  real contract regressions: (1) the FOCUSED tile scrolling out of the
+  rendered window unmounted and stranded keyboard focus on <body> — the
+  grid container now takes focus (never fighting the scroll) and its own
+  keydown resumes navigation from the roving tile's model position; (2)
+  windowed listitems hid the true collection size from assistive tech —
+  tiles now carry aria-setsize/aria-posinset. Also fixed: the
+  container-entry scroll reset was gated on the virtualized path (a small
+  container entered from a deep scroll landed at its clamped bottom); the
+  deferred focus retry could steal focus from a DIFFERENT tile the user
+  clicked mid-retry (now origin-aware); ensureVisible's fresh measurements
+  now write back into the window state (no split-brain row height after
+  container changes); the grid gap is read from computed style instead of
+  a hardcoded 12; scroll events no longer re-measure geometry (ResizeObserver
+  on the scroll container AND the grid owns that, catching thumbnail-driven
+  tile growth); and the scale E2E now ASSERTS the Escape reveal target
+  instead of claiming it in a comment.

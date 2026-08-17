@@ -61,9 +61,14 @@ test("a 400-item Tiles view is windowed, scrolls live, and keyboard-navigates ac
     .poll(async () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.libraryTile))
     .toBe(`worksheet:d${lastIndex + 1}`);
 
-  // Escape still returns to the plot and posts the canonical reveal target
-  // for the focused/selected worksheet ("Show in Library" contract).
+  // Escape still returns to the plot AND posts the canonical reveal target
+  // for the current selection ("Show in Library" contract) — asserted, not
+  // just claimed.
   await page.keyboard.press("Escape");
   await expect(workspace).toHaveCount(0);
   await expect(page.locator(".qzk-stage-cell")).toBeVisible();
+  const revealTarget = await page.evaluate(() => (
+    window as unknown as { __qz: { useApp: { getState: () => { revealTarget: string | null } } } }
+  ).__qz.useApp.getState().revealTarget);
+  expect(revealTarget).toBe("workbook:w1"); // the seeded librarySelection
 });
