@@ -100,7 +100,7 @@ describe("contextPaletteActions — Quick Plot (fix #3)", () => {
     expect(actions.some((a) => a.label === "Quick Plot")).toBe(false);
   });
 
-  it("omits Configure Quick Plot… (always disabled) even for a recognized dataset", () => {
+  it("includes Configure Quick Plot… and opens the transient builder for the active dataset", () => {
     useApp.setState({
       datasets: [
         makeDataset("d1", "Alpha", {
@@ -116,7 +116,11 @@ describe("contextPaletteActions — Quick Plot (fix #3)", () => {
       activeId: "d1",
     });
     const actions = contextPaletteActions();
-    expect(actions.some((a) => a.label === "Configure Quick Plot…")).toBe(false);
+    const configure = actions.find((a) => a.label === "Configure Quick Plot…");
+    expect(configure).toBeTruthy();
+    configure!.run();
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
+    expect(useApp.getState().editableFigures).toEqual([]);
   });
 });
 
