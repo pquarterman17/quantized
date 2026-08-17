@@ -2355,3 +2355,11 @@ back to the owner. No Library implementation is authorized by this pause.
   headroom, unchanged). G5's `[x]` is now honest: both Claude-owned
   handoff items are done; only the release-candidate human visual
   acceptance pass remains, as originally noted.
+- **2026-08-17 — Claude, PR #160 merged (`0519280`) — PR G closed:** the G5
+  lifecycle proof + canonical-state review branch merged after both
+  orchestrated review rounds (mutation-tested pins; the plan-honesty
+  correction that surfaced and then performed the canonical-state review)
+  and 13/13 checks green (one e2e runner hang — GitHub infra, cleared by
+  re-run in the normal ~3 min). PR G (G1-G5) is complete end to end;
+  the sole remaining G-item is the release-candidate human visual
+  acceptance pass, owner-only by design.
