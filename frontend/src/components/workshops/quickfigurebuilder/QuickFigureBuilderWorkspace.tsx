@@ -7,18 +7,22 @@ import {
   useAcquisitionAxis,
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMapping";
+import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import GraphPreview from "../graphbuilder/GraphPreview";
 import QuickMappingPanel from "./QuickMappingPanel";
 
 function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => void }) {
   const [mapping, setMapping] = useState(() => initialQuickFigureMapping(dataset));
+  const [style, setStyle] = useState<QuickPlotStyle>("line");
   const assign = (channel: number, assignment: QuickColumnAssignment): void => {
     setMapping((current) => assignQuickFigureColumn(current, channel, assignment));
   };
   const xName = mapping.xKey === null
     ? String(dataset.data.metadata?.["x_column_long"] || dataset.data.metadata?.["x_column_name"] || "Acquisition axis")
     : dataset.data.labels[mapping.xKey];
+  const preview = quickFigurePreview(dataset.data, mapping, style);
 
   return (
     <section className="qzk-quick-builder" aria-labelledby="quick-builder-title">
@@ -47,16 +51,23 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
         <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">
           <div className="qzk-quick-builder-step">2</div>
           <h2 id="quick-builder-preview">Live preview</h2>
-          <div className="qzk-quick-builder-preview-empty">
-            {mappingReady(mapping)
-              ? `${mapping.yKeys.length} Y series against ${xName}. Live rendering arrives in G3.`
-              : "Assign at least one Y series to preview the figure."}
-          </div>
+          <p className="qzk-quick-builder-preview-summary" aria-live="polite">
+            {mappingReady(mapping) ? `${mapping.yKeys.length} Y series against ${xName}` : "Mapping incomplete"}
+          </p>
+          <GraphPreview render={preview} />
         </section>
 
         <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-settings">
           <div className="qzk-quick-builder-step">3</div>
           <h2 id="quick-builder-settings">Figure setup</h2>
+          <label className="qzk-quick-builder-field">
+            <span>Plot style</span>
+            <select value={style} onChange={(event) => setStyle(event.target.value as QuickPlotStyle)}>
+              <option value="line">Line</option>
+              <option value="scatter">Scatter</option>
+              <option value="line-symbol">Line + symbol</option>
+            </select>
+          </label>
           <dl className="qzk-quick-builder-facts">
             <div><dt>Rows</dt><dd>{dataset.data.time.length.toLocaleString()}</dd></div>
             <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>

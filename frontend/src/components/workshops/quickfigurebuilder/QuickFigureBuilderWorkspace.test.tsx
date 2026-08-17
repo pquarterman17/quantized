@@ -46,7 +46,9 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     fireEvent.change(error, { target: { value: "error:x:-1:both" } });
     expect(error).toHaveValue("error:x:-1:both");
     fireEvent.change(error, { target: { value: "y" } });
-    expect(screen.getByText("1 Y series against signal. Live rendering arrives in G3.")).toBeInTheDocument();
+    expect(screen.getByText("1 Y series against signal")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Plot style" }), { target: { value: "line-symbol" } });
+    expect(screen.getByRole("combobox", { name: "Plot style" })).toHaveValue("line-symbol");
   });
 
   it("supports dragging a column into an explicit role zone", () => {
