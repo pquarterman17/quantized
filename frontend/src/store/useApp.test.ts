@@ -3265,6 +3265,25 @@ describe("useApp loadWorkspace", () => {
     expect(useApp.getState().activeId).toBeNull();
   });
 
+  // L0.25 (post-merge review fix): a restored librarySelection must win
+  // OUTRIGHT — the pre-existing "no persisted selectedIds -> fall back to
+  // [active]" synthesis is a STORE-level convenience with no basis in the
+  // doc, and re-introducing a dataset selection alongside a just-restored
+  // tree selection recreates the exact both-set state every chokepoint
+  // (setLibrarySelection, activateFromLibrary, ...) exists to prevent.
+  it("L0.25: a restored librarySelection wins outright — selectedIds is NOT synthesized to [active] alongside it", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "stale", data: raw }], activeId: "old" });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "first", data: raw }],
+      activeId: "w1", // truthy -- the [active] fallback would otherwise fire
+      selectedIds: [], // the doc itself carries no dataset selection
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    const s = useApp.getState();
+    expect(s.librarySelection).toEqual({ kind: "folder", id: "f1" });
+    expect(s.selectedIds).toEqual([]); // never synthesized to ["w1"]
+  });
+
   // GUI_INTERACTION_PLAN #10 item 3: the ToolWindow layout registry
   // round-trips through loadWorkspace exactly like plotWindows/folders — a
   // legacy doc with no field resets to {} (every window falls back to its
@@ -3396,6 +3415,9 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      librarySelection: null,
+      workbookLastChild: {},
+      expandedWorkbookIds: [],
     };
   }
 
@@ -4735,6 +4757,48 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
       focusedWindowId: "ghost",
     });
     expect(useApp.getState().focusedWindowId).toBe("p1");
+  });
+
+  // LIBRARY_WORKBOOK_UX_PLAN PR E2 — "Open Without Layout…"'s store-level
+  // contract: skipLayout ignores the persisted plotWindows/focusedWindowId/
+  // toolWindowLayout entirely (landing on the same single fresh window a
+  // layout-less doc already gets), while everything else — including the
+  // three new Library-panel session fields — restores exactly as a normal
+  // load. The command-level flow (confirm + dispatch) is covered by
+  // commands/openWorkspaceSafe.test.ts; this is the primitive underneath it.
+  it("loadWorkspace with skipLayout drops the persisted layout but restores librarySelection/workbookLastChild/expandedWorkbookIds", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "old" })],
+      focusedWindowId: "old",
+      toolWindowLayout: { existing: { x: 5, y: 5, width: 250, height: null, collapsed: false } },
+    });
+    useApp.getState().loadWorkspace(
+      {
+        datasets: [{ id: "d1", name: "a", data: raw }],
+        activeId: "d1",
+        workbooks: [{ id: "w1", name: "W" }],
+        plotWindows: [win({ id: "p1" }), win({ id: "p2" })],
+        focusedWindowId: "p1",
+        librarySelection: { kind: "workbook", id: "w1" },
+        workbookLastChild: { w1: "worksheet:d1" },
+        expandedWorkbookIds: ["w1"],
+      },
+      { skipLayout: true },
+    );
+    const s = useApp.getState();
+    // Exactly one fresh window — the persisted "p1"/"p2" layout never lands.
+    expect(s.plotWindows).toHaveLength(1);
+    expect(s.plotWindows[0].id).not.toBe("p1");
+    expect(s.plotWindows[0].id).not.toBe("p2");
+    expect(s.plotWindows[0].winState).toBe("maximized");
+    // The CURRENT session's toolWindowLayout is untouched, not reset to {}.
+    expect(s.toolWindowLayout).toEqual({ existing: { x: 5, y: 5, width: 250, height: null, collapsed: false } });
+    // Everything else restores normally.
+    expect(s.datasets.map((d) => d.id)).toEqual(["d1"]);
+    expect(s.workbooks.map((w) => w.id)).toEqual(["w1"]);
+    expect(s.librarySelection).toEqual({ kind: "workbook", id: "w1" });
+    expect(s.workbookLastChild).toEqual({ w1: "worksheet:d1" });
+    expect(s.expandedWorkbookIds).toEqual(["w1"]);
   });
 });
 

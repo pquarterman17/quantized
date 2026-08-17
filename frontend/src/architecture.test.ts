@@ -726,13 +726,16 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
   revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
   activeDrag: "active drag state for Library folder drag feedback; transient",
-  // LIBRARY_WORKBOOK_UX_PLAN PR C: tree UI state. The plan's E2 milestone
-  // (session restoration) explicitly owns persisting workbook expansion,
-  // selection, and the remembered child — undoing them here would be a
-  // second, premature persistence path that E2 would then have to reconcile.
-  expandedWorkbookIds: "Library tree workbook disclosure state; transient, E2 persists it",
-  librarySelection: "Library tree folder/workbook selection; transient, E2 persists it",
-  workbookLastChild: "L0.6 remembered workbook child per workbook id; transient, E2 persists it",
+  // LIBRARY_WORKBOOK_UX_PLAN PR C/E2: tree UI state. PR E2 now persists all
+  // three into the .dwk (lib/workspace.ts's parseWorkspace/serializeWorkspace),
+  // but persisted is not the same as undoable — they're view/navigation state
+  // (which row the tree currently shows as "current", which workbooks are
+  // disclosed), not an edit a user would expect Ctrl+Z to step back through,
+  // the same distinction `libraryPanelWidth`/`revealTarget` above already draw
+  // for their own (session-local, not .dwk-persisted) UI state.
+  expandedWorkbookIds: "Library tree workbook disclosure state; persisted view state (PR E2), not an undoable edit",
+  librarySelection: "Library tree folder/workbook selection; persisted view state (PR E2), not an undoable edit",
+  workbookLastChild: "L0.6 remembered workbook child per workbook id; persisted view state (PR E2), not an undoable edit",
 
   // originImport slice: ephemeral seeds
   originWorksheetSeed: "pending worksheet from Origin import; consumed on apply, not persistent",

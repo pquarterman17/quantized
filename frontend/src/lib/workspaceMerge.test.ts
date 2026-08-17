@@ -57,6 +57,9 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      librarySelection: null,
+      workbookLastChild: {},
+      expandedWorkbookIds: [],
     };
   }
 
@@ -446,5 +449,55 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       expect(r1.workbooks).toEqual(r2.workbooks);
       expect(r1.datasets.map((d) => d.workbookId)).toEqual(r2.datasets.map((d) => d.workbookId));
     });
+  });
+});
+
+describe("mergeWorkspace never imports the LIBRARY_WORKBOOK_UX_PLAN PR E2 session fields (PR C's existing precedent)", () => {
+  // The module header's field matrix already lists activeId/selectedIds/
+  // plotWindows/etc. as "never merged in at all" — E2's three new
+  // LoadedWorkspace fields (librarySelection/workbookLastChild/
+  // expandedWorkbookIds) join that same list: an append only ever reads
+  // `.datasets` and `.workbooks` off the incoming doc.
+  it("ignores librarySelection/workbookLastChild/expandedWorkbookIds on the incoming doc", () => {
+    const current = [makeDataset("a", "first")];
+    const incoming: LoadedWorkspace = {
+      datasets: [makeDataset("b", "second")],
+      folders: [],
+      workbooks: [],
+      activeId: null,
+      selectedIds: [],
+      expandedFolders: [],
+      originFigures: [],
+      originFidelity: [],
+      smartFolders: [],
+      reports: [],
+      macroSteps: [],
+      recalcMode: "auto",
+      figureDocs: [],
+      editableFigures: [],
+      pages: [],
+      migrationWarnings: [],
+      plotWindows: [],
+      focusedWindowId: null,
+      toolWindowLayout: {},
+      savedPlotSpecs: [],
+      techniqueViewMemory: {},
+      savedRois: [],
+      // "Poisoned" values a merge that DID read these would leak/react to.
+      librarySelection: { kind: "folder", id: "poison" },
+      workbookLastChild: { poison: "worksheet:x" },
+      expandedWorkbookIds: ["poison"],
+    };
+    const genId2 = () => "unused";
+    const genWorkbookId2 = () => "unused-wb";
+
+    const result = mergeWorkspace(current, incoming, genId2, new Set<string>(), genWorkbookId2);
+
+    // The merge succeeds exactly as it would with those fields absent...
+    expect(result.datasets.map((d) => d.id)).toEqual(["a", "b"]);
+    // ...and the result carries none of them through.
+    expect(result).not.toHaveProperty("librarySelection");
+    expect(result).not.toHaveProperty("workbookLastChild");
+    expect(result).not.toHaveProperty("expandedWorkbookIds");
   });
 });

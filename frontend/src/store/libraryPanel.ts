@@ -38,9 +38,10 @@
 //     re-run on every OTHER row's drag, and reactively where the whole-tree
 //     highlight does.
 //
-// LIBRARY_WORKBOOK_UX_PLAN PR C additions (all three transient — E2 owns
-// persistence, per the plan's PR sequence; see architecture.test.ts's
-// HISTORY_EXCLUDED for the matching justification):
+// LIBRARY_WORKBOOK_UX_PLAN PR C additions (all three now PERSISTED into the
+// .dwk by PR E2 — lib/workspace.ts's parseWorkspace/serializeWorkspace — but
+// still excluded from undo history; see architecture.test.ts's
+// HISTORY_EXCLUDED for that justification):
 //   - `expandedWorkbookIds` — the tree renderer's workbook disclosure state,
 //     the workbook-layer sibling of `expandedFolders` (folders live on
 //     useApp.ts already; workbooks land here to avoid touching that
@@ -98,13 +99,14 @@ export interface LibraryPanelSlice {
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
-  /** PR C — workbook disclosure state (transient; E2 persists it). */
+  /** PR C — workbook disclosure state (persisted into the .dwk by PR E2). */
   expandedWorkbookIds: string[];
   toggleWorkbookExpanded: (id: string) => void;
-  /** PR C — current folder/workbook selection (transient; E2 persists it). */
+  /** PR C — current folder/workbook selection (persisted into the .dwk by PR E2). */
   librarySelection: LibrarySelection | null;
   setLibrarySelection: (selection: LibrarySelection | null) => void;
-  /** PR C — L0.6 remembered workbook child, workbook id -> LibraryNodeKey. */
+  /** PR C — L0.6 remembered workbook child, workbook id -> LibraryNodeKey.
+   *  Persisted into the .dwk by PR E2. */
   workbookLastChild: Record<string, string>;
   setWorkbookLastChild: (workbookId: string, childKey: string) => void;
 }

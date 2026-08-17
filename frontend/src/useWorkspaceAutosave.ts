@@ -33,6 +33,17 @@ export type AutosaveState = Pick<
   | "plotWindows"
   | "focusedWindowId"
   | "savedPlotSpecs"
+  // LIBRARY_WORKBOOK_UX_PLAN PR E2: the three Library-panel fields
+  // store/libraryPanel.ts's header marks "transient, E2 owns persistence".
+  | "librarySelection"
+  | "workbookLastChild"
+  | "expandedWorkbookIds"
+  // Post-merge review fix: two more persisted fields with NO trigger here —
+  // renameWorkbook/moveWorkbookToFolder only mutate `workbooks`, and saving/
+  // deleting a named ROI only mutates `savedRois`, so either edit could sit
+  // unsaved until some unrelated field also changed.
+  | "workbooks"
+  | "savedRois"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -52,7 +63,12 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.pages === prev.pages &&
     state.plotWindows === prev.plotWindows &&
     state.focusedWindowId === prev.focusedWindowId &&
-    state.savedPlotSpecs === prev.savedPlotSpecs
+    state.savedPlotSpecs === prev.savedPlotSpecs &&
+    state.librarySelection === prev.librarySelection &&
+    state.workbookLastChild === prev.workbookLastChild &&
+    state.expandedWorkbookIds === prev.expandedWorkbookIds &&
+    state.workbooks === prev.workbooks &&
+    state.savedRois === prev.savedRois
   );
 }
 
