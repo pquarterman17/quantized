@@ -14,7 +14,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { createFigureDocument } from "../lib/figureDocument";
 import { openFilePicker } from "../lib/openFilePicker";
+import { createPageDocument } from "../lib/pageDocument";
+import { defaultPlotView } from "../lib/plotview";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { useApp } from "../store/useApp";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -105,5 +108,54 @@ describe("Open workspace — confirms before replacing the library", () => {
     useApp.getState().loadWorkspace({ datasets: [ds("restored")], folders: [] });
     expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["restored"]);
+  });
+});
+
+// Sol's PR #152 review (P1): the confirm gate checked ONLY
+// `datasets.length`, so a dataset-free session that still held folders,
+// workbooks, frozen editable/publication figures, pages, reports, smart
+// folders, saved graphs, macro steps, or saved ROIs got silently replaced —
+// `replaceConfirmMessage` even NAMES some of those without ever gating on
+// them. `hasWorkspaceContent` (lib/openWorkspaceReplace.ts) now covers every persisted,
+// user-owned collection `loadWorkspace` resets unconditionally.
+describe("Open workspace — confirms for a dataset-free session that still holds other content", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [],
+      activeId: null,
+      selectedIds: [],
+      editableFigures: [
+        createFigureDocument({ id: "fig-1", name: "Frozen figure", datasetId: null, view: defaultPlotView() }),
+      ],
+      pages: [createPageDocument({ id: "page-1", name: "Panel", rows: 1, cols: 1 })],
+      reports: [{ id: "rep-1", name: "Report", datasetId: null, report: { title: "Report", sections: [] } }],
+    });
+  });
+
+  it("asks before discarding it (0 datasets is NOT the same as an empty session)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspace();
+    await pickWorkspaceFile(WS);
+    expect(askConfirm).toHaveBeenCalledOnce();
+  });
+
+  it("declining preserves the figure, page, and report", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspace();
+    await pickWorkspaceFile(WS);
+    const s = useApp.getState();
+    expect(s.editableFigures).toHaveLength(1);
+    expect(s.pages).toHaveLength(1);
+    expect(s.reports).toHaveLength(1);
+  });
+
+  it("accepting replaces them (the incoming empty doc carries none)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    openWorkspace();
+    await pickWorkspaceFile(WS);
+    const s = useApp.getState();
+    expect(s.editableFigures).toEqual([]);
+    expect(s.pages).toEqual([]);
+    expect(s.reports).toEqual([]);
   });
 });

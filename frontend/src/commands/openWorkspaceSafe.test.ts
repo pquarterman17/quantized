@@ -12,7 +12,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { createFigureDocument } from "../lib/figureDocument";
 import { openFilePicker } from "../lib/openFilePicker";
+import { createPageDocument } from "../lib/pageDocument";
+import { defaultPlotView } from "../lib/plotview";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { useApp } from "../store/useApp";
 import type { DataStruct } from "../lib/types";
@@ -94,6 +97,12 @@ beforeEach(() => {
     activeId: "a",
     selectedIds: [],
     toolWindowLayout: EXISTING_TOOL_LAYOUT,
+    // Reset explicitly: WS's own `workbooks: [{id:"w1",...}]` lands in the
+    // store the moment any test in this file ACCEPTS a replace (e.g.
+    // "accepting restores datasets and workbooks…" below), and would
+    // otherwise leak into every later test — including hasWorkspaceContent's
+    // "already empty" case, which now checks workbooks too (PR #152 P1 fix).
+    workbooks: [],
   });
 });
 
@@ -153,5 +162,51 @@ describe("Open Without Layout — confirms before replacing, then skips the save
     expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().plotWindows).toHaveLength(1);
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["r1"]);
+  });
+});
+
+// Sol's PR #152 review (P1) — see openWorkspaceConfirm.test.ts's matching
+// describe block for the full rationale: `hasWorkspaceContent`
+// (lib/openWorkspaceReplace.ts) gates BOTH open commands, not just
+// "open-workspace".
+describe("Open without layout — confirms for a dataset-free session that still holds other content", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [],
+      activeId: null,
+      selectedIds: [],
+      editableFigures: [
+        createFigureDocument({ id: "fig-1", name: "Frozen figure", datasetId: null, view: defaultPlotView() }),
+      ],
+      pages: [createPageDocument({ id: "page-1", name: "Panel", rows: 1, cols: 1 })],
+      reports: [{ id: "rep-1", name: "Report", datasetId: null, report: { title: "Report", sections: [] } }],
+    });
+  });
+
+  it("asks before discarding it (0 datasets is NOT the same as an empty session)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    expect(askConfirm).toHaveBeenCalledOnce();
+  });
+
+  it("declining preserves the figure, page, and report", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    const s = useApp.getState();
+    expect(s.editableFigures).toHaveLength(1);
+    expect(s.pages).toHaveLength(1);
+    expect(s.reports).toHaveLength(1);
+  });
+
+  it("accepting replaces them", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    const s = useApp.getState();
+    expect(s.editableFigures).toEqual([]);
+    expect(s.pages).toEqual([]);
+    expect(s.reports).toEqual([]);
   });
 });

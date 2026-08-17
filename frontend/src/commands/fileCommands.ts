@@ -22,6 +22,12 @@ import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import {
+  hasWorkspaceContent,
+  replaceConfirmMessage,
+  replaceWorkspace,
+  replaceWorkspaceSafely,
+} from "../lib/openWorkspaceReplace";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
 import { snapshotView } from "../lib/plotview";
@@ -30,7 +36,6 @@ import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
-import { stageWorkspaceRestore } from "../store/windowHydration";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
 // chokepoint lives in store/importDatasets.ts's `runImport` (covers ⌘O, the
@@ -50,32 +55,10 @@ function rejectIfImportRunning(): boolean {
 let demoCounter = 0;
 let sampleCounter = 0;
 
-/** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
- *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
- *  two branches (empty library, and the confirmed-replace path) so the
- *  three-statement sequence isn't duplicated. */
-function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
-  s().recordHistory("open workspace");
-  s().loadWorkspace(ws);
-  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
-}
-
-/** "Open Without Layout…" (PR E2's safe-open) — same replace as
- *  `replaceWorkspace` above, but `loadWorkspace`'s `skipLayout` option drops
- *  the incoming plotWindows/focusedWindowId/toolWindowLayout and lands on
- *  the single fresh window every layout-less doc already gets; everything
- *  else restores normally. */
-function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace): void {
-  s().recordHistory("open workspace without layout");
-  s().loadWorkspace(ws, { skipLayout: true });
-  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
-}
-
-/** Shared "you're about to replace N datasets" confirm body for both open
- *  commands below; `extra` appends the safe-open's layout-skip notice. */
-function replaceConfirmMessage(n: number, extra = ""): string {
-  return `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently loaded, plus every folder, report and saved figure.${extra} Save your work first if you need it.`;
-}
+// replaceWorkspace/replaceWorkspaceSafely/hasWorkspaceContent/
+// replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
+// shared by both open commands below — live in lib/openWorkspaceReplace.ts
+// (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
 
 /** Shared Open/Append-workspace flow (the only difference between the two
  *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
@@ -217,9 +200,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
       run: openWorkspaceCommand(s, "open", (ws) => {
-        const n = s().datasets.length;
-        if (n === 0) return replaceWorkspace(s, ws);
-        void askConfirm("Replace the current workspace?", replaceConfirmMessage(n), "Replace", true).then(
+        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws);
+        void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
           (ok) => ok && replaceWorkspace(s, ws),
         );
       }),
@@ -233,12 +215,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
       run: openWorkspaceCommand(s, "open", (ws) => {
-        const n = s().datasets.length;
-        if (n === 0) return replaceWorkspaceSafely(s, ws);
+        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
-        void askConfirm("Replace the current workspace?", replaceConfirmMessage(n, extra), "Replace", true).then(
-          (ok) => ok && replaceWorkspaceSafely(s, ws),
-        );
+        void askConfirm(
+          "Replace the current workspace?",
+          replaceConfirmMessage(s().datasets.length, extra),
+          "Replace",
+          true,
+        ).then((ok) => ok && replaceWorkspaceSafely(s, ws));
       }),
     },
     {
