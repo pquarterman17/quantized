@@ -180,7 +180,19 @@ describe("Open without layout — confirms for a dataset-free session that still
       ],
       pages: [createPageDocument({ id: "page-1", name: "Panel", rows: 1, cols: 1 })],
       reports: [{ id: "rep-1", name: "Report", datasetId: null, report: { title: "Report", sections: [] } }],
+      techniqueViewMemory: {},
     });
+  });
+
+  it("asks when the ONLY customization is nonempty techniqueViewMemory (Sol follow-up: persisted project content)", async () => {
+    useApp.setState({
+      editableFigures: [], pages: [], reports: [],
+      techniqueViewMemory: { "magnetometry.mvsh": { yScale: "linear" } } as never,
+    });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    openWorkspaceSafe();
+    await pickWorkspaceFile(WS);
+    expect(askConfirm).toHaveBeenCalledOnce();
   });
 
   it("asks before discarding it (0 datasets is NOT the same as an empty session)", async () => {

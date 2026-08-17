@@ -51,7 +51,12 @@ export function hasWorkspaceContent(s: StoreGet): boolean {
     st.smartFolders.length > 0 ||
     st.savedPlotSpecs.length > 0 ||
     st.macroSteps.length > 0 ||
-    st.savedRois.length > 0
+    st.savedRois.length > 0 ||
+    // Sol follow-up (PR #152): techniqueViewMemory is serialized in the
+    // .dwk, restored per project, and overwritten on load — customized
+    // plotting behavior is user-owned project content, not disposable
+    // preference state.
+    Object.keys(st.techniqueViewMemory).length > 0
   );
 }
 
