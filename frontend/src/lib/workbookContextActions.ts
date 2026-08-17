@@ -54,8 +54,9 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     run: (t) => {
       const picked = pickQuickPlotWorksheet(t.node.children, useApp.getState().workbookLastChild, t.node.entity.id);
       if (!picked) return; // fail-closed: the menu already disables this when nothing qualifies
-      useApp.getState().quickPlotDataset(picked.id);
-      t.onStageOpen?.();
+      // quickPlotDataset returns true only on success (fix #6) -- a
+      // fail-closed refusal has no plot to return the Stage to.
+      if (useApp.getState().quickPlotDataset(picked.id)) t.onStageOpen?.();
     },
   },
   {

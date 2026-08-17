@@ -3,10 +3,10 @@
 // RECOGNIZED data only -- it must never replace/mutate an existing figure,
 // never mutate raw worksheet data, and never produce a "plausible generic
 // plot" for unrecognized data. "Recognized" here is intentionally narrow: a
-// non-"generic" backend-stamped technique AND at least one plottable channel
-// beyond a bare index column. Template matching, "Quick Plot With...", and
-// the Quick Figure Builder's schema-signature inference are PR G/H -- this
-// module never reaches for those; unavailable states carry a precise reason
+// non-"generic" backend-stamped technique AND at least one genuinely
+// plottable channel. Template matching, "Quick Plot With...", and the Quick
+// Figure Builder's schema-signature inference are PR G/H -- this module
+// never reaches for those; unavailable states carry a precise reason
 // instead of guessing.
 //
 // `datasetViewDefaults` (store/windowDefaults.ts) is a store-adjacent PURE
@@ -20,9 +20,10 @@
 
 import { datasetViewDefaults } from "../store/windowDefaults";
 import type { LibraryNode } from "./libraryHierarchy";
-import { defaultDenseChannels } from "./plotdata";
+import { defaultDenseChannels, finitePairCount } from "./plotdata";
 import { defaultPlotView, type PlotView } from "./plotview";
 import { techniqueOf } from "./techniqueDefaults";
+import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { Dataset } from "./types";
 
 /** PR G's Configure Quick Plot / Quick Plot With... arrive with the Quick
@@ -36,55 +37,51 @@ export const NO_PLOTTABLE_COLUMNS_REASON = "no plottable columns in this workshe
  *  disabled placeholders agree on the wording. */
 export const CONFIGURE_QUICK_PLOT_STUB_REASON = "arrives with the Quick Figure Builder (PR G)";
 
-export type QuickPlotAvailability =
-  | { available: true; dataset: Dataset }
-  | { available: false; reason: string };
+// No dataset payload -- callers that need the dataset already have it (they
+// built the availability check FROM it); carrying it here was dead weight
+// nothing consumed.
+export type QuickPlotAvailability = { available: true } | { available: false; reason: string };
 
 /** The recognized+plottable gate (L0.7-L0.11): `techniqueOf(dataset) !==
- *  "generic"` AND the dataset is plottable (more than a bare index column,
- *  and `defaultDenseChannels` yields at least one channel). No header/unit/
- *  adjacency inference and no confirmation dialog -- those need PR G's
- *  builder. Distinct, honest reasons per failure mode so a disabled menu
- *  item can say exactly why. */
+ *  "generic"` AND at least one channel has a genuinely finite (x, y) pair
+ *  against `.time` (Quick Plot always seeds `xKey: null`, i.e. time-as-x --
+ *  see quickPlotFigureSeed). A single `labels` entry is a REAL channel
+ *  (DataStruct.labels never contains an index/x column -- that's `.time`,
+ *  a separate array; "Plot (make active)" already draws such datasets
+ *  fine), so there is no separate "bare column" guard here -- only the
+ *  finite-pair check below, which also catches the degenerate cases (all-
+ *  NaN values, or an all-NaN `.time` with otherwise-finite values -- a
+ *  dataset with genuinely no x to plot against). No header/unit/adjacency
+ *  inference and no confirmation dialog -- those need PR G's builder. */
 export function quickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
   if (techniqueOf(dataset) === "generic") {
     return { available: false, reason: CONFIGURE_QUICK_PLOT_REASON };
   }
-  // labels.length <= 1: a bare index/time column with nothing else to plot
-  // against it. defaultDenseChannels rarely returns [] outright (its
-  // "nothing dense" branch falls back to every candidate -- plotdata.ts
-  // ~203-210) so this guard is what actually catches the single-column case.
-  if (dataset.data.labels.length <= 1) {
-    return { available: false, reason: NO_PLOTTABLE_COLUMNS_REASON };
-  }
   const channels = defaultDenseChannels(dataset.data, null);
-  // defaultDenseChannels' own "nothing is dense" branch falls back to EVERY
-  // candidate (plotdata.ts ~203-210: "the plot is never emptied outright") --
-  // exactly right for an interactive plot deciding what to SHOW, but wrong
-  // for Quick Plot's availability gate, which must say no when a recognized
-  // worksheet's channels are entirely NaN rather than hand back an "available"
-  // figure with nothing drawable in it. Re-check for at least one finite
-  // value among the candidate channels the fallback returned.
-  const hasPlottableValue =
+  const xs = dataset.data.time;
+  const hasPlottablePair =
     channels.length > 0 &&
-    dataset.data.values.some((row) => channels.some((c) => Number.isFinite(row[c])));
-  if (!hasPlottableValue) {
+    channels.some((c) => finitePairCount(xs, dataset.data.values.map((row) => row[c])) > 0);
+  if (!hasPlottablePair) {
     return { available: false, reason: NO_PLOTTABLE_COLUMNS_REASON };
   }
-  return { available: true, dataset };
+  return { available: true };
 }
 
 /** L0.11's Quick Plot worksheet resolver for a workbook -- DISTINCT from
  *  L0.6's remembered-child resolver (`libraryOpen.ts`'s
  *  `openWorkbookRemembered`/`opensInStage`), which opens ANY remembered
  *  child kind and falls back to "first worksheet" unconditionally. This one
- *  additionally requires the candidate to pass `quickPlotAvailability`:
- *  (1) the remembered child, if it is a worksheet AND plottable; else
- *  (2) the first worksheet in source order (children are already
- *  source-ordered by the hierarchy builder) that is plottable; else
- *  (3) null. A remembered NON-worksheet child (a figure, a report) is
- *  silently ignored -- it just falls through to rule 2, it is never treated
- *  as "no worksheets". */
+ *  additionally requires the candidate to pass `quickPlotAvailability`, with
+ *  a STRICT no-silent-substitution rule for a remembered WORKSHEET
+ *  (contract decision, L0.11): (1) if the remembered child is a worksheet,
+ *  it is a deliberate destination -- return it if it passes
+ *  `quickPlotAvailability`, else return null OUTRIGHT (never fall through
+ *  to a different sheet the user didn't pick); (2) only when the remembered
+ *  key is ABSENT or names a NON-worksheet child (a figure, a report -- L0.6
+ *  remembers those too) does this fall through to the first worksheet in
+ *  source order (children are already source-ordered by the hierarchy
+ *  builder) that passes `quickPlotAvailability`; (3) else null. */
 export function pickQuickPlotWorksheet(
   children: readonly LibraryNode[],
   workbookLastChild: Record<string, string>,
@@ -92,8 +89,8 @@ export function pickQuickPlotWorksheet(
 ): Dataset | null {
   const rememberedKey = workbookLastChild[workbookId];
   const remembered = rememberedKey ? children.find((c) => c.key === rememberedKey) : undefined;
-  if (remembered && remembered.kind === "worksheet" && quickPlotAvailability(remembered.entity).available) {
-    return remembered.entity;
+  if (remembered && remembered.kind === "worksheet") {
+    return quickPlotAvailability(remembered.entity).available ? remembered.entity : null;
   }
   for (const child of children) {
     if (child.kind !== "worksheet") continue;
@@ -106,13 +103,23 @@ export function pickQuickPlotWorksheet(
  *  view (`defaultPlotView`) overlaid with this dataset's technique-driven
  *  defaults (axis scale, channel/error selection, hidden channels --
  *  `store/windowDefaults.ts`'s `datasetViewDefaults`, the SAME table a
- *  silent import/switch auto-plot uses). A Quick Plot's starting point is
- *  therefore indistinguishable from any other freshly-bound window, not a
- *  bespoke rendering path -- and it stays fully editable after. */
-export function quickPlotFigureSeed(dataset: Dataset): { name: string; view: PlotView } {
+ *  silent import/switch auto-plot uses) AND, when the caller supplies one,
+ *  a remembered per-technique view (`memory` -- `lib/techniqueViewMemory
+ *  .ts`'s `TechniqueViewMemoryMap`, e.g. AppState.techniqueViewMemory) so a
+ *  remembered MvsH view applies just like a silent dataset switch would. A
+ *  Quick Plot's starting point is therefore indistinguishable from any
+ *  other freshly-bound window, not a bespoke rendering path -- and it stays
+ *  fully editable after. `datasetViewDefaults` is called with no `previous`
+ *  dataset (Quick Plot creates a fresh figure, not a window rebind) --
+ *  `undefined` always counts as "a technique change", so the technique
+ *  table applies whenever `memory` has nothing remembered yet. */
+export function quickPlotFigureSeed(
+  dataset: Dataset,
+  memory: TechniqueViewMemoryMap = {},
+): { name: string; view: PlotView } {
   return {
     name: `Quick Plot — ${dataset.name}`,
-    view: { ...defaultPlotView(), ...datasetViewDefaults(dataset) },
+    view: { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory) },
   };
 }
 
@@ -124,10 +131,12 @@ export interface QuickPlotWorkbookGate {
 
 /** The workbook-row "Quick Plot" gate (L0.36): enabled exactly when
  *  `pickQuickPlotWorksheet` resolves. When it doesn't, pick the MOST
- *  SPECIFIC honest reason available: no worksheets at all; every worksheet
- *  failing `quickPlotAvailability` for the identical reason (most commonly
- *  "every candidate is unrecognized"); or the generic "none qualify" when
- *  the failures are a mix (unrecognized + unplottable, etc.) and no single
+ *  SPECIFIC honest reason available: a remembered WORKSHEET that itself
+ *  failed availability is why the resolver refused (the strict rule above)
+ *  -- surface ITS specific reason, never a different sheet's; otherwise, no
+ *  worksheets at all; every worksheet failing `quickPlotAvailability` for
+ *  the identical reason (most commonly "every candidate is unrecognized");
+ *  or the generic "none qualify" when the failures are a mix and no single
  *  reason covers all of them. */
 export function quickPlotWorkbookGate(
   children: readonly LibraryNode[],
@@ -136,6 +145,12 @@ export function quickPlotWorkbookGate(
 ): QuickPlotWorkbookGate {
   if (pickQuickPlotWorksheet(children, workbookLastChild, workbookId)) {
     return { enabled: true, reason: "" };
+  }
+  const rememberedKey = workbookLastChild[workbookId];
+  const remembered = rememberedKey ? children.find((c) => c.key === rememberedKey) : undefined;
+  if (remembered && remembered.kind === "worksheet") {
+    const a = quickPlotAvailability(remembered.entity);
+    if (!a.available) return { enabled: false, reason: a.reason };
   }
   const worksheets = children.filter(
     (c): c is Extract<LibraryNode, { kind: "worksheet" }> => c.kind === "worksheet",

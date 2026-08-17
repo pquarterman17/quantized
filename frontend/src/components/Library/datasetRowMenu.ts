@@ -29,17 +29,10 @@ import {
   runContextAction,
   type DatasetActionTarget,
 } from "../../lib/contextActions";
-import { datasetQuickPlotActions } from "../../lib/quickPlotActions";
+import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
-
-// L0.38's ordering: Open, Quick Plot, ... -- datasetCoreActions's own "plot
-// group" (Plot (make active) / Plot in new window) is the closest this
-// registry has to "Open" for a worksheet row, so Quick Plot splices in right
-// after it rather than after the WHOLE core-actions block (which would land
-// it after Duplicate/Rename/Reimport/Split too).
-const PLOT_GROUP_IDS = new Set(["dataset.plot", "dataset.plotInNewWindow"]);
 
 export function buildDatasetRowMenu(
   d: Dataset,
@@ -73,15 +66,11 @@ export function buildDatasetRowMenu(
   const moveToFolder = useApp.getState().moveDatasetToFolder;
 
   return [
-    ...buildMenuItems(
-      datasetCoreActions.filter((a) => PLOT_GROUP_IDS.has(a.id)),
-      target,
-    ),
-    ...buildMenuItems(datasetQuickPlotActions, target),
-    ...buildMenuItems(
-      datasetCoreActions.filter((a) => !PLOT_GROUP_IDS.has(a.id)),
-      target,
-    ),
+    // withQuickPlot (lib/quickPlotActions.ts): L0.38's ordering splices
+    // Quick Plot right after the "plot" group (Plot (make active) / Plot in
+    // new window), shared with paletteContextActions.ts so the two menu
+    // surfaces can't drift apart on where it lands.
+    ...buildMenuItems(withQuickPlot(datasetCoreActions), target),
     // Move into a folder (project-organization item 3). Flat list of folders +
     // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
     // header does the same.)

@@ -25,6 +25,7 @@ beforeEach(() => {
     plotWindows: [],
     focusedWindowId: null,
     editableFigures: [],
+    techniqueViewMemory: {},
     history: [],
     future: [],
     status: "",
@@ -32,10 +33,11 @@ beforeEach(() => {
 });
 
 describe("quickPlotDataset (PR F)", () => {
-  it("creates a NEW live editable figure, records history once, and opens it", () => {
+  it("creates a NEW live editable figure, records ONE history entry, and opens it, returning true", () => {
     const before = useApp.getState().editableFigures.length;
     const historyBefore = useApp.getState().history.length;
-    useApp.getState().quickPlotDataset("d1");
+    const result = useApp.getState().quickPlotDataset("d1");
+    expect(result).toBe(true);
 
     const { editableFigures, history, plotWindows } = useApp.getState();
     expect(editableFigures).toHaveLength(before + 1);
@@ -43,44 +45,90 @@ describe("quickPlotDataset (PR F)", () => {
     expect(doc.name).toBe("Quick Plot — d1.dat");
     expect(doc.data.mode).toBe("live");
     expect(doc.bindings.datasetId).toBe("d1");
-    // quickPlotDataset's own body calls recordHistory exactly once ("quick
-    // plot"); openEditableFigure's createWindow (store/windows.ts) records
-    // its own "create window" entry as it always does when it opens a
-    // document into a fresh window -- that is openEditableFigure's existing,
-    // independent undo contract, not something Quick Plot suppresses.
-    expect(history.length).toBe(historyBefore + 2);
-    expect(history.map((h) => h.label)).toEqual(
-      expect.arrayContaining(["quick plot", "create window"]),
-    );
+    // Review fix #4: the WHOLE gesture (window + document + attach + focus)
+    // is ONE undo entry -- createWindow's own recordHistory is the only one.
+    expect(history.length).toBe(historyBefore + 1);
 
     // opened: a plot window now shows this exact document.
     const opened = plotWindows.find((w) => w.kind === "plot" && w.document?.id === doc.id);
     expect(opened).toBeDefined();
   });
 
-  it("never replaces an existing figure — running it twice yields TWO documents with distinct ids", () => {
+  // Review fix #4 (red-first): the OLD code called its OWN recordHistory("quick
+  // plot") before delegating to openEditableFigure, whose internal createWindow
+  // ALSO calls recordHistory -- two stack entries for one gesture. Popping just
+  // the top ("create window") left the just-created FigureDocument stranded in
+  // editableFigures with no window showing it. ONE undo must remove BOTH.
+  it("ONE undo after quickPlotDataset removes the figure document AND the window entirely (fix #4)", () => {
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    useApp.getState().quickPlotDataset("d1");
+    expect(useApp.getState().editableFigures.length).toBe(figuresBefore + 1);
+    expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
+
+    useApp.getState().undo();
+
+    expect(useApp.getState().editableFigures.length).toBe(figuresBefore);
+    expect(useApp.getState().plotWindows.length).toBe(windowsBefore);
+  });
+
+  // Review fix #5: repeated Quick Plots on the same dataset must not mint
+  // identical figure names -- dedupe like the window-title convention
+  // (lib/plotview.ts's dedupeWindowTitle: "X", "X (2)", "X (3)", ...).
+  it("never replaces an existing figure — running it twice yields TWO documents with distinct ids AND distinct names", () => {
     useApp.getState().quickPlotDataset("d1");
     useApp.getState().quickPlotDataset("d1");
     const { editableFigures } = useApp.getState();
     expect(editableFigures).toHaveLength(2);
     expect(editableFigures[0].id).not.toBe(editableFigures[1].id);
+    expect(editableFigures.map((d) => d.name)).toEqual([
+      "Quick Plot — d1.dat",
+      "Quick Plot — d1.dat (2)",
+    ]);
     expect(editableFigures.every((doc) => doc.bindings.datasetId === "d1")).toBe(true);
   });
 
-  it("is a fail-closed no-op on an unrecognized (generic) dataset — no document added, no history recorded", () => {
+  it("is a fail-closed no-op on an unrecognized (generic) dataset — no document added, no history recorded, returns false", () => {
     useApp.setState({ datasets: [dataset("d1", "generic")] });
     const before = useApp.getState().editableFigures.length;
     const historyBefore = useApp.getState().history.length;
-    useApp.getState().quickPlotDataset("d1");
+    const result = useApp.getState().quickPlotDataset("d1");
+    expect(result).toBe(false);
     expect(useApp.getState().editableFigures).toHaveLength(before);
     expect(useApp.getState().history).toHaveLength(historyBefore);
     expect(useApp.getState().status).toContain("Quick Plot unavailable");
   });
 
-  it("is a fail-closed no-op when the dataset id does not exist", () => {
+  it("is a fail-closed no-op when the dataset id does not exist, returns false", () => {
     const before = useApp.getState().editableFigures.length;
-    useApp.getState().quickPlotDataset("does-not-exist");
+    const result = useApp.getState().quickPlotDataset("does-not-exist");
+    expect(result).toBe(false);
     expect(useApp.getState().editableFigures).toHaveLength(before);
     expect(useApp.getState().status).toContain("Quick Plot unavailable");
+  });
+
+  // Review fix #8: a remembered per-technique view (techniqueViewMemory)
+  // threads through to the seeded figure's view, just like a silent
+  // dataset switch would apply it.
+  it("threads the store's techniqueViewMemory into the seeded view (fix #8)", () => {
+    useApp.setState({
+      techniqueViewMemory: {
+        "magnetometry.mvsh": {
+          xKey: null,
+          yKeys: [1],
+          yScale: "log",
+          xScale: "linear",
+          seriesStyles: {},
+          seriesLabels: {},
+          seriesOrder: null,
+          errKeys: {},
+          hiddenChannels: [],
+          labels: {},
+        },
+      },
+    });
+    useApp.getState().quickPlotDataset("d1");
+    const doc = useApp.getState().editableFigures[0];
+    expect(doc.plot.view.yScale).toBe("log");
   });
 });

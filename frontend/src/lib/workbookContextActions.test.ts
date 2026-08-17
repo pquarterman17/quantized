@@ -63,6 +63,7 @@ beforeEach(() => {
     history: [],
     editableFigures: [],
     workbookLastChild: {},
+    plotWindows: [],
   });
 });
 
@@ -113,6 +114,50 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     const item = menuItemFor(find("workbook.configureQuickPlot"), target({ id: "w1", name: "W" }));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe("arrives with the Quick Figure Builder (PR G)");
+  });
+
+  // Review fix #2 (CONTRACT DECISION, red-first probe): a remembered
+  // worksheet that fails quickPlotAvailability refuses OUTRIGHT -- the menu
+  // must show DISABLED with sheet1's specific reason, never silently plot
+  // sheet2 instead. The old gate derived enabled/reason purely from
+  // pickQuickPlotWorksheet's (silently-substituting) result, so this read
+  // enabled:true and a run() would have plotted sheet2.
+  it("a remembered generic sheet1 + a recognized sheet2: DISABLED with sheet1's reason (fix #2)", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const generic: Dataset = {
+      ...recognizedDataset("sheet1", "w1"),
+      data: { ...recognizedDataset("sheet1", "w1").data, metadata: { technique: "generic" } },
+    };
+    const good = recognizedDataset("sheet2", "w1");
+    useApp.setState({ workbookLastChild: { w1: "worksheet:sheet1" } });
+    const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic, good]));
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe(
+      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+    );
+  });
+
+  // Review fix #6 (red-first): `run`'s local `picked` comes from the
+  // TARGET's own hierarchy snapshot (t.node.children), which can be stale
+  // relative to the live store by the time a click actually fires (menu
+  // built, then the dataset vanished from the store before the click lands
+  // -- the same class of race L0.7's fail-closed contract exists for).
+  // `picked` alone being truthy is NOT enough; quickPlotDataset's OWN
+  // re-check against the live store is what actually decides success, and
+  // its (false) return is what run() must gate onStageOpen on. The OLD
+  // code called onStageOpen unconditionally once picked was truthy.
+  it("run() does NOT invoke onStageOpen when quickPlotDataset itself fails closed, even though the local pick looked valid (fix #6)", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    // The live store's datasets no longer contains d1 -- quickPlotDataset's
+    // own re-check refuses even though `t.node.children` (built from a
+    // snapshot that DID include d1) still resolves a pick.
+    useApp.setState({ datasets: [] });
+    const onStageOpen = vi.fn();
+    const item = menuItemFor(find("workbook.quickPlot"), target(wb, [d1], { onStageOpen }));
+    item.run();
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+    expect(onStageOpen).not.toHaveBeenCalled();
   });
 });
 

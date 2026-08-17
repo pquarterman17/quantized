@@ -45,7 +45,7 @@ function menuItemFor<T>(a: ContextAction<T>, t: T): ActionMenuItem {
 const find = (id: string) => datasetQuickPlotActions.find((a) => a.id === id)!;
 
 beforeEach(() => {
-  useApp.setState({ datasets: [], editableFigures: [], history: [], status: "" });
+  useApp.setState({ datasets: [], editableFigures: [], plotWindows: [], history: [], status: "" });
 });
 
 describe("dataset.quickPlot", () => {
@@ -67,13 +67,22 @@ describe("dataset.quickPlot", () => {
 
   it("disabled with the precise no-plottable-columns reason", () => {
     const base = dataset("d1");
-    const ds: Dataset = { ...base, data: { ...base.data, values: [[1], [2], [3]], labels: ["A"], units: [""] } };
+    const ds: Dataset = { ...base, data: { ...base.data, values: [[NaN, NaN], [NaN, NaN], [NaN, NaN]] } };
     const item = menuItemFor(find("dataset.quickPlot"), target(ds));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe("no plottable columns in this worksheet");
   });
 
-  it("run() calls through to quickPlotDataset and invokes onStageOpen when supplied", () => {
+  // Review fix #1: a single real channel (one labels entry) plotted against
+  // time IS available -- no more "bare column" gate.
+  it("a single-channel dataset IS enabled (fix #1)", () => {
+    const base = dataset("d1");
+    const ds: Dataset = { ...base, data: { ...base.data, values: [[1], [2], [3]], labels: ["A"], units: [""] } };
+    const item = menuItemFor(find("dataset.quickPlot"), target(ds));
+    expect(item.disabled).toBe(false);
+  });
+
+  it("run() calls through to quickPlotDataset and invokes onStageOpen on success", () => {
     const ds = dataset("d1");
     useApp.setState({ datasets: [ds] });
     const onStageOpen = vi.fn();
@@ -82,6 +91,22 @@ describe("dataset.quickPlot", () => {
     expect(useApp.getState().editableFigures).toHaveLength(1);
     expect(useApp.getState().editableFigures[0].bindings.datasetId).toBe("d1");
     expect(onStageOpen).toHaveBeenCalledOnce();
+  });
+
+  // Review fix #6 (red-first): quickPlotDataset returns false on a
+  // fail-closed refusal -- run() must NOT invoke onStageOpen in that case
+  // (there is nothing to return the Stage to). The disabled menu item
+  // normally prevents this click, but `run` stays dispatchable on a
+  // disabled item (the registry convention -- actionMenuItem's own doc),
+  // so the guard has to hold even when called directly.
+  it("run() does NOT invoke onStageOpen when quickPlotDataset fails closed (fix #6)", () => {
+    const ds = dataset("d1", "generic"); // unrecognized -> quickPlotDataset refuses
+    useApp.setState({ datasets: [ds] });
+    const onStageOpen = vi.fn();
+    const item = menuItemFor(find("dataset.quickPlot"), target(ds, { onStageOpen }));
+    item.run();
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+    expect(onStageOpen).not.toHaveBeenCalled();
   });
 });
 
