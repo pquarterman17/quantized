@@ -111,9 +111,13 @@ describe("dataset.quickPlot", () => {
 });
 
 describe("dataset.configureQuickPlot", () => {
-  it("is always disabled with the PR G stub reason", () => {
-    const item = menuItemFor(find("dataset.configureQuickPlot"), target(dataset("d1")));
-    expect(item.disabled).toBe(true);
-    expect(item.title).toBe("arrives with the Quick Figure Builder (PR G)");
+  it("opens the Quick Figure Builder for recognized or unknown data without plotting", () => {
+    const ds = dataset("d1", "generic");
+    useApp.setState({ datasets: [ds], quickFigureBuilderDatasetId: null });
+    const item = menuItemFor(find("dataset.configureQuickPlot"), target(ds));
+    expect(item.disabled).toBe(false);
+    item.run();
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
+    expect(useApp.getState().editableFigures).toEqual([]);
   });
 });

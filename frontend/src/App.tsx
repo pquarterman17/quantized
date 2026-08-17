@@ -24,6 +24,7 @@ import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
+const QuickFigureBuilderWorkspace = lazy(() => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"));
 // E-c1 bundle pass: ~45 kB of Inspector cards off the pre-paint parse path.
 // The fallback keeps the grid column (same root class) so nothing shifts
 // while the chunk loads; the cards fill in immediately after first paint.
@@ -34,6 +35,7 @@ export default function App() {
   const rightCollapsed = useApp((s) => s.rightCollapsed);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
+  const quickFigureBuilderDatasetId = useApp((s) => s.quickFigureBuilderDatasetId);
   const [libraryViewMode, setLibraryViewMode] = useState<LibraryViewMode>(loadLibraryViewMode);
   const previousBrowseMode = useRef<Exclude<LibraryViewMode, "tiles">>(
     libraryViewMode === "details" ? "details" : "tree",
@@ -89,7 +91,11 @@ export default function App() {
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <div className={mainCls}>
         <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
-        {libraryViewMode === "tiles" ? (
+        {quickFigureBuilderDatasetId ? (
+          <Suspense fallback={<section className="qzk-quick-builder" aria-label="Quick Figure Builder" />}>
+            <QuickFigureBuilderWorkspace />
+          </Suspense>
+        ) : libraryViewMode === "tiles" ? (
           <Suspense fallback={<section className="qzk-library-workspace" aria-label="Library workspace" />}>
             <LibraryWorkspace onClose={closeLibraryWorkspace} />
           </Suspense>

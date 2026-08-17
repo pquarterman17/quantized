@@ -110,10 +110,22 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     expect(onStageOpen).toHaveBeenCalledOnce();
   });
 
-  it("Configure Quick Plot… is always disabled with the PR G stub reason", () => {
+  it("Configure Quick Plot… is disabled only when the workbook has no worksheets", () => {
     const item = menuItemFor(find("workbook.configureQuickPlot"), target({ id: "w1", name: "W" }));
     expect(item.disabled).toBe(true);
-    expect(item.title).toBe("arrives with the Quick Figure Builder (PR G)");
+    expect(item.title).toBe("this workbook has no worksheets");
+  });
+
+  it("Configure Quick Plot… opens the remembered worksheet even when it is unknown", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const unknown = { ...recognizedDataset("d2", "w1"), data: { ...d1.data, metadata: { technique: "generic" } } };
+    useApp.setState({ datasets: [d1, unknown], workbooks: [wb], workbookLastChild: { w1: "worksheet:d2" } });
+    const item = menuItemFor(find("workbook.configureQuickPlot"), target(wb, [d1, unknown]));
+    expect(item.disabled).toBe(false);
+    item.run();
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d2");
+    expect(useApp.getState().editableFigures).toEqual([]);
   });
 
   // Review fix #2 (CONTRACT DECISION, red-first probe): a remembered

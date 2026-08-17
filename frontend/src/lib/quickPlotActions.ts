@@ -10,7 +10,7 @@
 // outside its own definition, so this is the actual assembly seam, not
 // contextActions.ts itself, which has no line-budget room left).
 
-import { CONFIGURE_QUICK_PLOT_STUB_REASON, quickPlotAvailability } from "./quickPlot";
+import { quickPlotAvailability } from "./quickPlot";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { useApp } from "../store/useApp";
 
@@ -32,9 +32,9 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.configureQuickPlot",
     label: "Configure Quick Plot…",
-    enabled: () => false,
-    disabledReason: () => CONFIGURE_QUICK_PLOT_STUB_REASON,
-    run: () => {},
+    run: (t) => {
+      useApp.getState().openQuickFigureBuilder(t.dataset.id);
+    },
   },
 ];
 

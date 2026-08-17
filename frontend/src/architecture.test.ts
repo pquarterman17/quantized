@@ -715,6 +715,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // graphBuilder slice: UI state (open/closed), not persisted data
   graphBuilderOpen: "Graph Builder workshop visibility; UI state, transient",
   graphBuilderSeed: "seeded spec from another workflow; consumed on use, not persistent",
+  quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
 
   // history slice: the undo stack itself (not a field to undo INTO)
   history: "undo stack; the history system itself, not undoable data",

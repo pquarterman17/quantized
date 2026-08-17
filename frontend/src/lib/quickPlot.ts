@@ -51,10 +51,6 @@ import type { DataStruct, Dataset, Technique } from "./types";
 export const CONFIGURE_QUICK_PLOT_REASON =
   "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)";
 export const NO_PLOTTABLE_COLUMNS_REASON = "no plottable columns in this worksheet";
-/** Shared by the dataset AND workbook "Configure Quick Plot…" stubs
- *  (lib/quickPlotActions.ts, lib/workbookContextActions.ts) so both honest
- *  disabled placeholders agree on the wording. */
-export const CONFIGURE_QUICK_PLOT_STUB_REASON = "arrives with the Quick Figure Builder (PR G)";
 /** A technique whose data is 2D map-shaped (see quickPlotProfile's `is2DMap`
  *  check -- the SAME signal Stage tab routing uses, lib/stagetab.ts). */
 export const MAP_DATA_REASON = "2D map data — open it in the Map view; Quick Plot line figures don't apply";
@@ -215,6 +211,28 @@ export function pickQuickPlotWorksheet(
     if (quickPlotAvailability(child.entity).available) return child.entity;
   }
   return null;
+}
+
+/** Resolve the worksheet a workbook-level Configure Quick Plot action edits.
+ * Unlike Quick Plot itself, configuration intentionally accepts unknown or
+ * currently unplottable data: use the remembered worksheet when present,
+ * otherwise the first worksheet in source order. This deliberately diverges
+ * from `pickQuickPlotWorksheet`'s fallback when the remembered child is NOT
+ * a worksheet (e.g. a figure): Quick Plot falls back to the first AVAILABLE
+ * worksheet (skipping unrecognized ones), while Configure falls back to the
+ * literal first worksheet in source order regardless of availability -- it
+ * must work on workbooks with zero recognized sheets, since configuring
+ * unknown data is the whole point of the builder. */
+export function pickConfigureQuickPlotWorksheet(
+  children: readonly LibraryNode[],
+  workbookLastChild: Record<string, string>,
+  workbookId: string,
+): Dataset | null {
+  const rememberedKey = workbookLastChild[workbookId];
+  const remembered = rememberedKey ? children.find((child) => child.key === rememberedKey) : undefined;
+  if (remembered?.kind === "worksheet") return remembered.entity;
+  return children.find((child): child is Extract<LibraryNode, { kind: "worksheet" }> =>
+    child.kind === "worksheet")?.entity ?? null;
 }
 
 /** The new editable figure's name + starting view: the app's normal fresh

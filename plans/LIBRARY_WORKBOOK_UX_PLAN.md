@@ -3,9 +3,9 @@
 **Status:** Active — milestone 1; PR E-a wide Tile workspace implemented on
 `sol/library-e-wide-shell`, pending Claude review/PR
 **Created:** 2026-08-12  
-**Updated:** 2026-08-15 — ChatGPT-Sol implemented PR E-a after PRs #143/#144
-merged; wide workspace, canonical tiles, worksheet previews, selection/open,
-keyboard navigation, and unchanged-plot return are pending review
+**Updated:** 2026-08-16 — ChatGPT-Sol started PR G after E-c/E2 completed
+and PR F entered its final merge pass; G1's main-workspace shell, launch
+actions, and cancel-safe transient transaction are implemented pending review
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -768,6 +768,28 @@ build, and focused interaction coverage where appropriate.
 7. [ ] **PR G — Quick Figure Builder mapping slice.** Reuse the canonical
    editable-figure path; ship live preview, mapping, Cancel, and editable
    creation before advanced template management.
+   - [~] **G1 — focused shell and transaction (ChatGPT-Sol):** enable
+     worksheet/workbook **Configure Quick Plot…**, open a lazy main-workspace
+     surface over the unchanged Tree/Tiles/Stage context, hold only a transient
+     source worksheet ID, and make Cancel/Escape a zero-mutation exit. Unknown
+     data is deliberately accepted here; a vanished source fails closed.
+     Implemented 2026-08-16 on `sol/quick-figure-builder-g1`, pending Claude
+     review/PR. **Review ruling (2026-08-17):** "Configure Quick Plot…" is
+     ALWAYS enabled when a worksheet exists, even when Quick Plot itself would
+     succeed — a deliberate widening of the L0.9 escape-hatch framing, since
+     the builder is the manual plotting path (Origin's Plot Setup analogue,
+     always reachable), while Quick Plot remains the recognized-data
+     shortcut. This supersedes the F-era always-disabled stub contract, whose
+     test was replaced in this PR.
+   - [ ] **G2 — mapping draft and role assignment:** one local mapping state;
+     X/Y/error/ignore roles through pointer and keyboard-accessible actions.
+   - [ ] **G3 — live canonical preview:** every valid draft change appears in
+     the center preview without creating a parallel figure-state model.
+   - [ ] **G4 — create editable figure:** commit once through the canonical
+     FigureDocument lifecycle and open the result as an ordinary editable plot.
+   - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
+     explanation, real-browser keyboard/cancel/error-bar coverage, reopen proof,
+     and visual acceptance at common desktop sizes.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,

@@ -19,7 +19,7 @@
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
 import type { LibraryNode } from "./libraryHierarchy";
-import { CONFIGURE_QUICK_PLOT_STUB_REASON, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
+import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { workbookDeleteBlockers } from "../store/workbookActions";
@@ -62,9 +62,13 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.configureQuickPlot",
     label: "Configure Quick Plot…",
-    enabled: () => false,
-    disabledReason: () => CONFIGURE_QUICK_PLOT_STUB_REASON,
-    run: () => {},
+    enabled: (t) => t.node.children.some((child) => child.kind === "worksheet"),
+    disabledReason: () => "this workbook has no worksheets",
+    run: (t) => {
+      const s = useApp.getState();
+      const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
+      if (worksheet) s.openQuickFigureBuilder(worksheet.id);
+    },
   },
   {
     id: "workbook.browse",
