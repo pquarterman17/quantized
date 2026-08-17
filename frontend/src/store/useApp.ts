@@ -5,7 +5,6 @@ import { create } from "zustand";
 
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import {
-  fetchBookData,
   fftSpectral,
   fitModel,
   guessImportSettings,
@@ -14,6 +13,7 @@ import {
   statsDescriptive,
   uploadFile,
 } from "../lib/api";
+import { installBookData } from "../lib/bookData";
 import { cloneDataStruct } from "../lib/dataset";
 import { centralDifference, sortByX, type DerivativeResult } from "../lib/differentiate";
 import { computeCursorReadout } from "../lib/gadgetCursors";
@@ -131,7 +131,6 @@ import type {
   Annotation,
   AxisFormat, AxisScale,
   BaselineOverlay,
-  BookSource,
   CalcResult,
   ChannelRole,
   ComputedColumn,
@@ -165,45 +164,9 @@ export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_i
 const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 // (window ids: see store/windows.ts — the MDI slice owns its own sequence)
 
-/** In-flight lazy-book fetches (ORIGIN_FILE_DECODE_PLAN #38), single-flight
- *  and keyed by dataset id — a book bound into two places at once (e.g. two
- *  plot windows) triggers exactly one HTTP fetch. Module scope, not store
- *  state: a Promise has no business flowing through Zustand subscribers or
- *  (accidentally) a .dwk serialize. */
-const _bookFetches = new Map<string, Promise<void>>();
-
-/** Fetch one dataset's full data and install it, single-flight. Resolves
- *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
- *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
- *  (the .dwk pre-save resolver) awaits the SAME promise and lets a failure
- *  propagate so the caller can abort the save. */
-function installBookData(id: string, source: BookSource): Promise<void> {
-  const inFlight = _bookFetches.get(id);
-  if (inFlight) return inFlight;
-  const p = fetchBookData(source)
-    .then((full) => {
-      useApp.setState((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id
-            ? {
-                ...d,
-                data: full,
-                pending: undefined,
-                // Row-state indices were against the PREVIEW rows (#50/#53)
-                // — they no longer mean anything against the real data.
-                excludedRows: undefined,
-                filter: undefined,
-              }
-            : d,
-        ),
-      }));
-    })
-    .finally(() => {
-      _bookFetches.delete(id);
-    });
-  _bookFetches.set(id, p);
-  return p;
-}
+// (single-flight lazy-book resolution — ORIGIN_FILE_DECODE_PLAN #38 —
+// extracted to lib/bookData.ts under this module's size ratchet; the three
+// resolve* actions below pass their own `set`.)
 
 // (mainWindow / focusTransientReset / datasetViewDefaults / focusedRebindPatch /
 // retargetPassiveRebind moved to store/windows.ts with the window slice —
@@ -1188,7 +1151,7 @@ export const useApp = create<AppState>((set, get) => ({
   ensureBookData: (id) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds?.pending) return;
-    installBookData(id, ds.pending).catch((e) => {
+    installBookData(set, id, ds.pending).catch((e) => {
       toast(
         `couldn't load full data for "${ds.name}" — ${e instanceof Error ? e.message : "error"}`,
         "danger",
@@ -1197,7 +1160,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   resolvePendingDatasets: async () => {
     const pending = get().datasets.filter((d) => d.pending);
-    await Promise.all(pending.map((d) => installBookData(d.id, d.pending!)));
+    await Promise.all(pending.map((d) => installBookData(set, d.id, d.pending!)));
   },
   resolveDataset: async (id) => {
     const ds = get().datasets.find((d) => d.id === id);
@@ -1208,7 +1171,7 @@ export const useApp = create<AppState>((set, get) => ({
       toast(`fetching full data for "${ds.name}"…`);
     }, 400);
     try {
-      await installBookData(id, ds.pending);
+      await installBookData(set, id, ds.pending);
     } finally {
       clearTimeout(timer);
     }
