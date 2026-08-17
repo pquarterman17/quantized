@@ -1,13 +1,32 @@
-// Quick Plot availability + worksheet resolver (PR F; plan L0.7-L0.11,
-// bounded by L0.14/L0.37). Quick Plot creates a NEW editable figure from
-// RECOGNIZED data only -- it must never replace/mutate an existing figure,
-// never mutate raw worksheet data, and never produce a "plausible generic
-// plot" for unrecognized data. "Recognized" here is intentionally narrow: a
-// non-"generic" backend-stamped technique AND at least one genuinely
-// plottable channel. Template matching, "Quick Plot With...", and the Quick
-// Figure Builder's schema-signature inference are PR G/H -- this module
-// never reaches for those; unavailable states carry a precise reason
-// instead of guessing.
+// Quick Plot availability + worksheet resolver + technique profile (PR F;
+// plan L0.7-L0.11, bounded by L0.14/L0.37). Quick Plot creates a NEW
+// editable figure from RECOGNIZED data only -- it must never replace or
+// mutate an existing figure, never mutate raw worksheet data, and never
+// produce a "plausible generic plot" for unrecognized OR unsupported data.
+//
+// "Recognized" is a TWO-part gate: (1) `quickPlotProfile` -- a BOUNDED,
+// explicit per-technique profile (Sol's review, OPTION 1: bounded, not a
+// full schema-signature system -- that stays PR H) deciding whether this
+// technique's CANONICAL rendering is one Quick Plot actually knows how to
+// build; (2) the finite-pair plottability check below. A technique stamp
+// alone was never sufficient (the P1 this module now closes): `xrd.rsm`
+// (a 2D reciprocal-space map) used to pass a bare "non-generic" gate and
+// Quick Plot would build an ordinary LINE figure out of scattered x/y/z
+// map columns -- a scientifically unsupported rendering nothing asked for.
+//
+// The canonical LINE mapping every allowlisted technique shares: shared-X,
+// multi-Y -- every non-x channel plotted against `.time` as an ordinary
+// series (`defaultPlotView`/`datasetViewDefaults`'s `xKey: null` seed).
+// Per-column explicit-X or XYXY-paired layouts are NEVER re-inferred here;
+// that normalization already happened at IMPORT TIME (the parser puts the
+// resolved x axis in `.time`, one array, regardless of how the source file
+// laid its columns out) -- by the time a Dataset reaches this module, x
+// live in exactly one place. A genuinely AMBIGUOUS multi-column mapping
+// (more than one plausible x/y pairing, needing the user's own compact
+// confirmation -- L0.10) is explicitly OUT of bounds for this bounded
+// profile; it needs PR G's Quick Figure Builder, which can ask. This module
+// only ever says "this technique's ONE canonical shape is a line plot" or
+// refuses with a reason -- it never offers a choice.
 //
 // `datasetViewDefaults` (store/windowDefaults.ts) is a store-adjacent PURE
 // function -- it takes a Dataset and returns a Partial<PlotView>, no
@@ -20,11 +39,11 @@
 
 import { datasetViewDefaults } from "../store/windowDefaults";
 import type { LibraryNode } from "./libraryHierarchy";
-import { defaultDenseChannels, finitePairCount } from "./plotdata";
+import { is2DMap } from "./mapdata";
 import { defaultPlotView, type PlotView } from "./plotview";
 import { techniqueOf } from "./techniqueDefaults";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
-import type { Dataset } from "./types";
+import type { DataStruct, Dataset, Technique } from "./types";
 
 /** PR G's Configure Quick Plot / Quick Plot With... arrive with the Quick
  *  Figure Builder -- named once here so every disabled stub (the menu
@@ -36,36 +55,132 @@ export const NO_PLOTTABLE_COLUMNS_REASON = "no plottable columns in this workshe
  *  (lib/quickPlotActions.ts, lib/workbookContextActions.ts) so both honest
  *  disabled placeholders agree on the wording. */
 export const CONFIGURE_QUICK_PLOT_STUB_REASON = "arrives with the Quick Figure Builder (PR G)";
+/** A technique whose data is 2D map-shaped (see quickPlotProfile's `is2DMap`
+ *  check -- the SAME signal Stage tab routing uses, lib/stagetab.ts). */
+export const MAP_DATA_REASON = "2D map data — open it in the Map view; Quick Plot line figures don't apply";
+/** Fail-closed default for a technique that is neither generic, on the line
+ *  allowlist, nor map-shaped -- most likely a FUTURE technique tag this
+ *  table hasn't been taught yet. Never silently treated as line-plottable. */
+export const UNSUPPORTED_TECHNIQUE_REASON =
+  "this data type isn't supported by Quick Plot yet — Configure Quick Plot arrives with the Quick Figure Builder (PR G)";
+
+/** The techniques whose canonical rendering IS the shared-X, multi-Y dense-
+ *  channel line mapping -- an explicit ALLOWLIST, not "everything non-
+ *  generic". Adding a technique here is a deliberate claim that its default
+ *  plot is exactly that shape; xrd.rsm is deliberately ABSENT (its
+ *  canonical view is a 2D map, not a line plot -- see quickPlotProfile). */
+const LINE_PLOT_TECHNIQUES: ReadonlySet<Technique> = new Set([
+  "magnetometry.mvsh",
+  "magnetometry.mvst",
+  "xrd.powder",
+  "reflectometry",
+  "sims",
+  "transport",
+  "spectroscopy",
+]);
+
+export type QuickPlotProfile = { supported: true; mode: "line" } | { supported: false; reason: string };
+
+/** The bounded per-technique profile (Sol's review, OPTION 1): does Quick
+ *  Plot know a canonical rendering for this dataset's technique, and if so
+ *  which one? `"generic"` keeps its existing PR G reason; a technique on
+ *  `LINE_PLOT_TECHNIQUES` is `{ supported: true; mode: "line" }`; anything
+ *  else FAILS CLOSED (Sol's requirement for unproven technique/mode
+ *  combinations) rather than defaulting to line. `is2DMap` (lib/mapdata.ts)
+ *  is the app's own canonical "this is 2D map data" signal -- the same one
+ *  Stage tab routing (lib/stagetab.ts's `nextStageTab`/`plotIntentStageTab`)
+ *  uses to send a dataset to the Map view instead of the Plot view -- so a
+ *  map-shaped dataset (today: xrd.rsm) gets the specific, honest map
+ *  reason; a technique that is neither generic, line-allowlisted, nor
+ *  map-shaped (a genuinely unknown FUTURE tag) gets the generic fail-closed
+ *  reason instead of guessing. */
+export function quickPlotProfile(dataset: Dataset): QuickPlotProfile {
+  const tech = techniqueOf(dataset);
+  if (tech === "generic") return { supported: false, reason: CONFIGURE_QUICK_PLOT_REASON };
+  if (LINE_PLOT_TECHNIQUES.has(tech)) return { supported: true, mode: "line" };
+  if (is2DMap(dataset.data)) return { supported: false, reason: MAP_DATA_REASON };
+  return { supported: false, reason: UNSUPPORTED_TECHNIQUE_REASON };
+}
 
 // No dataset payload -- callers that need the dataset already have it (they
 // built the availability check FROM it); carrying it here was dead weight
 // nothing consumed.
 export type QuickPlotAvailability = { available: true } | { available: false; reason: string };
 
-/** The recognized+plottable gate (L0.7-L0.11): `techniqueOf(dataset) !==
- *  "generic"` AND at least one channel has a genuinely finite (x, y) pair
- *  against `.time` (Quick Plot always seeds `xKey: null`, i.e. time-as-x --
- *  see quickPlotFigureSeed). A single `labels` entry is a REAL channel
- *  (DataStruct.labels never contains an index/x column -- that's `.time`,
- *  a separate array; "Plot (make active)" already draws such datasets
- *  fine), so there is no separate "bare column" guard here -- only the
- *  finite-pair check below, which also catches the degenerate cases (all-
- *  NaN values, or an all-NaN `.time` with otherwise-finite values -- a
- *  dataset with genuinely no x to plot against). No header/unit/adjacency
- *  inference and no confirmation dialog -- those need PR G's builder. */
-export function quickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
-  if (techniqueOf(dataset) === "generic") {
-    return { available: false, reason: CONFIGURE_QUICK_PLOT_REASON };
+/** Cache the resolved availability keyed on the DataStruct OBJECT identity
+ *  (the "thumbnail revision" pattern lib/plotdata.ts's `denseChannelsCache`
+ *  already uses): a Dataset's `.data` is a frozen, replaced-not-mutated
+ *  object (CLAUDE.md's data contract), so a cache entry is valid for
+ *  exactly as long as the object it's keyed on survives -- no separate
+ *  invalidation logic needed. Availability is recomputed on every Library
+ *  row render (menu gating) and workbook-row gating checks it once per
+ *  candidate worksheet, so a repeat call being allocation- and scan-free
+ *  matters (P2 review fix). */
+const availabilityCache = new WeakMap<DataStruct, QuickPlotAvailability>();
+
+/** Row-by-row, first-match-wins: does channel `c` have at least one row
+ *  where BOTH `.time` and the value are finite? Allocation-free (no
+ *  `.map()` column copy) and exits at the FIRST qualifying row instead of
+ *  counting every pair like `lib/plotdata.ts`'s `finitePairCount` (which
+ *  answers "how dense", a different, more expensive question this gate
+ *  doesn't need to ask). */
+function hasFinitePair(data: DataStruct, channel: number): boolean {
+  const { time, values } = data;
+  const n = Math.min(time.length, values.length);
+  for (let i = 0; i < n; i++) {
+    if (Number.isFinite(time[i]) && Number.isFinite(values[i][channel])) return true;
   }
-  const channels = defaultDenseChannels(dataset.data, null);
-  const xs = dataset.data.time;
-  const hasPlottablePair =
-    channels.length > 0 &&
-    channels.some((c) => finitePairCount(xs, dataset.data.values.map((row) => row[c])) > 0);
-  if (!hasPlottablePair) {
-    return { available: false, reason: NO_PLOTTABLE_COLUMNS_REASON };
+  return false;
+}
+
+/** The channels a fresh Quick Plot line figure would show: the
+ *  `metadata.default_value_channels` parser hint when present and valid
+ *  (reflectometry .dat's R+fit pick, etc.), else every channel. Quick Plot
+ *  always seeds `xKey: null` (time-as-x), so this deliberately duplicates
+ *  ONLY the hint-reading half of `lib/plotdata.ts`'s `defaultDenseChannels`
+ *  -- never its O(channels x rows) density-ranking SCAN, which decides
+ *  which subset is dense ENOUGH to show by default. That distinction never
+ *  changes this gate's boolean answer: `defaultDenseChannels` only ever
+ *  NARROWS within a non-empty candidate list (and falls back to the full
+ *  list rather than emptying it outright), so its own returned set always
+ *  contains the single densest candidate whenever ANY candidate has a
+ *  finite pair -- checking "any candidate at all" here is provably
+ *  equivalent to checking density-filtered candidates, just without paying
+ *  for the ranking scan or its `.map()` allocations. */
+function candidateChannels(data: DataStruct): readonly number[] {
+  const hint = (data.metadata ?? {})["default_value_channels"];
+  if (Array.isArray(hint)) {
+    const picks = hint.filter(
+      (v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < data.labels.length,
+    );
+    if (picks.length > 0) return picks;
   }
+  return data.labels.map((_, i) => i);
+}
+
+function computeQuickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
+  const profile = quickPlotProfile(dataset);
+  if (!profile.supported) return { available: false, reason: profile.reason };
+  const hasPlottablePair = candidateChannels(dataset.data).some((c) => hasFinitePair(dataset.data, c));
+  if (!hasPlottablePair) return { available: false, reason: NO_PLOTTABLE_COLUMNS_REASON };
   return { available: true };
+}
+
+/** The recognized+plottable gate (L0.7-L0.11): `quickPlotProfile` must
+ *  approve this dataset's technique (the bounded per-technique allowlist --
+ *  see its doc for why a bare "non-generic" check is not enough) AND at
+ *  least one channel has a genuinely finite (x, y) pair against `.time`
+ *  (Quick Plot always seeds `xKey: null`, i.e. time-as-x -- see
+ *  quickPlotFigureSeed). No header/unit/adjacency inference and no
+ *  confirmation dialog -- those need PR G's builder. Cached per `dataset
+ *  .data` object identity (P2 review fix) -- see `availabilityCache`'s
+ *  doc for why that key is safe. */
+export function quickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
+  const cached = availabilityCache.get(dataset.data);
+  if (cached) return cached;
+  const result = computeQuickPlotAvailability(dataset);
+  availabilityCache.set(dataset.data, result);
+  return result;
 }
 
 /** L0.11's Quick Plot worksheet resolver for a workbook -- DISTINCT from
@@ -106,21 +221,38 @@ export function pickQuickPlotWorksheet(
  *  silent import/switch auto-plot uses) AND, when the caller supplies one,
  *  a remembered per-technique view (`memory` -- `lib/techniqueViewMemory
  *  .ts`'s `TechniqueViewMemoryMap`, e.g. AppState.techniqueViewMemory) so a
- *  remembered MvsH view applies just like a silent dataset switch would. A
- *  Quick Plot's starting point is therefore indistinguishable from any
- *  other freshly-bound window, not a bespoke rendering path -- and it stays
- *  fully editable after. `datasetViewDefaults` is called with no `previous`
- *  dataset (Quick Plot creates a fresh figure, not a window rebind) --
- *  `undefined` always counts as "a technique change", so the technique
- *  table applies whenever `memory` has nothing remembered yet. */
+ *  remembered MvsH view applies just like a silent dataset switch would.
+ *  `datasetViewDefaults` already seeds `errKeys` (`defaultErrKeys`) and
+ *  `hiddenChannels` (`originHiddenChannels`) from the dataset's own error-
+ *  role/Origin-designation metadata, so a dataset with paired error columns
+ *  or Origin-hidden X/error columns gets those carried into the seed for
+ *  free -- this is the canonical mapping ALREADY handling them, not new
+ *  inference layered on top.
+ *
+ *  Creation consumes the SAME `quickPlotProfile` resolution `quickPlot
+ *  Availability` composes (one source of truth for both -- Sol's review):
+ *  the `switch` below is deliberately exhaustive over `QuickPlotProfile`'s
+ *  `mode` union so a FUTURE mode (added the day this bounded allowlist
+ *  grows) fails to compile here until it earns its own creation branch,
+ *  instead of silently falling through to the line mapping. Reaching the
+ *  `!profile.supported` branch is a caller-contract violation --
+ *  store/quickPlotAction.ts's `quickPlotDataset` is the sole caller and
+ *  always gates on `quickPlotAvailability` (hence this same profile) first. */
 export function quickPlotFigureSeed(
   dataset: Dataset,
   memory: TechniqueViewMemoryMap = {},
 ): { name: string; view: PlotView } {
-  return {
-    name: `Quick Plot — ${dataset.name}`,
-    view: { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory) },
-  };
+  const profile = quickPlotProfile(dataset);
+  if (!profile.supported) {
+    throw new Error(`quickPlotFigureSeed called on an unsupported dataset ("${dataset.name}")`);
+  }
+  switch (profile.mode) {
+    case "line":
+      return {
+        name: `Quick Plot — ${dataset.name}`,
+        view: { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory) },
+      };
+  }
 }
 
 export interface QuickPlotWorkbookGate {
