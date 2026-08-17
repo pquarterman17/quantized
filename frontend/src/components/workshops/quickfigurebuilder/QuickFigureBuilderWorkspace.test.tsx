@@ -17,6 +17,24 @@ const dataset: Dataset = {
   },
 };
 
+// G4 review round, FIX 2: a dataset with a worksheet-level (Inspector
+// Channels-card) role on a channel that is NOT auto-inferred as an error
+// column, so it starts out ignored by `initialQuickFigureMapping` and can be
+// explicitly reassigned to Y through the builder's own role menu (which is
+// agnostic of `channelRoles` -- see quickFigurePreview.ts's FIX 2 comment).
+const roleDataset: Dataset = {
+  id: "d2",
+  name: "roled.csv",
+  data: {
+    time: [0, 1, 2],
+    values: [[2, 30], [4, 40], [6, 50]],
+    labels: ["signal", "flagged"],
+    units: ["V", "V"],
+    metadata: {},
+  },
+  channelRoles: { 1: "ignore" },
+};
+
 beforeEach(() => {
   useApp.setState({
     datasets: [dataset],
@@ -92,6 +110,23 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     } finally {
       useApp.setState({ createQuickFigureFromMapping: realAction });
     }
+  });
+
+  // G4 review round, FIX 2 (RED-FIRST): the created figure drops a channel
+  // carrying a worksheet-level Label/Ignore role even when explicitly
+  // assigned to Y (effectiveChannels filters it, quickFigureCommit does
+  // not) -- L0.36 requires a visible reason rather than a silently
+  // mismatched preview.
+  it("shows a hint when a Label/Ignore-role channel is explicitly assigned to Y", () => {
+    useApp.setState({ datasets: [roleDataset], quickFigureBuilderDatasetId: "d2" });
+    render(<QuickFigureBuilderWorkspace />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for flagged" }), { target: { value: "y" } });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      '"flagged" is marked Label/Ignore in this worksheet and won\'t appear on the created figure',
+    );
   });
 
   it("offers keyboard-accessible X, Y, ignore, and targeted error roles", () => {

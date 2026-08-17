@@ -302,3 +302,97 @@ describe("usePlotPayload — G4 figure-scoped error honesty", () => {
     expect(result.current.errorSpans.size).toBe(0);
   });
 });
+
+// G4 review round, FIX 1 (P1, RED-FIRST): the decimation-eligibility gate
+// used to read ONLY `active.errorRoles?.length`, blind to a focused
+// window's own rich `documentErrors`. A >10,000-row dataset whose document
+// carries rich errors on an EMPTY `errorRoles` passed the gate: the server
+// bucket-decimated the payload while `buildErrorSpans` built full-resolution
+// magnitude arrays, and `errorSpansPlugin` (uplotOverlays.ts) indexes those
+// positionally against the (shorter, bucketed) xs -- silently wrong
+// uncertainty bars, the exact misalignment `lib/plotDecimate.ts`'s error-bar
+// doc comment warns about. `fetchPlotMock`'s 7th positional arg is
+// `decimateWidth` (see `lib/plotdata.ts`'s `fetchPlot` signature) --
+// non-null means a decimation request was actually sent.
+function bigErrorDataset(withDatasetErrorRoles: boolean): Dataset {
+  const n = 20_000;
+  const ds: Dataset = {
+    id: "big-err",
+    name: "big-err",
+    data: {
+      time: Array.from({ length: n }, (_, i) => i),
+      values: Array.from({ length: n }, (_, i) => [Math.sin(i), 0.1, 0.1]),
+      labels: ["signal", "eplus", "eminus"],
+      units: ["", "", ""],
+      metadata: {},
+    },
+  };
+  if (withDatasetErrorRoles) {
+    ds.errorRoles = [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ];
+  }
+  return ds;
+}
+
+const BIG_RICH_ERRORS: ErrorBinding[] = [
+  { channel: 1, target: 0, axis: "y", side: "+" },
+  { channel: 2, target: 0, axis: "y", side: "-" },
+];
+
+describe("usePlotPayload — G4 review round: decimation gate honors document errors (P1 fix)", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("big-err", false));
+  });
+
+  // RED-FIRST: fails before the fix (decimateWidth was non-null — the gate
+  // never consulted `documentErrors`).
+  it("a rich document on a dataset with EMPTY errorRoles disables server decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({
+        active: bigErrorDataset(false),
+        yKeys: [0],
+        documentErrors: BIG_RICH_ERRORS,
+      }),
+    });
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1);
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).toBeNull();
+  });
+
+  // Control: the SAME rich errors, sourced from `dataset.errorRoles` instead
+  // (the pre-existing path) — decimation was already, and stays, disabled.
+  it("control: rich errors on dataset.errorRoles (no document) already disables decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigErrorDataset(true), yKeys: [0] }),
+    });
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).toBeNull();
+  });
+
+  // Control: no perf regression for plain windows — empty documentErrors AND
+  // empty dataset.errorRoles on the same big dataset still decimates.
+  it("control: empty documentErrors + empty errorRoles on a big dataset still decimates", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigErrorDataset(false), yKeys: [0] }),
+    });
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).not.toBeNull();
+  });
+
+  // Control: a legacy-only (y/both) document on the same big, error-role-free
+  // dataset must NOT disable decimation -- only RICH document errors do.
+  it("control: a legacy-only document does not disable decimation", () => {
+    const legacyOnly: ErrorBinding[] = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({
+        active: bigErrorDataset(false),
+        yKeys: [0],
+        documentErrors: legacyOnly,
+      }),
+    });
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).not.toBeNull();
+  });
+});

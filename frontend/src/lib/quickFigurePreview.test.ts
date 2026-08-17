@@ -106,3 +106,67 @@ describe("quickFigurePreview — G2 error-binding fixes stay fixed at the render
     expect(span).toMatchObject({ axis: "y", plus: [5, 5], minus: [5, 5] });
   });
 });
+
+// G4 review round, FIX 2 (P2, RED-FIRST): verified that the Quick Figure
+// Builder's own mapping UI (`QuickMappingPanel`) is agnostic of
+// `Dataset.channelRoles` -- a user CAN explicitly assign a role-carrying
+// (label/ignore) channel to Y there. The created figure renders through
+// `effectiveChannels` (lib/plotdata.ts), which drops any such channel EVEN
+// when explicitly listed in `yKeys` -- so the preview must apply the SAME
+// filter, or it shows a series the real figure silently drops.
+describe("quickFigurePreview — G4 review round: matches the created figure's channelRoles filtering (FIX 2)", () => {
+  const roleData: DataStruct = {
+    time: [0, 1, 2],
+    values: [[1, 2, 100], [3, 4, 200], [5, 6, 300]],
+    labels: ["kept", "ignoredButAssigned", "note"],
+    units: ["", "", ""],
+    metadata: {},
+  };
+
+  // RED-FIRST: fails before the fix (channel 1 was plotted verbatim,
+  // ignoring `channelRoles` entirely).
+  it("drops a channel explicitly assigned to Y that also carries a channelRoles entry", () => {
+    const m: QuickFigureMapping = {
+      xKey: null,
+      yKeys: [0, 1], // channel 1 is explicitly Y despite its role below
+      errorBindings: [],
+      ignoredKeys: [],
+    };
+    const render = quickFigurePreview(roleData, m, "line", { 1: "ignore" });
+    expect(render.kind).toBe("xy");
+    if (render.kind !== "xy") return;
+    expect(render.payload.series.map((s) => s.label)).toEqual(["kept"]);
+    expect(render.payload.data).toHaveLength(2); // x + exactly one Y column
+  });
+
+  // Control: with NO channelRoles passed (every existing call site behaves
+  // exactly as before), the explicitly-assigned channel still plots.
+  it("control: without channelRoles, an explicitly-assigned channel still plots (unchanged)", () => {
+    const m: QuickFigureMapping = {
+      xKey: null,
+      yKeys: [0, 1],
+      errorBindings: [],
+      ignoredKeys: [],
+    };
+    const render = quickFigurePreview(roleData, m, "line");
+    expect(render.kind).toBe("xy");
+    if (render.kind !== "xy") return;
+    expect(render.payload.series.map((s) => s.label)).toEqual(["kept", "ignoredButAssigned"]);
+  });
+
+  // Control: a channel with a role that was NEVER assigned to Y stays absent
+  // either way -- the fix only changes what happens to an EXPLICITLY-listed
+  // role channel, not the ordinary "never assigned" case.
+  it("control: an unassigned role-carrying channel is absent from the preview regardless", () => {
+    const m: QuickFigureMapping = {
+      xKey: null,
+      yKeys: [0],
+      errorBindings: [],
+      ignoredKeys: [1],
+    };
+    const render = quickFigurePreview(roleData, m, "line", { 1: "ignore" });
+    expect(render.kind).toBe("xy");
+    if (render.kind !== "xy") return;
+    expect(render.payload.series.map((s) => s.label)).toEqual(["kept"]);
+  });
+});

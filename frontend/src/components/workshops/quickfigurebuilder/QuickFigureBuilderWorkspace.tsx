@@ -22,8 +22,16 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   const xName = mapping.xKey === null
     ? String(dataset.data.metadata?.["x_column_long"] || dataset.data.metadata?.["x_column_name"] || "Acquisition axis")
     : dataset.data.labels[mapping.xKey];
-  const preview = quickFigurePreview(dataset.data, mapping, style);
+  const preview = quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles);
   const ready = mappingReady(mapping);
+  // G4 review round (P2, FIX 2): a channel carrying a worksheet-level
+  // Label/Ignore role (Inspector's Channels card) is filtered out by
+  // `effectiveChannels` at render time even when explicitly assigned to Y
+  // here -- the builder's own mapping UI doesn't consult `channelRoles`, so
+  // this IS reachable. Named explicitly (L0.36: a dead interaction gets a
+  // visible reason, never silent) rather than leaving the mismatch between
+  // "N Y series" above and what actually renders unexplained.
+  const roleFilteredYKeys = mapping.yKeys.filter((ch) => dataset.channelRoles?.[ch]);
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
   // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
   // hidden -- the button itself is also gated on `ready` below). `close()`
@@ -66,6 +74,13 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
           <p className="qzk-quick-builder-preview-summary" aria-live="polite">
             {mappingReady(mapping) ? `${mapping.yKeys.length} Y series against ${xName}` : "Mapping incomplete"}
           </p>
+          {roleFilteredYKeys.length > 0 && (
+            <p className="qzk-quick-builder-notice" role="status">
+              {roleFilteredYKeys.length === 1
+                ? `"${dataset.data.labels[roleFilteredYKeys[0]]}" is marked Label/Ignore in this worksheet and won't appear on the created figure — clear its role in the Channels card first.`
+                : `${roleFilteredYKeys.length} assigned Y channels are marked Label/Ignore in this worksheet and won't appear on the created figure — clear their roles in the Channels card first.`}
+            </p>
+          )}
           <GraphPreview render={preview} />
         </section>
 

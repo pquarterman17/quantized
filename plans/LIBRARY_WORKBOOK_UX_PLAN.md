@@ -832,7 +832,13 @@ build, and focused interaction coverage where appropriate.
      builder UI -- the render layer (`lib/errorRoles.ts`'s `asymmetricPair`)
      already excludes half pairs from the plot, so the builder must SAY so
      rather than staying silent about a binding the user made that never
-     renders.
+     renders. Open semantic question (G4 review round, 2026-08-17, FIX 2): the
+     builder's mapping UI can explicitly assign a `Dataset.channelRoles`
+     (Label/Ignore) channel to Y, which the render layer (`effectiveChannels`)
+     silently drops even from an explicit list -- today mitigated with a
+     visible builder hint (never change the channel's role behind the user's
+     back), but whether a role-carrying channel should be assignable at all,
+     or should auto-clear its role on assignment, is still open.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,

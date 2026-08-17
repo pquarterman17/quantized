@@ -135,6 +135,21 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const { active } = p;
   const [payload, setPayload] = useState<PlotPayload | null>(null);
 
+  // G4 review round (P1 fix): whether the focused window's OWN document
+  // errors are rich enough to be the AUTHORITATIVE errorSpans source (see
+  // the `errorSpans` useMemo below for the full rule). Hoisted above both
+  // the fetch effect and that useMemo so the fetch effect's decimation gate
+  // can see it too -- it used to read ONLY `active.errorRoles?.length`,
+  // which stayed blind to a document carrying rich errors on a dataset
+  // whose OWN `errorRoles` were empty. A big (>10k-row) window in that state
+  // passed the decimation gate: the server returned a bucketed payload while
+  // `buildErrorSpans` built FULL-resolution magnitude arrays, and
+  // `errorSpansPlugin` (uplotOverlays.ts) indexes those positionally against
+  // the bucketed xs -- silently wrong uncertainty bars, exactly the
+  // misalignment `lib/plotDecimate.ts`'s own doc comment on error bars
+  // warns about.
+  const useDocumentErrors = hasRichErrorBindings(p.documentErrors);
+
   // P3.4 zoom-refetch residual: the full-range payload the BASE fetch effect
   // below last resolved, cached so a reset-to-full-view (xLim -> null) can
   // restore it with NO extra network round trip, and so the windowed-refetch
@@ -275,7 +290,13 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       decimationRequestEligible({
         defaultTrace: p.defaultTrace,
         hasErrorBars: errorBars.size > 0,
-        hasErrorSpans: !!active.errorRoles?.length,
+        // G4 review round (P1 fix): a rich document is the errorSpans SOURCE
+        // whenever `useDocumentErrors` is true (see that flag's own doc, and
+        // the `errorSpans` useMemo below) -- `useDocumentErrors` already
+        // implies `p.documentErrors` is non-empty, so this mirrors the
+        // dataset branch's own "any roles at all disqualify decimation"
+        // rule rather than trying to pre-filter to currently-plotted columns.
+        hasErrorSpans: useDocumentErrors || !!active.errorRoles?.length,
         hasColorByColumns: colorByColumns.size > 0,
       });
     const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
@@ -322,6 +343,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.derivOverlay,
     p.selection,
     p.excludedDisplay,
+    useDocumentErrors,
   ]);
 
   // P3.4 zoom-refetch residual: when the BASE payload above came back
@@ -415,7 +437,6 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // dedupe the dataset-authoritative path already relied on. No new
   // dedupe logic was needed; the existing column-based filter already
   // covers a Map built from either source.
-  const useDocumentErrors = hasRichErrorBindings(p.documentErrors);
   const errorSpans = useMemo(() => {
     if (!active) return new Map<number, ErrorSpan[]>();
     const bindings = useDocumentErrors ? p.documentErrors! : active.errorRoles;
