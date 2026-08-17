@@ -27,7 +27,7 @@
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
 import { quickFigureCommit } from "../lib/quickFigureCommit";
-import { mappingReady, type QuickFigureMapping } from "../lib/quickFigureMapping";
+import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
 import { nextFigureId } from "./figureLifecycle";
 import type { AppState } from "./useApp";
@@ -42,8 +42,12 @@ export interface QuickFigureCreateSlice {
    *  fresh window, as ONE undoable gesture. Returns true on success; a
    *  fail-closed no-op (false, with a status message, no history entry, no
    *  new document or window) when the dataset has vanished mid-gesture or
-   *  the mapping is not ready (belt-and-braces -- the Create button is
-   *  already gated on `mappingReady`). */
+   *  the mapping fails `canCreateQuickFigure` (lib/quickFigureMapping.ts --
+   *  the SAME predicate the Create button gates on, so this is not a second,
+   *  independently-drifting check: it is the one gate, called twice. G5
+   *  review round closed a prior drift where this action checked only
+   *  `mappingReady` and the button's role-filtered/incomplete-pair checks
+   *  lived inline in the component only). */
   createQuickFigureFromMapping: (datasetId: string, mapping: QuickFigureMapping, style: QuickPlotStyle) => boolean;
 }
 
@@ -56,8 +60,9 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
         set({ status: "Quick Figure Builder unavailable: dataset not found" });
         return false;
       }
-      if (!mappingReady(mapping)) {
-        set({ status: "Quick Figure Builder unavailable: assign at least one Y series" });
+      const gate = canCreateQuickFigure(dataset, mapping);
+      if (!gate.ok) {
+        set({ status: `Quick Figure Builder unavailable: ${gate.reason}` });
         return false;
       }
       const pieces = quickFigureCommit(dataset, mapping, style);

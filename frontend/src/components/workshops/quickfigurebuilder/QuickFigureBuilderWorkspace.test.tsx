@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -30,6 +30,35 @@ const roleDataset: Dataset = {
     values: [[2, 30], [4, 40], [6, 50]],
     labels: ["signal", "flagged"],
     units: ["V", "V"],
+    metadata: {},
+  },
+  channelRoles: { 1: "ignore" },
+};
+
+const asymmetricDataset: Dataset = {
+  id: "d3",
+  name: "asymmetric.csv",
+  data: {
+    time: [0, 1, 2],
+    values: [[2, 0.2, 0.3], [4, 0.4, 0.5], [6, 0.6, 0.7]],
+    labels: ["signal", "signal_err+", "signal_err-"],
+    units: ["V", "V", "V"],
+    metadata: {},
+  },
+};
+
+// G5 review round, FIX 3(a): a dataset where the DEFAULT mapping already
+// carries an incomplete pair (the "signal_err+" column is auto-inferred, and
+// nothing supplies its "-" half), AND a Label/Ignore-role channel ("flagged")
+// the test explicitly assigns to Y -- so both notices are live at once.
+const jointDataset: Dataset = {
+  id: "d4",
+  name: "joint.csv",
+  data: {
+    time: [0, 1, 2],
+    values: [[2, 30, 0.2], [4, 40, 0.4], [6, 50, 0.6]],
+    labels: ["signal", "flagged", "signal_err+"],
+    units: ["V", "V", "V"],
     metadata: {},
   },
   channelRoles: { 1: "ignore" },
@@ -124,9 +153,86 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "Role for flagged" }), { target: { value: "y" } });
 
+    // G5 review round, FIX 2: "won't appear ... clear its role first" was
+    // G4-era allow-and-drop framing that contradicted the button's actually
+    // being BLOCKED. Blocked framing now, matching the button's title.
     expect(screen.getByRole("status")).toHaveTextContent(
-      '"flagged" is marked Label/Ignore in this worksheet and won\'t appear on the created figure',
+      '"flagged" is marked Label/Ignore in this worksheet — creation is blocked until you clear its role in the Channels card.',
     );
+  });
+
+  it("blocks creation for a role-filtered Y until the worksheet role is cleared", () => {
+    useApp.setState({ datasets: [roleDataset], quickFigureBuilderDatasetId: "d2" });
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for flagged" }), { target: { value: "y" } });
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("title", "Clear the Label/Ignore role from every assigned Y column in the Channels card first");
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-role-warning");
+
+    act(() => useApp.setState({ datasets: [{ ...roleDataset, channelRoles: undefined }] }));
+    expect(createBtn).not.toBeDisabled();
+    fireEvent.click(createBtn);
+    expect(useApp.getState().editableFigures).toHaveLength(1);
+  });
+
+  it("identifies and blocks a half-complete asymmetric error pair", () => {
+    useApp.setState({ datasets: [asymmetricDataset], quickFigureBuilderDatasetId: "d3" });
+    render(<QuickFigureBuilderWorkspace />);
+    const minus = screen.getByRole("combobox", { name: "Role for signal_err-" });
+    fireEvent.change(minus, { target: { value: "unassigned" } });
+
+    expect(screen.getByRole("status")).toHaveTextContent('Y error for "signal" has + "signal_err+" but is missing −');
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("title", 'Y error for "signal" has + "signal_err+" but is missing −');
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-error-warning");
+
+    fireEvent.change(minus, { target: { value: "error:y:0:-" } });
+    expect(createBtn).not.toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  // G5 review round, FIX 3(b): the X-axis half of the same probe shape as
+  // above -- a lone X-error "+" binding with no "-" counterpart. The notice
+  // substitutes the axis's own display name (no assigned X column here, so
+  // it falls back to "Acquisition axis"), and Create is blocked.
+  it("identifies and blocks a half-complete X-axis error pair, naming the axis", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for error" }), {
+      target: { value: "error:x:-1:+" },
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      'X error for "Acquisition axis" has + "error" but is missing −',
+    );
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("title", 'X error for "Acquisition axis" has + "error" but is missing −');
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-error-warning");
+  });
+
+  // G5 review round, FIX 3(a): when BOTH a role-filtered Y channel and an
+  // incomplete error pair are live, both notices render -- the button's
+  // aria-describedby and title must report BOTH, not just the
+  // higher-priority one (role-filtered took sole priority before this fix).
+  it("reports BOTH notices when a role-filtered Y and an incomplete error pair are both present", () => {
+    useApp.setState({ datasets: [jointDataset], quickFigureBuilderDatasetId: "d4" });
+    render(<QuickFigureBuilderWorkspace />);
+    // The incomplete "signal_err+" pair is already live on load (inferred);
+    // assigning "flagged" to Y brings the role-filtered condition live too.
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for flagged" }), { target: { value: "y" } });
+
+    const notices = screen.getAllByRole("status");
+    expect(notices).toHaveLength(2);
+
+    const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
+    expect(createBtn).toBeDisabled();
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-role-warning quick-builder-error-warning");
+    const title = createBtn.getAttribute("title") ?? "";
+    expect(title).toContain("Label/Ignore");
+    expect(title).toContain("signal_err+");
   });
 
   it("offers keyboard-accessible X, Y, ignore, and targeted error roles", () => {

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   asymmetricPair,
+  incompleteAsymmetricPairs,
   classifyErrorLabel,
   errKeysFromBindings,
   hasRichErrorBindings,
@@ -129,6 +130,15 @@ describe("asymmetricPair / symmetricBinding", () => {
   it("finds a symmetric binding", () => {
     expect(symmetricBinding(bindings, 1, "y")).toBe(5);
     expect(symmetricBinding(bindings, 0, "y")).toBeNull();
+  });
+
+  it("reports only the asymmetric targets missing one half", () => {
+    expect(incompleteAsymmetricPairs(bindings)).toEqual([
+      { target: 1, axis: "y", plus: 4, minus: null },
+    ]);
+    expect(incompleteAsymmetricPairs([
+      { channel: 6, target: -1, axis: "x", side: "+" },
+    ])).toEqual([{ target: -1, axis: "x", plus: 6, minus: null }]);
   });
 });
 

@@ -1,11 +1,10 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1; PR E-a wide Tile workspace implemented on
-`sol/library-e-wide-shell`, pending Claude review/PR
+**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5 release
+hardening in progress
 **Created:** 2026-08-12  
-**Updated:** 2026-08-16 — ChatGPT-Sol started PR G after E-c/E2 completed
-and PR F entered its final merge pass; G1's main-workspace shell, launch
-actions, and cancel-safe transient transaction are implemented pending review
+**Updated:** 2026-08-17 — ChatGPT-Sol delegated the bounded G5 readiness slice;
+G1–G4 are merged and G5 remains in focused hardening
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -838,8 +837,40 @@ build, and focused interaction coverage where appropriate.
      (Label/Ignore) channel to Y, which the render layer (`effectiveChannels`)
      silently drops even from an explicit list -- today mitigated with a
      visible builder hint (never change the channel's role behind the user's
-     back), but whether a role-carrying channel should be assignable at all,
-     or should auto-clear its role on assignment, is still open.
+     back). **Resolved 2026-08-17:** mapping remains available so the conflict
+     is understandable, but Create is blocked until the user explicitly clears
+     the worksheet role; the builder never mutates source roles implicitly.
+     - [~] **2026-08-17 — ChatGPT-Sol (delegated implementation), PR #158:** the
+       builder now identifies half-complete asymmetric pairs by affected
+       columns and blocks creation with a concise reason; explicitly mapped
+       Label/Ignore Y columns likewise block creation without mutating the
+       worksheet role. Disabled reasons are programmatically associated with
+       Create; long scientific names wrap without crushing role controls; and
+       warning presentation remains compact at constrained sizes. Focused
+       unit/component coverage covers correction, cancel/no-mutation, and
+       readiness. A real Library-to-builder Chromium journey now proves
+       Cancel/Escape safety, native role assignment, half-pair blocking,
+       complete asymmetric creation, and exactly one rich-error document; a
+       900×700 long-label journey pins reachability and horizontal containment.
+       Remaining Claude-owned G5 work is save/close/reopen/project-reload proof
+       and the canonical-state review. Final human visual acceptance remains a
+       release-candidate task rather than an automated claim.
+     - [x] **2026-08-17 — PR #158 review round (independent reviewer,
+       probe-confirmed):** Sol's handoff above omitted that the button's
+       readiness checks (role-filtered Y, incomplete asymmetric pairs) were
+       gating the Create BUTTON only -- the store action
+       (`createQuickFigureFromMapping`) still gated on `mappingReady` alone,
+       so calling it directly with either probe shape (a lone `+`/`-` error
+       binding, or a role-filtered-only Y mapping) succeeded and created a
+       figure whose content silently vanished at render, a parallel-readiness
+       drift of exactly the kind this codebase's lessons-learned bans.
+       Closed: `canCreateQuickFigure` (`lib/quickFigureMapping.ts`) is now the
+       ONE predicate both the button and the store action gate on, so they
+       cannot drift apart again; the role-filtered notice copy was also
+       aligned to "blocked" framing (it previously read as G4-era
+       allow-and-drop), and the joint-condition case (both a role-filtered Y
+       and an incomplete pair at once) now reports both notices via
+       `aria-describedby`/title instead of only the higher-priority one.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,

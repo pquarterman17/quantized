@@ -167,6 +167,35 @@ export function asymmetricPair(
   return plus && minus ? { plus: plus.channel, minus: minus.channel } : null;
 }
 
+/** The asymmetric error slots that have only one half assigned.
+ *
+ * Rendering intentionally ignores these (see `asymmetricPair`), but the
+ * mapping UI needs to explain why a column the user assigned does not show
+ * up in the preview. Keep this alongside the canonical binding helpers so
+ * every builder/editor uses the same pairing semantics.
+ */
+export interface IncompleteAsymmetricPair {
+  target: number;
+  axis: "x" | "y";
+  plus: number | null;
+  minus: number | null;
+}
+
+export function incompleteAsymmetricPairs(
+  bindings: readonly ErrorBinding[],
+): IncompleteAsymmetricPair[] {
+  const groups = new Map<string, IncompleteAsymmetricPair>();
+  for (const binding of bindings) {
+    if (binding.side === "both") continue;
+    const key = `${binding.axis}:${binding.target}`;
+    const pair = groups.get(key) ?? { target: binding.target, axis: binding.axis, plus: null, minus: null };
+    if (binding.side === "+") pair.plus ??= binding.channel;
+    else pair.minus ??= binding.channel;
+    groups.set(key, pair);
+  }
+  return [...groups.values()].filter((pair) => pair.plus === null || pair.minus === null);
+}
+
 /** The symmetric binding for a target on one axis, if any. */
 export function symmetricBinding(
   bindings: readonly ErrorBinding[],

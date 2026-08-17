@@ -19,10 +19,6 @@ function dataset(id: string): Dataset {
   };
 }
 
-const asymmetricErrors: ErrorBinding[] = [
-  { channel: 1, target: 0, axis: "y", side: "+" },
-];
-
 function mapping(overrides: Partial<QuickFigureMapping> = {}): QuickFigureMapping {
   return {
     xKey: null,
@@ -109,14 +105,37 @@ describe("createQuickFigureFromMapping (G4)", () => {
 
   // t4: live-mode document; bindings carry the mapping's errors verbatim;
   // bindings.xKey/yKeys match the mapping.
+  //
+  // G5 review round: this used to seed a lone "+"-only Y error binding on
+  // channel 1 (the SAME channel already doing duty as xKey) -- itself an
+  // incomplete asymmetric pair, i.e. exactly the FIX 1 probe shape, which
+  // the shared predicate now blocks. Use a dedicated 4-column dataset with a
+  // genuinely COMPLETE +/- pair so this test keeps exercising "errors carry
+  // through verbatim" without tripping the new gate.
   it("the created document is live-mode, carries the mapping's errors verbatim, and its xKey/yKeys match the mapping", () => {
-    const m = mapping({ xKey: 1, yKeys: [0], errorBindings: asymmetricErrors, ignoredKeys: [] });
+    const richDataset: Dataset = {
+      id: "d1",
+      name: "d1.dat",
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 10, 0.1, 0.2], [2, 20, 0.2, 0.3], [3, 30, 0.3, 0.4]],
+        labels: ["A", "B", "B_err+", "B_err-"],
+        units: ["", "", "", ""],
+        metadata: { technique: "generic" },
+      },
+    };
+    useApp.setState({ datasets: [richDataset] });
+    const completePair: ErrorBinding[] = [
+      { channel: 2, target: 0, axis: "y", side: "+" },
+      { channel: 3, target: 0, axis: "y", side: "-" },
+    ];
+    const m = mapping({ xKey: 1, yKeys: [0], errorBindings: completePair, ignoredKeys: [2, 3] });
     useApp.getState().createQuickFigureFromMapping("d1", m, "line");
     const doc = useApp.getState().editableFigures[0];
     expect(doc.data.mode).toBe("live");
     expect(doc.bindings.xKey).toBe(1);
     expect(doc.bindings.yKeys).toEqual([0]);
-    expect(doc.bindings.errors).toEqual(asymmetricErrors);
+    expect(doc.bindings.errors).toEqual(completePair);
   });
 
   // t5: mappingReady=false -> fail-closed no-op (belt-and-braces; the button
@@ -129,5 +148,76 @@ describe("createQuickFigureFromMapping (G4)", () => {
     expect(useApp.getState().editableFigures).toHaveLength(before);
     expect(useApp.getState().history).toHaveLength(historyBefore);
     expect(useApp.getState().status).toContain("Quick Figure Builder unavailable");
+  });
+});
+
+// G5 review round (P1, FIX 1): the store action must enforce the SAME gates
+// as the Create button, via the ONE shared predicate (`canCreateQuickFigure`,
+// lib/quickFigureMapping.ts). Before this fix, calling the action directly
+// bypassed the button's role-filtered/incomplete-pair checks entirely --
+// probe-confirmed by an independent reviewer: a lone "+" error binding, or a
+// role-filtered-only Y mapping, both SUCCEEDED here and created a figure
+// whose content silently vanished at render.
+describe("createQuickFigureFromMapping gates on the shared canCreateQuickFigure predicate (G5 review round)", () => {
+  // t1, THE probe shape: a half-complete asymmetric error pair (a "+" with
+  // no matching "-") must block creation exactly like the button does.
+  it("is a fail-closed no-op for a half-complete asymmetric Y error pair, zero mutation", () => {
+    const before = useApp.getState().editableFigures.length;
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const historyBefore = useApp.getState().history.length;
+    const halfPair: ErrorBinding[] = [{ channel: 1, target: 0, axis: "y", side: "+" }];
+    const m = mapping({ yKeys: [0], errorBindings: halfPair, ignoredKeys: [] });
+
+    const result = useApp.getState().createQuickFigureFromMapping("d1", m, "line");
+
+    expect(result).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(before);
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore);
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+    expect(useApp.getState().status).toContain("missing");
+  });
+
+  // FIX 3(b), predicate half: the same probe shape on the X axis (a lone
+  // `+` X-error binding, no `-` counterpart). The component-level half of
+  // this case lives in QuickFigureBuilderWorkspace.test.tsx.
+  it("is a fail-closed no-op for a half-complete X-axis error pair, zero mutation", () => {
+    const before = useApp.getState().editableFigures.length;
+    const xHalfPair: ErrorBinding[] = [{ channel: 1, target: -1, axis: "x", side: "+" }];
+    const m = mapping({ xKey: null, yKeys: [0], errorBindings: xHalfPair, ignoredKeys: [] });
+
+    const result = useApp.getState().createQuickFigureFromMapping("d1", m, "line");
+
+    expect(result).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(before);
+    expect(useApp.getState().status).toContain("X error");
+  });
+
+  // t2, THE other probe shape: a mapping whose ONLY assigned Y channel
+  // carries a worksheet-level Label/Ignore role. `mappingReady` alone sees
+  // this as assigned (yKeys.length > 0); only the shared predicate catches
+  // that it will render as nothing.
+  it("is a fail-closed no-op when the only assigned Y channel is role-filtered (Label/Ignore), zero mutation", () => {
+    useApp.setState({ datasets: [{ ...dataset("d1"), channelRoles: { 0: "ignore" } }] });
+    const before = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+    const m = mapping({ yKeys: [0], errorBindings: [], ignoredKeys: [] });
+
+    const result = useApp.getState().createQuickFigureFromMapping("d1", m, "line");
+
+    expect(result).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(before);
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+    expect(useApp.getState().status).toContain("Label/Ignore");
+  });
+
+  // t3, control: a complete, unfiltered mapping is unaffected by the new
+  // gate -- it still creates.
+  it("still creates for a complete, unfiltered mapping (control)", () => {
+    const before = useApp.getState().editableFigures.length;
+
+    const result = useApp.getState().createQuickFigureFromMapping("d1", mapping(), "line");
+
+    expect(result).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(before + 1);
   });
 });
