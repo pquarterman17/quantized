@@ -121,3 +121,37 @@ describe("dataset.configureQuickPlot", () => {
     expect(useApp.getState().editableFigures).toEqual([]);
   });
 });
+
+describe("dataset.quickPlotWith (PR H, L0.37)", () => {
+  beforeEach(() => {
+    useApp.setState({ quickPlotTemplates: [] });
+  });
+
+  it("hidden (via actionMenuItem returning null) when zero templates exist", () => {
+    const ds = dataset("d1");
+    const item = actionMenuItem(find("dataset.quickPlotWith"), target(ds));
+    expect(item).toBeNull();
+  });
+
+  it("shown once a template exists", () => {
+    useApp.setState({
+      quickPlotTemplates: [
+        {
+          id: "qpt-1",
+          name: "T",
+          createdAt: "x",
+          modifiedAt: "x",
+          scope: { kind: "schema" },
+          technique: "magnetometry.mvsh",
+          signature: { channels: [] },
+          mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] },
+          style: "line",
+          labels: {},
+        },
+      ],
+    });
+    const ds = dataset("d1");
+    const item = actionMenuItem(find("dataset.quickPlotWith"), target(ds));
+    expect(item).not.toBeNull();
+  });
+});

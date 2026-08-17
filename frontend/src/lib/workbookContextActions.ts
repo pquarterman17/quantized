@@ -22,6 +22,7 @@ import type { LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { openQuickPlotWith } from "../store/quickPlotWithDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
 
 export interface WorkbookActionTarget {
@@ -68,6 +69,20 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
       const s = useApp.getState();
       const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
       if (worksheet) s.openQuickFigureBuilder(worksheet.id);
+    },
+  },
+  {
+    id: "workbook.quickPlotWith",
+    label: "Quick Plot With…",
+    // L0.37: hidden until a template exists AND this workbook has a
+    // worksheet to target (mirrors dataset.quickPlotWith's hidden gate).
+    hidden: (t) =>
+      useApp.getState().quickPlotTemplates.length === 0 ||
+      !t.node.children.some((child) => child.kind === "worksheet"),
+    run: (t) => {
+      const s = useApp.getState();
+      const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
+      if (worksheet) openQuickPlotWith(worksheet.id);
     },
   },
   {

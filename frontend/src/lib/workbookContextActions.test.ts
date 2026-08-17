@@ -246,3 +246,41 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     expect(useApp.getState().workbooks).toEqual([{ id: "w1", name: "W" }]);
   });
 });
+
+describe("workbook.quickPlotWith (PR H, L0.37)", () => {
+  const template = {
+    id: "qpt-1",
+    name: "T",
+    createdAt: "x",
+    modifiedAt: "x",
+    scope: { kind: "schema" as const },
+    technique: "magnetometry.mvsh" as const,
+    signature: { channels: [] },
+    mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] },
+    style: "line" as const,
+    labels: {},
+  };
+
+  it("hidden when zero templates exist", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ quickPlotTemplates: [] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, [d1]));
+    expect(item).toBeNull();
+  });
+
+  it("hidden when the workbook has no worksheets, even with templates saved", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    useApp.setState({ quickPlotTemplates: [template] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, []));
+    expect(item).toBeNull();
+  });
+
+  it("shown once a template exists and the workbook has a worksheet", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ quickPlotTemplates: [template] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, [d1]));
+    expect(item).not.toBeNull();
+  });
+});

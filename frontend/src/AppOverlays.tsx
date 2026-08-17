@@ -49,6 +49,7 @@ import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
 import { useHelp } from "./store/help";
+import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
@@ -119,6 +120,7 @@ const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
 // already in this composition root, so loading them only when opened removes
 // their implementation (and dialog-only helpers) from first-paint JS.
 const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
+const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
 const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"));
@@ -163,10 +165,12 @@ export default function AppOverlays() {
   const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
+  const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
+  const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
   const prefsMounted = useKeepMountedAfterOpen(prefsOpen);
@@ -177,6 +181,7 @@ export default function AppOverlays() {
       <ConfirmDialog />
       <AnnotationTextDialog />
       {splitDialogMounted && <SplitDatasetDialog />}
+      {quickPlotWithMounted && <QuickPlotWithDialog />}
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />
