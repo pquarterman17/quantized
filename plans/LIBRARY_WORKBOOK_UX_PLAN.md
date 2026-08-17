@@ -701,9 +701,26 @@ build, and focused interaction coverage where appropriate.
        clear loading, unavailable-source, unsupported, and error treatments,
        kind badges, restrained hover emphasis, and reduced-motion behavior.
        E-c3 virtualization remains explicitly outside this slice.*
-     - [ ] **E-c3 (Claude): large-Library safeguards.** Virtualization +
+     - [~] **E-c3 (Claude): large-Library safeguards.** Virtualization +
        large-library fixtures; preserve selection, keyboard navigation, and
        "Show in Library"; performance and regression testing.
+       *Implemented 2026-08-16 on `claude/quantized-origin-jmp-gaps-vbtfnm`,
+       pending PR. Windowed tile rendering above 80 items (below: DOM
+       byte-identical — every prior workspace test passes unchanged),
+       delegating the clamped row-window math to lib/gridwindow's
+       unit-tested `computeAxisWindow` (the worksheet viewport's helper).
+       Keyboard navigation moved to MODEL-index + ensureVisible +
+       guarded rAF focus retry (never steals focus the user moved
+       elsewhere); every rendered window carries exactly one tabbable
+       tile; entering any container (null root included) lands on the
+       current selection and resets stale scroll; jsdom-deterministic
+       measurement fallbacks are the unit-test contract, real geometry is
+       covered by a 400-item Playwright journey (bounded DOM, live window
+       movement, cross-boundary arrow nav, Escape/reveal). 11 scale tests
+       — 4 proven red by force-disabling virtualization; uniform-row
+       approximation documented in the hook header. TilePreview extracted
+       from LibraryWorkspace (workshop pattern) to stay under the
+       component ceiling.*
 5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
     selection, remembered workbook children, and workspace placement alongside
     the existing window layout; restore heavy children lazily and add
@@ -1810,3 +1827,34 @@ back to the owner. No Library implementation is authorized by this pause.
   wording untouched, CSS token-clean with reduced-motion support, bundle
   unchanged at 814.9 kB. Three probes proven red first
   (`thumbnailPreviewHonesty.test.ts`).
+- **2026-08-16 — Claude, E-c3 implementation (owner split, final slice):**
+  Windowed tile rendering for large Libraries, reusing lib/gridwindow's
+  clamped `computeAxisWindow` rather than new inline math (the pre-push
+  self-review pass caught the duplication AND that the duplicate lacked the
+  helper's shrink-under-scroll clamping — plus a container-change scroll
+  reset, a null-root land-on-selection miss, and a focus-stealing hazard in
+  the deferred focus retry; all four fixed with regression pins before
+  push). Small libraries are structurally unvirtualized: every pre-existing
+  workspace test passes byte-identical. The E-c1 sticky-visibility doc
+  promise is narrowed honestly: virtualized unmount aborts in-flight
+  generation like any unmount; completed thumbnails survive in the LRU.
+  E-c (thumbnails + scale safeguards) is complete pending PR/merge.
+- **2026-08-17 — Claude, PR #151 (E-c3) owner-directed critical review round
+  before merge:** A fresh max-effort adversarial pass on my own PR found 8
+  issues; all fixed with the four testable ones proven red first. The two
+  real contract regressions: (1) the FOCUSED tile scrolling out of the
+  rendered window unmounted and stranded keyboard focus on <body> — the
+  grid container now takes focus (never fighting the scroll) and its own
+  keydown resumes navigation from the roving tile's model position; (2)
+  windowed listitems hid the true collection size from assistive tech —
+  tiles now carry aria-setsize/aria-posinset. Also fixed: the
+  container-entry scroll reset was gated on the virtualized path (a small
+  container entered from a deep scroll landed at its clamped bottom); the
+  deferred focus retry could steal focus from a DIFFERENT tile the user
+  clicked mid-retry (now origin-aware); ensureVisible's fresh measurements
+  now write back into the window state (no split-brain row height after
+  container changes); the grid gap is read from computed style instead of
+  a hardcoded 12; scroll events no longer re-measure geometry (ResizeObserver
+  on the scroll container AND the grid owns that, catching thumbnail-driven
+  tile growth); and the scale E2E now ASSERTS the Escape reveal target
+  instead of claiming it in a comment.
