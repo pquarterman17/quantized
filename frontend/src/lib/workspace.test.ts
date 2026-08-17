@@ -1397,3 +1397,206 @@ describe("error roles survive save/reapply (MAIN #33)", () => {
     expect(out.datasets[0].errorRoles).toBeUndefined();
   });
 });
+
+describe("workspace session restoration (LIBRARY_WORKBOOK_UX_PLAN PR E2)", () => {
+  const winFor = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "Graph",
+    datasetId: "a",
+    geometry: { x: 10, y: 10, w: 480, h: 360 },
+    z: 1,
+    winState: "normal",
+    view: defaultPlotView(),
+    bg: "theme",
+    linkGroup: null,
+    pinned: false,
+    ...over,
+  });
+
+  it("round-trips librarySelection, workbookLastChild, and expandedWorkbookIds", () => {
+    const datasets = [{ ...makeDataset("a", "first"), workbookId: "w1" }];
+    const workbooks = [{ id: "w1", name: "W" }];
+    const loaded = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        workbooks,
+        selectedIds: [],
+        librarySelection: { kind: "workbook", id: "w1" },
+        workbookLastChild: { w1: "worksheet:a" },
+        expandedWorkbookIds: ["w1"],
+      }),
+    );
+    expect(loaded.librarySelection).toEqual({ kind: "workbook", id: "w1" });
+    expect(loaded.workbookLastChild).toEqual({ w1: "worksheet:a" });
+    expect(loaded.expandedWorkbookIds).toEqual(["w1"]);
+  });
+
+  it("defaults all three to null/{}/[] for a pre-E2 doc (back-compat)", () => {
+    const loaded = parseWorkspace(serializeWorkspace({ datasets: [makeDataset("a", "first")] }));
+    expect(loaded.librarySelection).toBeNull();
+    expect(loaded.workbookLastChild).toEqual({});
+    expect(loaded.expandedWorkbookIds).toEqual([]);
+  });
+
+  it("drops a librarySelection with an unrecognized kind or a non-string id", () => {
+    const datasets = [makeDataset("a", "first")];
+    const base = JSON.parse(serializeWorkspace({ datasets, selectedIds: [] })) as Record<string, unknown>;
+
+    const badKind = { ...base, librarySelection: { kind: "notebook", id: "x" } };
+    expect(parseWorkspace(JSON.stringify(badKind)).librarySelection).toBeNull();
+
+    // "worksheet" is deliberately NOT a valid librarySelection kind — a
+    // worksheet's "current" is `selectedIds`, never this field (store/
+    // libraryPanel.ts's header).
+    const worksheetKind = { ...base, librarySelection: { kind: "worksheet", id: "a" } };
+    expect(parseWorkspace(JSON.stringify(worksheetKind)).librarySelection).toBeNull();
+
+    const badId = { ...base, librarySelection: { kind: "folder", id: 7 } };
+    expect(parseWorkspace(JSON.stringify(badId)).librarySelection).toBeNull();
+
+    const notAnObject = { ...base, librarySelection: "folder:f1" };
+    expect(parseWorkspace(JSON.stringify(notAnObject)).librarySelection).toBeNull();
+  });
+
+  // Post-merge review fix: a well-formed {kind, id} whose id names no LIVE
+  // entity of that kind must still degrade to null — otherwise, e.g., the
+  // import-target resolver (resolveImportTargetFolderId) would be fed a
+  // dead folder id straight out of a restored librarySelection.
+  it("drops a librarySelection naming a dangling id for an otherwise-valid kind", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, folders: [{ id: "f1", name: "F", parentId: null, order: 0 }], selectedIds: [] }),
+    ) as Record<string, unknown>;
+    // "f1" is live, but this doc's librarySelection names a folder id that
+    // isn't in `folders` at all.
+    doc.librarySelection = { kind: "folder", id: "ghost-folder" };
+    expect(parseWorkspace(JSON.stringify(doc)).librarySelection).toBeNull();
+
+    // A real folder id in a DIFFERENT doc (no folders at all) also degrades.
+    const noFolders = JSON.parse(serializeWorkspace({ datasets, selectedIds: [] })) as Record<string, unknown>;
+    noFolders.librarySelection = { kind: "folder", id: "f1" };
+    expect(parseWorkspace(JSON.stringify(noFolders)).librarySelection).toBeNull();
+
+    // Every other kind gets the same per-kind aliveness check.
+    const workbookGhost = JSON.parse(serializeWorkspace({ datasets, selectedIds: [] })) as Record<string, unknown>;
+    workbookGhost.librarySelection = { kind: "workbook", id: "ghost-wb" };
+    expect(parseWorkspace(JSON.stringify(workbookGhost)).librarySelection).toBeNull();
+
+    const reportGhost = JSON.parse(serializeWorkspace({ datasets, selectedIds: [] })) as Record<string, unknown>;
+    reportGhost.librarySelection = { kind: "report", id: "ghost-report" };
+    expect(parseWorkspace(JSON.stringify(reportGhost)).librarySelection).toBeNull();
+  });
+
+  it("keeps a librarySelection whose id names a LIVE entity of the matching kind", () => {
+    const datasets = [{ ...makeDataset("a", "first"), workbookId: "w1" }];
+    const workbooks = [{ id: "w1", name: "W" }];
+    const folders = [{ id: "f1", name: "F", parentId: null, order: 0 }];
+    const loaded = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        workbooks,
+        folders,
+        selectedIds: [],
+        librarySelection: { kind: "workbook", id: "w1" },
+      }),
+    );
+    expect(loaded.librarySelection).toEqual({ kind: "workbook", id: "w1" });
+  });
+
+  it("drops workbookLastChild entries for dead workbooks, and non-string values for live ones", () => {
+    const datasets = [{ ...makeDataset("a", "first"), workbookId: "w1" }];
+    const workbooks = [{ id: "w1", name: "W" }];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, workbooks, selectedIds: [] }),
+    ) as Record<string, unknown>;
+    doc.workbookLastChild = { w1: "worksheet:a", ghost: "worksheet:gone", stray: 42 };
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.workbookLastChild).toEqual({ w1: "worksheet:a" });
+  });
+
+  it("filters expandedWorkbookIds to workbooks that survived load", () => {
+    const datasets = [{ ...makeDataset("a", "first"), workbookId: "w1" }];
+    const workbooks = [{ id: "w1", name: "W" }];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, workbooks, selectedIds: [] }),
+    ) as Record<string, unknown>;
+    doc.expandedWorkbookIds = ["w1", "ghost", 7];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.expandedWorkbookIds).toEqual(["w1"]);
+  });
+
+  it("L0.25: a non-empty restored selectedIds forces librarySelection to null", () => {
+    const datasets = [makeDataset("a", "first"), makeDataset("b", "second")];
+    const folders = [{ id: "f1", name: "F", parentId: null, order: 0 }];
+    const loaded = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        folders,
+        selectedIds: ["a"],
+        librarySelection: { kind: "folder", id: "f1" },
+      }),
+    );
+    expect(loaded.selectedIds).toEqual(["a"]);
+    expect(loaded.librarySelection).toBeNull();
+
+    // The same doc with an empty selectedIds keeps the folder selection.
+    const kept = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        folders,
+        selectedIds: [],
+        librarySelection: { kind: "folder", id: "f1" },
+      }),
+    );
+    expect(kept.librarySelection).toEqual({ kind: "folder", id: "f1" });
+  });
+
+  it("clamps an oversized restored plot-window position within the passed viewport, leaving sane coords untouched", () => {
+    const datasets = [makeDataset("a", "first")];
+    const viewport = { width: 1024, height: 768 };
+    const plotWindows = [
+      winFor({ id: "w1", geometry: { x: 99999, y: 99999, w: 480, h: 360 } }),
+      winFor({ id: "w2", geometry: { x: 10, y: 10, w: 480, h: 360 } }),
+    ];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w2" }),
+      viewport,
+    );
+    const oversized = loaded.plotWindows.find((w) => w.id === "w1")!;
+    const sane = loaded.plotWindows.find((w) => w.id === "w2")!;
+    // At least a 40px grabbable margin stays reachable inside the viewport.
+    expect(oversized.geometry.x).toBe(viewport.width - 40);
+    expect(oversized.geometry.y).toBe(viewport.height - 40);
+    expect(sane.geometry.x).toBe(10);
+    expect(sane.geometry.y).toBe(10);
+  });
+
+  // Post-merge review fix: a maximized window's stored geometry IS the
+  // "restore to normal" target restoreWindow/toggleMaximizeWindow apply
+  // verbatim on un-maximize (store/windows.ts) — leaving it unclamped just
+  // recreates the unreachable-window bug one click later. Clamp it exactly
+  // like every other winState.
+  it("clamps a MAXIMIZED window's stored (restore-to-normal) position too", () => {
+    const datasets = [makeDataset("a", "first")];
+    const viewport = { width: 1024, height: 768 };
+    const plotWindows = [
+      winFor({ id: "w1", winState: "maximized", geometry: { x: 3000, y: 3000, w: 480, h: 360 } }),
+    ];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w1" }),
+      viewport,
+    );
+    expect(loaded.plotWindows[0].geometry.x).toBe(viewport.width - 40);
+    expect(loaded.plotWindows[0].geometry.y).toBe(viewport.height - 40);
+  });
+
+  it("round-trips a lazy dataset's `pending` field intact (the autosave path — workspace.ts's legitimate pending carrier)", () => {
+    const d = {
+      ...makeDataset("a", "lazy"),
+      pending: { kind: "upload" as const, token: "tok-1", bookId: "book-1", rows: 10, cols: 2 },
+    };
+    const loaded = parseWorkspace(serializeWorkspace({ datasets: [d] }));
+    expect(loaded.datasets[0].pending).toEqual(d.pending);
+  });
+});

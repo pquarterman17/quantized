@@ -51,6 +51,9 @@ function asLoaded(datasets: Dataset[], workbooks: WorkbookNode[] = []): LoadedWo
     savedPlotSpecs: [],
     techniqueViewMemory: {},
     savedRois: [],
+    librarySelection: null,
+    workbookLastChild: {},
+    expandedWorkbookIds: [],
   };
 }
 

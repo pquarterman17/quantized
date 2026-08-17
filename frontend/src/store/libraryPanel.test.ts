@@ -1,7 +1,9 @@
-// LIBRARY_WORKBOOK_UX_PLAN PR C: the tree renderer's transient UI state —
-// workbook disclosure, folder/workbook selection, and the L0.6 remembered
-// child. All three are session-only (E2 owns persistence); see this slice's
-// module doc and architecture.test.ts's HISTORY_EXCLUDED entries.
+// LIBRARY_WORKBOOK_UX_PLAN PR C: the tree renderer's UI state — workbook
+// disclosure, folder/workbook selection, and the L0.6 remembered child. This
+// file tests the store slice's mutators in isolation; PR E2 (lib/
+// workspace.test.ts's "workspace session restoration" describe) covers their
+// .dwk persistence. See this slice's module doc and architecture.test.ts's
+// HISTORY_EXCLUDED entries for why they're still excluded from undo.
 
 import { beforeEach, describe, expect, it } from "vitest";
 

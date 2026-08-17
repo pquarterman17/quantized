@@ -5,7 +5,7 @@
 
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
-import { pruneOrphans } from "./foldertree";
+import { parseFolders, pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
@@ -20,8 +20,14 @@ import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
+import type { LibrarySelection } from "../store/libraryPanel";
 import { deserializeRois, serializeRois } from "../store/rois";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
+import {
+  librarySelectionLiveIds,
+  parseLibrarySelection,
+  parseWorkbookLastChild,
+} from "./workspaceLibraryPanel";
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -109,6 +115,12 @@ export interface WorkspaceState {
    *  see store/rois.ts's header for why only the NAMED, saved definitions
    *  round-trip through a restart. */
   savedRois?: RoiDef[];
+  /** PR E2 (LIBRARY_WORKBOOK_UX_PLAN) — the Library tree's "current"
+   *  selection, L0.6 remembered child, and workbook disclosure. See
+   *  store/libraryPanel.ts and lib/workspaceLibraryPanel.ts's validators. */
+  librarySelection?: LibrarySelection | null;
+  workbookLastChild?: Record<string, string>;
+  expandedWorkbookIds?: string[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -139,6 +151,10 @@ export interface LoadedWorkspace {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  /** PR E2 — see WorkspaceState's doc; always populated. */
+  librarySelection: LibrarySelection | null;
+  workbookLastChild: Record<string, string>;
+  expandedWorkbookIds: string[];
 }
 
 interface WorkspaceDoc {
@@ -166,6 +182,9 @@ interface WorkspaceDoc {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  librarySelection: LibrarySelection | null;
+  workbookLastChild: Record<string, string>;
+  expandedWorkbookIds: string[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -203,6 +222,11 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     // RSM_CUTS_PLAN item 13: named ROIs only (see WorkspaceState's doc) — the
     // actual (de)serialize logic lives in store/rois.ts, this module just calls it.
     savedRois: serializeRois(ws.savedRois ?? []),
+    // PR E2: passed through verbatim, same plain-serializer convention as
+    // every other field here.
+    librarySelection: ws.librarySelection ?? null,
+    workbookLastChild: ws.workbookLastChild ?? {},
+    expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -241,42 +265,6 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     })),
   };
   return JSON.stringify(doc, null, 2);
-}
-
-/** Validate a folder-node array (drops malformed entries; reparents a folder to
- *  root if its parent is missing). `notes`/`color`/`defaultTemplate` (plan
- *  #13 sub-item 4, Folder Properties) are additive-optional: present + a
- *  non-blank string carries through, absent/malformed is silently dropped —
- *  a legacy .dwk (no such fields at all) loads exactly as before. */
-function parseFolders(v: unknown): FolderNode[] {
-  if (!Array.isArray(v)) return [];
-  const out: FolderNode[] = [];
-  for (const f of v) {
-    if (typeof f !== "object" || f === null) continue;
-    const o = f as Record<string, unknown>;
-    if (
-      typeof o.id === "string" &&
-      typeof o.name === "string" &&
-      (o.parentId === null || typeof o.parentId === "string") &&
-      typeof o.order === "number" &&
-      Number.isFinite(o.order)
-    ) {
-      const node: FolderNode = {
-        id: o.id,
-        name: o.name,
-        parentId: (o.parentId as string | null) ?? null,
-        order: o.order,
-      };
-      if (typeof o.notes === "string" && o.notes.trim()) node.notes = o.notes;
-      if (typeof o.color === "string" && o.color.trim()) node.color = o.color;
-      if (typeof o.defaultTemplate === "string" && o.defaultTemplate.trim()) {
-        node.defaultTemplate = o.defaultTemplate;
-      }
-      out.push(node);
-    }
-  }
-  const ids = new Set(out.map((f) => f.id));
-  return out.map((f) => (f.parentId && !ids.has(f.parentId) ? { ...f, parentId: null } : f));
 }
 
 /** Future editable schemas are skipped; malformed v1 and duplicate ids are dropped. */
@@ -545,7 +533,7 @@ export function parseWorkspace(
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
   const editableFigures = parseEditableFigures(o.editableFigures, dsIds, migrationWarnings);
   const pages = sanitizePageDocuments(o.pages);
-  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings);
+  const plotWindows = sanitizeDocumentBackedPlotWindows(o.plotWindows, dsIds, migrationWarnings, viewport);
   const focusedWindowId =
     typeof o.focusedWindowId === "string" &&
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")
@@ -557,6 +545,15 @@ export function parseWorkspace(
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
+  // PR E2 — `workbookIds` is the same set `workbooks` above already carries.
+  const workbookIds = new Set(workbooks.map((w) => w.id));
+  const librarySelection = parseLibrarySelection(
+    o.librarySelection,
+    selectedIds,
+    librarySelectionLiveIds({ folders: migration.folders, workbooks, originFigures, editableFigures, figureDocs, pages, reports }),
+  );
+  const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
+  const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   return {
     datasets,
     folders: migration.folders,
@@ -580,6 +577,9 @@ export function parseWorkspace(
     savedPlotSpecs,
     techniqueViewMemory,
     savedRois,
+    librarySelection,
+    workbookLastChild,
+    expandedWorkbookIds,
   };
 }
 

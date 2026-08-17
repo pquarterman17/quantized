@@ -22,6 +22,12 @@ import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import {
+  hasWorkspaceContent,
+  replaceConfirmMessage,
+  replaceWorkspace,
+  replaceWorkspaceSafely,
+} from "../lib/openWorkspaceReplace";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
 import { snapshotView } from "../lib/plotview";
@@ -30,7 +36,6 @@ import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
-import { stageWorkspaceRestore } from "../store/windowHydration";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
 // chokepoint lives in store/importDatasets.ts's `runImport` (covers ⌘O, the
@@ -50,15 +55,10 @@ function rejectIfImportRunning(): boolean {
 let demoCounter = 0;
 let sampleCounter = 0;
 
-/** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
- *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
- *  two branches (empty library, and the confirmed-replace path) so the
- *  three-statement sequence isn't duplicated. */
-function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
-  s().recordHistory("open workspace");
-  s().loadWorkspace(ws);
-  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
-}
+// replaceWorkspace/replaceWorkspaceSafely/hasWorkspaceContent/
+// replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
+// shared by both open commands below — live in lib/openWorkspaceReplace.ts
+// (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
 
 /** Shared Open/Append-workspace flow (the only difference between the two
  *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
@@ -193,32 +193,36 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Open workspace (.dwk)…",
       description: "Replace the current session with a previously saved Quantized workspace.",
-      // `loadWorkspace` REPLACES the entire library (datasets, folders,
-      // reports, figure docs, saved specs, macro steps, windows) -- clearAll's
-      // own comment calls it "loadWorkspace's replace-everything reset". The
-      // strictly LESS destructive "Remove all…" above both confirms and
-      // records undo; this path did neither, and the 800ms autosave debounce
-      // then overwrote the discarded session's autosave record too.
-      //
-      // The guard lives HERE, not inside `loadWorkspace`, because that action
-      // has two legitimate non-interactive callers: `clearAll` (already
-      // confirmed at its own call site) and the startup autosave restore
-      // (useWorkspaceAutosave), which must never prompt.
-      // P3.4 slice 4: `replaceWorkspace` stages every restored window except
-      // the active/linked ones behind a placeholder until its drain turn,
-      // instead of all mounting — and each creating a live uPlot instance —
-      // in one commit.
+      // `loadWorkspace` REPLACES the entire library — confirm + undo-record
+      // here (not inside `loadWorkspace`, which also has two legitimate
+      // non-interactive callers: `clearAll`, and the startup autosave
+      // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
+      // stages every restored window except the active/linked ones behind a
+      // placeholder until its drain turn, instead of mounting all at once.
       run: openWorkspaceCommand(s, "open", (ws) => {
-        const n = s().datasets.length;
-        if (n === 0) return replaceWorkspace(s, ws);
+        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws);
+        void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
+          (ok) => ok && replaceWorkspace(s, ws),
+        );
+      }),
+    },
+    {
+      id: "open-workspace-safe",
+      group: "File",
+      label: "Open without layout…",
+      description: "Replace the current session with a saved workspace, skipping its saved window layout.",
+      keywords: "safe recovery layout skip windows corrupted crash",
+      // Same replace-and-confirm flow as "open-workspace" above, via
+      // replaceWorkspaceSafely (skipLayout: true).
+      run: openWorkspaceCommand(s, "open", (ws) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws);
+        const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
           "Replace the current workspace?",
-          `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently ` +
-            `loaded, plus every folder, report and saved figure. Save your work first ` +
-            `if you need it.`,
+          replaceConfirmMessage(s().datasets.length, extra),
           "Replace",
           true,
-        ).then((ok) => ok && replaceWorkspace(s, ws));
+        ).then((ok) => ok && replaceWorkspaceSafely(s, ws));
       }),
     },
     {
