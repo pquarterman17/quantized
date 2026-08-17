@@ -1,9 +1,72 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
+import {
+  assignQuickFigureColumn,
+  initialQuickFigureMapping,
+  mappingReady,
+  useAcquisitionAxis,
+  type QuickColumnAssignment,
+} from "../../../lib/quickFigureMapping";
+import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import QuickMappingPanel from "./QuickMappingPanel";
 
-function usefulColumns(labels: readonly string[], units: readonly string[]): string[] {
-  return labels.map((label, index) => units[index] ? `${label} (${units[index]})` : label);
+function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => void }) {
+  const [mapping, setMapping] = useState(() => initialQuickFigureMapping(dataset));
+  const assign = (channel: number, assignment: QuickColumnAssignment): void => {
+    setMapping((current) => assignQuickFigureColumn(current, channel, assignment));
+  };
+  const xName = mapping.xKey === null
+    ? String(dataset.data.metadata?.["x_column_long"] || dataset.data.metadata?.["x_column_name"] || "Acquisition axis")
+    : dataset.data.labels[mapping.xKey];
+
+  return (
+    <section className="qzk-quick-builder" aria-labelledby="quick-builder-title">
+      <header className="qzk-quick-builder-head">
+        <div>
+          <div className="qzk-quick-builder-eyebrow">Quick Figure Builder</div>
+          <h1 id="quick-builder-title">Configure {dataset.name}</h1>
+          <p>Choose how this worksheet becomes an editable figure. The source data stays unchanged.</p>
+        </div>
+        <button type="button" className="qz-btn" onClick={close}>Cancel</button>
+      </header>
+
+      <div className="qzk-quick-builder-grid">
+        <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-columns">
+          <div className="qzk-quick-builder-step">1</div>
+          <h2 id="quick-builder-columns">Data columns</h2>
+          <p>Assign the axes and uncertainty columns explicitly.</p>
+          <QuickMappingPanel
+            data={dataset.data}
+            mapping={mapping}
+            onAssign={assign}
+            onUseAcquisitionX={() => setMapping(useAcquisitionAxis)}
+          />
+        </section>
+
+        <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">
+          <div className="qzk-quick-builder-step">2</div>
+          <h2 id="quick-builder-preview">Live preview</h2>
+          <div className="qzk-quick-builder-preview-empty">
+            {mappingReady(mapping)
+              ? `${mapping.yKeys.length} Y series against ${xName}. Live rendering arrives in G3.`
+              : "Assign at least one Y series to preview the figure."}
+          </div>
+        </section>
+
+        <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-settings">
+          <div className="qzk-quick-builder-step">3</div>
+          <h2 id="quick-builder-settings">Figure setup</h2>
+          <dl className="qzk-quick-builder-facts">
+            <div><dt>Rows</dt><dd>{dataset.data.time.length.toLocaleString()}</dd></div>
+            <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>
+            <div><dt>Output</dt><dd>Editable figure</dd></div>
+          </dl>
+          <button type="button" className="qz-btn qz-primary" disabled>Create Editable Figure</button>
+        </section>
+      </div>
+    </section>
+  );
 }
 
 export default function QuickFigureBuilderWorkspace() {
@@ -34,47 +97,5 @@ export default function QuickFigureBuilderWorkspace() {
       </section>
     );
   }
-
-  const columns = usefulColumns(dataset.data.labels, dataset.data.units);
-  return (
-    <section className="qzk-quick-builder" aria-labelledby="quick-builder-title">
-      <header className="qzk-quick-builder-head">
-        <div>
-          <div className="qzk-quick-builder-eyebrow">Quick Figure Builder</div>
-          <h1 id="quick-builder-title">Configure {dataset.name}</h1>
-          <p>Choose how this worksheet becomes an editable figure. The source data stays unchanged.</p>
-        </div>
-        <button type="button" className="qz-btn" onClick={close}>Cancel</button>
-      </header>
-
-      <div className="qzk-quick-builder-grid">
-        <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-columns">
-          <div className="qzk-quick-builder-step">1</div>
-          <h2 id="quick-builder-columns">Data columns</h2>
-          <p>Role assignment is the next stacked slice.</p>
-          <ul className="qzk-quick-builder-columns">
-            <li><span>Source X</span><strong>Acquisition axis</strong></li>
-            {columns.map((column, index) => <li key={`${index}:${column}`}><span>{column}</span><strong>Unassigned</strong></li>)}
-          </ul>
-        </section>
-
-        <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">
-          <div className="qzk-quick-builder-step">2</div>
-          <h2 id="quick-builder-preview">Live preview</h2>
-          <div className="qzk-quick-builder-preview-empty">Assign X and Y roles to preview the figure.</div>
-        </section>
-
-        <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-settings">
-          <div className="qzk-quick-builder-step">3</div>
-          <h2 id="quick-builder-settings">Figure setup</h2>
-          <dl className="qzk-quick-builder-facts">
-            <div><dt>Rows</dt><dd>{dataset.data.time.length.toLocaleString()}</dd></div>
-            <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>
-            <div><dt>Output</dt><dd>Editable figure</dd></div>
-          </dl>
-          <button type="button" className="qz-btn qz-primary" disabled>Create Editable Figure</button>
-        </section>
-      </div>
-    </section>
-  );
+  return <BuilderForDataset key={dataset.id} dataset={dataset} close={close} />;
 }
