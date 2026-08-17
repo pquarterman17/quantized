@@ -97,8 +97,11 @@ export type QuickPlotProfile = { supported: true; mode: "line" } | { supported: 
 export function quickPlotProfile(dataset: Dataset): QuickPlotProfile {
   const tech = techniqueOf(dataset);
   if (tech === "generic") return { supported: false, reason: CONFIGURE_QUICK_PLOT_REASON };
-  if (LINE_PLOT_TECHNIQUES.has(tech)) return { supported: true, mode: "line" };
+  // The canonical data-shape signal outranks the technique tag (Sol
+  // follow-up, PR #153): 2D map data refuses a line Quick Plot even when a
+  // malformed/future parser stamped it with an allowlisted 1D technique.
   if (is2DMap(dataset.data)) return { supported: false, reason: MAP_DATA_REASON };
+  if (LINE_PLOT_TECHNIQUES.has(tech)) return { supported: true, mode: "line" };
   return { supported: false, reason: UNSUPPORTED_TECHNIQUE_REASON };
 }
 

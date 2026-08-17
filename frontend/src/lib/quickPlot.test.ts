@@ -425,3 +425,22 @@ describe("quickPlotAvailability performance (P2: allocation-free early exit + ca
     expect(reads()).toBe(readsAfterFirst); // cache hit: no additional element reads at all
   });
 });
+
+describe("quickPlotProfile — canonical data shape outranks the technique tag (Sol follow-up)", () => {
+  it("an ALLOWLISTED technique carrying canonical 2D map data still refuses line Quick Plot", () => {
+    const dataset = {
+      id: "d2d", name: "sneaky-map", workbookId: null,
+      data: {
+        time: [0, 1, 2, 3],
+        values: [[0, 0, 1], [0, 1, 2], [1, 0, 3], [1, 1, 4]],
+        labels: ["qx", "qz", "intensity"],
+        units: ["", "", ""],
+        // Malformed/future-parser case: a line-plot technique tag on data
+        // whose canonical shape is a 2D map.
+        metadata: { technique: "xrd.powder", is2D: true },
+      },
+    } as never;
+    const profile = quickPlotProfile(dataset);
+    expect(profile).toEqual({ supported: false, reason: MAP_DATA_REASON });
+  });
+});
