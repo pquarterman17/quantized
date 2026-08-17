@@ -28,6 +28,7 @@ import { askParams } from "../components/overlays/ParamDialog";
 import type { Action } from "../store/commands";
 import { useApp } from "../store/useApp";
 import { actionPaletteEntry, datasetActions, type DatasetActionTarget } from "./contextActions";
+import { withQuickPlot } from "./quickPlotActions";
 
 function renameDatasetDialog(id: string, name: string): void {
   void askParams(`Rename "${name}"`, [{ key: "name", label: "Name", type: "text", default: name }]).then(
@@ -65,7 +66,14 @@ export function contextPaletteActions(): Action[] {
       onAddTag: () => addDatasetTagDialog(active.id, active.name),
     };
     const group = `Active dataset — ${active.name}`;
-    for (const a of datasetActions) {
+    // withQuickPlot (review fix #3): datasetActions is the flat "every
+    // dataset action" list, and this loop is its ONLY real consumer outside
+    // its own definition -- the actual palette/flat-list assembly seam,
+    // since contextActions.ts itself has no line-budget room to fold Quick
+    // Plot in directly. actionPaletteEntry already omits a disabled/hidden
+    // entry (the palette convention: no greyed rows), so an unrecognized
+    // active dataset's Quick Plot is naturally absent, no extra filtering.
+    for (const a of withQuickPlot(datasetActions)) {
       const entry = actionPaletteEntry(a, target, group, "ctx.dataset");
       if (entry) out.push(entry);
     }

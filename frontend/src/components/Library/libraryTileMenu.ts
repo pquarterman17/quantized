@@ -63,7 +63,8 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
     return buildWorkbookRowMenu(node, () =>
       renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameWorkbook(node.entityId, name)),
     () => hooks.browse(node),
-    () => hooks.open(node));
+    () => hooks.open(node),
+    hooks.stageReturn);
   }
   if (node.kind === "folder") {
     // The SUBTREE dataset count, exactly what the tree passes (LibraryTree's

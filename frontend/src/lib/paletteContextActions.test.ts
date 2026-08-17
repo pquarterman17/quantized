@@ -68,6 +68,58 @@ describe("contextPaletteActions — active dataset", () => {
   });
 });
 
+// Review fix #3: datasetQuickPlotActions was missing from the flat
+// "every dataset action" list the palette consumes -- withQuickPlot
+// (lib/quickPlotActions.ts) folds it into the SAME loop this file already
+// runs over `datasetActions`.
+describe("contextPaletteActions — Quick Plot (fix #3)", () => {
+  it("includes Quick Plot for a recognized, plottable active dataset", () => {
+    useApp.setState({
+      datasets: [
+        makeDataset("d1", "Alpha", {
+          data: {
+            time: [0, 1, 2],
+            values: [[1, 10], [2, 20], [3, 30]],
+            labels: ["A", "B"],
+            units: ["", ""],
+            metadata: { technique: "magnetometry.mvsh" },
+          },
+        }),
+      ],
+      activeId: "d1",
+    });
+    const actions = contextPaletteActions();
+    const quickPlot = actions.find((a) => a.label === "Quick Plot");
+    expect(quickPlot).toBeTruthy();
+    expect(quickPlot!.group).toBe("Active dataset — Alpha");
+  });
+
+  it("omits Quick Plot for an unrecognized (generic) active dataset — palette convention: no greyed rows", () => {
+    // makeDataset's default metadata ({}) resolves to technique "generic".
+    const actions = contextPaletteActions();
+    expect(actions.some((a) => a.label === "Quick Plot")).toBe(false);
+  });
+
+  it("omits Configure Quick Plot… (always disabled) even for a recognized dataset", () => {
+    useApp.setState({
+      datasets: [
+        makeDataset("d1", "Alpha", {
+          data: {
+            time: [0, 1, 2],
+            values: [[1, 10], [2, 20], [3, 30]],
+            labels: ["A", "B"],
+            units: ["", ""],
+            metadata: { technique: "magnetometry.mvsh" },
+          },
+        }),
+      ],
+      activeId: "d1",
+    });
+    const actions = contextPaletteActions();
+    expect(actions.some((a) => a.label === "Configure Quick Plot…")).toBe(false);
+  });
+});
+
 describe("contextPaletteActions — selected annotation", () => {
   beforeEach(() => {
     useApp.setState({ activeId: null, datasets: [] }); // isolate to just the annotation group

@@ -131,8 +131,8 @@ export function categoricalXPayload(
  *  density" against a given x source. A channel with few finite pairs can't
  *  render as a meaningful line, and worse: its stray finite values still enter
  *  uPlot's shared y-axis autoscale, squashing every other series into
- *  invisibility instead of just being invisible itself. */
-function finitePairCount(xs: readonly number[], ys: readonly number[]): number {
+ *  invisibility. Exported for lib/quickPlot.ts's availability gate. */
+export function finitePairCount(xs: readonly number[], ys: readonly number[]): number {
   const n = Math.min(xs.length, ys.length);
   let count = 0;
   for (let i = 0; i < n; i++) {

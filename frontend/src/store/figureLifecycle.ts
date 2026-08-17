@@ -15,7 +15,10 @@ import { withPlotWindowDocument } from "./windowDocuments";
 export { liveWindowDocument } from "./liveWindowDocument";
 
 let figureSequence = 0;
-const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;
+// Exported (nextDatasetId/useApp.ts precedent) so a sibling slice minting a
+// FRESH editable-figure id -- store/quickPlotAction.ts's quickPlotDataset --
+// shares the exact same id scheme instead of inventing a second one.
+export const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;
 // Shared by both begin* refusals (a session already open) — one wording, one
 // place to update, kept off the StatusBar-only rest of the file (toast(...) +
 // status both carry it — the convention the rest of the app follows for

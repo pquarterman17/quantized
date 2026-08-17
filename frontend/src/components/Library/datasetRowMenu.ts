@@ -29,6 +29,7 @@ import {
   runContextAction,
   type DatasetActionTarget,
 } from "../../lib/contextActions";
+import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
@@ -65,7 +66,11 @@ export function buildDatasetRowMenu(
   const moveToFolder = useApp.getState().moveDatasetToFolder;
 
   return [
-    ...buildMenuItems(datasetCoreActions, target),
+    // withQuickPlot (lib/quickPlotActions.ts): L0.38's ordering splices
+    // Quick Plot right after the "plot" group (Plot (make active) / Plot in
+    // new window), shared with paletteContextActions.ts so the two menu
+    // surfaces can't drift apart on where it lands.
+    ...buildMenuItems(withQuickPlot(datasetCoreActions), target),
     // Move into a folder (project-organization item 3). Flat list of folders +
     // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
     // header does the same.)
