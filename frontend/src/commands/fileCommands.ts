@@ -60,6 +60,23 @@ function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
 }
 
+/** "Open Without Layout…" (PR E2's safe-open) — same replace as
+ *  `replaceWorkspace` above, but `loadWorkspace`'s `skipLayout` option drops
+ *  the incoming plotWindows/focusedWindowId/toolWindowLayout and lands on
+ *  the single fresh window every layout-less doc already gets; everything
+ *  else restores normally. */
+function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace): void {
+  s().recordHistory("open workspace without layout");
+  s().loadWorkspace(ws, { skipLayout: true });
+  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+}
+
+/** Shared "you're about to replace N datasets" confirm body for both open
+ *  commands below; `extra` appends the safe-open's layout-skip notice. */
+function replaceConfirmMessage(n: number, extra = ""): string {
+  return `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently loaded, plus every folder, report and saved figure.${extra} Save your work first if you need it.`;
+}
+
 /** Shared Open/Append-workspace flow (the only difference between the two
  *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
  *  (`loadWorkspace` or `appendWorkspace`).
@@ -193,32 +210,35 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Open workspace (.dwk)…",
       description: "Replace the current session with a previously saved Quantized workspace.",
-      // `loadWorkspace` REPLACES the entire library (datasets, folders,
-      // reports, figure docs, saved specs, macro steps, windows) -- clearAll's
-      // own comment calls it "loadWorkspace's replace-everything reset". The
-      // strictly LESS destructive "Remove all…" above both confirms and
-      // records undo; this path did neither, and the 800ms autosave debounce
-      // then overwrote the discarded session's autosave record too.
-      //
-      // The guard lives HERE, not inside `loadWorkspace`, because that action
-      // has two legitimate non-interactive callers: `clearAll` (already
-      // confirmed at its own call site) and the startup autosave restore
-      // (useWorkspaceAutosave), which must never prompt.
-      // P3.4 slice 4: `replaceWorkspace` stages every restored window except
-      // the active/linked ones behind a placeholder until its drain turn,
-      // instead of all mounting — and each creating a live uPlot instance —
-      // in one commit.
+      // `loadWorkspace` REPLACES the entire library — confirm + undo-record
+      // here (not inside `loadWorkspace`, which also has two legitimate
+      // non-interactive callers: `clearAll`, and the startup autosave
+      // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
+      // stages every restored window except the active/linked ones behind a
+      // placeholder until its drain turn, instead of mounting all at once.
       run: openWorkspaceCommand(s, "open", (ws) => {
         const n = s().datasets.length;
         if (n === 0) return replaceWorkspace(s, ws);
-        void askConfirm(
-          "Replace the current workspace?",
-          `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently ` +
-            `loaded, plus every folder, report and saved figure. Save your work first ` +
-            `if you need it.`,
-          "Replace",
-          true,
-        ).then((ok) => ok && replaceWorkspace(s, ws));
+        void askConfirm("Replace the current workspace?", replaceConfirmMessage(n), "Replace", true).then(
+          (ok) => ok && replaceWorkspace(s, ws),
+        );
+      }),
+    },
+    {
+      id: "open-workspace-safe",
+      group: "File",
+      label: "Open Without Layout...",
+      description: "Replace the current session with a saved workspace, skipping its saved window layout.",
+      keywords: "safe recovery layout skip windows corrupted crash",
+      // Same replace-and-confirm flow as "open-workspace" above, via
+      // replaceWorkspaceSafely (skipLayout: true).
+      run: openWorkspaceCommand(s, "open", (ws) => {
+        const n = s().datasets.length;
+        if (n === 0) return replaceWorkspaceSafely(s, ws);
+        const extra = " The saved window layout will be skipped — everything opens in one default window.";
+        void askConfirm("Replace the current workspace?", replaceConfirmMessage(n, extra), "Replace", true).then(
+          (ok) => ok && replaceWorkspaceSafely(s, ws),
+        );
       }),
     },
     {

@@ -848,10 +848,42 @@ export function dedupeWindowTitle(baseName: string, existingTitles: readonly str
   return `${baseName} (${n})`;
 }
 
+// LIBRARY_WORKBOOK_UX_PLAN PR E2 ("oversized window coordinates") — how far
+// off the right/bottom edge a restored, non-maximized window's position may
+// sail before its top-left becomes permanently unreachable (a workspace
+// saved on a big monitor must not restore a window the user can never grab
+// back on a smaller one). Mirrors lib/toolwindow.ts's clampToolWindowPos
+// margin discipline, but clamps the UPPER bound only: this function's own
+// pre-existing "clamps non-finite/negative geometry to sane defaults" test
+// pins that a negative x/y is left alone (already a valid on-screen
+// position — partially off the left/top edge, same as any live drag can
+// stop short of); this only guards the direction restoring onto a smaller
+// viewport can actually overflow toward.
+const RESTORE_POSITION_MARGIN = 40;
+
+function clampRestoreAxis(pos: number, viewport: number): number {
+  if (!Number.isFinite(viewport) || viewport <= RESTORE_POSITION_MARGIN) return pos;
+  return Math.min(pos, viewport - RESTORE_POSITION_MARGIN);
+}
+
 /** Validate persisted plot windows (drop malformed entries; clamp dead
  *  dataset refs to null — never drop the window itself, see decision #4;
- *  clamp geometry to finite, non-negative numbers). Never throws. */
-export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): PlotWindow[] {
+ *  clamp geometry to finite, non-negative numbers). `viewport` (PR E2)
+ *  additionally clamps a NON-maximized window's restored x/y so its
+ *  top-left stays reachable — a maximized window's stored position is only
+ *  its "restore to normal" target and is left untouched (maximized/
+ *  minimized winState semantics are otherwise unaffected either way);
+ *  width/height keep their existing finite-only clamp. Defaults to the real
+ *  browser window, like lib/toolwindow.ts's `sanitizeToolWindowLayout`, so
+ *  callers only override it in tests. Never throws. */
+export function sanitizePlotWindows(
+  v: unknown,
+  dsIds: ReadonlySet<string>,
+  viewport: { width: number; height: number } = {
+    width: typeof window !== "undefined" ? window.innerWidth : 1280,
+    height: typeof window !== "undefined" ? window.innerHeight : 800,
+  },
+): PlotWindow[] {
   if (!Array.isArray(v)) return [];
   const out: PlotWindow[] = [];
   for (const e of v) {
@@ -884,6 +916,14 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       unknown
     >;
     const datasetId = typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
+    const winState = WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal";
+    // PR E2: only clamp a window whose stored x/y is its live on-screen
+    // position — a maximized window's is merely the "restore to normal"
+    // target, so leave it exactly as saved (see this function's own doc).
+    const rawX = num(g.x, 0);
+    const rawY = num(g.y, 0);
+    const x = winState === "maximized" ? rawX : clampRestoreAxis(rawX, viewport.width);
+    const y = winState === "maximized" ? rawY : clampRestoreAxis(rawY, viewport.height);
     out.push({
       id: o.id,
       kind,
@@ -893,13 +933,13 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       // dataset-bound via this field.
       datasetId: kind === "snapshot" || kind === "panel" ? null : datasetId,
       geometry: {
-        x: num(g.x, 0),
-        y: num(g.y, 0),
+        x,
+        y,
         w: Math.max(1, num(g.w, DEFAULT_WIDTH)),
         h: Math.max(1, num(g.h, DEFAULT_HEIGHT)),
       },
       z: num(o.z, 0),
-      winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
+      winState,
       view: sanitizePlotView(o.view),
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
       // Only plot windows can sync, and only groups 1..MAX_LINK_GROUP exist —

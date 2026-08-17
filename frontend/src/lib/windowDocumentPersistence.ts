@@ -33,13 +33,17 @@ function migrateLegacyWindow(window: PlotWindow): FigureDocument {
 /** Validate current documents and deterministically promote pre-F1 plot windows.
  * A newer document schema cannot be safely rewritten, so that ONE window falls
  * back to its already-sanitized legacy PlotView projection and records a
- * non-persisted migration warning; valid siblings keep loading normally. */
+ * non-persisted migration warning; valid siblings keep loading normally.
+ * `viewport` (LIBRARY_WORKBOOK_UX_PLAN PR E2) threads straight through to
+ * `sanitizePlotWindows` for its restore-position clamp — see that function's
+ * doc; omitted, it falls back to the same real-browser-window default. */
 export function sanitizeDocumentBackedPlotWindows(
   value: unknown,
   datasetIds: ReadonlySet<string>,
   migrationWarnings: string[] = [],
+  viewport?: { width: number; height: number },
 ): PlotWindow[] {
-  const windows = sanitizePlotWindows(value, datasetIds);
+  const windows = sanitizePlotWindows(value, datasetIds, viewport);
   const rawDocuments = rawDocumentsByWindowId(value);
   const usedDocumentIds = new Set<string>();
 

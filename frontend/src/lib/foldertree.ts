@@ -370,3 +370,44 @@ export function resolveDropBeforeId(
   if (i < 0) return undefined;
   return siblingIds[i + 1];
 }
+
+// ── .dwk parse boundary ─────────────────────────────────────────────────
+
+/** Validate a folder-node array from an untrusted `.dwk` (drops malformed
+ *  entries; reparents a folder to root if its parent is missing).
+ *  `notes`/`color`/`defaultTemplate` (plan #13 sub-item 4, Folder
+ *  Properties) are additive-optional: present + a non-blank string carries
+ *  through, absent/malformed is silently dropped — a legacy .dwk (no such
+ *  fields at all) loads exactly as before. Moved from lib/workspace.ts (that
+ *  module's own size ratchet) — the folder-tree parse boundary belongs
+ *  beside the rest of the folder-tree logic. */
+export function parseFolders(v: unknown): FolderNode[] {
+  if (!Array.isArray(v)) return [];
+  const out: FolderNode[] = [];
+  for (const f of v) {
+    if (typeof f !== "object" || f === null) continue;
+    const o = f as Record<string, unknown>;
+    if (
+      typeof o.id === "string" &&
+      typeof o.name === "string" &&
+      (o.parentId === null || typeof o.parentId === "string") &&
+      typeof o.order === "number" &&
+      Number.isFinite(o.order)
+    ) {
+      const node: FolderNode = {
+        id: o.id,
+        name: o.name,
+        parentId: (o.parentId as string | null) ?? null,
+        order: o.order,
+      };
+      if (typeof o.notes === "string" && o.notes.trim()) node.notes = o.notes;
+      if (typeof o.color === "string" && o.color.trim()) node.color = o.color;
+      if (typeof o.defaultTemplate === "string" && o.defaultTemplate.trim()) {
+        node.defaultTemplate = o.defaultTemplate;
+      }
+      out.push(node);
+    }
+  }
+  const ids = new Set(out.map((f) => f.id));
+  return out.map((f) => (f.parentId && !ids.has(f.parentId) ? { ...f, parentId: null } : f));
+}

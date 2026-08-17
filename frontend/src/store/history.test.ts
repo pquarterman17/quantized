@@ -291,6 +291,9 @@ describe("per-action-class undo/redo coverage", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      librarySelection: null,
+      workbookLastChild: {},
+      expandedWorkbookIds: [],
     };
 
     useApp.getState().appendWorkspace(incoming);

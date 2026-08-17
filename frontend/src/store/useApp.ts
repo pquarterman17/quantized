@@ -651,7 +651,10 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
   setFitSpec: (id: string, spec: FitSpec | null) => void;
-  loadWorkspace: (ws: WorkspaceState) => void;
+  // `skipLayout` (PR E2 "Open Without Layout…") ignores plotWindows/
+  // focusedWindowId/toolWindowLayout, falling through to the same
+  // single-fresh-window default a layout-less doc already gets.
+  loadWorkspace: (ws: WorkspaceState, options?: { skipLayout?: boolean }) => void;
   // Append a second .dwk's datasets into the CURRENT library (Origin's
   // "Append Project", MAIN_PLAN #16) — the additive opposite of
   // loadWorkspace: only the flat dataset list joins (collision-free ids +
@@ -1554,8 +1557,9 @@ export const useApp = create<AppState>((set, get) => ({
   // Runs on BOTH triggers that call this action: the autosave restore on
   // startup, and an explicit File ▸ Open .dwk — so a legacy v1 doc's `group`
   // strings get promoted to folders (item 6) either way, exactly once.
-  loadWorkspace: (ws) =>
+  loadWorkspace: (ws, options) =>
     set((s) => {
+      const skipLayout = options?.skipLayout ?? false; // PR E2, see AppState doc
       // v1/legacy compat: promote any un-foldered `Dataset.group` into a
       // root-level folder before anything else reads `datasets`/`folders` —
       // idempotent, so reloading an already-migrated workspace is a no-op.
@@ -1579,7 +1583,11 @@ export const useApp = create<AppState>((set, get) => ({
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
       const migrationWarnings = [...(ws.migrationWarnings ?? [])];
-      const restored = sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds, migrationWarnings);
+      // skipLayout: an empty `restored` falls through to the same
+      // single-fresh-window path a plotWindows-less doc already takes.
+      const restored = skipLayout
+        ? []
+        : sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds, migrationWarnings);
       const migrationNotice = migrationWarnings[0] ? ` — ${migrationWarnings[0]}${migrationWarnings.length > 1 ? ` (+${migrationWarnings.length - 1} more)` : ""}` : "";
       // Items 11/17: the ≥1-window invariant is specifically ≥1 PLOT window —
       // non-plot kinds (snapshot / worksheet / map) can't hold focus, so a
@@ -1613,15 +1621,12 @@ export const useApp = create<AppState>((set, get) => ({
         // TypeScript won't catch a missing key in an object literal here).
         workbooks: ws.workbooks ?? [],
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
-        // L0.25 coherence (retrospective-audit fix): the incoming document
-        // fully replaces the library, so the PREVIOUS project's transient
-        // tree selection/workbook disclosure must not survive into it — a
-        // stale librarySelection could name a folder id that doesn't exist
-        // here and feed import targeting a dangling id. (A2's lesson: every
-        // partial-set() field needs its explicit loadWorkspace reset line.)
-        librarySelection: null,
-        expandedWorkbookIds: [],
-        workbookLastChild: {},
+        // L0.25 coherence, now PR E2's persistence: restore what THIS doc
+        // carries (parseWorkspace already sanitized it), never the
+        // PREVIOUS project's stale value.
+        librarySelection: ws.librarySelection ?? null,
+        expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
+        workbookLastChild: ws.workbookLastChild ?? {},
         activeId: active,
         // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
         worksheetId: null,
@@ -1681,10 +1686,9 @@ export const useApp = create<AppState>((set, get) => ({
         plotWindows,
         focusedWindowId,
         // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by
-        // parseWorkspace (lib/workspace.ts's sanitizeToolWindowLayout) — a
-        // legacy doc with no field defaults to {} (every window falls back
-        // to its own default props, same as a fresh app start).
-        toolWindowLayout: ws.toolWindowLayout ?? {},
+        // parseWorkspace. PR E2 skipLayout: OMIT the key (not {}) so
+        // `set()`'s merge leaves the CURRENT session's layout untouched.
+        ...(skipLayout ? {} : { toolWindowLayout: ws.toolWindowLayout ?? {} }),
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never
         // wrote these here before item 7, so they're left alone (whatever the
