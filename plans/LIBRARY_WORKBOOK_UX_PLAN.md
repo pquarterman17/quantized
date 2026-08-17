@@ -1049,8 +1049,50 @@ build, and focused interaction coverage where appropriate.
        `frontend/src/store/quickFigureReimport.test.ts`). G5's remaining
        line is unchanged: the release-candidate human visual acceptance
        pass noted above.
-8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
-   with explicit scope and safe mismatch behavior.
+8. [~] **PR H — template persistence and scopes.** Save named mappings/styles
+   with explicit scope and safe mismatch behavior. Implemented-pending-review
+   (2026-08-17): `lib/quickPlotTemplates.ts` (H1 object + sanitizer, H4
+   `resolveTemplate`), `store/quickPlotTemplates.ts` (H3 CRUD +
+   apply-delegation), the `.dwk` `quickPlotTemplates` field
+   (`lib/workspace.ts`'s four-site additive pattern) and its `HistorySnapshot`
+   inclusion (`store/history.ts`, same commit as the slice — the savedRois-
+   incident gate), the Quick Figure Builder's **Save Quick Plot Template…**
+   action, and the **Quick Plot With…** chooser
+   (`components/overlays/QuickPlotWithDialog.tsx`) wired onto the worksheet
+   and workbook context menus + the ⌘K palette, hidden until ≥1 template
+   exists (L0.37). Rulings recorded here:
+   - **Lean template object, two scopes.** Scope is exactly `{kind:"workbook",
+     workbookId}` or `{kind:"schema"}` (L0.31's confirmed default) — no
+     third/global/named-import scope yet.
+   - **Refusal-with-report, never partial apply.** `resolveTemplate` re-keys
+     every mapped channel (X, each Y, each error binding endpoint) by its
+     saved LABEL, exactly like `techniqueViewMemory`'s re-key idiom, but
+     UNLIKE that function's partial tolerance: any single unresolved channel
+     refuses the WHOLE apply, naming every unmatched field — a silently
+     partial figure is a worse failure than an honest
+     "Configure Quick Plot..." refusal. Cross-technique is never bridged,
+     workbook-scoped templates gate to their own workbook, and a same-label-
+     different-unit column (e.g. "B" in Oe vs. Tesla) is treated as
+     unresolved too.
+   - **History inclusion is not optional.** `quickPlotTemplates` landed in
+     `HistorySnapshot`/`snapshotOf` in the SAME commit as the store slice —
+     see `store/history.ts`'s own savedRois-incident warning this guards
+     against.
+   - **Never auto-save, never silently overwrite.** Only the builder's
+     explicit **Save Quick Plot Template…** action creates a template;
+     saving under a name already in use dedupes it (`dedupeWindowTitle`
+     idiom: "Name", "Name (2)", ...) rather than replacing the existing
+     entry. `applyQuickPlotTemplate` never touches `quickPlotTemplates`
+     itself — it only resolves + delegates to the canonical
+     `createQuickFigureFromMapping` (G4), so apply carries the SAME
+     one-undo-per-gesture guarantee as Quick Plot/the builder's own Create.
+   - **What stays open under P1.3:** the full recipe-field vocabulary (only
+     mapping/style/technique/signature are captured here, not axis
+     limits/legend/decor), a global or exportable/cross-project scope, and
+     reverse-mapping an existing editable FigureDocument back into a
+     template (the editable-figure context menu's **Save as Template…**
+     ships as an honest disabled stub pointing at the builder, per H5c —
+     `components/Library/artifactContextActions.ts`).
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
    bounded Copy/Paste package, fresh-ID rewrite, provenance, and failure-safe
    cleanup contract from L0.23-L0.24.
@@ -1557,6 +1599,26 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **2026-08-17 — Claude, PR H implementation checkpoint (pending review):**
+  Quick Plot template persistence, scopes, and matching. `lib/quickPlotTemplates.ts`
+  (H1 template object + `sanitizeQuickPlotTemplates`; H4 pure `resolveTemplate`
+  — technique equality, scope gating, per-channel label re-key with
+  refusal-with-named-fields on ANY unresolved channel, never a partial
+  apply); `store/quickPlotTemplates.ts` (H3 save/rename/delete/apply, apply
+  delegates to the canonical `createQuickFigureFromMapping` — never a second
+  create path); `.dwk` `quickPlotTemplates` field via `lib/workspace.ts`'s
+  four-site additive pattern (module pin raised 592 → 600 with written
+  justification — the minimal unavoidable cost of the pattern, no extractable
+  block available to fund it) and `HistorySnapshot` inclusion in the SAME
+  commit as the slice; builder **Save Quick Plot Template…** action
+  (name+scope prompt, gated on `canCreateQuickFigure`); **Quick Plot With…**
+  chooser (`components/overlays/QuickPlotWithDialog.tsx`, lazy-loaded) wired
+  onto the worksheet/workbook context menus + the ⌘K palette, hidden until
+  ≥1 template exists; editable-figure **Save as Template…** honest disabled
+  stub (`artifactContextActions.ts`). See item H above for the full ruling
+  record. Gate: 647 targeted tests + full suite 482 files/7,128 tests green,
+  tsc/eslint clean, build + bundle budget green (832.5 kB eager, 21.4 kB
+  under budget).
 - **2026-08-15 — ChatGPT-Sol, PR E-a implementation checkpoint (pending
   review):** Added the main-workspace Tile browser from the approved L0.15
   mockup without creating another Library model. `App.tsx` owns the renderer
