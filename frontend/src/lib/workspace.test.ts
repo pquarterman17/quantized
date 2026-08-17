@@ -841,6 +841,46 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.figureDocs).toEqual([]);
   });
 
+  // G5 lifecycle proof (LIBRARY_WORKBOOK_UX_PLAN PR G5) pin: P0-a's probe
+  // found this seam ALREADY correct (sanitizeFigureDocument's `errorBindings`
+  // reads `bindings.errors` directly off the persisted JSON — it never
+  // reconstructs from `plot.view`/legacy `errKeys`), but the exact failure
+  // mode this slice exists to catch (a parse path that rebuilds documents
+  // from views/legacy errKeys and silently drops asymmetric/X bindings) has
+  // no permanent regression pin anywhere else, so it gets one here.
+  it("round-trips a figure-scoped asymmetric pair AND an X-error binding exactly, byte-for-byte (G5 lifecycle proof)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const errors: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+      { channel: 3, target: -1, axis: "x", side: "both" },
+    ];
+    const editable = createFigureDocument({
+      id: "rich-errors",
+      name: "Rich errors",
+      datasetId: "a",
+      view: defaultPlotView(),
+      errors,
+    });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, editableFigures: [editable] }));
+    expect(loaded.editableFigures).toEqual([editable]);
+    expect(loaded.editableFigures[0].bindings.errors).toEqual(errors);
+
+    // The window-attached document path (windowDocumentPersistence.ts) is a
+    // SEPARATE parse function from editableFigures' — pin it too so the two
+    // can't silently drift.
+    const winLoaded = parseWorkspace(serializeWorkspace({
+      datasets,
+      plotWindows: [{
+        id: "w1", kind: "plot", title: "t", datasetId: "a",
+        geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+        view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+        document: editable,
+      }],
+    }));
+    expect(winLoaded.plotWindows[0].document?.bindings.errors).toEqual(errors);
+  });
+
   it("migrates v1 editable documents to v2 without inventing publication state", () => {
     const editable = createFigureDocument({ id: "v1", name: "V1", datasetId: "a", view: defaultPlotView() });
     const raw = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")], editableFigures: [editable] })) as Record<string, unknown>;
