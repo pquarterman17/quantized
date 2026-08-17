@@ -51,6 +51,13 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
       : incompleteErrorNotice.length > 0
         ? incompleteErrorNotice[0]
         : undefined;
+  const createReasonId = !ready
+    ? "quick-builder-preview-summary"
+    : roleFilteredYKeys.length > 0
+      ? "quick-builder-role-warning"
+      : incompleteErrorNotice.length > 0
+        ? "quick-builder-error-warning"
+        : undefined;
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
   // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
   // hidden -- the button itself is also gated on `ready` below). `close()`
@@ -90,19 +97,21 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
         <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">
           <div className="qzk-quick-builder-step">2</div>
           <h2 id="quick-builder-preview">Live preview</h2>
-          <p className="qzk-quick-builder-preview-summary" aria-live="polite">
+          <p id="quick-builder-preview-summary" className="qzk-quick-builder-preview-summary" aria-live="polite">
             {mappingReady(mapping) ? `${mapping.yKeys.length} Y series against ${xName}` : "Mapping incomplete"}
           </p>
           {roleFilteredYKeys.length > 0 && (
-            <p className="qzk-quick-builder-notice" role="status">
+            <p id="quick-builder-role-warning" className="qzk-quick-builder-notice" role="status">
               {roleFilteredYKeys.length === 1
                 ? `"${dataset.data.labels[roleFilteredYKeys[0]]}" is marked Label/Ignore in this worksheet and won't appear on the created figure — clear its role in the Channels card first.`
                 : `${roleFilteredYKeys.length} assigned Y channels are marked Label/Ignore in this worksheet and won't appear on the created figure — clear their roles in the Channels card first.`}
             </p>
           )}
-          {incompleteErrorNotice.map((notice) => (
-            <p className="qzk-quick-builder-notice" role="status" key={notice}>{notice}.</p>
-          ))}
+          {incompleteErrorNotice.length > 0 && (
+            <div id="quick-builder-error-warning" className="qzk-quick-builder-notice" role="status">
+              {incompleteErrorNotice.map((notice) => <p key={notice}>{notice}.</p>)}
+            </div>
+          )}
           <GraphPreview render={preview} />
         </section>
 
@@ -127,6 +136,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             className="qz-btn qz-primary"
             disabled={createDisabledReason !== undefined}
             title={createDisabledReason}
+            aria-describedby={createReasonId}
             onClick={createFigure}
           >
             Create Editable Figure

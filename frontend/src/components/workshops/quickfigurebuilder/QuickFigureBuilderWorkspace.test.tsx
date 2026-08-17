@@ -148,6 +148,7 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
     expect(createBtn).toBeDisabled();
     expect(createBtn).toHaveAttribute("title", "Clear the Label/Ignore role from every assigned Y column in the Channels card first");
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-role-warning");
 
     act(() => useApp.setState({ datasets: [{ ...roleDataset, channelRoles: undefined }] }));
     expect(createBtn).not.toBeDisabled();
@@ -165,6 +166,7 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     const createBtn = screen.getByRole("button", { name: "Create Editable Figure" });
     expect(createBtn).toBeDisabled();
     expect(createBtn).toHaveAttribute("title", 'Y error for "signal" has + "signal_err+" but is missing −');
+    expect(createBtn).toHaveAttribute("aria-describedby", "quick-builder-error-warning");
 
     fireEvent.change(minus, { target: { value: "error:y:0:-" } });
     expect(createBtn).not.toBeDisabled();

@@ -837,16 +837,24 @@ build, and focused interaction coverage where appropriate.
      (Label/Ignore) channel to Y, which the render layer (`effectiveChannels`)
      silently drops even from an explicit list -- today mitigated with a
      visible builder hint (never change the channel's role behind the user's
-     back), but whether a role-carrying channel should be assignable at all,
-     or should auto-clear its role on assignment, is still open.
-     - [~] **2026-08-17 — ChatGPT-Sol (delegated implementation):** the
+     back). **Resolved 2026-08-17:** mapping remains available so the conflict
+     is understandable, but Create is blocked until the user explicitly clears
+     the worksheet role; the builder never mutates source roles implicitly.
+     - [~] **2026-08-17 — ChatGPT-Sol (delegated implementation), PR #158:** the
        builder now identifies half-complete asymmetric pairs by affected
        columns and blocks creation with a concise reason; explicitly mapped
        Label/Ignore Y columns likewise block creation without mutating the
-       worksheet role. Focused unit/component coverage covers correction,
-       cancel/no-mutation, and readiness. Remaining G5 work is real-browser
-       keyboard/cancel/error-bar coverage, save/close/reopen proof, and visual
-       acceptance at common desktop sizes.
+       worksheet role. Disabled reasons are programmatically associated with
+       Create; long scientific names wrap without crushing role controls; and
+       warning presentation remains compact at constrained sizes. Focused
+       unit/component coverage covers correction, cancel/no-mutation, and
+       readiness. A real Library-to-builder Chromium journey now proves
+       Cancel/Escape safety, native role assignment, half-pair blocking,
+       complete asymmetric creation, and exactly one rich-error document; a
+       900×700 long-label journey pins reachability and horizontal containment.
+       Remaining Claude-owned G5 work is save/close/reopen/project-reload proof
+       and the canonical-state review. Final human visual acceptance remains a
+       release-candidate task rather than an automated claim.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
