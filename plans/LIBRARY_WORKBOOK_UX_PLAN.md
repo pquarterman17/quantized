@@ -824,7 +824,7 @@ build, and focused interaction coverage where appropriate.
      projection cannot express, closing the gap where a builder-edited error
      binding rendered in the preview but silently dropped in the real figure
      window.
-   - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
+   - [x] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
      explanation, real-browser keyboard/cancel/error-bar coverage, reopen proof,
      and visual acceptance at common desktop sizes. Explicit requirement (G2
      review, 2026-08-17): surface half-complete asymmetric error pairs (a `+`
@@ -872,6 +872,57 @@ build, and focused interaction coverage where appropriate.
        allow-and-drop), and the joint-condition case (both a role-filtered Y
        and an incomplete pair at once) now reports both notices via
        `aria-describedby`/title instead of only the higher-priority one.
+     - [x] **2026-08-17 — Claude, the lifecycle proof (save/close/reopen/
+       project-reload, closing the remaining Claude-owned G5 work):** Phase 0
+       probed the three riskiest seams BEFORE building the journey and found
+       all three already correct, with evidence: (P0-a) the `.dwk` round trip
+       of a figure-scoped asymmetric pair + an X-error binding — both through
+       `editableFigures` and the window-attached document path
+       (`windowDocumentPersistence.ts`) — because `sanitizeFigureDocument`'s
+       `errorBindings()` reads `bindings.errors` straight off the persisted
+       JSON and never reconstructs from `plot.view`/legacy `errKeys`; (P0-b)
+       a normal property edit (a per-series style / axis label, the same
+       fields `updateFigureDocumentFromPlotView` folds in) survives Save,
+       window close, and reopen from Editable Figures, because that function
+       deliberately preserves every non-symmetric-Y binding while only
+       replacing the legacy projection it can actually edit; (P0-c) Undo/Redo
+       stays coherent across create → edit → save → close → reopen, because
+       `recordHistory`'s allowlisted snapshot already carries both
+       `editableFigures` and `plotWindows` together, so no step in the chain
+       can detach an edit from its document or resurrect a closed window.
+       Since nothing was broken, the probes became permanent regression pins
+       (`frontend/src/lib/workspace.test.ts`,
+       `frontend/src/store/quickFigureLifecycle.test.ts`) rather than fixes.
+       The real-browser proof (`frontend/e2e/specs/quick-figure-lifecycle.spec.ts`)
+       drives the owner's full checklist as ONE Chromium journey: builds a
+       Quick Figure through the real Library → Configure Quick Plot flow
+       (alternate X, 2 Y series, a complete asymmetric Y pair, an X-error
+       binding, line+symbol style); edits the Y-axis label through the
+       Inspector; saves and closes via the window's own title-bar controls;
+       reopens from the Editable Figures Library section; saves the complete
+       project through the real File ▸ "Save workspace (.dwk)…" menu (a real
+       browser download) and reloads it through the real File ▸ "Open
+       workspace (.dwk)…" native file picker (a real `filechooser` event,
+       confirmed through the actual "Replace the current workspace?"
+       dialog) — the realest driveable path, not a store-only shortcut; then
+       reopens the figure again post-reload and asserts the X/Y mapping,
+       mark + line-symbol `seriesStyles`, the axis-label edit, and both rich
+       error bindings all survived byte-exact, with a final real-keyboard
+       (Ctrl+Z / Ctrl+Shift+Z) Undo/Redo spot-check that leaves exactly one
+       window bound to the document throughout. (Two spec-authoring bugs
+       caught and fixed red-first along the way, not app bugs: the Quick
+       Figure Builder's "Plot style" `<select>` is a wrapping `<label>` whose
+       real-Chromium accessible name folds in the current option text, so an
+       exact `getByLabel` match hung — fixed with a class-scoped locator; and
+       the Library TREE row's L0.25 single-click-selects/double-click-opens
+       convention means a single `.click()` on "Editable figures" only
+       selected the row — fixed with `.dblclick()`, matching
+       figure-document-roundtrip.spec.ts's existing precedent.) Gate: 478/478 vitest files,
+       7,061/7,061 tests; tsc (app + e2e) and eslint clean; build 826.1 kB
+       eager (27.9 kB under budget); full local Playwright 54/54 passed.
+       G5's only remaining line is the release-candidate human visual
+       acceptance noted below — everything else on the checklist is
+       automated and green.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
