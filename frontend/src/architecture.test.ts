@@ -178,6 +178,23 @@ const STORE_PINS: Record<string, number> = {
   // renderer's first workbook mutations), composed in exactly like
   // datasetMeta.ts: one import line + one `WorkbookActionsSlice` word on the
   // extends clause + one spread line. Net still well down.
+  // 2818 -> 2661 (2026-08-17, sprint Day-0 pre-bank, PIN LEFT AT 2818 —
+  // the one deliberate exception to "no slack, tight pin" above): the
+  // #152/#153 merge landed useApp.ts 2 lines over this pin, because the
+  // ratchet sums line deltas across branches — two lanes can each add a
+  // few lines and still collide at merge even though neither alone crossed
+  // the ceiling. installBookData (lib/bookData.ts) was that incident's
+  // fix; with seven lanes landing store-slice registrations in parallel
+  // this week, the same collision was likely again. Moved
+  // ensureBookData/resolvePendingDatasets/resolveDataset/resolveDatasets
+  // (ORIGIN_FILE_DECODE_PLAN #38, around installBookData's call sites) and
+  // pasteDataFromClipboard (gap #47) — each already self-contained, no
+  // state of its own — to the new store/dataIntake.ts (DataIntakeSlice),
+  // composed in exactly like datasetMeta.ts. The pin stays at 2818 on
+  // purpose so the 157 lines of headroom are actually usable by the
+  // week's lanes instead of being immediately reclaimed; the NEXT
+  // extraction after the sprint should ratchet the pin back down to
+  // whatever useApp.ts actually is then, per the iron rule above.
   "/store/useApp.ts": 2818,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
