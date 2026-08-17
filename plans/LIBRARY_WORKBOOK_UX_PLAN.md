@@ -725,13 +725,46 @@ build, and focused interaction coverage where appropriate.
        approximation documented in the hook header. TilePreview extracted
        from LibraryWorkspace (workshop pattern) to stay under the
        component ceiling.*
-5b. [ ] **PR E2 — session restoration and safe open.** Persist Library view,
+5b. [x] **PR E2 — session restoration and safe open.** Merged as PR #152
+    (`dc2cb76`, owner-directed; parallel-delegation slice — Sonnet worktree
+    agent implemented to Claude's scope/contracts, then a 5-finding Claude
+    review round and two Sol review rounds, all red-proven — see the
+    2026-08-17 change-log entries). Persist Library view,
     selection, remembered workbook children, and workspace placement alongside
     the existing window layout; restore heavy children lazily and add
     **Safe Open Without Layout**.
-6. [ ] **PR F — known-data Quick Plot contract.** Add explicit availability,
+    *Three additive `.dwk` fields (no version bump): `librarySelection`
+    (7-kind union — deliberately NO worksheet kind; worksheet selection IS
+    `selectedIds`, L0.25), `workbookLastChild`, `expandedWorkbookIds` —
+    sanitized degrade-never-throw with per-kind live-id validation, and the
+    L0.25 selection exclusivity enforced at parse AND restore (a restored
+    tree selection wins outright; no `[active]` synthesis). Safe open ships
+    as a second command via `loadWorkspace`'s `skipLayout` option (layout
+    dropped, everything else restores; the session's toolWindowLayout
+    survives untouched); both open commands now confirm on
+    `hasWorkspaceContent` — every user-owned collection loadWorkspace
+    resets, techniqueViewMemory included — not `datasets.length`. All
+    restored window geometry viewport-clamps on restore (maximized
+    included).*
+6. [x] **PR F — known-data Quick Plot contract.** Merged as PR #153
+   (`2966c69`, owner-directed; the parallel slice to E2 — Sonnet worktree
+   agent implemented to Claude's scope/contracts, then a 9-finding Claude
+   review round (4 red-proven) and two Sol review rounds — see the
+   2026-08-17 change-log entries). Add explicit availability,
    disabled explanations, data-profile/schema matching, and focused tests for
    supported column permutations.
+   *Fail-closed by construction: a closed allowlist of line-plot
+   techniques (`generic` is the never-guess bucket → "Configure Quick
+   Plot…" reason), with the canonical `is2DMap` data-shape signal checked
+   BEFORE the technique tag (an `xrd.rsm`-tagged map can never quick-plot
+   as a line figure) and a finite x/y-pair probe (all-NaN axes fail
+   closed). Strict L0.11 workbook resolution: a remembered-but-unrecognized
+   worksheet disables with THAT sheet's reason, never silent substitution.
+   Creation is structurally never-replace (fresh id through the canonical
+   `createFigureDocument` → `editableFigures` → `openEditableFigure` path,
+   seeded with the same view composition as normal plotting), one history
+   entry per gesture, deduped names, and stage-return fires only when a
+   plot actually happened.*
 7. [ ] **PR G — Quick Figure Builder mapping slice.** Reuse the canonical
    editable-figure path; ship live preview, mapping, Cancel, and editable
    creation before advanced template management.
@@ -1862,3 +1895,59 @@ back to the owner. No Library implementation is authorized by this pause.
   on the scroll container AND the grid owns that, catching thumbnail-driven
   tile growth); and the scale E2E now ASSERTS the Escape reveal target
   instead of claiming it in a comment.
+- **2026-08-17 — Claude, PR E2 (#152, merge `dc2cb76`) — first
+  parallel-delegation slice:** Owner directive: work E2 and F in parallel,
+  delegating implementation to cheaper models after owning scope and plan.
+  Claude scoped the contracts (the three additive `.dwk` fields, the L0.25
+  worksheet-kind exclusion — a Claude scoping error the implementing agent
+  correctly flagged and implemented right — sanitizer rules, safe-open
+  semantics), a Sonnet worktree agent implemented, and a Claude review
+  round found 5 defects, all red-proven before fix: restored
+  `librarySelection` was synthesizing `selectedIds:[active]` (L0.25
+  violation); `parseLibrarySelection` validated shape but not per-kind
+  aliveness (a dangling folder id would feed import targeting); the
+  maximized-window restore was exempt from the viewport clamp (unreachable
+  one un-maximize later); autosave triggers omitted `workbooks`/`savedRois`;
+  and a label-style fix ("Open without layout…"). Two Sol review rounds,
+  both verified then fixed on the branch: P1 — gating the replace confirm
+  on `datasets.length` let a dataset-free session holding figures/pages/
+  reports be silently discarded (fixed with `hasWorkspaceContent` over
+  every collection loadWorkspace resets, `7a6c5d7`); follow-up —
+  `techniqueViewMemory` belongs in that predicate too (persisted, per-
+  project, user-owned; `3f01530`). Final branch gate: tsc/lint clean,
+  6,928 vitest, 51/51 local Playwright, both workflows green.
+- **2026-08-17 — Claude, PR F (#153, merge `2966c69`) — second
+  parallel-delegation slice:** Same delegation shape as E2, run
+  concurrently in a second worktree. Claude fixed the fail-closed Quick
+  Plot contract up front (closed technique allowlist, no inference, strict
+  L0.11, never-replace creation); a Sonnet agent implemented; Claude's
+  review round found 9 defects (4 red-proven), the substantive ones:
+  single-channel-vs-time datasets wrongly rejected (`labels.length<=1`
+  guard); silent worksheet substitution violating strict L0.11; a double
+  history entry stranding an orphaned figure on single Undo (restructured
+  to the createWindow-first single-entry pattern); `onStageOpen` firing on
+  fail-closed no-ops (a disabled Quick Plot closed the tile workspace);
+  all-NaN time passing a y-only finite check; palette flat-registry
+  omission; `techniqueViewMemory` not threaded into the seeded view;
+  repeat-run name collisions; a dead union payload. Two Sol review rounds,
+  verified then fixed: P1 — an `xrd.rsm`-tagged 2-D map passed the
+  technique gate and quick-plotted as a nonsense line figure (fixed with
+  the explicit line-technique allowlist + `is2DMap` guard, `e86a07e`);
+  follow-up — the data-shape signal must outrank the technique tag, so
+  `is2DMap` now short-circuits BEFORE the allowlist (`abb3209`). Final
+  branch gate: 6,954 vitest, 51/51 local Playwright, both workflows green.
+- **2026-08-17 — Claude, post-merge ratchet reconciliation (`74070c8` on
+  the #153 branch):** The two parallel slices were textually disjoint in
+  `store/useApp.ts` (E2: loadWorkspace restore; F: slice composition) and
+  GitHub merged them cleanly, but their line counts COMBINED pushed the
+  store 2 lines over the 2818 architecture-ratchet pin — each PR was green
+  alone; only the merge was red. Per the ratchet's own instruction
+  (extract, never raise the pin), the single-flight lazy-book resolver
+  (`installBookData` + its in-flight map, ORIGIN_FILE_DECODE_PLAN #38)
+  moved to a new pure `lib/bookData.ts`, parameterized on the store's
+  `set` (no store import, no cycle); `useApp.ts` dropped to 2,783 lines —
+  35 banked under the pin. Full combined-head gate before re-merge: 6,986
+  vitest, build 821.1 kB (32.9 kB under budget), CI + E2E + CodeQL green.
+  Lesson for future parallel slices: the ratchet sums across branches —
+  budget shared-pinned-file growth at scoping time, or pre-merge the
+  second branch locally before its CI run.
