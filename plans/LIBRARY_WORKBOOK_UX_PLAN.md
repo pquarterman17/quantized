@@ -742,8 +742,12 @@ build, and focused interaction coverage where appropriate.
      data is deliberately accepted here; a vanished source fails closed.
      Implemented 2026-08-16 on `sol/quick-figure-builder-g1`, pending Claude
      review/PR.
-   - [ ] **G2 — mapping draft and role assignment:** one local mapping state;
-     X/Y/error/ignore roles through pointer and keyboard-accessible actions.
+   - [~] **G2 — mapping draft and role assignment (ChatGPT-Sol):** one local
+     mapping state; X/Y/error/ignore roles through drag/drop and native
+     keyboard-accessible role menus. Error roles explicitly name axis, target,
+     and symmetric/asymmetric side; role changes remain exclusive and remove
+     invalid dependent bindings. Implemented 2026-08-16 on
+     `sol/quick-figure-builder-g2`, pending stacked PR/review.
    - [ ] **G3 — live canonical preview:** every valid draft change appears in
      the center preview without creating a parallel figure-state model.
    - [ ] **G4 — create editable figure:** commit once through the canonical

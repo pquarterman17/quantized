@@ -31,9 +31,36 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
   it("shows the source facts without creating or mutating a figure", () => {
     render(<QuickFigureBuilderWorkspace />);
     expect(screen.getByRole("heading", { name: "Configure measurement.csv" })).toBeInTheDocument();
-    expect(screen.getByText("signal (V)")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Role for signal" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Editable Figure" })).toBeDisabled();
     expect(useApp.getState().editableFigures).toEqual([]);
+  });
+
+  it("offers keyboard-accessible X, Y, ignore, and targeted error roles", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    const signal = screen.getByRole("combobox", { name: "Role for signal" });
+    const error = screen.getByRole("combobox", { name: "Role for error" });
+    expect(signal).toHaveValue("y");
+    fireEvent.change(signal, { target: { value: "x" } });
+    expect(signal).toHaveValue("x");
+    fireEvent.change(error, { target: { value: "error:x:-1:both" } });
+    expect(error).toHaveValue("error:x:-1:both");
+    fireEvent.change(error, { target: { value: "y" } });
+    expect(screen.getByText("1 Y series against signal. Live rendering arrives in G3.")).toBeInTheDocument();
+  });
+
+  it("supports dragging a column into an explicit role zone", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    const row = screen.getByText("signal").closest("li")!;
+    const ignoreZone = screen.getByLabelText("Column role drop zones").querySelectorAll(".qzk-quick-builder-zone")[2];
+    fireEvent.dragStart(row, { dataTransfer });
+    fireEvent.drop(ignoreZone, { dataTransfer });
+    expect(screen.getByRole("combobox", { name: "Role for signal" })).toHaveValue("ignore");
   });
 
   it("Cancel clears only the transient builder target", () => {
