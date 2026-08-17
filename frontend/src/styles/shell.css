@@ -929,7 +929,12 @@ body {
 .qzk-quick-builder-facts div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
 .qzk-quick-builder-facts dt { color: var(--text-faint); }
 .qzk-quick-builder-facts dd { margin: 0; font-family: var(--font-mono); }
-.qzk-quick-builder-notice { margin-top: 10px !important; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 48%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--warn) 8%, var(--surface-1)); color: var(--text); overflow-wrap: anywhere; }
+.qzk-quick-builder-notice { margin-top: 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 48%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--warn) 8%, var(--surface-1)); color: var(--text); overflow-wrap: anywhere; }
+/* G5 review round (P3c): scoped to beat `.qzk-quick-builder p { margin: 0 }`'s
+   specificity (a class+type selector) without `!important` -- the notice is
+   rendered as either a <p> (role-filtered) or a <div> (error) with the same
+   class; only the <p> case collides with that reset. */
+.qzk-quick-builder p.qzk-quick-builder-notice { margin-top: 10px; }
 .qzk-quick-builder-notice p + p { margin-top: 6px; }
 @media (max-width: 1050px) { .qzk-quick-builder-grid { grid-template-columns: 1fr 1.35fr; } .qzk-quick-builder-grid > :last-child { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .qzk-quick-builder-head { flex-direction: column-reverse; } .qzk-quick-builder-grid { grid-template-columns: 1fr; } .qzk-quick-builder-grid > :last-child { grid-column: auto; } }

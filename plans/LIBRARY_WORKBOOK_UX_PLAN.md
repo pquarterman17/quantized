@@ -855,6 +855,22 @@ build, and focused interaction coverage where appropriate.
        Remaining Claude-owned G5 work is save/close/reopen/project-reload proof
        and the canonical-state review. Final human visual acceptance remains a
        release-candidate task rather than an automated claim.
+     - [x] **2026-08-17 — PR #158 review round (independent reviewer,
+       probe-confirmed):** Sol's handoff above omitted that the button's
+       readiness checks (role-filtered Y, incomplete asymmetric pairs) were
+       gating the Create BUTTON only -- the store action
+       (`createQuickFigureFromMapping`) still gated on `mappingReady` alone,
+       so calling it directly with either probe shape (a lone `+`/`-` error
+       binding, or a role-filtered-only Y mapping) succeeded and created a
+       figure whose content silently vanished at render, a parallel-readiness
+       drift of exactly the kind this codebase's lessons-learned bans.
+       Closed: `canCreateQuickFigure` (`lib/quickFigureMapping.ts`) is now the
+       ONE predicate both the button and the store action gate on, so they
+       cannot drift apart again; the role-filtered notice copy was also
+       aligned to "blocked" framing (it previously read as G4-era
+       allow-and-drop), and the joint-condition case (both a role-filtered Y
+       and an incomplete pair at once) now reports both notices via
+       `aria-describedby`/title instead of only the higher-priority one.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
