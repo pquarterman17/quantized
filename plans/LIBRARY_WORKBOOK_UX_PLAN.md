@@ -701,7 +701,11 @@ build, and focused interaction coverage where appropriate.
        clear loading, unavailable-source, unsupported, and error treatments,
        kind badges, restrained hover emphasis, and reduced-motion behavior.
        E-c3 virtualization remains explicitly outside this slice.*
-     - [~] **E-c3 (Claude): large-Library safeguards.** Virtualization +
+     - [x] **E-c3 (Claude): large-Library safeguards.** Merged as PR #151
+       (`4055699`, owner-directed after a max-effort critical review round
+       fixed 8 findings — see the 2026-08-17 change-log entry). **E-c is
+       now COMPLETE**: E-c1 cache → E-c2 previews → E-c3 scale.
+       Virtualization +
        large-library fixtures; preserve selection, keyboard navigation, and
        "Show in Library"; performance and regression testing.
        *Implemented 2026-08-16 on `claude/quantized-origin-jmp-gaps-vbtfnm`,
