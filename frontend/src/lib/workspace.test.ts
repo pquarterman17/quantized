@@ -8,6 +8,7 @@ import { createPageDocument } from "./pageDocument";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
+import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { RoiDef } from "./roi";
 import type { Dataset, OriginFigure } from "./types";
@@ -1249,6 +1250,78 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
     );
     expect(loaded.savedPlotSpecs).toHaveLength(1);
     expect(loaded.savedPlotSpecs[0].spec).toEqual(emptySpec());
+  });
+});
+
+describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR H)", () => {
+  const templateA: QuickPlotTemplate = {
+    id: "qpt-1",
+    name: "My Template",
+    createdAt: "2026-08-17T00:00:00.000Z",
+    modifiedAt: "2026-08-17T00:00:00.000Z",
+    scope: { kind: "schema" },
+    technique: "magnetometry.mvsh",
+    signature: {
+      channels: [
+        { label: "a", unit: "emu", errorRole: "value" },
+        { label: "b", unit: "oe", errorRole: "value" },
+      ],
+    },
+    mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [1] },
+    style: "line",
+    labels: { 0: "A" },
+  };
+
+  it("round-trips a well-formed template list byte-exact", () => {
+    const datasets = [makeDataset("a", "first")];
+    const serialized = serializeWorkspace({ datasets, quickPlotTemplates: [templateA] });
+    const loaded = parseWorkspace(serialized);
+    expect(loaded.quickPlotTemplates).toEqual([templateA]);
+    // Byte-exact re-serialization of the templates field itself (the doc's
+    // `savedAt` is a fresh timestamp each call, so compare the field in
+    // isolation rather than the whole document).
+    const reserialized = JSON.parse(serializeWorkspace({ datasets, quickPlotTemplates: loaded.quickPlotTemplates })) as {
+      quickPlotTemplates: unknown;
+    };
+    const original = JSON.parse(serialized) as { quickPlotTemplates: unknown };
+    expect(JSON.stringify(reserialized.quickPlotTemplates)).toBe(JSON.stringify(original.quickPlotTemplates));
+  });
+
+  it("round-trips a workbook-scoped template", () => {
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-2", scope: { kind: "workbook", workbookId: "wb-1" } };
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([scoped]);
+  });
+
+  it("defaults to an empty list for a legacy doc with no quickPlotTemplates field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.quickPlotTemplates).toEqual([]);
+  });
+
+  it("drops a corrupt template entry without throwing or dropping the rest of the doc (never throws on load)", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], quickPlotTemplates: [templateA] }),
+    ) as Record<string, unknown>;
+    doc.quickPlotTemplates = [
+      (doc.quickPlotTemplates as unknown[])[0],
+      { id: "bad" }, // missing everything else
+      { ...templateA, id: "bad2", mapping: { xKey: 0, yKeys: "not-an-array" } }, // corrupt nested mapping
+    ];
+    expect(() => parseWorkspace(JSON.stringify(doc))).not.toThrow();
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.quickPlotTemplates).toHaveLength(1);
+    expect(loaded.quickPlotTemplates[0].id).toBe("qpt-1");
+  });
+
+  it("never throws on a hand-edited non-array quickPlotTemplates", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.quickPlotTemplates = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).quickPlotTemplates).toEqual([]);
   });
 });
 

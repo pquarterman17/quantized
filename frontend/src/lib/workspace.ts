@@ -18,6 +18,7 @@ import {
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
+import { sanitizeQuickPlotTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
@@ -106,6 +107,8 @@ export interface WorkspaceState {
   toolWindowLayout?: Record<string, ToolWindowLayout>;
   /** GUI_INTERACTION_PLAN #11 — every named saved Graph Builder spec. */
   savedPlotSpecs?: SavedPlotSpec[];
+  /** PR H — every named saved Quick Plot template (L0.14/L0.31). Additive-optional. */
+  quickPlotTemplates?: QuickPlotTemplate[];
   /** PLOT_WORKFLOW_PLAN item 5 — per-technique last-used view. Additive; a
    *  caller (or a pre-item-5 .dwk) with no field loads as `{}`. */
   techniqueViewMemory?: TechniqueViewMemoryMap;
@@ -151,6 +154,7 @@ export interface LoadedWorkspace {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  quickPlotTemplates: QuickPlotTemplate[]; // PR H — always populated
   /** PR E2 — see WorkspaceState's doc; always populated. */
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
@@ -182,6 +186,7 @@ interface WorkspaceDoc {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  quickPlotTemplates: QuickPlotTemplate[];
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
@@ -215,6 +220,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     focusedWindowId: ws.focusedWindowId ?? null,
     toolWindowLayout: ws.toolWindowLayout ?? {},
     savedPlotSpecs: ws.savedPlotSpecs ?? [],
+    quickPlotTemplates: ws.quickPlotTemplates ?? [], // PR H — verbatim, same convention as savedPlotSpecs
     // PLOT_WORKFLOW_PLAN item 5: passed through verbatim, same convention as
     // `plotWindows` above — the caller (windowsForSave()'s save-time-freshen
     // sibling, `captureTechniqueView` applied to the live view) owns the fold.
@@ -541,6 +547,7 @@ export function parseWorkspace(
       : null;
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
+  const quickPlotTemplates = sanitizeQuickPlotTemplates(o.quickPlotTemplates);
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
@@ -577,6 +584,7 @@ export function parseWorkspace(
     savedPlotSpecs,
     techniqueViewMemory,
     savedRois,
+    quickPlotTemplates,
     librarySelection,
     workbookLastChild,
     expandedWorkbookIds,
