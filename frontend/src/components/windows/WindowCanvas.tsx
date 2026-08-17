@@ -203,6 +203,7 @@ export default function WindowCanvas() {
                     view={plotWindowView(win)}
                     bg={win.bg}
                     linkGroup={win.linkGroup}
+                    document={win.document}
                   />
                 </Suspense>
               )}

@@ -808,8 +808,22 @@ build, and focused interaction coverage where appropriate.
      and preview renderer contracts. Line, scatter, and line+symbol update
      live; alternate X, selected Y, and complete symmetric/asymmetric error
      pairs render from the draft without creating a parallel figure model.
-   - [ ] **G4 — create editable figure:** commit once through the canonical
+   - [~] **G4 — create editable figure:** commit once through the canonical
      FigureDocument lifecycle and open the result as an ordinary editable plot.
+     Implemented 2026-08-17 on `claude/g4-quick-figure-create`, pending
+     review/PR: the Create button now runs the canonical quickPlotDataset-
+     shaped commit sequence (pure `quickFigureCommit` converter + a
+     `createQuickFigureFromMapping` sibling store slice, ONE undo, name
+     dedupe); the seeded view is an explicit-whitelist overlay on
+     `defaultPlotView()` (mapping's `xKey`/`yKeys` only — no
+     `datasetViewDefaults`/`techniqueViewMemory` blending, since the mapping
+     IS the user-confirmed replacement for that inference); and
+     `usePlotPayload` now honors a document's own rich (X or asymmetric)
+     error bindings as authoritative over `Dataset.errorRoles`, activated
+     only when `hasRichErrorBindings` finds something the legacy `errKeys`
+     projection cannot express, closing the gap where a builder-edited error
+     binding rendered in the preview but silently dropped in the real figure
+     window.
    - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
      explanation, real-browser keyboard/cancel/error-bar coverage, reopen proof,
      and visual acceptance at common desktop sizes. Explicit requirement (G2
@@ -818,7 +832,13 @@ build, and focused interaction coverage where appropriate.
      builder UI -- the render layer (`lib/errorRoles.ts`'s `asymmetricPair`)
      already excludes half pairs from the plot, so the builder must SAY so
      rather than staying silent about a binding the user made that never
-     renders.
+     renders. Open semantic question (G4 review round, 2026-08-17, FIX 2): the
+     builder's mapping UI can explicitly assign a `Dataset.channelRoles`
+     (Label/Ignore) channel to Y, which the render layer (`effectiveChannels`)
+     silently drops even from an explicit list -- today mitigated with a
+     visible builder hint (never change the channel's role behind the user's
+     back), but whether a role-carrying channel should be assignable at all,
+     or should auto-clear its role on assignment, is still open.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,

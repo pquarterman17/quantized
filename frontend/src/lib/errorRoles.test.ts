@@ -8,6 +8,7 @@ import {
   asymmetricPair,
   classifyErrorLabel,
   errKeysFromBindings,
+  hasRichErrorBindings,
   inferErrorBindings,
   sanitizeBindings,
   symmetricBinding,
@@ -128,6 +129,33 @@ describe("asymmetricPair / symmetricBinding", () => {
   it("finds a symmetric binding", () => {
     expect(symmetricBinding(bindings, 1, "y")).toBe(5);
     expect(symmetricBinding(bindings, 0, "y")).toBeNull();
+  });
+});
+
+describe("hasRichErrorBindings (G4)", () => {
+  it("false for undefined or empty", () => {
+    expect(hasRichErrorBindings(undefined)).toBe(false);
+    expect(hasRichErrorBindings([])).toBe(false);
+  });
+
+  it("false when every binding is legacy-expressible (y, both)", () => {
+    const legacy: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 3, target: 2, axis: "y", side: "both" },
+    ];
+    expect(hasRichErrorBindings(legacy)).toBe(false);
+  });
+
+  it("true when any binding is X-axis", () => {
+    expect(hasRichErrorBindings([{ channel: 1, target: -1, axis: "x", side: "both" }])).toBe(true);
+  });
+
+  it("true when any binding is asymmetric (+/-), even alongside legacy ones", () => {
+    const mixed: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 2, target: 0, axis: "y", side: "+" },
+    ];
+    expect(hasRichErrorBindings(mixed)).toBe(true);
   });
 });
 
