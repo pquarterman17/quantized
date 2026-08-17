@@ -6,7 +6,7 @@
 **Repository:** `C:\Users\patri\git\quantized`  
 **Sources of truth:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`,
 `plans/LIBRARY_WORKBOOK_UX_PLAN.md`, and their linked active plans  
-**Status:** Proposed — owner confirmation and Claude lane assignment required
+**Status:** Adopted 2026-08-17 — owner confirmed; Claude orchestrator adjustments folded in (see below)
 
 > The former OneDrive checkout must not be used. Every lane uses a dedicated
 > worktree rooted from the current `origin/main`; no two lanes may own the same
@@ -46,6 +46,35 @@ The week is successful if:
   clipboard/package, and sidecar failure paths.
 - Twice-daily integration windows prevent a week of divergent branches.
 - Stop feature work after Day 5. Days 6–7 are integration and release work.
+
+## Orchestrator adjustments (adopted 2026-08-17)
+
+The owner adopted this plan together with four adjustments from Claude's
+orchestrator review. These are binding, not optional gloss on the schedule
+above.
+
+1. **Tiered review depth.** The review pipeline, not the worktree count, is
+   the throughput constraint. Contract PRs (the Day-0/1 output of lanes
+   B/C/D/F/G) get full adversarial, adjudicated review. Settled-implementation
+   PRs get an independent Sonnet review with an orchestrator spot-check of the
+   verdict. Test-only/fixture QA PRs get review-by-diff. Merges land in
+   batches at the two daily integration windows rather than trickling in, so
+   rebase churn stays bounded.
+2. **Shared-pinned-file protocol.** Architecture ratchets sum across
+   branches — the #152/#153 collision proved it. Day 0 pre-banks slack in the
+   pinned chokepoints (the `useApp.ts` extraction, in progress). Store-slice
+   registrations and other pinned-file edits land only at integration windows,
+   through a single integrator. Every lane brief lists the pinned files that
+   lane must not touch.
+3. **Owner-dependency schedule.** Beyond the two daily decision windows,
+   P1.1/P1.2 platform verification (native dialogs, file associations,
+   packaged builds) and the Day-6 Windows/macOS smoke passes are
+   owner-machine-only. If an owner window slips, the affected lane takes the
+   documented preview-label fallback rather than stalling.
+4. **B/F/G success calibration.** For the platform-risk lanes, a "bounded
+   contract merged + safe core behind a preview label + honest defer of the
+   remainder" outcome on Day 5 is a **success**, not a shortfall — recorded
+   now, in advance, to prevent Day-5 scope-panic merges.
 
 ## Scope reconciliation and critical precedence
 
@@ -185,13 +214,15 @@ unit test is not completion.
 
 ## Expected staffing and realistic confidence
 
-This plan assumes one active Claude orchestrator, seven Claude worktrees (or
-fewer worktrees running two short sequential slices),
-cheap implementation/test agents beneath them, ChatGPT-Sol for bounded GUI
-acceptance, and prompt owner decisions. It can produce a broad release candidate
-in seven days. It cannot guarantee that every advanced workflow is production-
-mature before real use; the release-candidate label and explicit defer mechanism
-are essential safeguards, not loopholes.
+This plan assumes one active Claude orchestrator, Claude worktrees for lanes
+A–G (or fewer worktrees running two short sequential slices), cheap
+implementation/test agents beneath them, ChatGPT-Sol for bounded GUI
+acceptance, and prompt owner decisions. Worktree count is not the binding
+constraint; concurrent review capacity is (see orchestrator adjustment 1
+above). It can produce a broad release candidate in seven days. It cannot
+guarantee that every advanced workflow is production-mature before real use;
+the release-candidate label and explicit defer mechanism are essential
+safeguards, not loopholes.
 
 ## Sprint log
 
@@ -203,3 +234,6 @@ are essential safeguards, not loopholes.
   expanded scope beyond Library H–N to the Primary audit's more consequential
   P1.1–P1.7 queue. Made N evidence-gated and added the owner-only switch-trigger
   and Office acceptance gates.
+- **2026-08-17 — Claude (orchestrator):** Owner adopted the sprint. Folded the
+  four review adjustments in; Day 0 dispatch begun (contract scouts for
+  P1.1/P1.4/K, useApp.ts slack pre-bank, lane briefs).
