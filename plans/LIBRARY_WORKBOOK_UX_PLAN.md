@@ -1,10 +1,13 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5 release
-hardening in progress
+**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5's automated
+hardening (including the canonical-state review) is complete — only the
+release-candidate human visual acceptance pass remains
 **Created:** 2026-08-12  
-**Updated:** 2026-08-17 — ChatGPT-Sol delegated the bounded G5 readiness slice;
-G1–G4 are merged and G5 remains in focused hardening
+**Updated:** 2026-08-17 — Claude completed the G5 canonical-state review,
+correcting an independent reviewer's merge-blocking overclaim flag on the
+prior lifecycle-proof slice's `[x]`; see the PR G / G5 entries and the
+change-log for the full record
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -920,9 +923,132 @@ build, and focused interaction coverage where appropriate.
        figure-document-roundtrip.spec.ts's existing precedent.) Gate: 478/478 vitest files,
        7,061/7,061 tests; tsc (app + e2e) and eslint clean; build 826.1 kB
        eager (27.9 kB under budget); full local Playwright 54/54 passed.
-       G5's only remaining line is the release-candidate human visual
-       acceptance noted below — everything else on the checklist is
-       automated and green.
+       **Correction (independent reviewer, 2026-08-17, merge-blocking):**
+       this bullet marked G5 `[x]` claiming everything but the
+       release-candidate human visual acceptance was done, but the plan's
+       own G ownership-matrix row ("Sonnet reviews canonical-state writes")
+       and the sentence originally written below this one both named a
+       second Claude-owned handoff item — a review of the canonical
+       figure-document write paths — that this slice silently never
+       performed. See the dedicated review bullet immediately below, which
+       performs it and corrects the record.
+     - [x] **2026-08-17 — Claude, the canonical-state review (closing the
+       gap the correction above documents):** authority documents:
+       `lib/figureContract.ts` (the field-ownership census) and the plan's
+       L0.12/L0.13 contracts (editor continuity into the SAME canonical
+       system; creating/saving a figure never mutates raw worksheet data).
+       Enumerated every code path that writes canonical `FigureDocument`
+       state (grepped `editableFigures`/`withPlotWindowDocument`/
+       `createFigureDocument` for anything the known list missed — none
+       found) and reviewed each against never-replace, live/frozen
+       invariants, rich-error round-trip integrity, name/id uniqueness,
+       history coherence, and degrade-never-throw on malformed input:
+         - `lib/figureDocument.ts` (`createFigureDocument`,
+           `updateFigureDocumentFromPlotView`, `sanitizeFigureDocument`,
+           `figureDocumentToPlotView`) — CLEAN. Pure and immutable (every
+           path returns a fresh object; grepped the whole `frontend/src`
+           tree for a direct `document.bindings.* =` / `document.plot.* =`
+           field assignment — none exists outside a local, freshly cloned
+           value). `createFigureDocument` throws on an inconsistent
+           live/frozen combination; `sanitizeFigureDocument` rejects the
+           whole document only on a bad envelope/identity/data-mode/frozen
+           snapshot, degrading every other malformed optional field to a
+           safe default. `updateFigureDocumentFromPlotView` preserves every
+           non-symmetric-Y (X-axis, asymmetric) error binding while only
+           replacing the legacy `errKeys` projection it can actually edit —
+           no lossy round trip (the exact contract G4's fix established,
+           reconfirmed here).
+         - `store/windowDocuments.ts` (`withPlotWindowDocument`,
+           `createPlotWindowDocument`, `syncPlotWindow`,
+           `withWindowDocumentErrors`, `pruneWindowDatasetRefs`) — CLEAN.
+           `withPlotWindowDocument` is the one documented chokepoint
+           (`structuredClone`s on every call) every other write path routes
+           through; `pruneWindowDatasetRefs` nulls a removed dataset's
+           binding in BOTH the canonical document and the legacy facade
+           together, never one without the other.
+         - `store/quickPlotAction.ts` / `store/quickFigureCreate.ts` —
+           CLEAN. Structurally identical shape: fail-closed gate
+           (`quickPlotAvailability` / the shared `canCreateQuickFigure`
+           predicate), fresh id, `dedupeWindowTitle`-deduped name, APPEND
+           to `editableFigures` (never an existing-by-datasetId lookup+
+           overwrite), one `recordHistory` for the whole gesture (riding on
+           `createWindow`'s).
+         - `store/figureLifecycle.ts` (`saveFigure`/`saveFigureAs`/
+           `openEditableFigure`/`renameEditableFigure`/
+           `duplicateEditableFigure`/`deleteEditableFigure`/
+           `applyFigurePublicationEdit`'s three targets) — CLEAN.
+           `saveFigure`'s overwrite-by-id only ever replaces the SAME
+           document being re-saved, never a different figure; the
+           `new-editable` Apply branch always appends fresh; one
+           `recordHistory` per user gesture throughout; no direct field
+           mutation (same grep as above).
+         - Window-close path (`store/windows.ts`'s `closeWindow`,
+           `components/windows/figureLifecycleUi.ts`'s
+           `closeFigureWindow`/`cancelPublicationPreview`) — CLEAN and
+           deliberate: a window never saved as a figure closes plainly
+           (undoable, per GUI_INTERACTION #17's confirm-exemption); a SAVED
+           figure with unsaved drift, and an untracked Publication Preview
+           draft, both get an explicit discard confirm first. Matches
+           documented intent — not silently lossy.
+         - Reimport/dataset-replacement path (`lib/reimport.ts`,
+           `store/reimport.ts`, `lib/figureDocumentReimport.ts`) — CLEAN
+           for the channel-indexed fields that reach the interactive
+           renderer: `reimportColumnsChanged` fires on ANY column-count
+           change (grow OR shrink — it only compares counts, not
+           direction), and `resetFigureDocumentForReshape` clears
+           `xKey`/`yKeys`/`y2Keys`/`errors` plus every channel-indexed
+           `plot.view` field to the safe null/empty sentinel for BOTH the
+           saved `editableFigures` entry and every bound open `plotWindows`
+           document. **Probed** (new permanent regression pin,
+           `frontend/src/store/quickFigureReimport.test.ts`): built a rich
+           mapping (alternate X, one Y, a complete asymmetric Y pair, an
+           X-error binding on channels 2/3/4) into a figure through the
+           real G4/G5 creation path (`createQuickFigureFromMapping`), mocked
+           a reimport of its dataset down from 5 columns to 1 (the exact
+           columns the rich bindings target vanish entirely, not merely
+           renumber), and confirmed: the saved document's and the open
+           window's canonical bindings both reset to
+           null/null/`[]` (no dangling reference to the vanished columns),
+           and `figureDocumentToPlotView` on the reset document neither
+           throws nor still names them (`errKeys: {}`). Passed on the first
+           run — found already correct, not a fix. **Real finding, out of
+           G5 scope, booked under PR M** (with a pointer at that item):
+           `resetFigureDocumentForReshape` deliberately leaves
+           `bindings.groupKey`/`facetKey` untouched on reimport; `groupKey`
+           reaches the backend as `FigureSpec.group_col` and a stale index
+           raises a raw `ValueError` from `calc/plotting.py` at
+           export/preview time instead of a clear explanation (not a crash
+           or silent mis-bind, and unreachable via the Quick Figure Builder
+           itself — only via the separate Figure Builder workshop's
+           Grouping panel) — L0.55's territory, not G5's.
+         - `store/history.ts` undo/redo restore of `editableFigures`/
+           `plotWindows` — CLEAN. Structural sharing (old snapshots keep
+           array/object references from the live state at record time) is
+           safe here specifically BECAUSE every document write path above
+           was confirmed to construct new objects rather than ever mutating
+           one in place — a restored snapshot's document references can be
+           shared with what was live at snapshot time without risk, since
+           no later edit can reach through and corrupt them. Separately
+           probed `restorePatch`'s dangling-dataset-binding guard
+           (`history.test.ts:130`) against a document-backed window (the
+           existing test's `PlotWindow` fixture omits `.document`, so it
+           only exercises the legacy facade field): every real mutation
+           that changes a window's dataset binding routes through
+           `syncPlotWindow`/`withPlotWindowDocument`, which keep the facade
+           `datasetId` and the canonical `document.bindings.datasetId`
+           synchronized together, so no reachable sequence left them
+           disagreeing in a recorded snapshot — the guard's facade-only
+           patch never diverges from the canonical document in practice.
+           No fix needed; noted here rather than left unrecorded.
+       Gate: `frontend && npx tsc --noEmit` clean; `npx eslint` (touched
+       files) clean; full `npx vitest run` 479/479 files, 7,062/7,062 tests
+       (one new pin over the prior 478/7,061); `npm run build` 826.1 kB
+       eager (27.9 kB under budget, unchanged — no app code touched). No
+       Playwright changes needed (no app code changed — this bullet is
+       review + one new permanent test file:
+       `frontend/src/store/quickFigureReimport.test.ts`). G5's remaining
+       line is unchanged: the release-candidate human visual acceptance
+       pass noted above.
 8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
    with explicit scope and safe mismatch behavior.
 9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
@@ -945,7 +1071,25 @@ build, and focused interaction coverage where appropriate.
     project-local saved Collections from L0.48-L0.49 and L0.56.
 13. [ ] **PR M — dependency-aware reimport and deletion.** Add previews,
     transactional propagation, stale analysis state, Trash dependency review,
-    and freeze/materialize recovery from L0.45 and L0.55.
+    and freeze/materialize recovery from L0.45 and L0.55. **Booked finding
+    (G5 canonical-state review, 2026-08-17):** a shape-changing reimport
+    resets a FigureDocument's `bindings.xKey/yKeys/y2Keys/errors` (and every
+    channel-indexed `plot.view` field) to the safe null/empty sentinel, but
+    deliberately leaves `bindings.groupKey`/`facetKey` untouched
+    (`lib/figureDocumentReimport.ts`, tested at
+    `lib/figureDocumentReimport.test.ts:77-84`). `facetKey` is inert today
+    (no renderer reads it yet). `groupKey` DOES reach the backend as
+    `FigureSpec.group_col` (`lib/figureSpec.ts:200`) for Publication
+    Preview/export, and `calc/plotting.py`'s `build_grouped_series` raises
+    `ValueError(f"group_col {group_col!r} is out of range")` for a stale
+    index — so a Figure-Builder-grouped figure whose grouping column is
+    removed or shifted by reimport surfaces a raw backend error at
+    export/preview time instead of a clear "grouping column no longer
+    exists" message, rather than crashing or silently mis-grouping. Not
+    reachable via the Quick Figure Builder (the G-series create paths never
+    set `groupKey`) — only via the separate Figure Builder workshop's
+    Grouping panel. Squarely L0.55's "update linked plots" contract; belongs
+    here, not in G5.
 14. [ ] **PR N — managed large-data sidecars.** Add threshold policy,
     explicit externalization, missing/offline recovery, **Relink Data...**, and
     portable **Pack Project...** from L0.54.
@@ -2185,3 +2329,29 @@ back to the owner. No Library implementation is authorized by this pause.
   13/13 checks green pre-merge. G5 remains partially open: Claude-owned
   save/close/reopen/project-reload proof and canonical-state review;
   final human visual acceptance stays a release-candidate task.
+- **2026-08-17 — Claude, the G5 lifecycle proof (save/close/reopen/
+  project-reload):** closed the first of the two remaining Claude-owned
+  G5 handoff items — see the PR G / G5 entry above for the full Phase-0
+  probe + real-browser-journey record. Its own summary line claimed G5
+  `[x]` with only the release-candidate visual-acceptance pass left open,
+  but silently dropped the SECOND handoff item (the canonical-state
+  review the ownership matrix names). An independent reviewer flagged the
+  `[x]` as a merge-blocking overclaim.
+- **2026-08-17 — Claude, the G5 canonical-state review (correcting the
+  overclaim above):** performed the review the previous entry's slice
+  skipped — every code path that writes canonical `FigureDocument` state,
+  against `lib/figureContract.ts` and the plan's L0.12/L0.13 contracts.
+  Full path-by-path record is on the PR G / G5 entry above (search
+  "canonical-state review"); summary: every write path CLEAN (pure,
+  immutable, never-replace, one-history-entry-per-gesture, degrade-never-
+  throw); reimport channel-index safety PROBED through the real
+  `createQuickFigureFromMapping` path and confirmed already correct (new
+  permanent pin, `frontend/src/store/quickFigureReimport.test.ts` — not a
+  fix, nothing was broken); one real-but-out-of-scope finding (a stale
+  `groupKey` surviving a shape-changing reimport can raise a raw backend
+  `ValueError` at export/preview time instead of a clear message) booked
+  under PR M with a pointer, per L0.55. Gate: tsc/eslint clean; full
+  vitest 479/479 files, 7,062/7,062 tests; build 826.1 kB eager (27.9 kB
+  headroom, unchanged). G5's `[x]` is now honest: both Claude-owned
+  handoff items are done; only the release-candidate human visual
+  acceptance pass remains, as originally noted.
