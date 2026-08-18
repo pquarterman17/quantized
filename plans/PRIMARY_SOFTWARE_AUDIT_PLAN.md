@@ -512,7 +512,7 @@ Behavior:
   auto-applied to SIMS.
 - [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent.
 
-### P1.4 — First-class categorical and metadata channels
+### P1.4 — First-class categorical and metadata channels [~]
 
 **Goal:** use text columns and multiple metadata rows directly for grouping,
 faceting, legends, categorical axes, filters, and statistics.
@@ -529,16 +529,63 @@ data columns` — categorical columns cannot enter as data at all today. The
 baseline box-plot fixture (`grouped_factors_boxplot.csv`) had to encode
 factors as integer codes with the name legend in the preamble.
 
-- [ ] Stable numeric/datetime/text/categorical/metadata/error semantics.
-- [ ] Display multiple header/comment rows with clear roles.
-- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or X.
-- [ ] Multiple ordered factors and missing-value policy.
+**Slice 1 shipped (2026-08-17, Lane C):** the CONTRACT itself — lossless
+representation, import capture for the two measured failures, the
+sanctioned accessor layer, and P1.5/P1.6-ready group-label plumbing. Backend
+`DataStruct.cat_levels: Mapping[int, tuple[str,...]] | None` (channel index
+-> ordered level strings) + `is_categorical`/`level_labels`/`level_of`
+accessors (`src/quantized/datastruct.py`); frontend `DataStruct.catLevels?:
+Record<number, string[]>` + `lib/categorical.ts`'s
+`isCategoricalChannel`/`categoricalLevels`/`levelLabel`. Round-trip proven
+both languages, both import paths (`tests/test_datastruct.py`,
+`tests/test_io_delimited.py`, `tests/test_io_import_preview.py`,
+`frontend/src/lib/workspace.test.ts`). Full detail: see the "Lessons
+learned" style note this plan's git history carries for 2026-08-17, and the
+commit series on `claude/p14-categorical-contract`.
+
+- [x] Stable numeric/datetime/text/categorical semantics for GENERIC
+  delimited import (`io/delimited.py`'s two measured failures) and the
+  Import Wizard's `parse_import` (`io/import_preview.py`, new `categorical`
+  role + `label` role no longer drops raw strings). Metadata semantics
+  (multiple comment rows) were already stable pre-slice and are unchanged.
+- [ ] Display multiple header/comment rows with clear roles — unchanged this
+  slice (P1.6's Import Wizard UI territory; the backend `label_rows`/
+  `text_columns` sidecars this depends on already existed and are untouched
+  except for staying aligned to the (possibly larger) final channel list).
+- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
+  X — the REPRESENTATION and the Group-label rendering path
+  (`calc/plotting.build_grouped_series`, `lib/plotspec.ts` `buildXY`) are
+  done; wiring Facet/Legend/Color/Symbol pickers and the Data
+  Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
+  `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
+  Wizard UI) territory — this contract is what they now build against.
+- [ ] Multiple ordered factors and missing-value policy — level ORDER is
+  represented (the tuple's own order; NaN = missing is the representation's
+  missing-value policy) but user-settable REORDERING (J1's ask) is not
+  built yet; that is J2/recode territory.
 - [ ] Preserve factors through derived data, filter/join, reopen, recipes,
-  and export.
-- [ ] Keep ignored instrumental metadata searchable.
-- [ ] Sample ID, field, or temperature can independently label the legend.
-- [ ] Lot/wafer/type can form nested grouping for a box plot.
-- [ ] Existing numeric projects migrate unchanged.
+  and export — reopen (`.dwk` round-trip) is proven this slice
+  (`lib/workspace.test.ts`); filter/join/recipes/export propagation is not
+  audited yet (no consumer besides `build_grouped_series`/`buildXY` and
+  `barlayout.ts`'s `resolveCategoryLabels` reads `cat_levels`/`catLevels`
+  today, so nothing downstream can yet drop or corrupt it, but nothing
+  downstream has been proven to CARRY it through a filter/join/recipe step
+  either — P1.5/P2.6 territory).
+- [ ] Keep ignored instrumental metadata searchable — unchanged (pre-
+  existing `text_columns`/`comments` sidecars; still stand).
+- [ ] Sample ID, field, or temperature can independently label the legend —
+  the representation supports it (any categorical channel can be the group
+  column); the Graph Builder wiring to pick ANY such channel as the legend
+  source specifically is P1.5.
+- [ ] Lot/wafer/type can form nested grouping for a box plot — single-level
+  categorical grouping works (box/bar's `isCategorical` gate now composes
+  with the P1.4 nominal default, see `plotspec.test.ts`); NESTED
+  (multi-factor) grouping is not built.
+- [x] Existing numeric projects migrate unchanged — additive by
+  construction (`cat_levels`/`catLevels` absent = byte-identical to before
+  this field existed); pinned by `test_cat_levels_absent_is_additive_byte_
+  identical` and the full existing suite passing unmodified (`uv run pytest
+  -m golden`: 155 passed, 0 failed, same as pre-slice).
 
 ### P1.5 — Live Graph Builder grouping parity
 
@@ -1555,6 +1602,54 @@ work (its BACKLOG row).
   (silent technique defaults, batch overlay offer, Layer 1 pre-P1.3,
   per-technique view memory). P1.3 recipes will build on its technique
   tag.
+
+#### 2026-08-17 — P1.4 categorical/metadata CONTRACT, Slice 1 (Sonnet agent, worktree `lane-c`)
+
+- Shipped the representation + import capture + accessor layer +
+  P1.5/P1.6-ready group-label plumbing on `claude/p14-categorical-contract`
+  (NOT merged to `main` by this slice — orchestrator to land). NOT in
+  scope: the Import Wizard UI overhaul (P1.6) and Graph Builder
+  live-grouping parity (P1.5) — this slice is backend/lib contract only.
+- Red-first on both P0.3-measured failures, verified against pre-fix
+  `import_csv` by hand before the fix landed: f1 (leading text column) gave
+  `ds.time == [nan, nan, nan]`; f2 (trailing text-only columns) raised
+  `ValueError: no valid data columns`. Also red-first on a third bug found
+  while implementing (not one of the two P0.3 failures, but the same
+  "silent loss" class): the Import Wizard's `label` role dropped its raw
+  strings with literally no metadata trace — worse than a default import,
+  which never offers that role and so never lost anything.
+- `DataStruct.cat_levels` is deliberately narrow-gated: `import_csv`'s
+  f2-style promotion (text -> categorical) fires ONLY when the numeric-only
+  column selection is EMPTY (the actual failure condition), so a file with
+  at least one real numeric data column plus a text column is
+  byte-identical to before (`text_columns` sidecar, unchanged) — verified
+  by re-running the pre-existing `test_csv_keeps_a_text_column_as_metadata`
+  family unmodified.
+- Found and deliberately did NOT fix: an all-text CSV with NO numeric column
+  anywhere (e.g. `"Sample,Tag\nA,X\nB,Y\n"`) has its header row misdetected
+  as a THIRD data row by `_delimited_layout._detect_layout` (numeric-score
+  layout detection has no signal when literally nothing in the file is
+  numeric) — pre-existing, unrelated to f1/f2, out of scope for this
+  narrow slice. Left as a residual for whoever next touches layout
+  detection or all-text-file import.
+- Gates: backend `uv run pytest -q` 3431 passed / 268 skipped / 18 xfailed
+  (0 failed); `-m golden` 155 passed / 93 skipped (missing MATLAB freeze
+  files, expected outside CI) / 0 failed — untouched by this slice, as the
+  contract requires; ruff + mypy --strict clean. Frontend `tsc --noEmit`
+  clean, `eslint --max-warnings=0` on every touched/new file clean, full
+  `vitest run`: 480 test files / 7077 tests, ALL passed on a clean re-run
+  (a first run under heavy shared-machine contention showed one flake in
+  `GridViewport.perf.test.tsx`'s wall-clock fan-out assertion — a
+  pre-existing, unrelated, documented-flaky-under-load test per this
+  plan's own "Test determinism" notes; confirmed unrelated by file-overlap
+  check and by passing 4/4 in isolation before the clean full re-run
+  settled it). `npm run build`: bundle-size OK, 826.5 kB eager (27.5 kB
+  under the 854.0 kB budget). Also discovered and fixed in-flight: the new
+  field pushed `lib/plotspec.ts`/`lib/types.ts` over their
+  `architecture.test.ts` line-count pins — fixed by extracting the shared
+  group-label-resolution logic into the new `lib/categorical.ts` sibling
+  (the ceiling test's own prescribed remedy) rather than raising either
+  pin; both files land at their ORIGINAL line counts.
 
 ## Reference baseline
 

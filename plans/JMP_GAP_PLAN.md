@@ -170,18 +170,49 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 1 — High Impact (fails any JMP-shaped workflow)
 
-1. **[ ] J1 — String categorical levels end-to-end** (with P1.4; design
+1. **[~] J1 — String categorical levels end-to-end** (with P1.4; design
    the contract once). Acceptance beyond P1.4's own boxes:
-   - [ ] A text column imports as a first-class categorical column
-     (string levels preserved, not numeric-coded), visible in the
-     worksheet, editable type C/O/N.
-   - [ ] Categorical columns drive Graph Builder X/Group/Facet, Stat
-     Stage group/facet, Data Filter level-sets, Tabulate wells, legend
-     labels, and `facet-by-column` — with their **string** labels on
-     axes/legends everywhere including matplotlib export.
+   - [x] **Contract designed once (2026-08-17, P1.4 Slice 1,
+     `claude/p14-categorical-contract`).** A text column imports as a
+     first-class categorical channel via BOTH generic import paths
+     (`io/delimited.py`'s f1/f2 fixes, `io/import_preview.py`'s new
+     `categorical` role). Ruling recorded here per this plan's own
+     instruction: JMP's "string levels preserved, not numeric-coded" bar is
+     satisfied AT THE CONTRACT LEVEL, not by literal string storage — the
+     representation is float codes `0..n-1` PLUS a first-class ordered
+     level table (`DataStruct.cat_levels` / `catLevels`), and the mapping is
+     LOSSLESS + INVERTIBLE (`levels[code] == original string` for every
+     cell, proven by round-trip tests both languages/both import paths).
+     The accessor layer (`is_categorical`/`level_labels`/`level_of` in
+     `quantized/datastruct.py`; `isCategoricalChannel`/`categoricalLevels`/
+     `levelLabel` in `lib/categorical.ts`) is declared the ONLY sanctioned
+     read path specifically so this internal-numeric-storage choice never
+     leaks as a representational loss to any consumer or to a future
+     storage-scheme change — see the full ruling in `DataStruct`'s
+     docstring (`src/quantized/datastruct.py`).
+   - [ ] Worksheet-visible, editable type C/O/N: the MODELING-TYPE half
+     landed (a channel with a level table defaults to "nominal",
+     `lib/modeling.ts`'s `channelModelingType`, user override still wins),
+     but no worksheet UI change shipped this slice (P1.6 territory).
+   - [~] Categorical columns drive Graph Builder X/Group/Facet, Stat Stage
+     group/facet, Data Filter level-sets, Tabulate wells, legend labels,
+     and `facet-by-column` — with their **string** labels on axes/legends
+     everywhere including matplotlib export. DONE this slice: the box/bar
+     categorical gate composes with the nominal default (no manual
+     `channelTypes` override needed), and Group's series labels resolve
+     string levels (`calc/plotting.build_grouped_series`,
+     `lib/plotspec.ts` `buildXY`) — pinned by cross-language parity tests.
+     NOT done: Facet/Data Filter/Tabulate/`facet-by-column`/matplotlib
+     export wiring (P1.5/P1.6 territory — they now build against this
+     contract instead of inventing their own).
    - [ ] Level *ordering* is user-settable (ordinal value order) and
-     survives `.dwk` round-trip and export.
-   - [ ] Existing numeric-coded workflows migrate unchanged.
+     survives `.dwk` round-trip and export. The representation CARRIES an
+     order (the level tuple's own order, first-appearance from import) and
+     it survives `.dwk` round-trip (proven, `workspace.test.ts`); making it
+     USER-settable is J2/recode territory, not built yet.
+   - [x] Existing numeric-coded workflows migrate unchanged — additive by
+     construction, proven by the full pre-existing suite passing
+     unmodified plus a dedicated byte-identical-when-absent test.
 
 2. **[ ] J2 — Recode workshop.** Merge/rename/bin levels of a
    categorical column with live preview (old → new mapping table),
