@@ -359,7 +359,14 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   await expect.poll(() => legendSeriesLabels(page)).toEqual(expect.arrayContaining(EXPECTED_SERIES_LABELS));
 
   // ── Export parity: the reopened window's OWN canonical document carries
-  //    the SAME group binding into a real export request. ─────────────────
+  //    the SAME group binding into a real export request. NOTE (review round
+  //    P3): the close/reopen round trip itself is already independently
+  //    proven above (the post-undo-of-close storeGroupKey/legend polls,
+  //    lines 358-359) -- that is the load-bearing assertion for "reopen
+  //    preserves grouping". This step exercises export specifically;
+  //    Export re-commits the Graph Builder's own live spec first
+  //    (exportPlot -> applyToCurrent), so its group_col also reflects that
+  //    fresh commit, not purely the reopened window's persisted state alone. ─
   const exportDialog = page.locator(".qz-dialog").filter({ has: page.getByRole("heading", { name: "Export figure" }) });
   const exportResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
