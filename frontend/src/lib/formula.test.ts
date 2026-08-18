@@ -5,9 +5,12 @@ import {
   baseColumns,
   channelLetter,
   compileFormula,
+  formulaErrors,
   recomputeData,
+  recomputeWithErrors,
+  referencedColumns,
 } from "./formula";
-import type { DataStruct } from "./types";
+import type { ComputedColumn, DataStruct } from "./types";
 
 const ev = (src: string, ctx: Record<string, number> = {}) => compileFormula(src)(ctx);
 
@@ -557,5 +560,147 @@ describe("fuzz — random comparison/logical expressions (seeded, deterministic)
       expect(Number.isNaN(v)).toBe(false); // finite operands -> never NaN here
       expect(v === 0 || v === 1).toBe(true); // every generated expr is boolean-shaped
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// K1 — referencedColumns: a static pass over the SAME grammar compileFormula
+// parses, reusing its onRef collection hook (LIBRARY_WORKBOOK_UX_PLAN PR K).
+// ---------------------------------------------------------------------------
+
+describe("referencedColumns", () => {
+  it("collects bare arithmetic/logical/comparison references, deduped, first-seen order", () => {
+    expect(referencedColumns("A + B")).toEqual({ letters: ["A", "B"], valid: true });
+    expect(referencedColumns("A + A + B")).toEqual({ letters: ["A", "B"], valid: true }); // deduped
+    expect(referencedColumns("(A > 0 and B < 5) or not C")).toEqual({
+      letters: ["A", "B", "C"],
+      valid: true,
+    });
+  });
+
+  it("includes x (the time column) like any other bare reference", () => {
+    expect(referencedColumns("x * 2 + A")).toEqual({ letters: ["x", "A"], valid: true });
+  });
+
+  it("excludes constants, function names, and keywords", () => {
+    expect(referencedColumns("pi * sin(A) + e")).toEqual({ letters: ["A"], valid: true });
+    expect(referencedColumns("A and B or not A")).toEqual({ letters: ["A", "B"], valid: true });
+  });
+
+  it("collects both branches of if(), even though only one runs at eval time", () => {
+    expect(referencedColumns("if(A > 0, B, C)")).toEqual({ letters: ["A", "B", "C"], valid: true });
+  });
+
+  it("collects row-aware bare-column arguments (lag/diff/aggregates), including the second lag arg", () => {
+    expect(referencedColumns("lag(A, B)")).toEqual({ letters: ["A", "B"], valid: true });
+    expect(referencedColumns("diff(A) + mean(B)")).toEqual({ letters: ["A", "B"], valid: true });
+    expect(referencedColumns("max(A)")).toEqual({ letters: ["A"], valid: true }); // aggregate form, not elementwise
+  });
+
+  it("min/max elementwise form still reports every operand", () => {
+    expect(referencedColumns("min(A, B, C)")).toEqual({ letters: ["A", "B", "C"], valid: true });
+  });
+
+  it("row() references no column", () => {
+    expect(referencedColumns("row() + 1")).toEqual({ letters: [], valid: true });
+  });
+
+  it("a syntax error reports valid: false with no letters", () => {
+    expect(referencedColumns("A +")).toEqual({ letters: [], valid: false });
+    expect(referencedColumns("lag(A + 1, 1)")).toEqual({ letters: [], valid: false }); // not a bare column
+    expect(referencedColumns("nonsense(A)")).toEqual({ letters: [], valid: false }); // unknown function
+  });
+
+  // Property-style agreement (red-first requirement): for every expression
+  // below, the letters referencedColumns reports must be EXACTLY the set of
+  // context/columns keys the compiled evaluator actually reads when run
+  // across enough rows to take every branch (if() only reads one branch's
+  // variables per row, so multiple rows with different cond signs are
+  // needed to exercise both). Reused compileFormula's onRef hook by
+  // construction — this test is the guardrail against the two ever
+  // silently diverging.
+  it("agrees with eval-time context/columns access, for a representative set of expressions", () => {
+    const exprs = [
+      "A + B",
+      "x * 2 - C",
+      "if(A > 0, B, C)",
+      "if(A > 0 and B < 5, sin(x), C)",
+      "lag(A, 1) + diff(B)",
+      "mean(A) + max(B, C)",
+      "not (A > 0) or B == C",
+    ];
+    for (const expr of exprs) {
+      const { letters, valid } = referencedColumns(expr);
+      expect(valid).toBe(true);
+      const fn = compileFormula(expr);
+      const accessed = new Set<string>();
+      const columnNames = ["x", "A", "B", "C"];
+      const rawColumns: Record<string, number[]> = {};
+      for (const name of columnNames) rawColumns[name] = [1, -1, 2, -2, 0.5];
+      const trackedColumns = new Proxy(rawColumns, {
+        get(target, prop: string) {
+          accessed.add(prop);
+          return target[prop];
+        },
+      });
+      // Enough rows, with alternating-sign values, to take BOTH sides of
+      // every if() in the expr set above at least once.
+      for (let row = 0; row < rawColumns.A.length; row++) {
+        const rawCtx: Record<string, number> = {};
+        for (const name of columnNames) rawCtx[name] = rawColumns[name][row];
+        const trackedCtx = new Proxy(rawCtx, {
+          get(target, prop: string) {
+            accessed.add(prop);
+            return target[prop];
+          },
+        });
+        fn(trackedCtx, { row, rowCount: rawColumns.A.length, columns: trackedColumns });
+      }
+      expect([...letters].sort(), `letters vs accessed for "${expr}"`).toEqual([...accessed].sort());
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// K5b — per-column formula error state: a compile/eval failure yields the
+// NaN column PLUS a visible error, instead of failing silently.
+// ---------------------------------------------------------------------------
+
+describe("formulaErrors", () => {
+  it("is empty when every formula compiles and evaluates cleanly", () => {
+    expect(formulaErrors(base, [{ name: "S", expr: "A + B" }])).toEqual({});
+  });
+
+  it("records a compile failure, keyed by column name, alongside the NaN column", () => {
+    const formulas: ComputedColumn[] = [{ name: "bad", expr: "A +" }];
+    const data = applyFormulas(base, formulas);
+    const errs = formulaErrors(base, formulas);
+    expect(data.values.every((row) => Number.isNaN(row[row.length - 1]))).toBe(true); // unchanged NaN behavior
+    expect(Object.keys(errs)).toEqual(["bad"]);
+    expect(errs.bad).toMatch(/./); // some human-readable message
+  });
+
+  it("records an eval-time failure (unknown variable reached at run time)", () => {
+    // "Z" isn't a real column of `base` (only A/B exist) — this compiles
+    // fine but throws "unknown variable" on every row's evaluation.
+    const formulas: ComputedColumn[] = [{ name: "bogus", expr: "Z + 1" }];
+    const errs = formulaErrors(base, formulas);
+    expect(Object.keys(errs)).toEqual(["bogus"]);
+    expect(errs.bogus).toMatch(/unknown variable/);
+  });
+
+  it("a later clean formula doesn't mask an earlier one's error", () => {
+    const formulas: ComputedColumn[] = [
+      { name: "bad", expr: "A +" },
+      { name: "good", expr: "A + B" },
+    ];
+    expect(Object.keys(formulaErrors(base, formulas))).toEqual(["bad"]);
+  });
+
+  it("recomputeWithErrors derives data + errors from the SAME pass as recomputeData/formulaErrors", () => {
+    const formulas: ComputedColumn[] = [{ name: "bad", expr: "A +" }];
+    const withErrors = recomputeWithErrors(base, formulas);
+    expect(withErrors.data).toEqual(recomputeData(base, formulas));
+    expect(withErrors.errors).toEqual(formulaErrors(baseColumns(base, formulas.length), formulas));
   });
 });

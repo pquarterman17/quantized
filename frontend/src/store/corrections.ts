@@ -18,6 +18,7 @@
 
 import { applyCorrections as applyCorrectionsApi, type CorrectionsRequest } from "../lib/api";
 import { lit } from "../lib/macro";
+import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
 
@@ -72,6 +73,21 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         const bgDs =
           bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
         const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
+        // LIBRARY_WORKBOOK_UX_PLAN PR K (K4): write-time cycle rejection —
+        // refuse BEFORE calling the API, with zero mutation, when picking
+        // `bgDs` as this dataset's background would close a loop (the
+        // constructible-today A↔B case: B already subtracts A, now A tries
+        // to subtract B).
+        if (bgRef) {
+          const reason = wouldCreateCycle(get().datasets, {
+            from: recalcNodes.dataset(bgRef.datasetId),
+            to: recalcNodes.dataset(id),
+          });
+          if (reason) {
+            get().setStatus(`Can't set "${bgDs!.name}" as the background: ${reason}`);
+            return false;
+          }
+        }
         const req: CorrectionsRequest = { dataset: raw, params };
         if (bgDs) {
           req.bg_dataset = bgDs.data;

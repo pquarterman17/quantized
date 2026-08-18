@@ -15,7 +15,7 @@ import { computeCursorReadout } from "../lib/gadgetCursors";
 import type { Measurement } from "../lib/measure";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import type { Notation } from "../lib/format";
-import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
+import { recomputeWithErrors } from "../lib/formula";
 import { lit } from "../lib/macro";
 import {
   makeStep,
@@ -69,7 +69,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, syncDatasetWindowDocuments, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -94,6 +94,7 @@ import { recomputeStaleFits } from "./recalcFits";
 import { removeDatasetsPatch } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
+import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
@@ -106,7 +107,6 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
@@ -132,7 +132,6 @@ import type {
   BaselineOverlay,
   CalcResult,
   ChannelRole,
-  ComputedColumn,
   DataFilter,
   Dataset,
   DataStruct,
@@ -147,9 +146,17 @@ import type {
  *  formulas). Routed through after any base-data mutation (cell edit, corrections).
  *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
  *  corrections slice re-derives computed columns after every apply/reset from
- *  the SAME formula-recompute logic every other base-data mutation here uses. */
-export const recompute = (d: Dataset): Dataset =>
-  d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
+ *  the SAME formula-recompute logic every other base-data mutation here uses.
+ *  LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): also refreshes `formulaErrors` in the
+ *  same pass, so a base-data edit that fixes (or breaks) a formula's
+ *  evaluation keeps the visible error state in sync everywhere `recompute`
+ *  is the chokepoint — not just at the store/computedColumns.ts authoring
+ *  sites. */
+export const recompute = (d: Dataset): Dataset => {
+  if (!d.formulas?.length) return d;
+  const { data, errors } = recomputeWithErrors(d.data, d.formulas);
+  return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+};
 let _refSeq = 0;
 let _annSeq = 0;
 let _idSeq = 0;
@@ -275,7 +282,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -624,8 +631,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   duplicateDataset: (id: string) => Promise<void>;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
-  addFormula: (id: string, name: string, expr: string) => void;
-  removeFormula: (id: string, index: number) => void;
+  // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
+  // (store/computedColumns.ts) — see AppState's extends list.
   // Folder tree (project-organization plan item 1). Thin wrappers over
   // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
   createFolder: (parentId: string | null, name?: string) => string;
@@ -856,6 +863,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
   ...createGraphBuilderSlice(set, get),
   ...createCorrectionsSlice(set, get),
+  ...createComputedColumnsSlice(set, get),
   ...createCellEditSlice(set, get),
   ...createDatasetMetaSlice(set, get),
   ...createDataIntakeSlice(set, get),
@@ -1794,62 +1802,8 @@ export const useApp = create<AppState>((set, get) => ({
   // are read-only — a recompute would overwrite them — so an edit there is a
   // no-op. Editing a base cell recomputes the computed columns. Recovery of the
   // original is via Duplicate.
-  // Append a computed column (formula) to a dataset and evaluate it. The column
-  // lands as the last column of `data` and recomputes whenever the base changes.
-  // Strips the OLD computed columns first, then reapplies the grown list.
-  addFormula: (id, name, expr) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    get().recordHistory("add column");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const base = baseColumns(d.data, d.formulas?.length ?? 0);
-        const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr }];
-        return { ...d, formulas, data: applyFormulas(base, formulas) };
-      }),
-    }));
-    if (ds) {
-      get().recordMacro(`Add column ${name}`, `qz.addColumn(${lit(name)}, ${lit(expr)})`, {
-        kind: "expression",
-        params: { name, expr },
-      });
-    }
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
-  // Remove the computed column at `index` (in the formulas list). Strips the OLD
-  // computed columns, then reapplies the shrunk list (NaN-stable indices).
-  removeFormula: (id, index) => {
-    get().recordHistory("remove column");
-    // Computed columns are the LAST formulas.length value columns, in order,
-    // so the removed one is column (baseCount + index) and every later column
-    // shifts down by one. BOTH halves of the index-keyed state have to follow
-    // it -- the dataset-scoped roles/types/filter AND the live view's
-    // xKey/yKeys/styles/hidden/errKeys. See lib/channelRemap.ts for why the
-    // view half was missing until 2026-07-19.
-    const target = get().datasets.find((d) => d.id === id);
-    if (!target?.formulas) return;
-    const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
-    set((s) => {
-      const datasets = s.datasets.map((d) => {
-        if (d.id !== id || !d.formulas) return d;
-        const base = baseColumns(d.data, d.formulas.length);
-        const formulas = d.formulas.filter((_, i) => i !== index);
-        return {
-          ...d,
-          formulas: formulas.length ? formulas : undefined,
-          data: applyFormulas(base, formulas),
-          ...remapDatasetChannels(d, removedCol),
-        };
-      });
-      const remappedWindows = remapWindowViews(s.plotWindows, id, removedCol);
-      const remappedDataset = datasets.find((dataset) => dataset.id === id);
-      return { datasets,
-      ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
-      plotWindows: syncDatasetWindowDocuments(remappedWindows, id, remappedDataset?.errorRoles),
-      };
-    });
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
+  // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
+  // (store/computedColumns.ts) — see AppState's extends list.
   // ── Folder tree (project-organization plan item 1) ──────────────────────
   // All five delegate to the pure lib/foldertree ops; the store only supplies
   // ids and threads state. deleteFolder re-homes datasets (never destroys them).
@@ -2540,7 +2494,22 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
   },
   clearFigureDocSeed: () => set({ figureDocSeed: null }),
-  // ── Recalc engine (#1) ───────────────────────────────────────────────────
+  // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
+  // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
+  // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already
+  // lands in `down.datasets`/`down.fits` here exactly like a bgRef-chained
+  // one — no separate sheet-marking path needed. That satisfies K5c's "no
+  // automatic recompute on source edit beyond stale-marking" for free: this
+  // action only ever ADDS ids to `staleDatasets`/`staleFits`, never mutates
+  // data, whether the auto-mode debounce below fires or not. `recalcNow`
+  // below is the actual "async stale-marked scheduler path" a sheet
+  // recalculates through — today a stale sheet with no `corrections` simply
+  // clears (the honest no-op: no pipeline EXECUTOR exists yet, that's
+  // LIBRARY_WORKBOOK_UX_PLAN PR K slice 2), and because `down.fits` was
+  // populated from the SAME graph walk, a downstream fit on a sheet is
+  // already stale in this SAME call — recalcNow's existing two-phase order
+  // (datasets, then `recomputeStaleFits`) processes a ds→sheet→fit chain in
+  // the right order inside one pass without further changes here.
   setRecalcMode: (recalcMode) => set({ recalcMode }),
   touchDataset: (id) => {
     if (_recalcInProgress) return; // the recalc's own writes never re-mark

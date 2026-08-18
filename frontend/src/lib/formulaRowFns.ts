@@ -27,6 +27,12 @@ export interface ParserOps {
   eat(): Tok;
   expectOp(v: string): void;
   parseExpr(): FormulaFn;
+  /** LIBRARY_WORKBOOK_UX_PLAN PR K (K1): report a bare-column-name reference
+   *  as it's parsed (static, once per occurrence — not per row). formula.ts's
+   *  `referencedColumns` and `compileFormula` share this exact call site so
+   *  the two can never disagree about what a formula references. A no-op
+   *  when the caller isn't collecting (ordinary compilation). */
+  ref(name: string): void;
 }
 
 function parseBareColumnArg(fnName: string, ops: ParserOps, consts: Record<string, number>): string {
@@ -40,6 +46,7 @@ function parseBareColumnArg(fnName: string, ops: ParserOps, consts: Record<strin
   const terminates = !!nxt && nxt.t === "op" && (nxt.v === "," || nxt.v === ")");
   if (!terminates) throw new Error(`${fnName}() expects a bare column name, not an expression`);
   ops.eat();
+  ops.ref(t.v);
   return t.v;
 }
 
@@ -117,6 +124,7 @@ export function tryParseRowAwareCall(
       !!first && first.t === "name" && !(first.v in consts) && !!second && second.t === "op" && second.v === ")";
     if (isBareSingle) {
       const col = (ops.eat() as Extract<Tok, { t: "name" }>).v;
+      ops.ref(col);
       ops.expectOp(")");
       const aggName = fname as AggregateName;
       const fn: FormulaFn = (_c, ex) => {

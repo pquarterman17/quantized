@@ -35,6 +35,7 @@ import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
+import { applyComputedColumnsExtras, serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import type {
@@ -247,14 +248,11 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.workbookId ? { workbookId: d.workbookId } : {}),
       ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
+      ...serializeComputedColumnsExtras(d),
       ...(d.errorRoles?.length ? { errorRoles: d.errorRoles } : {}),
       ...(d.importedAt ? { importedAt: d.importedAt } : {}),
-      ...(d.channelRoles && Object.keys(d.channelRoles).length
-        ? { channelRoles: d.channelRoles }
-        : {}),
-      ...(d.channelTypes && Object.keys(d.channelTypes).length
-        ? { channelTypes: d.channelTypes }
-        : {}),
+      ...(d.channelRoles && Object.keys(d.channelRoles).length ? { channelRoles: d.channelRoles } : {}),
+      ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
@@ -417,6 +415,7 @@ export function parseWorkspace(
       );
       if (formulas.length) ds.formulas = formulas;
     }
+    applyComputedColumnsExtras(ds, dd); // PR K (K2/K5b) — lib/workspaceComputedColumns.ts
     // MAIN #33: error roles survive save/reapply, but are re-validated
     // against the CURRENT channel count — a template reapplied to a
     // differently-shaped source must not bind error bars to whatever column

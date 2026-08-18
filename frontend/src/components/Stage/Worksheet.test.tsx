@@ -309,7 +309,8 @@ describe("Worksheet computed columns (recompute)", () => {
     addColumn("A + B", "S");
     expect(useApp.getState().datasets).toHaveLength(1); // in place, not a new dataset
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`.
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
     expect(d.data.values[0][2]).toBe(30); // 10 + 20
     expect(screen.getByText("30.0000")).toBeInTheDocument();
   });

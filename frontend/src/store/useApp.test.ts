@@ -3551,7 +3551,9 @@ describe("useApp computed columns (recompute)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
     useApp.getState().addFormula("d1", "S", "A + B");
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`
+    // at authoring time.
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
     expect(d.data.labels).toEqual(["A", "B", "S"]);
     expect(d.data.values).toEqual([
       [10, 20, 30],
@@ -3607,6 +3609,63 @@ describe("useApp computed columns (recompute)", () => {
     const d = useApp.getState().datasets[0];
     // corrected A column drove a fresh S = A + B (999 discarded).
     expect(d.data.values[0][2]).toBe(20); // 0 + 20
+    expect(d.data.values[1][2]).toBe(60); // 20 + 40
+  });
+
+  // Review-round P3: formulaErrors (K5b) clears through the SAME `recompute`
+  // chokepoint corrections/reimport already route through — pinning that a
+  // BASE-DATA change (not a formula EDIT — updateFormula is untouched here)
+  // can turn a previously-failing formula valid again.
+  it("formulaErrors clears when a base-data change (not a formula edit) makes a previously-erroring formula valid", async () => {
+    // Start already in the erroring state directly (bypassing addFormula —
+    // its own K4 cycle guard is irrelevant here and, for a BRAND-NEW
+    // formula, would always reject referencing "the next unassigned
+    // letter" as a self-reference, since that's necessarily both the
+    // missing letter AND the new formula's own slot — see formulaLetter).
+    // What P3 pins is the `recompute` chokepoint's error-clearing, not
+    // addFormula's authoring-time guard (covered elsewhere).
+    const erroring: DataStruct = {
+      time: [1, 2],
+      labels: ["A", "S"],
+      units: ["u", ""],
+      values: [
+        [10, NaN],
+        [30, NaN],
+      ],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x",
+          data: erroring,
+          formulas: [{ name: "S", expr: "A + B", deps: ["A", "B"] }],
+          formulaErrors: { S: 'unknown variable "B"' },
+        },
+      ],
+      activeId: "d1",
+    });
+
+    // A correction (a base-data change, NOT a formula edit) grows the base
+    // to include B — the backend echoes the shape it received (3 cols incl.
+    // the stale/erroring S, discarded on recompute).
+    const corrected: DataStruct = {
+      time: [1, 2],
+      labels: ["A", "B", "S"],
+      units: ["u", "v", ""],
+      values: [
+        [0, 20, NaN],
+        [20, 40, NaN],
+      ],
+      metadata: {},
+    };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(corrected);
+    await useApp.getState().applyCorrections("d1", { yOff: -10 });
+
+    const d = useApp.getState().datasets[0];
+    expect(d.formulaErrors).toBeUndefined();
+    expect(d.data.values[0][2]).toBe(20); // 0 + 20, freshly evaluated
     expect(d.data.values[1][2]).toBe(60); // 20 + 40
   });
 });

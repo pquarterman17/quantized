@@ -160,8 +160,13 @@ function tokenize(src: string): Tok[] {
   return toks;
 }
 
-/** Compile an expression to a per-row evaluator. Throws on a parse error. */
-export function compileFormula(src: string): FormulaFn {
+/** Compile an expression to a per-row evaluator. Throws on a parse error.
+ *  `onRef`, when given, is called once (at PARSE time, not per row/eval) for
+ *  every bare column-letter/variable reference the expression contains — the
+ *  single collection point `referencedColumns` below reuses so the two can
+ *  never disagree (LIBRARY_WORKBOOK_UX_PLAN PR K, K1). Ordinary callers pass
+ *  nothing and pay no cost beyond one extra no-op call per reference. */
+export function compileFormula(src: string, onRef?: (name: string) => void): FormulaFn {
   const toks = tokenize(src);
   let pos = 0;
   const peek = (): Tok | undefined => toks[pos];
@@ -172,6 +177,7 @@ export function compileFormula(src: string): FormulaFn {
     if (!t || t.t !== "op" || t.v !== v) throw new Error(`expected "${v}"`);
   };
   const isKeyword = (t: Tok | undefined, kw: string): boolean => !!t && t.t === "name" && t.v === kw;
+  const ref = onRef ?? ((): void => {});
 
   function parseOr(): FormulaFn {
     let left = parseAnd();
@@ -259,7 +265,7 @@ export function compileFormula(src: string): FormulaFn {
   // ParserOps capability interface, so the row-aware special forms (if /
   // row / lag / diff / the aggregates) parse against this SAME token stream
   // without formulaRowFns.ts touching `toks`/`pos` directly.
-  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr() };
+  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr(), ref };
 
   function parseAtom(): FormulaFn {
     const t = eat();
@@ -281,6 +287,7 @@ export function compileFormula(src: string): FormulaFn {
         return () => k;
       }
       const name = t.v;
+      ref(name);
       return (c) => {
         const v = c[name];
         if (v === undefined) throw new Error(`unknown variable "${name}"`);
@@ -316,6 +323,36 @@ export function compileFormula(src: string): FormulaFn {
   return fn;
 }
 
+/** Static pass over the SAME grammar `compileFormula` parses (K1): every
+ *  column-letter/variable this expression references, in first-seen order,
+ *  plus whether it parses at all. Reuses `compileFormula`'s own `onRef`
+ *  collection hook rather than a second parser — by construction, the letters
+ *  reported here are exactly the names `compileFormula`'s returned evaluator
+ *  looks up in its per-row context (`ctx[name]` / `ex.columns[name]`), for
+ *  row-aware functions (lag/diff/aggregates) included, since those parse
+ *  their bare-column argument through the very same `ref()` call
+ *  (`formulaRowFns.ts`'s `parseBareColumnArg` / aggregate bare-single branch).
+ *  `valid: false` (empty letters) means the expression doesn't compile at all
+ *  (syntax error, unknown function, …) — it says nothing about whether every
+ *  reported letter resolves to a REAL column in a given dataset; that's the
+ *  caller's job (a formula may name a column that doesn't exist yet, or no
+ *  longer does after a reimport — not a parse error). */
+export function referencedColumns(expr: string): { letters: string[]; valid: boolean } {
+  const letters: string[] = [];
+  const seen = new Set<string>();
+  try {
+    compileFormula(expr, (name) => {
+      if (!seen.has(name)) {
+        seen.add(name);
+        letters.push(name);
+      }
+    });
+    return { letters, valid: true };
+  } catch {
+    return { letters: [], valid: false };
+  }
+}
+
 /** Strip the last `n` columns (the computed ones) from a DataStruct, returning
  *  the base. `n <= 0` returns the input unchanged. */
 export function baseColumns(data: DataStruct, n: number): DataStruct {
@@ -329,25 +366,34 @@ export function baseColumns(data: DataStruct, n: number): DataStruct {
   };
 }
 
-/** Append computed columns to a base DataStruct, evaluating each formula in order
- *  over `x` + the accumulating channels (so a later formula may reference an
- *  earlier computed column). A formula that fails to compile or evaluate yields
- *  an all-NaN column, keeping the column count stable so downstream channel
- *  indices never shift. Row-aware functions (row/lag/diff/aggregates) see the
- *  SAME rows as the plain scalar context — see the module header's "Aggregate
- *  / row-scope" note for what that means today. */
-export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): DataStruct {
-  if (!formulas.length) return base;
+/** The shared computation `applyFormulas`/`formulaErrors` both delegate to
+ *  (K5b): ONE pass over the formula list, producing the resulting DataStruct
+ *  AND the per-column error state side by side, so the two views can never
+ *  drift apart. A formula that fails to compile OR whose evaluator throws on
+ *  ANY row is recorded in `errors` (keyed by `ComputedColumn.name`, first
+ *  failure's message) — but STILL yields its all-NaN column in `data.values`,
+ *  keeping the column count stable so downstream channel indices never
+ *  shift (unchanged pre-K5 behavior; the error state is a purely additive
+ *  companion). Row-aware functions (row/lag/diff/aggregates) see the SAME
+ *  rows as the plain scalar context — see the module header's "Aggregate /
+ *  row-scope" note for what that means today. */
+function computeFormulas(
+  base: DataStruct,
+  formulas: ComputedColumn[],
+): { data: DataStruct; errors: Record<string, string> } {
+  if (!formulas.length) return { data: base, errors: {} };
   const labels = [...base.labels];
   const units = [...base.units];
   const values = base.values.map((row) => [...row]);
   const rowCount = base.time.length;
+  const errors: Record<string, string> = {};
   for (const f of formulas) {
     let fn: FormulaFn | null;
     try {
       fn = compileFormula(f.expr);
-    } catch {
+    } catch (e) {
       fn = null;
+      errors[f.name] = e instanceof Error ? e.message : "formula failed to compile";
     }
     // One column-array snapshot per formula (not per row): captures `x` plus
     // every channel as of just before THIS formula's own column is appended
@@ -365,8 +411,11 @@ export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): Dat
         });
         try {
           v = fn(ctx, { row: r, rowCount, columns: colSnapshot });
-        } catch {
+        } catch (e) {
           v = Number.NaN;
+          // First failing row wins (later rows' errors are usually the same
+          // root cause repeated); don't overwrite a compile-time error above.
+          if (!errors[f.name]) errors[f.name] = e instanceof Error ? e.message : "formula evaluation failed";
         }
       }
       values[r].push(v);
@@ -374,13 +423,39 @@ export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): Dat
     labels.push(f.name);
     units.push(f.unit ?? "");
   }
-  return { ...base, labels, units, values };
+  return { data: { ...base, labels, units, values }, errors };
+}
+
+/** Append computed columns to a base DataStruct, evaluating each formula in
+ *  order over `x` + the accumulating channels (so a later formula may
+ *  reference an earlier computed column). See `computeFormulas` for the
+ *  per-column-failure behavior; this wrapper keeps the pre-K5 signature
+ *  (data only) for every existing caller. */
+export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): DataStruct {
+  return computeFormulas(base, formulas).data;
+}
+
+/** The per-column error state (K5b) `applyFormulas` computes but discards —
+ *  same single pass, errors only. */
+export function formulaErrors(base: DataStruct, formulas: ComputedColumn[]): Record<string, string> {
+  return computeFormulas(base, formulas).errors;
 }
 
 /** Recompute a dataset's computed columns from its current base: strip the last
  *  `formulas.length` columns (the stale computed ones) and reapply the formulas. */
 export function recomputeData(data: DataStruct, formulas: ComputedColumn[]): DataStruct {
-  return applyFormulas(baseColumns(data, formulas.length), formulas);
+  return computeFormulas(baseColumns(data, formulas.length), formulas).data;
+}
+
+/** `recomputeData` plus its per-column error state (K5b), in the one pass —
+ *  the chokepoint `store/useApp.ts`'s `recompute` helper uses so every base-
+ *  data-changing action (corrections apply/reset, cell edits, reimport)
+ *  keeps `Dataset.formulaErrors` in sync for free. */
+export function recomputeWithErrors(
+  data: DataStruct,
+  formulas: ComputedColumn[],
+): { data: DataStruct; errors: Record<string, string> } {
+  return computeFormulas(baseColumns(data, formulas.length), formulas);
 }
 
 /** Channel letter for a 0-based index: 0→A, 1→B, … 25→Z, then AA, AB, … */
