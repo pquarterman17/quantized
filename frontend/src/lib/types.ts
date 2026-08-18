@@ -996,18 +996,16 @@ export interface CorrectionParams {
 
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
 
-/** Per-column role, mirroring the backend's `ImportSettings.roles` semantics
- *  (`io/import_preview.DATA_ROLES`): `x` becomes the axis, `y`/`error` become
- *  DataStruct channels, `label`/`ignore` are dropped (numeric-only contract). */
-export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore";
+/** Per-column role (`io/import_preview.DATA_ROLES`): `x` -> axis; `y`/`error` -> DataStruct channels; `categorical` -> a P1.4 categorical channel (string levels preserved); `label`/`ignore` drop from `.values` (`label`'s raw strings still land in `text_columns`, `ignore`'s don't). */
+export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore" | "categorical";
 
-/** How to read a delimited file — mirrors
- *  `quantized.io.import_preview.ImportSettings.to_dict()` exactly (also the
- *  persistable import-filter shape). */
+/** How to read a delimited file — mirrors `quantized.io.import_preview.
+ *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
 export interface ImportSettingsWire {
   delimiter: string;
   header_line: number | null;
   units_line: number | null;
+  label_line: number | null; // P1.6: legend-label row's cells override each channel's display label; null = header-derived name stands
   data_start_line: number;
   column_names: string[] | null;
   roles: ImportColumnRole[] | null;
@@ -1028,11 +1026,13 @@ export interface ImportPreviewResponse {
   delimiter: string;
   header_line: number | null;
   units_line: number | null;
+  label_line: number | null;
   data_start_line: number;
   columns: ImportPreviewColumn[];
   rows: (number | null)[][];
   n_data_rows: number;
   n_preview_rows: number;
+  comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
 }
 
 /** A saved, named `ImportSettingsWire` bound to a filename glob

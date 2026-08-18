@@ -6,11 +6,14 @@ looks like under adjustable settings and re-preview on every tweak, then parse
 with the confirmed settings. This module provides that:
 
 - :class:`ImportSettings` — a serializable description of how to read a file
-  (delimiter, which absolute lines are the header / units / first data row,
-  column-name overrides, and a per-column role: ``x`` / ``y`` / ``error`` /
-  ``label`` / ``ignore``). This is also the persistable "import filter" shape;
-  binding a saved filter to a glob and consulting it from the registry is the
-  remaining (design) half of #40.
+  (delimiter, which absolute lines are the header / units / label / first
+  data row, column-name overrides, and a per-column role: ``x`` / ``y`` /
+  ``error`` / ``label`` / ``ignore`` / ``categorical``, P1.4/P1.6). This is
+  also the persistable "import filter" shape; binding a saved filter to a
+  glob and consulting it from the registry is the remaining (design) half
+  of #40. Every preamble line above ``data_start_line`` NOT consumed as
+  header/units/label is retained (``metadata["comments"]``, P1.6 item 3)
+  instead of silently dropped.
 - :func:`guess_settings` — a starting guess from the raw text (reusing the
   ``delimited`` detectors).
 - :func:`preview_import` — parse the first rows under given settings and return
@@ -60,6 +63,14 @@ _CATEGORICAL_ROLE = "categorical"
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
                  "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
 
+# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
+# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
+# far the sniffer actually looks) -- an accidental huge value would make
+# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
+# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
+# `max_lines` bound on `raw_lines`.
+_MAX_PREAMBLE_COMMENTS = 500
+
 
 @dataclass(frozen=True)
 class ImportSettings:
@@ -68,6 +79,12 @@ class ImportSettings:
     delimiter: str = "auto"
     header_line: int | None = None
     units_line: int | None = None
+    # P1.6: the "default legend-label row" -- when set, its per-column cells
+    # (aligned by raw column position, same as header_line/units_line)
+    # override each CHANNEL column's display LABEL (not its unit). Absent
+    # (None, the default) means the header-derived name stands unchanged --
+    # additive, no behavior change for a settings object that doesn't set it.
+    label_line: int | None = None
     data_start_line: int = 0
     column_names: list[str] | None = None
     roles: list[str] | None = None
@@ -94,6 +111,9 @@ class _Parsed:
     # BEFORE `_to_float` conversion -- the P1.4 "label"/"categorical" roles
     # need the original text, which the numeric `matrix` has already erased.
     data_tokens: list[list[str]]
+    # Every line, delimiter-split (P1.6: label_line lookup + preamble capture
+    # both need lines ABOVE data_start, which `data_tokens` excludes).
+    all_tokens: list[list[str]]
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -192,7 +212,58 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     for i, row in enumerate(data_tokens):
         for k in range(min(len(row), n_cols)):
             matrix[i, k] = _to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens)
+    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens)
+
+
+def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
+    """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
+    POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
+    `label_line` isn't set or is out of range (no override, unchanged
+    behavior).
+
+    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
+    `units_line`), reuse the already `_extract_units`-split `p.names` (or
+    `p.units`) rather than re-reading the raw token row -- the raw row still
+    has an embedded "Name (unit)" suffix that `_extract_units` already
+    stripped out of `p.names`, so reading it again would silently
+    reintroduce the unit text into the label."""
+    ll = settings.label_line
+    if ll is None:
+        return None
+    if ll == settings.header_line:
+        return list(p.names)
+    if ll == settings.units_line:
+        return list(p.units)
+    if not (0 <= ll < len(p.all_tokens)):
+        return None
+    row = p.all_tokens[ll]
+    return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
+
+
+def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
+    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
+    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
+    (raw stripped text) as searchable metadata instead of silently dropped.
+    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
+    consumer (search, the Inspector) reads one convention regardless of
+    which import path produced the dataset.
+
+    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
+    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
+    directly user-settable through the wizard, so an oversized value (typo,
+    or a stale saved filter) can't balloon `metadata["comments"]` to the
+    size of the whole file."""
+    consumed = {settings.header_line, settings.units_line, settings.label_line}
+    out: list[str] = []
+    for i in range(p.data_start):
+        if len(out) >= _MAX_PREAMBLE_COMMENTS:
+            break
+        if i in consumed:
+            continue
+        raw = p.lines[i].strip() if i < len(p.lines) else ""
+        if raw:
+            out.append(raw)
+    return out
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
@@ -227,11 +298,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "delimiter": p.delim,
         "header_line": settings.header_line,
         "units_line": settings.units_line,
+        "label_line": settings.label_line,
         "data_start_line": p.data_start,
         "columns": columns,
         "rows": preview_rows,
         "n_data_rows": int(n_rows),
         "n_preview_rows": len(preview_rows),
+        "comments": _preamble_comments(p, settings),
     }
 
 
@@ -267,7 +340,16 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         x = np.arange(1, n_rows + 1, dtype=float)
         x_name, x_unit = "Sample Index", ""
 
-    labels = [p.names[k] for k in chan_cols]
+    # P1.6: the "default legend-label row" overrides a channel's LABEL (not
+    # its unit) -- absent (None) leaves the header-derived name untouched.
+    label_overrides = _label_row_overrides(p, settings, n_cols)
+
+    def label_for(k: int) -> str:
+        if label_overrides and label_overrides[k]:
+            return label_overrides[k]
+        return p.names[k]
+
+    labels = [label_for(k) for k in chan_cols]
     units = [p.units[k] for k in chan_cols]
     values = p.matrix[:, chan_cols] if chan_cols else np.empty((n_rows, 0), dtype=float)
 
@@ -280,7 +362,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
             cells = [row[k] if k < len(row) else "" for row in p.data_tokens]
             codes, levels = _encode_categorical(cells)
             cat_levels[len(labels)] = levels
-            labels.append(p.names[k])
+            labels.append(label_for(k))
             units.append(p.units[k])
             cat_arrays.append(codes)
         values = np.hstack([values, np.column_stack(cat_arrays)])
@@ -299,6 +381,9 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
             p.names[k]: [row[k].strip() if k < len(row) else "" for row in p.data_tokens]
             for k in label_cols
         }
+    comments = _preamble_comments(p, settings)
+    if comments:
+        metadata["comments"] = comments
     return DataStruct.create(
         x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
     )

@@ -1,0 +1,7 @@
+# Sample: NbAu bilayer
+# Operator: pq
+Temp,M1,M2
+(K),(emu),(emu)
+,NbAu-Alpha,NbAu-Beta
+1,10,11
+2,20,21

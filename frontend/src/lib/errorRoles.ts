@@ -91,8 +91,8 @@ export function classifyErrorLabel(
   return { axis, side, base };
 }
 
-/** Infer bindings from column labels, pairing each error column with the value
- *  column it describes.
+/** Infer bindings from column LABELS ALONE, pairing each error column with
+ *  the value column it describes.
  *
  *  PAIRING RULES, in order of confidence:
  *    1. Base-name match — `dR` binds to `R`, `M_err` to `M`. Unambiguous.
@@ -100,9 +100,13 @@ export function classifyErrorLabel(
  *    3. Nearest PRECEDING value column — the instrument-file convention the
  *       Origin/reflectometry corpus already relies on.
  *  A column that matches none of these is left UNBOUND rather than guessed at:
- *  the plan's "never silently forced". */
-export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
-  const labels = data.labels ?? [];
+ *  the plan's "never silently forced".
+ *
+ *  Label-only (no `.values` needed) so the SAME algorithm seeds the Import
+ *  Wizard's error-role suggestions (P1.6) against a preview's resolved
+ *  column names, before any DataStruct exists — `inferErrorBindings` below
+ *  is a thin `data.labels` wrapper over this. */
+export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBinding[] {
   const classified = labels.map((l) => classifyErrorLabel(l));
   const isError = classified.map((c) => c !== null);
   const bindings: ErrorBinding[] = [];
@@ -138,6 +142,11 @@ export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
     });
   }
   return bindings;
+}
+
+/** `inferErrorBindingsFromLabels` against a real DataStruct's `.labels`. */
+export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
+  return inferErrorBindingsFromLabels(data.labels ?? []);
 }
 
 /** Back-compat projection: the legacy `errKeys` map (value channel → error

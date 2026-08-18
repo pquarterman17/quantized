@@ -1,10 +1,14 @@
-// Import wizard (ORIGIN_GAP_PLAN #40) — view. Pick a file -> guessed settings
-// -> live preview (re-guessed on every edit, debounced) -> Import lands a new
-// library dataset named after the file. "Save as filter…" persists the
-// confirmed settings under a name + glob (io.import_filters) so a returning
-// file of the same shape imports with zero dialogs next time; the picker at
-// the top re-applies one of those saved settings. Thin — all state lives in
-// useImportWizard; the raw-lines + resolved-columns grid is PreviewTable.
+// Import wizard (ORIGIN_GAP_PLAN #40 / P1.6) — view. Pick a file -> guessed
+// settings -> live preview (re-guessed on every edit, debounced) -> Import
+// lands a new library dataset named after the file, Cancel (the window's
+// close control) leaves zero state behind (ImportWizardPanel only mounts
+// while open, AppOverlays.tsx). "Save as filter…" persists the confirmed
+// settings under a name + glob (io.import_filters) so a returning file of the
+// same shape imports with zero dialogs next time; the picker at the top
+// re-applies one of those saved settings — REFUSING (P1.6 item 4) rather than
+// partially applying one whose column shape no longer matches. Thin — all
+// state lives in useImportWizard; the raw-lines + resolved-columns grid is
+// PreviewTable, the error-role assignment table is ErrorRolesEditor.
 
 import { useRef, useState } from "react";
 
@@ -14,6 +18,7 @@ import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, NumberField, Select } from "../../primitives";
+import ErrorRolesEditor from "./ErrorRolesEditor";
 import PreviewTable from "./PreviewTable";
 import { useImportWizard } from "./useImportWizard";
 
@@ -66,10 +71,10 @@ export default function ImportWizardPanel() {
                 ...w.filters.map((f) => ({ value: f.name, label: f.name })),
               ]}
               value={pickedFilter}
-              disabled={!w.file}
+              disabled={!w.file || w.filterApplying}
               onChange={(e) => {
                 setPickedFilter(e.target.value);
-                if (e.target.value) w.applyFilter(e.target.value);
+                if (e.target.value) void w.applyFilter(e.target.value);
               }}
             />
           </label>
@@ -79,7 +84,7 @@ export default function ImportWizardPanel() {
             </Button>
           )}
           <span className="qzk-ds-meta" style={faint}>
-            {w.filtersBusy ? "loading…" : `${w.filters.length} saved`}
+            {w.filterApplying ? "applying…" : w.filtersBusy ? "loading…" : `${w.filters.length} saved`}
           </span>
         </div>
       )}
@@ -133,6 +138,15 @@ export default function ImportWizardPanel() {
                 width={56}
               />
             </label>
+            <label className="qzk-field" title="Per-column cells that override the legend label (P1.6)">
+              <span>Label line</span>
+              <NumberField
+                value={w.settings?.label_line ?? ""}
+                onChange={(v) => w.patchSettings({ label_line: parseLineField(v) })}
+                placeholder="none"
+                width={56}
+              />
+            </label>
           </div>
 
           {w.error && (
@@ -156,6 +170,24 @@ export default function ImportWizardPanel() {
             />
           )}
 
+          {w.preview && w.preview.comments.length > 0 && (
+            <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
+              Preamble retained as searchable metadata: {w.preview.comments.join(" · ")}
+            </div>
+          )}
+
+          {w.preview && (
+            <div style={{ marginTop: 10 }}>
+              <ErrorRolesEditor
+                rows={w.errorRows}
+                columns={w.preview.columns}
+                onTargetChange={w.setErrorTarget}
+                onAxisChange={w.setErrorAxis}
+                onSideChange={w.setErrorSide}
+              />
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Button
               variant="primary"
@@ -167,6 +199,9 @@ export default function ImportWizardPanel() {
             </Button>
             <Button size="sm" disabled={!w.settings} onClick={() => void onSaveAsFilter()}>
               Save as filter…
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
             </Button>
           </div>
         </>

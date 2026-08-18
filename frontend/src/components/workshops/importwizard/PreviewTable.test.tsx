@@ -10,6 +10,7 @@ const PREVIEW: ImportPreviewResponse = {
   delimiter: ",",
   header_line: 1,
   units_line: 2,
+  label_line: null,
   data_start_line: 3,
   columns: [
     { index: 0, name: "Temp", unit: "K", role: "x" },
@@ -18,6 +19,7 @@ const PREVIEW: ImportPreviewResponse = {
   rows: [[300, 0.0012]],
   n_data_rows: 1,
   n_preview_rows: 1,
+  comments: [],
 };
 
 describe("PreviewTable", () => {
@@ -45,6 +47,22 @@ describe("PreviewTable", () => {
     expect(header.getAttribute("style")).not.toBe(units.getAttribute("style"));
   });
 
+  it("highlights the label line distinctly too (P1.6)", () => {
+    const withLabel: ImportPreviewResponse = {
+      ...PREVIEW,
+      raw_lines: ["Temp,Moment", "(K),(emu)", "T1,M1", "300,0.0012"],
+      label_line: 2,
+      data_start_line: 3,
+    };
+    render(
+      <PreviewTable preview={withLabel} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    const label = screen.getByText("T1,M1").closest("div")!;
+    const header = screen.getByText("Temp,Moment").closest("div")!;
+    expect(label.getAttribute("style")).toContain("background");
+    expect(label.getAttribute("style")).not.toBe(header.getAttribute("style"));
+  });
+
   it("calls back with the column index on name / unit / role edits", () => {
     const onNameChange = vi.fn();
     const onUnitChange = vi.fn();
@@ -66,5 +84,13 @@ describe("PreviewTable", () => {
 
     fireEvent.change(screen.getByLabelText("column 2 role"), { target: { value: "error" } });
     expect(onRoleChange).toHaveBeenCalledWith(1, "error");
+  });
+
+  it("offers the P1.4/P1.6 categorical role in the column role picker", () => {
+    render(
+      <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    const select = screen.getByLabelText("column 1 role") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toContain("categorical");
   });
 });
