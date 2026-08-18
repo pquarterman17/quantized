@@ -55,6 +55,10 @@ export interface GridHeaderProps {
   /** Double-click the handle: autofit the column to a content sample. */
   onAutofitCol: (col: number) => void;
   onRemoveFormula: (index: number) => void;
+  /** PR K (K5b): per-column error state for a failing computed column, keyed
+   *  by name — a computed column with an entry here shows a warning badge
+   *  instead of the failure staying silent. */
+  formulaErrors?: Record<string, string>;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
   /** Read-only Origin text columns (item 8), unvirtualized, always appended
    *  after the numeric/computed run (and its trailing spacer). */
@@ -112,6 +116,7 @@ export default function GridHeader({
   onResizeStart,
   onAutofitCol,
   onRemoveFormula,
+  formulaErrors,
   onHeaderContext,
   textCols,
 }: GridHeaderProps) {
@@ -188,6 +193,11 @@ export default function GridHeader({
               >
                 ×
               </button>
+            )}
+            {computed && formulaErrors?.[data.labels[c]] && (
+              <span className="qzk-formula-err" title={`Formula error: ${formulaErrors[data.labels[c]]}`}>
+                ⚠
+              </span>
             )}
             <span className="role">
               {roleText(c, computed, channelRoles[c], meta)}

@@ -36,6 +36,7 @@ import { recordWorkbookOpen } from "./libraryOpen";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { Dataset } from "../../lib/types";
+import DerivedWorksheetMark from "./DerivedWorksheetMark";
 import RecomputedMark from "./RecomputedMark";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
@@ -179,9 +180,7 @@ export default function DatasetRow({
 
   return (
     <div
-      className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
-        sheetNumber ? " qzk-ds-sheet" : ""
-      }`}
+      className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${sheetNumber ? " qzk-ds-sheet" : ""}`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
       tabIndex={0}
@@ -246,6 +245,7 @@ export default function DatasetRow({
           </span>
         )}
         <RecomputedMark spec={d.fitSpec} stale={stale} />
+        <DerivedWorksheetMark dataset={d} />
         {sheetNumber != null && (
           <span className="qzk-ds-sheet-chip" title={`Sheet ${sheetNumber} of the same Origin workbook`}>
             └ sheet {sheetNumber}
