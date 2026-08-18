@@ -356,8 +356,10 @@ as a CSS-only tree redesign.
 
 ### Derived-data integrity requirements
 
-- [ ] Store a dependency graph and reject cycles between calculated columns,
-  derived worksheets, and analyses with a clear explanation.
+- [x] Store a dependency graph and reject cycles between calculated columns,
+  derived worksheets, and analyses with a clear explanation. (PR K slices
+  1-2: `lib/recalc.ts`'s `wouldCreateCycle`, wired into addFormula/
+  updateFormula, applyCorrections' bgRef, and createDerivedWorksheet.)
 - [ ] Mark stale/error states without replacing the last valid output.
 - [ ] Preview the effect of deleting or moving a dependency before committing.
 - [ ] Preserve formulas, pipeline parameters, units, exclusions, and provenance
@@ -1126,7 +1128,7 @@ build, and focused interaction coverage where appropriate.
 10. [ ] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
-11. [~] **PR K — calculated columns and derived worksheets.** Add the acyclic
+11. [x] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.
     - [x] **slice 1 — dependency foundation (Claude, worktree agent):**
@@ -1169,6 +1171,41 @@ build, and focused interaction coverage where appropriate.
       ~537/2353) can now query `downstreamOf`/`wouldCreateCycle` for
       derived worksheets, not just bgRef chains; PR J's dependency-aware
       workbook separation (L0.51) has the same generalized graph to query.
+    - [x] **slice 2 — derived worksheets + Freeze Copy, happy path (Claude,
+      worktree agent):** on `claude/k-derived-worksheets`, rebased onto
+      main after slice 1 merged (PR #172) plus H's Quick Plot templates
+      and P1.4's categorical contract. The `derivedFrom` setter is
+      `store/derivedWorksheets.ts`'s `createDerivedWorksheet(sourceId,
+      params, pipelineLabel?)`: runs `params` (the SAME `CorrectionParams`
+      shape `applyCorrections` already uses — no new pipeline DSL) against
+      the source's CURRENT raw/data via the existing corrections API, and
+      commits the result as a brand-new dataset (`get().addDataset`, the
+      MAIN_PLAN #9 single entry point) carrying `derivedFrom` + the SAME
+      workbook/folder as its source — wired through `wouldCreateCycle`
+      first (K4), refusing with zero mutation; the source itself is never
+      mutated. The REAL EXECUTOR (replacing slice 1's honest no-op):
+      `recomputeDerivedSheet` re-runs a derived sheet's own `.corrections`
+      (its re-runnable pipeline recipe) against its source's LATEST raw/
+      data, called ONLY from `useApp.ts`'s `recalcNow` — never
+      synchronously from `touchDataset` — keeping slice 1's invariant (c)
+      intact (pinned red-first: temporarily reverting the `recalcNow`
+      branch to the old no-op fails 3 tests in `store/recalc.test.ts`,
+      restoring passes all). **Freeze Copy** (`freezeCopy(id)`) severs the
+      link entirely: a plain dataset with no `derivedFrom`/`corrections`/
+      `raw`, `data.metadata.frozenFrom` recording source id/pipeline/
+      timestamp, one `addDataset`-supplied history entry. Visible marking:
+      a derived-worksheet badge (new `DerivedWorksheetMark.tsx`, the
+      `RecomputedMark.tsx` pattern — `DatasetRow.tsx` sits at the 400-line
+      ceiling) in the Library row, a source+pipeline banner with an inline
+      **Freeze Copy** button in the Worksheet pane, and a K5b formula-error
+      header badge threaded `WorksheetPane → GridViewport → GridHeader`.
+      Both actions get dataset-row context-menu entries (new
+      `lib/derivedWorksheetActions.ts`, spliced into
+      `datasetRowMenu.ts` — kept out of `lib/contextActions.ts`, which
+      sits exactly at the general 500-line ceiling with zero headroom).
+      OUT of scope (per the dispatch): M's reimport/delete propagation,
+      J's separation, user-settable level ordering, any UI beyond grid/
+      Library marking + the create/freeze actions and their menu entries.
 12. [ ] **PR L — Details metadata and Collections.** Add column selection,
     batch project-metadata edits, grouping/filtering, session undo, and
     project-local saved Collections from L0.48-L0.49 and L0.56.
