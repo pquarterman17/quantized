@@ -88,6 +88,17 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
     expect(useApp.getState().datasets.find((d) => d.id === "c")!.tags ?? []).toEqual([]);
   });
 
+  it("Tag is undoable as exactly ONE entry for the whole selection (PR L, L0.56)", async () => {
+    useApp.setState({ history: [] });
+    vi.mocked(askParams).mockResolvedValue({ tag: "MvsH" });
+    render(<MultiSelectBar />);
+    fireEvent.click(screen.getByText("Tag"));
+    await waitFor(() => expect(useApp.getState().history).toHaveLength(1));
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.find((d) => d.id === "a")!.tags ?? []).toEqual([]);
+    expect(useApp.getState().datasets.find((d) => d.id === "b")!.tags ?? []).toEqual([]);
+  });
+
   it("a blank tag entry does nothing", async () => {
     vi.mocked(askParams).mockResolvedValue({ tag: "   " });
     render(<MultiSelectBar />);

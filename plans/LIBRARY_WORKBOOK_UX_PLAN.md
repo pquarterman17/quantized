@@ -1169,9 +1169,49 @@ build, and focused interaction coverage where appropriate.
       ~537/2353) can now query `downstreamOf`/`wouldCreateCycle` for
       derived worksheets, not just bgRef chains; PR J's dependency-aware
       workbook separation (L0.51) has the same generalized graph to query.
-12. [ ] **PR L — Details metadata and Collections.** Add column selection,
+12. [~] **PR L — Details metadata and Collections.** Add column selection,
     batch project-metadata edits, grouping/filtering, session undo, and
-    project-local saved Collections from L0.48-L0.49 and L0.56.
+    project-local saved Collections from L0.48-L0.49 and L0.56. **Slice 1
+    (sprint Day-2, `claude/l-metadata-collections`):** selectable Details
+    columns, batch project-metadata edit, and basic Collections landed.
+    Selectable columns — `lib/libraryDetailsColumns.ts` (bounded 10-column
+    set; Name stays mandatory, the original seven default ON, three new
+    project-metadata columns — sample/notes/group — default OFF and
+    discoverable via the new `LibraryDetailsColumnsMenu.tsx` picker; the
+    picker is session-local state on `LibraryDetails.tsx`, not yet
+    `.dwk`-persisted). Batch edit — `store/datasetMeta.ts`'s new
+    `batchEditDatasetMetadata(ids, patch)`: notes/group/add-tags/remove-tags
+    applied to the whole selection as ONE `recordHistory` call (pinned by
+    `datasetMeta.test.ts`'s "is undoable as exactly ONE entry" +
+    "NEVER rewrites the imported raw data/header" boundary tests); wired to
+    a new "Edit metadata (N)…" control in the Details toolbar (shows the
+    affected count in the dialog title and the confirmation toast) and to
+    `MultiSelectBar`'s existing Tag button (previously N `recordHistory`
+    calls for a tag-the-selection gesture — a live L0.56 violation the new
+    action also fixes, pinned by a new "exactly ONE entry" test there).
+    Tags — already first-class project metadata from PR A2
+    (`addDatasetTag`/`removeDatasetTag`, shown in Details, searchable via
+    the existing `tag:` grammar); no new work needed, confirmed by test.
+    Collections — new `lib/collections.ts` (`Collection` type,
+    `collectionMembers` derived over the canonical `LibraryHierarchy` via
+    the SAME shared query grammar Smart Folders/search already use, never a
+    stored id list) + `store/collections.ts` (CRUD slice: add/rename/
+    re-query/delete, each one undoable `recordHistory` call) +
+    `components/Library/CollectionsSection.tsx` (a cross-cutting section
+    beside Smart Folders; a member row reveals its ONE real location via
+    "Show in Library" rather than opening a second place for it — L0.48's
+    ownership distinction) + a "⊙ Save this filter as a Collection…" button
+    beside the existing ☆ smart-folder one. Persists in `.dwk` additively
+    (`lib/workspace.ts`'s `collections?` field, sanitized by
+    `sanitizeCollections`; absent on an older doc loads as `[]`) — kept
+    project-local per L0.49 (no cross-project index exists to add one to).
+    Deferred to a later slice (booked, not built): `.dwk`-persisting the
+    Details column selection itself; drag-to-group/filter interactions
+    beyond the basic filter/save-as-Collection UI; cross-project catalogs
+    (banned outright by L0.49); grouping polish. File ownership: Details-
+    view metadata UI, tags, Collections store/persistence only — workbook
+    combine/split (Lane E-J), derived worksheets/computedColumns
+    (Lane D2), and the Import Wizard (Lane C) untouched.
 13. [ ] **PR M — dependency-aware reimport and deletion.** Add previews,
     transactional propagation, stale analysis state, Trash dependency review,
     and freeze/materialize recovery from L0.45 and L0.55. **Booked finding

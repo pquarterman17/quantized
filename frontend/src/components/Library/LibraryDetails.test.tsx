@@ -89,6 +89,65 @@ describe("LibraryDetails", () => {
   });
 });
 
+describe("LibraryDetails — selectable metadata columns (PR L, L0.56)", () => {
+  it("the Columns picker is closed by default; opening it reveals every bounded column as a checkbox, the original seven pre-checked", () => {
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(screen.queryByRole("menu", { name: "Choose Details columns" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Columns ▾" }));
+    const menu = screen.getByRole("menu", { name: "Choose Details columns" });
+    expect(within(menu).getByLabelText("Tags")).toBeChecked();
+    expect(within(menu).getByLabelText("Notes")).not.toBeChecked();
+    expect(within(menu).getByLabelText("Sample")).not.toBeChecked();
+    expect(within(menu).getByLabelText("Group")).not.toBeChecked();
+  });
+
+  it("checking a new column adds its header and cell; unchecking an existing one removes both", () => {
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(screen.queryByRole("columnheader", { name: "Notes" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Columns ▾" }));
+    fireEvent.click(screen.getByLabelText("Notes"));
+    expect(screen.getByRole("columnheader", { name: /^Notes/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Tags"));
+    expect(screen.queryByRole("columnheader", { name: /^Tags/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("LibraryDetails — batch project-metadata edit (PR L, L0.56)", () => {
+  it("the batch-edit control is hidden for 0 or 1 selected rows, and shows the affected-item count for 2+", () => {
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(screen.queryByRole("button", { name: /Edit metadata/ })).not.toBeInTheDocument();
+    act(() => useApp.setState({ selectedIds: ["a", "b"] }));
+    expect(screen.getByRole("button", { name: "Edit metadata (2)…" })).toBeInTheDocument();
+  });
+
+  it("applies notes/group/add-tags/remove-tags to every selected row as ONE undo entry, showing the count in the dialog title", async () => {
+    useApp.setState({ selectedIds: ["a", "b"] });
+    vi.mocked(askParams).mockResolvedValue({
+      notes: "batch note", clearNotes: false, group: "batch group", clearGroup: false,
+      addTags: "urgent, review", removeTags: "",
+    });
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit metadata (2)…" }));
+    expect(askParams).toHaveBeenCalledWith("Edit metadata for 2 selected", expect.anything());
+    await act(() => Promise.resolve());
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "a")?.notes).toBe("batch note");
+    expect(s.datasets.find((d) => d.id === "b")?.notes).toBe("batch note");
+    expect(s.datasets.find((d) => d.id === "a")?.tags).toEqual(["urgent", "review"]);
+    expect(s.history).toHaveLength(1); // one undo entry for the whole batch
+  });
+
+  it("a cancelled dialog (askParams resolves null) mutates nothing", async () => {
+    useApp.setState({ selectedIds: ["a", "b"] });
+    vi.mocked(askParams).mockResolvedValue(null as never);
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit metadata (2)…" }));
+    await act(() => Promise.resolve());
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
 describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 review)", () => {
   const deletionDatasets = [
     dataset("d1", "one.csv", 0),

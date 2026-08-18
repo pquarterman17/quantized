@@ -12,8 +12,10 @@
 //                per-row "Move to…" menu items call. No existing standalone
 //                picker component exists to reuse (checked DatasetRow's menu
 //                and folderOps.ts first), so this is that "minimal dialog".
-//   - Tag     -> addDatasetTag per id (the same action the row's ➕ tag chip
-//                calls), after a one-field text prompt.
+//   - Tag     -> batchEditDatasetMetadata (PR L, L0.56 — ONE undo entry for
+//                the whole selection; the row's own ➕ tag chip still calls
+//                addDatasetTag per-row, which is a single-row edit and
+//                correctly gets its own entry), after a one-field text prompt.
 //   - Export  -> folderOps.exportDatasets (the folder-export core, factored
 //                out so this bar doesn't need its own CSV logic).
 //   - Clear   -> selectIds([]) (the same primitive selectFolderContents/
@@ -62,8 +64,8 @@ export default function MultiSelectBar() {
     ]);
     const tag = picked ? String(picked.tag).trim() : "";
     if (!tag) return;
-    const add = useApp.getState().addDatasetTag;
-    selectedIds.forEach((id) => add(id, tag));
+    // PR L (L0.56): ONE undo entry for the whole batch, not one per dataset.
+    useApp.getState().batchEditDatasetMetadata([...selectedIds], { addTags: [tag] });
     toast(`tagged ${n} dataset(s) "${tag}"`);
   };
 

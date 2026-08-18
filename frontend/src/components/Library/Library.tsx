@@ -21,6 +21,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
+import CollectionsSection from "./CollectionsSection";
 import DatasetRow from "./DatasetRow";
 import FiguresSection from "./FiguresSection";
 import MultiSelectBar from "./MultiSelectBar";
@@ -74,6 +75,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const folders = useApp((s) => s.folders);
   const createFolder = useApp((s) => s.createFolder);
   const addSmartFolder = useApp((s) => s.addSmartFolder);
+  const addCollection = useApp((s) => s.addCollection);
   const expandedFolders = useApp((s) => s.expandedFolders);
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
   const expandedWorkbookIds = useApp((s) => s.expandedWorkbookIds);
@@ -303,6 +305,25 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
             ☆
           </button>
         )}
+        {/* PR L (L0.48/L0.49/L0.56): "a configured filter can be saved as a
+         *  virtual Collection" — the SAME query grammar/box as the smart-
+         *  folder save above, saved into the new hierarchy-scoped store
+         *  instead (see lib/collections.ts / CollectionsSection.tsx). */}
+        {query.trim() !== "" && (
+          <button
+            className="qz-icon-btn"
+            title="Save this filter as a Collection…"
+            onClick={() => {
+              void askParams("Save filter as Collection", [
+                { key: "name", label: "Name", type: "text", default: query.trim() },
+              ]).then((p) => {
+                if (p && String(p.name).trim()) addCollection(String(p.name), query);
+              });
+            }}
+          >
+            ⊙
+          </button>
+        )}
       </div>
 
       <MultiSelectBar />
@@ -320,6 +341,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       {!inHierarchy && !searchActive && <ReportsSection />}
       {!searchActive && <BookFamiliesSection />}
       <SmartFoldersSection onFilterTag={setQuery} />
+      <CollectionsSection hierarchy={hierarchy} onShowInLibrary={showInLibrary} />
 
       {body}
       {/* MAIN #38: an empty Library is the most common launch state, so it

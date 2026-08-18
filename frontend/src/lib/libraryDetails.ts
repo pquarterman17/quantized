@@ -14,7 +14,14 @@ export type LibraryDetailsSortKey =
   | "dataType"
   | "source"
   | "modified"
-  | "tags";
+  | "tags"
+  // PR L (L0.56) — project-metadata columns, selectable/off by default (see
+  // lib/libraryDetailsColumns.ts). `sample` reads the imported header
+  // (display-only); `notes`/`group` are the same batch-EDITABLE project
+  // metadata store/datasetMeta.ts's single-row actions already write.
+  | "sample"
+  | "notes"
+  | "group";
 export type LibraryDetailsSortDirection = "asc" | "desc";
 
 export interface LibraryDetailsRow {
@@ -27,6 +34,9 @@ export interface LibraryDetailsRow {
   source: string;
   modified: string;
   tags: string;
+  sample: string;
+  notes: string;
+  group: string;
 }
 
 const TYPE_LABELS: Record<LibraryNodeKind, string> = {
@@ -107,6 +117,14 @@ function modifiedOf(node: LibraryNode): string {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleDateString();
 }
 
+/** The imported header's sample identity (`data.metadata.sample`) —
+ *  display-only: it is part of the raw imported header, never rewritten by a
+ *  batch project-metadata edit (see store/datasetMeta.ts's frozen boundary). */
+function sampleOf(node: LibraryNode): string {
+  if (node.kind !== "worksheet") return "—";
+  return textMetadata(node.entity.data.metadata ?? {}, ["sample"]);
+}
+
 export function libraryDetailsRows(hierarchy: LibraryHierarchy): LibraryDetailsRow[] {
   const nodes: LibraryNode[] = [];
   flatten(hierarchy.roots, nodes);
@@ -120,6 +138,9 @@ export function libraryDetailsRows(hierarchy: LibraryHierarchy): LibraryDetailsR
     source: sourceOf(node),
     modified: modifiedOf(node),
     tags: node.kind === "worksheet" ? (node.entity.tags ?? []).join(", ") || "—" : "—",
+    sample: sampleOf(node),
+    notes: node.kind === "worksheet" ? node.entity.notes?.trim() || "—" : "—",
+    group: node.kind === "worksheet" ? node.entity.group?.trim() || "—" : "—",
   }));
 }
 
