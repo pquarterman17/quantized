@@ -34,6 +34,7 @@ import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
+import { sanitizeCollections, type Collection } from "./collections";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyComputedColumnsExtras, serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
@@ -113,18 +114,14 @@ export interface WorkspaceState {
   /** PLOT_WORKFLOW_PLAN item 5 — per-technique last-used view. Additive; a
    *  caller (or a pre-item-5 .dwk) with no field loads as `{}`. */
   techniqueViewMemory?: TechniqueViewMemoryMap;
-  /** RSM_CUTS_PLAN item 13 — every named saved ROI (box/ruler/sector; store/
-   *  rois.ts's `savedRois`). Additive-optional, so a pre-item-13 .dwk loads
-   *  with an empty list. Deliberately NOT the working `mapRoi`/`mapRuler` —
-   *  see store/rois.ts's header for why only the NAMED, saved definitions
-   *  round-trip through a restart. */
+  /** RSM_CUTS_PLAN item 13 — every named saved ROI (store/rois.ts); additive-optional, not the working mapRoi/mapRuler (see store/rois.ts). */
   savedRois?: RoiDef[];
-  /** PR E2 (LIBRARY_WORKBOOK_UX_PLAN) — the Library tree's "current"
-   *  selection, L0.6 remembered child, and workbook disclosure. See
-   *  store/libraryPanel.ts and lib/workspaceLibraryPanel.ts's validators. */
+  /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
   expandedWorkbookIds?: string[];
+  /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
+  collections?: Collection[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -160,6 +157,7 @@ export interface LoadedWorkspace {
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
+  collections: Collection[]; // PR L — always populated
 }
 
 interface WorkspaceDoc {
@@ -191,6 +189,7 @@ interface WorkspaceDoc {
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
+  collections: Collection[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -234,6 +233,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     librarySelection: ws.librarySelection ?? null,
     workbookLastChild: ws.workbookLastChild ?? {},
     expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
+    collections: ws.collections ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -559,6 +559,7 @@ export function parseWorkspace(
   );
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
+  const collections = sanitizeCollections(o.collections);
   return {
     datasets,
     folders: migration.folders,
@@ -586,6 +587,7 @@ export function parseWorkspace(
     librarySelection,
     workbookLastChild,
     expandedWorkbookIds,
+    collections,
   };
 }
 

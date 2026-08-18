@@ -55,6 +55,7 @@ function asLoaded(datasets: Dataset[], workbooks: WorkbookNode[] = []): LoadedWo
     librarySelection: null,
     workbookLastChild: {},
     expandedWorkbookIds: [],
+    collections: [],
   };
 }
 
