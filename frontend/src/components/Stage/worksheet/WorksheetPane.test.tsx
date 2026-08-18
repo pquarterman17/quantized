@@ -67,3 +67,55 @@ describe("WorksheetPane window-scoped selection (GUI_INTERACTION #14)", () => {
     expect(within(a.container).queryByText(/Linked to plot/)).not.toBeInTheDocument();
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K slice 2 (L0.50): the derived-worksheet
+// identity banner + Freeze Copy action, and K5b's formula-error badge.
+describe("WorksheetPane derived worksheet + formula error marking (PR K slice 2)", () => {
+  const derived: Dataset = {
+    id: "derived1",
+    name: "flattened",
+    data: { time: [0, 1], values: [[1], [2]], labels: ["A"], units: [""], metadata: {} },
+    derivedFrom: { datasetId: "full1", pipeline: "Corrections: yOff=-10" },
+  };
+
+  it("shows the source name and pipeline for a derived worksheet", () => {
+    useApp.setState({ datasets: [fullDataset, derived] });
+    render(<WorksheetPane datasetId="derived1" />);
+    expect(screen.getByText(/Derived worksheet — source: PNR:Book1/)).toBeInTheDocument();
+    expect(screen.getByTitle(/Pipeline: Corrections: yOff=-10/)).toBeInTheDocument();
+  });
+
+  it("shows no derived-worksheet banner for a plain dataset", () => {
+    useApp.setState({ datasets: [fullDataset, derived] });
+    render(<WorksheetPane datasetId="full1" />);
+    expect(screen.queryByText(/Derived worksheet/)).not.toBeInTheDocument();
+  });
+
+  it("Freeze Copy creates an independent snapshot (link severed) and records one history entry", () => {
+    useApp.setState({ datasets: [fullDataset, derived] });
+    const before = useApp.getState().history.length;
+    render(<WorksheetPane datasetId="derived1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Freeze Copy" }));
+    const frozen = useApp.getState().datasets.find((d) => d.id !== "full1" && d.id !== "derived1");
+    expect(frozen?.derivedFrom).toBeUndefined();
+    expect(frozen?.corrections).toBeUndefined();
+    expect((frozen?.data.metadata as Record<string, unknown>).frozenFrom).toMatchObject({
+      datasetId: "derived1",
+      sourceId: "full1",
+    });
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("shows a formula-error badge only on the failing computed column's header", () => {
+    const erroring: Dataset = {
+      id: "err1",
+      name: "erroring",
+      data: { time: [0, 1], values: [[1, NaN]], labels: ["A", "S"], units: ["", ""], metadata: {} },
+      formulas: [{ name: "S", expr: "A + Z", deps: ["A", "Z"] }],
+      formulaErrors: { S: 'unknown variable "Z"' },
+    };
+    useApp.setState({ datasets: [erroring] });
+    render(<WorksheetPane datasetId="err1" />);
+    expect(screen.getByTitle(/Formula error: unknown variable/)).toBeInTheDocument();
+  });
+});

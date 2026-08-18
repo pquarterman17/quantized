@@ -10,6 +10,23 @@
 
 import type { AppState } from "./useApp";
 
+// LIBRARY_WORKBOOK_UX_PLAN PR L / L0.56 — batch project-metadata edit. Every
+// field is OPTIONAL and independently applied: `undefined` means "leave this
+// field alone" for every selected dataset, while an explicit `""` for
+// notes/group means "clear it" (mirrors setDatasetNotes/setDatasetGroup's own
+// blank-clears convention below). `addTags`/`removeTags` are trimmed,
+// deduplicated tag lists, applied the same way addDatasetTag/removeDatasetTag
+// already do per-dataset. Deliberately the SAME field set as the single-row
+// actions below and nothing from `Dataset.data`/`Dataset.raw` — batch edits
+// are project metadata only, never a rewrite of the imported source (pinned
+// by datasetMeta.test.ts).
+export interface BatchMetadataPatch {
+  notes?: string;
+  group?: string;
+  addTags?: string[];
+  removeTags?: string[];
+}
+
 export interface DatasetMetaSlice {
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it
   // lives on the object (round-trips through .dwk) rather than transient view state.
@@ -20,6 +37,19 @@ export interface DatasetMetaSlice {
   removeDatasetTag: (id: string, tag: string) => void;
   // Assign a dataset to a (trimmed) group; blank clears it back to Ungrouped.
   setDatasetGroup: (id: string, group: string) => void;
+  /** Apply `patch` to every dataset in `ids` as ONE undo entry (L0.56 — never
+   *  one recordHistory per dataset, so a batch edit undoes in a single
+   *  Ctrl+Z). Returns the number of datasets ACTUALLY updated — the live
+   *  intersection of `ids` with the current dataset list, since a caller
+   *  (LibraryDetails.tsx's batch-edit dialog) captures `ids` before an async
+   *  confirm step during which every named dataset can be deleted/trashed.
+   *  A no-op patch (every field absent/empty) OR a selection with zero live
+   *  ids records NO history and mutates nothing — either would otherwise be
+   *  a phantom undo entry an Ctrl+Z silently no-ops on (adversarial-review
+   *  P2, pinned by datasetMeta.test.ts). Unknown ids among a live selection
+   *  are silently skipped (no throw — the same degrade-on-stale-id
+   *  convention every other id-keyed action here uses). */
+  batchEditDatasetMetadata: (ids: readonly string[], patch: BatchMetadataPatch) => number;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -66,6 +96,41 @@ export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMet
           d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
         ),
       }));
+    },
+    batchEditDatasetMetadata: (ids, patch) => {
+      const idSet = new Set(ids);
+      const addTags = [...new Set((patch.addTags ?? []).map((t) => t.trim()).filter(Boolean))];
+      const removeTags = new Set((patch.removeTags ?? []).map((t) => t.trim()).filter(Boolean));
+      const touchesNotes = patch.notes !== undefined;
+      const touchesGroup = patch.group !== undefined;
+      if (idSet.size === 0 || (!touchesNotes && !touchesGroup && addTags.length === 0 && removeTags.size === 0)) {
+        return 0;
+      }
+      // adversarial-review P2: `ids` is the selection at the moment the
+      // caller opened its edit dialog — by the time it confirms, every
+      // named dataset may already be gone (deleted/trashed mid-dialog). Bail
+      // BEFORE recordHistory in that case too, exactly like the empty-patch
+      // guard above — a zero-effect batch edit must never leave a phantom
+      // undo entry.
+      const liveCount = get().datasets.filter((d) => idSet.has(d.id)).length;
+      if (liveCount === 0) return 0;
+      get().recordHistory("batch edit metadata"); // ONE entry for the whole selection (L0.56)
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (!idSet.has(d.id)) return d;
+          let next = d;
+          if (touchesNotes) next = { ...next, notes: patch.notes!.trim() ? patch.notes : undefined };
+          if (touchesGroup) next = { ...next, group: patch.group!.trim() ? patch.group!.trim() : undefined };
+          if (addTags.length > 0 || removeTags.size > 0) {
+            const merged = [...(next.tags ?? [])];
+            for (const t of addTags) if (!merged.includes(t)) merged.push(t);
+            const filtered = merged.filter((t) => !removeTags.has(t));
+            next = { ...next, tags: filtered.length ? filtered : undefined };
+          }
+          return next;
+        }),
+      }));
+      return liveCount;
     },
   };
 }

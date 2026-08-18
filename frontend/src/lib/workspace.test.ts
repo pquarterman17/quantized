@@ -897,6 +897,29 @@ describe("workspace smart folders (org #9)", () => {
   });
 });
 
+describe("workspace Collections (LIBRARY_WORKBOOK_UX_PLAN PR L, L0.48/L0.49)", () => {
+  it("round-trips saved Collection queries (additive-optional — no version bump)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const collections = [
+      { id: "c1", name: "Hysteresis loops", query: "tag:mvsh" },
+      { id: "c2", name: "QD data", query: "format:qd" },
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, collections }));
+    expect(loaded.collections).toEqual(collections);
+  });
+
+  it("sanitizes malformed entries on load and defaults to [] for an older doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.collections = [{ id: "ok", name: "Fine", query: "" }, { id: 7, name: "bad" }, "junk"];
+    expect(parseWorkspace(JSON.stringify(doc)).collections).toEqual([
+      { id: "ok", name: "Fine", query: "" },
+    ]);
+    delete doc.collections; // a pre-PR-L doc
+    expect(parseWorkspace(JSON.stringify(doc)).collections).toEqual([]);
+  });
+});
+
 describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, no version bump)", () => {
   const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
     id: "w1",

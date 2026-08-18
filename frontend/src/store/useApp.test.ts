@@ -3419,6 +3419,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       librarySelection: null,
       workbookLastChild: {},
       expandedWorkbookIds: [],
+      collections: [],
     };
   }
 

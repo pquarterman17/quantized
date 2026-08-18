@@ -356,8 +356,10 @@ as a CSS-only tree redesign.
 
 ### Derived-data integrity requirements
 
-- [ ] Store a dependency graph and reject cycles between calculated columns,
-  derived worksheets, and analyses with a clear explanation.
+- [x] Store a dependency graph and reject cycles between calculated columns,
+  derived worksheets, and analyses with a clear explanation. (PR K slices
+  1-2: `lib/recalc.ts`'s `wouldCreateCycle`, wired into addFormula/
+  updateFormula, applyCorrections' bgRef, and createDerivedWorksheet.)
 - [ ] Mark stale/error states without replacing the last valid output.
 - [ ] Preview the effect of deleting or moving a dependency before committing.
 - [ ] Preserve formulas, pipeline parameters, units, exclusions, and provenance
@@ -1123,10 +1125,119 @@ build, and focused interaction coverage where appropriate.
     (backend `io/` + thin route on the served modes; define the two-browser-
     tabs-one-backend story explicitly). (Booked 2026-08-14 — L0.47 previously
     had no owning slice.)
-10. [ ] **PR J — combined and split workbooks.** Implement explicit combine,
+10. [~] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
-11. [~] **PR K — calculated columns and derived worksheets.** Add the acyclic
+    - [x] **slice 1 — combine/separate against the frozen dependency contract
+      (Claude, worktree agent, sprint Day-2):** implemented pending review, on
+      `claude/j-combine-split`. Store-only (no UI) — mirrors PR K slice 1's
+      scoping precedent (see that item's log). **Combine** (L0.32-L0.34):
+      `lib/workbookCombine.ts`'s pure `resolveCombineTargets` (expands a
+      selected whole workbook to every live member + individually-picked
+      worksheets, de-duplicated), `suggestCombinedWorkbookName` (longest
+      shared basename prefix, undefined below a 3-char floor — "when one is
+      clear"), and `dedupeWorksheetNames` (the `dedupeWindowTitle` "Name",
+      "Name (2)", … idiom, scoped to the incoming batch only — two unrelated
+      workbooks may legitimately share a worksheet name elsewhere);
+      `store/workbookCombine.ts`'s `combineWorkbooks(selection, name)` mints
+      ONE new workbook (`nextWorkbookId`) and reassigns the resolved
+      worksheets' `workbookId` (+ deduped display name) in one `set()`/one
+      `recordHistory`. Source path/importedAt provenance rides the dataset
+      object untouched — no reimport machinery is invoked (L0.33 stays PR
+      M's). Source workbooks are DELIBERATELY never deleted (even fully
+      drained) — the plan's documented memberless-but-alive state, so a
+      workbook-scoped Quick Plot template never dangles and PR M's
+      delete/prune contract is never triggered by this PR. Refuses (zero
+      mutation) on an empty selection or blank name. **Separate** (L0.51):
+      `lib/workbookSeparate.ts`'s `closeExclusiveDependents` — a fixpoint
+      closure over the SAME bgRef/derivedFrom edges `lib/recalc.ts`'s
+      `buildEdges` folds (re-derived rather than imported, since
+      `downstreamOf` answers "reachable" not "exclusively dependent" — a
+      dataset with an EXTRA dependency outside the moving set never joins,
+      pinned by a two-upstream-fields test) — and `computeSeparatePlan`,
+      which builds the affected-item preview by calling
+      `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy` TWICE (current
+      state, and a hypothetical post-separate state) and diffing each
+      figure/page/report/derived-worksheet's placement: **the key finding
+      this slice turned up is that no explicit "rewrite a source link" step
+      exists anywhere in this codebase** — every artifact kind (origin/
+      editable/publication figure, page, report) resolves its Library
+      placement FRESH from its source dataset(s)' CURRENT `workbookId` on
+      every hierarchy build (already true before this PR; FigureDocument/
+      FigureDoc/ReportEntry are all single-`datasetId`-only, so only Origin
+      figure families and multi-panel Pages can even span >1 worksheet), so
+      the ENTIRE commit mutation is "mint one workbook, reassign
+      `workbookId` on the moving dataset ids" — nothing else to touch, and
+      nothing that can drift out of sync with a stored link, because there
+      is no stored link. Preview/commit are two store actions
+      (`store/workbookSeparate.ts`): `previewSeparateWorksheets` computes and
+      opens a `SeparatePlan` (new `separatePreview` state field — transient,
+      added to `architecture.test.ts`'s HISTORY_EXCLUDED, mirroring
+      `splitDialogTargetId`); `commitSeparateWorksheets` REFUSES with zero
+      mutation unless a preview is open (preview-before-commit is a hard
+      gate, not just a UI convention) and re-validates every previewed
+      moving id is still live before applying (fails closed on a
+      preview/commit race, e.g. the worksheet got removed by something else
+      meanwhile) — one `recordHistory`/one `set()` on success. Both slices
+      composed into `useApp.ts` exactly like `workbookActions.ts` (2 import
+      lines + 2 extends-union words + 2 spread lines + one `loadWorkspace`
+      reset line for `separatePreview`; the 2818 pin is untouched, still
+      well under it). P1.4's `cat_levels` merge contract was checked and
+      found N/A: combine never merges worksheet ROW data into one sheet
+      (`lib/merge.ts`'s `mergeDatasets` is the feature that does that,
+      untouched here) — L0.34 keeps every combined worksheet a separate
+      child by design. Red-first throughout; every pin (collision
+      suffixing, the exclusive-vs-shared dependency split, the
+      preview-before-commit/staleness gate) mutation-tested by temporarily
+      breaking it and confirming the test catches it. Gates green: `tsc
+      --noEmit` clean, `eslint --max-warnings=0` clean on touched files,
+      full `vitest run` 495/495 files, 7338/7338 tests, `npm run build`
+      845.2 kB eager (8.8 kB under the 854.0 kB budget). **Deferred to a
+      later slice** (booked here, not silently dropped): the actual dialog
+      UI (name-prompt/prefix-suggestion for Combine, the affected-item
+      preview list for Separate) and Library context-menu wiring —
+      `store/workbookCombine.ts`/`store/workbookSeparate.ts` expose a
+      complete, independently-tested action contract for that UI to call
+      directly, same "NO UI, slice 2's job" scoping PR K slice 1 used;
+      L0.33's transactional multi-source reimport (PR M's machinery, per
+      this PR's brief); PR I's cross-instance transfer; Lane D2's
+      dependency-graph WRITES (this slice only READS `downstreamOf`-adjacent
+      structure via `closeExclusiveDependents`, never persists a graph).
+      **Slice-2 caveat (booked from the adversarial review, 2026-08-18):**
+      `previewSeparateWorksheets` mints `nextWorkbookId()` once per preview
+      OPEN — fine for today's static, open-once-per-gesture preview, but a
+      live-updating preview (re-running as the user tweaks the separate
+      selection) must NOT re-mint on every recompute/keystroke; mint once at
+      commit instead, or memoize the id across recomputes of the same open
+      preview. Booked as a slice-2 constraint, not built here.
+    - **Review round (2026-08-18, adversarial verdict SOUND-WITH-FIXES) —
+      P1/P2 fixed, same commit as slice 1's plan-doc entry:** P1 (probe-
+      proven): `combineWorkbooks`/`commitSeparateWorksheets` reassigned
+      `Dataset.workbookId` but left `folderId` untouched, breaking the
+      `lib/workbooks.ts:52-54`/`moveWorkbookToFolder` invariant ("folder
+      placement is owned by the WORKBOOK") and split-braining Folder view
+      (`lib/foldertree.ts`'s `folderDatasets`, read by `Library.tsx`/
+      `SmartFoldersSection.tsx`/`datasetRowMenu.ts`) against the workbook
+      tree. Fixed: combine's new workbook lands at the Library root, so
+      every moved worksheet's `folderId` is set to `undefined` UNCONDITIONALLY
+      (mirroring `moveWorkbookToFolder`'s own `folderId ?? undefined`);
+      separate's moving datasets (seed + closure-swept dependents, which can
+      carry a DIFFERENT drifted `folderId` than the seed) are all re-homed to
+      `SeparatePlan.newWorkbookFolderId` (the source workbook's folder).
+      Red-first: a dataset moved from a foldered workbook no longer
+      disappears from `folderDatasets(oldFolder)` (combine) and a
+      closure-swept dependent with a drifted `folderId` gets re-homed to
+      match the seed's new placement (separate) — both quoted red in the
+      session transcript, both mutation-tested by reverting the fix. P2
+      (should-fix): `closeExclusiveDependents`'s bgRef live-edge predicate
+      (`d.bgRef && d.corrections && d.raw`) had no test isolating each half —
+      the sole negative case dropped BOTH `corrections` and `raw` at once, so
+      a mutated predicate missing just `&& d.raw` (or just `&& d.corrections`)
+      still passed all 14 prior tests. Added two isolated cases; each was
+      proven red under its matching single-field mutation, then the
+      predicate was restored. P3 (booked): `previewSeparateWorksheets`'s
+      `nextWorkbookId()`-per-open caveat above.
+11. [x] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.
     - [x] **slice 1 — dependency foundation (Claude, worktree agent):**
@@ -1169,9 +1280,84 @@ build, and focused interaction coverage where appropriate.
       ~537/2353) can now query `downstreamOf`/`wouldCreateCycle` for
       derived worksheets, not just bgRef chains; PR J's dependency-aware
       workbook separation (L0.51) has the same generalized graph to query.
-12. [ ] **PR L — Details metadata and Collections.** Add column selection,
+    - [x] **slice 2 — derived worksheets + Freeze Copy, happy path (Claude,
+      worktree agent):** on `claude/k-derived-worksheets`, rebased onto
+      main after slice 1 merged (PR #172) plus H's Quick Plot templates
+      and P1.4's categorical contract. The `derivedFrom` setter is
+      `store/derivedWorksheets.ts`'s `createDerivedWorksheet(sourceId,
+      params, pipelineLabel?)`: runs `params` (the SAME `CorrectionParams`
+      shape `applyCorrections` already uses — no new pipeline DSL) against
+      the source's CURRENT raw/data via the existing corrections API, and
+      commits the result as a brand-new dataset (`get().addDataset`, the
+      MAIN_PLAN #9 single entry point) carrying `derivedFrom` + the SAME
+      workbook/folder as its source — wired through `wouldCreateCycle`
+      first (K4), refusing with zero mutation; the source itself is never
+      mutated. The REAL EXECUTOR (replacing slice 1's honest no-op):
+      `recomputeDerivedSheet` re-runs a derived sheet's own `.corrections`
+      (its re-runnable pipeline recipe) against its source's LATEST raw/
+      data, called ONLY from `useApp.ts`'s `recalcNow` — never
+      synchronously from `touchDataset` — keeping slice 1's invariant (c)
+      intact (pinned red-first: temporarily reverting the `recalcNow`
+      branch to the old no-op fails 3 tests in `store/recalc.test.ts`,
+      restoring passes all). **Freeze Copy** (`freezeCopy(id)`) severs the
+      link entirely: a plain dataset with no `derivedFrom`/`corrections`/
+      `raw`, `data.metadata.frozenFrom` recording source id/pipeline/
+      timestamp, one `addDataset`-supplied history entry. Visible marking:
+      a derived-worksheet badge (new `DerivedWorksheetMark.tsx`, the
+      `RecomputedMark.tsx` pattern — `DatasetRow.tsx` sits at the 400-line
+      ceiling) in the Library row, a source+pipeline banner with an inline
+      **Freeze Copy** button in the Worksheet pane, and a K5b formula-error
+      header badge threaded `WorksheetPane → GridViewport → GridHeader`.
+      Both actions get dataset-row context-menu entries (new
+      `lib/derivedWorksheetActions.ts`, spliced into
+      `datasetRowMenu.ts` — kept out of `lib/contextActions.ts`, which
+      sits exactly at the general 500-line ceiling with zero headroom).
+      OUT of scope (per the dispatch): M's reimport/delete propagation,
+      J's separation, user-settable level ordering, any UI beyond grid/
+      Library marking + the create/freeze actions and their menu entries.
+12. [~] **PR L — Details metadata and Collections.** Add column selection,
     batch project-metadata edits, grouping/filtering, session undo, and
-    project-local saved Collections from L0.48-L0.49 and L0.56.
+    project-local saved Collections from L0.48-L0.49 and L0.56. **Slice 1
+    (sprint Day-2, `claude/l-metadata-collections`):** selectable Details
+    columns, batch project-metadata edit, and basic Collections landed.
+    Selectable columns — `lib/libraryDetailsColumns.ts` (bounded 10-column
+    set; Name stays mandatory, the original seven default ON, three new
+    project-metadata columns — sample/notes/group — default OFF and
+    discoverable via the new `LibraryDetailsColumnsMenu.tsx` picker; the
+    picker is session-local state on `LibraryDetails.tsx`, not yet
+    `.dwk`-persisted). Batch edit — `store/datasetMeta.ts`'s new
+    `batchEditDatasetMetadata(ids, patch)`: notes/group/add-tags/remove-tags
+    applied to the whole selection as ONE `recordHistory` call (pinned by
+    `datasetMeta.test.ts`'s "is undoable as exactly ONE entry" +
+    "NEVER rewrites the imported raw data/header" boundary tests); wired to
+    a new "Edit metadata (N)…" control in the Details toolbar (shows the
+    affected count in the dialog title and the confirmation toast) and to
+    `MultiSelectBar`'s existing Tag button (previously N `recordHistory`
+    calls for a tag-the-selection gesture — a live L0.56 violation the new
+    action also fixes, pinned by a new "exactly ONE entry" test there).
+    Tags — already first-class project metadata from PR A2
+    (`addDatasetTag`/`removeDatasetTag`, shown in Details, searchable via
+    the existing `tag:` grammar); no new work needed, confirmed by test.
+    Collections — new `lib/collections.ts` (`Collection` type,
+    `collectionMembers` derived over the canonical `LibraryHierarchy` via
+    the SAME shared query grammar Smart Folders/search already use, never a
+    stored id list) + `store/collections.ts` (CRUD slice: add/rename/
+    re-query/delete, each one undoable `recordHistory` call) +
+    `components/Library/CollectionsSection.tsx` (a cross-cutting section
+    beside Smart Folders; a member row reveals its ONE real location via
+    "Show in Library" rather than opening a second place for it — L0.48's
+    ownership distinction) + a "⊙ Save this filter as a Collection…" button
+    beside the existing ☆ smart-folder one. Persists in `.dwk` additively
+    (`lib/workspace.ts`'s `collections?` field, sanitized by
+    `sanitizeCollections`; absent on an older doc loads as `[]`) — kept
+    project-local per L0.49 (no cross-project index exists to add one to).
+    Deferred to a later slice (booked, not built): `.dwk`-persisting the
+    Details column selection itself; drag-to-group/filter interactions
+    beyond the basic filter/save-as-Collection UI; cross-project catalogs
+    (banned outright by L0.49); grouping polish. File ownership: Details-
+    view metadata UI, tags, Collections store/persistence only — workbook
+    combine/split (Lane E-J), derived worksheets/computedColumns
+    (Lane D2), and the Import Wizard (Lane C) untouched.
 13. [ ] **PR M — dependency-aware reimport and deletion.** Add previews,
     transactional propagation, stale analysis state, Trash dependency review,
     and freeze/materialize recovery from L0.45 and L0.55. **Booked finding

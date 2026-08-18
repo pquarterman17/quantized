@@ -43,6 +43,28 @@ export interface WorksheetPaneProps {
   windowId?: string;
 }
 
+/** PR K (L0.50): the derived-worksheet identity banner + Freeze Copy action.
+ *  Its own function (not a separate file) — WorksheetPane has room under the
+ *  component ceiling; splitting further would be premature. */
+function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
+  const sourceName = useApp((s) => s.datasets.find((d) => d.id === ds.derivedFrom?.datasetId)?.name);
+  if (!ds.derivedFrom) return null;
+  return (
+    <div className="qzk-ds-meta" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+      <span title={`Pipeline: ${ds.derivedFrom.pipeline}`}>
+        Derived worksheet — source: {sourceName ?? ds.derivedFrom.datasetId}
+      </span>
+      <button
+        className="qz-btn"
+        title="Create a permanent, independent snapshot of this worksheet's current data (link severed)"
+        onClick={() => useApp.getState().freezeCopy(ds.id)}
+      >
+        Freeze Copy
+      </button>
+    </div>
+  );
+}
+
 export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   if (!ds) {
@@ -160,6 +182,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         canExtract={view.canExtract}
         onExtract={view.extractSubset}
       />
+      <DerivedWorksheetBanner ds={ds} />
       {ds.pending && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
           Loading full data ({ds.pending.rows} rows × {ds.pending.cols} channels) — showing a preview
@@ -195,6 +218,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onEditCell={view.onEditCell}
         baseCount={view.baseCount}
         onRemoveFormula={view.onRemoveFormula}
+        formulaErrors={ds.formulaErrors}
         showStats={view.showStats}
         colStats={view.colStats}
         statsErr={view.statsErr}

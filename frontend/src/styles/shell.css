@@ -218,6 +218,13 @@ body {
 .qzk-details-tools { min-height: 20px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text-faint); font-size: var(--type-nano); }
 .qzk-details-manual { border: 0; padding: 2px 4px; background: none; color: var(--accent); font-size: inherit; cursor: default; }
 .qzk-details-manual:hover { text-decoration: underline; }
+.qzk-details-tools-actions { position: relative; display: flex; align-items: center; gap: 4px; }
+/* PR L (L0.56) — the "Columns" picker popover. Anchored to its own toggle
+   button; z-index keeps it above the sticky table header it overlaps. */
+.qzk-details-colpicker { position: relative; }
+.qzk-details-colmenu { position: absolute; top: 100%; right: 0; z-index: 40; display: flex; flex-direction: column; gap: 2px; min-width: 160px; padding: 6px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.qzk-details-colitem { display: flex; align-items: center; gap: 6px; padding: 2px 4px; color: var(--text-dim); font-size: var(--type-nano); cursor: default; }
+.qzk-details-colitem:hover { color: var(--text); background: var(--surface-3); }
 .qzk-details-scroll { min-width: 0; overflow-x: auto; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
 .qzk-details-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--type-nano); }
 .qzk-details-table th { position: sticky; top: 0; z-index: 1; padding: 0; border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; }
@@ -306,6 +313,12 @@ body {
 .qzk-group-caret { width: 10px; color: var(--text-dim); }
 .qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+/* PR L (L0.48/L0.49) — a Collection's member row. Deliberately NOT a
+   DatasetRow: a Collection's members span every hierarchy node kind, and
+   clicking one reveals its real location rather than opening a second place
+   for it to "live" (L0.48's ownership distinction). */
+.qzk-collection-member { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 20px; border: 0; background: none; color: var(--text-dim); font-size: var(--type-nano); text-align: left; cursor: default; }
+.qzk-collection-member:hover { color: var(--text); background: var(--surface-2); }
 
 /* Folder tree (project-organization item 3): user-named folders over the flat
    dataset list. Reuses the group caret/name/count, but normal-case with a folder
@@ -452,6 +465,7 @@ body {
 .qzk-cell-edit { width: 100%; min-width: 60px; padding: 1px 4px; font-family: var(--font-mono); font-size: inherit; box-sizing: border-box; }
 .qzk-col-x { margin-left: 4px; padding: 0 3px; background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--type-nano); line-height: 1; }
 .qzk-col-x:hover { color: var(--danger); }
+.qzk-formula-err { margin-left: 4px; color: var(--danger); font-size: var(--type-nano); line-height: 1; cursor: default; }
 
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }

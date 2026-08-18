@@ -29,6 +29,7 @@ import {
   runContextAction,
   type DatasetActionTarget,
 } from "../../lib/contextActions";
+import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
 import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -93,6 +94,10 @@ export function buildDatasetRowMenu(
     ...buildMenuItems([datasetNewFolderAction], target),
     // Batch-apply this dataset's corrections (only when it has any).
     ...(d.corrections ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetCorrectionsActions, target)] : []),
+    // PR K slice 2 (L0.50): Create Derived Worksheet / Freeze Copy — each
+    // entry gates its OWN visibility (hidden), so this splices unconditionally.
+    { separator: true },
+    ...buildMenuItems(datasetDerivedWorksheetActions, target),
     // Merge / panel / overlay quick picks for the multi-selection (item 19).
     ...(selected && selectedCount > 1
       ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetMultiSelectActions, target)]

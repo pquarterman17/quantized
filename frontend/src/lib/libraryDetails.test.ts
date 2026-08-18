@@ -44,6 +44,27 @@ describe("Library Details projection", () => {
     });
   });
 
+  it("exposes sample/notes/group as their own selectable metadata columns (PR L, L0.56)", () => {
+    const withMeta: Dataset = {
+      ...dataset("b", "beta.csv", "w", 0),
+      notes: "annealed at 400C",
+      group: "batch-3",
+      data: { ...dataset("b", "beta.csv", "w", 0).data, metadata: { technique: "VSM", sample: "Fe3O4" } },
+    };
+    const hierarchy = buildLibraryHierarchy({ folders: [], workbooks: [{ id: "w", name: "Run" }], datasets: [withMeta] });
+    const row = libraryDetailsRows(hierarchy).find((item) => item.node.kind === "worksheet")!;
+    expect(row.sample).toBe("Fe3O4");
+    expect(row.notes).toBe("annealed at 400C");
+    expect(row.group).toBe("batch-3");
+    // A non-worksheet row (the workbook) and a worksheet missing the field both fall back to "—".
+    const bare = libraryDetailsRows(buildLibraryHierarchy({
+      folders: [], workbooks: [{ id: "w", name: "Run" }], datasets: [dataset("b", "beta.csv", "w", 0)],
+    }));
+    expect(bare.find((r) => r.node.kind === "workbook")?.sample).toBe("—");
+    expect(bare.find((r) => r.node.kind === "worksheet")?.notes).toBe("—");
+    expect(bare.find((r) => r.node.kind === "worksheet")?.group).toBe("—");
+  });
+
   it("sorts a copy and restores the untouched canonical manual order", () => {
     const hierarchy = buildLibraryHierarchy({
       folders: [],

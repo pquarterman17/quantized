@@ -59,3 +59,23 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
     );
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K slice 2 (L0.50): Create Derived Worksheet /
+// Freeze Copy — exactly one of the two is ever offered on a dataset row.
+describe("buildDatasetRowMenu — Create Derived Worksheet / Freeze Copy (PR K slice 2)", () => {
+  it("offers 'Create Derived Worksheet' (not Freeze Copy) on an ordinary dataset", () => {
+    const ds = dataset("d1");
+    const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
+    const labels = items.map(labelOf);
+    expect(labels).toContain("Create Derived Worksheet");
+    expect(labels).not.toContain("Freeze Copy");
+  });
+
+  it("offers 'Freeze Copy' (not Create Derived Worksheet) on a derived worksheet", () => {
+    const ds: Dataset = { ...dataset("d1"), derivedFrom: { datasetId: "src", pipeline: "x" } };
+    const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
+    const labels = items.map(labelOf);
+    expect(labels).toContain("Freeze Copy");
+    expect(labels).not.toContain("Create Derived Worksheet");
+  });
+});
