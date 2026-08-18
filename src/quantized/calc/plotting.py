@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.datastruct import DataStruct
+from quantized.datastruct import DataStruct, is_categorical, level_of
 
 __all__ = [
     "PlotData",
@@ -168,7 +168,14 @@ def build_grouped_series(
         like :func:`build_series`).
       - Label: ``f"{y_label} ({group_label}={level})"`` -- ``level`` is the
         RAW numeric group value (see :func:`_format_level`), never a
-        resolved category text label.
+        resolved category text label -- UNLESS ``group_col`` is a P1.4
+        categorical channel (:func:`quantized.datastruct.is_categorical`),
+        in which case ``level`` is the channel's string label for that code
+        (:func:`quantized.datastruct.level_of`), matching the frontend's
+        ``buildXY``/``levelLabel`` pairing (P4-4). Grouping EQUALITY always
+        stays code-based (the numeric fast path below is unchanged either
+        way) -- only the rendered label text differs. A non-categorical
+        channel's output is completely unchanged by this addition.
       - Every series stays on axis 0 -- ``buildXY`` never assigns
         ``axis: 1`` to a grouped series; a request combining a group split
         with a secondary axis is rejected earlier, at the route layer
@@ -196,6 +203,7 @@ def build_grouped_series(
     finite_group = group_vals[np.isfinite(group_vals)]
     levels = np.sort(np.unique(finite_group))
     g_label = ds.labels[gi]
+    group_is_categorical = is_categorical(ds, gi)
 
     series: list[PlotSeries] = []
     for yk in y_keys:
@@ -206,9 +214,12 @@ def build_grouped_series(
         for lvl in levels:
             mask = (group_vals == lvl) & np.isfinite(y_vals)
             masked = np.where(mask, y_vals, np.nan)
+            level_text = level_of(ds, gi, float(lvl)) if group_is_categorical else None
+            if level_text is None:
+                level_text = _format_level(float(lvl))
             series.append(
                 PlotSeries(
-                    label=f"{y_label} ({g_label}={_format_level(float(lvl))})",
+                    label=f"{y_label} ({g_label}={level_text})",
                     unit=y_unit,
                     values=np.asarray(masked, dtype=float),
                     axis=0,

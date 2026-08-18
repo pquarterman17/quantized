@@ -9,6 +9,7 @@
 // the same axis geometry; groupedBarSlots is the extra sub-division a
 // clustered bar chart needs within one category slot.
 
+import { isCategoricalChannel, levelLabel } from "./categorical";
 import type { DataStruct } from "./types";
 
 const colValues = (data: DataStruct, index: number): number[] =>
@@ -82,15 +83,32 @@ function formatLevel(v: number): string {
   return Number.isInteger(v) ? String(v) : String(Number(v.toPrecision(6)));
 }
 
-/** Category tick labels for `channel`'s levels: an Origin text-label column
- *  when one consistently covers every level (RESOLVED decision b), else
- *  formatted numeric levels (decision a, the fallback). */
+/** P1.4 FIRST source (highest precedence): `channel`'s own level table
+ *  (`lib/categorical.ts`), when it has one. Fixes the pre-P1.4
+ *  inconsistency where this module read ONLY `origin_text_columns` even
+ *  though a P1.4 categorical channel already carries its own authoritative
+ *  string levels — `null` when `channel` isn't categorical, so the caller
+ *  falls through to the Origin-text-column / numeric-formatting sources
+ *  exactly as before. */
+function catTableLabels(
+  data: DataStruct,
+  channel: number,
+  levels: readonly number[],
+): string[] | null {
+  if (!isCategoricalChannel(data, channel)) return null;
+  return levels.map((lvl) => levelLabel(data, channel, lvl) ?? formatLevel(lvl));
+}
+
+/** Category tick labels for `channel`'s levels: a P1.4 categorical channel's
+ *  own level table first (new, highest precedence), then an Origin
+ *  text-label column when one consistently covers every level (RESOLVED
+ *  decision b), else formatted numeric levels (decision a, the fallback). */
 export function resolveCategoryLabels(
   data: DataStruct,
   channel: number,
   levels: readonly number[],
 ): string[] {
-  return textLabelsFor(data, channel, levels) ?? levels.map(formatLevel);
+  return catTableLabels(data, channel, levels) ?? textLabelsFor(data, channel, levels) ?? levels.map(formatLevel);
 }
 
 // ── Per-series aggregate (mean ± SEM) ────────────────────────────────────────

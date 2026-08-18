@@ -92,6 +92,35 @@ describe("resolveCategoryLabels (RESOLVED decision: text column then numeric fal
     const frac: DataStruct = { ...base, values: [[1.5], [2.25], [1.5], [2.25]] };
     expect(resolveCategoryLabels(frac, 0, [1.5, 2.25])).toEqual(["1.5", "2.25"]);
   });
+
+  // P1.4 categorical codes are 0-indexed (`levels[code]`), unlike `base`'s
+  // 1/2-valued numeric group column above — a dedicated 0/1-coded fixture.
+  const catBase: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [[0], [1], [0], [1]],
+    labels: ["group"],
+    units: [""],
+    metadata: {},
+  };
+
+  // P1.4: catLevels is the FIRST source, taking precedence even over an
+  // origin_text_columns entry that would otherwise qualify — fixes the
+  // pre-P1.4 inconsistency where this module read ONLY origin_text_columns.
+  it("a P1.4 categorical channel's own level table wins over origin_text_columns", () => {
+    const ds: DataStruct = {
+      ...catBase,
+      metadata: { origin_text_columns: { B: ["Stale A", "Stale B", "Stale A", "Stale B"] } },
+      catLevels: { 0: ["Room A", "Room B"] },
+    };
+    expect(resolveCategoryLabels(ds, 0, [0, 1])).toEqual(["Room A", "Room B"]);
+  });
+
+  it("a P1.4 categorical channel still falls back to formatted numeric levels for an out-of-table code", () => {
+    const ds: DataStruct = { ...catBase, catLevels: { 0: ["Room A", "Room B"] } };
+    expect(resolveCategoryLabels(ds, 0, [0, 1])).toEqual(["Room A", "Room B"]);
+    // a level code with no entry in the table falls back to the numeric format
+    expect(resolveCategoryLabels(ds, 0, [0, 1, 2])).toEqual(["Room A", "Room B", "2"]);
+  });
 });
 
 describe("seriesStat", () => {

@@ -459,6 +459,37 @@ describe("specToRender", () => {
     ]);
   });
 
+  // P1.4 (P4-4): the SAME parity fixture shape, but the group channel now
+  // carries a level table — series labels should read the STRING level.
+  // Backend counterpart: test_calc_plotting.py
+  // test_build_grouped_series_uses_level_labels_for_a_categorical_group_col.
+  it("a categorical group channel uses its string level labels, not the raw code", () => {
+    const catData: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 0],
+        [40, 1],
+      ],
+      labels: ["Value", "Region"],
+      units: ["V", ""],
+      metadata: {},
+      catLevels: { 1: ["North", "South"] },
+    };
+    const catDs: Dataset = { id: "c1", name: "cat.dat", data: catData };
+    const r = specToRender(
+      spec(null, [{ datasetId: "c1", channel: 0 }], "scatter", { datasetId: "c1", channel: 1 }),
+      [catDs],
+    );
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.payload.series.map((s) => s.label)).toEqual([
+      "Value (Region=North)",
+      "Value (Region=South)",
+    ]);
+  });
+
   it("nominal X + continuous Y → box stats grouped by the category", () => {
     const r = specToRender(spec(ref(2), [ref(1)], "box"), [DS]);
     expect(r.kind).toBe("box");
@@ -470,6 +501,33 @@ describe("specToRender", () => {
     // group 0 = rows with grp 0 → y in 10..20 → median 15
     expect(r.boxes[0].median).toBe(15);
     expect(r.boxes[1].median).toBe(35);
+  });
+
+  // P1.4 (P4-4 closing sentence): the box/bar categorical gate is
+  // `isCategorical(channelModelingType(...))`; channelModelingType now
+  // defaults a catLevels channel to "nominal" (lib/modeling.ts), so a
+  // categorical channel is box-groupable with NO channelTypes override —
+  // even one too small/irregular for the numeric-shape inference to catch.
+  it("a P1.4 categorical X channel is box-groupable with no channelTypes override", () => {
+    const catData: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [0, 10],
+        [1, 20],
+        [0, 30],
+        [1, 40],
+      ],
+      labels: ["Lot", "y"],
+      units: ["", ""],
+      metadata: {},
+      catLevels: { 0: ["L1", "L2"] }, // only 4 rows, 2 levels — below inferModelingType's MIN_SAMPLES
+    };
+    const catDs: Dataset = { id: "c2", name: "cat2.dat", data: catData };
+    const r = specToRender(spec({ datasetId: "c2", channel: 0 }, [{ datasetId: "c2", channel: 1 }], "box"), [catDs]);
+    expect(r.kind).toBe("box");
+    if (r.kind !== "box") return;
+    expect(r.boxes).toHaveLength(2);
+    expect(r.groupLabel).toBe("Lot");
   });
 
   it("violin mark renders as box stats offline, flagged for the caller", () => {
