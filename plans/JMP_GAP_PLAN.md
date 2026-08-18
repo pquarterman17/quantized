@@ -172,24 +172,41 @@ replacements and its priority case is now stronger, not different.
 
 1. **[~] J1 — String categorical levels end-to-end** (with P1.4; design
    the contract once). Acceptance beyond P1.4's own boxes:
-   - [x] **Contract designed once (2026-08-17, P1.4 Slice 1,
-     `claude/p14-categorical-contract`).** A text column imports as a
-     first-class categorical channel via BOTH generic import paths
-     (`io/delimited.py`'s f1/f2 fixes, `io/import_preview.py`'s new
+   - [x] **Contract designed once (2026-08-17, P1.4 Slice 1 + same-day
+     review round, `claude/p14-categorical-contract`).** A text column
+     imports as a first-class categorical channel via BOTH generic import
+     paths (`io/delimited.py`'s f1/f2 fixes, `io/import_preview.py`'s new
      `categorical` role). Ruling recorded here per this plan's own
      instruction: JMP's "string levels preserved, not numeric-coded" bar is
      satisfied AT THE CONTRACT LEVEL, not by literal string storage — the
      representation is float codes `0..n-1` PLUS a first-class ordered
-     level table (`DataStruct.cat_levels` / `catLevels`), and the mapping is
+     level table (`DataStruct.cat_levels`, identically named both
+     languages — the review round's blocker fix: the frontend field was
+     briefly `catLevels`, camelCase, silently un-wired from the backend's
+     snake_case wire payload, so no categorical accessor ever fired against
+     a real import until that was caught and renamed), and the mapping is
      LOSSLESS + INVERTIBLE (`levels[code] == original string` for every
-     cell, proven by round-trip tests both languages/both import paths).
-     The accessor layer (`is_categorical`/`level_labels`/`level_of` in
+     cell). This is now proven by SHARED-FIXTURE WIRE PARITY, precisely: a
+     single committed JSON payload (`tests/fixtures/wire/
+     categorical_import_payload.json`) that a backend test
+     (`test_wire_fixtures.py`) asserts the real `datastruct_payload()`
+     output matches byte-for-byte, and a frontend test
+     (`categoricalWireFixture.test.ts`) parses through the real
+     `parseWorkspace`/accessor path — one source of truth both suites read,
+     not two hand-synced fixtures that could (and did) silently drift. The
+     accessor layer (`is_categorical`/`level_labels`/`level_of` in
      `quantized/datastruct.py`; `isCategoricalChannel`/`categoricalLevels`/
      `levelLabel` in `lib/categorical.ts`) is declared the ONLY sanctioned
      read path specifically so this internal-numeric-storage choice never
      leaks as a representational loss to any consumer or to a future
      storage-scheme change — see the full ruling in `DataStruct`'s
-     docstring (`src/quantized/datastruct.py`).
+     docstring (`src/quantized/datastruct.py`), which now also states
+     explicitly that construction validates the level table's SHAPE only;
+     a value cell's code/level COHERENCE degrades at read time
+     (`level_of`/`levelLabel` -> `None`), never raises. Both languages'
+     read paths also degrade safely on a structurally corrupted table
+     (e.g. `{0: "AB"}`) rather than treating a bare string as if it were a
+     string array.
    - [ ] Worksheet-visible, editable type C/O/N: the MODELING-TYPE half
      landed (a channel with a level table defaults to "nominal",
      `lib/modeling.ts`'s `channelModelingType`, user override still wins),
@@ -201,10 +218,17 @@ replacements and its priority case is now stronger, not different.
      categorical gate composes with the nominal default (no manual
      `channelTypes` override needed), and Group's series labels resolve
      string levels (`calc/plotting.build_grouped_series`,
-     `lib/plotspec.ts` `buildXY`) — pinned by cross-language parity tests.
-     NOT done: Facet/Data Filter/Tabulate/`facet-by-column`/matplotlib
-     export wiring (P1.5/P1.6 territory — they now build against this
-     contract instead of inventing their own).
+     `lib/plotspec.ts` `buildXY`) — pinned by a hand-synced fixture in each
+     language (`test_build_grouped_series_matches_frontend_parity_fixture`
+     / `plotspec.test.ts`'s "cross-language parity fixture"), the SAME
+     pre-existing mechanism the P4-4 categorical-label tests extend, which
+     is a weaker guarantee than P1-1's shared-fixture wire parity above (it
+     catches the two implementations drifting from EACH OTHER, not from
+     the real wire shape — exactly the class of bug the shared fixture
+     exists to catch that this one could not have). NOT done: Facet/Data
+     Filter/Tabulate/`facet-by-column`/matplotlib export wiring (P1.5/P1.6
+     territory — they now build against this contract instead of
+     inventing their own).
    - [ ] Level *ordering* is user-settable (ordinal value order) and
      survives `.dwk` round-trip and export. The representation CARRIES an
      order (the level tuple's own order, first-appearance from import) and
