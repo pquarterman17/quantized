@@ -31,6 +31,20 @@ describe("document-backed plot-window persistence", () => {
     });
   });
 
+  it("P1.5: a legacy PlotView-only window's own groupKey survives the migration to a document", () => {
+    // RED before this fix: migrateLegacyWindow's createFigureDocument call
+    // never threaded `view.groupKey` through -- a P1.5 grouped window with
+    // no `document` yet (any window saved before this field existed, or a
+    // fresh window this same session set groupKey on but hasn't otherwise
+    // touched) silently lost its group binding on the very next promotion.
+    const [restored] = sanitizeDocumentBackedPlotWindows(
+      [window({ view: { ...defaultPlotView(), groupKey: 2 } })],
+      new Set(["d1"]),
+    );
+    expect(restored.document?.bindings.groupKey).toBe(2);
+    expect(restored.view.groupKey).toBe(2);
+  });
+
   it("treats a valid document as authoritative over stale compatibility fields", () => {
     const document = createFigureDocument({
       id: "figure-stable",

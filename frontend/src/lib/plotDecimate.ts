@@ -294,10 +294,16 @@ export function decimationRequestEligible(args: {
   hasErrorBars: boolean;
   hasErrorSpans: boolean;
   hasColorByColumns: boolean;
+  /** P1.5: a live Group split (usePlotPayload's `applyGroupSplit`) reads its
+   *  per-row level codes off the FULL dataset, row-position-aligned to the
+   *  fetched payload -- same "can't tolerate a decimated, non-1:1 row set"
+   *  reasoning as error bars/color-by-column above. */
+  hasGroupSplit?: boolean;
 }): boolean {
   if (args.hasErrorBars || args.hasErrorSpans) return false;
   if ((args.defaultTrace ?? "Line") === "Scatter") return false;
   if (args.hasColorByColumns) return false;
+  if (args.hasGroupSplit) return false;
   return true;
 }
 

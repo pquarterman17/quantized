@@ -406,6 +406,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   yAxisLabel: string; // override for the primary y-axis label ("" = auto)
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
+  groupKey: number | null; // P1.5 "Group" well channel — splits each plotted Y into one series per level
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
   y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
@@ -698,6 +699,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setY2AxisLabel: (y2AxisLabel: string) => void;
   setXKey: (xKey: number | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
+  setGroupKey: (groupKey: number | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
@@ -956,6 +958,7 @@ export const useApp = create<AppState>((set, get) => ({
   yAxisLabel: "",
   xKey: null,
   yKeys: null,
+  groupKey: null,
   y2Keys: null,
   y2Lim: null,
   y2Scale: null,
@@ -1522,6 +1525,7 @@ export const useApp = create<AppState>((set, get) => ({
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
         xKey: restoredView ? restoredView.xKey : null,
         yKeys: restoredView ? restoredView.yKeys : null,
+        groupKey: restoredView ? restoredView.groupKey : null,
         y2Keys: restoredView ? restoredView.y2Keys : null,
         y2Lim: restoredView ? restoredView.y2Lim : null,
         y2Scale: restoredView ? restoredView.y2Scale : null,
@@ -1759,6 +1763,7 @@ export const useApp = create<AppState>((set, get) => ({
         stageTab: nextStageTab(clone, s.stageTab),
         xKey: null,
         yKeys: null,
+        groupKey: null,
         y2Keys: null,
       y2Lim: null,
       y2Scale: null,
@@ -1935,6 +1940,18 @@ export const useApp = create<AppState>((set, get) => ({
   setXKey: (xKey) => {
     get().recordHistory("change X channel"); set({ xKey });
     get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
+  },
+  // P1.5: durable live grouping -- committed by useGraphBuilder's commitToPlot
+  // (replacing the old "preview-only" toast) and editable directly once a
+  // window exists. Mirrors setXKey exactly (undo history + macro record);
+  // syncPlotWindow/updateFigureDocumentFromPlotView (windowDocuments.ts /
+  // figureDocument.ts) then carry this singleton into the focused window's
+  // canonical FigureDocument on the next view sync, same as every other
+  // PlotView field.
+  setGroupKey: (groupKey) => {
+    get().recordHistory("change group");
+    set({ groupKey });
+    get().recordMacro(`Group by channel ${groupKey ?? "none"}`, `qz.setGroupKey(${lit(groupKey)})`);
   },
   setYKeys: (yKeys) => {
     get().recordHistory("change Y channels"); set({ yKeys });
@@ -2499,6 +2516,11 @@ export const useApp = create<AppState>((set, get) => ({
       ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
       xKey: c.xKey,
       yKeys: c.yKeys,
+      // P1.5: a legacy FigureDoc's own grouping (Graph Builder's
+      // plotSpecToFigureDoc is the only producer) now carries over into the
+      // opened window's live groupKey too, same as xKey/yKeys just above --
+      // previously this whole binding was silently dropped on "open in window".
+      groupKey: c.groupCol ?? null,
       xScale: c.xScale,
       yScale: c.yScale,
       plotTitle: c.title,
