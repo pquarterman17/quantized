@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
+import { probeSource } from "../lib/desktopBridge";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Technique } from "../lib/types";
 import { usePendingOps } from "./pendingOps";
@@ -15,6 +16,11 @@ vi.mock("../lib/api", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   importFile: vi.fn(),
   uploadFile: vi.fn(),
+}));
+
+vi.mock("../lib/desktopBridge", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  probeSource: vi.fn(),
 }));
 
 vi.mock("../lib/plotSelectedTogether", () => ({
@@ -41,6 +47,7 @@ beforeEach(() => {
   useToasts.setState({ toasts: [] });
   vi.mocked(importFile).mockResolvedValue(payload());
   vi.mocked(uploadFile).mockResolvedValue(payload());
+  vi.mocked(probeSource).mockResolvedValue(null);
 });
 
 /** An AbortError shaped like what `fetch` actually rejects with — used by
@@ -81,6 +88,51 @@ describe("importPaths", () => {
   });
 
   it("records source.path so re-import needs no picker", async () => {
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });
+  });
+
+  // P1.7 / L0.32 provenance: "record source path, import time, observed
+  // modification time, and a checksum where practical". RED-FIRST: before
+  // `importPaths` called `probeSource`, a desktop import's `source` NEVER
+  // carried checksum/mtime/size no matter what the bridge reported — this
+  // pins the NEW behavior against a mocked bridge that DOES have one.
+  it("captures checksum/mtime/size from the bridge when one is available", async () => {
+    vi.mocked(probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/data/scan.dat",
+      size: 123,
+      mtime: 1700000000,
+      checksum: "sha256:deadbeef",
+    });
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({
+      kind: "path",
+      path: "/data/scan.dat",
+      checksum: "sha256:deadbeef",
+      mtime: 1700000000,
+      size: 123,
+    });
+  });
+
+  it("degrades to path-only provenance honestly when no bridge is available (browser)", async () => {
+    vi.mocked(probeSource).mockResolvedValue(null); // the no-bridge convention
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });
+    expect(ds.source).not.toHaveProperty("checksum");
+  });
+
+  it("never fabricates a checksum when the probe reports a non-ok state", async () => {
+    vi.mocked(probeSource).mockResolvedValue({
+      state: "missing",
+      path: "/data/scan.dat",
+      size: null,
+      mtime: null,
+      checksum: null,
+    });
     await useApp.getState().importPaths(["/data/scan.dat"]);
     const [ds] = useApp.getState().datasets;
     expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });

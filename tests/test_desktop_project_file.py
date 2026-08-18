@@ -14,6 +14,7 @@ import pytest
 from quantized.desktop_project_file import (
     WORKSPACE_FORMAT,
     WORKSPACE_VERSIONS,
+    extract_declared_source_paths,
     validate_workspace_payload,
 )
 
@@ -100,3 +101,41 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
     # pass the backend's gate.
     payload = f'{{"format": "{frontend_format}", "version": {frontend_version}, "datasets": []}}'
     assert validate_workspace_payload(payload) is None
+
+
+# --- extract_declared_source_paths (P1.7 P1-A) ------------------------------
+
+
+def test_extract_declared_source_paths_finds_every_dataset_source() -> None:
+    payload = (
+        '{"format": "quantized-workspace", "version": 4, "datasets": ['
+        '{"id": "a", "source": {"kind": "path", "path": "/data/a.csv"}}, '
+        '{"id": "b", "source": {"kind": "path", "path": "/data/b.csv"}}, '
+        '{"id": "c"}'  # no source at all
+        "]}"
+    )
+    assert extract_declared_source_paths(payload) == ["/data/a.csv", "/data/b.csv"]
+
+
+def test_extract_declared_source_paths_never_raises_on_a_malformed_payload() -> None:
+    assert extract_declared_source_paths("not json") == []
+    assert extract_declared_source_paths("[]") == []
+    assert extract_declared_source_paths('{"datasets": "not a list"}') == []
+    assert extract_declared_source_paths('{"datasets": [1, 2, "not an object"]}') == []
+    assert (
+        extract_declared_source_paths('{"datasets": [{"source": "not an object"}]}') == []
+    )
+    assert (
+        extract_declared_source_paths('{"datasets": [{"source": {"path": 123}}]}') == []
+    )
+    assert (
+        extract_declared_source_paths('{"datasets": [{"source": {"path": ""}}]}') == []
+    )
+
+
+def test_extract_declared_source_paths_ignores_everything_but_source_path() -> None:
+    """It reads narrowly — a malicious payload can't smuggle extra
+    "declared" paths through some OTHER field this function might have been
+    tempted to also scan."""
+    payload = '{"datasets": [{"id": "a", "pending": {"kind": "path", "path": "/sneaky/a.csv"}}]}'
+    assert extract_declared_source_paths(payload) == []

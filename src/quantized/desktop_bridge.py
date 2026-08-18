@@ -43,6 +43,10 @@ functions call:
 * ``read_project_file(path)`` -> ``{"path": ..., "content": ...}``, re-reads
   a path already covered by a read OR write grant from earlier this
   process — no new dialog (the Recent Projects reopen path).
+* ``probe_source(path)`` -> reachability + optional checksum for P1.7
+  relink (see "P1.7" section below for the consent ruling).
+* ``grant_source_paths(paths)`` -> ``{"paths": [...]}``, extends read
+  consent to a project's own already-recorded source paths (P1.7).
 
 **``null`` vs. cancel, everywhere in this contract:** every dialog method
 here returns a well-formed dict even on cancel or on a recoverable dialog
@@ -86,6 +90,46 @@ every path it did not itself get back from a real dialog.
   P1.1's own checklist owner item, unblocked by this slice but not shipped
   by it (this PR's tests run the bridge logic against ``FakeWindow``, never
   a packaged app).
+
+## P1.7: source probing + the consent ruling for relink
+
+``probe_source(path)`` and ``grant_source_paths(paths)`` (below) exist for
+project portability / source relinking (PRIMARY_SOFTWARE_AUDIT_PLAN.md's
+P1.7): distinguishing missing / offline / changed / permission-denied source
+states, and computing the checksum a "did this source's CONTENT change"
+verdict needs (``lib/relink.ts``'s ``sourceChangeVerdict``).
+
+**The ruling (P1-A fix, adversarial review round; full mechanics in
+``desktop_consent.py``'s "declared sources" section).** A checksum reads a
+file's full bytes — bigger than the consent-free ``path_status`` reachability
+check above — but a fresh OPEN dialog per relinked file would make relinking
+hundreds of datasets pop hundreds of dialogs. An EARLIER version of
+``grant_source_paths`` was a bare passthrough to ``grant_paths`` reasoning
+"the frontend only ever asks for its own project's sources" — that reasoning
+does not hold (the frontend's argument is caller-supplied input like any
+other), and made this method an unconditional, un-gated arbitrary-file-read-
+consent oracle: any JS in the window, no dialog, no project even open, could
+self-grant read consent for any path (e.g. a user's SSH key).
+
+The fix reuses (does NOT invent a parallel kind of) ``desktop_consent``'s
+existing read-grant store, gated by a NEW server-tracked *declared-source
+set*: ``_read_granted`` (below — ``open_project_file``/``read_project_file``,
+both reached only via a real native OPEN dialog) records exactly what a
+just-opened project's OWN payload names as dataset sources
+(``set_declared_sources``); ``grant_source_paths`` intersects its request
+against that set before ever calling ``grant_paths``, silently dropping
+anything the currently-open project didn't itself declare. The frontend's
+argument list is a REQUEST against backend-tracked state, never an authority
+— no HTTP route, no separate js_api, can add to that set directly. Residual,
+accepted scope: whatever the OPENED project's own payload declares is still
+eligible (same trust act as ``pick_files`` granting whatever a user
+physically selected, applied to content instead of selection) — this fix
+closes the unconditional oracle, not full sandboxing against a hostile
+payload's own declared paths.
+
+``probe_source`` itself still computes a checksum ONLY when the resolved
+path is ALREADY read-consented (``desktop_consent.is_consented``) at call
+time — a path nobody granted gets state/size/mtime only, never content.
 """
 
 from __future__ import annotations
@@ -99,12 +143,17 @@ from quantized.desktop_consent import (
     consented_write_path,
     grant_paths,
     grant_write_path,
+    is_consented,
+    is_declared_source,
+    set_declared_sources,
 )
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
+    extract_declared_source_paths,
     validate_workspace_payload,
 )
+from quantized.desktop_source_probe import probe_source_path, volume_present
 
 __all__ = ["DesktopApi", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
@@ -148,49 +197,6 @@ def _dialog_kind(name: str, fallback: int) -> int:
         return int(value) if isinstance(value, int) else fallback
     except ImportError:
         return fallback
-
-
-# Where POSIX mounts removable and network volumes. These are not a guess: a
-# volume named "share" is mounted AT `/Volumes/share` (macOS) or `/mnt/share` /
-# `/media/<user>/share` (Linux), so the mount point's absence is exactly the
-# statement "that volume is not mounted right now".
-_POSIX_VOLUME_PREFIXES = ("/Volumes", "/media", "/mnt", "/net", "/run/media")
-
-
-def _volume_present(resolved: str) -> bool:
-    """Is the VOLUME holding ``resolved`` currently attached?
-
-    Windows gives a directly checkable answer: every path carries a drive letter
-    or a UNC share root, and if that root is not a directory the volume is gone.
-
-    POSIX has no such thing — ``splitdrive`` returns nothing and the anchor is
-    always ``/``, which always exists. So the check is the mount point instead:
-    for a path under a standard volume prefix, the component just below that
-    prefix IS the mount point, and its absence means the volume is not mounted.
-
-    Outside those prefixes POSIX genuinely cannot distinguish "unmounted share"
-    from "path that never existed", so this returns True and the caller reports
-    ``missing``. That is the deliberate, documented limit rather than a guess:
-    over-reporting ``offline`` would suppress a real "your file is gone", which
-    is the more useful of the two messages to get right.
-    """
-    drive = os.path.splitdrive(resolved)[0]
-    if drive:  # Windows drive letter or UNC \\server\share
-        try:
-            return os.path.isdir(drive + os.sep) or os.path.isdir(drive)
-        except OSError:
-            return False
-    for prefix in _POSIX_VOLUME_PREFIXES:
-        if not resolved.startswith(prefix + "/"):
-            continue
-        rest = resolved[len(prefix) + 1 :].split("/", 1)[0]
-        if not rest:
-            continue
-        try:
-            return os.path.isdir(os.path.join(prefix, rest))
-        except OSError:
-            return False
-    return True  # not on a recognizable volume — cannot tell, so do not claim offline
 
 
 class DesktopApi:
@@ -295,9 +301,45 @@ class DesktopApi:
         if os.path.isfile(resolved):
             return {"state": "ok", "path": resolved}
         return {
-            "state": "missing" if _volume_present(resolved) else "offline",
+            "state": "missing" if volume_present(resolved) else "offline",
             "path": resolved,
         }
+
+    # -- source probing / relink (P1.7) --------------------------------------
+
+    def probe_source(self, path: str) -> dict[str, Any]:
+        """Reachability + fingerprint of a dataset's recorded SOURCE path, for
+        relink's missing/offline/changed/permission-denied distinction
+        (P1.7 box 4). A superset of `path_status` above: same state values
+        PLUS `permission_denied`, and — only when `path` is already READ-
+        consented this process — a `checksum` a caller can diff against a
+        dataset's recorded provenance to answer "did the content change".
+        See this module's own doc for the full consent ruling; the short
+        version is that `is_consented` gates the checksum, never the
+        reachability check (which stays as unguarded as `path_status`
+        always was)."""
+        try:
+            resolved = os.path.realpath(path)
+        except (OSError, ValueError):
+            return {"state": "invalid"}
+        return probe_source_path(resolved, compute_checksum=is_consented(resolved))
+
+    def grant_source_paths(self, paths: list[str]) -> dict[str, Any]:
+        """Extend READ consent to paths the CALLER ASSERTS are a dataset's
+        source in the project open in this app — NOT taken on faith (P1-A
+        fix; see this module's doc). Intersected against the server-tracked
+        declared-source set (populated only from a payload THIS process
+        itself read via a real dialog, `_read_granted`) before ever
+        reaching `grant_paths`; anything not declared is silently dropped."""
+        eligible: list[str] = []
+        for p in paths:
+            try:
+                resolved = os.path.realpath(p)
+            except (OSError, ValueError):
+                continue
+            if is_declared_source(resolved):
+                eligible.append(resolved)
+        return {"paths": grant_paths(eligible)}
 
     # -- project save (P1.1 C2) ----------------------------------------------
 
@@ -398,7 +440,14 @@ class DesktopApi:
         `read_project_file` (an already-consented path, no new dialog):
         read `path` IN-PROCESS if EITHER a read or a write grant covers it —
         a project saved earlier this session is reopenable without a second
-        dialog even though `save_file_dialog` only ever granted WRITE."""
+        dialog even though `save_file_dialog` only ever granted WRITE.
+
+        P1.7 (P1-A fix): a successful read here IS a project open/reopen, so
+        it also records what that payload declares as its dataset sources
+        (`set_declared_sources`, wholesale-replacing any prior project's) —
+        what `grant_source_paths` enforces against; see this module's doc.
+        Never runs on a `None`/error read, nor on a save, so a Save-As can't
+        retroactively "declare" a dataset list before it's ever reopened."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
@@ -411,6 +460,7 @@ class DesktopApi:
                 content = f.read()
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
+        set_declared_sources(extract_declared_source_paths(content))
         return {"path": granted, "content": content}
 
     def open_project_file(self, directory: str = "") -> dict[str, Any]:

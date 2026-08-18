@@ -46,10 +46,13 @@ __all__ = [
     "consent_count",
     "consented_path",
     "consented_write_path",
+    "declared_source_count",
     "grant_paths",
     "grant_write_path",
     "is_consented",
+    "is_declared_source",
     "is_write_consented",
+    "set_declared_sources",
     "write_consent_count",
 ]
 
@@ -168,8 +171,59 @@ def write_consent_count() -> int:
     return len(_write_granted)
 
 
+# -- declared sources (P1.7: server-side enforcement for grant_source_paths) -
+#
+# The adversarial-review fix: `grant_source_paths` (desktop_bridge.py) used
+# to be a bare passthrough to `grant_paths` — an unconditional arbitrary-
+# file-read-consent oracle, since NOTHING checked that the paths it was
+# asked to grant had anything to do with the project the user actually has
+# open. `store/relink.ts` computes its argument list from the frontend's own
+# in-memory `datasets` array, which is exactly the kind of caller-supplied
+# input this repo's whole `desktop_consent` design otherwise never trusts.
+#
+# The fix is NOT a new consent kind — it is a narrower ELIGIBILITY set that
+# `grant_source_paths` must intersect its request against before handing
+# anything to `grant_paths`. A path is eligible only when it is one this
+# project's own OPENED PAYLOAD named as a dataset's source — recorded here,
+# backend-side, the moment `desktop_bridge.py`'s `_read_granted` successfully
+# reads a project file (i.e. `open_project_file`/`read_project_file`, both of
+# which already required a real native OPEN dialog earlier). The frontend's
+# argument list to `grant_source_paths` is therefore a REQUEST against this
+# set, never an authority of its own — exactly mirroring how `grant_paths`
+# itself only ever accepts what a real dialog returned.
+#
+# Wholesale REPLACE on every project open/reopen (never accumulated): opening
+# project B must not leave project A's declared sources still eligible. There
+# is no HTTP route that can set this, and no js_api the frontend can call to
+# set it directly either — it is populated ONLY as a side effect of a
+# successful project-file READ inside this process, the same "only from a
+# real dialog result" discipline every other grant in this module follows.
+_declared_sources: set[str] = set()
+
+
+def set_declared_sources(paths: Iterable[str]) -> None:
+    """Replace the declared-source set with exactly what a just-opened
+    project's OWN payload names. Called only by `desktop_bridge.py`'s
+    `_read_granted`, never from an HTTP route or a frontend-settable js_api
+    — see this section's module doc for the full ruling."""
+    global _declared_sources
+    _declared_sources = {r for p in paths if (r := _normalize(p)) is not None}
+
+
+def is_declared_source(resolved_path: str) -> bool:
+    """True when `resolved_path` was named as a dataset source by the
+    CURRENTLY open project's own payload. Callers must pass an already-
+    ``realpath``-normalized string, same convention as `is_consented`."""
+    return resolved_path in _declared_sources
+
+
+def declared_source_count() -> int:
+    return len(_declared_sources)
+
+
 def clear_consent() -> None:
-    """Drop every grant, read AND write. Used by tests, and available for a
-    future "forget picked files" action."""
+    """Drop every grant, read AND write, AND the declared-source set. Used by
+    tests, and available for a future "forget picked files" action."""
     _granted.clear()
     _write_granted.clear()
+    _declared_sources.clear()

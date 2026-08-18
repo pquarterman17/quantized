@@ -816,20 +816,190 @@ Both need a real worksheet-UI design pass (column-header type badge +
 editor, a cell-edit guard or suggestion), not a few lines bolted onto the
 wizard; P1.6b is the placeholder name until that gets its own plan entry.
 
-### P1.7 — Project portability and source relinking
+### P1.7 — Project portability and source relinking [~]
 
 **Goal:** move/share projects without confusing raw, linked, corrected, and
 derived data.
 
 **Models:** GPT-5.6 Sol high / Claude Opus 4.8. **Dependencies:** P1.1-P1.2.
 
-- [ ] Define linked, embedded, and portable bundle modes.
-- [ ] Preserve checksum/time/import filter/correction/source provenance.
-- [ ] Relink-one and relink-folder with dry-run preview.
-- [ ] Distinguish missing, offline, changed, and permission denied.
-- [ ] Changed source warns and can import as a new version.
-- [ ] Cross-platform folder-tree relinking passes.
-- [ ] Raw originals are never replaced.
+**Slice 1 shipped (2026-08-18, Lane B, `claude/p17-relink-portability`,
+built on the merged P1.1 bridge `#169` and P1.2 lifecycle `#180`):** the
+relink core (path matching + provenance + missing/offline/changed/
+permission-denied probing + atomic commit) and the mode CONTRACT. The full
+portable-bundle packer ("Pack Project") is explicitly deferred — see below.
+
+**The mode contract (box 1).** Written in `lib/projectPortability.ts`
+(`ProjectPortabilityMode = "embedded" | "linked" | "portable"`, full
+rationale in that module's doc):
+- **embedded** — today's ONLY implemented behavior and the de-facto default
+  (L0.32): the `.dwk` carries a full `DataStruct` snapshot per dataset, so
+  opening never depends on sources being reachable; a source going
+  missing/offline/changing is entirely a Relink/Reimport concern (this
+  slice), never an open-time failure. `Dataset.source` (path + provenance)
+  still rides along even in this mode.
+- **linked** — NOT implemented: no writer strips a save-time snapshot and no
+  reader rehydrates one from sources at open time yet. Needs its own
+  save-time UI decision and open-time "resolve every source first" flow, a
+  materially different shape from what box 3 (relink) needed. Named home:
+  a future P1.7 follow-up slice.
+- **portable** — NOT implemented: the raw-file-copying "Pack Project"
+  packer is explicitly booked to PR-N territory per this slice's own
+  scoping instruction. The relink machinery this slice ships (path
+  matching, dry-run preview, atomic commit) is exactly what a future packer
+  would reuse to repoint sources at its own bundle copies after unpacking
+  — this slice is that packer's future dependency, not a parallel
+  implementation. Named home: same P1.7 follow-up, tracked as "Pack
+  Project".
+
+**Provenance (box 2).** `Dataset.source` (`lib/datasetSource.ts`) gained
+`checksum`/`mtime`/`size`, captured from the desktop bridge's new
+`probe_source` js_api method at IMPORT time (desktop-only — "where
+practical" per L0.32; a browser upload has no bridge to ask, and degrades
+honestly to path-only provenance, pinned in `importDatasets.test.ts`) and
+again at RELINK/reimport-as-new-version time. **Gap found and closed
+honestly:** before this slice, `Dataset.source` recorded ONLY `path` — no
+checksum, no observed mtime, despite L0.32's plan text already promising
+both; `importedAt` existed but nothing captured a source FINGERPRINT at
+all, so "did the source change" was structurally unanswerable. Never
+silently rewritten: a relink backfills provenance only for a row whose
+verdict is `unchanged` (same bytes, still true) or `unknown` (nothing was
+ever recorded — filling a gap, not overwriting a value); a `changed` row is
+excluded from commit entirely (box 5). Raw source files on disk are never
+written to by anything in this slice — the desktop bridge's probe/checksum
+path opens files strictly read-only (`open(path, "rb")`).
+
+**Relink-one / relink-folder + dry-run preview (box 3).** One store
+(`store/relink.ts`) covers both — relink-one is just relink-folder with a
+single dataset's own path as the "old root". `lib/relink.ts` is the pure,
+cross-platform path-matching core (`suffixUnderRoot`/`relinkedCandidate`,
+unit-tested for POSIX, Windows drive-letter, UNC, and cross-platform-move
+shapes, case-insensitive, either separator). The preview runs entirely
+before commit (`runPreview` populates `RelinkPreviewRow[]` with a
+per-dataset status); `commit()` is ONE `recordHistory` call covering every
+resolved row, so undo restores every relinked path in a single step
+(pinned in `relink.test.ts`).
+
+**Missing/offline/changed/permission-denied (box 4).** New
+`desktop_bridge.py` js_api method `probe_source` (backed by the pure
+`desktop_source_probe.py`, split out to stay under the 500-line ceiling)
+returns `ok`/`missing`/`offline`/`invalid`/`permission_denied` plus
+`size`/`mtime`/an optional checksum. **The consent ruling** (documented in
+full in `desktop_bridge.py`'s module doc): a checksum needs a full file
+READ, a strictly bigger ask than the reachability check `path_status`
+already makes with zero consent — so a NEW js_api method,
+`grant_source_paths`, extends read consent for paths eligible under a
+server-tracked *declared-source set*. `probe_source` itself still computes
+a checksum only when the resolved path is already consented at call time —
+an unconsented path never yields file content, only reachability. Browser
+degrade: with no desktop bridge, every preview row reports `unavailable` —
+box 4's "say so, never guess" — never a guessed reachability state
+(`store/relink.ts`'s `bridgeAvailable` gate, pinned red-first in
+`relink.test.ts`).
+
+**P1-A fix round (adversarial review, 2026-08-18, same slice):** the FIRST
+version of `grant_source_paths` was a bare passthrough to `grant_paths`,
+trusting the frontend's own argument list as authority — the reviewer
+verified this as a real, unconditional arbitrary-file-read-consent oracle
+(no dialog, no project even open, any JS in the window could self-grant
+read consent for e.g. a user's SSH key, then read it through the existing
+`/api/parsers/import` route). Fixed by making the declared-source set
+BACKEND-tracked and enforced server-side: `desktop_consent.py`'s
+`set_declared_sources`/`is_declared_source`, populated ONLY as a side
+effect of `_read_granted` (`open_project_file`/`read_project_file`, both
+reachable only via a real native dialog) parsing the just-opened payload's
+OWN `datasets[].source.path` values (`desktop_project_file
+.extract_declared_source_paths`) — wholesale replacing any prior project's
+declared set, never accumulating. `grant_source_paths` now intersects its
+request against that set before ever calling `grant_paths`; the frontend's
+argument list is a request against backend state, never an authority of
+its own. Red-first proven both directions (`test_desktop_bridge.py`): a
+path no open project declared stays ungranted; the SAME request mixing a
+legitimately declared path with a poisoned one grants only the declared
+one (the "compositional pin" — `store/relink.ts`'s argument list, computed
+from in-memory frontend state, cannot smuggle in anything the backend
+didn't itself see declared). Accepted residual scope, stated plainly in
+`desktop_bridge.py`'s doc: once a project IS opened via a real dialog,
+whatever it declares is eligible — the same trust act `pick_files` already
+grants a physically-selected file, applied to content instead of
+selection; this fix closes the unconditional oracle, not full sandboxing
+against a hostile payload's own declared paths.
+
+**P1-B fix round (adversarial review, same slice): provenance completeness.**
+`workspace.ts`'s `parseSource` reconstructed a bare `{kind,path}` on every
+load, silently dropping checksum/mtime/size — and `versionOf` was missing
+from the serializer entirely — so after the first save/reopen,
+`sourceChangeVerdict` degraded to `"unknown"` for every dataset, defeating
+box 5's protection in the realistic import-today/reopen-tomorrow/relink
+workflow. Fixed: the validator moved to `lib/datasetSource.ts`
+(`parseDatasetSource`, also resolving `workspace.ts`'s own line-ceiling
+pin) and now validates/carries every field; `versionOf` was added to both
+the serializer and the parser. Red-first in `workspace.test.ts` (the exact
+reviewer-predicted failures — `expected {kind,path} to deeply equal
+{kind,path,checksum,mtime,size}` and `expected undefined to be
+'orig-id'`), now green; the pre-existing "workspace source reference"
+round-trip describe block was extended in place rather than duplicated.
+
+**P2 fix (TOCTOU at commit, adversarial review):** `commit()` used to write
+whatever `runPreview` had captured with no re-check — a file deleted or
+overwritten in the window between Preview and clicking Relink would land a
+stale checksum silently. Fixed cheaply: `commit()` re-probes every
+committing candidate immediately before writing and drops (never trusts)
+any row whose reachability changed or whose checksum changed again since
+Preview, reported in the success toast rather than silently absorbed.
+Red-first in `relink.test.ts`.
+
+**Changed source -> new version (box 5).** `sourceChangeVerdict`
+(`lib/relink.ts`) diffs checksum first when both sides have one, falls back
+to size+mtime only when neither side has a checksum, and reports
+`"unknown"` — never `"unchanged"` — when there isn't enough information to
+say anything (pinned: a recorded-but-unprobeable checksum must not read as
+fine). A `changed` row is excluded from `commit()`; `importChangedAsNewVersion`
+reuses the EXISTING import path (`importPaths`) and tags the newly created
+dataset(s) with `versionOf` — the original is never touched in place, per
+L0.32.
+
+**Cross-platform folder-tree relinking (box 6).** `lib/relink.test.ts`
+covers POSIX-root/POSIX-move, Windows-drive-root/Windows-move, a UNC root,
+a cross-platform move (Windows-recorded path relinked onto a POSIX new
+root and vice versa), case-only differences, mixed/doubled separators, and
+sibling-name false positives (`/data/run1` vs `/data/run10`).
+
+**Raw originals never replaced (box 7).** Pinned three ways: (1)
+`desktop_source_probe.py`'s checksum path opens strictly `"rb"`, no write
+mode, ever; (2) relink only ever rewrites `Dataset.source.path` in the
+in-memory store (and, on save, the `.dwk` — never the file at either the
+old or new path); (3) `importChangedAsNewVersion` imports a SECOND dataset
+alongside the original rather than refreshing it in place.
+
+- [x] Define linked, embedded, and portable bundle modes — contract above;
+  only "embedded" is implemented, "linked"/"portable" are named + deferred
+  with a home, per this slice's own explicit scoping allowance.
+- [x] Preserve checksum/time/import filter/correction/source provenance —
+  checksum/mtime/size closed this slice (the honestly-found gap above);
+  import-filter/correction provenance was already preserved pre-slice
+  (`ImportSettings`/`Dataset.corrections`) and untouched by this work.
+- [x] Relink-one and relink-folder with dry-run preview.
+- [x] Distinguish missing, offline, changed, and permission denied.
+- [x] Changed source warns and can import as a new version.
+- [x] Cross-platform folder-tree relinking passes.
+- [x] Raw originals are never replaced.
+
+**Explicitly booked, NOT shipped this slice — named home "P1.7 Pack
+Project" (no owner/slice assigned yet):** the full portable-bundle packer
+(copying every dataset's raw source file into a project-adjacent bundle at
+save time) and "linked" mode's save-time strip / open-time rehydrate flow.
+Both build directly on this slice's path-matching + provenance + probing
+primitives; neither needed to exist for the relink core itself.
+
+**P3 booked (adversarial review, cheap-if-fixed-else-book call): `commit()`
+has no dedup when two DIFFERENT old paths case-collide onto the SAME new
+candidate (e.g. two old sources differing only by case, or by a segment
+that normalizes identically under `lib/relink.ts`'s case-insensitive
+matching) — both would relink onto one path with no collision warning.
+Named home: same "P1.7 Pack Project" follow-up (a natural fit alongside
+the packer's own name-collision handling, L0.34's precedent for resolving
+duplicate names on import).
 
 ---
 

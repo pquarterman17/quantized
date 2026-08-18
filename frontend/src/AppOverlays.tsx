@@ -63,6 +63,7 @@ import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useVariabilityStore } from "./store/variability";
+import { useRelink } from "./store/relink";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -143,6 +144,10 @@ const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"));
 // lib/recoveryChoice.ts), so it stays out of the eager bundle like every
 // other on-demand dialog above.
 const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"));
+// P1.7: relink-one/relink-folder dry-run + commit. Rare-ish, on-demand
+// action (opened from the command palette, never on startup), so it stays
+// out of the eager bundle like every other workshop panel above.
+const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"));
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -186,6 +191,7 @@ export default function AppOverlays() {
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
+  const relinkOpen = useRelink((s) => s.open);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
   const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
@@ -240,6 +246,7 @@ export default function AppOverlays() {
       {textFormatHelpMounted && <TextFormatHelp />}
       {prefsMounted && <PreferencesDialog />}
       {recoveryPending && <RecoveryChoiceDialog />}
+      {relinkOpen && <RelinkPanel />}
       <Toaster />
     </>
   );
