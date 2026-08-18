@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card } from "../primitives";
+import Card from "../primitives/Card";
 
 export default function NotesCard({ active }: { active: Dataset | null }) {
   const setDatasetNotes = useApp((s) => s.setDatasetNotes);

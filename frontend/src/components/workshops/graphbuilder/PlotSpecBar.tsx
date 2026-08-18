@@ -13,7 +13,8 @@
 import type { SavedPlotSpec } from "../../../lib/plotspec";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { askParams } from "../../overlays/ParamDialog";
-import { Button, Card, IconButton, StatusDot } from "../../primitives";
+import { Button, IconButton, StatusDot } from "../../primitives";
+import Card from "../../primitives/Card";
 
 export interface PlotSpecBarProps {
   specs: SavedPlotSpec[];

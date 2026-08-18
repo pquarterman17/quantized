@@ -18,7 +18,7 @@ import { clampAnnotationSize, MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from ".
 import type { ShapeAnchorConversion } from "../../lib/uplotShapes";
 import type { ContextAction } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";
-import { askAnnotationText } from "../overlays/AnnotationTextDialog";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 
 /** The corner-handle drag's step size for the object menu's Size +/− entries
  *  (a discrete click, unlike the drag's continuous px-to-size mapping). */

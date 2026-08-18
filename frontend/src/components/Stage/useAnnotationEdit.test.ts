@@ -5,13 +5,13 @@ import { fireEvent, renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { askAnnotationText } from "../overlays/AnnotationTextDialog";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
-vi.mock("../overlays/AnnotationTextDialog", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../overlays/AnnotationTextDialog")>()),
+vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../store/annotationTextDialog")>()),
   askAnnotationText: vi.fn(),
 }));
 

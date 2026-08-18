@@ -5,7 +5,8 @@
 
 import { useState } from "react";
 
-import { Button, Card, Checkbox, NumberField, Select } from "../primitives";
+import { Button, Checkbox, NumberField, Select } from "../primitives";
+import Card from "../primitives/Card";
 import { fromMultiplier, toMultiplier, type ScaleOp } from "../../lib/rescale";
 import RescaleFields from "./RescaleFields";
 import type { CorrectionParams, Dataset } from "../../lib/types";
