@@ -22,6 +22,7 @@ import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
   replaceConfirmMessage,
@@ -29,9 +30,7 @@ import {
   replaceWorkspaceSafely,
 } from "../lib/openWorkspaceReplace";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
-import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
 import { snapshotView } from "../lib/plotview";
-import type { LoadedWorkspace } from "../lib/workspace";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
@@ -59,36 +58,11 @@ let sampleCounter = 0;
 // replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
 // shared by both open commands below — live in lib/openWorkspaceReplace.ts
 // (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
-
-/** Shared Open/Append-workspace flow (the only difference between the two
- *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
- *  (`loadWorkspace` or `appendWorkspace`).
- *
- *  P3.4 slice 3: the picker's `onchange` callback fires the moment a file is
- *  chosen — well before any parsing starts — so the `withOp` busy state is
- *  registered HERE, inside the callback, not around the `openFilePicker`
- *  call itself (which would show "Opening…" while the OS file dialog is
- *  merely sitting open and the user hasn't picked anything yet). The parse
- *  itself runs off the main thread via `parseWorkspaceFile` (a module Worker
- *  when available, the prior synchronous path as a fallback) — see that
- *  module's doc comment for why the two paths can't diverge. */
-function openWorkspaceCommand(
-  s: StoreGet,
-  verb: string,
-  dispatch: (ws: LoadedWorkspace) => void,
-): () => void {
-  const label = verb === "open" ? "Opening workspace…" : "Appending workspace…";
-  return () =>
-    openFilePicker((files) => {
-      const file = files[0];
-      if (!file) return;
-      void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
-        .then(dispatch)
-        .catch((e: unknown) =>
-          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
-        );
-    }, ".dwk,.json");
-}
+// `openWorkspaceCommand` itself — the shared pick/native-open + parse flow
+// both "open-workspace"/"open-workspace-safe" and "append-workspace" call
+// below — lives in lib/openWorkspaceCommand.ts for the identical reason
+// (P1.1 C3's native-open wiring pushed this module over the ceiling; see
+// that file's header for the extraction note).
 
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build

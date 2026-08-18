@@ -9,6 +9,8 @@
 // Window menu/⌘K entries and their keyboard shortcuts always work.
 // `useHistoryCommands` (MAIN_PLAN #9, undo/redo) is mounted here for the
 // identical reason — Ctrl+Z must work no matter which stage tab is showing.
+// `useRecentProjectsCommands` (P1.1 C4, Recent Projects) is mounted here for
+// the same reason again — its ⌘K entries must exist regardless of tab.
 //
 // CODE SPLITTING: the Map and Worksheet tabs are dynamic imports — only one
 // tab is ever visible at a time, and "plot" is every fresh workspace's
@@ -25,6 +27,7 @@ import { lazy, Suspense, useEffect } from "react";
 
 import { canRenderMap } from "../../lib/mapdata";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
@@ -44,6 +47,7 @@ export default function Stage() {
   const active = useActiveDataset();
   useWindowCommands();
   useHistoryCommands();
+  useRecentProjectsCommands();
 
   // Owner request 2026-07-25: the Map tab is CONTEXTUAL. A 1-D dataset can
   // never produce a map, so the tab was a permanent invitation to a screen that

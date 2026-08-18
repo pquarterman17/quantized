@@ -14,6 +14,7 @@ import { buildLibraryHierarchy, type LibraryNode } from "./libraryHierarchy";
 import type { Dataset } from "./types";
 import type { WorkbookNode } from "./workbooks";
 import { useApp } from "../store/useApp";
+import { useQuickPlotWithDialog } from "../store/quickPlotWithDialog";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
@@ -244,5 +245,95 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     item.run();
     await Promise.resolve();
     expect(useApp.getState().workbooks).toEqual([{ id: "w1", name: "W" }]);
+  });
+});
+
+describe("workbook.quickPlotWith (PR H, L0.37)", () => {
+  const template = {
+    id: "qpt-1",
+    name: "T",
+    createdAt: "x",
+    modifiedAt: "x",
+    scope: { kind: "schema" as const },
+    technique: "magnetometry.mvsh" as const,
+    signature: { channels: [] },
+    mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] },
+    style: "line" as const,
+    labels: {},
+  };
+
+  it("hidden when zero templates exist", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ quickPlotTemplates: [] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, [d1]));
+    expect(item).toBeNull();
+  });
+
+  it("hidden when the workbook has no worksheets, even with templates saved", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    useApp.setState({ quickPlotTemplates: [template] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, []));
+    expect(item).toBeNull();
+  });
+
+  it("shown once a template exists and the workbook has a worksheet", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ quickPlotTemplates: [template] });
+    const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, [d1]));
+    expect(item).not.toBeNull();
+  });
+
+  // Review-round P2b (the orphan bug's manage-affordance half): reviewer's
+  // exact probe shape -- a workbook-scoped template must stay reachable even
+  // after its workbook loses its only dataset (ordinary removeDatasets),
+  // because the workbook itself is still alive, only memberless.
+  describe("memberless-but-alive workbook (review-round P2b)", () => {
+    const workbookScoped = { ...template, id: "qpt-scoped", scope: { kind: "workbook" as const, workbookId: "w1" } };
+
+    it("stays SHOWN (never hidden) for a memberless workbook that owns a workbook-scoped template", () => {
+      const wb: WorkbookNode = { id: "w1", name: "W" };
+      useApp.setState({ quickPlotTemplates: [workbookScoped] });
+      const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, [] /* no worksheet children */));
+      expect(item).not.toBeNull();
+    });
+
+    it("stays hidden for a memberless workbook whose ONLY templates are scoped to a DIFFERENT workbook", () => {
+      const wb: WorkbookNode = { id: "w1", name: "W" };
+      const otherWorkbookScoped = { ...workbookScoped, id: "qpt-other", scope: { kind: "workbook" as const, workbookId: "w2" } };
+      useApp.setState({ quickPlotTemplates: [otherWorkbookScoped] });
+      const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, []));
+      expect(item).toBeNull();
+    });
+
+    it("reviewer's exact probe: save workbook-scoped template, remove the workbook's only dataset, menu still offers the chooser", () => {
+      const wb: WorkbookNode = { id: "w1", name: "W" };
+      const d1 = recognizedDataset("d1", "w1");
+      useApp.setState({ workbooks: [wb], datasets: [d1] });
+      useApp.getState().saveQuickPlotTemplate(
+        "d1",
+        { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [1] },
+        "line",
+        "Scoped",
+        { kind: "workbook", workbookId: "w1" },
+      );
+      // Ordinary removal of the workbook's only dataset -- the workbook
+      // itself is untouched (still in `workbooks`), just now memberless.
+      useApp.getState().removeDatasets(["d1"]);
+      expect(useApp.getState().datasets).toHaveLength(0);
+
+      const item = actionMenuItem(find("workbook.quickPlotWith"), target(wb, []));
+      expect(item).not.toBeNull();
+    });
+
+    it("run() opens the chooser in workbook-only mode (openQuickPlotWithForWorkbook) when there is no worksheet to target", () => {
+      const wb: WorkbookNode = { id: "w1", name: "W" };
+      useApp.setState({ quickPlotTemplates: [workbookScoped] });
+      useQuickPlotWithDialog.getState().close();
+      menuItemFor(find("workbook.quickPlotWith"), target(wb, [])).run();
+      expect(useQuickPlotWithDialog.getState().workbookId).toBe("w1");
+      expect(useQuickPlotWithDialog.getState().datasetId).toBeNull();
+    });
   });
 });

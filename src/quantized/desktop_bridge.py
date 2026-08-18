@@ -20,16 +20,88 @@ would be the "false promise" the plan warns against.
 
 Kept free of FastAPI/pydantic imports: this is a launch-path helper, not a
 route, and the desktop shell must stay importable without the web stack.
+
+## Bridge contract (P1.1)
+
+``window.pywebview.api`` (this class) is the pywebview half of the
+shell-agnostic frontend contract in ``frontend/src/lib/desktopBridge.ts``
+(``openFiles`` / ``openProject`` / ``saveProjectAs`` / ``saveProjectTo`` /
+``probe``). The js_api methods below are the snake_case wire format those
+functions call:
+
+* ``probe()`` -> capability dict (``shell``, ``canPickFiles``, ...).
+* ``pick_files(directory, multiple)`` -> ``{"paths": [...]}`` (import flow).
+* ``pick_directory(directory)`` -> ``{"path": ...}`` (working-directory flow).
+* ``path_status(path)`` -> ``{"state": "ok"|"missing"|"offline"|"invalid"}``.
+* ``save_file_dialog(suggested_name)`` -> ``{"path": ...}``, grants WRITE
+  consent for the chosen destination.
+* ``write_project_file(path, content)`` -> ``{"ok": bool, "path"?: ...}``,
+  writes ONLY to a write-consented path (temp file + ``os.replace``).
+* ``open_project_file(directory)`` -> ``{"path": ..., "content": ...}``,
+  native OPEN dialog + an in-process read of the chosen project file; grants
+  READ consent for it.
+* ``read_project_file(path)`` -> ``{"path": ..., "content": ...}``, re-reads
+  a path already covered by a read OR write grant from earlier this
+  process — no new dialog (the Recent Projects reopen path).
+
+**``null`` vs. cancel, everywhere in this contract:** every dialog method
+here returns a well-formed dict even on cancel or on a recoverable dialog
+failure (``{"path": None}``, optionally with an ``"error"`` string) — it
+never raises into JS. The FRONTEND is what turns that into the two distinct
+outcomes callers must not conflate: a missing/broken bridge method reports
+``null`` ("no usable bridge — fall back to the browser input/download"),
+while a well-formed cancel result reports ``[]`` (list calls) or a distinct
+cancel value (single-result calls) meaning "the user backed out — do
+NOTHING, never fall back". See ``desktopBridge.ts``'s own module doc for the
+exact frontend-side rule; this module only needs to never collapse "cancel"
+and "error" into an exception, so the frontend has something to inspect.
+
+**Write consent, the new rule this slice adds:** a path is writable through
+``write_project_file`` ONLY when ``save_file_dialog`` (or, in tests, a
+directly-called ``desktop_consent.grant_write_path``) returned it THIS
+process. Read consent (from ``pick_files``/``open_project_file``) does NOT
+double as write consent, and vice versa — see ``desktop_consent``'s module
+doc for why the two grant kinds are kept apart. There is still, deliberately,
+no HTTP route that grants either kind: every grant originates from a modal
+OS dialog the js_api bridge itself invoked, so a hostile page loaded in the
+window can request `write_project_file` all it wants and it will refuse
+every path it did not itself get back from a real dialog.
+
+**Explicitly deferred (not this slice):**
+
+* **Tauri wiring.** ``desktopBridge.ts``'s ``shell`` discriminant already
+  types ``"tauri"`` and ``"browser"`` alongside ``"pywebview"``, but nothing
+  here implements a Tauri backend — that needs its own contract PR, because
+  Tauri's IPC crosses a process boundary with a different consent story
+  (Rust-side dialog plugin, not an in-process Python object) than this
+  same-process pywebview bridge.
+* **Project identity / dirty-state tracking** (open path, unsaved-changes
+  indicator, "Save" vs. "Save As") — P1.2's. This slice's ``saveProjectTo``
+  exists in the frontend contract and is exercised at the bridge-client
+  level, but nothing in this PR calls it from a UI command yet; the one
+  wired File-menu save command always goes through ``saveProjectAs``
+  (native "Save As" every time), matching today's single "Save workspace"
+  command having no separate "Save" affordance to begin with.
+* **Packaged Windows/macOS E2E** covering the full native lifecycle —
+  P1.1's own checklist owner item, unblocked by this slice but not shipped
+  by it (this PR's tests run the bridge logic against ``FakeWindow``, never
+  a packaged app).
 """
 
 from __future__ import annotations
 
 import os
+import tempfile
 from typing import Any
 
-from quantized.desktop_consent import grant_paths
+from quantized.desktop_consent import (
+    consented_path,
+    consented_write_path,
+    grant_paths,
+    grant_write_path,
+)
 
-__all__ = ["DesktopApi", "IMPORT_FILE_TYPES"]
+__all__ = ["DesktopApi", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
 # Shown in the native dialog's format dropdown. Mirrors the frontend's
 # IMPORT_ACCEPT list; "All files" stays LAST but present, because an instrument
@@ -52,6 +124,15 @@ IMPORT_FILE_TYPES: tuple[str, ...] = (
 # window object the launcher injects.
 _OPEN_DIALOG_DEFAULT = 10
 _FOLDER_DIALOG_DEFAULT = 20
+_SAVE_DIALOG_DEFAULT = 30
+
+# The native dialog's format filter for a Quantized project (a ".dwk" is JSON
+# under the hood — see lib/workspace.ts's serialization — so ".json" stays
+# openable too, mirroring the frontend's ".dwk,.json" browser-input accept).
+PROJECT_FILE_TYPES: tuple[str, ...] = (
+    "Quantized workspaces (*.dwk;*.json)",
+    "All files (*.*)",
+)
 
 
 def _dialog_kind(name: str, fallback: int) -> int:
@@ -212,3 +293,129 @@ class DesktopApi:
             "state": "missing" if _volume_present(resolved) else "offline",
             "path": resolved,
         }
+
+    # -- project save (P1.1 C2) ----------------------------------------------
+
+    def save_file_dialog(self, suggested_name: str = "") -> dict[str, Any]:
+        """Open a native SAVE dialog and grant WRITE consent for the chosen
+        destination — read consent is a separate, unaffected grant (see
+        desktop_consent's module doc): picking where to save never authorizes
+        reading anything.
+
+        Cancelling returns ``{"path": None}``, same non-error convention as
+        every other dialog method here."""
+        if self._window is None:
+            return {"path": None, "error": "no window attached"}
+        try:
+            chosen = self._window.create_file_dialog(
+                _dialog_kind("SAVE_DIALOG", _SAVE_DIALOG_DEFAULT),
+                save_filename=suggested_name or "workspace.dwk",
+                file_types=PROJECT_FILE_TYPES,
+            )
+        except Exception as exc:  # noqa: BLE001 - reported to JS, never raised into it
+            return {"path": None, "error": str(exc)}
+        if not chosen:
+            return {"path": None}  # cancelled
+        first = chosen[0] if isinstance(chosen, (list, tuple)) else chosen
+        try:
+            resolved = os.path.realpath(str(first))
+        except (OSError, ValueError) as exc:
+            return {"path": None, "error": str(exc)}
+        granted = grant_write_path(resolved)
+        if granted is None:
+            return {"path": None, "error": "could not grant write consent"}
+        return {"path": granted}
+
+    def write_project_file(self, path: str, content: str) -> dict[str, Any]:
+        """Write ``content`` to ``path`` IN-PROCESS — never through an HTTP
+        route, which is what keeps desktop_consent's "no HTTP route grants
+        (or spends) consent" boundary intact for writes too.
+
+        Refuses any path that was not returned by ``save_file_dialog`` this
+        process — the new rule this slice adds; a stray path from anywhere
+        else in the JS layer must not be writable just because it was asked
+        for. The write itself is temp-file-plus-``os.replace`` (same
+        directory, so the replace is atomic on a normal filesystem) so a
+        crash mid-write cannot leave a half-written ``.dwk`` at the real
+        path — full crash *recovery* (detecting and offering to restore a
+        stray temp file) is P1.2's, not this slice's."""
+        try:
+            resolved = os.path.realpath(path)
+        except (OSError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+        granted = consented_write_path(resolved)
+        if granted is None:
+            return {"ok": False, "error": "path not consented for writing"}
+        directory = os.path.dirname(granted) or "."
+        tmp_path: str | None = None
+        try:
+            fd, tmp_path = tempfile.mkstemp(prefix=".qz-write-", dir=directory)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(content)
+                os.replace(tmp_path, granted)
+                tmp_path = None  # replaced — nothing left to clean up
+            finally:
+                if tmp_path is not None:
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "path": granted}
+
+    # -- project open (P1.1 C3's "minimal read path") ------------------------
+
+    def _read_granted(self, path: str) -> dict[str, Any]:
+        """Shared by `open_project_file` (after a fresh pick) and
+        `read_project_file` (an already-consented path, no new dialog):
+        read `path` IN-PROCESS if EITHER a read or a write grant covers it —
+        a project saved earlier this session is reopenable without a second
+        dialog even though `save_file_dialog` only ever granted WRITE."""
+        try:
+            resolved = os.path.realpath(path)
+        except (OSError, ValueError) as exc:
+            return {"path": None, "error": str(exc)}
+        granted = consented_path(resolved) or consented_write_path(resolved)
+        if granted is None:
+            return {"path": None, "error": "path not consented — use the dialog"}
+        try:
+            with open(granted, encoding="utf-8") as f:
+                content = f.read()
+        except OSError as exc:
+            return {"path": granted, "error": str(exc)}
+        return {"path": granted, "content": content}
+
+    def open_project_file(self, directory: str = "") -> dict[str, Any]:
+        """Native OPEN dialog filtered to project files, then an in-process
+        read of the chosen file. The read stays off HTTP entirely (no new
+        route needed to serve project bytes) — this IS "the bridge's open
+        returning the file content" the frontend contract calls for."""
+        if self._window is None:
+            return {"path": None, "error": "no window attached"}
+        try:
+            chosen = self._window.create_file_dialog(
+                _dialog_kind("OPEN_DIALOG", _OPEN_DIALOG_DEFAULT),
+                directory=directory or os.getcwd(),
+                allow_multiple=False,
+                file_types=PROJECT_FILE_TYPES,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"path": None, "error": str(exc)}
+        if not chosen:
+            return {"path": None}  # cancelled
+        first = chosen[0] if isinstance(chosen, (list, tuple)) else chosen
+        granted = grant_paths([str(first)])
+        if not granted:
+            return {"path": None, "error": "selected path is not a readable file"}
+        return self._read_granted(granted[0])
+
+    def read_project_file(self, path: str) -> dict[str, Any]:
+        """Re-read an already-consented project path with NO new dialog —
+        reopening a Recent Projects entry from earlier this session. Consent
+        is per-process (desktop_consent's module doc), so a lapsed grant
+        (e.g. after an app restart) reports an error here rather than
+        silently reading; the frontend degrades to the ordinary dialog, the
+        same way a missing/offline Recent entry does for datasets."""
+        return self._read_granted(path)

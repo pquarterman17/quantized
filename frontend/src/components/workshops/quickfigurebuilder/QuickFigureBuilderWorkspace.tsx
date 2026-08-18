@@ -12,10 +12,37 @@ import {
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMapping";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
+import type { QuickPlotTemplateScope } from "../../../lib/quickPlotTemplates";
 import type { Dataset } from "../../../lib/types";
+import { askParams } from "../../overlays/ParamDialog";
 import { useApp } from "../../../store/useApp";
 import GraphPreview from "../graphbuilder/GraphPreview";
 import QuickMappingPanel from "./QuickMappingPanel";
+
+const SCHEMA_SCOPE_LABEL = "This data type and schema";
+const WORKBOOK_SCOPE_LABEL = "This workbook only";
+
+/** H5a: name + scope prompt, defaulting to the confirmed L0.31 schema scope.
+ *  The workbook-only option is offered only when this worksheet actually
+ *  belongs to a workbook (a bare imported dataset has nothing to scope to). */
+function promptSaveTemplate(dataset: Dataset): Promise<{ name: string; scope: QuickPlotTemplateScope } | null> {
+  const options = dataset.workbookId ? [SCHEMA_SCOPE_LABEL, WORKBOOK_SCOPE_LABEL] : [SCHEMA_SCOPE_LABEL];
+  return askParams("Save Quick Plot Template", [
+    { key: "name", label: "Name", type: "text", default: `${dataset.name} template` },
+    ...(options.length > 1
+      ? [{ key: "scope", label: "Scope", type: "select" as const, options, default: SCHEMA_SCOPE_LABEL }]
+      : []),
+  ]).then((result) => {
+    if (!result) return null;
+    const name = String(result.name).trim();
+    if (!name) return null;
+    const scope: QuickPlotTemplateScope =
+      result.scope === WORKBOOK_SCOPE_LABEL && dataset.workbookId
+        ? { kind: "workbook", workbookId: dataset.workbookId }
+        : { kind: "schema" };
+    return { name, scope };
+  });
+}
 
 function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => void }) {
   const [mapping, setMapping] = useState(() => initialQuickFigureMapping(dataset));
@@ -59,6 +86,17 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
       ? "quick-builder-role-warning quick-builder-error-warning"
       : gate.reasonId;
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
+  const saveQuickPlotTemplate = useApp((s) => s.saveQuickPlotTemplate);
+  // H5a: "Save Quick Plot Template…" is gated on the SAME `canCreateQuickFigure`
+  // gate as Create Figure — a template that could never itself become a
+  // figure is not a useful thing to save (store/quickPlotTemplates.ts's
+  // saveQuickPlotTemplate enforces this same gate belt-and-braces).
+  const saveTemplate = (): void => {
+    void promptSaveTemplate(dataset).then((result) => {
+      if (!result) return;
+      saveQuickPlotTemplate(dataset.id, mapping, style, result.name, result.scope);
+    });
+  };
   // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
   // hidden -- the button itself is also gated on `ready` below). `close()`
   // unmounts the builder so Stage reappears already focused on the new
@@ -140,6 +178,15 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             onClick={createFigure}
           >
             Create Editable Figure
+          </button>
+          <button
+            type="button"
+            className="qz-btn"
+            disabled={createDisabledReason !== undefined}
+            title={createDisabledReason}
+            onClick={saveTemplate}
+          >
+            Save Quick Plot Template…
           </button>
         </section>
       </div>

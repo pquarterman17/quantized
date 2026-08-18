@@ -311,7 +311,15 @@ const MODULE_PINS: Record<string, number> = {
   // which also now applies A1's surrogate-folder conversion (dropping a
   // converted folder from folders/expandedFolders and re-homing its former
   // occupants) — a NET SHRINK even with the new conversion step folded in.
-  "/lib/workspace.ts": 592,
+  // 592 -> 600 (2026-08-17, LIBRARY_WORKBOOK_UX_PLAN PR H): the four-site
+  // additive .dwk field pattern (WorkspaceState optional field,
+  // LoadedWorkspace required field, WorkspaceDoc field, serializer default +
+  // parseWorkspace sanitize call + return field) for the new
+  // `quickPlotTemplates` field, mirroring `savedPlotSpecs`'s existing
+  // hook-in exactly. No extractable cohesive block funds this minimal
+  // 8-line addition (comments trimmed to one line per site); written
+  // justification per CLAUDE.md's "raise only with written justification".
+  "/lib/workspace.ts": 600,
   "/lib/plotview.ts": 978,
 };
 

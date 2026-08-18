@@ -100,6 +100,12 @@ export interface HistorySnapshot {
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
   savedRois: AppState["savedRois"];
+  // LIBRARY_WORKBOOK_UX_PLAN PR H — named Quick Plot templates. Persistent
+  // user edits (save/rename/delete), same class as `savedPlotSpecs`/
+  // `savedRois` right above — wired here IN THE SAME COMMIT as the store
+  // slice (store/quickPlotTemplates.ts) per this file's own savedRois-
+  // incident gate, not as an afterthought.
+  quickPlotTemplates: AppState["quickPlotTemplates"];
   plotWindows: AppState["plotWindows"];
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
@@ -140,6 +146,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,
     savedRois: s.savedRois,
+    quickPlotTemplates: s.quickPlotTemplates,
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),

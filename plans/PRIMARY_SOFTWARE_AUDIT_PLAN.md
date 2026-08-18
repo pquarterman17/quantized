@@ -423,15 +423,52 @@ and safe missing/offline path handling in packaged Tauri.
 Rust-only/unwired to the remote frontend; recents are files, not workspaces;
 the existing remote-IPC security boundary must remain.
 
-- [ ] Native Open Files/Project returns durable paths.
-- [ ] Save/Save As chooses and retains a project identity.
+- [x] Native Open Files/Project returns durable paths. (Contract slice —
+  `desktop_bridge.py`'s `open_project_file`/`read_project_file`,
+  `desktopBridge.ts`'s `openProject`; pywebview only. Datasets already had
+  this via `pick_files` — MAIN_PLAN #31 — this ships it for **projects**.)
+- [ ] Save/Save As chooses and retains a project identity. Save AS ships
+  this slice (`saveProjectAs` — native dialog, real path, direct write);
+  project IDENTITY (open path + dirty-state tracking, so a plain "Save"
+  exists as distinct from "Save As") is **P1.2's** — `saveProjectTo` exists
+  in the frontend contract for it but nothing calls it from a UI command yet.
 - [ ] Re-import uses its path and distinguishes offline from deletion.
-- [ ] Recent Files and Recent Projects are separate.
-- [ ] Working-directory selection affects the next chooser.
-- [ ] Drag/drop and browser inputs remain fallbacks.
-- [ ] Long Unicode/network paths and canceled dialogs work.
-- [ ] Bridge schemas/security assumptions are documented and tested.
-- [ ] Packaged Windows/macOS E2E covers the lifecycle.
+  Datasets already had this (MAIN_PLAN #31, `pathState`/`path_status`).
+  Projects get the same distinction this slice, reused verbatim
+  (`recentProjectsCommands.ts` checks `pathState` before reopening a Recent
+  Projects entry) — but full "re-import a project" semantics beyond reopen
+  are **P1.2's** (project identity again).
+- [x] Recent Files and Recent Projects are separate. (`qz.recentProjects`
+  vs. `qz.recent`, separate storage keys, separate stores — `lib/
+  recentProjects.ts` / `store/recentProjects.ts` vs. the pre-existing
+  `lib/recentFiles.ts` / `store/recents.ts`. Surfaced as ⌘K palette
+  commands, not a MenuBar row — see `recentProjectsCommands.ts`'s header for
+  why: `store/useApp.ts`, which the MenuBar's Recent Files row reads, was
+  pinned for this contract slice.)
+- [ ] Working-directory selection affects the next chooser. Datasets already
+  had this (MAIN_PLAN #31, `useWorkingPaths`). NOT wired for projects this
+  slice — `openProject`/`saveProjectAs` don't thread a working-directory
+  hint yet. **Deferred, no owner assigned** — small, uncontracted follow-up.
+- [x] Drag/drop and browser inputs remain fallbacks. (Every native call
+  degrades to the pre-existing `openFilePicker`/`saveBlob` path exactly —
+  verified by the full existing jsdom suite passing untouched, plus new
+  fallback-branch tests.)
+- [ ] Long Unicode/network paths and canceled dialogs work. Cancel semantics
+  ARE covered this slice (`CANCELLED` sentinel, red-first-tested both sides
+  of the bridge). Long Unicode/network-path behavior is **untested this
+  slice** — no packaged app to exercise real OS dialogs against; owner is
+  the packaged E2E item below.
+- [x] Bridge schemas/security assumptions are documented and tested. (The
+  "## Bridge contract (P1.1)" section in `desktop_bridge.py`'s module
+  docstring; the write-consent security rule is red-first tested in
+  `tests/test_desktop_bridge.py`.)
+- [ ] Packaged Windows/macOS E2E covers the lifecycle. Not shipped —
+  **owner: the packaged-E2E work item**, tracked separately; this slice's
+  tests run the bridge logic against `FakeWindow`/a mocked
+  `window.pywebview`, never a packaged app. The Tauri shell itself is
+  **also** out of scope here — its own contract PR, noted in
+  `desktop_bridge.py`'s docstring (different consent story, cross-process
+  IPC rather than in-process js_api).
 
 ### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
 

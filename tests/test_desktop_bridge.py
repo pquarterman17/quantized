@@ -16,7 +16,11 @@ from typing import Any
 import pytest
 
 from quantized.desktop_bridge import DesktopApi
-from quantized.desktop_consent import clear_consent, is_consented
+from quantized.desktop_consent import (
+    clear_consent,
+    is_consented,
+    is_write_consented,
+)
 
 
 class FakeWindow:
@@ -187,3 +191,180 @@ def test_path_status_reports_missing_outside_a_recognizable_volume() -> None:
     is gone" — the more useful of the two messages to get right.
     """
     assert DesktopApi().path_status("/qz-no-such-dir/run.dat")["state"] == "missing"
+
+
+# --- save_file_dialog / write_project_file (P1.1 C2) ------------------------
+#
+# The FakeWindow pattern above stands in for the dialog; the interesting
+# behaviour is what the bridge does with a chosen SAVE path — grant write
+# consent for it (and ONLY it), and refuse to write anywhere that consent was
+# never granted for. That refusal is the new security rule this slice adds
+# (previously nothing in this module could write at all), so it is exercised
+# red-first: the test existed and failed against a stub before
+# `write_project_file` enforced the check.
+
+
+def test_save_file_dialog_grants_write_consent_but_not_read_consent(tmp_path: Path) -> None:
+    dest = tmp_path / "new_workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    out = api.save_file_dialog("new_workspace.dwk")
+    resolved = os.path.realpath(str(dest))
+    assert out["path"] == resolved
+    assert is_write_consented(resolved)
+    # Picking a SAVE destination must not also grant READ access to it (or to
+    # anything else) — the two consent kinds are deliberately independent.
+    assert not is_consented(resolved)
+
+
+def test_save_file_dialog_cancel_returns_none_and_grants_nothing() -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow(None))
+    out = api.save_file_dialog("workspace.dwk")
+    assert out["path"] is None
+    assert "error" not in out
+
+
+def test_save_file_dialog_without_a_window_reports_rather_than_raises() -> None:
+    out = DesktopApi().save_file_dialog("workspace.dwk")
+    assert out["path"] is None
+    assert "error" in out
+
+
+def test_save_file_dialog_reports_a_dialog_failure() -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow(RuntimeError("no display")))
+    out = api.save_file_dialog("workspace.dwk")
+    assert out["path"] is None
+    assert "no display" in out["error"]
+
+
+def test_write_project_file_lands_content_at_a_granted_path(tmp_path: Path) -> None:
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    write_out = api.write_project_file(save_out["path"], '{"v": 1}')
+    assert write_out["ok"] is True
+    assert write_out["path"] == save_out["path"]
+    assert dest.read_text(encoding="utf-8") == '{"v": 1}'
+
+
+def test_write_project_file_refuses_a_path_that_was_never_granted(tmp_path: Path) -> None:
+    """RED-FIRST: the new security rule. Nothing granted this path write
+    consent (no save dialog ever returned it), so the write must be refused
+    — and must not touch the filesystem at all."""
+    dest = tmp_path / "unconsented.dwk"
+    out = DesktopApi().write_project_file(str(dest), "should not land")
+    assert out["ok"] is False
+    assert "error" in out
+    assert not dest.exists()
+
+
+def test_write_project_file_refuses_a_path_only_granted_for_reading(tmp_path: Path) -> None:
+    """Read consent (from opening/picking a file) must not double as write
+    consent — the two grant kinds stay independent even for the same path."""
+    f = _csv(tmp_path, "existing.dwk")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(f)]))
+    picked = api.pick_files()  # grants READ consent only
+    out = api.write_project_file(picked["paths"][0], "overwrite attempt")
+    assert out["ok"] is False
+    assert f.read_text(encoding="utf-8") != "overwrite attempt"
+
+
+def test_write_project_file_overwrite_leaves_no_stray_temp_file(tmp_path: Path) -> None:
+    """Atomic-ish shape: temp file + os.replace, never a leftover partial
+    write sitting next to the target (P1.2 owns full crash-recovery; this
+    slice only guarantees the write itself isn't torn)."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    api.write_project_file(save_out["path"], "first")
+    api.write_project_file(save_out["path"], "second")
+    assert dest.read_text(encoding="utf-8") == "second"
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []
+
+
+def test_write_project_file_reports_an_os_error_rather_than_raising(tmp_path: Path) -> None:
+    # A directory can never be replaced by a file write — a realistic OSError
+    # source that must come back as a reported error, not an exception into JS.
+    directory = tmp_path / "a_directory.dwk"
+    directory.mkdir()
+    api = DesktopApi()
+    api.attach(FakeWindow([str(directory)]))
+    save_out = api.save_file_dialog("a_directory.dwk")
+    out = api.write_project_file(save_out["path"], "x")
+    assert out["ok"] is False
+    assert "error" in out
+
+
+# --- open_project_file / read_project_file (P1.1 C3's "minimal read path") --
+
+
+def test_open_project_file_reads_content_and_grants_read_consent(tmp_path: Path) -> None:
+    f = _csv(tmp_path, "workspace.dwk")
+    f.write_text('{"v": 1}', encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(f)]))
+    out = api.open_project_file()
+    resolved = os.path.realpath(str(f))
+    assert out["path"] == resolved
+    assert out["content"] == '{"v": 1}'
+    assert is_consented(resolved)
+
+
+def test_open_project_file_cancel_returns_none_without_reading() -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow(None))
+    out = api.open_project_file()
+    assert out["path"] is None
+    assert "content" not in out
+
+
+def test_open_project_file_without_a_window_reports_rather_than_raises() -> None:
+    out = DesktopApi().open_project_file()
+    assert out["path"] is None
+    assert "error" in out
+
+
+def test_open_project_file_rejects_a_directory(tmp_path: Path) -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow([str(tmp_path)]))  # a directory, not a project file
+    out = api.open_project_file()
+    assert out["path"] is None
+    assert "error" in out
+
+
+def test_read_project_file_reuses_an_open_grant_without_a_new_dialog(tmp_path: Path) -> None:
+    f = _csv(tmp_path, "workspace.dwk")
+    f.write_text('{"v": 2}', encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(f)]))
+    api.open_project_file()  # grants read consent
+    out = api.read_project_file(str(f))
+    assert out["content"] == '{"v": 2}'
+
+
+def test_read_project_file_reuses_a_write_grant_from_a_prior_save(tmp_path: Path) -> None:
+    """Reopening a project saved earlier THIS session (e.g. a Recent Projects
+    click) must not require a fresh dialog when only a write grant exists."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    api.write_project_file(save_out["path"], '{"v": 3}')
+    out = api.read_project_file(save_out["path"])
+    assert out["content"] == '{"v": 3}'
+
+
+def test_read_project_file_refuses_an_unconsented_path(tmp_path: Path) -> None:
+    """RED-FIRST alongside the write refusal above: a path nothing ever
+    granted must not be readable through this call either."""
+    f = _csv(tmp_path, "never_picked.dwk")
+    out = DesktopApi().read_project_file(str(f))
+    assert out["path"] is None
+    assert "content" not in out
+    assert "error" in out

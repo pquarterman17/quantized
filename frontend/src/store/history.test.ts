@@ -291,6 +291,7 @@ describe("per-action-class undo/redo coverage", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      quickPlotTemplates: [],
       librarySelection: null,
       workbookLastChild: {},
       expandedWorkbookIds: [],
