@@ -215,13 +215,48 @@ describe("derived worksheets (K5c/K5d)", () => {
     expect(useApp.getState().datasets.find((d) => d.id === "b")).toEqual(sheet);
   });
 
-  it("a ds->sheet->fit chain recomputes in topological order inside ONE recalcNow", async () => {
-    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], R2: 1, yFit: [1, 2, 3] });
+  // PR K slice 2 — the real executor happy path replaces slice 1's honest
+  // no-op: recalcNow now actually re-runs the sheet's own `.corrections`
+  // pipeline against its SOURCE's CURRENT raw/data (not the sheet's own
+  // stale cache), via the exact `applyCorrections` API call regular
+  // corrections use.
+  it("recalcNow actually recomputes a stale derived sheet from its source's CURRENT data (K5c/K5d real executor)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[99]] });
     useApp.setState({
       recalcMode: "manual",
       datasets: [
         ds("a"),
-        ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" }, fitSpec: { model: "Linear" } }),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "yOff=-1" },
+          corrections: { yOff: -1 },
+          data: { ...data(), values: [[1]] }, // stale — must NOT survive the recompute
+        }),
+      ],
+      staleDatasets: ["b"],
+    });
+
+    await useApp.getState().recalcNow();
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith(
+      expect.objectContaining({ params: { yOff: -1 } }),
+    );
+    const sheet = useApp.getState().datasets.find((d) => d.id === "b");
+    expect(sheet?.data.values).toEqual([[99]]); // freshly recomputed, not the stale cache
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
+  it("a ds->sheet->fit chain recomputes in topological order inside ONE recalcNow", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], R2: 1, yFit: [1, 2, 3] });
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[9], [9], [9]] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "flatten" },
+          corrections: {},
+          fitSpec: { model: "Linear" },
+        }),
       ],
     });
     useApp.getState().setCellValue("a", 0, 0, 99);
@@ -230,12 +265,23 @@ describe("derived worksheets (K5c/K5d)", () => {
     expect(useApp.getState().staleFits).toEqual(["b"]);
 
     await useApp.getState().recalcNow();
-    // The sheet has no pipeline executor yet (that's PR K slice 2) — it
-    // just clears (the honest no-op), same as any stale dataset with no
-    // corrections to redo — BEFORE its fit is recomputed.
+    // The sheet's own pipeline executor runs BEFORE its fit is recomputed —
+    // the existing two-phase (datasets, then fits) order, unchanged.
     expect(useApp.getState().staleDatasets).toEqual([]);
+    expect(useApp.getState().datasets.find((d) => d.id === "b")?.data.values).toEqual([[9], [9], [9]]);
     expect(fitModel).toHaveBeenCalledTimes(1);
     expect(useApp.getState().staleFits).toEqual([]);
+  });
+
+  it("a source that no longer exists leaves the sheet stale instead of throwing", async () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("b", { derivedFrom: { datasetId: "ghost", pipeline: "x" }, corrections: {} })],
+      staleDatasets: ["b"],
+    });
+    await useApp.getState().recalcNow();
+    expect(useApp.getState().staleDatasets).toEqual(["b"]); // stays stale
+    expect(useApp.getState().status).toContain("derived worksheet recompute failed");
   });
 
   it("staleDatasets/staleFits accumulation is one recordHistory per triggering gesture (K5e)", () => {
