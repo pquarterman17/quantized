@@ -379,12 +379,35 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   await expect.poll(() => storeGroupKey(page)).toBe(1);
   await expect.poll(() => legendSeriesLabels(page)).toHaveLength(GROUP_LEVELS.length);
 
+  // CI review round (PR #182, third collision): Graph Builder's job is done
+  // -- the group is committed to the live window and re-proven through
+  // undo/redo above. It has been sitting at its fixed default screen
+  // position (every floating ToolWindow in this app opens there) for the
+  // whole test so far, which is exactly what caused THREE separate
+  // interception failures in a row as the journey moved into window
+  // management below (a right-click titlebar, next a Close Window
+  // menuitem, and it would have hit the export dialog too). Rather than
+  // route around it interaction by interaction, close it ONCE here, the
+  // same real "the app's own close control" way the sibling test above
+  // already does (setGraphBuilderOpen(false) IS what GraphBuilderPanel's
+  // own × control calls -- store/graphBuilder.ts, not a test-only
+  // shortcut) -- structurally removing every remaining overlay risk for
+  // the rest of this journey (see the export step's own note for why the
+  // final "Export figure…" no longer needs Graph Builder open at all).
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setGraphBuilderOpen: (open: boolean) => void } } } })
+      .__qz.useApp.getState().setGraphBuilderOpen(false),
+  );
+  await expect(graphBuilder).toBeHidden();
+
   // ── Close/reopen: close the grouped window via the real title-bar context
   //    menu (window-arrange.spec.ts's own path), then undo the close — a
   //    genuine close-then-restore round trip, not a fabricated one (the
   //    original default window stays open throughout, so the ≥1-window
   //    invariant is never at risk). The restored window's groupKey and live
-  //    legend must read back exactly as they did before closing. ──────────
+  //    legend must read back exactly as they did before closing. Graph
+  //    Builder is closed by this point (above), so nothing can overlap
+  //    this titlebar or the context menu it opens. ───────────────────────
   const focusedTitlebar = page.locator(".qzk-plotwin.focused .qzk-plotwin-titlebar");
   await expect(focusedTitlebar).toBeVisible();
   await focusedTitlebar.click({ button: "right" });
@@ -395,19 +418,22 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   await expect.poll(() => legendSeriesLabels(page)).toEqual(expect.arrayContaining(EXPECTED_SERIES_LABELS));
 
   // ── Export parity: the reopened window's OWN canonical document carries
-  //    the SAME group binding into a real export request. NOTE (review round
-  //    P3): the close/reopen round trip itself is already independently
-  //    proven above (the post-undo-of-close storeGroupKey/legend polls,
-  //    lines 358-359) -- that is the load-bearing assertion for "reopen
-  //    preserves grouping". This step exercises export specifically;
-  //    Export re-commits the Graph Builder's own live spec first
-  //    (exportPlot -> applyToCurrent), so its group_col also reflects that
-  //    fresh commit, not purely the reopened window's persisted state alone. ─
+  //    the SAME group binding into a real export request. Routed through
+  //    the command palette's "Export figure…" (File menu command,
+  //    commands/fileCommands.ts -> the SAME runExportFigureCommand Graph
+  //    Builder's own "Export" button calls) rather than Graph Builder's
+  //    button, now that Graph Builder is closed -- runPaletteCommand is
+  //    also this repo's own established robust driver (utils/palette.ts),
+  //    used by the sibling test above for "Publication preview". This also
+  //    makes the assertion STRICTER than before: without Graph Builder's
+  //    own applyToCurrent() re-commit in the path, group_col below is
+  //    proven to come PURELY from the reopened window's persisted/restored
+  //    state, not partly re-derived from a fresh commit. ────────────────
   const exportDialog = page.locator(".qz-dialog").filter({ has: page.getByRole("heading", { name: "Export figure" }) });
   const exportResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
   );
-  await graphBuilder.getByRole("button", { name: "Export" }).click();
+  await runPaletteCommand(page, "Export figure");
   await expect(exportDialog).toBeVisible();
   await exportDialog.getByRole("button", { name: "Run" }).click();
   const response = await exportResponse;
