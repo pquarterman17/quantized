@@ -146,6 +146,7 @@ function BackgroundXYWindow({
       xScale: view.xScale,
       xKey: view.xKey,
       yKeys: view.yKeys,
+      groupKey: view.groupKey,
       y2Keys: view.y2Keys,
       seriesOrder: view.seriesOrder,
       seriesStyles: view.seriesStyles,

@@ -55,6 +55,7 @@ function baseParams(overrides: Partial<PlotPayloadParams> = {}): PlotPayloadPara
     xScale: "linear",
     xKey: null,
     yKeys: null,
+    groupKey: null,
     y2Keys: null,
     seriesOrder: null,
     seriesStyles: EMPTY_STYLES,
