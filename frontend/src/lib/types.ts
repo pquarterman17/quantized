@@ -335,6 +335,8 @@ export interface ComputedColumn {
   name: string;
   expr: string;
   unit?: string;
+  /** PR K: referenced columns (formula.referencedColumns) — feeds recalc's col→col edges; legacy columns re-derive. */
+  deps?: string[];
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..
@@ -445,8 +447,7 @@ export interface Dataset {
   raw?: DataStruct;
   corrections?: CorrectionParams;
   /** Reference-background subtraction folded into `corrections`: the picked
-   *  background dataset's id + the interpolation method. Persisted so the
-   *  Corrections card can re-populate and re-apply it reproducibly. */
+   *  background dataset's id + interp method, so the Corrections card can re-populate/re-apply it. */
   bgRef?: { datasetId: string; interp: string };
   /** The last fit run on this dataset — the recalc graph (#1) re-runs it when
    *  the data changes (auto mode) or marks it stale (manual). Set by the Curve
@@ -457,11 +458,9 @@ export interface Dataset {
    *  and `exitFlag`. `xKey`/`yKey` are absent on legacy v1 (`{model}`) specs —
    *  recompute then falls back to the live plotted selection. */
   fitSpec?: FitSpec;
-  /** Free-text user notes about this dataset (sample, conditions, caveats).
-   *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
+  /** Free-text user notes (sample, conditions, caveats); shown in the Inspector Notes card. */
   notes?: string;
-  /** User tags for organizing + filtering the Library (e.g. "MvsH", "sample-A").
-   *  Round-trips through the .dwk workspace. */
+  /** User tags for organizing + filtering the Library. */
   tags?: string[];
   /** LEGACY read-only field — superseded by the folder tree (`folderId`).
    *  `useApp.loadWorkspace` promotes any un-foldered `group` into a
@@ -470,19 +469,20 @@ export interface Dataset {
    *  anymore. Kept only so an old .dwk v1 doc (datasets carrying just a
    *  `group` string, no folder tree at all) still parses and migrates. */
   group?: string;
-  /** Containing folder id (project-organization plan, Approach B). Absent = the
-   *  dataset lives at the tree root. The folder tree itself is the store's
-   *  `folders` slice; membership lives HERE (not as a folder child-list) so
-   *  deleting a dataset can never dangle a ref. Pure organization — it never
-   *  gates row-state (excludedRows/filter). Round-trips through .dwk v2. */
+  /** Containing folder id (project-organization plan, Approach B). Absent =
+   *  the dataset lives at the tree root; membership lives HERE (not as a
+   *  folder child-list) so deleting a dataset can never dangle a ref. */
   folderId?: string;
-  /** Sort key within the containing folder (see lib/order). Absent = fall back
-   *  to insertion order. Round-trips through .dwk v2. */
+  /** Sort key within the containing folder (see lib/order); absent falls back to insertion order. */
   order?: number;
-  /** Worksheet computed columns. They occupy the last `formulas.length` columns
-   *  of `data` and recompute when the base data changes (cell edits, corrections).
-   *  Round-trips through the .dwk workspace. */
+  /** Worksheet computed columns — occupy the last `formulas.length` columns
+   *  of `data`; recompute when the base data changes. */
   formulas?: ComputedColumn[];
+  /** PR K: per-column error for a failing formula, keyed by name. */
+  formulaErrors?: Record<string, string>;
+  /** PR K (L0.50): set for a DERIVED WORKSHEET — recalculates only via the
+   *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
+  derivedFrom?: { datasetId: string; pipeline: string };
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the

@@ -186,6 +186,49 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
   });
 });
 
+// LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round
+// trip through the existing .dwk dataset path — no version bump.
+describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
+  it("round-trips a formula's deps nested inside `formulas` (no explicit workspace.ts handling)", () => {
+    const ds = makeDataset("a", "with-formula");
+    ds.formulas = [{ name: "S", expr: "A + B", deps: ["A", "B"] }];
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
+  });
+
+  it("a legacy formula without `deps` round-trips as absent (degrades, not defaulted)", () => {
+    const ds = makeDataset("a", "legacy-formula");
+    ds.formulas = [{ name: "S", expr: "A + B" }];
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    expect(restored.formulas?.[0].deps).toBeUndefined();
+  });
+
+  it("round-trips derivedFrom (and omits it when absent)", () => {
+    const ds = makeDataset("a", "sheet");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "flatten + smooth" };
+    const [restored] = parse(ser([ds]));
+    expect(restored.derivedFrom).toEqual({ datasetId: "raw1", pipeline: "flatten + smooth" });
+    const bare = makeDataset("b", "bare");
+    expect(parse(ser([bare]))[0].derivedFrom).toBeUndefined();
+  });
+
+  it("degrades a malformed derivedFrom (missing pipeline) instead of throwing", () => {
+    const bad = { ...makeDataset("a", "x"), derivedFrom: { datasetId: "raw1" } } as unknown as Dataset;
+    expect(() => parseWorkspace(ser([bad]))).not.toThrow();
+    expect(parseWorkspace(ser([bad])).datasets[0].derivedFrom).toBeUndefined();
+  });
+
+  it("round-trips formulaErrors (and omits an empty map)", () => {
+    const ds = makeDataset("a", "erroring");
+    ds.formulaErrors = { bad: "unknown variable \"Z\"" };
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulaErrors).toEqual({ bad: 'unknown variable "Z"' });
+    const clean = { ...makeDataset("b", "clean"), formulaErrors: {} };
+    expect(parse(ser([clean]))[0].formulaErrors).toBeUndefined();
+  });
+});
+
 describe("workspace v2 folder tree", () => {
   it("round-trips the folder tree, active/selection, and expansion", () => {
     const a = { ...makeDataset("a", "in-f1"), folderId: "f1", order: 0 };
