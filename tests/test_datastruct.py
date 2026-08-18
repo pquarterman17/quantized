@@ -217,4 +217,26 @@ class TestCategoricalAccessors:
         assert level_of(ds, 1, float("nan")) is None  # missing
         assert level_of(ds, 1, 99.0) is None  # out of range
         assert level_of(ds, 1, 0.5) is None  # non-integer code
+
+    def test_construction_validates_table_shape_only_not_value_coherence(self) -> None:
+        """P1.4 review P2-3/P3-1 ruling: __post_init__ validates cat_levels'
+        SHAPE (in-range index, non-empty str tuple) -- it does NOT cross-check
+        every VALUES cell against its channel's level table. A downstream
+        row-edit/merge/recode gone wrong can leave an out-of-range, negative,
+        non-integer, or NaN code in a categorical column, and construction
+        must still succeed -- coherence degrades at READ time (level_of ->
+        None), never at construction time (no raise)."""
+        ds = DataStruct.create(
+            time=[0.0, 1.0, 2.0, 3.0],
+            # channel 1 ("Region") is categorical with 2 levels, but its cells
+            # carry a valid code (0), an out-of-range code (99), a negative
+            # code (-1), and NaN -- all structurally legal float64 values.
+            values=[[1.0, 0.0], [2.0, 99.0], [3.0, -1.0], [4.0, np.nan]],
+            labels=["Moment", "Region"],
+            cat_levels={1: ("North", "South")},
+        )  # must not raise
+        assert level_of(ds, 1, 0.0) == "North"
+        assert level_of(ds, 1, 99.0) is None
+        assert level_of(ds, 1, -1.0) is None
+        assert level_of(ds, 1, float("nan")) is None
         assert level_of(ds, 0, 0.0) is None  # non-categorical channel

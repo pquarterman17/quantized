@@ -1,8 +1,8 @@
-// Workspace (.dwk) save/load — serialize the loaded datasets to a portable JSON
-// document and parse one back, with validation. A reload otherwise loses the
-// library (datasets live only in memory); this gives session persistence. Pure +
-// testable; the App wires it to Save/Open commands (download + file picker).
+// Workspace (.dwk) save/load — serialize the loaded datasets to a portable JSON document and
+// parse one back, with validation. A reload otherwise loses the library (datasets live only in
+// memory); this gives session persistence. Pure + testable; the App wires it to Save/Open commands (download + file picker).
 
+import { sanitizeDataStruct } from "./categorical";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFolders, pruneOrphans } from "./foldertree";
@@ -325,7 +325,7 @@ function parseSource(v: unknown): { kind: "path"; path: string } | null {
   return null;
 }
 
-/** Structural check that `v` is a DataStruct (time/values/labels/units/metadata). */
+/** Structural check that `v` is a DataStruct (time/values/labels/units/metadata) -- `cat_levels` is repaired separately by `sanitizeDataStruct`, not gated here. */
 function isDataStruct(v: unknown): v is DataStruct {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -382,9 +382,9 @@ export function parseWorkspace(
     const ds: Dataset = {
       id: typeof dd.id === "string" ? dd.id : `ws-${i}`,
       name: typeof dd.name === "string" ? dd.name : `dataset ${i + 1}`,
-      data: dd.data,
+      data: sanitizeDataStruct(dd.data),
     };
-    if (isDataStruct(dd.raw)) ds.raw = dd.raw;
+    if (isDataStruct(dd.raw)) ds.raw = sanitizeDataStruct(dd.raw);
     if (dd.corrections && typeof dd.corrections === "object") {
       ds.corrections = dd.corrections as CorrectionParams;
     }

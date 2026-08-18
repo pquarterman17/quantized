@@ -39,6 +39,19 @@ every cell) and the accessor layer below is the ONLY sanctioned read path:
 consumers must call ``is_categorical``/``level_labels``/``level_of`` rather
 than reach into ``cat_levels`` directly, so the day the storage scheme
 changes (e.g. to native strings) only this module's accessors need to.
+
+VALIDATION SCOPE (P1.4 review, P2-3/P3-1 ruling -- document + degrade,
+NEVER throw): ``__post_init__`` validates ``cat_levels``' TABLE SHAPE only
+-- every key is an in-range channel index, every value a non-empty tuple of
+``str``. It deliberately does NOT cross-check CODE/LEVEL COHERENCE against
+``values`` -- a cell's numeric code may be out of range, non-integer, or
+NaN for its channel's level table (a downstream row-edit, a bad merge, or a
+Recode step gone wrong could all produce one), and construction still
+succeeds. Coherence degrades at READ time instead: ``level_of`` returns
+``None`` for any code it cannot resolve rather than raising or returning
+garbage, so a malformed cell degrades to "no label" for that one cell,
+never crashes the caller. This mirrors the frontend's ``levelLabel``
+(``lib/categorical.ts``), which applies the identical rule.
 """
 
 from __future__ import annotations

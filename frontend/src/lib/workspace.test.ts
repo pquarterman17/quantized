@@ -1,6 +1,7 @@
 import type { ErrorBinding } from "./errorRoles";
 import { describe, expect, it } from "vitest";
 
+import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
@@ -354,32 +355,75 @@ describe("workspace channel modeling types", () => {
   });
 });
 
-// P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN, Day-1 round-trip gate): `catLevels`
-// lives on `DataStruct` itself (not `Dataset`), so it is expected to survive
-// .dwk save/reload with ZERO changes to workspace.ts — `isDataStruct` is a
-// structural check that narrows `unknown` to `DataStruct` without stripping
-// extra fields, and `data: dd.data` keeps the whole parsed object. This
-// test is the verification the P1.4 contract calls for, per PINNED
-// FILES: "the dataset blob already carries the new optional field for
-// free — verify with a test, change nothing" (workspace.ts is untouched by
-// this slice).
-describe("workspace categorical channel levels (P1.4, workspace.ts untouched)", () => {
-  it("round-trips DataStruct.catLevels through serializeWorkspace/parseWorkspace with no workspace.ts changes needed", () => {
+// P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN, Day-1 round-trip gate): `cat_levels`
+// lives on `DataStruct` itself (not `Dataset`), so a WELL-FORMED one
+// survives .dwk save/reload for free — `isDataStruct` is a structural check
+// that narrows `unknown` to `DataStruct` without stripping extra fields,
+// and `data: dd.data` originally kept the whole parsed object verbatim.
+// UPDATE (P1.4 review round, P2-3/P3-1): workspace.ts is NO LONGER
+// untouched — a hand-edited/corrupted `cat_levels` (structurally wrong, not
+// just semantically stale) needed a degrade-not-throw repair
+// (`sanitizedCatLevels`/`sanitizedDataStruct`) so it can't propagate into
+// `lib/categorical.ts`'s accessors as string-indexed garbage. The
+// well-formed round trip below is UNCHANGED by that; the corruption tests
+// after it pin the new repair.
+describe("workspace categorical channel levels (P1.4)", () => {
+  it("round-trips a well-formed DataStruct.cat_levels through serializeWorkspace/parseWorkspace unchanged", () => {
     const ds = makeDataset("a", "categorical");
     ds.data = {
       ...ds.data,
       values: [[10, 0], [20, 1], [30, 0]],
-      catLevels: { 1: ["NbAu-1", "NbAu-2"] },
+      cat_levels: { 1: ["NbAu-1", "NbAu-2"] },
     };
     const [restored] = parse(ser([ds]));
-    expect(restored.data.catLevels).toEqual({ 1: ["NbAu-1", "NbAu-2"] });
+    expect(restored.data.cat_levels).toEqual({ 1: ["NbAu-1", "NbAu-2"] });
     expect(restored.data.values).toEqual([[10, 0], [20, 1], [30, 0]]);
   });
 
-  it("a dataset with no catLevels round-trips with the key simply absent", () => {
+  it("a dataset with no cat_levels round-trips with the key simply absent", () => {
     const ds = makeDataset("a", "plain");
     const [restored] = parse(ser([ds]));
-    expect(restored.data.catLevels).toBeUndefined();
+    expect(restored.data.cat_levels).toBeUndefined();
+  });
+
+  // P1.4 review P2-3/P3-1: the reviewer's exact corruption shape — a level
+  // "list" that is a bare string, not an array of strings. Without the
+  // repair, `lib/categorical.ts`'s `levelLabel` would index INTO the string
+  // ("AB"[0] === "A") as if it were `["A", "B"]` — plausible-looking but
+  // WRONG string-indexed garbage, not a caught error.
+  it("drops a corrupted cat_levels entry (string instead of string[]) — no categorical status, no string-indexed garbage", () => {
+    const ds = makeDataset("a", "corrupted");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: "AB" };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
+    expect(isCategoricalChannel(restored.data, 0)).toBe(false);
+    expect(levelLabel(restored.data, 0, 0)).toBeNull(); // NOT "A"
+    expect(levelLabel(restored.data, 0, 1)).toBeNull(); // NOT "B"
+  });
+
+  it("drops only the corrupted channel's entry, keeping a well-formed sibling entry", () => {
+    const ds = makeDataset("a", "mixed");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: "AB", 1: ["North", "South"] };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toEqual({ 1: ["North", "South"] });
+  });
+
+  it("drops a non-array, non-object cat_levels entirely (e.g. a bare string)", () => {
+    const ds = makeDataset("a", "wrong-type");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = "not even an object";
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
+  });
+
+  it("drops a level list containing a non-string element", () => {
+    const ds = makeDataset("a", "mixed-elems");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: ["A", 2, "C"] };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
   });
 });
 
