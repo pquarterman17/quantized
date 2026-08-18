@@ -90,7 +90,6 @@ every path it did not itself get back from a real dialog.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from typing import Any
@@ -100,6 +99,11 @@ from quantized.desktop_consent import (
     consented_write_path,
     grant_paths,
     grant_write_path,
+)
+from quantized.desktop_project_file import (
+    WRITE_TEMP_PREFIX,
+    cleanup_stray_write_temps,
+    validate_workspace_payload,
 )
 
 __all__ = ["DesktopApi", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
@@ -134,43 +138,6 @@ PROJECT_FILE_TYPES: tuple[str, ...] = (
     "Quantized workspaces (*.dwk;*.json)",
     "All files (*.*)",
 )
-
-
-# P1.2 box 2: the top-level shape ``write_project_file`` requires BEFORE an
-# atomic replace. Mirrors the two constants frontend/src/lib/workspace.ts's
-# `parseWorkspace` itself gates on (``WORKSPACE_FORMAT`` /
-# ``WORKSPACE_VERSION``'s supported set) — kept in sync with that file BY
-# HAND, since nothing crosses the Python/TypeScript boundary to share them.
-# Deliberately NOT the same check: the frontend module owns full semantic
-# validation (per-dataset DataStruct shape, folder/workbook migration, ...)
-# and stays the ONE place a project's *meaning* is understood, exercised on
-# OPEN. This is the narrower, backend-appropriate gate — is the payload
-# well-formed JSON that at minimum LOOKS like a Quantized workspace — so a
-# truncated write, a stray non-JSON string, or a caller bug can never replace
-# a good project file with garbage. "Reuse the existing entry point, don't
-# write a second validator" is honored by keeping this to exactly the
-# top-level fields `parseWorkspace` itself checks before it will even start
-# reading a document, no further.
-_WORKSPACE_FORMAT = "quantized-workspace"
-_WORKSPACE_VERSIONS = (1, 2, 3, 4)
-
-
-def _workspace_validation_error(content: str) -> str | None:
-    """``None`` when ``content`` is acceptable to write; else a human-readable
-    reason, safe to report straight back to the frontend as ``error``."""
-    try:
-        payload = json.loads(content)
-    except (json.JSONDecodeError, ValueError) as exc:
-        return f"not valid JSON: {exc}"
-    if not isinstance(payload, dict):
-        return "not a JSON object"
-    if payload.get("format") != _WORKSPACE_FORMAT:
-        return "missing or unexpected 'format' field"
-    if payload.get("version") not in _WORKSPACE_VERSIONS:
-        return f"unsupported workspace version: {payload.get('version')!r}"
-    if not isinstance(payload.get("datasets"), list):
-        return "missing or non-array 'datasets' field"
-    return None
 
 
 def _dialog_kind(name: str, fallback: int) -> int:
@@ -375,14 +342,25 @@ class DesktopApi:
         for. The write itself is temp-file-plus-``os.replace`` (same
         directory, so the replace is atomic on a normal filesystem) so a
         crash mid-write cannot leave a half-written ``.dwk`` at the real
-        path — full crash *recovery* (detecting and offering to restore a
-        stray temp file) is P1.2's, not this slice's.
+        path.
 
         P1.2 box 2 adds a VALIDATION gate ahead of the replace: ``content``
-        must pass ``_workspace_validation_error`` or the write is refused
+        must pass ``validate_workspace_payload`` or the write is refused
         before a temp file is even opened — a bad payload can never
         overwrite a good project file, and whatever was previously at
-        ``path`` is left byte-identical."""
+        ``path`` is left byte-identical.
+
+        P1.2 (adversarial review round) also sweeps stale ``.qz-write-*``
+        temp files out of the TARGET directory before creating a new one —
+        the crash window this docstring used to punt to "P1.2" (a process
+        killed between the temp write succeeding and ``os.replace`` running)
+        left an anonymous half-written file behind forever, since nothing
+        ever looked for one. The prefix is exclusively ours, so anything
+        matching it in a write-consented directory is safe to remove; the
+        sweep is best-effort (``cleanup_stray_write_temps`` never raises)
+        so a failed cleanup — a permissions error, a race with another
+        process — can never turn an otherwise-successful save into a
+        reported failure."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
@@ -390,13 +368,14 @@ class DesktopApi:
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        invalid = _workspace_validation_error(content)
+        invalid = validate_workspace_payload(content)
         if invalid is not None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
         directory = os.path.dirname(granted) or "."
+        cleanup_stray_write_temps(directory)
         tmp_path: str | None = None
         try:
-            fd, tmp_path = tempfile.mkstemp(prefix=".qz-write-", dir=directory)
+            fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content)

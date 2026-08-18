@@ -78,4 +78,17 @@ describe("RecoveryChoiceDialog", () => {
     fireEvent.mouseDown(container.querySelector(".qz-overlay-backdrop") as Element);
     expect(useRecoveryChoice.getState().pending).toBeNull();
   });
+
+  // P3-a (adversarial review): applyKeepLastProject (lib/applyRecoveryChoice.ts)
+  // never touches the autosave generation — it stays in storage untouched.
+  // The "Keep" button's own tooltip previously claimed the opposite ("discard
+  // the autosaved snapshot"), which would talk a user out of a choice they
+  // could still safely make later. Pin the copy honest.
+  it('the "Keep" button never claims to discard the autosave — it stays available', () => {
+    useRecoveryChoice.setState({ pending: prompt() });
+    render(<RecoveryChoiceDialog />);
+    const keepButton = screen.getByRole("button", { name: /^Keep / });
+    expect(keepButton.title).not.toMatch(/discard/i);
+    expect(keepButton.title).toMatch(/stays? in storage|unaffected|remains? available/i);
+  });
 });

@@ -22,7 +22,9 @@ function lastKnownProject(): LastProjectRef | null {
 }
 
 /** Every store field serialized into a .dwk workspace. Keep this list in one
- * place so autosave cannot silently omit a newly-persisted artifact. */
+ * place so autosave cannot silently omit a newly-persisted artifact — its
+ * test file's "AutosaveState completeness sweep" cross-checks it against
+ * lib/workspace.ts's real WorkspaceDoc shape so this can't drift unnoticed. */
 export type AutosaveState = Pick<
   AppState,
   | "datasets"
@@ -31,6 +33,11 @@ export type AutosaveState = Pick<
   | "selectedIds"
   | "expandedFolders"
   | "originFigures"
+  // P2-1 (adversarial review, 2026-08-18): `originFidelity` persists
+  // (lib/workspace.ts) and mutates independently via
+  // store/originImport.ts's `addOriginFidelity` — no other tracked field
+  // necessarily changes alongside it.
+  | "originFidelity"
   | "smartFolders"
   | "reports"
   | "macroSteps"
@@ -40,7 +47,15 @@ export type AutosaveState = Pick<
   | "pages"
   | "plotWindows"
   | "focusedWindowId"
+  // P2-1: persists (lib/workspace.ts) and mutates independently via
+  // store/toolwindows.ts's setToolWindowLayout/toggleToolWindowCollapsed/
+  // resetToolWindowPositions — dragging or collapsing a tool window
+  // previously left the dirty marker false and scheduled no autosave.
+  | "toolWindowLayout"
   | "savedPlotSpecs"
+  // P2-1: PR H's saved Quick Plot templates — persist, mutate independently
+  // (store/quickPlotTemplates.ts), had no trigger here.
+  | "quickPlotTemplates"
   // LIBRARY_WORKBOOK_UX_PLAN PR E2: the three Library-panel fields
   // store/libraryPanel.ts's header marks "transient, E2 owns persistence".
   | "librarySelection"
@@ -52,6 +67,10 @@ export type AutosaveState = Pick<
   // unsaved until some unrelated field also changed.
   | "workbooks"
   | "savedRois"
+  // P2-1: PR L's saved-search Collections — persist, mutate independently
+  // (store/collections.ts), had no trigger here. A Collection rename/save
+  // left the title bar showing clean right up to a crash.
+  | "collections"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -62,6 +81,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.selectedIds === prev.selectedIds &&
     state.expandedFolders === prev.expandedFolders &&
     state.originFigures === prev.originFigures &&
+    state.originFidelity === prev.originFidelity &&
     state.smartFolders === prev.smartFolders &&
     state.reports === prev.reports &&
     state.macroSteps === prev.macroSteps &&
@@ -71,12 +91,15 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.pages === prev.pages &&
     state.plotWindows === prev.plotWindows &&
     state.focusedWindowId === prev.focusedWindowId &&
+    state.toolWindowLayout === prev.toolWindowLayout &&
     state.savedPlotSpecs === prev.savedPlotSpecs &&
+    state.quickPlotTemplates === prev.quickPlotTemplates &&
     state.librarySelection === prev.librarySelection &&
     state.workbookLastChild === prev.workbookLastChild &&
     state.expandedWorkbookIds === prev.expandedWorkbookIds &&
     state.workbooks === prev.workbooks &&
-    state.savedRois === prev.savedRois
+    state.savedRois === prev.savedRois &&
+    state.collections === prev.collections
   );
 }
 

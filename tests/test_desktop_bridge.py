@@ -507,3 +507,76 @@ def test_write_project_file_preserves_the_prior_file_when_the_disk_is_full(
     assert dest.read_text(encoding="utf-8") == good
     leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
     assert leftovers == []
+
+
+# --- stray .qz-write-* cleanup (P2-2, adversarial review) -------------------
+#
+# A crash between the successful temp write and `os.replace` (killed process,
+# OS crash, power loss — the window is real: both are separate syscalls)
+# strands an anonymous `.qz-write-*` file next to the target. Nothing swept
+# it up before this — the P1.1 docstring on `write_project_file` explicitly
+# punted "detecting and offering to restore a stray temp file" to P1.2, and
+# P1.2 never actually did it. RED-FIRST: this test plants a stray file with
+# the module's own prefix and proves the NEXT successful save removes it.
+
+
+def test_write_project_file_removes_a_stray_qz_write_temp_before_the_next_save(
+    tmp_path: Path,
+) -> None:
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    # Simulate a crash between a PRIOR write's temp-file creation and its
+    # `os.replace` — exactly the module's own naming convention, so this is
+    # unambiguously ours to clean up (never someone else's dotfile).
+    stray = tmp_path / ".qz-write-deadbeef"
+    stray.write_text("half-written garbage from a crashed save", encoding="utf-8")
+
+    second = _workspace_json("second")
+    out = api.write_project_file(save_out["path"], second)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == second
+    # The stray file is gone, and the save itself is otherwise unaffected —
+    # no OTHER leftovers (a fresh crash-mid-write of THIS save would still be
+    # cleaned by the existing finally-block, covered by the sibling test above).
+    remaining = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert remaining == [], f"stray temp file(s) survived a successful save: {remaining}"
+
+
+def test_write_project_file_stray_cleanup_is_best_effort_and_never_blocks_the_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stray file that fails to unlink (permissions, a race with another
+    process) must not turn a perfectly good save into a reported failure —
+    cleanup is opportunistic, not load-bearing."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    api.write_project_file(save_out["path"], _workspace_json("good"))
+
+    stray = tmp_path / ".qz-write-cannotremove"
+    stray.write_text("x", encoding="utf-8")
+
+    real_remove = os.remove
+
+    def _remove_raises_for_the_stray(path: str, *a: Any, **kw: Any) -> None:
+        if os.path.basename(path) == stray.name:
+            raise OSError("permission denied")
+        real_remove(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.remove", _remove_raises_for_the_stray)
+
+    second = _workspace_json("second")
+    out = api.write_project_file(save_out["path"], second)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == second
+    # The stray survives (cleanup failed, as forced above) but the save
+    # itself must have succeeded regardless.
+    assert stray.exists()

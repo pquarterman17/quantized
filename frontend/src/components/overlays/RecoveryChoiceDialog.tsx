@@ -51,7 +51,7 @@ export default function RecoveryChoiceDialog() {
           </Button>
           <Button
             onClick={() => void applyKeepLastProject(prompt)}
-            title={`Reopen ${lastProject.name} from disk; discard the autosaved snapshot from this session`}
+            title={`Reopen ${lastProject.name} from disk without loading the autosaved snapshot — it stays in storage, unaffected, in case you want it later`}
           >
             Keep {lastProject.name}
           </Button>
