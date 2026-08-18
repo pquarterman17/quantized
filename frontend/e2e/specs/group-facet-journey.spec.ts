@@ -301,8 +301,32 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
 // -> undo/redo -> close/reopen (via undo-of-close, the same real-UI pattern
 // window-arrange journeys use) -> export parity, all through the real uPlot
 // canvas + store, no mocks.
+// CI review round (PR #182): the live interactive legend row renders the
+// series label as a bare text node (PlotLegend.tsx's `<RichText text={text}
+// />` — a Fragment, no wrapper element, for the common no-markup-syntax
+// case this fixture's labels always are) directly alongside a SEPARATE
+// `<span>` holding the "move earlier/later" draw-order buttons (▲/▼) when
+// more than one series is plotted (`plotted.length > 1`, true here: three
+// grouped series). `allTextContents()` on the whole `.it` row therefore
+// picked up "Value (Run=1)▲▼" instead of "Value (Run=1)" — confirmed by
+// reading PlotLegend.tsx before touching anything: the glyphs are that
+// reorder control's own button text, not an unexpected surface. Rather than
+// a glyph regex (which would silently mask any FUTURE unrelated garbage the
+// same way), this reads each row's OWN direct child text nodes only —
+// robust to whatever else the row's DOM grows, since it structurally
+// excludes the button `<span>` (and the `<LegendSample>` swatch, which
+// renders no text) without depending on the buttons' exact glyphs at all.
 async function legendSeriesLabels(page: Page): Promise<string[]> {
-  return page.locator(".qzk-legend .it").filter({ hasText: /\(Run=/ }).allTextContents();
+  const rows = page.locator(".qzk-legend .it").filter({ hasText: /\(Run=/ });
+  return rows.evaluateAll((elements) =>
+    elements.map((el) => {
+      let text = "";
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? "";
+      }
+      return text.trim();
+    }),
+  );
 }
 
 function storeGroupKey(page: Page): Promise<number | null> {
