@@ -22,6 +22,49 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-08-18 — pinned at 905,104 after the bundle-diet pass that followed
+ *  four feature lanes (P1.6 import wizard, L metadata/collections, K derived
+ *  worksheets, J combine/split) landing the same day and leaving the eager
+ *  gate at 853.9 kB against the 854.0 kB pin — effectively zero headroom
+ *  with more frontend lanes already queued. Two real reductions, both
+ *  behavior-preserving (no new Suspense fallback becomes visible on any hot
+ *  path — plot rendering, the worksheet grid, and keyboard shortcuts stay
+ *  fully eager):
+ *  (1) `askAnnotationText()` and its store moved out of
+ *  `components/overlays/AnnotationTextDialog.tsx` into
+ *  `store/annotationTextDialog.ts` (the `store/quickPlotWithDialog.ts`
+ *  shape) — `components/Stage/useShapeDraw.ts` and `annotationShapeActions.ts`
+ *  (the always-eager Stage tree) only ever CALLED `askAnnotationText()`, never
+ *  rendered the dialog, but importing it from the component file dragged the
+ *  whole dialog — RichLabelInput -> SymbolPalette, the Omega symbol grid —
+ *  into the eager graph. The dialog itself is now a `lazyPanel()` in
+ *  AppOverlays.tsx, same as SplitDatasetDialog/QuickPlotWithDialog.
+ *  (2) `components/primitives/index.tsx`'s barrel re-exported `Card`,
+ *  `RichLabelInput`, `SymbolPalette`, `RangeSlider`, and
+ *  `BufferedNumberField` as STATIC re-exports alongside `Button`/`Select`/
+ *  `StatusDot`/etc. (which genuinely are eager — ConfirmDialog, ParamDialog,
+ *  Shell chrome, PlotLegend, PlotResultChips). Every actual consumer of
+ *  those five is a lazy Inspector card or workshop panel, but the static
+ *  re-export gave them the SAME reachability as `Button`, so Rollup bundled
+ *  all five into the eager `primitives` chunk regardless. They now import
+ *  straight from their own file (`"../primitives/Card"`, not `"../primitives"`)
+ *  and `index.tsx` no longer re-exports them — 21 call sites updated, 0
+ *  behavior change (same components, same props, just a different import
+ *  path). `RichText` stays barrel-exported: `PlotLegend.tsx` needs it via
+ *  that exact barrel and it IS eager.
+ *  Measured 865,104 B eager (was 874,393 B on main, 853.9 kB against the old
+ *  854.0 kB pin), down ~9.4 kB — real, but under the ~20 kB bar for relying
+ *  on found reductions alone with more lanes already queued behind this one.
+ *  Per this pass's explicit scope, the remaining gap to a healthy 25-40 kB
+ *  cushion is a deliberate, reviewed pin raise (not a silent bump): the four
+ *  lanes that exhausted the previous 40 kB slack band were legitimate
+ *  feature growth, not accidental bloat, and this ratchet exists to catch
+ *  the latter. New pin follows the file's own convention (measured + the
+ *  full 40 kB `SLACK`): 865,104 + 40,000 = 905,104, i.e. 883.9 kB — 39.1 kB
+ *  of headroom for the lanes already in flight. NEVER raise this again
+ *  without the same measure-first discipline — split a panel out or defer a
+ *  module instead.
+ *
  *  2026-08-16 — pinned at 874,461 after the E-c1 extraction pass, booked by
  *  the owner's E-c split ("address the eager bundle budget first" — the
  *  0.2 kB of remaining headroom was one feature away from red). Three
@@ -74,7 +117,7 @@ import { fileURLToPath } from "node:url";
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
  *  before first paint. */
-const EAGER_JS_BUDGET = 874_461;
+const EAGER_JS_BUDGET = 905_104;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

@@ -22,7 +22,8 @@ import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
 import { folderPathLabel } from "../../lib/foldertree";
 import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
-import { Card, Select } from "../primitives";
+import { Select } from "../primitives";
+import Card from "../primitives/Card";
 import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
 
 export default function Inspector() {

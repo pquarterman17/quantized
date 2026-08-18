@@ -6,7 +6,8 @@
 // palette and a live preview renders under the field while markup is present.
 
 import { useApp } from "../../store/useApp";
-import { Card, RichLabelInput } from "../primitives";
+import Card from "../primitives/Card";
+import RichLabelInput from "../primitives/RichLabelInput";
 
 function LabelRow({
   label,

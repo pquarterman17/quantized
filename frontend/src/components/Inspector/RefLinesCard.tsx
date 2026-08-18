@@ -7,7 +7,8 @@ import { useRef, useState } from "react";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { fmtNum } from "../../lib/format";
 import { useApp } from "../../store/useApp";
-import { Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
+import { Button, IconButton, NumberField, SegmentedControl } from "../primitives";
+import Card from "../primitives/Card";
 
 export default function RefLinesCard() {
   const refLines = useApp((s) => s.refLines);

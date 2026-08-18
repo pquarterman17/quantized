@@ -20,7 +20,8 @@ import { copyText } from "../../lib/clipboard";
 import { formatMetaValue } from "../../lib/metadata";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Button, Card } from "../primitives";
+import { Button } from "../primitives";
+import Card from "../primitives/Card";
 
 interface ResultsLogRecord {
   timestamp: string;

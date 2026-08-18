@@ -1,4 +1,4 @@
-import { BufferedNumberField } from "../../primitives";
+import BufferedNumberField from "../../primitives/BufferedNumberField";
 
 /** A labelled numeric field that retains valid in-progress typing while
  * reflecting externally replaced canonical-draft values. The buffer-commit

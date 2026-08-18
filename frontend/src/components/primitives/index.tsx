@@ -10,17 +10,16 @@ import type {
 } from "react";
 import clsx from "clsx";
 
-export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
-export { default as BufferedNumberField } from "./BufferedNumberField";
-export { default as Card, type CardProps } from "./Card";
+// RangeSlider, BufferedNumberField, Card, RichLabelInput, and SymbolPalette
+// deliberately do NOT re-export from here (bundle-size pass 2026-08-18):
+// every consumer of theirs is a lazy workshop/Inspector panel, but a static
+// re-export in this barrel creates a static import edge from THIS module —
+// which Button/Select/StatusDot/etc. below force into the eager chunk — to
+// those files, dragging them along regardless of who actually uses them.
+// Import them from their own file directly (e.g. `"../primitives/Card"`)
+// instead. `RichText` stays barrel-exported: `components/Stage/PlotLegend.tsx`
+// (always-eager Stage tree) needs it via this same barrel.
 export { default as RichText } from "./RichText";
-export { default as RichLabelInput } from "./RichLabelInput";
-export {
-  default as SymbolPalette,
-  insertLabelToken,
-  countUnescapedDollars,
-  type PaletteEntry,
-} from "./SymbolPalette";
 
 // ── Button ────────────────────────────────────────────────────────────────
 type ButtonVariant = "default" | "primary" | "ghost" | "danger";
