@@ -269,8 +269,46 @@ def test_probe_source_missing_and_offline_states(tmp_path: Path) -> None:
 
 def test_probe_source_invalid_path_never_raises() -> None:
     # A null byte cannot be resolved by realpath — must report, not raise.
+    # CI FOUND (2026-08-18): this is exactly the case that was Windows-red —
+    # `os.path.realpath` swallows the null on Linux/macOS (degrading through
+    # `OSError`, already caught below), but succeeds SILENTLY on Windows,
+    # deferring the actual `ValueError: embedded null character in path` to
+    # a later syscall this method's own `os.stat`/checksum step must catch
+    # too (see `desktop_source_probe.py`'s matching, deterministic pin).
     out = DesktopApi().probe_source("bad\x00path")
     assert out["state"] == "invalid"
+
+
+def test_probe_source_degrades_when_realpath_itself_raises_valueerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RED-FIRST, deterministic on every host (unlike the fixture above,
+    which only reproduces the bug on Windows): force `os.path.realpath` to
+    raise the EXACT Windows failure class and confirm the resolve step at
+    `probe_source`'s own entry point degrades to `invalid` rather than
+    propagating — pinning the realpath step, not just the stat step."""
+
+    def _boom(_path: str) -> str:
+        raise ValueError("embedded null character in path")
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.path.realpath", _boom)
+    out = DesktopApi().probe_source("bad\x00path")
+    assert out["state"] == "invalid"
+
+
+def test_grant_source_paths_degrades_when_realpath_itself_raises_valueerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same deterministic pin as above, for `grant_source_paths`'s own
+    realpath loop — a malformed candidate must be silently dropped
+    (never granted, never raised), not blow up the whole batch."""
+
+    def _boom(_path: str) -> str:
+        raise ValueError("embedded null character in path")
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.path.realpath", _boom)
+    out = DesktopApi().grant_source_paths(["bad\x00path"])
+    assert out["paths"] == []
 
 
 def test_grant_source_paths_wraps_grant_paths_exactly(tmp_path: Path) -> None:

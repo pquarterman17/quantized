@@ -106,6 +106,21 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
     (permission, a vanished volume, a race where the file disappears between
     the stat and the read) degrades to a reported state, matching every other
     bridge method's "report, don't raise into JS" rule.
+
+    ``ValueError`` is caught right alongside ``OSError`` at both syscalls
+    below (CI-found, Windows-only — this class is invisible on Linux/macOS,
+    which degrade the same input through ``OSError`` instead): a malformed
+    path (an embedded null byte, the concrete case; also a path over
+    Windows' ``MAX_PATH``) makes ``os.path.realpath`` at the call site
+    below succeed silently on Windows — it does no OS-level validation for
+    a not-yet-resolved path — while the ACTUAL syscalls here
+    (``os.stat``, then ``open`` for the checksum) DO validate, and raise
+    ``ValueError: embedded null character in path`` rather than any
+    ``OSError`` subtype. The realpath call itself is guarded the identical
+    way at its own two call sites (``desktop_bridge.py``'s ``probe_source``/
+    ``grant_source_paths``) — this docstring calls it out so the SAME
+    malformed-path failure mode is provably degraded at every syscall a
+    caller-supplied path reaches in this module, not just the first one.
     """
     try:
         st = os.stat(resolved)
@@ -116,7 +131,7 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
             "state": "missing" if volume_present(resolved) else "offline",
             "path": resolved,
         }
-    except OSError:
+    except (OSError, ValueError):
         return {"state": "invalid", "path": resolved}
     if not os.path.isfile(resolved):
         return {"state": "invalid", "path": resolved}
@@ -135,6 +150,6 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
             # and the open) — report what IS known rather than failing the
             # whole probe; the caller still learns size/mtime.
             out["state"] = "permission_denied"
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             out["checksum_error"] = str(exc)
     return out

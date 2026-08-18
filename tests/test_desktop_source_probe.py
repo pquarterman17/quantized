@@ -73,6 +73,53 @@ def test_probe_permission_denied_when_stat_itself_is_refused(
     assert out["state"] == "permission_denied"
 
 
+def test_probe_degrades_to_invalid_when_stat_raises_valueerror_not_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RED-FIRST (CI-found, Windows-only class): a malformed path (the
+    concrete case is an embedded null byte) makes `os.path.realpath`
+    succeed SILENTLY on Windows — it does no OS-level validation for a
+    not-yet-resolved path — while the actual `os.stat` syscall DOES
+    validate and raises `ValueError`, never any `OSError` subtype. This is
+    invisible on Linux/macOS (where the same input degrades through
+    `OSError` instead, so a plain `bad\\x00path` fixture never reproduces
+    it there) — monkeypatching `os.stat` to raise the EXACT Windows error
+    class reproduces the bug deterministically on every host."""
+    f = _file(tmp_path)
+
+    def _boom(path: str, *a: object, **kw: object) -> None:
+        if path == str(f):
+            raise ValueError("embedded null character in path")
+        return real_stat(path, *a, **kw)  # type: ignore[return-value]
+
+    real_stat = os.stat
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
+    out = probe_source_path(str(f), compute_checksum=False)
+    assert out["state"] == "invalid"
+
+
+def test_checksum_degrades_when_the_read_raises_valueerror_not_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same Windows asymmetry, at the checksum's `open(..., "rb")` syscall
+    instead of `os.stat` — stat already succeeded (state is `ok`), but the
+    read itself raises `ValueError` rather than `OSError`."""
+    f = _file(tmp_path)
+
+    real_open = open
+
+    def _boom(path: object, mode: str = "r", *a: object, **kw: object) -> object:
+        if mode == "rb":
+            raise ValueError("embedded null character in path")
+        return real_open(path, mode, *a, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("builtins.open", _boom)
+    out = probe_source_path(str(f), compute_checksum=True)
+    assert out["state"] == "ok"  # stat already succeeded — only the checksum degrades
+    assert "checksum" not in out
+    assert "embedded null" in out["checksum_error"]
+
+
 # --- checksum gating (the consent ruling) -------------------------------
 
 
