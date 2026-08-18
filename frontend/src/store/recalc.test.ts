@@ -165,3 +165,92 @@ describe("recalc engine (#1)", () => {
     expect(useApp.getState().status).toContain("recalc fit failed");
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K, K4: write-time bgRef cycle rejection.
+describe("applyCorrections — write-time cycle rejection (K4)", () => {
+  it("refuses (zero mutation, no API call) the A<->B bgRef cycle recalc.test.ts's traversal test documents as constructible today", async () => {
+    // b already subtracts a (an already-applied bgRef, same shape the
+    // lib/recalc.test.ts traversal-safety fixture uses).
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a", { raw: data(), corrections: {} }),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ],
+    });
+    const before = useApp.getState().datasets;
+    // Now try to make a subtract b — closes the loop.
+    const ok = await useApp.getState().applyCorrections("a", {}, { datasetId: "b", interp: "linear" });
+    expect(ok).toBe(false);
+    expect(useApp.getState().status).toMatch(/circular/);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toBe(before); // zero mutation
+  });
+
+  it("a non-cyclic bgRef still applies normally (no false positive)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data());
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a"), ds("b")],
+    });
+    const ok = await useApp.getState().applyCorrections("a", { yOff: 1 }, { datasetId: "b", interp: "linear" });
+    expect(ok).toBe(true);
+    expect(applyCorrectionsApi).toHaveBeenCalledTimes(1);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K, K5c/K5d: derived worksheets (L0.50) recalc
+// only through the async stale-marked scheduler, never synchronously; a
+// ds->sheet->fit chain settles in topological order inside one recalcNow.
+describe("derived worksheets (K5c/K5d)", () => {
+  it("a source edit marks a downstream derived worksheet stale but does NOT recompute it", () => {
+    const sheet = ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" } });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a"), sheet],
+    });
+    useApp.getState().setCellValue("a", 0, 0, 99);
+    expect(useApp.getState().staleDatasets).toEqual(["b"]);
+    // Not recomputed: the sheet's own data/derivedFrom are byte-identical.
+    expect(useApp.getState().datasets.find((d) => d.id === "b")).toEqual(sheet);
+  });
+
+  it("a ds->sheet->fit chain recomputes in topological order inside ONE recalcNow", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], R2: 1, yFit: [1, 2, 3] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" }, fitSpec: { model: "Linear" } }),
+      ],
+    });
+    useApp.getState().setCellValue("a", 0, 0, 99);
+    // Both the sheet AND its fit are already stale from the SAME touch.
+    expect(useApp.getState().staleDatasets).toEqual(["b"]);
+    expect(useApp.getState().staleFits).toEqual(["b"]);
+
+    await useApp.getState().recalcNow();
+    // The sheet has no pipeline executor yet (that's PR K slice 2) — it
+    // just clears (the honest no-op), same as any stale dataset with no
+    // corrections to redo — BEFORE its fit is recomputed.
+    expect(useApp.getState().staleDatasets).toEqual([]);
+    expect(fitModel).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().staleFits).toEqual([]);
+  });
+
+  it("staleDatasets/staleFits accumulation is one recordHistory per triggering gesture (K5e)", () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" }, fitSpec: { model: "Linear" } }),
+      ],
+    });
+    const before = useApp.getState().history.length;
+    useApp.getState().setCellValue("a", 0, 0, 99); // one gesture
+    // touchDataset's own stale-marking writes are NOT history entries (only
+    // the triggering cell edit is) — exactly one entry for the whole
+    // propagation (bgRef chain, sheet stale-marking, fit stale-marking).
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+});

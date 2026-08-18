@@ -3550,7 +3550,9 @@ describe("useApp computed columns (recompute)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
     useApp.getState().addFormula("d1", "S", "A + B");
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`
+    // at authoring time.
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
     expect(d.data.labels).toEqual(["A", "B", "S"]);
     expect(d.data.values).toEqual([
       [10, 20, 30],
