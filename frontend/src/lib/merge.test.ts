@@ -45,13 +45,16 @@ describe("mergeDatasets", () => {
   });
 });
 
-// P1.4 review P2-1: merge drops levels unless every merged dataset agrees.
-// RULING: per-channel, carry the level table iff EVERY merged dataset has an
-// IDENTICAL (same order) level table for that channel; on any mismatch, drop
-// that channel's levels (the codes would be incoherent -- e.g. code 0 means
-// "North" in one dataset and "East" in the other). Real conflict-resolution
-// (remapping codes to a union table) is booked under P1.5.
-describe("mergeDatasets — cat_levels (P1.4 review P2-1)", () => {
+// P1.4 review P2-1's placeholder ("carry the level table iff every merged
+// dataset has an IDENTICAL, same-order table; on any mismatch drop that
+// channel entirely") is superseded by P1.5's real conflict resolution below:
+// a channel whose datasets ALL carry SOME table for it (possibly differing)
+// merges onto a coherent UNION table, remapping every dataset's own codes
+// losslessly (lib/merge.ts's `planChannel`/`remapFor`). The one remaining
+// drop case is a channel with NO table at all on at least one dataset --
+// there is nothing to remap FROM (its raw values were never codes into
+// anything), so it still drops, unchanged from the P1.4 ruling.
+describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
   const catA: DataStruct = {
     time: [1, 2],
     values: [[10, 0], [20, 1]],
@@ -86,27 +89,34 @@ describe("mergeDatasets — cat_levels (P1.4 review P2-1)", () => {
     expect(m.cat_levels).toEqual({ 1: ["North", "South"] });
   });
 
-  it("drops that channel's levels when datasets disagree on the level strings", () => {
+  it("remaps codes onto a union table when datasets disagree on the level strings", () => {
+    // catA: North/South (codes 0/1, rows [0,1]). catBDiffering: East/West of
+    // its OWN (codes 1/0 = West/East, rows [1,0]). Union = catA's own order
+    // first, then catB's genuinely NEW strings appended: [North,South,East,West].
+    // catA needs no remap (its table already IS the union's prefix); catB's
+    // West(1)->3, East(0)->2.
     const m = mergeDatasets([catA, catBDiffering], ["a", "b"]);
-    expect(m.cat_levels?.[1]).toBeUndefined();
+    expect(m.cat_levels).toEqual({ 1: ["North", "South", "East", "West"] });
+    expect(m.values.map((row) => row[1])).toEqual([0, 1, 3, 2]);
   });
 
   it("drops that channel's levels when one dataset has no level table for it at all", () => {
+    // The one case that still drops: catBMissing's raw values were never
+    // codes into anything, so there is nothing to remap them FROM.
     const m = mergeDatasets([catA, catBMissing], ["a", "b"]);
     expect(m.cat_levels?.[1]).toBeUndefined();
   });
 
-  it("drops that channel's levels when the level ORDER differs (same strings, different order)", () => {
+  it("remaps a reordered-but-same-strings table onto the canonical (no-new-strings) union", () => {
+    // catBReordered has NO string catA lacks, so the union collapses back to
+    // catA's own table -- catB's codes get canonically relabeled onto it
+    // (North/South swapped -> remapped back to catA's own order).
     const m = mergeDatasets([catA, catBReordered], ["a", "b"]);
-    expect(m.cat_levels?.[1]).toBeUndefined();
+    expect(m.cat_levels).toEqual({ 1: ["North", "South"] });
+    expect(m.values.map((row) => row[1])).toEqual([0, 1, 0, 1]);
   });
 
-  it("omits cat_levels entirely when no channel survives agreement (additive, not a stray empty object)", () => {
-    const m = mergeDatasets([catA, catBDiffering], ["a", "b"]);
-    expect("cat_levels" in m).toBe(false);
-  });
-
-  it("carries only the AGREEING channel forward when a second categorical channel disagrees", () => {
+  it("merges multiple categorical channels independently -- one agrees, one needs a remap", () => {
     const wideA: DataStruct = {
       time: [1],
       values: [[0, 0]],
@@ -117,14 +127,17 @@ describe("mergeDatasets — cat_levels (P1.4 review P2-1)", () => {
     };
     const wideB: DataStruct = {
       time: [2],
-      values: [[1, 0]],
+      values: [[1, 1]], // Region=South(1); Lot=L1(1) under wideB's OWN reordered table
       labels: ["Region", "Lot"],
       units: ["", ""],
       metadata: {},
       cat_levels: { 0: ["North", "South"], 1: ["L2", "L1"] }, // channel 1 disagrees (order)
     };
     const m = mergeDatasets([wideA, wideB], ["a", "b"]);
-    expect(m.cat_levels).toEqual({ 0: ["North", "South"] });
+    expect(m.cat_levels).toEqual({ 0: ["North", "South"], 1: ["L1", "L2"] });
+    // channel 0 (agrees) unchanged: [0, 1]; channel 1 (remapped) L1(wideB code
+    // 1) -> canonical index 0: [0, 0].
+    expect(m.values).toEqual([[0, 0], [1, 0]]);
   });
 
   it("plain numeric datasets (no cat_levels anywhere) merge with no cat_levels key", () => {
