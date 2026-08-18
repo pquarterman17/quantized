@@ -6,8 +6,9 @@ import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
 import type { Dataset } from "../../lib/types";
 import { askConfirm } from "../overlays/ConfirmDialog";
-import { askParams } from "../overlays/ParamDialog";
+import { askParams, type ParamValues } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
+import { useToasts } from "../../store/toasts";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -145,6 +146,44 @@ describe("LibraryDetails — batch project-metadata edit (PR L, L0.56)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit metadata (2)…" }));
     await act(() => Promise.resolve());
     expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  // adversarial-review P2: selectedIds is captured BEFORE the async dialog
+  // resolves, so every named dataset can be deleted/trashed while it's open.
+  const openDialogAndAwait = (
+    picked: ParamValues,
+    duringDialog: () => void,
+  ): Promise<void> => {
+    let resolveDialog: (v: ParamValues | null) => void = () => {};
+    vi.mocked(askParams).mockReturnValue(new Promise((resolve) => { resolveDialog = resolve; }));
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit metadata (2)…" }));
+    act(duringDialog);
+    return act(async () => {
+      resolveDialog(picked);
+      await Promise.resolve();
+    });
+  };
+  const editPatch = { notes: "n", clearNotes: false, group: "", clearGroup: false, addTags: "", removeTags: "" };
+
+  it("every selected dataset is gone by confirm time — zero mutation, zero history, no success toast (adversarial-review P2)", async () => {
+    useApp.setState({ selectedIds: ["a", "b"] });
+    useToasts.setState({ toasts: [] });
+    await openDialogAndAwait(editPatch, () => useApp.setState({ datasets: [], selectedIds: [] }));
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useToasts.getState().toasts).toEqual([]);
+  });
+
+  it("a mixed case (1 live + 1 gone by confirm time) applies to the survivor only, ONE history entry, and the toast reports the LIVE count (1), not the stale selection size (2)", async () => {
+    useApp.setState({ selectedIds: ["a", "b"] });
+    useToasts.setState({ toasts: [] });
+    await openDialogAndAwait(editPatch, () =>
+      useApp.setState({ datasets: useApp.getState().datasets.filter((d) => d.id !== "b") }),
+    );
+    const s = useApp.getState();
+    expect(s.history).toHaveLength(1);
+    expect(s.datasets.find((d) => d.id === "a")?.notes).toBe("n");
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(["Updated metadata for 1 dataset(s)"]);
   });
 });
 

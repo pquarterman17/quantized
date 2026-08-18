@@ -65,8 +65,12 @@ export default function MultiSelectBar() {
     const tag = picked ? String(picked.tag).trim() : "";
     if (!tag) return;
     // PR L (L0.56): ONE undo entry for the whole batch, not one per dataset.
-    useApp.getState().batchEditDatasetMetadata([...selectedIds], { addTags: [tag] });
-    toast(`tagged ${n} dataset(s) "${tag}"`);
+    // `selectedIds`/`n` are the render-time selection, captured before this
+    // async dialog resolves — a dataset can vanish while it's open
+    // (adversarial-review P2), so the toast reports the store's returned
+    // LIVE-applied count, never the stale `n`, and stays silent at 0.
+    const updated = useApp.getState().batchEditDatasetMetadata([...selectedIds], { addTags: [tag] });
+    if (updated > 0) toast(`tagged ${updated} dataset(s) "${tag}"`);
   };
 
   const onExport = () => void exportDatasets([...selectedIds], `selection-${n}.csv`, "");

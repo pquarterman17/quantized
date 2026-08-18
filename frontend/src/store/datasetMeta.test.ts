@@ -72,16 +72,45 @@ describe("batchEditDatasetMetadata", () => {
     expect(s.datasets.find((d) => d.id === "d3")?.group).toBeUndefined();
   });
 
-  it("a no-op patch (nothing set) records no history and mutates nothing", () => {
+  it("a no-op patch (nothing set) records no history, mutates nothing, and returns 0", () => {
     const before = useApp.getState().datasets;
-    useApp.getState().batchEditDatasetMetadata(["d1", "d2"], {});
+    const returned = useApp.getState().batchEditDatasetMetadata(["d1", "d2"], {});
     const s = useApp.getState();
+    expect(returned).toBe(0);
     expect(s.datasets).toBe(before);
     expect(s.history).toHaveLength(0);
   });
 
   it("unknown ids are silently skipped, not thrown", () => {
     expect(() => useApp.getState().batchEditDatasetMetadata(["nope"], { notes: "x" })).not.toThrow();
+  });
+
+  it("every named id already gone (deleted/trashed since capture) — zero mutation, ZERO history entries, returns 0 (adversarial-review P2)", () => {
+    // The exact race LibraryDetails.tsx's batch-edit dialog is exposed to:
+    // selectedIds is captured before the async askParams() dialog, so every
+    // named dataset can be gone by the time the user confirms. A phantom
+    // "batch edit metadata" entry here would make Ctrl+Z silently no-op.
+    const before = useApp.getState().datasets;
+    const returned = useApp.getState().batchEditDatasetMetadata(["gone1", "gone2"], { notes: "x", group: "y", addTags: ["t"] });
+    const s = useApp.getState();
+    expect(returned).toBe(0);
+    expect(s.datasets).toBe(before); // referentially untouched
+    expect(s.history).toHaveLength(0);
+  });
+
+  it("a mixed selection (2 live + 1 already-gone) applies to only the live ones, ONE history entry, returns the live count", () => {
+    const returned = useApp.getState().batchEditDatasetMetadata(["d1", "gone", "d3"], { group: "batch group" });
+    const s = useApp.getState();
+    expect(returned).toBe(2);
+    expect(s.history).toHaveLength(1);
+    expect(s.datasets.find((d) => d.id === "d1")?.group).toBe("batch group");
+    expect(s.datasets.find((d) => d.id === "d3")?.group).toBe("batch group");
+    expect(s.datasets.find((d) => d.id === "d2")?.group).toBe("keep group"); // untouched
+  });
+
+  it("a live selection with an effective patch returns the applied count", () => {
+    const returned = useApp.getState().batchEditDatasetMetadata(["d1", "d3"], { notes: "batch note" });
+    expect(returned).toBe(2);
   });
 
   it("NEVER rewrites the imported raw data/header — project metadata only (frozen boundary, L0.56)", () => {

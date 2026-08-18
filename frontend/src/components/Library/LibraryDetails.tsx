@@ -180,10 +180,14 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   };
 
   // PR L (L0.56): shows the affected-item count IN the dialog title before
-  // apply, and again in the confirmation toast after — the count is never
-  // implicit. ONE store call for the whole selection (store/datasetMeta.ts's
+  // apply. ONE store call for the whole selection (store/datasetMeta.ts's
   // `batchEditDatasetMetadata` records ONE history entry), so Ctrl+Z undoes
-  // the entire batch in one step.
+  // the entire batch in one step. `ids` is captured before the async dialog,
+  // so every named dataset can be deleted/trashed while it's open
+  // (adversarial-review P2) — the confirmation toast reports the store's
+  // returned LIVE-applied count, never the stale `ids.length`, and stays
+  // silent entirely when that count is 0 (a no-op edit deserves no "it
+  // happened" confirmation).
   const onBatchEditMetadata = async (): Promise<void> => {
     const ids = useApp.getState().selectedIds;
     if (ids.length < 2) return;
@@ -196,8 +200,8 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
       { key: "removeTags", label: "Remove tags", type: "text", default: "", hint: "comma-separated" },
     ]);
     if (!picked) return;
-    useApp.getState().batchEditDatasetMetadata(ids, batchPatchFrom(picked));
-    toast(`Updated metadata for ${ids.length} dataset(s)`);
+    const updated = useApp.getState().batchEditDatasetMetadata(ids, batchPatchFrom(picked));
+    if (updated > 0) toast(`Updated metadata for ${updated} dataset(s)`);
   };
 
   return (

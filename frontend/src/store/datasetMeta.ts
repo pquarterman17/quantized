@@ -39,10 +39,17 @@ export interface DatasetMetaSlice {
   setDatasetGroup: (id: string, group: string) => void;
   /** Apply `patch` to every dataset in `ids` as ONE undo entry (L0.56 — never
    *  one recordHistory per dataset, so a batch edit undoes in a single
-   *  Ctrl+Z). A no-op patch (every field absent/empty) records no history and
-   *  mutates nothing. Unknown ids are silently skipped (no throw — the same
-   *  degrade-on-stale-id convention every other id-keyed action here uses). */
-  batchEditDatasetMetadata: (ids: readonly string[], patch: BatchMetadataPatch) => void;
+   *  Ctrl+Z). Returns the number of datasets ACTUALLY updated — the live
+   *  intersection of `ids` with the current dataset list, since a caller
+   *  (LibraryDetails.tsx's batch-edit dialog) captures `ids` before an async
+   *  confirm step during which every named dataset can be deleted/trashed.
+   *  A no-op patch (every field absent/empty) OR a selection with zero live
+   *  ids records NO history and mutates nothing — either would otherwise be
+   *  a phantom undo entry an Ctrl+Z silently no-ops on (adversarial-review
+   *  P2, pinned by datasetMeta.test.ts). Unknown ids among a live selection
+   *  are silently skipped (no throw — the same degrade-on-stale-id
+   *  convention every other id-keyed action here uses). */
+  batchEditDatasetMetadata: (ids: readonly string[], patch: BatchMetadataPatch) => number;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -97,8 +104,16 @@ export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMet
       const touchesNotes = patch.notes !== undefined;
       const touchesGroup = patch.group !== undefined;
       if (idSet.size === 0 || (!touchesNotes && !touchesGroup && addTags.length === 0 && removeTags.size === 0)) {
-        return;
+        return 0;
       }
+      // adversarial-review P2: `ids` is the selection at the moment the
+      // caller opened its edit dialog — by the time it confirms, every
+      // named dataset may already be gone (deleted/trashed mid-dialog). Bail
+      // BEFORE recordHistory in that case too, exactly like the empty-patch
+      // guard above — a zero-effect batch edit must never leave a phantom
+      // undo entry.
+      const liveCount = get().datasets.filter((d) => idSet.has(d.id)).length;
+      if (liveCount === 0) return 0;
       get().recordHistory("batch edit metadata"); // ONE entry for the whole selection (L0.56)
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -115,6 +130,7 @@ export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMet
           return next;
         }),
       }));
+      return liveCount;
     },
   };
 }

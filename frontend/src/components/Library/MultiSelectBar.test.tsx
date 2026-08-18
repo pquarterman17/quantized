@@ -10,7 +10,8 @@ import MultiSelectBar from "./MultiSelectBar";
 import { exportConsolidated } from "../../lib/api";
 import type { Dataset, DataStruct, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { askParams } from "../overlays/ParamDialog";
+import { useToasts } from "../../store/toasts";
+import { askParams, type ParamValues } from "../overlays/ParamDialog";
 
 vi.mock("../../lib/api", () => ({ exportConsolidated: vi.fn() }));
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -97,6 +98,21 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
     useApp.getState().undo();
     expect(useApp.getState().datasets.find((d) => d.id === "a")!.tags ?? []).toEqual([]);
     expect(useApp.getState().datasets.find((d) => d.id === "b")!.tags ?? []).toEqual([]);
+  });
+
+  it("Tag's toast reports the LIVE-applied count, not the stale selection size, when a selected dataset vanishes while the dialog is open (adversarial-review P2)", async () => {
+    useApp.setState({ history: [] });
+    useToasts.setState({ toasts: [] });
+    let resolveDialog: (v: ParamValues | null) => void = () => {};
+    vi.mocked(askParams).mockReturnValue(new Promise((resolve) => { resolveDialog = resolve; }));
+    render(<MultiSelectBar />);
+    fireEvent.click(screen.getByText("Tag"));
+    // "b" is removed (deleted/trashed) while the Tag dialog is still open.
+    useApp.setState({ datasets: useApp.getState().datasets.filter((d) => d.id !== "b") });
+    resolveDialog({ tag: "MvsH" });
+    await waitFor(() => expect(useApp.getState().history).toHaveLength(1));
+    expect(useApp.getState().datasets.find((d) => d.id === "a")!.tags).toEqual(["MvsH"]);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual(['tagged 1 dataset(s) "MvsH"']);
   });
 
   it("a blank tag entry does nothing", async () => {
