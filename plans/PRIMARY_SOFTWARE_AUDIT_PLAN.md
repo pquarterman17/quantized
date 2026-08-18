@@ -733,11 +733,31 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   checkbox UI (every preamble line is ALREADY retained by default, so an
   explicit per-line "mark as metadata" toggle would add UI weight with no
   behavioral gain — see the Day-1 scope note if that changes).
-- [x] Select the default legend-label row — `label_line`, above.
+- [x] Select the default legend-label row — `label_line`, above. At the
+  `io/import_preview.py` function level, an out-of-range `label_line`
+  silently no-ops (falls back to the header-derived name) — same
+  convention `header_line`/`units_line` always had, not a new gap (review
+  round P3(c) audit: doc claim now matches the actual, always-shared,
+  out-of-range behavior of all three line settings). The ONE path where
+  this convention is deliberately overridden is a saved-filter reapply
+  (`resolveImportFilter`, review round P1-2): there, a saved line landing
+  at-or-past the FRESH file's own detected data start is treated as a
+  signal the filter no longer fits this file at all, and the whole apply
+  is refused rather than silently no-op-ing into a wrong-looking import.
 - [x] Assign symmetric/asymmetric X and Y error roles explicitly —
   `ErrorRolesEditor`'s target/axis/side pickers, above.
 - [x] Suggest common adjacent/name patterns, confirm ambiguity —
   `inferErrorBindingsFromLabels`-seeded suggestions, editable before Import.
+  TWO-TIER (review round P1-1): a NAME-driven match (base-name, e.g. `dR`
+  -> `R`; or an explicit `x`-prefix) is always a real, pre-filled
+  suggestion. A POSITION-only match (nearest preceding column, no name
+  signal) is a real suggestion ONLY when single-candidate — nothing
+  plausible follows the error column, e.g. `Temp, M, err`; when another
+  non-error column ALSO follows (e.g. `T1, "T err", T2`, genuinely
+  ambiguous between the two), it demotes to unassigned instead of binding
+  to whichever happens to precede. Surgical to the wizard's own
+  `suggestErrorBindings` — `errorRoles.inferErrorBindingsFromLabels`
+  itself is untouched for its other callers.
 - [x] Assign categorical/text roles without losing raw strings — the P1.4
   `categorical` role (and `label`'s `text_columns` capture) now appear in
   the wizard's own `ROLE_OPTIONS` (previously P1.4 built the backend role
@@ -749,7 +769,19 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   `store/quickPlotTemplates.ts` was added.
 - [x] Live preview plus Apply/Cancel — preview was already live (debounced
   re-preview on every edit); Cancel is now an explicit button in addition
-  to the window's close control.
+  to the window's close control. NARROWED (review round P2-2): "live"
+  covers every OTHER settings edit (delimiter/header/units/data-start/
+  role/name), but a `label_line` override's RESOLVED text is not itself
+  reflected anywhere in the preview table's per-column name cell — that
+  cell is `c.name` (header-derived, or `column_names` if hand-edited),
+  the SAME field wired to `setColumnName`, so folding the label override
+  into it would silently conflate a derived suggestion with a user's own
+  typed name (and a later hand-edit would permanently clobber the
+  override display for no data reason). The raw-lines table already
+  highlights the selected `label_line` row with a "label line (legend
+  labels)" badge so the row itself is visible; showing its RESOLVED
+  per-column text needs its own display slot in `PreviewTable`/
+  `preview_import`, not a same-field overwrite. Booked to P1.6b.
 - [x] No guess can silently attach error to the wrong signal — pinned
   red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
