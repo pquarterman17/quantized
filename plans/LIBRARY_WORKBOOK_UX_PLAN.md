@@ -1123,9 +1123,118 @@ build, and focused interaction coverage where appropriate.
     (backend `io/` + thin route on the served modes; define the two-browser-
     tabs-one-backend story explicitly). (Booked 2026-08-14 — L0.47 previously
     had no owning slice.)
-10. [ ] **PR J — combined and split workbooks.** Implement explicit combine,
+10. [~] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
+    - [x] **slice 1 — combine/separate against the frozen dependency contract
+      (Claude, worktree agent, sprint Day-2):** implemented pending review, on
+      `claude/j-combine-split`. Store-only (no UI) — mirrors PR K slice 1's
+      scoping precedent (see that item's log). **Combine** (L0.32-L0.34):
+      `lib/workbookCombine.ts`'s pure `resolveCombineTargets` (expands a
+      selected whole workbook to every live member + individually-picked
+      worksheets, de-duplicated), `suggestCombinedWorkbookName` (longest
+      shared basename prefix, undefined below a 3-char floor — "when one is
+      clear"), and `dedupeWorksheetNames` (the `dedupeWindowTitle` "Name",
+      "Name (2)", … idiom, scoped to the incoming batch only — two unrelated
+      workbooks may legitimately share a worksheet name elsewhere);
+      `store/workbookCombine.ts`'s `combineWorkbooks(selection, name)` mints
+      ONE new workbook (`nextWorkbookId`) and reassigns the resolved
+      worksheets' `workbookId` (+ deduped display name) in one `set()`/one
+      `recordHistory`. Source path/importedAt provenance rides the dataset
+      object untouched — no reimport machinery is invoked (L0.33 stays PR
+      M's). Source workbooks are DELIBERATELY never deleted (even fully
+      drained) — the plan's documented memberless-but-alive state, so a
+      workbook-scoped Quick Plot template never dangles and PR M's
+      delete/prune contract is never triggered by this PR. Refuses (zero
+      mutation) on an empty selection or blank name. **Separate** (L0.51):
+      `lib/workbookSeparate.ts`'s `closeExclusiveDependents` — a fixpoint
+      closure over the SAME bgRef/derivedFrom edges `lib/recalc.ts`'s
+      `buildEdges` folds (re-derived rather than imported, since
+      `downstreamOf` answers "reachable" not "exclusively dependent" — a
+      dataset with an EXTRA dependency outside the moving set never joins,
+      pinned by a two-upstream-fields test) — and `computeSeparatePlan`,
+      which builds the affected-item preview by calling
+      `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy` TWICE (current
+      state, and a hypothetical post-separate state) and diffing each
+      figure/page/report/derived-worksheet's placement: **the key finding
+      this slice turned up is that no explicit "rewrite a source link" step
+      exists anywhere in this codebase** — every artifact kind (origin/
+      editable/publication figure, page, report) resolves its Library
+      placement FRESH from its source dataset(s)' CURRENT `workbookId` on
+      every hierarchy build (already true before this PR; FigureDocument/
+      FigureDoc/ReportEntry are all single-`datasetId`-only, so only Origin
+      figure families and multi-panel Pages can even span >1 worksheet), so
+      the ENTIRE commit mutation is "mint one workbook, reassign
+      `workbookId` on the moving dataset ids" — nothing else to touch, and
+      nothing that can drift out of sync with a stored link, because there
+      is no stored link. Preview/commit are two store actions
+      (`store/workbookSeparate.ts`): `previewSeparateWorksheets` computes and
+      opens a `SeparatePlan` (new `separatePreview` state field — transient,
+      added to `architecture.test.ts`'s HISTORY_EXCLUDED, mirroring
+      `splitDialogTargetId`); `commitSeparateWorksheets` REFUSES with zero
+      mutation unless a preview is open (preview-before-commit is a hard
+      gate, not just a UI convention) and re-validates every previewed
+      moving id is still live before applying (fails closed on a
+      preview/commit race, e.g. the worksheet got removed by something else
+      meanwhile) — one `recordHistory`/one `set()` on success. Both slices
+      composed into `useApp.ts` exactly like `workbookActions.ts` (2 import
+      lines + 2 extends-union words + 2 spread lines + one `loadWorkspace`
+      reset line for `separatePreview`; the 2818 pin is untouched, still
+      well under it). P1.4's `cat_levels` merge contract was checked and
+      found N/A: combine never merges worksheet ROW data into one sheet
+      (`lib/merge.ts`'s `mergeDatasets` is the feature that does that,
+      untouched here) — L0.34 keeps every combined worksheet a separate
+      child by design. Red-first throughout; every pin (collision
+      suffixing, the exclusive-vs-shared dependency split, the
+      preview-before-commit/staleness gate) mutation-tested by temporarily
+      breaking it and confirming the test catches it. Gates green: `tsc
+      --noEmit` clean, `eslint --max-warnings=0` clean on touched files,
+      full `vitest run` 495/495 files, 7338/7338 tests, `npm run build`
+      845.2 kB eager (8.8 kB under the 854.0 kB budget). **Deferred to a
+      later slice** (booked here, not silently dropped): the actual dialog
+      UI (name-prompt/prefix-suggestion for Combine, the affected-item
+      preview list for Separate) and Library context-menu wiring —
+      `store/workbookCombine.ts`/`store/workbookSeparate.ts` expose a
+      complete, independently-tested action contract for that UI to call
+      directly, same "NO UI, slice 2's job" scoping PR K slice 1 used;
+      L0.33's transactional multi-source reimport (PR M's machinery, per
+      this PR's brief); PR I's cross-instance transfer; Lane D2's
+      dependency-graph WRITES (this slice only READS `downstreamOf`-adjacent
+      structure via `closeExclusiveDependents`, never persists a graph).
+      **Slice-2 caveat (booked from the adversarial review, 2026-08-18):**
+      `previewSeparateWorksheets` mints `nextWorkbookId()` once per preview
+      OPEN — fine for today's static, open-once-per-gesture preview, but a
+      live-updating preview (re-running as the user tweaks the separate
+      selection) must NOT re-mint on every recompute/keystroke; mint once at
+      commit instead, or memoize the id across recomputes of the same open
+      preview. Booked as a slice-2 constraint, not built here.
+    - **Review round (2026-08-18, adversarial verdict SOUND-WITH-FIXES) —
+      P1/P2 fixed, same commit as slice 1's plan-doc entry:** P1 (probe-
+      proven): `combineWorkbooks`/`commitSeparateWorksheets` reassigned
+      `Dataset.workbookId` but left `folderId` untouched, breaking the
+      `lib/workbooks.ts:52-54`/`moveWorkbookToFolder` invariant ("folder
+      placement is owned by the WORKBOOK") and split-braining Folder view
+      (`lib/foldertree.ts`'s `folderDatasets`, read by `Library.tsx`/
+      `SmartFoldersSection.tsx`/`datasetRowMenu.ts`) against the workbook
+      tree. Fixed: combine's new workbook lands at the Library root, so
+      every moved worksheet's `folderId` is set to `undefined` UNCONDITIONALLY
+      (mirroring `moveWorkbookToFolder`'s own `folderId ?? undefined`);
+      separate's moving datasets (seed + closure-swept dependents, which can
+      carry a DIFFERENT drifted `folderId` than the seed) are all re-homed to
+      `SeparatePlan.newWorkbookFolderId` (the source workbook's folder).
+      Red-first: a dataset moved from a foldered workbook no longer
+      disappears from `folderDatasets(oldFolder)` (combine) and a
+      closure-swept dependent with a drifted `folderId` gets re-homed to
+      match the seed's new placement (separate) — both quoted red in the
+      session transcript, both mutation-tested by reverting the fix. P2
+      (should-fix): `closeExclusiveDependents`'s bgRef live-edge predicate
+      (`d.bgRef && d.corrections && d.raw`) had no test isolating each half —
+      the sole negative case dropped BOTH `corrections` and `raw` at once, so
+      a mutated predicate missing just `&& d.raw` (or just `&& d.corrections`)
+      still passed all 14 prior tests. Added two isolated cases; each was
+      proven red under its matching single-field mutation, then the
+      predicate was restored. P3 (booked): `previewSeparateWorksheets`'s
+      `nextWorkbookId()`-per-open caveat above.
 11. [~] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.

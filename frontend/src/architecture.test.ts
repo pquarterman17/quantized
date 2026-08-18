@@ -799,6 +799,13 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // split slice: dialog state
   splitDialogTargetId: "target dataset for split operation; UI dialog state, ephemeral",
 
+  // workbookSeparate slice (LIBRARY_WORKBOOK_UX_PLAN PR J, L0.51): the
+  // affected-item preview plan. Transient dialog state discarded on
+  // commit/cancel — never an edit itself (commitSeparateWorksheets is the
+  // actual undoable gesture, via the ordinary datasets/workbooks fields
+  // already in HistorySnapshot), same class as splitDialogTargetId above.
+  separatePreview: "Separate-worksheet affected-item preview; transient dialog state, discarded on commit/cancel, not an undoable edit",
+
   // toolwindows slice: window geometry (separate from persistent layout in plotWindows)
   toolWindowLayout: "transient tool window positions (unclear if persists, mark for review)",
 
