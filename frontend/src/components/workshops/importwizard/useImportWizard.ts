@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { ErrorBinding } from "../../../lib/errorRoles";
 import {
   importGuess,
   importParse,
@@ -18,9 +19,12 @@ import {
   deleteImportFilter,
 } from "../../../lib/api";
 import {
+  confirmedErrorBindings,
+  resolveImportFilter,
   withColumnName,
   withColumnUnit,
   withRole,
+  type WizardErrorRow,
 } from "../../../lib/importwizard";
 import type {
   ImportColumnRole,
@@ -31,6 +35,7 @@ import type {
 } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { useImportErrorRoles } from "./useImportErrorRoles";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
@@ -43,16 +48,22 @@ export interface ImportWizardState {
   preview: ImportPreviewResponse | null;
   filters: ImportFilterWire[];
   filtersBusy: boolean;
+  filterApplying: boolean;
   busy: boolean; // guess/preview round-trip in flight
   importing: boolean;
   error: string | null;
   imported: boolean; // one-shot success flag (view shows a done state)
+  /** P1.6 item 2: one row per `error`-role column, editable target/axis/side. */
+  errorRows: WizardErrorRow[];
   pickFile: (f: File) => Promise<void>;
   patchSettings: (patch: Partial<ImportSettingsWire>) => void;
   setColumnRole: (index: number, role: ImportColumnRole) => void;
   setColumnName: (index: number, name: string) => void;
   setColumnUnit: (index: number, unit: string) => void;
-  applyFilter: (name: string) => void;
+  setErrorTarget: (channel: number, target: number | null) => void;
+  setErrorAxis: (channel: number, axis: "x" | "y") => void;
+  setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
+  applyFilter: (name: string) => Promise<void>;
   saveAsFilter: (name: string, glob: string) => Promise<void>;
   removeFilter: (name: string) => Promise<void>;
   doImport: () => Promise<void>;
@@ -76,10 +87,13 @@ export function useImportWizard(): ImportWizardState {
   const [columns, setColumns] = useState<ImportPreviewColumn[]>([]);
   const [filters, setFilters] = useState<ImportFilterWire[]>([]);
   const [filtersBusy, setFiltersBusy] = useState(false);
+  const [filterApplying, setFilterApplying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
+  const { errorRows, setErrorTarget, setErrorAxis, setErrorSide, resetErrorRows } =
+    useImportErrorRoles(columns);
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -162,12 +176,33 @@ export function useImportWizard(): ImportWizardState {
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
   }
 
-  function applyFilter(name: string): void {
+  // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
+  // H-template semantics (quickPlotTemplates.resolveTemplate): re-preview
+  // the CURRENT file under the CANDIDATE filter's settings, resolve the
+  // saved column shape against what that produces, and refuse the WHOLE
+  // apply (current settings/preview untouched) rather than silently
+  // clobbering with a filter that no longer fits — never a partial apply.
+  async function applyFilter(name: string): Promise<void> {
     const filt = filters.find((f) => f.name === name);
-    if (!filt) return;
-    setImported(false);
-    setColumns([]); // the applied filter's settings may not match the current columns at all
-    setSettings({ ...filt.settings });
+    if (!filt || !text) return;
+    setFilterApplying(true);
+    try {
+      const fresh = await importPreview(text, filt.settings, PREVIEW_ROWS);
+      const resolution = resolveImportFilter(filt, fresh.columns);
+      if (!resolution.ok) {
+        toast(`can't apply filter "${filt.name}": ${resolution.reason}`, "danger");
+        return;
+      }
+      setImported(false);
+      setSettings({ ...filt.settings });
+      setPreview(fresh);
+      setColumns(fresh.columns);
+      setError(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "couldn't apply filter", "danger");
+    } finally {
+      setFilterApplying(false);
+    }
   }
 
   async function saveAsFilter(name: string, glob: string): Promise<void> {
@@ -200,7 +235,12 @@ export function useImportWizard(): ImportWizardState {
     try {
       const data = await importParse(text, settings);
       const id = `impwiz-${++_seq}`;
-      addDataset({ id, name: file.name, data });
+      // P1.6 item 2: only EXPLICITLY assigned error rows (target !== null)
+      // become Dataset.errorRoles — an unassigned suggestion contributes
+      // nothing, so a column the user never confirmed a target for imports
+      // as a plain, unbound channel rather than guessing one.
+      const errorRoles = confirmedErrorBindings(errorRows);
+      addDataset({ id, name: file.name, data, ...(errorRoles.length ? { errorRoles } : {}) });
       pushRecent(file.name, file.size);
       setStatus(`imported ${file.name} via Import wizard`);
       toast(`imported ${file.name}`, "ok");
@@ -222,6 +262,7 @@ export function useImportWizard(): ImportWizardState {
     setColumns([]);
     setError(null);
     setImported(false);
+    resetErrorRows();
   }
 
   // The view always renders `columns` (the optimistic overlay) as the column
@@ -239,15 +280,20 @@ export function useImportWizard(): ImportWizardState {
     preview: displayPreview,
     filters,
     filtersBusy,
+    filterApplying,
     busy,
     importing,
     error,
     imported,
+    errorRows,
     pickFile,
     patchSettings,
     setColumnRole,
     setColumnName,
     setColumnUnit,
+    setErrorTarget,
+    setErrorAxis,
+    setErrorSide,
     applyFilter,
     saveAsFilter,
     removeFilter,

@@ -36,6 +36,7 @@ const SETTINGS: ImportSettingsWire = {
   delimiter: "auto",
   header_line: 1,
   units_line: 2,
+  label_line: null,
   data_start_line: 3,
   column_names: ["Temp", "Moment"],
   roles: ["x", "y"],
@@ -47,6 +48,7 @@ const PREVIEW: ImportPreviewResponse = {
   delimiter: ",",
   header_line: 1,
   units_line: 2,
+  label_line: null,
   data_start_line: 3,
   columns: [
     { index: 0, name: "Temp", unit: "K", role: "x" },
@@ -55,6 +57,7 @@ const PREVIEW: ImportPreviewResponse = {
   rows: [[300, 0.0012]],
   n_data_rows: 1,
   n_preview_rows: 1,
+  comments: [],
 };
 
 const DS: DataStruct = {
@@ -153,6 +156,68 @@ describe("ImportWizardPanel", () => {
     await waitFor(() =>
       expect(saveImportFilterMock).toHaveBeenCalledWith("run1", "*.dat", SETTINGS),
     );
+  });
+
+  it("Cancel closes the wizard, leaving zero state behind on reopen (P1.6 item 5)", async () => {
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(useApp.getState().importWizardOpen).toBe(false);
+
+    // Reopen: ImportWizardPanel only mounts while importWizardOpen (AppOverlays.tsx),
+    // so a fresh render starts from nothing — no leftover file/preview.
+    useApp.setState({ importWizardOpen: true });
+    render(<ImportWizardPanel />);
+    expect(screen.getByText(/Pick a delimited text file/)).toBeInTheDocument();
+  });
+
+  it("shows the retained preamble as searchable metadata, not silently dropped (P1.6 item 3)", async () => {
+    importPreviewMock.mockResolvedValue({ ...PREVIEW, comments: ["# Sample: NbAu bilayer"] });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    expect(screen.getByText(/Sample: NbAu bilayer/)).toBeInTheDocument();
+  });
+
+  it("shows an editable label-line field that carries into the preview highlight", async () => {
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    // label_line 0 -- a raw line with no OTHER role in this fixture, so its
+    // highlight is attributable ONLY to the label-line edit below.
+    importPreviewMock.mockResolvedValue({ ...PREVIEW, label_line: 0 });
+
+    const field = screen.getByLabelText(/Label line/) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "0" } });
+    expect(field).toHaveValue("0");
+
+    // Wait on the OBSERVABLE state the edit produces (the highlighted label
+    // row once the re-preview lands), not on the mock call itself.
+    await waitFor(() =>
+      expect(screen.getByText("# header comment").closest("div")!.getAttribute("style")).toContain("background"),
+    );
+  });
+
+  it("shows the error-role editor once a column is marked 'error', with the auto-suggestion pre-filled (P1.6 item 2)", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+
+    // The error-role row seeds via an effect one tick after columns land —
+    // wait on its OWN presence (state), not a mock call.
+    await waitFor(() => expect(screen.getByLabelText("dMoment error target")).toBeInTheDocument());
+    expect(screen.getByLabelText("dMoment error target")).toHaveValue("0"); // "dMoment" -> "Moment", channel 0
+    expect(screen.getByText("(suggested)")).toBeInTheDocument();
   });
 
   it("lists saved filters and applies one to re-preview", async () => {

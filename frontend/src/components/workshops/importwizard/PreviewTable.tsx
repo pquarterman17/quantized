@@ -24,11 +24,13 @@ export default function PreviewTable({
   const rowBg = (i: number): string | undefined => {
     if (i === preview.header_line) return "var(--accent-soft)";
     if (i === preview.units_line) return "var(--capture-soft)";
+    if (i === preview.label_line) return "var(--border-soft)";
     return undefined;
   };
   const rowTitle = (i: number): string | undefined => {
     if (i === preview.header_line) return "header line";
     if (i === preview.units_line) return "units line";
+    if (i === preview.label_line) return "label line (legend labels)";
     if (i === preview.data_start_line) return "first data line";
     return undefined;
   };

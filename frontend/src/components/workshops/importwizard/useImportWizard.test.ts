@@ -31,6 +31,7 @@ const SETTINGS: ImportSettingsWire = {
   delimiter: "auto",
   header_line: 1,
   units_line: 2,
+  label_line: null,
   data_start_line: 3,
   column_names: ["Temp", "Moment"],
   roles: ["x", "y"],
@@ -42,6 +43,7 @@ const PREVIEW: ImportPreviewResponse = {
   delimiter: ",",
   header_line: 1,
   units_line: 2,
+  label_line: null,
   data_start_line: 3,
   columns: [
     { index: 0, name: "Temp", unit: "K", role: "x" },
@@ -50,6 +52,7 @@ const PREVIEW: ImportPreviewResponse = {
   rows: [[300, 0.0012]],
   n_data_rows: 1,
   n_preview_rows: 1,
+  comments: [],
 };
 
 const DS: DataStruct = {
@@ -148,6 +151,59 @@ describe("useImportWizard", () => {
     expect(result.current.imported).toBe(true);
   });
 
+  it("P1.6 item 2: attaches CONFIRMED error-role bindings (from the auto-suggestion) to the new dataset", async () => {
+    const errPreview: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "R", unit: "", role: "y" },
+        { index: 2, name: "dR", unit: "", role: "error" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(errPreview);
+    vi.mocked(importParse).mockResolvedValue(DS);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+    ]));
+
+    await act(async () => {
+      await result.current.doImport();
+    });
+
+    const ds = useApp.getState().datasets;
+    expect(ds[0].errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("P1.6 item 2: an UNASSIGNED error row never reaches Dataset.errorRoles — never a guessed default", async () => {
+    const ambiguous: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "err", unit: "", role: "error" }, // nothing precedes it — genuinely ambiguous
+        { index: 1, name: "M", unit: "", role: "y" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(ambiguous);
+    vi.mocked(importParse).mockResolvedValue(DS);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.errorRows).toEqual([
+      { channel: 0, label: "err", target: null, axis: "y", side: "both" },
+    ]));
+
+    await act(async () => {
+      await result.current.doImport();
+    });
+
+    const ds = useApp.getState().datasets;
+    expect(ds[0].errorRoles).toBeUndefined();
+  });
+
   it("surfaces a parse error (422) without adding a dataset", async () => {
     vi.mocked(importParse).mockRejectedValue(new Error("no y/error columns selected to import"));
     const { result } = renderHook(() => useImportWizard());
@@ -192,8 +248,34 @@ describe("useImportWizard", () => {
     });
     await waitFor(() => expect(result.current.settings).not.toBeNull());
 
-    act(() => result.current.applyFilter("Messy"));
+    await act(async () => {
+      await result.current.applyFilter("Messy");
+    });
     expect(result.current.settings).toEqual(SETTINGS);
+    expect(result.current.preview).toEqual(PREVIEW);
+  });
+
+  it("refuses to apply a saved filter whose column shape no longer matches, leaving current settings untouched (P1.6 item 4)", async () => {
+    const stale: ImportFilterWire = {
+      name: "Stale",
+      glob: "*.dat",
+      settings: { ...SETTINGS, column_names: ["Field", "Moment"] }, // "Field" no longer matches
+      updated: "t",
+    };
+    vi.mocked(listImportFilters).mockResolvedValue([stale]);
+    vi.mocked(importGuess).mockResolvedValue({ ...SETTINGS, delimiter: "auto", roles: ["y", "y"] });
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.filters).toEqual([stale]));
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.settings).not.toBeNull());
+    const settingsBefore = result.current.settings;
+
+    await act(async () => {
+      await result.current.applyFilter("Stale");
+    });
+    expect(result.current.settings).toEqual(settingsBefore); // never partially applied
   });
 
   it("removes a saved filter", async () => {
