@@ -179,16 +179,23 @@ export function useImportWizard(): ImportWizardState {
   // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
   // H-template semantics (quickPlotTemplates.resolveTemplate): re-preview
   // the CURRENT file under the CANDIDATE filter's settings, resolve the
-  // saved column shape against what that produces, and refuse the WHOLE
-  // apply (current settings/preview untouched) rather than silently
-  // clobbering with a filter that no longer fits — never a partial apply.
+  // saved column shape AND line positions against what that produces (plus
+  // an INDEPENDENT guess of where this file's data actually starts, review
+  // round P1-2 — a saved header/units/label line landing at-or-past that
+  // point means it's reading a DIFFERENT file's layout onto this one), and
+  // refuse the WHOLE apply (current settings/preview untouched) rather than
+  // silently clobbering with a filter that no longer fits — never a partial
+  // apply.
   async function applyFilter(name: string): Promise<void> {
     const filt = filters.find((f) => f.name === name);
     if (!filt || !text) return;
     setFilterApplying(true);
     try {
-      const fresh = await importPreview(text, filt.settings, PREVIEW_ROWS);
-      const resolution = resolveImportFilter(filt, fresh.columns);
+      const [fresh, naturalGuess] = await Promise.all([
+        importPreview(text, filt.settings, PREVIEW_ROWS),
+        importGuess(text),
+      ]);
+      const resolution = resolveImportFilter(filt, fresh, naturalGuess.data_start_line);
       if (!resolution.ok) {
         toast(`can't apply filter "${filt.name}": ${resolution.reason}`, "danger");
         return;

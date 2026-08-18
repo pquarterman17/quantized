@@ -2,11 +2,12 @@
 // separate from the state hook so the array-alignment / label-composition
 // logic is unit-testable without React.
 
-import { inferErrorBindingsFromLabels, type ErrorBinding } from "./errorRoles";
+import { classifyErrorLabel, inferErrorBindingsFromLabels, type ErrorBinding } from "./errorRoles";
 import type {
   ImportColumnRole,
   ImportFilterWire,
   ImportPreviewColumn,
+  ImportPreviewResponse,
   ImportSettingsWire,
 } from "./types";
 
@@ -155,19 +156,72 @@ export function finalChannelOrder(columns: readonly ImportPreviewColumn[]): Wiza
   }));
 }
 
+/** Mirrors `errorRoles.ts`'s private `norm` exactly (kept in sync by hand):
+ *  needed here to independently re-derive WHICH inference rule fired for a
+ *  binding without reaching into `inferErrorBindingsFromLabels`'s internals
+ *  or changing that shared function. */
+function normalizeLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/[\s_]+/g, "");
+}
+
+/** True when `labels[errorChannel]` matched via `inferErrorBindingsFromLabels`'
+ *  RULE 1 (base-name match, e.g. `dR` -> `R`) or RULE 2 (explicit `x` prefix)
+ *  -- a real NAME-driven signal. False means the binding (if any) can only
+ *  have come from RULE 3 (nearest preceding column, pure position). */
+function isNameDrivenMatch(labels: readonly string[], errorChannel: number): boolean {
+  const info = classifyErrorLabel(labels[errorChannel]);
+  if (!info) return false;
+  if (info.axis === "x") return true; // rule 2
+  if (!info.base) return false;
+  const isErrorLabel = labels.map((l) => classifyErrorLabel(l) !== null);
+  return labels.some((l, i) => !isErrorLabel[i] && normalizeLabel(l) === info.base); // rule 1
+}
+
+/** True when some OTHER, non-error channel sits AFTER `channel` in `order`
+ *  -- the wizard's own (stricter) bar for "is a pure position-only pairing
+ *  actually unambiguous", on top of `inferErrorBindingsFromLabels`' own bar
+ *  (which only asks "is there anything valid preceding"). A following
+ *  ERROR-role channel doesn't count -- it isn't itself a plausible target. */
+function hasFollowingCandidate(
+  order: readonly WizardChannel[],
+  channel: number,
+  errorChannels: ReadonlySet<number>,
+): boolean {
+  return order.some((c) => c.channel > channel && !errorChannels.has(c.channel));
+}
+
 /** Suggested error-role bindings for the CURRENT preview (P1.6 item 2): runs
  *  the SAME name-based inference the rest of the app uses
  *  (`errorRoles.inferErrorBindingsFromLabels`) against the final channel
  *  labels, so `channel`/`target` already mean what `Dataset.errorRoles`
- *  needs. A column whose pairing is genuinely ambiguous is simply ABSENT
- *  from the result (never guessed) -- "no guess can silently attach error
- *  to the wrong signal": these are SUGGESTIONS the wizard pre-fills into an
- *  editable picker, never applied without the user seeing and confirming
- *  them (Import itself is that confirmation, same as every other wizard
- *  field). */
+ *  needs -- THEN (review round P1-1) demotes a MULTI-CANDIDATE, POSITION-
+ *  ONLY (rule 3) pairing back to "no suggestion": rule 3 alone has no
+ *  forward awareness at all, so it always binds to whatever precedes even
+ *  when an equally plausible column also FOLLOWS the error column (e.g.
+ *  `T1, "T err", T2` bound "T err" to T1 unconditionally, contradicting the
+ *  "ambiguous -> ABSENT" claim below). A rule 1 (base-name) or rule 2
+ *  (explicit x-prefix) match is NEVER demoted -- those are real name
+ *  signals, not positional guesses. A rule-3 pairing with NOTHING plausible
+ *  following (value columns only precede the error column) is still a
+ *  single-candidate case and stays a real suggestion. This demotion is
+ *  SURGICAL to this wizard-seeding layer -- `inferErrorBindingsFromLabels`
+ *  itself is untouched and every other consumer keeps its existing,
+ *  broader "any preceding column" bar.
+ *
+ *  Whatever survives: a column whose pairing is genuinely ambiguous is
+ *  simply ABSENT from the result (never guessed) -- "no guess can silently
+ *  attach error to the wrong signal": these are SUGGESTIONS the wizard
+ *  pre-fills into an editable picker, never applied without the user
+ *  seeing and confirming them (Import itself is that confirmation, same as
+ *  every other wizard field). */
 export function suggestErrorBindings(columns: readonly ImportPreviewColumn[]): ErrorBinding[] {
   const order = finalChannelOrder(columns);
-  return inferErrorBindingsFromLabels(order.map((c) => c.label));
+  const labels = order.map((c) => c.label);
+  const raw = inferErrorBindingsFromLabels(labels);
+  const errorChannels = new Set(errorRoleChannels(columns).map((c) => c.channel));
+  return raw.filter(
+    (b) => isNameDrivenMatch(labels, b.channel) || !hasFollowingCandidate(order, b.channel, errorChannels),
+  );
 }
 
 /** The channels sourced from an `error`-role column, in final-channel order —
@@ -246,19 +300,57 @@ function baseName(composed: string): string {
   return composed.replace(/\s*\([^()]*\)\s*$/, "").trim();
 }
 
-/** Can `filter`'s saved settings be reapplied cleanly against `freshColumns`
- *  (a live re-preview of the CURRENT file under the filter's OWN settings)?
- *  Refuses the WHOLE apply (never a partial one -- the current preview
- *  stays exactly as it was) when: the saved column COUNT no longer matches
- *  (a shorter/longer `roles`/`column_names` array would otherwise silently
- *  truncate or pad server-side); or any saved column NAME no longer names
- *  the SAME position, named individually in the refusal. A filter that
- *  never recorded names (a bare delimiter/line-position filter) has nothing
- *  to name-check and passes on count alone. */
+/** Split one raw line the same way the resolved delimiter would (a
+ *  lightweight mirror of the backend's whitespace-mode special case; exact
+ *  parity isn't required for this heuristic). */
+function splitRawLine(row: string, delimiter: string): string[] {
+  return delimiter === " " ? row.trim().split(/\s+/) : row.split(delimiter);
+}
+
+/** True when every non-blank cell of `row` parses as a finite number --
+ *  i.e. the row looks like a DATA row, not a legend-label/header/units row.
+ *  A blank row (nothing to judge) is NOT "fully numeric". */
+function looksFullyNumeric(row: string, delimiter: string): boolean {
+  const cells = splitRawLine(row, delimiter)
+    .map((c) => c.trim())
+    .filter((c) => c !== "");
+  return cells.length > 0 && cells.every((c) => Number.isFinite(Number(c)));
+}
+
+/** Can `filter`'s saved settings be reapplied cleanly against `fresh` (a
+ *  live re-preview of the CURRENT file under the filter's OWN settings) and
+ *  `naturalDataStart` (an INDEPENDENT guess of where THIS file's data
+ *  actually starts, from `guess_settings`/`importGuess` on its raw text,
+ *  ignoring the candidate filter entirely)? Refuses the WHOLE apply (never
+ *  a partial one -- the current preview stays exactly as it was) when:
+ *
+ *  - the saved column COUNT no longer matches (a shorter/longer
+ *    `roles`/`column_names` array would otherwise silently truncate or pad
+ *    server-side);
+ *  - any saved column NAME no longer names the SAME position, named
+ *    individually in the refusal;
+ *  - LINE-POSITION SANITY (review round P1-2): a saved `header_line`/
+ *    `units_line`/`label_line` lands AT OR PAST where THIS file's data
+ *    actually starts -- that line is real DATA here, not a header/units/
+ *    label row, so applying it would silently swallow a data row as
+ *    metadata (the two-file probe: fileA's `label_line`/`data_start_line`
+ *    reapplied to fileB, which lacks fileA's extra label row, consumed
+ *    fileB's first real data row as the "label" instead of importing it);
+ *  - or (the same failure mode from the other direction) the saved
+ *    `label_line` row, read from THIS file, itself parses as fully numeric
+ *    -- unambiguously data-shaped, not a legend-label row, even in the
+ *    rare case the data-start heuristic alone didn't catch it.
+ *
+ *  A filter that never recorded names (a bare delimiter/line-position
+ *  filter) has nothing to name-check and passes THAT check on count alone
+ *  -- but still goes through the line-position checks above, since those
+ *  don't depend on names at all. */
 export function resolveImportFilter(
   filter: ImportFilterWire,
-  freshColumns: readonly ImportPreviewColumn[],
+  fresh: ImportPreviewResponse,
+  naturalDataStart: number,
 ): ImportFilterResolution {
+  const freshColumns = fresh.columns;
   const savedNames = filter.settings.column_names;
   const savedRoles = filter.settings.roles;
   const savedCount = savedNames?.length ?? savedRoles?.length ?? null;
@@ -269,6 +361,33 @@ export function resolveImportFilter(
       reason: `saved for ${savedCount} column${savedCount === 1 ? "" : "s"}, this file has ${freshColumns.length} column${freshColumns.length === 1 ? "" : "s"}`,
     };
   }
+
+  const linePositions: [string, number | null][] = [
+    ["header", filter.settings.header_line],
+    ["units", filter.settings.units_line],
+    ["label", filter.settings.label_line],
+  ];
+  for (const [label, line] of linePositions) {
+    if (line !== null && line >= naturalDataStart) {
+      return {
+        ok: false,
+        unmatched: [],
+        reason: `saved ${label} line (line ${line}) appears to be data in this file (data starts at line ${naturalDataStart})`,
+      };
+    }
+  }
+
+  const labelLine = filter.settings.label_line;
+  if (labelLine !== null && labelLine >= 0 && labelLine < fresh.raw_lines.length) {
+    if (looksFullyNumeric(fresh.raw_lines[labelLine], fresh.delimiter)) {
+      return {
+        ok: false,
+        unmatched: [],
+        reason: `saved label line (line ${labelLine}) parses as numeric data in this file, not a legend-label row`,
+      };
+    }
+  }
+
   if (!savedNames) return { ok: true };
 
   const unmatched: string[] = [];

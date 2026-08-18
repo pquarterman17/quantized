@@ -204,6 +204,32 @@ describe("useImportWizard", () => {
     expect(ds[0].errorRoles).toBeUndefined();
   });
 
+  it("P1.6 review P1-1: a MULTI-CANDIDATE position-only suggestion (T1, 'T err', T2) seeds unassigned and never reaches Dataset.errorRoles unconfirmed", async () => {
+    const multiCandidate: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "T1", unit: "", role: "y" },
+        { index: 1, name: "T err", unit: "", role: "error" },
+        { index: 2, name: "T2", unit: "", role: "y" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(multiCandidate);
+    vi.mocked(importParse).mockResolvedValue(DS);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "T err", target: null, axis: "y", side: "both" },
+    ]));
+
+    await act(async () => {
+      await result.current.doImport();
+    });
+
+    expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
+  });
+
   it("surfaces a parse error (422) without adding a dataset", async () => {
     vi.mocked(importParse).mockRejectedValue(new Error("no y/error columns selected to import"));
     const { result } = renderHook(() => useImportWizard());
@@ -274,6 +300,54 @@ describe("useImportWizard", () => {
 
     await act(async () => {
       await result.current.applyFilter("Stale");
+    });
+    expect(result.current.settings).toEqual(settingsBefore); // never partially applied
+  });
+
+  it("P1.6 review P1-2: refuses a filter whose saved label_line lands on real data in THIS file, leaving settings untouched", async () => {
+    // fileB naturally starts data at line 1 (no extra label row) -- fileA's
+    // saved filter expects a label row at line 1 and data starting at 2.
+    vi.mocked(importGuess).mockResolvedValue({
+      ...SETTINGS,
+      header_line: 0,
+      units_line: null,
+      label_line: null,
+      data_start_line: 1,
+      roles: ["x", "y"],
+    });
+    const fileAFilter: ImportFilterWire = {
+      name: "FileA shape",
+      glob: "*.dat",
+      settings: {
+        ...SETTINGS,
+        header_line: 0,
+        units_line: null,
+        label_line: 1,
+        data_start_line: 2,
+        column_names: null,
+        roles: ["x", "y"],
+      },
+      updated: "t",
+    };
+    vi.mocked(listImportFilters).mockResolvedValue([fileAFilter]);
+    vi.mocked(importPreview).mockResolvedValue({
+      ...PREVIEW,
+      raw_lines: ["Temp,Moment", "1,10", "2,20"],
+      header_line: 0,
+      units_line: null,
+      label_line: 1,
+      data_start_line: 2,
+    });
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.filters).toEqual([fileAFilter]));
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.settings).not.toBeNull());
+    const settingsBefore = result.current.settings;
+
+    await act(async () => {
+      await result.current.applyFilter("FileA shape");
     });
     expect(result.current.settings).toEqual(settingsBefore); // never partially applied
   });
