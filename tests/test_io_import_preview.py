@@ -196,3 +196,92 @@ def test_categorical_import_round_trips_through_dict() -> None:
     back = DataStruct.from_dict(ds.to_dict())
     assert back.cat_levels == ds.cat_levels
     assert back.labels == ds.labels
+
+
+# --- P1.6: legend-label row + retained preamble ----------------------------
+
+_MULTI_ROW_TEXT = "Temp,M1,M2\n(K),(emu),(emu)\n,NbAu-1,NbAu-2\n1,10,11\n2,20,21\n"
+
+
+def test_label_line_overrides_channel_labels() -> None:
+    """RED before this fix: ImportSettings had no label_line field at all --
+    the header row was the only label source, so a 'name'-style legend row
+    (a common instrument-export shape, see io/delimited.py's label_rows)
+    could not drive the DataStruct's channel labels through the wizard."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert ds.labels == ("NbAu-1", "NbAu-2")
+    assert ds.units == ("emu", "emu")  # units_line is untouched by label_line
+
+
+def test_label_line_absent_leaves_header_derived_labels_unchanged() -> None:
+    settings = ImportSettings(header_line=0, units_line=1, data_start_line=3, roles=["x", "y", "y"])
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert ds.labels == ("M1", "M2")
+
+
+def test_label_line_blank_cell_falls_back_to_header_name() -> None:
+    """A blank legend-label cell for one column doesn't blank that label --
+    it falls back to the header-derived name, same as any other missing
+    override."""
+    text = "Temp,M1,M2\n,NbAu-1,\n1,10,11\n2,20,21\n"
+    settings = ImportSettings(header_line=0, label_line=1, data_start_line=2, roles=["x", "y", "y"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("NbAu-1", "M2")
+
+
+def test_label_line_applies_to_categorical_channels_too() -> None:
+    text = "Temp,M1,Sample\n,NbAu-1,\n1,10,A\n2,20,B\n"
+    settings = ImportSettings(
+        header_line=0, label_line=1, data_start_line=2, roles=["x", "y", "categorical"]
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("NbAu-1", "Sample")  # blank override cell -> header name
+
+
+def test_preview_reports_label_line() -> None:
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert pv["label_line"] == 2
+
+
+_PREAMBLE_TEXT = "# Sample: NbAu bilayer\n# Operator: pq\nTemp,Moment\n1,10\n2,20\n"
+
+
+def test_preamble_lines_retained_as_comments_metadata() -> None:
+    """RED before this fix: every line above data_start_line NOT consumed as
+    header/units was silently dropped -- no trace anywhere in the resulting
+    DataStruct, unlike io/delimited.py's silent-import path, which has always
+    kept this preamble in metadata['comments']."""
+    settings = ImportSettings(header_line=2, data_start_line=3, roles=["x", "y"])
+    ds = parse_import(_PREAMBLE_TEXT, settings)
+    assert ds.metadata["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
+
+
+def test_preview_reports_comments_too() -> None:
+    settings = ImportSettings(header_line=2, data_start_line=3, roles=["x", "y"])
+    pv = preview_import(_PREAMBLE_TEXT, settings)
+    assert pv["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
+
+
+def test_no_comments_key_when_preamble_is_fully_consumed() -> None:
+    """Every preamble line becomes header/units/label -- nothing left over,
+    so no comments key at all (matches io/delimited.py's omit-when-absent
+    convention)."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert "comments" not in ds.metadata
+
+
+def test_comments_survive_alongside_label_rows_and_text_columns() -> None:
+    text = "# Instrument log\nTemp,M1,Sample\n1,10,A\n2,20,B\n"
+    settings = ImportSettings(header_line=1, data_start_line=2, roles=["x", "y", "label"])
+    ds = parse_import(text, settings)
+    assert ds.metadata["comments"] == ["# Instrument log"]
+    assert ds.metadata["text_columns"] == {"Sample": ["A", "B"]}
