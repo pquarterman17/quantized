@@ -57,6 +57,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      quickPlotTemplates: [],
       librarySelection: null,
       workbookLastChild: {},
       expandedWorkbookIds: [],
@@ -483,6 +484,7 @@ describe("mergeWorkspace never imports the LIBRARY_WORKBOOK_UX_PLAN PR E2 sessio
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      quickPlotTemplates: [],
       // "Poisoned" values a merge that DID read these would leak/react to.
       librarySelection: { kind: "folder", id: "poison" },
       workbookLastChild: { poison: "worksheet:x" },

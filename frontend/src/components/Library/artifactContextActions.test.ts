@@ -95,3 +95,29 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
     expect(action(items, "Delete").title).toBe("recovered Origin figures are managed by their source import");
   });
 });
+
+describe("artifact.saveAsTemplate — PR H5c honest disabled stub", () => {
+  it("appears disabled on an editable-figure node, pointing at the builder", () => {
+    const node = {
+      key: "editable-figure:fig1", entityId: "fig1", kind: "editable-figure", name: "Moment sweep",
+      parentKey: null, depth: 0, children: [],
+      source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+      entity: { id: "fig1", name: "Moment sweep" },
+    } as unknown as Extract<ArtifactNode, { kind: "editable-figure" }>;
+
+    const item = action(buildArtifactMenu(node), "Save as Template…");
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe("save a Quick Plot template from the Quick Figure Builder instead");
+  });
+
+  it("is absent entirely (not merely disabled) on a non-editable-figure artifact", () => {
+    const node = {
+      key: "origin-figure:o1", entityId: "o1", kind: "origin-figure", name: "Graph1",
+      parentKey: null, depth: 0, children: [],
+      source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+      entity: { id: "o1", datasetId: null },
+    } as unknown as ArtifactNode;
+    const items = buildArtifactMenu(node);
+    expect(items.some((i) => "label" in i && i.label === "Save as Template…")).toBe(false);
+  });
+});

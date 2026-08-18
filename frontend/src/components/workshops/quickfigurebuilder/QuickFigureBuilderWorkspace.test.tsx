@@ -1,9 +1,12 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
+import { askParams } from "../../overlays/ParamDialog";
 import { useApp } from "../../../store/useApp";
 import QuickFigureBuilderWorkspace from "./QuickFigureBuilderWorkspace";
+
+vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
 
 const dataset: Dataset = {
   id: "d1",
@@ -303,5 +306,68 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     render(<QuickFigureBuilderWorkspace />);
     expect(screen.getByRole("heading", { name: "Worksheet unavailable" })).toBeInTheDocument();
     expect(screen.getByText("The source worksheet was removed. Nothing was changed.")).toBeInTheDocument();
+  });
+});
+
+describe("QuickFigureBuilderWorkspace — Save Quick Plot Template… (PR H, L0.31)", () => {
+  beforeEach(() => {
+    vi.mocked(askParams).mockReset();
+    useApp.setState({ quickPlotTemplates: [] });
+  });
+
+  it("is gated on the SAME canCreateQuickFigure predicate as Create Editable Figure", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    const saveBtn = screen.getByRole("button", { name: "Save Quick Plot Template…" });
+    expect(saveBtn).not.toBeDisabled();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for signal" }), { target: { value: "ignore" } });
+    expect(saveBtn).toBeDisabled();
+    expect(saveBtn).toHaveAttribute("title", "Assign at least one Y series to create a figure");
+  });
+
+  it("prompts for a name and defaults to the schema scope for an unfoldered dataset (no workbook)", async () => {
+    vi.mocked(askParams).mockResolvedValue({ name: "My Template" } as never);
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "Save Quick Plot Template…" }));
+    await act(async () => {});
+    expect(askParams).toHaveBeenCalledOnce();
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    // No workbook -> only the name field, no scope select (nothing to scope to).
+    expect(fields.some((f) => f.key === "scope")).toBe(false);
+
+    expect(useApp.getState().quickPlotTemplates).toHaveLength(1);
+    expect(useApp.getState().quickPlotTemplates[0].name).toBe("My Template");
+    expect(useApp.getState().quickPlotTemplates[0].scope).toEqual({ kind: "schema" });
+  });
+
+  it("offers the workbook scope only when the worksheet belongs to a workbook, and honors the pick", async () => {
+    useApp.setState({ datasets: [{ ...dataset, workbookId: "wb-1" }] });
+    vi.mocked(askParams).mockResolvedValue({ name: "Scoped", scope: "This workbook only" } as never);
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "Save Quick Plot Template…" }));
+    await act(async () => {});
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields.find((f) => f.key === "scope")?.options).toEqual([
+      "This data type and schema",
+      "This workbook only",
+    ]);
+    expect(useApp.getState().quickPlotTemplates[0].scope).toEqual({ kind: "workbook", workbookId: "wb-1" });
+  });
+
+  it("does nothing on cancel (askParams resolves null)", async () => {
+    vi.mocked(askParams).mockResolvedValue(null);
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "Save Quick Plot Template…" }));
+    await act(async () => {});
+    expect(useApp.getState().quickPlotTemplates).toEqual([]);
+  });
+
+  it("never creates a figure or window — saving a template is not creating a plot", async () => {
+    vi.mocked(askParams).mockResolvedValue({ name: "T" } as never);
+    render(<QuickFigureBuilderWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "Save Quick Plot Template…" }));
+    await act(async () => {});
+    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().plotWindows).toEqual([]);
   });
 });
