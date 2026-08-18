@@ -204,6 +204,88 @@ def test_path_status_reports_missing_outside_a_recognizable_volume() -> None:
     assert DesktopApi().path_status("/qz-no-such-dir/run.dat")["state"] == "missing"
 
 
+# --- probe_source / grant_source_paths (P1.7) -------------------------------
+
+
+def test_probe_source_reports_ok_without_a_checksum_when_unconsented(tmp_path: Path) -> None:
+    """RED-FIRST: this is a NEW method. A path nobody granted read consent
+    for gets reachability + size/mtime but NEVER a checksum — the consent
+    ruling this slice adds (desktop_bridge.py's own doc)."""
+    f = _csv(tmp_path)
+    out = DesktopApi().probe_source(str(f))
+    assert out["state"] == "ok"
+    assert out["size"] == f.stat().st_size
+    assert "checksum" not in out
+
+
+def test_probe_source_computes_a_checksum_once_read_consented(tmp_path: Path) -> None:
+    f = _csv(tmp_path)
+    resolved = os.path.realpath(str(f))
+    api = DesktopApi()
+    api.attach(FakeWindow([str(f)]))
+    api.pick_files()  # grants read consent the ordinary way
+    out = api.probe_source(resolved)
+    assert out["state"] == "ok"
+    assert out["checksum"].startswith("sha256:")
+
+
+def test_probe_source_missing_and_offline_states(tmp_path: Path) -> None:
+    api = DesktopApi()
+    assert api.probe_source(str(tmp_path / "nope.csv"))["state"] == "missing"
+    assert api.probe_source(_unmounted_volume_path())["state"] == "offline"
+
+
+def test_probe_source_invalid_path_never_raises() -> None:
+    # A null byte cannot be resolved by realpath — must report, not raise.
+    out = DesktopApi().probe_source("bad\x00path")
+    assert out["state"] == "invalid"
+
+
+def test_grant_source_paths_wraps_grant_paths_exactly(tmp_path: Path) -> None:
+    """RED-FIRST: a NEW method. It must extend READ consent (checked via the
+    SAME `is_consented` store `pick_files` uses) for exactly the files it
+    was given, silently dropping anything that isn't a real file — mirroring
+    `grant_paths`'s own directory-skip rule (a hostile/stale entry must not
+    be able to widen consent to a directory)."""
+    f = _csv(tmp_path)
+    api = DesktopApi()
+    out = api.grant_source_paths([str(f), str(tmp_path)])  # second is a directory
+    resolved = os.path.realpath(str(f))
+    assert out["paths"] == [resolved]
+    assert is_consented(resolved)
+
+
+def test_grant_source_paths_then_probe_source_yields_a_checksum(tmp_path: Path) -> None:
+    """The end-to-end P1.7 relink path: grant consent for a project's own
+    recorded source paths (no dialog), THEN probe with a real checksum —
+    this is what lets a relink-folder dry-run diff many files without a
+    dialog per file."""
+    f = _csv(tmp_path)
+    resolved = os.path.realpath(str(f))
+    api = DesktopApi()
+    api.grant_source_paths([str(f)])
+    out = api.probe_source(resolved)
+    assert out["checksum"].startswith("sha256:")
+
+
+def test_probe_source_permission_denied_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = _csv(tmp_path)
+    resolved = os.path.realpath(str(f))
+
+    real_stat = os.stat
+
+    def _boom(path: str, *a: Any, **kw: Any) -> Any:
+        if path == resolved:
+            raise PermissionError("Permission denied")
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
+    out = DesktopApi().probe_source(resolved)
+    assert out["state"] == "permission_denied"
+
+
 # --- save_file_dialog / write_project_file (P1.1 C2) ------------------------
 #
 # The FakeWindow pattern above stands in for the dialog; the interesting

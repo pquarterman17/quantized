@@ -43,6 +43,10 @@ functions call:
 * ``read_project_file(path)`` -> ``{"path": ..., "content": ...}``, re-reads
   a path already covered by a read OR write grant from earlier this
   process — no new dialog (the Recent Projects reopen path).
+* ``probe_source(path)`` -> reachability + optional checksum for P1.7
+  relink (see "P1.7" section below for the consent ruling).
+* ``grant_source_paths(paths)`` -> ``{"paths": [...]}``, extends read
+  consent to a project's own already-recorded source paths (P1.7).
 
 **``null`` vs. cancel, everywhere in this contract:** every dialog method
 here returns a well-formed dict even on cancel or on a recoverable dialog
@@ -86,6 +90,37 @@ every path it did not itself get back from a real dialog.
   P1.1's own checklist owner item, unblocked by this slice but not shipped
   by it (this PR's tests run the bridge logic against ``FakeWindow``, never
   a packaged app).
+
+## P1.7: source probing + the consent ruling for relink
+
+``probe_source(path)`` and ``grant_source_paths(paths)`` (below) exist for
+project portability / source relinking (PRIMARY_SOFTWARE_AUDIT_PLAN.md's
+P1.7): distinguishing missing / offline / changed / permission-denied source
+states, and computing the checksum a "did this source's CONTENT change"
+verdict needs (``lib/relink.ts``'s ``sourceChangeVerdict``).
+
+**The ruling.** A checksum requires reading a file's full bytes — a strictly
+bigger ask than the reachability check ``path_status`` above already makes
+with NO consent at all (existence/type only, never content). Requiring a
+fresh native OPEN dialog per relinked file — the ordinary read-consent
+path — would make relinking a folder tree of hundreds of datasets pop
+hundreds of dialogs, which defeats the feature. So this reuses (does NOT
+invent a parallel consent kind for) ``desktop_consent``'s EXISTING read-grant
+store, extended with one new, narrowly-scoped entry point:
+``grant_source_paths`` — a thin wrapper over the same ``grant_paths`` a real
+``pick_files`` dialog calls, EXCEPT the paths did not just come out of a
+modal dialog. What justifies that: the frontend calls it ONLY with paths
+already recorded as a ``Dataset.source.path`` in the project CURRENTLY OPEN
+in the app — and opening that project (``open_project_file``/
+``read_project_file``) itself already required a real native dialog earlier.
+A user who opened a project has already, once, expressed trust in
+everything that project itself declares as its own sources; this extends
+that SAME trust to reading those specific files for a fingerprint, not to
+anything the page could name on its own. ``probe_source`` itself still
+computes a checksum ONLY when the resolved path is ALREADY read-consented
+(``desktop_consent.is_consented``) at call time — a path nobody granted (via
+either a real pick or ``grant_source_paths``) gets state/size/mtime only,
+never content.
 """
 
 from __future__ import annotations
@@ -99,12 +134,14 @@ from quantized.desktop_consent import (
     consented_write_path,
     grant_paths,
     grant_write_path,
+    is_consented,
 )
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
     validate_workspace_payload,
 )
+from quantized.desktop_source_probe import probe_source_path, volume_present
 
 __all__ = ["DesktopApi", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
@@ -148,49 +185,6 @@ def _dialog_kind(name: str, fallback: int) -> int:
         return int(value) if isinstance(value, int) else fallback
     except ImportError:
         return fallback
-
-
-# Where POSIX mounts removable and network volumes. These are not a guess: a
-# volume named "share" is mounted AT `/Volumes/share` (macOS) or `/mnt/share` /
-# `/media/<user>/share` (Linux), so the mount point's absence is exactly the
-# statement "that volume is not mounted right now".
-_POSIX_VOLUME_PREFIXES = ("/Volumes", "/media", "/mnt", "/net", "/run/media")
-
-
-def _volume_present(resolved: str) -> bool:
-    """Is the VOLUME holding ``resolved`` currently attached?
-
-    Windows gives a directly checkable answer: every path carries a drive letter
-    or a UNC share root, and if that root is not a directory the volume is gone.
-
-    POSIX has no such thing — ``splitdrive`` returns nothing and the anchor is
-    always ``/``, which always exists. So the check is the mount point instead:
-    for a path under a standard volume prefix, the component just below that
-    prefix IS the mount point, and its absence means the volume is not mounted.
-
-    Outside those prefixes POSIX genuinely cannot distinguish "unmounted share"
-    from "path that never existed", so this returns True and the caller reports
-    ``missing``. That is the deliberate, documented limit rather than a guess:
-    over-reporting ``offline`` would suppress a real "your file is gone", which
-    is the more useful of the two messages to get right.
-    """
-    drive = os.path.splitdrive(resolved)[0]
-    if drive:  # Windows drive letter or UNC \\server\share
-        try:
-            return os.path.isdir(drive + os.sep) or os.path.isdir(drive)
-        except OSError:
-            return False
-    for prefix in _POSIX_VOLUME_PREFIXES:
-        if not resolved.startswith(prefix + "/"):
-            continue
-        rest = resolved[len(prefix) + 1 :].split("/", 1)[0]
-        if not rest:
-            continue
-        try:
-            return os.path.isdir(os.path.join(prefix, rest))
-        except OSError:
-            return False
-    return True  # not on a recognizable volume — cannot tell, so do not claim offline
 
 
 class DesktopApi:
@@ -295,9 +289,38 @@ class DesktopApi:
         if os.path.isfile(resolved):
             return {"state": "ok", "path": resolved}
         return {
-            "state": "missing" if _volume_present(resolved) else "offline",
+            "state": "missing" if volume_present(resolved) else "offline",
             "path": resolved,
         }
+
+    # -- source probing / relink (P1.7) --------------------------------------
+
+    def probe_source(self, path: str) -> dict[str, Any]:
+        """Reachability + fingerprint of a dataset's recorded SOURCE path, for
+        relink's missing/offline/changed/permission-denied distinction
+        (P1.7 box 4). A superset of `path_status` above: same state values
+        PLUS `permission_denied`, and — only when `path` is already READ-
+        consented this process — a `checksum` a caller can diff against a
+        dataset's recorded provenance to answer "did the content change".
+        See this module's own doc for the full consent ruling; the short
+        version is that `is_consented` gates the checksum, never the
+        reachability check (which stays as unguarded as `path_status`
+        always was)."""
+        try:
+            resolved = os.path.realpath(path)
+        except (OSError, ValueError):
+            return {"state": "invalid"}
+        return probe_source_path(resolved, compute_checksum=is_consented(resolved))
+
+    def grant_source_paths(self, paths: list[str]) -> dict[str, Any]:
+        """Extend READ consent to paths the caller asserts are ALREADY a
+        dataset's recorded `source.path` in the project currently open in
+        this app — never an arbitrary list the page invents. A thin wrapper
+        over the SAME `grant_paths` a real `pick_files` dialog result goes
+        through (no parallel consent kind); see this module's doc for why
+        that's a sound extension of the trust a native project-open dialog
+        already granted, rather than a new bypass."""
+        return {"paths": grant_paths(paths)}
 
     # -- project save (P1.1 C2) ----------------------------------------------
 
