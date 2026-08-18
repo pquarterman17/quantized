@@ -190,6 +190,28 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
         return np.asarray([_to_float(c) for c in cells], dtype=np.float64)
 
 
+def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
+    """P1.4: encode raw text cells as float codes ``0..n-1`` (NaN = a blank
+    cell -- missing, not a level of its own) plus the ordered level table
+    that inverts them (``levels[code] == original string``, LOSSLESS). Level
+    order is first-appearance order in the file -- deterministic, and the
+    natural default until a user-settable ordering (J1) lands."""
+    levels: list[str] = []
+    seen: dict[str, int] = {}
+    codes = np.full(len(cells), np.nan, dtype=np.float64)
+    for i, raw in enumerate(cells):
+        text = raw.strip()
+        if not text:
+            continue
+        idx = seen.get(text)
+        if idx is None:
+            idx = len(levels)
+            seen[text] = idx
+            levels.append(text)
+        codes[i] = idx
+    return codes, tuple(levels)
+
+
 def import_csv(
     filepath: str | Path,
     *,
@@ -237,6 +259,11 @@ def import_csv(
         time_idx = resolve_column(time_column, col_headers)
 
     time_is_datetime = False
+    # P1.4 (f1): a resolved time column that is neither numeric nor a
+    # datetime is TEXT, not a broken time axis -- the old behaviour silently
+    # left `time_vec` all-NaN. `time_promoted` marks that this column will
+    # re-enter below as an ordinary categorical channel instead of vanishing.
+    time_promoted = False
     if time_idx < 0:
         time_vec = np.arange(1, n_rows + 1, dtype=float)
     else:
@@ -252,17 +279,42 @@ def import_csv(
                     dtype=float,
                 )
                 time_is_datetime = True
+            else:
+                time_promoted = True
+                time_vec = np.arange(1, n_rows + 1, dtype=float)
 
+    categorical_idx: list[int] = []
     if data_columns is None:
-        candidates = [c for c in range(n_cols) if c != time_idx]
-        data_idx = [
+        reserved = set() if time_promoted else {time_idx}
+        candidates = [c for c in range(n_cols) if c not in reserved]
+        numeric_idx = [
             c
             for c in candidates
             if (np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows) > 0.1
         ]
+        data_idx = numeric_idx
+        # P1.4 (f2): a trailing-text-only file used to raise here once
+        # `numeric_idx` came up empty. Rather than lose the file, admit the
+        # text candidates (non-blank, sub-threshold numeric ratio -- same
+        # test the `text_columns` sidecar loop below already applies) as
+        # categorical channels. Only fires on the actual failure mode: a
+        # normal file with at least one real numeric data column is
+        # completely unaffected (those text columns stay sidecar-only, as
+        # before -- see the `text_columns` loop's `used` guard).
+        if not numeric_idx:
+            for c in candidates:
+                cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
+                if any(cells):
+                    categorical_idx.append(c)
     else:
         data_idx = [resolve_column(s, col_headers) for s in data_columns]
-    if not data_idx:
+    # Unconditional (not just the `data_columns is None` branch above): the
+    # f1 note below always promises the promoted time column was imported as
+    # categorical, so it must actually happen regardless of how the OTHER
+    # data columns were selected.
+    if time_promoted:
+        categorical_idx = sorted({time_idx, *categorical_idx})
+    if not data_idx and not categorical_idx:
         raise ValueError(f"no valid data columns in {path.name}")
 
     labels: list[str] = []
@@ -276,7 +328,27 @@ def import_csv(
             if c < len(row_units) and row_units[c]:
                 units[i] = row_units[c]
 
-    if time_idx >= 0:
+    # P1.4: categorical channels are appended AFTER the numeric ones, in
+    # column order, regardless of which failure mode (or neither) admitted
+    # them -- one predictable channel ordering rule instead of two.
+    cat_levels: dict[int, tuple[str, ...]] = {}
+    if categorical_idx:
+        cat_code_columns = []
+        for c in categorical_idx:
+            unit, label = _extract_units(col_headers[c])
+            if row_units and c < len(row_units) and row_units[c]:
+                unit = row_units[c]
+            cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
+            codes, levels = _encode_categorical(cells)
+            cat_levels[len(labels)] = levels
+            labels.append(label)
+            units.append(unit)
+            cat_code_columns.append(codes)
+        cat_matrix = np.column_stack(cat_code_columns)
+    else:
+        cat_matrix = np.empty((n_rows, 0), dtype=np.float64)
+
+    if time_idx >= 0 and not time_promoted:
         x_unit, x_name = _extract_units(col_headers[time_idx])
         if not x_name:
             x_name = col_headers[time_idx]
@@ -313,8 +385,11 @@ def import_csv(
                 {
                     "index": i,
                     "role": "header" if i == header_row else "units" if i == units_row else "label",
-                    "x": at(time_idx) if time_idx >= 0 else "",
-                    "cells": [at(c) for c in data_idx],
+                    "x": at(time_idx) if time_idx >= 0 and not time_promoted else "",
+                    # Aligned to the FINAL channel order (numeric, then any
+                    # P1.4 categorical channels appended after) -- same
+                    # invariant as `labels`/`units` above.
+                    "cells": [at(c) for c in (*data_idx, *categorical_idx)],
                 }
             )
 
@@ -323,7 +398,9 @@ def import_csv(
     # why generic imports could not drive legends, grouping, or faceting the way
     # an Origin or SQLite import could. Same `text_columns` metadata shape those
     # two already emit, so the worksheet renders them with no frontend change.
-    used = {time_idx, *data_idx}
+    # A column PROMOTED to categorical (P1.4) is excluded via `used` so it is
+    # never duplicated into this sidecar.
+    used = {time_idx, *data_idx, *categorical_idx}
     text_columns: dict[str, list[str]] = {}
     for c in range(n_cols):
         if c in used:
@@ -351,6 +428,25 @@ def import_csv(
         metadata["label_rows"] = label_rows
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
+    notes: list[str] = []
+    if time_promoted:
+        notes.append(
+            f"Column '{col_headers[time_idx]}' is text, not numeric or datetime; the time "
+            "axis fell back to a 1..N row index and the column was imported as a "
+            "categorical channel."
+        )
+    other_categorical = [c for c in categorical_idx if not (time_promoted and c == time_idx)]
+    if other_categorical:
+        names = ", ".join(col_headers[c] for c in other_categorical)
+        notes.append(f"Text column(s) imported as categorical channel(s): {names}.")
+    if notes:
+        metadata["notes"] = notes
+    values_matrix = np.hstack([matrix[:, data_idx], cat_matrix])
     return DataStruct.create(
-        time_vec, matrix[:, data_idx], labels=labels, units=units, metadata=metadata
+        time_vec,
+        values_matrix,
+        labels=labels,
+        units=units,
+        metadata=metadata,
+        cat_levels=cat_levels or None,
     )

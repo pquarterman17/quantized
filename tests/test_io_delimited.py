@@ -215,3 +215,85 @@ def test_label_rows_pad_a_short_row_to_the_channel_count(tmp_path: Path) -> None
 def test_label_rows_do_not_become_data(tmp_path: Path) -> None:
     ds = import_csv(_write(tmp_path, "multi.csv", _MULTI_HEADER))
     assert ds.n_points == 2
+
+
+# --- P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN): categorical import capture --------
+# f1/f2 are the two failure modes measured while building the
+# grouped-factors baseline fixture (P1.4's "Current evidence"):
+#   f1 -- a CSV whose FIRST column is text imported with a silent all-NaN
+#         positional time axis.
+#   f2 -- a numeric-first CSV with trailing text-only columns raised
+#         `ValueError: no valid data columns`.
+# Both are red against pre-P1.4 `import_csv` (verified by hand before this
+# fix landed: f1's `ds.time` was `[nan, nan, nan]`; f2 raised exactly that
+# ValueError) -- these tests pin the FIXED contract.
+
+
+def test_f1_leading_text_column_no_longer_yields_a_nan_time_axis(tmp_path: Path) -> None:
+    path = _write(tmp_path, "leadtext.csv", "Sample,Moment\nNbAu-1,1.5\nNbAu-2,2.5\nNbAu-1,3.5\n")
+    ds = import_csv(path)
+    # time falls back to a 1..N row index -- no NaN, no ValueError.
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]
+    assert ds.metadata["x_column_name"] == "Sample Index"
+    # the text column is not lost: it becomes a categorical channel...
+    assert list(ds.labels) == ["Moment", "Sample"]
+    assert ds.cat_levels == {1: ("NbAu-1", "NbAu-2")}
+    assert ds.column("Sample").tolist() == [0.0, 1.0, 0.0]
+    # ...not duplicated into the text_columns sidecar.
+    assert "text_columns" not in ds.metadata
+    assert any("Sample" in note for note in ds.metadata["notes"])
+
+
+def test_f2_trailing_text_only_columns_no_longer_raise(tmp_path: Path) -> None:
+    path = _write(tmp_path, "trailtext.csv", "Time,Tag\n1,A\n2,B\n3,A\n")
+    ds = import_csv(path)  # used to raise ValueError: no valid data columns
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]  # Time still resolves as x normally
+    assert list(ds.labels) == ["Tag"]
+    assert ds.cat_levels == {0: ("A", "B")}
+    assert ds.column("Tag").tolist() == [0.0, 1.0, 0.0]
+
+
+def test_f2_numeric_and_categorical_columns_both_present(tmp_path: Path) -> None:
+    """Categorical channels append AFTER numeric ones when both exist among
+    the text-only fallback candidates."""
+    path = _write(
+        tmp_path, "mixed.csv", "Time,Lot,Wafer\n1,L1,W1\n2,L1,W2\n3,L2,W1\n"
+    )
+    ds = import_csv(path)
+    assert list(ds.labels) == ["Lot", "Wafer"]
+    assert ds.cat_levels == {0: ("L1", "L2"), 1: ("W1", "W2")}
+
+
+def test_existing_text_column_alongside_real_data_stays_sidecar_only(tmp_path: Path) -> None:
+    """When there IS a genuine numeric data column, the f2 fallback must not
+    fire -- a text column stays a `text_columns` sidecar exactly as before
+    (this is the pre-existing, still-passing behaviour P1.4 must not touch)."""
+    path = _write(
+        tmp_path, "run.csv", "Temp,Moment,Sample\n10,1.5,NbAu-1\n20,2.5,NbAu-1\n30,3.5,NbAu-2\n"
+    )
+    ds = import_csv(path)
+    assert list(ds.labels) == ["Moment"]
+    assert ds.cat_levels is None
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-1", "NbAu-2"]}
+
+
+def test_categorical_missing_cell_encodes_as_nan_not_a_level(tmp_path: Path) -> None:
+    path = _write(tmp_path, "blank.csv", "Time,Tag\n1,A\n2,\n3,A\n")
+    ds = import_csv(path)
+    assert ds.cat_levels == {0: ("A",)}
+    codes = ds.column("Tag").tolist()
+    assert codes[0] == 0.0 and codes[2] == 0.0
+    assert codes[1] != codes[1]  # NaN
+
+
+def test_categorical_round_trip_through_dict(tmp_path: Path) -> None:
+    """strings -> import -> DataStruct -> to_dict/from_dict -> same levels,
+    same order, same codes (the Day-1 round-trip gate, delimited half)."""
+    from quantized.datastruct import DataStruct
+
+    path = _write(tmp_path, "leadtext.csv", "Sample,Moment\nNbAu-1,1.5\nNbAu-2,2.5\nNbAu-1,3.5\n")
+    ds = import_csv(path)
+    back = DataStruct.from_dict(ds.to_dict())
+    assert back.cat_levels == ds.cat_levels
+    assert back.labels == ds.labels
+    assert back.column("Sample").tolist() == ds.column("Sample").tolist()
