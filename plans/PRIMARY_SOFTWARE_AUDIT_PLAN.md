@@ -549,7 +549,7 @@ Behavior:
   auto-applied to SIMS.
 - [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent.
 
-### P1.4 — First-class categorical and metadata channels
+### P1.4 — First-class categorical and metadata channels [~]
 
 **Goal:** use text columns and multiple metadata rows directly for grouping,
 faceting, legends, categorical axes, filters, and statistics.
@@ -566,16 +566,112 @@ data columns` — categorical columns cannot enter as data at all today. The
 baseline box-plot fixture (`grouped_factors_boxplot.csv`) had to encode
 factors as integer codes with the name legend in the preamble.
 
-- [ ] Stable numeric/datetime/text/categorical/metadata/error semantics.
-- [ ] Display multiple header/comment rows with clear roles.
-- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or X.
-- [ ] Multiple ordered factors and missing-value policy.
-- [ ] Preserve factors through derived data, filter/join, reopen, recipes,
-  and export.
-- [ ] Keep ignored instrumental metadata searchable.
-- [ ] Sample ID, field, or temperature can independently label the legend.
-- [ ] Lot/wafer/type can form nested grouping for a box plot.
-- [ ] Existing numeric projects migrate unchanged.
+**Slice 1 shipped (2026-08-17, Lane C):** the CONTRACT itself — lossless
+representation, import capture for the two measured failures, the
+sanctioned accessor layer, and P1.5/P1.6-ready group-label plumbing. Backend
+`DataStruct.cat_levels: Mapping[int, tuple[str,...]] | None` (channel index
+-> ordered level strings) + `is_categorical`/`level_labels`/`level_of`
+accessors (`src/quantized/datastruct.py`); frontend `DataStruct.cat_levels?:
+Record<number, string[]>` + `lib/categorical.ts`'s
+`isCategoricalChannel`/`categoricalLevels`/`levelLabel`.
+
+**Review round fixed same-day (P1-1 blocker + adjudicated P2s/P3s):** the
+slice-1 frontend field was originally declared `catLevels` (camelCase)
+while the backend wire payload (`routes/_payload.datastruct_payload`) emits
+`cat_levels` (snake_case, the established convention — see `book_source`/
+`origin_fidelity`) — nothing translated, so every categorical accessor was
+DEAD CODE against any real imported dataset; a reviewer probe caught it
+because same-language test fixtures had (wrongly) used the same broken key
+on both sides and so never noticed. Fixed by renaming the TS field to match
+the wire, and the boundary is now pinned by a SHARED fixture
+(`tests/fixtures/wire/categorical_import.csv` +
+`categorical_import_payload.json`) that both suites read: a backend test
+asserts the ACTUAL `datastruct_payload()` output equals the committed JSON
+byte-for-byte, and a frontend test parses that SAME JSON file through the
+real `parseWorkspace`/`isCategoricalChannel`/`levelLabel` path — this is
+what "round-trip proven both languages" now means, PRECISELY: shared-fixture
+wire parity, one JSON file two suites read, not two hand-synced fixtures
+that could silently drift apart the way the camelCase bug did. Also this
+round: `lib/datasetsplit.ts`'s row-slice and `lib/merge.ts`'s row-concat
+were dropping `cat_levels` entirely (split now carries it forward
+unconditionally — a row slice preserves column layout; merge carries a
+channel's level table only when every merged dataset has an IDENTICAL,
+same-order table for it, dropping just that channel on any mismatch — real
+conflict-resolution/remapping is booked under P1.5, not built); a
+whitespace-strip gap in the Import Wizard's `label`-role sidecar capture
+matched to `io/delimited.py`'s convention; `barlayout.ts`'s
+`resolveCategoryLabels` now reads the generic `text_columns` sidecar (not
+only Origin's `origin_text_columns`, matching `columnmeta.ts`'s own `??`
+order); and both languages' `cat_levels` read paths were hardened against a
+structurally corrupted table (e.g. `{0: "AB"}`, a bare string where a
+string array belongs) to DEGRADE (drop the field, or that one channel) that
+worst case never had a spec quite as tight — the backend's `__post_init__`
+was already shape-only by construction and just gained an explicit
+docstring ruling; the frontend's `lib/categorical.ts` accessors and
+`lib/workspace.ts`'s `.dwk` load path both gained a real runtime check
+(without it, a corrupted string level "list" reads as truthy and JS happily
+INDEXES INTO it character-by-character — silent, plausible-looking, wrong
+output, not a caught error).
+
+- [x] Stable numeric/datetime/text/categorical semantics for GENERIC
+  delimited import (`io/delimited.py`'s two measured failures) and the
+  Import Wizard's `parse_import` (`io/import_preview.py`, new `categorical`
+  role + `label` role no longer drops raw strings). Metadata semantics
+  (multiple comment rows) were already stable pre-slice and are unchanged.
+- [ ] Display multiple header/comment rows with clear roles — unchanged this
+  slice (P1.6's Import Wizard UI territory; the backend `label_rows`/
+  `text_columns` sidecars this depends on already existed and are untouched
+  except for staying aligned to the (possibly larger) final channel list).
+- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
+  X — the REPRESENTATION and the Group-label rendering path
+  (`calc/plotting.build_grouped_series`, `lib/plotspec.ts` `buildXY`) are
+  done; wiring Facet/Legend/Color/Symbol pickers and the Data
+  Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
+  `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
+  Wizard UI) territory — this contract is what they now build against.
+- [ ] Multiple ordered factors and missing-value policy — level ORDER is
+  represented (the tuple's own order; NaN = missing is the representation's
+  missing-value policy) but user-settable REORDERING (J1's ask) is not
+  built yet; that is J2/recode territory.
+- [~] Preserve factors through derived data, filter/join, reopen, recipes,
+  and export — reopen (`.dwk` round-trip) is proven, now via the SHARED wire
+  fixture (`lib/workspace.test.ts` + `tests/test_wire_fixtures.py`), not
+  just a same-language round trip. CONFIRMED (review round, not a hedge
+  anymore): merge (`lib/merge.ts`) and split (`lib/datasetsplit.ts`) BOTH
+  silently dropped `cat_levels` — split is FIXED (a row slice preserves
+  column layout, so it now always carries the table forward unchanged);
+  merge CARRIES-IF-IDENTICAL (a channel's level table survives only when
+  every merged dataset agrees on it, same strings, same order; any mismatch
+  drops just that channel, never the whole merge) with REAL conflict
+  resolution — remapping each dataset's codes onto one union level table
+  when they disagree — explicitly BOOKED under P1.5 (today's drop-on-
+  mismatch is the safe default, not the final answer). Filter/recipes/
+  export propagation is still unaudited. Also found this round, booked (not
+  fixed) for P1.6/the worksheet-UI slice: `store/cellEdit.ts`'s
+  `setCellValue`/`setCellBlock` write a raw `number` into any cell,
+  categorical channels included, with NO awareness that the channel is
+  categorical — a user can type a code with no entry in the level table
+  (e.g. `7.5`, or `-1`) and the write succeeds unguarded. This degrades
+  SAFELY today (`level_of`/`levelLabel` render "no label" for that one
+  cell per the P2-3/P3-1 ruling, never garbage or a crash) but there is no
+  UX yet to prevent, flag, or guide the edit (a level-picker/dropdown, a
+  Recode-and-extend-the-table flow) — P1.6's worksheet-UI slice owns
+  closing that gap, not this contract.
+- [ ] Keep ignored instrumental metadata searchable — unchanged (pre-
+  existing `text_columns`/`comments` sidecars; still stand).
+- [ ] Sample ID, field, or temperature can independently label the legend —
+  the representation supports it (any categorical channel can be the group
+  column); the Graph Builder wiring to pick ANY such channel as the legend
+  source specifically is P1.5.
+- [ ] Lot/wafer/type can form nested grouping for a box plot — single-level
+  categorical grouping works (box/bar's `isCategorical` gate now composes
+  with the P1.4 nominal default, see `plotspec.test.ts`); NESTED
+  (multi-factor) grouping is not built.
+- [x] Existing numeric projects migrate unchanged — additive by
+  construction (`cat_levels` absent = byte-identical to before this field
+  existed, both languages); pinned by `test_cat_levels_absent_is_additive_
+  byte_identical` and the full existing suite passing unmodified (`uv run
+  pytest -m golden`: 155 passed, 0 failed, same as pre-slice).
 
 ### P1.5 — Live Graph Builder grouping parity
 
@@ -1592,6 +1688,153 @@ work (its BACKLOG row).
   (silent technique defaults, batch overlay offer, Layer 1 pre-P1.3,
   per-technique view memory). P1.3 recipes will build on its technique
   tag.
+
+#### 2026-08-17 — P1.4 categorical/metadata CONTRACT, Slice 1 (Sonnet agent, worktree `lane-c`)
+
+- Shipped the representation + import capture + accessor layer +
+  P1.5/P1.6-ready group-label plumbing on `claude/p14-categorical-contract`
+  (NOT merged to `main` by this slice — orchestrator to land). NOT in
+  scope: the Import Wizard UI overhaul (P1.6) and Graph Builder
+  live-grouping parity (P1.5) — this slice is backend/lib contract only.
+- Red-first on both P0.3-measured failures, verified against pre-fix
+  `import_csv` by hand before the fix landed: f1 (leading text column) gave
+  `ds.time == [nan, nan, nan]`; f2 (trailing text-only columns) raised
+  `ValueError: no valid data columns`. Also red-first on a third bug found
+  while implementing (not one of the two P0.3 failures, but the same
+  "silent loss" class): the Import Wizard's `label` role dropped its raw
+  strings with literally no metadata trace — worse than a default import,
+  which never offers that role and so never lost anything.
+- `DataStruct.cat_levels` is deliberately narrow-gated: `import_csv`'s
+  f2-style promotion (text -> categorical) fires ONLY when the numeric-only
+  column selection is EMPTY (the actual failure condition), so a file with
+  at least one real numeric data column plus a text column is
+  byte-identical to before (`text_columns` sidecar, unchanged) — verified
+  by re-running the pre-existing `test_csv_keeps_a_text_column_as_metadata`
+  family unmodified.
+- Found and deliberately did NOT fix: an all-text CSV with NO numeric column
+  anywhere (e.g. `"Sample,Tag\nA,X\nB,Y\n"`) has its header row misdetected
+  as a THIRD data row by `_delimited_layout._detect_layout` (numeric-score
+  layout detection has no signal when literally nothing in the file is
+  numeric) — pre-existing, unrelated to f1/f2, out of scope for this
+  narrow slice. Left as a residual for whoever next touches layout
+  detection or all-text-file import. Honest severity note (review round):
+  this slice's f2 fix changed that pre-existing bug's OUTWARD BEHAVIOR from
+  loud to silent — before, this exact file raised `ValueError: no valid
+  data columns` (a visible failure); after, it "succeeds" silently with the
+  misdetected header row folded in as spurious categorical levels
+  (`cat_levels` picks up `"Sample"`/`"Tag"` alongside the real `"A"`/`"B"`
+  values, and `n_points` is off by one) — worse to debug than a raised
+  error, even though it is not itself one of the two contracted failure
+  modes. Flagging it here rather than letting the silence stand unremarked.
+- Gates: backend `uv run pytest -q` 3431 passed / 268 skipped / 18 xfailed
+  (0 failed); `-m golden` 155 passed / 93 skipped (missing MATLAB freeze
+  files, expected outside CI) / 0 failed — untouched by this slice, as the
+  contract requires; ruff + mypy --strict clean. Frontend `tsc --noEmit`
+  clean, `eslint --max-warnings=0` on every touched/new file clean, full
+  `vitest run`: 480 test files / 7077 tests, ALL passed on a clean re-run
+  (a first run under heavy shared-machine contention showed one flake in
+  `GridViewport.perf.test.tsx`'s wall-clock fan-out assertion — a
+  pre-existing, unrelated, documented-flaky-under-load test per this
+  plan's own "Test determinism" notes; confirmed unrelated by file-overlap
+  check and by passing 4/4 in isolation before the clean full re-run
+  settled it). `npm run build`: bundle-size OK, 826.5 kB eager (27.5 kB
+  under the 854.0 kB budget). Also discovered and fixed in-flight: the new
+  field pushed `lib/plotspec.ts`/`lib/types.ts` over their
+  `architecture.test.ts` line-count pins — fixed by extracting the shared
+  group-label-resolution logic into the new `lib/categorical.ts` sibling
+  (the ceiling test's own prescribed remedy) rather than raising either
+  pin; both files land at their ORIGINAL line counts.
+
+#### 2026-08-18 — P1.4 review round: P1-1 blocker + adjudicated P2s/P3s fixed same-day (Sonnet agent, worktree `lane-c`)
+
+- **P1-1 (blocker, RESOLVED):** the wire-key mismatch — backend
+  `cat_levels` (snake_case) vs. frontend `catLevels` (camelCase), so every
+  categorical accessor was dead code against a real import. Renamed the TS
+  field everywhere (`types.ts`, `categorical.ts`, `barlayout.ts`,
+  `modeling.ts`, `plotspec.ts`, all touched tests) and pinned the boundary
+  with a SHARED fixture: `tests/fixtures/wire/categorical_import.csv` +
+  `categorical_import_payload.json`, read by a new backend test
+  (`test_wire_fixtures.py`, byte-for-byte against the real
+  `datastruct_payload()` output) AND a new frontend test
+  (`categoricalWireFixture.test.ts`, through the real `parseWorkspace`/
+  `isCategoricalChannel`/`levelLabel` path). Red-first evidence: the
+  frontend fixture test, run against the still-camelCase code before the
+  rename, failed exactly as predicted (`isCategoricalChannel` false,
+  `levelLabel` null against the backend's real payload).
+- **P2-2 (split drops levels), FIXED:** `lib/datasetsplit.ts`'s
+  `sliceDataStruct` now carries `cat_levels` forward (a row slice preserves
+  column layout). Red-first: a dedicated test showed `sliced.cat_levels ===
+  undefined` before the one-line fix.
+- **P2-1 (merge drops levels), FIXED per ruling:** `lib/merge.ts` now
+  carries a channel's level table forward IFF every merged dataset has an
+  IDENTICAL (same order) table for it; any mismatch (differing strings,
+  differing order, or a missing table) drops just that channel. Real
+  conflict resolution (remapping codes onto a union table) is explicitly
+  booked under P1.5, not built. Red-first on both branches (identical ->
+  carried was red before the fix; differing -> dropped already matched the
+  old unconditional-drop behavior, so it wasn't itself a red case, but is
+  pinned going forward).
+- **P2-4, FIXED:** `io/import_preview.py`'s `label`-role `text_columns`
+  capture gained the `.strip()` `io/delimited.py`'s sidecar always applies
+  (one line). Red-first: a whitespace-padded cell round-tripped verbatim
+  before the fix.
+- **P2-5, FIXED:** `lib/barlayout.ts`'s `textLabelsFor` now reads
+  `metadata["text_columns"] ?? metadata["origin_text_columns"]`, matching
+  `columnmeta.ts`'s exact `??` order (was Origin-only). Red-first with the
+  reviewer's probe shape: a generic `text_columns` sidecar labeling a
+  numeric group column returned formatted numeric levels, not the text
+  labels, before the fix.
+- **P2-3 + P3-1 (validation teeth), ruling applied — document + degrade,
+  never throw:** backend `DataStruct`'s docstring now states explicitly
+  that construction validates `cat_levels`' TABLE SHAPE only; a value
+  cell's code/level COHERENCE degrades at read time (`level_of` -> `None`),
+  pinned by a new test constructing a DataStruct with out-of-range/
+  negative/NaN codes in a categorical column (construction succeeds,
+  `level_of` degrades per-cell). Frontend: BOTH `lib/categorical.ts`'s
+  accessors (`isValidLevelList`, checked directly in `isCategoricalChannel`/
+  `categoricalLevels`) AND `lib/workspace.ts`'s `.dwk` load path
+  (`sanitizeDataStruct`, imported from `lib/categorical.ts` to stay under
+  `workspace.ts`'s OWN `architecture.test.ts` line-count pin — moving the
+  logic to the sibling module the SAME lesson slice 1 already applied to
+  `plotspec.ts`/`types.ts`) now reject a structurally corrupted table.
+  Red-first with the reviewer's exact `{0: "AB"}` corruption shape: before
+  the fix, `isCategoricalChannel` returned `true` and `levelLabel`
+  returned the individual CHARACTERS `"A"`/`"B"` (JS indexes into a string
+  the same as an array) — silent, plausible-looking, wrong data, not a
+  caught error. After: no categorical status, `levelLabel` returns `null`.
+  Pinned twice — directly in `categorical.test.ts` (any ingestion path) and
+  through the real `.dwk` load in `workspace.test.ts` (including a
+  mixed-corruption case: one bad channel entry is dropped, a well-formed
+  sibling entry survives).
+- **P3 bookings (plan text only, this entry + the P1.4 section above):**
+  `store/cellEdit.ts`'s `setCellValue`/`setCellBlock` write raw numbers
+  into any cell, categorical channels included, with no level-aware guard
+  or UI — degrades safely today (P2-3/P3-1's ruling) but has no
+  discoverability; booked under P1.6's worksheet-UI slice. The all-text
+  header-misdetection residual (noted above) got an honest severity-change
+  sentence: this slice's f2 fix turned that PRE-EXISTING bug from a loud
+  `ValueError` into a SILENT wrong-shape import for that one edge case —
+  flagged, not fixed (out of scope). Round-trip language narrowed
+  throughout this plan and `JMP_GAP_PLAN.md`: "proven both languages" now
+  means, precisely, SHARED-FIXTURE WIRE PARITY (P1-1's one JSON file two
+  suites read) — distinguished from the pre-existing hand-synced
+  parity-fixture pattern (`build_grouped_series`/`buildXY`'s matching test
+  pair), which only catches the two implementations drifting from EACH
+  OTHER, not from the real wire shape (exactly the class of bug P1-1 was).
+- Gates: backend `uv run pytest -q` 3436 passed / 268 skipped / 18 xfailed
+  (0 failed, +5 over the slice-1 count: 2 wire-fixture + 1 shape-only-
+  validation + 1 whitespace-strip + the new fixture CSV auto-joining the
+  parser matrix walk); `-m golden` 155 passed / 93 skipped / 0 failed,
+  unchanged; ruff + mypy --strict clean. Frontend `tsc --noEmit` clean,
+  `eslint --max-warnings=0` on every touched/new file clean, full `vitest
+  run`: **481 test files / 7100 tests, ALL passed** (clean run, no
+  contention this time). `npm run build`: bundle-size OK, 827.3 kB eager
+  (26.7 kB under the 854.0 kB budget). Also fixed in-flight (same lesson as
+  slice 1): the P2-3/P3-1 fix initially pushed `lib/workspace.ts` over its
+  OWN `architecture.test.ts` pin (592 lines, zero headroom, same as
+  `plotspec.ts`/`types.ts` before it) — moved `sanitizeDataStruct` to
+  `lib/categorical.ts` instead of raising the pin; `workspace.ts` lands at
+  its exact original line count.
 
 ## Reference baseline
 

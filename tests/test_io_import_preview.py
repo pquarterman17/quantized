@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from quantized.io.import_preview import (
+    DATA_ROLES,
     ImportSettings,
     guess_settings,
     parse_import,
@@ -124,3 +125,74 @@ def test_import_settings_roundtrip() -> None:
     assert ImportSettings.from_dict(s.to_dict()) == s
     # unknown keys are ignored on decode
     assert ImportSettings.from_dict({"delimiter": ";", "bogus": 1}).delimiter == ";"
+
+
+# --- P1.4: "label" role no longer drops raw strings; "categorical" role ----
+
+_LABEL_TEXT = "Temp,Moment,Sample\n1,10,NbAu-1\n2,20,NbAu-2\n3,30,NbAu-1\n"
+
+
+def test_label_role_captures_raw_strings_instead_of_discarding_them() -> None:
+    """RED before this fix: the wizard's 'label' role silently dropped the
+    'Sample' column entirely -- no metadata trace at all, worse than a
+    default/silent import (which never even offers a 'label' role and so
+    never lost anything). Parity means it now lands in the SAME
+    `text_columns` sidecar shape `import_csv` already emits."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment",)  # label column still excluded from .values
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2", "NbAu-1"]}
+
+
+def test_label_role_strips_whitespace_matching_import_csv_sidecar() -> None:
+    """P1.4 review P2-4: RED before this fix -- the wizard's `label` sidecar
+    capture skipped the `.strip()` that `io/delimited.py`'s `text_columns`
+    sidecar always applies, so a whitespace-padded cell (` NbAu-1 `) landed
+    verbatim instead of matching the generic-import convention."""
+    text = "Temp,Moment,Sample\n1,10, NbAu-1 \n2,20, NbAu-2 \n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    ds = parse_import(text, settings)
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2"]}
+
+
+def test_ignore_role_still_drops_with_no_sidecar_capture() -> None:
+    """`ignore` is an explicit user choice to discard -- unlike `label`, it
+    gets no text_columns capture."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment",)
+    assert "text_columns" not in ds.metadata
+
+
+def test_categorical_role_produces_a_categorical_channel() -> None:
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "categorical"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment", "Sample")
+    assert ds.cat_levels == {1: ("NbAu-1", "NbAu-2")}
+    assert ds.column("Sample").tolist() == [0.0, 1.0, 0.0]
+    assert "text_columns" not in ds.metadata  # categorical, not label -- no sidecar duplication
+
+
+def test_categorical_role_is_in_data_roles() -> None:
+    assert "categorical" in DATA_ROLES
+
+
+def test_categorical_only_columns_still_import_with_no_y_channels() -> None:
+    """A categorical column alone satisfies "something was selected" -- the
+    old "no y/error columns" gate must not reject a categorical-only pick."""
+    text = "Sample\nA\nB\nA\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["categorical"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Sample",)
+    assert ds.cat_levels == {0: ("A", "B")}
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]  # no x role -> row index
+
+
+def test_categorical_import_round_trips_through_dict() -> None:
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "categorical"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    from quantized.datastruct import DataStruct
+
+    back = DataStruct.from_dict(ds.to_dict())
+    assert back.cat_levels == ds.cat_levels
+    assert back.labels == ds.labels

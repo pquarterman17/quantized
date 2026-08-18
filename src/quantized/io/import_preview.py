@@ -35,6 +35,7 @@ from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _looks_like_units_row, _numeric_score
 from quantized.io.delimited import (
     _detect_delimiter,
+    _encode_categorical,
     _extract_units,
     _to_float,
 )
@@ -47,8 +48,14 @@ __all__ = [
     "preview_import",
 ]
 
-DATA_ROLES = ("x", "y", "error", "label", "ignore")
+# P1.4: "categorical" joins the roles a column can carry -- it produces a
+# categorical DataStruct channel (see `_encode_categorical`/`cat_levels`
+# below). The Import Wizard UI for picking it is P1.6's slice; the backend
+# role already works (guess_settings never suggests it -- only an explicit
+# ImportSettings.roles entry selects it).
+DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
+_CATEGORICAL_ROLE = "categorical"
 # friendly delimiter aliases -> how to split
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
                  "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
@@ -83,6 +90,10 @@ class _Parsed:
     roles: list[str]
     matrix: np.ndarray  # (n_rows, n_cols) float
     data_start: int
+    # Raw string cells per data row (n_rows entries, each up to n_cols wide),
+    # BEFORE `_to_float` conversion -- the P1.4 "label"/"categorical" roles
+    # need the original text, which the numeric `matrix` has already erased.
+    data_tokens: list[list[str]]
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -181,7 +192,7 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     for i, row in enumerate(data_tokens):
         for k in range(min(len(row), n_cols)):
             matrix[i, k] = _to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds)
+    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens)
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
@@ -228,8 +239,16 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     """Parse the full ``text`` under ``settings`` into a ``DataStruct``.
 
     The ``x`` role column becomes the axis (a 1..N sample index if none is
-    marked); ``y`` / ``error`` columns become channels; ``label`` / ``ignore``
-    columns are dropped (``DataStruct`` is numeric-only).
+    marked); ``y`` / ``error`` columns become numeric channels;
+    ``categorical`` columns become P1.4 categorical channels (float codes +
+    a level table), appended after the numeric ones; ``label`` columns are
+    dropped from ``.values`` (DataStruct stays numeric-only) but their raw
+    strings are captured to the ``text_columns`` metadata sidecar -- the
+    SAME shape ``import_csv`` already emits -- rather than silently lost
+    (P1.4's wizard-label-drop fix: parity with a silent/default import,
+    which never had this role to begin with and so never dropped anything).
+    ``ignore`` columns are dropped entirely, with no sidecar capture --the
+    user explicitly asked for that.
     """
     p = _parse_core(text, settings)
     n_rows, n_cols = p.matrix.shape
@@ -238,8 +257,9 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
 
     x_cols = [k for k in range(n_cols) if p.roles[k] == "x"]
     chan_cols = [k for k in range(n_cols) if p.roles[k] in _CHANNEL_ROLES]
-    if not chan_cols:
-        raise ValueError("no y/error columns selected to import")
+    cat_cols = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
+    if not chan_cols and not cat_cols:
+        raise ValueError("no y/error columns (or categorical) selected to import")
     if x_cols:
         x = p.matrix[:, x_cols[0]]
         x_name, x_unit = p.names[x_cols[0]], p.units[x_cols[0]]
@@ -249,6 +269,22 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
 
     labels = [p.names[k] for k in chan_cols]
     units = [p.units[k] for k in chan_cols]
+    values = p.matrix[:, chan_cols] if chan_cols else np.empty((n_rows, 0), dtype=float)
+
+    # P1.4: categorical channels append AFTER the numeric ones -- same rule
+    # as import_csv's f1/f2 fallback, one predictable ordering everywhere.
+    cat_levels: dict[int, tuple[str, ...]] = {}
+    if cat_cols:
+        cat_arrays = []
+        for k in cat_cols:
+            cells = [row[k] if k < len(row) else "" for row in p.data_tokens]
+            codes, levels = _encode_categorical(cells)
+            cat_levels[len(labels)] = levels
+            labels.append(p.names[k])
+            units.append(p.units[k])
+            cat_arrays.append(codes)
+        values = np.hstack([values, np.column_stack(cat_arrays)])
+
     metadata: dict[str, Any] = {
         "parser_name": "import_preview",
         "x_column_name": x_name,
@@ -257,5 +293,12 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "all_column_names": p.names,
         "import_settings": settings.to_dict(),
     }
-    return DataStruct.create(x, p.matrix[:, chan_cols], labels=labels, units=units,
-                             metadata=metadata)
+    label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
+    if label_cols:
+        metadata["text_columns"] = {
+            p.names[k]: [row[k].strip() if k < len(row) else "" for row in p.data_tokens]
+            for k in label_cols
+        }
+    return DataStruct.create(
+        x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
+    )

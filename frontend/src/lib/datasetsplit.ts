@@ -334,10 +334,13 @@ export function pickDefaultSplitColumn(data: DataStruct): number {
 
 /** Slice a DataStruct's time+values rows down to `rowIndexes` (any order —
  *  typically ascending, straight from a `SplitGroup`) into a fresh,
- *  non-aliased DataStruct. labels/units/metadata are structural (per-
- *  COLUMN, not per-row) so they're copied whole, unaffected by which rows
- *  survive — this is the "per-row-safe fields" the store's
- *  `splitDatasetByColumn` action builds each child dataset's `data` from. */
+ *  non-aliased DataStruct. labels/units/metadata/cat_levels are structural
+ *  (per-COLUMN, not per-row) so they're copied whole, unaffected by which
+ *  rows survive -- a row slice preserves column LAYOUT (P1.4 review P2-2:
+ *  a categorical child dataset must stay categorical, since its level table
+ *  and codes are untouched by which rows remain) -- this is the
+ *  "per-row-safe fields" the store's `splitDatasetByColumn` action builds
+ *  each child dataset's `data` from. */
 export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[]): DataStruct {
   return {
     time: rowIndexes.map((i) => data.time[i]),
@@ -345,5 +348,6 @@ export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[])
     labels: [...data.labels],
     units: [...data.units],
     metadata: { ...data.metadata },
+    ...(data.cat_levels ? { cat_levels: data.cat_levels } : {}),
   };
 }
