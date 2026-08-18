@@ -65,7 +65,15 @@ beforeEach(() => {
   setShell(null);
   localStorage.clear();
   useRecentProjects.setState({ recentProjects: [] });
-  useApp.setState({ datasets: [], activeId: null, selectedIds: [], folders: [], workbooks: [] });
+  useApp.setState({
+    datasets: [],
+    activeId: null,
+    selectedIds: [],
+    folders: [],
+    workbooks: [],
+    currentProject: null,
+    projectDirty: false,
+  });
 });
 
 describe("open-workspace — native branch", () => {
@@ -83,6 +91,14 @@ describe("open-workspace — native branch", () => {
     const recent = useRecentProjects.getState().recentProjects;
     expect(recent).toHaveLength(1);
     expect(recent[0]).toMatchObject({ name: "workspace.dwk", path: "/p/workspace.dwk" });
+  });
+
+  it("records the project identity on a successful native open (P1.2 box 1)", async () => {
+    setShell({ open_project_file: async () => ({ path: "/p/workspace.dwk", content: WS }) });
+    run("open-workspace");
+    await settle();
+    expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
+    expect(useApp.getState().projectDirty).toBe(false);
   });
 
   it("does NOT fall back to the browser picker when the user cancels the native dialog", async () => {
@@ -123,6 +139,9 @@ describe("open-workspace — native branch", () => {
     // Declined — the recent entry is still recorded (the FILE was opened and
     // read successfully; only loading it into the session was declined).
     expect(useRecentProjects.getState().recentProjects).toHaveLength(1);
+    // But the project identity must NOT change — nothing was actually
+    // loaded, so the session's existing project (if any) stays correct.
+    expect(useApp.getState().currentProject).toBeNull();
   });
 });
 

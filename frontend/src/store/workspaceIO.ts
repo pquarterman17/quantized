@@ -21,7 +21,7 @@
 // Recent Projects entry — see lib/recentProjects.ts's module doc for why a
 // browser download, which has no path, never does.
 
-import { CANCELLED, saveProjectAs } from "../lib/desktopBridge";
+import { CANCELLED, hasDesktopShell, saveProjectAs, saveProjectTo } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
@@ -41,11 +41,23 @@ function baseName(path: string): string {
   return cut >= 0 ? path.slice(cut + 1) : path;
 }
 
-export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
+/** Shared "saved workspace [to PATH] — N dataset(s)" status/toast text —
+ *  used by every successful save branch below (native Save As, quick Save,
+ *  and the browser-download fallback) so the phrasing can't drift between them. */
+function savedMsg(n: number, path?: string): string {
+  return `saved workspace${path ? ` to ${path}` : ""} — ${n} dataset${n === 1 ? "" : "s"}`;
+}
+
+/** Resolve pending books and serialize the live workspace — the shared
+ *  preface both Save (`runSaveWorkspace`) and Save As (`runSaveWorkspaceToFile`)
+ *  need before they can write anything. Returns null when there is nothing to
+ *  save or resolving pending books failed; both cases already set status/toast
+ *  themselves, so callers just bail out. */
+async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> {
   const all = get().datasets;
   if (all.length === 0) {
     get().setStatus("no datasets to save");
-    return;
+    return null;
   }
   const pendingCount = all.filter((d) => d.pending).length;
   if (pendingCount > 0) {
@@ -56,7 +68,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       const msg = `save failed — couldn't load full data for every book: ${e instanceof Error ? e.message : "error"}`;
       get().setStatus(msg);
       toast(msg, "danger");
-      return;
+      return null;
     }
   }
   const s = get();
@@ -68,22 +80,71 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     s,
     s.techniqueViewMemory,
   );
-  const content = serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  return serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+}
+
+export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
+  const content = await serializeCurrentWorkspace(get);
+  if (content === null) return;
+  const all = get().datasets; // unaffected by serializing — safe to re-read for the count
 
   const native = await saveProjectAs("workspace.dwk", content);
   if (native === CANCELLED) return; // the user backed out — do nothing, never fall back
   if (native !== null) {
+    // P1.2 box 1: a native Save As always establishes (or renames) the
+    // project's identity and clears the dirty marker — this IS the moment
+    // the live workspace and disk agree.
+    get().setCurrentProject({ name: baseName(native.path), path: native.path });
     useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
-    const msg = `saved workspace to ${native.path} — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
+    const msg = savedMsg(all.length, native.path);
     get().setStatus(msg);
     toast(msg, "ok");
     return;
   }
 
   // No usable bridge (every browser tab, and every jsdom test environment) —
-  // byte-identical to this function's pre-P1.1 behavior.
+  // byte-identical to this function's pre-P1.1 behavior. A browser download
+  // has no durable path, so `currentProject` is deliberately left untouched
+  // (lib/recentProjects.ts's module doc has the identical rule for Recent
+  // Projects entries — the same "no path, no identity" reasoning applies).
   saveBlob(new Blob([content], { type: "application/json" }), "workspace.dwk");
-  const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
+  const msg = savedMsg(all.length);
+  get().setStatus(msg);
+  toast(msg, "ok");
+}
+
+/** "Save" (Ctrl+S) — P1.2 box 1: write straight to the CURRENT project's
+ *  known path with no dialog, when one is known and a bridge can reach it.
+ *  Falls back to the Save As flow (`runSaveWorkspaceToFile` — native dialog,
+ *  or a browser download) whenever there is no known project path yet, or no
+ *  bridge to write through: identical to the pre-P1.2 "Save workspace"
+ *  command's only behavior, so a browser tab is unaffected by this slice.
+ *
+ *  A write failure here is reported and left AS a failure — unlike Save As,
+ *  which degrades to a browser download when the native write fails, a
+ *  quick-save failure must never silently substitute a download the user
+ *  did not ask for in place of the NAMED project they meant to update; the
+ *  atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already
+ *  guarantees the previous good file on disk is untouched, so the only job
+ *  left here is to say so plainly and leave the dirty marker set. */
+export async function runSaveWorkspace(get: SliceGet): Promise<void> {
+  const project = get().currentProject;
+  if (project === null || !hasDesktopShell()) {
+    return runSaveWorkspaceToFile(get);
+  }
+  const content = await serializeCurrentWorkspace(get);
+  if (content === null) return;
+
+  const result = await saveProjectTo(project.path, content);
+  if (result === null) {
+    const msg = `save failed — could not write to ${project.path} (try Save As)`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  get().markProjectClean();
+  useRecentProjects.getState().pushRecentProject(project.name, project.path);
+  const msg = savedMsg(get().datasets.length, result.path);
   get().setStatus(msg);
   toast(msg, "ok");
 }

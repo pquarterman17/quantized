@@ -38,7 +38,11 @@ import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
-async function openRecentProject(name: string, path: string): Promise<void> {
+/** Reopen a Recent Projects entry — missing-vs-offline aware (see module
+ *  doc). Exported (P1.2) so the crash-recovery chooser (useWorkspaceAutosave)
+ *  can reuse the EXACT same reopen path for its "keep the last project"
+ *  choice instead of a second implementation. */
+export async function openRecentProject(name: string, path: string): Promise<void> {
   const state = await pathState(path);
   if (state === "offline") {
     toast(`${name}: the drive or share is not available right now — reconnect and try again`, "danger");
@@ -64,8 +68,9 @@ async function openRecentProject(name: string, path: string): Promise<void> {
     return;
   }
   const s = useApp.getState;
+  const identity = { name, path };
   if (!hasWorkspaceContent(s)) {
-    replaceWorkspace(s, ws);
+    replaceWorkspace(s, ws, identity);
     return;
   }
   const ok = await askConfirm(
@@ -74,7 +79,7 @@ async function openRecentProject(name: string, path: string): Promise<void> {
     "Replace",
     true,
   );
-  if (ok) replaceWorkspace(s, ws);
+  if (ok) replaceWorkspace(s, ws, identity);
 }
 
 /** Publish one "Open recent project…" command per Recent Projects entry,

@@ -62,7 +62,13 @@ function openWorkspace() {
 beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(openFilePicker).mockReset();
-  useApp.setState({ datasets: [ds("a"), ds("b")], activeId: "a", selectedIds: [] });
+  useApp.setState({
+    datasets: [ds("a"), ds("b")],
+    activeId: "a",
+    selectedIds: [],
+    currentProject: null,
+    projectDirty: false,
+  });
 });
 
 describe("Open workspace — confirms before replacing the library", () => {
@@ -101,6 +107,14 @@ describe("Open workspace — confirms before replacing the library", () => {
     await pickWorkspaceFile(WS);
     expect(useApp.getState().history.length).toBeGreaterThan(before);
     expect(useApp.getState().history.at(-1)?.label).toBe("open workspace");
+  });
+
+  it("clears the project identity — a browser-picked file has no durable path (P1.2 box 1)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.getState().setCurrentProject({ name: "old.dwk", path: "/old.dwk" });
+    openWorkspace();
+    await pickWorkspaceFile(WS);
+    expect(useApp.getState().currentProject).toBeNull();
   });
 
   it("the autosave restore path still calls loadWorkspace WITHOUT prompting", () => {

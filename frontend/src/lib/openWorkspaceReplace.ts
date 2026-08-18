@@ -5,16 +5,26 @@
 // already carries a command's body out of the curated command list.
 
 import { stageWorkspaceRestore } from "../store/windowHydration";
+import type { ProjectIdentity } from "../store/project";
 import type { StoreGet } from "./exportActive";
 import type { LoadedWorkspace } from "./workspace";
 
 /** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
  *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
  *  two branches (empty library, and the confirmed-replace path) so the
- *  three-statement sequence isn't duplicated. */
-export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
+ *  three-statement sequence isn't duplicated.
+ *
+ *  P1.2 box 1: `native` is the project identity to adopt — a real native
+ *  open/reopen passes its `{name, path}`; a browser-picker open (no durable
+ *  path) passes nothing, which CLEARS `currentProject` rather than leaving
+ *  it pointing at whatever was open before. Either way the identity is set
+ *  in the SAME call as the actual replace, never before it (a confirm
+ *  dialog can still say no) — see store/project.ts's header on why that
+ *  ordering matters. */
+export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace");
   s().loadWorkspace(ws);
+  s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
 }
 
@@ -23,9 +33,10 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
  *  the incoming plotWindows/focusedWindowId/toolWindowLayout and lands on
  *  the single fresh window every layout-less doc already gets; everything
  *  else restores normally. */
-export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace): void {
+export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace without layout");
   s().loadWorkspace(ws, { skipLayout: true });
+  s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
 }
 

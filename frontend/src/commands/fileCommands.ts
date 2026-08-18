@@ -155,11 +155,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "save-workspace",
       group: "File",
-      label: "Save workspace (.dwk)…",
+      label: "Save workspace as (.dwk)…",
       description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
-      // like every other one in this list.
+      // like every other one in this list. Always prompts, unlike "Save
+      // workspace" above, which reuses the known path once one exists.
       run: () => s().saveWorkspaceToFile(),
     },
     {
@@ -173,10 +174,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
         void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
-          (ok) => ok && replaceWorkspace(s, ws),
+          (ok) => ok && replaceWorkspace(s, ws, native),
         );
       }),
     },
@@ -188,15 +189,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
           "Replace the current workspace?",
           replaceConfirmMessage(s().datasets.length, extra),
           "Replace",
           true,
-        ).then((ok) => ok && replaceWorkspaceSafely(s, ws));
+        ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
       }),
     },
     {

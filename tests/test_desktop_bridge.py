@@ -50,6 +50,17 @@ def _csv(tmp_path: Path, name: str = "run.csv") -> Path:
     return p
 
 
+def _workspace_json(marker: str = "x") -> str:
+    """A minimal, structurally valid `.dwk` payload (P1.2 box 2) — matches the
+    top-level shape frontend/src/lib/workspace.ts's `parseWorkspace` itself
+    requires (`format`, a supported `version`, a `datasets` array). `marker`
+    lands in a dataset id so two calls are distinguishable for a byte-compare."""
+    return (
+        '{"format": "quantized-workspace", "version": 4, '
+        f'"datasets": [{{"id": "{marker}"}}]}}'
+    )
+
+
 # --- probe -----------------------------------------------------------------
 
 
@@ -244,10 +255,11 @@ def test_write_project_file_lands_content_at_a_granted_path(tmp_path: Path) -> N
     api = DesktopApi()
     api.attach(FakeWindow([str(dest)]))
     save_out = api.save_file_dialog("workspace.dwk")
-    write_out = api.write_project_file(save_out["path"], '{"v": 1}')
+    content = _workspace_json("1")
+    write_out = api.write_project_file(save_out["path"], content)
     assert write_out["ok"] is True
     assert write_out["path"] == save_out["path"]
-    assert dest.read_text(encoding="utf-8") == '{"v": 1}'
+    assert dest.read_text(encoding="utf-8") == content
 
 
 def test_write_project_file_refuses_a_path_that_was_never_granted(tmp_path: Path) -> None:
@@ -281,9 +293,10 @@ def test_write_project_file_overwrite_leaves_no_stray_temp_file(tmp_path: Path) 
     api = DesktopApi()
     api.attach(FakeWindow([str(dest)]))
     save_out = api.save_file_dialog("workspace.dwk")
-    api.write_project_file(save_out["path"], "first")
-    api.write_project_file(save_out["path"], "second")
-    assert dest.read_text(encoding="utf-8") == "second"
+    second = _workspace_json("second")
+    api.write_project_file(save_out["path"], _workspace_json("first"))
+    api.write_project_file(save_out["path"], second)
+    assert dest.read_text(encoding="utf-8") == second
     leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
     assert leftovers == []
 
@@ -296,7 +309,7 @@ def test_write_project_file_reports_an_os_error_rather_than_raising(tmp_path: Pa
     api = DesktopApi()
     api.attach(FakeWindow([str(directory)]))
     save_out = api.save_file_dialog("a_directory.dwk")
-    out = api.write_project_file(save_out["path"], "x")
+    out = api.write_project_file(save_out["path"], _workspace_json())
     assert out["ok"] is False
     assert "error" in out
 
@@ -355,9 +368,10 @@ def test_read_project_file_reuses_a_write_grant_from_a_prior_save(tmp_path: Path
     api = DesktopApi()
     api.attach(FakeWindow([str(dest)]))
     save_out = api.save_file_dialog("workspace.dwk")
-    api.write_project_file(save_out["path"], '{"v": 3}')
+    content = _workspace_json("3")
+    api.write_project_file(save_out["path"], content)
     out = api.read_project_file(save_out["path"])
-    assert out["content"] == '{"v": 3}'
+    assert out["content"] == content
 
 
 def test_read_project_file_refuses_an_unconsented_path(tmp_path: Path) -> None:
@@ -368,3 +382,128 @@ def test_read_project_file_refuses_an_unconsented_path(tmp_path: Path) -> None:
     assert out["path"] is None
     assert "content" not in out
     assert "error" in out
+
+
+# --- write_project_file validation-before-replace (P1.2 box 2/3) -----------
+#
+# RED-FIRST: none of these passed before `write_project_file` gained a
+# structural check ahead of the temp-file+`os.replace`. The point is that a
+# bad payload — or a real OS failure mid-write — must never land ANY bytes at
+# the real path: the file that was there before stays byte-identical.
+
+
+def test_write_project_file_refuses_invalid_json_and_leaves_prior_file_untouched(
+    tmp_path: Path,
+) -> None:
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    assert api.write_project_file(save_out["path"], good)["ok"] is True
+
+    out = api.write_project_file(save_out["path"], "not json at all")
+    assert out["ok"] is False
+    assert "error" in out
+    assert dest.read_text(encoding="utf-8") == good
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []
+
+
+def test_write_project_file_refuses_a_payload_missing_the_workspace_shape(
+    tmp_path: Path,
+) -> None:
+    """Well-formed JSON that simply isn't a workspace (wrong `format`, no
+    `datasets` array) must be refused the same way — valid JSON alone is not
+    "structurally sound"."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    for bad in (
+        '{"format": "quantized-workspace", "version": 4}',  # no datasets
+        '{"format": "not-a-workspace", "version": 4, "datasets": []}',
+        '{"format": "quantized-workspace", "version": 99, "datasets": []}',
+        "[1, 2, 3]",  # valid JSON, not even an object
+    ):
+        out = api.write_project_file(save_out["path"], bad)
+        assert out["ok"] is False, bad
+        assert dest.read_text(encoding="utf-8") == good
+
+
+def test_write_project_file_validation_never_touches_disk_on_a_first_write(
+    tmp_path: Path,
+) -> None:
+    """No prior file exists at all — a validation failure must still leave
+    nothing behind (not even an empty file), matching the "abort before the
+    replace" contract for the from-scratch case."""
+    dest = tmp_path / "new_workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("new_workspace.dwk")
+    out = api.write_project_file(save_out["path"], "garbage")
+    assert out["ok"] is False
+    assert not dest.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_write_project_file_preserves_the_prior_file_when_os_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mocked OS failure mode #1: `os.replace` itself fails (a realistic stand-
+    in for a permission error or a hostile filesystem event mid-write). The
+    previous good generation must survive byte-for-byte and no temp file may
+    be left behind."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    def _boom(_src: str, _dst: str) -> None:
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.replace", _boom)
+    out = api.write_project_file(save_out["path"], _workspace_json("new"))
+    assert out["ok"] is False
+    assert "Permission denied" in out["error"]
+    assert dest.read_text(encoding="utf-8") == good
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []
+
+
+def test_write_project_file_preserves_the_prior_file_when_the_disk_is_full(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mocked OS failure mode #2: the write itself fails partway through
+    (`ENOSPC` — disk full). Same preservation guarantee as the `os.replace`
+    failure above, exercised on the earlier failure point."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    real_fdopen = os.fdopen
+
+    def _fdopen_then_fail_on_write(*args: Any, **kw: Any) -> Any:
+        handle = real_fdopen(*args, **kw)
+
+        def _write(_data: str) -> int:
+            raise OSError("No space left on device")
+
+        handle.write = _write  # close() on __exit__ still works normally
+        return handle
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.fdopen", _fdopen_then_fail_on_write)
+    out = api.write_project_file(save_out["path"], _workspace_json("new"))
+    assert out["ok"] is False
+    assert "No space left on device" in out["error"]
+    assert dest.read_text(encoding="utf-8") == good
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []

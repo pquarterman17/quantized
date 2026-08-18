@@ -14,6 +14,7 @@
 // The API is now ASYNC — IndexedDB has no synchronous mode. Callers await.
 
 import {
+  capByAge,
   capBySize,
   pickRestorable,
   rotate,
@@ -73,8 +74,11 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
       return true;
     }
     const existing = await backend.read();
+    // Three bounds, applied in sequence, each preserving the newest
+    // generation on its own axis (count / age / size) — see
+    // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
     const kept = capBySize(
-      rotate(existing, { at: now, text: serializeWorkspace(ws) }),
+      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws) }), now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await backend.write(kept);
@@ -91,11 +95,22 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
  *  Skipping past a corrupt newest snapshot to a good older one is the entire
  *  reason several generations are kept. */
 export async function loadAutosave(): Promise<LoadedWorkspace | null> {
+  const picked = await loadAutosaveGeneration();
+  return picked ? picked.workspace : null;
+}
+
+/** Same restore rule as `loadAutosave`, but also returns the generation's
+ *  `at` timestamp — P1.2 box "explain crash recovery source/time/choices"
+ *  needs the candidate's age to decide whether it is newer than the last-
+ *  opened project, which the workspace content alone can't say. */
+export async function loadAutosaveGeneration(): Promise<
+  { workspace: LoadedWorkspace; at: number } | null
+> {
   try {
     const generations = await readAllWithMigration();
     const pick = pickRestorable(generations, isRestorable);
     health = { ...health, count: generations.length };
-    return pick ? parseWorkspace(pick.text) : null;
+    return pick ? { workspace: parseWorkspace(pick.text), at: pick.at } : null;
   } catch {
     return null; // never block startup on a bad autosave
   }

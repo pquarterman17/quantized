@@ -38,6 +38,9 @@ body {
 .qzk-brand { display: flex; align-items: center; gap: 9px; }
 .qzk-brand img { width: 19px; height: 19px; }
 .qzk-brand .nm { font-weight: var(--weight-semibold); font-size: var(--font-size); }
+/* P1.2 box 1: project name + dirty marker. */
+.qzk-project { font-size: var(--font-size-sm); color: var(--text-dim); white-space: nowrap; }
+.qzk-project-dirty { color: var(--accent); }
 .qzk-doc { text-align: center; font-size: var(--font-size-sm); color: var(--text-dim); white-space: nowrap; }
 .qzk-doc .ext { color: var(--text-faint); }
 .qzk-tbar-right { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }

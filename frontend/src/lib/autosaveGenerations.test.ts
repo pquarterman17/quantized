@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  capByAge,
   capBySize,
   MAX_GENERATIONS,
+  MAX_GENERATION_AGE_MS,
   newestFirst,
   pickRestorable,
   rotate,
@@ -83,6 +85,47 @@ describe("capBySize", () => {
 
   it("returns empty only for empty input", () => {
     expect(capBySize([], 10)).toEqual([]);
+  });
+});
+
+describe("capByAge", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("keeps everything within the age budget", () => {
+    const now = 100 * DAY;
+    const gens = [gen(now), gen(now - DAY), gen(now - 2 * DAY)];
+    expect(capByAge(gens, now, 10 * DAY)).toHaveLength(3);
+  });
+
+  it("drops generations older than the budget", () => {
+    const now = 100 * DAY;
+    const gens = [gen(now), gen(now - 5 * DAY), gen(now - 40 * DAY)];
+    expect(capByAge(gens, now, 10 * DAY).map((g) => g.at)).toEqual([now, now - 5 * DAY]);
+  });
+
+  it("ALWAYS keeps the newest, even when it alone is older than the budget", () => {
+    // Mirrors capBySize's identical guarantee: a stale-but-only recovery
+    // point must never be silently discarded — see that describe block.
+    const now = 100 * DAY;
+    const gens = [gen(now - 90 * DAY)];
+    expect(capByAge(gens, now, 10 * DAY).map((g) => g.at)).toEqual([now - 90 * DAY]);
+  });
+
+  it("respects recency even when the store hands back a jumbled order", () => {
+    const now = 100 * DAY;
+    const gens = [gen(now - 40 * DAY), gen(now), gen(now - 5 * DAY)];
+    expect(capByAge(gens, now, 10 * DAY).map((g) => g.at)).toEqual([now, now - 5 * DAY]);
+  });
+
+  it("returns empty only for empty input", () => {
+    expect(capByAge([], 100 * DAY, 10 * DAY)).toEqual([]);
+  });
+
+  it("defaults to MAX_GENERATION_AGE_MS (30 days) when no budget is given", () => {
+    const now = 100 * DAY;
+    const gens = [gen(now), gen(now - 29 * DAY), gen(now - 31 * DAY)];
+    expect(capByAge(gens, now).map((g) => g.at)).toEqual([now, now - 29 * DAY]);
+    expect(MAX_GENERATION_AGE_MS).toBe(30 * DAY);
   });
 });
 

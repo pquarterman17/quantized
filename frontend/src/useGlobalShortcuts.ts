@@ -193,6 +193,16 @@ export function useGlobalShortcuts(): void {
           e.preventDefault();
           s.setPrefsOpen(true);
           break;
+        case "s":
+          // P1.2 box 1: Ctrl/Cmd+S — write to the known project path with no
+          // dialog; falls back to Save As (prompts / downloads) when there is
+          // no known project yet. ⇧ is reserved (a future explicit Save As
+          // shortcut), so this branch only claims the plain combo.
+          if (!e.shiftKey) {
+            e.preventDefault();
+            void s.saveWorkspace();
+          }
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
