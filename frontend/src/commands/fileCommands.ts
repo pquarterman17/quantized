@@ -155,12 +155,19 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "save-workspace",
       group: "File",
-      label: "Save workspace as (.dwk)…",
+      label: "Save workspace (.dwk)…",
       description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
-      // like every other one in this list. Always prompts, unlike "Save
-      // workspace" above, which reuses the known path once one exists.
+      // like every other one in this list. Always prompts (native Save As
+      // dialog, or a browser download) — never reuses a known project path.
+      // P1.2 originally renamed this to "...as (.dwk)…" to disambiguate from
+      // a sibling quick-save command (⌘S); that command was later removed
+      // for bundle-size reasons (AppOverlays.tsx's eager budget), leaving
+      // the "as" with nothing left to disambiguate FROM — reverted back to
+      // the original label, which is also the exact-text locator
+      // e2e/specs/quick-figure-lifecycle.spec.ts drives to trigger a real
+      // browser download (pinned by commands/fileCommands.test.ts).
       run: () => s().saveWorkspaceToFile(),
     },
     {
