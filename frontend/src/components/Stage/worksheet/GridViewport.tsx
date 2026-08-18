@@ -62,6 +62,9 @@ export interface GridViewportProps {
   /** Channels at index >= baseCount are computed (formula) columns. */
   baseCount: number;
   onRemoveFormula: (index: number) => void;
+  /** PR K (K5b): per-column error state for a failing computed column, keyed
+   *  by name (`Dataset.formulaErrors`) — surfaced as a header badge. */
+  formulaErrors?: Record<string, string>;
   showStats: boolean;
   colStats: (CalcResult | null)[] | null;
   statsErr: boolean;
@@ -106,6 +109,7 @@ export default function GridViewport({
   onEditCell,
   baseCount,
   onRemoveFormula,
+  formulaErrors,
   showStats,
   colStats,
   statsErr,
@@ -237,6 +241,7 @@ export default function GridViewport({
         xUnit={xUnit}
         channelRoles={channelRoles}
         baseCount={baseCount}
+        formulaErrors={formulaErrors}
         visibleCols={visibleCols}
         leadingSpacer={leadingColSpacer}
         trailingSpacer={trailingColSpacer}

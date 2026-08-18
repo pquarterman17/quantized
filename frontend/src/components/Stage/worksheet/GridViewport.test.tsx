@@ -246,3 +246,57 @@ describe("GridViewport column resize (MAIN_PLAN #3)", () => {
     expect(screen.queryByText("C0")).not.toBeInTheDocument();
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): the per-column formula-error badge.
+describe("GridViewport formula-error marking (K5b)", () => {
+  function renderWithFormula(formulaErrors?: Record<string, string>) {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[10, NaN], [20, NaN]],
+      labels: ["A", "S"],
+      units: ["", ""],
+      metadata: {},
+    };
+    return render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={1}
+        onRemoveFormula={noop}
+        formulaErrors={formulaErrors}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+      />,
+    );
+  }
+
+  it("shows a warning badge on a computed column with a recorded error", () => {
+    renderWithFormula({ S: 'unknown variable "Z"' });
+    expect(screen.getByTitle('Formula error: unknown variable "Z"')).toBeInTheDocument();
+  });
+
+  it("shows no badge when the column has no error", () => {
+    renderWithFormula({});
+    expect(screen.queryByTitle(/Formula error/)).not.toBeInTheDocument();
+  });
+
+  it("shows no badge when formulaErrors is entirely absent", () => {
+    renderWithFormula(undefined);
+    expect(screen.queryByTitle(/Formula error/)).not.toBeInTheDocument();
+  });
+});

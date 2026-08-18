@@ -513,3 +513,26 @@ describe("DatasetRow — destructive Remove confirms first (GUI_INTERACTION #8)"
     expect(vi.mocked(askConfirm).mock.calls[0][0]).toContain(plain.name);
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K slice 2 (L0.50): the derived-worksheet badge.
+describe("DatasetRow derived-worksheet marking (PR K slice 2)", () => {
+  const derived: Dataset = {
+    ...plain,
+    id: "derived1",
+    name: "flattened",
+    derivedFrom: { datasetId: "plain", pipeline: "yOff=-1" },
+  };
+
+  it("shows no derived-worksheet mark for an ordinary dataset", () => {
+    useApp.setState({ datasets: [plain] });
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(screen.queryByTitle(/Derived worksheet/)).not.toBeInTheDocument();
+  });
+
+  it("shows the derived-worksheet mark, naming the source and pipeline, for a derived worksheet", () => {
+    useApp.setState({ datasets: [plain, derived] });
+    render(<DatasetRow dataset={derived} {...baseProps} />);
+    expect(screen.getByTitle(/Derived worksheet — source: sample\.dat/)).toBeInTheDocument();
+    expect(screen.getByTitle(/pipeline: yOff=-1/)).toBeInTheDocument();
+  });
+});
