@@ -241,6 +241,33 @@ def test_label_line_applies_to_categorical_channels_too() -> None:
     assert ds.labels == ("NbAu-1", "Sample")  # blank override cell -> header name
 
 
+def test_label_line_coinciding_with_header_line_reuses_split_names() -> None:
+    """Review round P2-1: RED before this fix -- pointing label_line AT the
+    header row itself (a plausible "confirm this row as the legend labels
+    too" wizard action) re-read the RAW token row, which still carries the
+    embedded "(unit)" suffix `_extract_units` already split OUT of
+    `p.names` -- so the label silently regained the unit text
+    ('Moment (emu)' instead of 'Moment'). Fixed by reusing `p.names`."""
+    text = "Temp,Moment (emu)\n1,10\n2,20\n"
+    settings = ImportSettings(header_line=0, label_line=0, data_start_line=1, roles=["x", "y"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Moment",)
+    assert ds.units == ("emu",)
+
+
+def test_label_line_coinciding_with_units_line_reuses_split_units() -> None:
+    """Same bug, units_line side: label_line pointing at the units row
+    re-read the raw bracketed cell instead of the already `strip("()[]{}")`
+    -processed `p.units`."""
+    text = "Temp,Moment\nK,(emu)\n1,10\n2,20\n"
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=1, data_start_line=2, roles=["x", "y"]
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("emu",)
+    assert ds.units == ("emu",)
+
+
 def test_preview_reports_label_line() -> None:
     settings = ImportSettings(
         header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
@@ -277,6 +304,23 @@ def test_no_comments_key_when_preamble_is_fully_consumed() -> None:
     )
     ds = parse_import(_MULTI_ROW_TEXT, settings)
     assert "comments" not in ds.metadata
+
+
+def test_preamble_comments_capped_at_max() -> None:
+    """Review round P3(b): RED before this fix -- `data_start_line` is
+    directly user-settable through the wizard (unlike `io/delimited.py`'s
+    auto-sniffed preamble), so an oversized value (a typo, or a stale saved
+    filter reapplied to a much longer file) walked and retained EVERY
+    preceding line as a `comments` entry, unbounded. 600 preamble lines
+    caps down to `_MAX_PREAMBLE_COMMENTS` (500), not 600."""
+    from quantized.io.import_preview import _MAX_PREAMBLE_COMMENTS
+
+    lines = [f"# comment {i}" for i in range(600)] + ["Temp,Moment", "1,10"]
+    text = "\n".join(lines) + "\n"
+    settings = ImportSettings(delimiter=",", header_line=600, data_start_line=601, roles=["x", "y"])
+    ds = parse_import(text, settings)
+    assert len(ds.metadata["comments"]) == _MAX_PREAMBLE_COMMENTS == 500
+    assert ds.metadata["comments"][0] == "# comment 0"
 
 
 def test_comments_survive_alongside_label_rows_and_text_columns() -> None:

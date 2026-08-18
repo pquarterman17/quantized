@@ -63,6 +63,14 @@ _CATEGORICAL_ROLE = "categorical"
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
                  "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
 
+# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
+# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
+# far the sniffer actually looks) -- an accidental huge value would make
+# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
+# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
+# `max_lines` bound on `raw_lines`.
+_MAX_PREAMBLE_COMMENTS = 500
+
 
 @dataclass(frozen=True)
 class ImportSettings:
@@ -211,9 +219,22 @@ def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> l
     """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
     POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
     `label_line` isn't set or is out of range (no override, unchanged
-    behavior)."""
+    behavior).
+
+    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
+    `units_line`), reuse the already `_extract_units`-split `p.names` (or
+    `p.units`) rather than re-reading the raw token row -- the raw row still
+    has an embedded "Name (unit)" suffix that `_extract_units` already
+    stripped out of `p.names`, so reading it again would silently
+    reintroduce the unit text into the label."""
     ll = settings.label_line
-    if ll is None or not (0 <= ll < len(p.all_tokens)):
+    if ll is None:
+        return None
+    if ll == settings.header_line:
+        return list(p.names)
+    if ll == settings.units_line:
+        return list(p.units)
+    if not (0 <= ll < len(p.all_tokens)):
         return None
     row = p.all_tokens[ll]
     return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
@@ -225,10 +246,18 @@ def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
     (raw stripped text) as searchable metadata instead of silently dropped.
     Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
     consumer (search, the Inspector) reads one convention regardless of
-    which import path produced the dataset."""
+    which import path produced the dataset.
+
+    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
+    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
+    directly user-settable through the wizard, so an oversized value (typo,
+    or a stale saved filter) can't balloon `metadata["comments"]` to the
+    size of the whole file."""
     consumed = {settings.header_line, settings.units_line, settings.label_line}
     out: list[str] = []
     for i in range(p.data_start):
+        if len(out) >= _MAX_PREAMBLE_COMMENTS:
+            break
         if i in consumed:
             continue
         raw = p.lines[i].strip() if i < len(p.lines) else ""
