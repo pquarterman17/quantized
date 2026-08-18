@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
+import { folderDatasets } from "../lib/foldertree";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
 
@@ -68,6 +69,29 @@ describe("workbookCombine slice", () => {
     useApp.getState().combineWorkbooks({ workbookIds: ["w1", "w2"], worksheetIds: [] }, "Combined");
     const names = useApp.getState().datasets.map((d) => d.name).sort();
     expect(names).toEqual(["data.dat", "data.dat (2)"]);
+  });
+
+  // P1 fix (adversarial review, 2026-08-18): folder placement is owned by
+  // the WORKBOOK (lib/workbooks.ts:52-54 / store/workbookActions.ts's
+  // moveWorkbookToFolder) — a moved worksheet must not keep listing under
+  // its OLD folder in Folder view / smart folders while the workbook tree
+  // shows it under the new combined workbook (split-brain). The new combined
+  // workbook is placed at the Library root (undefined folderId — combine
+  // never suggests a folder), so every moved worksheet's folderId follows
+  // it to undefined too, consistently.
+  it("re-homes each moved worksheet's folderId to the new workbook's placement (P1 fix)", () => {
+    useApp.setState({
+      datasets: [ds("d1", "a.dat", "w1", { folderId: "f1" })],
+      workbooks: [wb("w1", "A")],
+      folders: [{ id: "f1", name: "F1", parentId: null, order: 0 }],
+    });
+    const newId = useApp.getState().combineWorkbooks({ workbookIds: ["w1"], worksheetIds: [] }, "Combined");
+    const s = useApp.getState();
+    expect(s.workbooks.find((w) => w.id === newId)?.folderId).toBeUndefined();
+    expect(s.datasets.find((d) => d.id === "d1")?.folderId).toBeUndefined();
+    // the old folder no longer lists the moved worksheet — no split-brain
+    // between Folder view and the workbook tree.
+    expect(folderDatasets(s.datasets, "f1")).toEqual([]);
   });
 
   it("is a single undo entry restoring the pre-combine workbook/worksheet assignment exactly", () => {

@@ -15,6 +15,21 @@
 // A source workbook left with zero members is exactly the plan's documented
 // "memberless-but-alive" state, reachable through the manage surface like
 // any other, not a bug this PR introduces.
+//
+// P1 fix (adversarial review, 2026-08-18): folder placement is owned by the
+// WORKBOOK, not the dataset (lib/workbooks.ts:52-54's `WorkbookNode.folderId`
+// doc) — `moveWorkbookToFolder` (workbookActions.ts) re-homes every member's
+// `folderId` in the SAME action for exactly this reason: `Dataset.folderId`
+// is read directly by lib/foldertree.ts's `folderDatasets` (Folder view),
+// SmartFoldersSection, and the dataset row menu, all independent of the
+// workbook tree. Leaving a moved worksheet's `folderId` pointing at its OLD
+// folder split-brains those two views. Combine never suggests a folder for
+// the new workbook (no "shared folder" concept in L0.32-L0.34), so it lands
+// at the Library root (`folderId` undefined) — and every moved worksheet's
+// `folderId` is set to match, UNCONDITIONALLY (mirrors
+// `moveWorkbookToFolder`'s own `folderId ?? undefined` — never "only if it
+// had one"), so the new workbook's placement and its members' folder-view
+// placement can never disagree.
 
 import { nextWorkbookId } from "./workbookIds";
 import { toast } from "./toasts";
@@ -39,8 +54,11 @@ export interface WorkbookCombineSlice {
    *  entry, a status message) when the selection resolves to zero worksheets
    *  or `name` is blank. Every moved worksheet's own display name is
    *  deduped against ITS NEW SIBLINGS ONLY (L0.34) — its source path/import
-   *  time and every other field ride along untouched. One history entry.
-   *  Returns the new workbook's id, or null on refusal. */
+   *  time and every other field ride along untouched, EXCEPT `folderId`,
+   *  which is re-homed to the new workbook's own (the Library root — see
+   *  this file's header P1 note) so Folder view / smart folders can never
+   *  disagree with the workbook tree about where a moved worksheet lives.
+   *  One history entry. Returns the new workbook's id, or null on refusal. */
   combineWorkbooks: (selection: CombineSelection, name: string) => string | null;
 }
 
@@ -66,11 +84,17 @@ export function createWorkbookCombineSlice(set: SliceSet, get: SliceGet): Workbo
       const nameById = new Map(targetIds.map((id, i) => [id, dedupedNames[i]]));
 
       get().recordHistory("combine workbooks");
+      // New workbook lands at the Library root — combine never suggests a
+      // folder (see this file's header P1 note) — so every moved worksheet's
+      // folderId follows it there too, unconditionally, exactly like
+      // moveWorkbookToFolder does for an ordinary workbook move.
       const workbook: WorkbookNode = { id: newId, name: trimmedName };
       set((st) => ({
         workbooks: [...st.workbooks, workbook],
         datasets: st.datasets.map((d) =>
-          targetSet.has(d.id) ? { ...d, workbookId: newId, name: nameById.get(d.id)! } : d,
+          targetSet.has(d.id)
+            ? { ...d, workbookId: newId, folderId: undefined, name: nameById.get(d.id)! }
+            : d,
         ),
       }));
 

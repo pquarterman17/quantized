@@ -83,6 +83,33 @@ describe("workbookSeparate slice", () => {
       expect(s.separatePreview).toBeNull(); // preview clears after commit
     });
 
+    // P1 fix (adversarial review, 2026-08-18): folder placement is owned by
+    // the WORKBOOK (lib/workbooks.ts:52-54 / moveWorkbookToFolder's own
+    // pattern) — every dataset whose workbookId is reassigned must have its
+    // folderId re-homed to match, or it split-brains between Folder view
+    // (lib/foldertree.ts's folderDatasets, still the OLD folder) and the
+    // workbook tree (the NEW workbook). This covers BOTH the seed and a
+    // closure-swept dependent whose folderId had drifted to something
+    // DIFFERENT from the seed's own.
+    it("re-homes the seed's AND a closure-swept dependent's folderId to the new workbook's folder, even when the dependent had drifted to a different one (P1 fix)", () => {
+      useApp.setState({
+        datasets: [
+          ds("d1", "A.dat", "w1", { folderId: "f1" }),
+          ds("d2", "B.dat", "w1", { folderId: "f2", derivedFrom: { datasetId: "d1", pipeline: "p" } }),
+        ],
+        workbooks: [wb("w1", "Source", "f1")],
+        folders: [
+          { id: "f1", name: "F1", parentId: null, order: 0 },
+          { id: "f2", name: "F2", parentId: null, order: 0 },
+        ],
+      });
+      useApp.getState().previewSeparateWorksheets(["d1"]);
+      useApp.getState().commitSeparateWorksheets();
+      const s = useApp.getState();
+      expect(s.datasets.find((d) => d.id === "d1")?.folderId).toBe("f1");
+      expect(s.datasets.find((d) => d.id === "d2")?.folderId).toBe("f1"); // re-homed, not left at the drifted "f2"
+    });
+
     it("moves an exclusively-dependent report along with the separated worksheet", () => {
       useApp.setState({ reports: [report("r1", "d1")] });
       useApp.getState().previewSeparateWorksheets(["d1"]);

@@ -14,6 +14,18 @@
 // previewed worksheet removed by some other gesture before the user
 // confirms) — re-checked explicitly below, failing closed with zero
 // mutation per this PR's transactional-discipline requirement.
+//
+// P1 fix (adversarial review, 2026-08-18): folder placement is owned by the
+// WORKBOOK (lib/workbooks.ts:52-54 / moveWorkbookToFolder's own pattern in
+// workbookActions.ts) — every dataset whose `workbookId` this action
+// reassigns (the seed AND every closure-swept dependent, which may have
+// drifted to a DIFFERENT `folderId` than the seed, e.g. an older derived
+// worksheet created before a since-undone folder move) gets its `folderId`
+// re-homed to the new workbook's own `folderId`
+// (`SeparatePlan.newWorkbookFolderId`, the source workbook's folder —
+// UNCONDITIONALLY, never "only if it already matched"), so Folder view
+// (`lib/foldertree.ts`'s `folderDatasets`) and the workbook tree can never
+// disagree about where a separated worksheet or its dependents live.
 
 import { computeSeparatePlan, type SeparatePlan } from "../lib/workbookSeparate";
 import { nextWorkbookId } from "./workbookIds";
@@ -56,8 +68,11 @@ export interface WorkbookSeparateSlice {
    *  worksheet no longer exists (a race since the preview opened) — the
    *  preview then stays open so the caller can re-preview rather than losing
    *  its place. `name` overrides the plan's suggested default (the dialog's
-   *  editable name field); blank/omitted falls back to the suggestion.
-   *  Returns the new workbook's id on success, null on refusal. */
+   *  editable name field); blank/omitted falls back to the suggestion. Every
+   *  moving dataset's `folderId` is re-homed to the new workbook's own
+   *  (`plan.newWorkbookFolderId`, UNCONDITIONALLY — see this file's header P1
+   *  note) so Folder view can never disagree with the workbook tree. Returns
+   *  the new workbook's id on success, null on refusal. */
   commitSeparateWorksheets: (name?: string) => string | null;
 }
 
@@ -70,6 +85,14 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
         get().setStatus("Separate unavailable: nothing selected");
         return;
       }
+      // P3 booking (adversarial review, 2026-08-18): `nextWorkbookId()` is
+      // minted HERE, once per open, which is safe today (a static preview,
+      // opened once per gesture). A slice-2 LIVE-UPDATING preview (e.g.
+      // re-running as the user tweaks the selection) must NOT call this on
+      // every keystroke/recompute — mint once at commit instead, or memoize
+      // the id across recomputes of the same open preview, or a cancelled
+      // preview leaks session-unique ids for no reason (harmless individually,
+      // but needless churn). Tracked in the plan's PR J slice-2 line.
       const plan = computeSeparatePlan(hierarchyInput(get()), worksheetIds, nextWorkbookId());
       set({ separatePreview: plan });
     },
@@ -94,10 +117,13 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
       const newWorkbookId = plan.newWorkbookId;
 
       get().recordHistory("separate worksheet");
-      const workbook: WorkbookNode = { id: newWorkbookId, name: trimmedName, folderId: plan.newWorkbookFolderId };
+      const newFolderId = plan.newWorkbookFolderId;
+      const workbook: WorkbookNode = { id: newWorkbookId, name: trimmedName, folderId: newFolderId };
       set((st) => ({
         workbooks: [...st.workbooks, workbook],
-        datasets: st.datasets.map((d) => (movingSet.has(d.id) ? { ...d, workbookId: newWorkbookId } : d)),
+        datasets: st.datasets.map((d) =>
+          movingSet.has(d.id) ? { ...d, workbookId: newWorkbookId, folderId: newFolderId } : d,
+        ),
         separatePreview: null,
       }));
 

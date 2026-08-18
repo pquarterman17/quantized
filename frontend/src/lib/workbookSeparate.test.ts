@@ -45,6 +45,30 @@ describe("closeExclusiveDependents", () => {
     expect(closeExclusiveDependents(datasets, ["a"])).toEqual(new Set(["a"]));
   });
 
+  // P2 fix (adversarial review, 2026-08-18): the "does NOT sweep" case above
+  // omits BOTH `corrections` and `raw` at once, so it can't tell a broken
+  // `d.bgRef && d.corrections && d.raw` predicate (e.g. one that dropped
+  // `&& d.raw`) from a correct one — 14/14 tests still passed under that
+  // exact mutation during review. These two isolate each half.
+  it("does NOT sweep in a bgRef consumer with corrections but NO raw (not a live edge)", () => {
+    const datasets = [
+      ds("a", "A"),
+      ds("b", "B", { bgRef: { datasetId: "a", interp: "pchip" }, corrections: {} }),
+    ];
+    expect(closeExclusiveDependents(datasets, ["a"])).toEqual(new Set(["a"]));
+  });
+
+  it("does NOT sweep in a bgRef consumer with raw but NO corrections (not a live edge)", () => {
+    const datasets = [
+      ds("a", "A"),
+      ds("b", "B", {
+        bgRef: { datasetId: "a", interp: "pchip" },
+        raw: { time: [0], values: [[0]], labels: ["y"], units: [""], metadata: {} },
+      }),
+    ];
+    expect(closeExclusiveDependents(datasets, ["a"])).toEqual(new Set(["a"]));
+  });
+
   it("sweeps in a derived worksheet chained off the seed", () => {
     const datasets = [ds("a", "A"), ds("b", "B", { derivedFrom: { datasetId: "a", pipeline: "smooth" } })];
     expect(closeExclusiveDependents(datasets, ["a"])).toEqual(new Set(["a", "b"]));

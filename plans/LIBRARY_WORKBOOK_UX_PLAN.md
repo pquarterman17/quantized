@@ -1201,6 +1201,40 @@ build, and focused interaction coverage where appropriate.
       this PR's brief); PR I's cross-instance transfer; Lane D2's
       dependency-graph WRITES (this slice only READS `downstreamOf`-adjacent
       structure via `closeExclusiveDependents`, never persists a graph).
+      **Slice-2 caveat (booked from the adversarial review, 2026-08-18):**
+      `previewSeparateWorksheets` mints `nextWorkbookId()` once per preview
+      OPEN — fine for today's static, open-once-per-gesture preview, but a
+      live-updating preview (re-running as the user tweaks the separate
+      selection) must NOT re-mint on every recompute/keystroke; mint once at
+      commit instead, or memoize the id across recomputes of the same open
+      preview. Booked as a slice-2 constraint, not built here.
+    - **Review round (2026-08-18, adversarial verdict SOUND-WITH-FIXES) —
+      P1/P2 fixed, same commit as slice 1's plan-doc entry:** P1 (probe-
+      proven): `combineWorkbooks`/`commitSeparateWorksheets` reassigned
+      `Dataset.workbookId` but left `folderId` untouched, breaking the
+      `lib/workbooks.ts:52-54`/`moveWorkbookToFolder` invariant ("folder
+      placement is owned by the WORKBOOK") and split-braining Folder view
+      (`lib/foldertree.ts`'s `folderDatasets`, read by `Library.tsx`/
+      `SmartFoldersSection.tsx`/`datasetRowMenu.ts`) against the workbook
+      tree. Fixed: combine's new workbook lands at the Library root, so
+      every moved worksheet's `folderId` is set to `undefined` UNCONDITIONALLY
+      (mirroring `moveWorkbookToFolder`'s own `folderId ?? undefined`);
+      separate's moving datasets (seed + closure-swept dependents, which can
+      carry a DIFFERENT drifted `folderId` than the seed) are all re-homed to
+      `SeparatePlan.newWorkbookFolderId` (the source workbook's folder).
+      Red-first: a dataset moved from a foldered workbook no longer
+      disappears from `folderDatasets(oldFolder)` (combine) and a
+      closure-swept dependent with a drifted `folderId` gets re-homed to
+      match the seed's new placement (separate) — both quoted red in the
+      session transcript, both mutation-tested by reverting the fix. P2
+      (should-fix): `closeExclusiveDependents`'s bgRef live-edge predicate
+      (`d.bgRef && d.corrections && d.raw`) had no test isolating each half —
+      the sole negative case dropped BOTH `corrections` and `raw` at once, so
+      a mutated predicate missing just `&& d.raw` (or just `&& d.corrections`)
+      still passed all 14 prior tests. Added two isolated cases; each was
+      proven red under its matching single-field mutation, then the
+      predicate was restored. P3 (booked): `previewSeparateWorksheets`'s
+      `nextWorkbookId()`-per-open caveat above.
 11. [~] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.
