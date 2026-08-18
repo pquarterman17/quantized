@@ -9,16 +9,37 @@
 // A .dwk must be self-contained (#38): resolve every pending lazy book
 // FIRST — an exported file never references a book by a path/token that may
 // not exist on another machine or after a server restart.
+//
+// P1.1 C3: "Save workspace" now tries a NATIVE Save As first — a real dialog,
+// a real path, a direct in-process write (desktopBridge.ts's `saveProjectAs`)
+// — and falls back to the pre-existing `saveBlob` download exactly when
+// `saveProjectAs` reports `null` ("no usable bridge", which is EVERY jsdom
+// test environment and every browser tab). A `CANCELLED` result is a
+// deliberate no-op: the user backed out of the native dialog, and falling
+// back to a browser download they never asked for would be worse than doing
+// nothing. Only a genuine native save (a real returned path) records a
+// Recent Projects entry — see lib/recentProjects.ts's module doc for why a
+// browser download, which has no path, never does.
 
+import { CANCELLED, saveProjectAs } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
+import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
+
+/** Basename of a native path, tolerant of either separator (the same "either
+ *  slash, Windows paths included" handling lib/importEntry.ts's
+ *  `parentDirectory` uses for the complementary half of a path). */
+function baseName(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
 
 export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   const all = get().datasets;
@@ -47,12 +68,21 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     s,
     s.techniqueViewMemory,
   );
-  saveBlob(
-    new Blob([serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory })], {
-      type: "application/json",
-    }),
-    "workspace.dwk",
-  );
+  const content = serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+
+  const native = await saveProjectAs("workspace.dwk", content);
+  if (native === CANCELLED) return; // the user backed out — do nothing, never fall back
+  if (native !== null) {
+    useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
+    const msg = `saved workspace to ${native.path} — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
+    get().setStatus(msg);
+    toast(msg, "ok");
+    return;
+  }
+
+  // No usable bridge (every browser tab, and every jsdom test environment) —
+  // byte-identical to this function's pre-P1.1 behavior.
+  saveBlob(new Blob([content], { type: "application/json" }), "workspace.dwk");
   const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
   get().setStatus(msg);
   toast(msg, "ok");
