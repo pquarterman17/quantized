@@ -471,12 +471,12 @@ export interface Dataset {
   group?: string;
   /** Containing folder id (project-organization plan, Approach B). Absent =
    *  the dataset lives at the tree root; membership lives HERE (not as a
-   *  folder child-list) so deleting a dataset can never dangle a ref. */
+   *  folder child-list) so deleting a dataset can never dangle a ref. Pure
+   *  organization — it never gates row-state (excludedRows/filter). */
   folderId?: string;
   /** Sort key within the containing folder (see lib/order); absent falls back to insertion order. */
   order?: number;
-  /** Worksheet computed columns — occupy the last `formulas.length` columns
-   *  of `data`; recompute when the base data changes. */
+  /** Worksheet computed columns — occupy the last `formulas.length` columns of `data`; recompute on base-data changes. */
   formulas?: ComputedColumn[];
   /** PR K: per-column error for a failing formula, keyed by name. */
   formulaErrors?: Record<string, string>;

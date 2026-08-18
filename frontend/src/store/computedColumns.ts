@@ -46,8 +46,11 @@ type SliceGet = () => AppState;
 
 /** The channel letter a dataset's `index`-th formula occupies (LIBRARY_
  *  WORKBOOK_UX_PLAN PR K): formulas are appended positionally after every
- *  base column, in list order — see `lib/formula.ts`'s module header. */
-function formulaLetter(baseLabelCount: number, formulaCount: number, index: number): string {
+ *  base column, in list order — see `lib/formula.ts`'s module header.
+ *  Exported for tests: the cycle check resolves deps by LETTER, not by a
+ *  formula's display `name`, so a regression test must compute the real
+ *  letter a new/edited column will occupy rather than guess. */
+export function formulaLetter(baseLabelCount: number, formulaCount: number, index: number): string {
   const baseCount = Math.max(0, baseLabelCount - formulaCount);
   return channelLetter(baseCount + index);
 }

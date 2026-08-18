@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ComputedColumn, Dataset } from "../lib/types";
+import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
 
 // A base dataset with ONE real column, "A".
@@ -88,6 +89,33 @@ describe("addFormula (K1/K2/K4/K5b)", () => {
     const ok = useApp.getState().addFormula("a", "C", "B + 1");
     expect(ok).toBe(true);
     expect(useApp.getState().status).not.toMatch(/circular/);
+  });
+
+  // Review-round P1: the previous test suite had ZERO coverage that
+  // addFormula's wouldCreateCycle check (store/computedColumns.ts:74-83) is
+  // actually wired in — deleting the check left all 23 targeted tests
+  // green. A display-name self-reference (e.g. addFormula("a", "S", "S+1"))
+  // is a FALSE NEGATIVE for this purpose: formulas resolve dependencies by
+  // CHANNEL LETTER (see lib/formula.ts's colSnapshot/ctx keying), never by
+  // the column's display `name`, so the only real self-reference a brand-
+  // new column can make is against the LETTER it's about to occupy —
+  // computed here via the exported `formulaLetter`, not guessed.
+  it("refuses a new formula that references the channel letter it will itself occupy (P1 regression)", () => {
+    const base = baseDs("a"); // 1 base column "A", no formulas yet
+    useApp.setState({ datasets: [base] });
+    const target = formulaLetter(base.data.labels.length, 0, 0); // the letter "S" will land on
+    const beforeDatasets = useApp.getState().datasets;
+    const beforeHistory = useApp.getState().history.length;
+
+    const ok = useApp.getState().addFormula("a", "S", `${target} + 1`);
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().status).toMatch(/cannot depend on itself/);
+    // Zero mutation: same datasets array reference, no formula appended.
+    expect(useApp.getState().datasets).toBe(beforeDatasets);
+    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+    // No history entry for a refused write.
+    expect(useApp.getState().history.length).toBe(beforeHistory);
   });
 });
 
