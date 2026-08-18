@@ -11,17 +11,22 @@
 // cohesive block funds itself with a fresh module instead of raising the
 // pin (the `lib/api/stats.ts` precedent that guard's own comment names).
 //
-// ALGORITHM PARITY (item 3 of the P1.5 scope): this reuses the EXACT same
-// per-level split buildXY already implements -- distinct FINITE integer
-// codes across every row, sorted ascending, one expanded series per
-// (base channel, level) pair, `${label} (${groupLabel}=${levelLabel})` --
-// so the interactive Stage and the Graph Builder's own preview render
-// identical level ordering/labeling for the identical spec. It is a second
-// CALL SITE of the identical algorithm, not a reimplementation, so there is
-// no new label-resolution site for the cross-language parity fixture
-// (`tests/test_calc_plotting.py` <-> `plotspec.test.ts`) to cover -- see
-// this module's own test file for the parity assertion against buildXY's
-// documented behavior instead.
+// ALGORITHM PARITY (item 3 of the P1.5 scope; review round P2 correction):
+// `applyGroupSplit` is an INDEPENDENTLY hand-written function -- it does
+// NOT call `buildXY`, and the two are not one shared code path. What makes
+// them a genuine parity claim rather than a hand-synced pair (the exact
+// P1.4 "two implementations drift apart" trap) is `plotGroupSplit.test.ts`'s
+// REAL runtime parity test: it builds the identical payload through BOTH
+// functions and asserts the results are `toEqual` -- same distinct FINITE
+// integer codes sorted ascending, same expanded series per (channel,
+// level), same `${label} (${groupLabel}=${levelLabel})` format, same
+// non-finite-Y masking (both now guard `Number.isFinite` explicitly). That
+// test is what would catch the two drifting apart in the future, not a
+// shared-code guarantee -- so there is no NEW label-resolution site for the
+// backend/frontend cross-language parity fixture
+// (`tests/test_calc_plotting.py` <-> `plotspec.test.ts`) to cover: this is
+// a frontend-internal parity question between two frontend implementations,
+// orthogonal to that fixture's backend/frontend boundary.
 //
 // STABLE IDENTITY / edit-one-vs-edit-all ruling (item 5): every expanded
 // series for one base channel shares that channel's OWN entry in
@@ -87,7 +92,12 @@ export function applyGroupSplit(
     const base = payload.series[i];
     if (!base) return; // defensive: a malformed payload's column/series-list length mismatch
     for (const lvl of levels) {
-      cols.push(col.map((v, r) => (groupCodes[r] === lvl ? v : null)));
+      // P1.5 review P2: explicit Number.isFinite guard, matching buildXY's
+      // own -- the upstream fetch already nulls non-finite values today
+      // (buildColumns/fromResponse), so this is usually a no-op in
+      // practice, but a caller must never depend on that upstream
+      // invariant for genuine parity with buildXY's documented contract.
+      cols.push(col.map((v, r) => (groupCodes[r] === lvl && Number.isFinite(v) ? v : null)));
       series.push({ ...base, label: `${base.label} (${groupLabel}=${levelLabelOf(lvl)})` });
     }
   });

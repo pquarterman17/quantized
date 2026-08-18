@@ -556,8 +556,8 @@ function channelLabel(data: DataStruct, channel: number): string {
 }
 
 /** Build the xy payload, splitting into one series per group level when a group channel is set
- *  (a colour split; each series is the Y value where the row's group matches, null elsewhere, so all series share the one x column; a categorical group channel's label is its string level, P4-4). */
-function buildXY(
+ *  (a colour split; each series is the Y value where the row's group matches, null elsewhere, so all series share the one x column; a categorical group channel's label is its string level, P4-4). Exported so plotGroupSplit.test.ts can assert REAL parity against applyGroupSplit (P1.5 review P2), not a hand-synced twin. */
+export function buildXY(
   data: DataStruct,
   xKey: number | null,
   yChannels: number[],
