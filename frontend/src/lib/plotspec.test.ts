@@ -475,7 +475,7 @@ describe("specToRender", () => {
       labels: ["Value", "Region"],
       units: ["V", ""],
       metadata: {},
-      catLevels: { 1: ["North", "South"] },
+      cat_levels: { 1: ["North", "South"] },
     };
     const catDs: Dataset = { id: "c1", name: "cat.dat", data: catData };
     const r = specToRender(
@@ -505,7 +505,7 @@ describe("specToRender", () => {
 
   // P1.4 (P4-4 closing sentence): the box/bar categorical gate is
   // `isCategorical(channelModelingType(...))`; channelModelingType now
-  // defaults a catLevels channel to "nominal" (lib/modeling.ts), so a
+  // defaults a cat_levels channel to "nominal" (lib/modeling.ts), so a
   // categorical channel is box-groupable with NO channelTypes override —
   // even one too small/irregular for the numeric-shape inference to catch.
   it("a P1.4 categorical X channel is box-groupable with no channelTypes override", () => {
@@ -520,7 +520,7 @@ describe("specToRender", () => {
       labels: ["Lot", "y"],
       units: ["", ""],
       metadata: {},
-      catLevels: { 0: ["L1", "L2"] }, // only 4 rows, 2 levels — below inferModelingType's MIN_SAMPLES
+      cat_levels: { 0: ["L1", "L2"] }, // only 4 rows, 2 levels — below inferModelingType's MIN_SAMPLES
     };
     const catDs: Dataset = { id: "c2", name: "cat2.dat", data: catData };
     const r = specToRender(spec({ datasetId: "c2", channel: 0 }, [{ datasetId: "c2", channel: 1 }], "box"), [catDs]);

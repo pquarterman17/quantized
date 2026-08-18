@@ -118,7 +118,7 @@ describe("channelModelingType — P1.4 categorical default", () => {
         labels: ["x", "cat"],
         units: ["", ""],
         metadata: {},
-        catLevels: { 1: smoothCodes.map((_, i) => `L${i}`) },
+        cat_levels: { 1: smoothCodes.map((_, i) => `L${i}`) },
       },
     };
     expect(channelModelingType(d, 1)).toBe("nominal");
@@ -135,7 +135,7 @@ describe("channelModelingType — P1.4 categorical default", () => {
         labels: ["cat"],
         units: [""],
         metadata: {},
-        catLevels: { 0: ["A", "B"] },
+        cat_levels: { 0: ["A", "B"] },
       },
       channelTypes: { 0: "continuous" },
     };

@@ -1,0 +1,49 @@
+{
+  "cat_levels": {
+    "1": [
+      "NbAu-1",
+      "NbAu-2"
+    ]
+  },
+  "labels": [
+    "Moment",
+    "Sample"
+  ],
+  "metadata": {
+    "all_column_names": [
+      "Sample",
+      "Moment"
+    ],
+    "delimiter": ",",
+    "notes": [
+      "Column 'Sample' is text, not numeric or datetime; the time axis fell back to a 1..N row index and the column was imported as a categorical channel."
+    ],
+    "parser_name": "import_csv",
+    "source": "categorical_import.csv",
+    "x_column_name": "Sample Index",
+    "x_column_unit": ""
+  },
+  "time": [
+    1.0,
+    2.0,
+    3.0
+  ],
+  "units": [
+    "",
+    ""
+  ],
+  "values": [
+    [
+      1.5,
+      0.0
+    ],
+    [
+      2.5,
+      1.0
+    ],
+    [
+      3.5,
+      0.0
+    ]
+  ]
+}
