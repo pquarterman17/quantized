@@ -1063,9 +1063,49 @@ build, and focused interaction coverage where appropriate.
 10. [ ] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
-11. [ ] **PR K — calculated columns and derived worksheets.** Add the acyclic
+11. [~] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.
+    - [x] **slice 1 — dependency foundation (Claude, worktree agent):**
+      implemented pending review, on `claude/k-dependency-foundation`. K1
+      static `referencedColumns` (reuses compileFormula's own parse, one new
+      `onRef` hook — no second parser); K2 schema (`ComputedColumn.deps`,
+      `Dataset.derivedFrom`, `Dataset.formulaErrors`, all additive .dwk,
+      no version bump — `formulas[].deps` rides the existing per-entry
+      passthrough, `derivedFrom`/`formulaErrors` got their own
+      `lib/workspaceComputedColumns.ts` serialize/parse helpers); K3
+      widened `lib/recalc.ts` graph (ds:/col:/sheet:/fit: vocabulary) —
+      THE RULING: the graph is derived fresh from `Dataset.bgRef` /
+      `.fitSpec` / `.derivedFrom` / `ComputedColumn.deps` on every query,
+      never itself persisted (documented in the module header) —
+      `downstreamOf` reimplemented on top of it, same public shape, all
+      prior tests green; K4 write-time cycle rejection
+      (`wouldCreateCycle`, pure + exported) wired into `addFormula`/
+      `updateFormula` (new `store/computedColumns.ts` slice — also funded
+      useApp.ts headroom by extracting addFormula/removeFormula out of the
+      pinned file) and `applyCorrections`' bgRef (`store/corrections.ts`) —
+      the constructible-today A↔B bgRef cycle is now REFUSED at write time
+      (red-first pin in `store/recalc.test.ts`), zero mutation, clear
+      status explanation naming the cycle path; K5 invariants pinned by
+      test — (a) synchronous same-dataset formula freshness unchanged,
+      (b) a failing formula now carries a visible `Dataset.formulaErrors`
+      entry alongside its NaN column (previously silent), (c) a derived
+      worksheet (`derivedFrom` set) is stale-marked but never synchronously
+      recomputed — `downstreamOf`'s generalization gives this for free, no
+      `touchDataset` logic change needed, (d) a ds→sheet→fit chain settles
+      in topological order inside one `recalcNow` (also free, from the
+      existing two-phase corrections-then-fits order once `staleFits` is
+      populated by the same widened graph walk), (e) one `recordHistory`
+      per gesture pinned. `updateFormula` — an authoring action the
+      contract names but that didn't exist before this slice — is new
+      (edit an existing computed column's name/expr/unit in place). NO UI:
+      no derived-worksheet creation surface, no Freeze Copy, no visible
+      error-state marking in the worksheet grid — those + the `derivedFrom`
+      setter's own cycle-check wiring are slice 2. Unblocks: PR M's
+      dependency-aware Trash/reimport preview (booked pointer at line
+      ~537/2353) can now query `downstreamOf`/`wouldCreateCycle` for
+      derived worksheets, not just bgRef chains; PR J's dependency-aware
+      workbook separation (L0.51) has the same generalized graph to query.
 12. [ ] **PR L — Details metadata and Collections.** Add column selection,
     batch project-metadata edits, grouping/filtering, session undo, and
     project-local saved Collections from L0.48-L0.49 and L0.56.
