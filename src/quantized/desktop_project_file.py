@@ -21,6 +21,7 @@ __all__ = [
     "WORKSPACE_VERSIONS",
     "WRITE_TEMP_PREFIX",
     "cleanup_stray_write_temps",
+    "extract_declared_source_paths",
     "validate_workspace_payload",
 ]
 
@@ -40,6 +41,46 @@ __all__ = [
 # checks before it will even start reading a document, no further.
 WORKSPACE_FORMAT = "quantized-workspace"
 WORKSPACE_VERSIONS = (1, 2, 3, 4)
+
+
+def extract_declared_source_paths(content: str) -> list[str]:
+    """Every ``datasets[].source.path`` string a project payload itself
+    names — for P1.7's server-side consent-enforcement fix (``desktop_bridge
+    .py``'s ``_read_granted``, ``desktop_consent.set_declared_sources``): the
+    backend must record what THIS project's own OPENED FILE declares as its
+    sources, so ``grant_source_paths`` can refuse to trust an arbitrary
+    caller-supplied list later (the frontend's argument becomes a request,
+    never an authority — see ``desktop_consent.py``'s "declared sources"
+    section for the full ruling).
+
+    Best-effort and never raises: a malformed/foreign/non-workspace payload
+    yields ``[]`` rather than an exception, since this runs on the SAME read
+    path as a plain "open project" click and a bad file must still open (or
+    fail) exactly as it did before this existed — the parse here is read-
+    only reconnaissance, never the gate on whether ``content`` IS a valid
+    workspace (``validate_workspace_payload`` above owns that, ahead of a
+    WRITE; the frontend's own ``parseWorkspace`` owns full semantic
+    validation on open)."""
+    try:
+        payload = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    datasets = payload.get("datasets")
+    if not isinstance(datasets, list):
+        return []
+    paths: list[str] = []
+    for ds in datasets:
+        if not isinstance(ds, dict):
+            continue
+        source = ds.get("source")
+        if not isinstance(source, dict):
+            continue
+        path = source.get("path")
+        if isinstance(path, str) and path:
+            paths.append(path)
+    return paths
 
 
 def validate_workspace_payload(content: str) -> str | None:

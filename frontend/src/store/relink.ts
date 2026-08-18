@@ -64,7 +64,7 @@ interface RelinkState {
   setOldRoot: (v: string) => void;
   setNewRoot: (v: string) => void;
   runPreview: () => Promise<void>;
-  commit: () => void;
+  commit: () => Promise<void>;
   importChangedAsNewVersion: (datasetId: string) => Promise<void>;
 }
 
@@ -186,13 +186,51 @@ export const useRelink = create<RelinkState>((set, get) => ({
     }
   },
 
-  commit: () => {
+  commit: async () => {
     const { preview } = get();
-    const resolved = preview.filter(
+    const candidates = preview.filter(
       (r) => r.status === "resolved" && r.candidatePath && r.changeVerdict !== "changed",
     );
-    if (resolved.length === 0) {
+    if (candidates.length === 0) {
       toast("nothing to relink — no resolved, unchanged candidates", "danger");
+      return;
+    }
+    set({ busy: true });
+    let resolved: RelinkPreviewRow[];
+    try {
+      // P2 (adversarial review, TOCTOU): the preview can go stale between
+      // when it ran and when the user clicks Relink — a file deleted or
+      // overwritten in that window must never write a stale checksum
+      // silently. Re-probe every committing candidate right here, right
+      // before the write, and drop (never trust) anything whose
+      // reachability changed or whose content changed AGAIN since the
+      // preview ran.
+      const reprobed = await Promise.all(
+        candidates.map(async (row) => {
+          const probe = await probeSource(row.candidatePath!);
+          if (probe === null || probe.state !== "ok") return null;
+          if (
+            row.candidateChecksum != null &&
+            probe.checksum != null &&
+            probe.checksum !== row.candidateChecksum
+          ) {
+            return null; // changed again since Preview — do not trust it
+          }
+          return {
+            ...row,
+            candidateChecksum: probe.checksum,
+            candidateMtime: probe.mtime,
+            candidateSize: probe.size,
+          };
+        }),
+      );
+      resolved = reprobed.filter((r): r is RelinkPreviewRow => r !== null);
+    } finally {
+      set({ busy: false });
+    }
+    const staleSinceCommit = candidates.length - resolved.length;
+    if (resolved.length === 0) {
+      toast("nothing to relink — every candidate changed or became unreachable since Preview", "danger");
       return;
     }
     const byId = new Map(resolved.map((r) => [r.datasetId, r]));
@@ -209,13 +247,14 @@ export const useRelink = create<RelinkState>((set, get) => ({
           source: {
             kind: "path" as const,
             path: row.candidatePath,
-            // Backfill provenance from the fresh probe: for an "unchanged"
-            // verdict this is the SAME bytes already recorded (no silent
-            // rewrite — it still describes the identical content); for
-            // "unknown" (nothing was recorded before, e.g. a legacy or
-            // browser-imported dataset) this fills a genuine gap rather
-            // than leaving it forever blank. A "changed" row never reaches
-            // here — filtered out above.
+            // Backfill provenance from the RE-PROBED fresh read (not the
+            // stale preview one): for an "unchanged" verdict this is the
+            // SAME bytes already recorded (no silent rewrite — it still
+            // describes the identical content); for "unknown" (nothing was
+            // recorded before, e.g. a legacy or browser-imported dataset)
+            // this fills a genuine gap rather than leaving it forever
+            // blank. A "changed" row never reaches here — filtered out
+            // above, both at Preview and again at re-probe.
             ...(row.candidateChecksum != null ? { checksum: row.candidateChecksum } : {}),
             ...(row.candidateMtime != null ? { mtime: row.candidateMtime } : {}),
             ...(row.candidateSize != null ? { size: row.candidateSize } : {}),
@@ -225,12 +264,11 @@ export const useRelink = create<RelinkState>((set, get) => ({
     }));
     const skippedChanged = preview.filter((r) => r.changeVerdict === "changed").length;
     const summary = `relinked ${resolved.length} dataset${resolved.length === 1 ? "" : "s"}`;
-    toast(
-      skippedChanged > 0
-        ? `${summary} — ${skippedChanged} changed source${skippedChanged === 1 ? "" : "s"} skipped (import as new version instead)`
-        : summary,
-      "ok",
-    );
+    const notes = [
+      skippedChanged > 0 ? `${skippedChanged} changed source${skippedChanged === 1 ? "" : "s"} skipped (import as new version instead)` : null,
+      staleSinceCommit > 0 ? `${staleSinceCommit} candidate${staleSinceCommit === 1 ? "" : "s"} changed since Preview, skipped` : null,
+    ].filter((n): n is string => n !== null);
+    toast(notes.length > 0 ? `${summary} — ${notes.join("; ")}` : summary, "ok");
     set({ open: false, preview: [] });
   },
 

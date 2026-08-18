@@ -99,28 +99,37 @@ P1.7): distinguishing missing / offline / changed / permission-denied source
 states, and computing the checksum a "did this source's CONTENT change"
 verdict needs (``lib/relink.ts``'s ``sourceChangeVerdict``).
 
-**The ruling.** A checksum requires reading a file's full bytes — a strictly
-bigger ask than the reachability check ``path_status`` above already makes
-with NO consent at all (existence/type only, never content). Requiring a
-fresh native OPEN dialog per relinked file — the ordinary read-consent
-path — would make relinking a folder tree of hundreds of datasets pop
-hundreds of dialogs, which defeats the feature. So this reuses (does NOT
-invent a parallel consent kind for) ``desktop_consent``'s EXISTING read-grant
-store, extended with one new, narrowly-scoped entry point:
-``grant_source_paths`` — a thin wrapper over the same ``grant_paths`` a real
-``pick_files`` dialog calls, EXCEPT the paths did not just come out of a
-modal dialog. What justifies that: the frontend calls it ONLY with paths
-already recorded as a ``Dataset.source.path`` in the project CURRENTLY OPEN
-in the app — and opening that project (``open_project_file``/
-``read_project_file``) itself already required a real native dialog earlier.
-A user who opened a project has already, once, expressed trust in
-everything that project itself declares as its own sources; this extends
-that SAME trust to reading those specific files for a fingerprint, not to
-anything the page could name on its own. ``probe_source`` itself still
-computes a checksum ONLY when the resolved path is ALREADY read-consented
-(``desktop_consent.is_consented``) at call time — a path nobody granted (via
-either a real pick or ``grant_source_paths``) gets state/size/mtime only,
-never content.
+**The ruling (P1-A fix, adversarial review round; full mechanics in
+``desktop_consent.py``'s "declared sources" section).** A checksum reads a
+file's full bytes — bigger than the consent-free ``path_status`` reachability
+check above — but a fresh OPEN dialog per relinked file would make relinking
+hundreds of datasets pop hundreds of dialogs. An EARLIER version of
+``grant_source_paths`` was a bare passthrough to ``grant_paths`` reasoning
+"the frontend only ever asks for its own project's sources" — that reasoning
+does not hold (the frontend's argument is caller-supplied input like any
+other), and made this method an unconditional, un-gated arbitrary-file-read-
+consent oracle: any JS in the window, no dialog, no project even open, could
+self-grant read consent for any path (e.g. a user's SSH key).
+
+The fix reuses (does NOT invent a parallel kind of) ``desktop_consent``'s
+existing read-grant store, gated by a NEW server-tracked *declared-source
+set*: ``_read_granted`` (below — ``open_project_file``/``read_project_file``,
+both reached only via a real native OPEN dialog) records exactly what a
+just-opened project's OWN payload names as dataset sources
+(``set_declared_sources``); ``grant_source_paths`` intersects its request
+against that set before ever calling ``grant_paths``, silently dropping
+anything the currently-open project didn't itself declare. The frontend's
+argument list is a REQUEST against backend-tracked state, never an authority
+— no HTTP route, no separate js_api, can add to that set directly. Residual,
+accepted scope: whatever the OPENED project's own payload declares is still
+eligible (same trust act as ``pick_files`` granting whatever a user
+physically selected, applied to content instead of selection) — this fix
+closes the unconditional oracle, not full sandboxing against a hostile
+payload's own declared paths.
+
+``probe_source`` itself still computes a checksum ONLY when the resolved
+path is ALREADY read-consented (``desktop_consent.is_consented``) at call
+time — a path nobody granted gets state/size/mtime only, never content.
 """
 
 from __future__ import annotations
@@ -135,10 +144,13 @@ from quantized.desktop_consent import (
     grant_paths,
     grant_write_path,
     is_consented,
+    is_declared_source,
+    set_declared_sources,
 )
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
+    extract_declared_source_paths,
     validate_workspace_payload,
 )
 from quantized.desktop_source_probe import probe_source_path, volume_present
@@ -313,14 +325,21 @@ class DesktopApi:
         return probe_source_path(resolved, compute_checksum=is_consented(resolved))
 
     def grant_source_paths(self, paths: list[str]) -> dict[str, Any]:
-        """Extend READ consent to paths the caller asserts are ALREADY a
-        dataset's recorded `source.path` in the project currently open in
-        this app — never an arbitrary list the page invents. A thin wrapper
-        over the SAME `grant_paths` a real `pick_files` dialog result goes
-        through (no parallel consent kind); see this module's doc for why
-        that's a sound extension of the trust a native project-open dialog
-        already granted, rather than a new bypass."""
-        return {"paths": grant_paths(paths)}
+        """Extend READ consent to paths the CALLER ASSERTS are a dataset's
+        source in the project open in this app — NOT taken on faith (P1-A
+        fix; see this module's doc). Intersected against the server-tracked
+        declared-source set (populated only from a payload THIS process
+        itself read via a real dialog, `_read_granted`) before ever
+        reaching `grant_paths`; anything not declared is silently dropped."""
+        eligible: list[str] = []
+        for p in paths:
+            try:
+                resolved = os.path.realpath(p)
+            except (OSError, ValueError):
+                continue
+            if is_declared_source(resolved):
+                eligible.append(resolved)
+        return {"paths": grant_paths(eligible)}
 
     # -- project save (P1.1 C2) ----------------------------------------------
 
@@ -421,7 +440,14 @@ class DesktopApi:
         `read_project_file` (an already-consented path, no new dialog):
         read `path` IN-PROCESS if EITHER a read or a write grant covers it —
         a project saved earlier this session is reopenable without a second
-        dialog even though `save_file_dialog` only ever granted WRITE."""
+        dialog even though `save_file_dialog` only ever granted WRITE.
+
+        P1.7 (P1-A fix): a successful read here IS a project open/reopen, so
+        it also records what that payload declares as its dataset sources
+        (`set_declared_sources`, wholesale-replacing any prior project's) —
+        what `grant_source_paths` enforces against; see this module's doc.
+        Never runs on a `None`/error read, nor on a save, so a Save-As can't
+        retroactively "declare" a dataset list before it's ever reopened."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
@@ -434,6 +460,7 @@ class DesktopApi:
                 content = f.read()
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
+        set_declared_sources(extract_declared_source_paths(content))
         return {"path": granted, "content": content}
 
     def open_project_file(self, directory: str = "") -> dict[str, Any]:

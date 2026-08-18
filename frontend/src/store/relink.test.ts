@@ -202,8 +202,17 @@ describe("commit (box 3: atomic, one undo entry)", () => {
         },
       ],
     });
+    // P2: commit re-probes every candidate right before writing (TOCTOU
+    // fix) — these mirror the Preview-time probes exactly (nothing changed
+    // in the gap), so both rows commit as before.
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) => {
+      if (path === "/new/place/a.csv") {
+        return { state: "ok", path, size: 1, mtime: 1, checksum: "sha256:a" };
+      }
+      return { state: "ok", path, size: 2, mtime: 2, checksum: "sha256:b" };
+    });
 
-    useRelink.getState().commit();
+    await useRelink.getState().commit();
 
     expect(useApp.getState().history).toHaveLength(1); // ONE undo entry for the whole batch
     const [a, b] = useApp.getState().datasets;
@@ -213,6 +222,81 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     useApp.getState().undo();
     expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv");
     expect(useApp.getState().datasets[1].source?.path).toBe("/old/data/b.csv");
+  });
+
+  // P2 (adversarial review, TOCTOU): a file changed/vanished in the window
+  // between Preview and clicking Relink must never write a stale checksum
+  // silently — RED-FIRST against the pre-fix commit() (which trusted the
+  // stale preview row with no re-probe at all).
+  it("re-probes at commit time and drops a row whose content changed again since Preview", async () => {
+    useApp.setState({
+      datasets: [baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv" } })],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: "sha256:preview-time",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    // The re-probe at commit time sees a DIFFERENT checksum than Preview did.
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/a.csv",
+      size: 2,
+      mtime: 2,
+      checksum: "sha256:changed-after-preview",
+    });
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv"); // untouched
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).toHaveBeenCalledWith(
+      "nothing to relink — every candidate changed or became unreachable since Preview",
+      "danger",
+    );
+  });
+
+  it("re-probes at commit time and drops a row that vanished since Preview", async () => {
+    useApp.setState({
+      datasets: [baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv" } })],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: null,
+          candidateSize: null,
+        },
+      ],
+    });
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "missing",
+      path: "/new/place/a.csv",
+      size: null,
+      mtime: null,
+      checksum: null,
+    });
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv");
+    expect(useApp.getState().history).toHaveLength(0);
   });
 
   it("excludes a 'changed' row from commit — never silently rewritten (box 2/5)", async () => {
@@ -235,7 +319,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       ],
     });
 
-    useRelink.getState().commit();
+    await useRelink.getState().commit();
 
     expect(useApp.getState().datasets[0].source).toEqual({
       kind: "path",
@@ -245,7 +329,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(useApp.getState().history).toHaveLength(0); // nothing committed, nothing to undo
   });
 
-  it("reports nothing-to-relink instead of committing an empty batch", () => {
+  it("reports nothing-to-relink instead of committing an empty batch", async () => {
     useRelink.setState({
       preview: [
         {
@@ -262,7 +346,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       ],
     });
 
-    useRelink.getState().commit();
+    await useRelink.getState().commit();
 
     expect(useApp.getState().history).toHaveLength(0);
     expect(toast).toHaveBeenCalledWith("nothing to relink — no resolved, unchanged candidates", "danger");

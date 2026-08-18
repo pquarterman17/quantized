@@ -888,18 +888,66 @@ returns `ok`/`missing`/`offline`/`invalid`/`permission_denied` plus
 full in `desktop_bridge.py`'s module doc): a checksum needs a full file
 READ, a strictly bigger ask than the reachability check `path_status`
 already makes with zero consent — so a NEW js_api method,
-`grant_source_paths`, extends read consent for paths already recorded as
-the CURRENTLY OPEN project's own `Dataset.source.path` values, reusing
-`desktop_consent`'s existing per-path grant store verbatim (no parallel
-consent kind). What justifies the extension: opening that project already
-required a real native dialog: a user who opened it has already, once,
-expressed trust in everything that project itself declares as its own
-sources. `probe_source` itself still computes a checksum only when the
-resolved path is already consented at call time — an unconsented path
-never yields file content, only reachability. Browser degrade: with no
-desktop bridge, every preview row reports `unavailable` — box 4's "say so,
-never guess" — never a guessed reachability state (`store/relink.ts`'s
-`bridgeAvailable` gate, pinned red-first in `relink.test.ts`).
+`grant_source_paths`, extends read consent for paths eligible under a
+server-tracked *declared-source set*. `probe_source` itself still computes
+a checksum only when the resolved path is already consented at call time —
+an unconsented path never yields file content, only reachability. Browser
+degrade: with no desktop bridge, every preview row reports `unavailable` —
+box 4's "say so, never guess" — never a guessed reachability state
+(`store/relink.ts`'s `bridgeAvailable` gate, pinned red-first in
+`relink.test.ts`).
+
+**P1-A fix round (adversarial review, 2026-08-18, same slice):** the FIRST
+version of `grant_source_paths` was a bare passthrough to `grant_paths`,
+trusting the frontend's own argument list as authority — the reviewer
+verified this as a real, unconditional arbitrary-file-read-consent oracle
+(no dialog, no project even open, any JS in the window could self-grant
+read consent for e.g. a user's SSH key, then read it through the existing
+`/api/parsers/import` route). Fixed by making the declared-source set
+BACKEND-tracked and enforced server-side: `desktop_consent.py`'s
+`set_declared_sources`/`is_declared_source`, populated ONLY as a side
+effect of `_read_granted` (`open_project_file`/`read_project_file`, both
+reachable only via a real native dialog) parsing the just-opened payload's
+OWN `datasets[].source.path` values (`desktop_project_file
+.extract_declared_source_paths`) — wholesale replacing any prior project's
+declared set, never accumulating. `grant_source_paths` now intersects its
+request against that set before ever calling `grant_paths`; the frontend's
+argument list is a request against backend state, never an authority of
+its own. Red-first proven both directions (`test_desktop_bridge.py`): a
+path no open project declared stays ungranted; the SAME request mixing a
+legitimately declared path with a poisoned one grants only the declared
+one (the "compositional pin" — `store/relink.ts`'s argument list, computed
+from in-memory frontend state, cannot smuggle in anything the backend
+didn't itself see declared). Accepted residual scope, stated plainly in
+`desktop_bridge.py`'s doc: once a project IS opened via a real dialog,
+whatever it declares is eligible — the same trust act `pick_files` already
+grants a physically-selected file, applied to content instead of
+selection; this fix closes the unconditional oracle, not full sandboxing
+against a hostile payload's own declared paths.
+
+**P1-B fix round (adversarial review, same slice): provenance completeness.**
+`workspace.ts`'s `parseSource` reconstructed a bare `{kind,path}` on every
+load, silently dropping checksum/mtime/size — and `versionOf` was missing
+from the serializer entirely — so after the first save/reopen,
+`sourceChangeVerdict` degraded to `"unknown"` for every dataset, defeating
+box 5's protection in the realistic import-today/reopen-tomorrow/relink
+workflow. Fixed: the validator moved to `lib/datasetSource.ts`
+(`parseDatasetSource`, also resolving `workspace.ts`'s own line-ceiling
+pin) and now validates/carries every field; `versionOf` was added to both
+the serializer and the parser. Red-first in `workspace.test.ts` (the exact
+reviewer-predicted failures — `expected {kind,path} to deeply equal
+{kind,path,checksum,mtime,size}` and `expected undefined to be
+'orig-id'`), now green; the pre-existing "workspace source reference"
+round-trip describe block was extended in place rather than duplicated.
+
+**P2 fix (TOCTOU at commit, adversarial review):** `commit()` used to write
+whatever `runPreview` had captured with no re-check — a file deleted or
+overwritten in the window between Preview and clicking Relink would land a
+stale checksum silently. Fixed cheaply: `commit()` re-probes every
+committing candidate immediately before writing and drops (never trusts)
+any row whose reachability changed or whose checksum changed again since
+Preview, reported in the success toast rather than silently absorbed.
+Red-first in `relink.test.ts`.
 
 **Changed source -> new version (box 5).** `sourceChangeVerdict`
 (`lib/relink.ts`) diffs checksum first when both sides have one, falls back
@@ -943,6 +991,15 @@ Project" (no owner/slice assigned yet):** the full portable-bundle packer
 save time) and "linked" mode's save-time strip / open-time rehydrate flow.
 Both build directly on this slice's path-matching + provenance + probing
 primitives; neither needed to exist for the relink core itself.
+
+**P3 booked (adversarial review, cheap-if-fixed-else-book call): `commit()`
+has no dedup when two DIFFERENT old paths case-collide onto the SAME new
+candidate (e.g. two old sources differing only by case, or by a segment
+that normalizes identically under `lib/relink.ts`'s case-insensitive
+matching) — both would relink onto one path with no collision warning.
+Named home: same "P1.7 Pack Project" follow-up (a natural fit alongside
+the packer's own name-collision handling, L0.34's precedent for resolving
+duplicate names on import).
 
 ---
 

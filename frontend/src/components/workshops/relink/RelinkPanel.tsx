@@ -86,7 +86,7 @@ export default function RelinkPanel() {
         <Button size="sm" onClick={() => void runPreview()} disabled={busy}>
           {busy ? "checking…" : "Preview"}
         </Button>
-        <Button size="sm" onClick={commit} disabled={committable === 0}>
+        <Button size="sm" onClick={() => void commit()} disabled={committable === 0 || busy}>
           Relink {committable > 0 ? committable : ""}
         </Button>
       </div>

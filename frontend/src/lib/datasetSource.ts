@@ -36,3 +36,26 @@ export interface DatasetSource {
   /** Observed size in bytes at the same moment. */
   size?: number;
 }
+
+/** Validate a persisted `Dataset.source` (MAIN_PLAN #10) for
+ *  `lib/workspace.ts`'s `parseWorkspace` — a stale/hand-edited value
+ *  degrades to "no source" (the dataset falls back to "Re-import from
+ *  file…") rather than throwing. Lives here, not inline in workspace.ts,
+ *  for that module's own line-ceiling ratchet (architecture.test.ts) —
+ *  cohesive with the type it validates either way.
+ *
+ *  P1.7 P1-B (adversarial review fix): this used to reconstruct a bare
+ *  `{kind,path}` in workspace.ts, silently DROPPING checksum/mtime/size —
+ *  which meant box 5's "changed source" protection degraded to "unknown"
+ *  for every dataset the moment a project was reopened. Each field is
+ *  independently validated and omitted (never defaulted) when malformed. */
+export function parseDatasetSource(v: unknown): DatasetSource | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  if (o.kind !== "path" || typeof o.path !== "string" || !o.path) return null;
+  const source: DatasetSource = { kind: "path", path: o.path };
+  if (typeof o.checksum === "string" && o.checksum) source.checksum = o.checksum;
+  if (typeof o.mtime === "number" && Number.isFinite(o.mtime)) source.mtime = o.mtime;
+  if (typeof o.size === "number" && Number.isFinite(o.size)) source.size = o.size;
+  return source;
+}

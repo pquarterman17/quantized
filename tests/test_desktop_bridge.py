@@ -19,6 +19,7 @@ from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
     is_consented,
+    is_declared_source,
     is_write_consented,
 )
 
@@ -59,6 +60,37 @@ def _workspace_json(marker: str = "x") -> str:
         '{"format": "quantized-workspace", "version": 4, '
         f'"datasets": [{{"id": "{marker}"}}]}}'
     )
+
+
+def _workspace_json_declaring(*source_paths: str) -> str:
+    """A `.dwk` payload whose datasets declare `source.path` = each of
+    `source_paths` — for the P1.7 declared-source tests below (a real
+    project-open is how `set_declared_sources` gets populated)."""
+    import json as _json
+
+    return _json.dumps(
+        {
+            "format": "quantized-workspace",
+            "version": 4,
+            "datasets": [
+                {"id": f"d{i}", "source": {"kind": "path", "path": p}}
+                for i, p in enumerate(source_paths)
+            ],
+        }
+    )
+
+
+def _open_project_declaring(tmp_path: Path, *source_paths: str) -> DesktopApi:
+    """Open (via a real FakeWindow dialog, exactly like a genuine
+    open_project_file) a `.dwk` that declares `source_paths` as dataset
+    sources — the ONLY way `set_declared_sources` gets populated, per the
+    P1-A fix. Returns the API instance with that project now "open"."""
+    project = tmp_path / "workspace.dwk"
+    project.write_text(_workspace_json_declaring(*source_paths), encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(project)]))
+    api.open_project_file()
+    return api
 
 
 # --- probe -----------------------------------------------------------------
@@ -242,30 +274,125 @@ def test_probe_source_invalid_path_never_raises() -> None:
 
 
 def test_grant_source_paths_wraps_grant_paths_exactly(tmp_path: Path) -> None:
-    """RED-FIRST: a NEW method. It must extend READ consent (checked via the
-    SAME `is_consented` store `pick_files` uses) for exactly the files it
-    was given, silently dropping anything that isn't a real file — mirroring
-    `grant_paths`'s own directory-skip rule (a hostile/stale entry must not
-    be able to widen consent to a directory)."""
+    """A NEW method. Once a path is DECLARED (a real project naming it as a
+    dataset source was opened via a real dialog — the P1-A enforcement),
+    it extends READ consent (checked via the SAME `is_consented` store
+    `pick_files` uses) for exactly the files it was given, silently
+    dropping anything that isn't a real file — mirroring `grant_paths`'s
+    own directory-skip rule (a hostile/stale entry must not be able to
+    widen consent to a directory)."""
     f = _csv(tmp_path)
-    api = DesktopApi()
-    out = api.grant_source_paths([str(f), str(tmp_path)])  # second is a directory
+    api = _open_project_declaring(tmp_path, str(f), str(tmp_path))  # second is a directory
+    out = api.grant_source_paths([str(f), str(tmp_path)])
     resolved = os.path.realpath(str(f))
     assert out["paths"] == [resolved]
     assert is_consented(resolved)
 
 
 def test_grant_source_paths_then_probe_source_yields_a_checksum(tmp_path: Path) -> None:
-    """The end-to-end P1.7 relink path: grant consent for a project's own
-    recorded source paths (no dialog), THEN probe with a real checksum —
-    this is what lets a relink-folder dry-run diff many files without a
-    dialog per file."""
+    """The end-to-end P1.7 relink path: open a project that declares a
+    source, grant consent for it (no second dialog), THEN probe with a
+    real checksum — this is what lets a relink-folder dry-run diff many
+    files without a dialog per file."""
     f = _csv(tmp_path)
     resolved = os.path.realpath(str(f))
-    api = DesktopApi()
+    api = _open_project_declaring(tmp_path, str(f))
     api.grant_source_paths([str(f)])
     out = api.probe_source(resolved)
     assert out["checksum"].startswith("sha256:")
+
+
+# --- P1-A (adversarial review, SECURITY): grant_source_paths must not trust
+# its own argument list — it is a REQUEST against the backend-tracked
+# declared-source set of the CURRENTLY OPEN project, never an authority on
+# its own. The exploit this closes: a bare passthrough to `grant_paths` made
+# `grant_source_paths` an unconditional arbitrary-file-read-consent oracle
+# — any JS in the window (no dialog, no project even open) could self-grant
+# read consent for any path (e.g. a user's SSH key) via the ordinary
+# `/api/parsers/import` route, which already honors `consented_path()`.
+
+
+def test_grant_source_paths_rejects_a_path_no_project_has_declared(tmp_path: Path) -> None:
+    """RED-FIRST (load-bearing security test): with NO project open at all,
+    nothing is declared — a path must not be grantable just because a
+    caller asks for it."""
+    victim = tmp_path / "id_rsa"
+    victim.write_text("-----BEGIN OPENSSH PRIVATE KEY-----", encoding="utf-8")
+    resolved = os.path.realpath(str(victim))
+    api = DesktopApi()
+
+    out = api.grant_source_paths([str(victim)])
+
+    assert out["paths"] == []
+    assert not is_consented(resolved)
+    assert not is_declared_source(resolved)
+
+
+def test_grant_source_paths_accepts_a_path_the_opened_project_actually_declared(
+    tmp_path: Path,
+) -> None:
+    """RED-FIRST (the other half of the same test): a path the CURRENTLY
+    open project's own payload names as a source must still work — the fix
+    narrows eligibility, it does not break the legitimate relink flow."""
+    declared = _csv(tmp_path, "run1.csv")
+    resolved = os.path.realpath(str(declared))
+    api = _open_project_declaring(tmp_path, str(declared))
+
+    out = api.grant_source_paths([str(declared)])
+
+    assert out["paths"] == [resolved]
+    assert is_consented(resolved)
+
+
+def test_grant_source_paths_compositional_pin_poisoned_path_from_loaded_dwk(
+    tmp_path: Path,
+) -> None:
+    """Compositional pin: `store/relink.ts`'s argument list is computed from
+    the frontend's own in-memory `datasets` array, which could diverge from
+    what the ACTUALLY-opened project declared (e.g. a dataset injected by
+    some other path). Even mixed into the SAME request as a legitimate
+    declared source, a path the opened project never named is dropped —
+    the enforcement is per-path, not "trust the whole batch once one path
+    checks out"."""
+    legit = _csv(tmp_path, "legit.csv")
+    victim = tmp_path / "id_rsa"
+    victim.write_text("secret key material", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(legit))  # victim NOT declared
+
+    out = api.grant_source_paths([str(legit), str(victim)])
+
+    assert out["paths"] == [os.path.realpath(str(legit))]
+    assert not is_consented(os.path.realpath(str(victim)))
+
+
+def test_grant_source_paths_declared_set_replaces_wholesale_on_reopen(tmp_path: Path) -> None:
+    """Opening project B must not leave project A's declared sources still
+    eligible — a stale grant from a previous project is exactly the kind of
+    residual trust this fix must not leave lying around."""
+    a_source = _csv(tmp_path, "a.csv")
+    b_source = _csv(tmp_path, "b.csv")
+    _open_project_declaring(tmp_path, str(a_source))
+    api_b = _open_project_declaring(tmp_path, str(b_source))
+
+    out = api_b.grant_source_paths([str(a_source), str(b_source)])
+
+    assert out["paths"] == [os.path.realpath(str(b_source))]
+    assert not is_consented(os.path.realpath(str(a_source)))
+
+
+def test_declared_sources_only_recorded_on_a_successful_project_read(tmp_path: Path) -> None:
+    """A cancelled/failed project open must not leave a stale declared set
+    from whatever WAS previously open — but must also not itself declare
+    anything (there is no content to have read)."""
+    declared = _csv(tmp_path, "run1.csv")
+    api = _open_project_declaring(tmp_path, str(declared))
+    assert is_declared_source(os.path.realpath(str(declared)))
+
+    # A cancelled second open (FakeWindow returns None) must not clear OR
+    # extend what's already declared — it never reached _read_granted at all.
+    api.attach(FakeWindow(None))
+    api.open_project_file()
+    assert is_declared_source(os.path.realpath(str(declared)))
 
 
 def test_probe_source_permission_denied_state(
