@@ -36,9 +36,35 @@ import json
 from pathlib import Path
 
 from quantized.io.delimited import import_csv
+from quantized.io.import_preview import ImportSettings, parse_import
 from quantized.routes._payload import datastruct_payload
 
 WIRE_DIR = Path(__file__).parent / "fixtures" / "wire"
+
+# P1.6 review round P3(a): the `label_import.csv` fixture's ImportSettings --
+# a multi-row header/units/label instrument export with a 2-line preamble,
+# exercising label_line-derived channel labels AND metadata["comments"]
+# retention (io/import_preview.py) across the SAME wire boundary the P1.4
+# categorical fixture above pins for cat_levels. Regenerate (only when the
+# fixture is meant to change) via:
+#
+#     uv run python -c "
+#     import json
+#     from pathlib import Path
+#     from quantized.io.import_preview import ImportSettings, parse_import
+#     from quantized.routes._payload import datastruct_payload
+#     src = Path('tests/fixtures/wire/label_import.csv')
+#     settings = ImportSettings(delimiter=',', header_line=2, units_line=3,
+#                                label_line=4, data_start_line=5, roles=['x', 'y', 'y'])
+#     payload = datastruct_payload(parse_import(src.read_text(encoding='utf-8'), settings))
+#     payload['metadata']['source'] = 'label_import.csv'
+#     Path('tests/fixtures/wire/label_import_payload.json').write_text(
+#         json.dumps(payload, indent=2, sort_keys=True) + chr(10), encoding='utf-8')
+#     "
+_LABEL_IMPORT_SETTINGS = ImportSettings(
+    delimiter=",", header_line=2, units_line=3, label_line=4,
+    data_start_line=5, roles=["x", "y", "y"],
+)
 
 
 def test_categorical_import_payload_matches_wire_fixture() -> None:
@@ -66,3 +92,28 @@ def test_wire_fixture_carries_the_categorical_channel_snake_case_key() -> None:
     assert "cat_levels" in payload
     assert "catLevels" not in payload
     assert payload["cat_levels"] == {"1": ["NbAu-1", "NbAu-2"]}
+
+
+def test_label_import_payload_matches_wire_fixture() -> None:
+    """P1.6 review round P3(a): the wizard's `parse_import` path (label_line
+    -derived channel labels + retained preamble `comments`) is a SEPARATE
+    code path from `import_csv` above -- this pins its ACTUAL output against
+    the committed JSON byte-for-byte, same discipline as the categorical
+    fixture, so a P2-1/P3-style regression (the "(unit)" suffix reintroduced,
+    or comments silently dropped) fails HERE, not just in a hand probe."""
+    src = WIRE_DIR / "label_import.csv"
+    ds = parse_import(src.read_text(encoding="utf-8"), _LABEL_IMPORT_SETTINGS)
+    payload = datastruct_payload(ds)
+    payload["metadata"]["source"] = "label_import.csv"
+
+    fixture_text = (WIRE_DIR / "label_import_payload.json").read_text(encoding="utf-8")
+    expected = json.loads(fixture_text)
+    assert payload == expected
+
+
+def test_wire_fixture_carries_label_derived_labels_and_comments() -> None:
+    """Pin the literal values -- the label row overrides the header-derived
+    name, and the 2-line preamble survives as `metadata.comments`."""
+    payload = json.loads((WIRE_DIR / "label_import_payload.json").read_text(encoding="utf-8"))
+    assert payload["labels"] == ["NbAu-Alpha", "NbAu-Beta"]
+    assert payload["metadata"]["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
