@@ -17,12 +17,20 @@
 // is eager because it self-gates on a `SHOW_SQLITE_QUERY` window event
 // registered in a `useEffect`, so it must stay mounted to hear it at all.
 //
-// Three more overlays were evaluated for the same treatment and two stay put:
-// `AnnotationTextDialog` exposes a promise-based `askAnnotationText()` API
-// like ParamDialog/ConfirmDialog, AND `components/Stage/useShapeDraw.ts` (part
-// of the always-eager Stage tree) imports it statically, so the module is
-// already in the eager graph regardless of what this file does — lazy-loading
-// only the mount here would save nothing. `InteractionHints` registers its
+// Three more overlays were evaluated for the same treatment; two stay put and
+// one now joins the lazy panels below. `AnnotationTextDialog` exposes a
+// promise-based `askAnnotationText()` API like ParamDialog/ConfirmDialog, and
+// `components/Stage/useShapeDraw.ts` (part of the always-eager Stage tree)
+// does call it — but as of the 2026-08-18 bundle-size pass, `askAnnotationText()`
+// and its store moved to `store/annotationTextDialog.ts` (the same shape as
+// `store/quickPlotWithDialog.ts`), so that eager call site no longer touches
+// this component file at all. The DIALOG itself (RichLabelInput ->
+// SymbolPalette, the Omega symbol grid) is now a `lazyPanel()` below, gated
+// the same way as SplitDatasetDialog/QuickPlotWithDialog: no keep-mounted
+// wrapper needed because the component already reseeds `draft` from
+// `initial` in a `useEffect` every time it mounts with a non-null title, so a
+// fresh mount per open is behavior-identical to the old always-mounted-but-
+// hidden one. `InteractionHints` registers its
 // `SHOW_INTERACTION_HINTS` window listener unconditionally on mount (so
 // Help's "Show interaction hints" can reopen it after the first-run card is
 // dismissed) — gating the mount would drop that listener while dismissed and
@@ -40,7 +48,6 @@
 // violation of that byte-identical rule.
 
 import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
-import AnnotationTextDialog from "./components/overlays/AnnotationTextDialog";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -49,6 +56,7 @@ import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
 import { useHelp } from "./store/help";
+import { useAnnotationTextDialog } from "./store/annotationTextDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
@@ -121,6 +129,7 @@ const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
 // their implementation (and dialog-only helpers) from first-paint JS.
 const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
 const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
+const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
 const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"));
@@ -166,6 +175,7 @@ export default function AppOverlays() {
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
   const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
+  const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
@@ -179,7 +189,7 @@ export default function AppOverlays() {
     <>
       <ParamDialog />
       <ConfirmDialog />
-      <AnnotationTextDialog />
+      {annotationTextOpen && <AnnotationTextDialog />}
       {splitDialogMounted && <SplitDatasetDialog />}
       {quickPlotWithMounted && <QuickPlotWithDialog />}
       <TooltipLayer />

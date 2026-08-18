@@ -15,7 +15,8 @@ import { useRef, useState } from "react";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { clampAnnotationSize } from "../../lib/uplotOverlays";
 import { useApp } from "../../store/useApp";
-import { Button, Card, IconButton, NumberField, RichText } from "../primitives";
+import { Button, IconButton, NumberField, RichText } from "../primitives";
+import Card from "../primitives/Card";
 
 export default function AnnotationsCard() {
   const annotations = useApp((s) => s.annotations);

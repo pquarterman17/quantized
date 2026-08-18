@@ -17,7 +17,9 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
-import { BufferedNumberField, Button, Card, IconButton, NumberField, SegmentedControl } from "../primitives";
+import { Button, IconButton, NumberField, SegmentedControl } from "../primitives";
+import BufferedNumberField from "../primitives/BufferedNumberField";
+import Card from "../primitives/Card";
 
 const DEFAULT_FILL = "#3388cc";
 type AxisChoice = "y" | "y2";

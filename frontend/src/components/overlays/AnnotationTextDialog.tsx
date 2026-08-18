@@ -11,36 +11,21 @@
 // ParamDialog/ConfirmDialog's promise+zustand pattern and chrome
 // (`qz-overlay-backdrop` / `qzk-glass qz-dialog` / `qz-btn-row`) so it reads
 // as the same family of dialog, not a one-off.
+//
+// The `askAnnotationText()` function and its store live in
+// `store/annotationTextDialog.ts`, not here (bundle-size pass 2026-08-18):
+// `components/Stage/useShapeDraw.ts` is part of the always-eager Stage tree
+// and only ever calls `askAnnotationText()`, never renders this component,
+// so keeping the store in its own tiny module lets that eager call site
+// avoid pulling in RichLabelInput's SymbolPalette (the Omega symbol grid)
+// and this file becomes a LAZY `AppOverlays.tsx` panel like
+// SplitDatasetDialog/QuickPlotWithDialog.
 
 import { useEffect, useState } from "react";
-import { create } from "zustand";
 
-import { Button, RichLabelInput } from "../primitives";
-
-interface AnnotationTextDialogState {
-  title: string | null;
-  initial: string;
-  resolve: ((v: string | null) => void) | null;
-  open: (title: string, initial: string, resolve: (v: string | null) => void) => void;
-  close: () => void;
-}
-
-const useAnnotationTextDialog = create<AnnotationTextDialogState>((set) => ({
-  title: null,
-  initial: "",
-  resolve: null,
-  open: (title, initial, resolve) => set({ title, initial, resolve }),
-  close: () => set({ title: null, initial: "", resolve: null }),
-}));
-
-/** Open the annotation text editor; resolves the committed text, or null on
- *  cancel/backdrop/Escape (matches askParams/askConfirm's promise contract —
- *  callers do `if (v != null) updateAnnotation(id, { text: v })`). */
-export function askAnnotationText(title: string, initial: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    useAnnotationTextDialog.getState().open(title, initial, resolve);
-  });
-}
+import { Button } from "../primitives";
+import RichLabelInput from "../primitives/RichLabelInput";
+import { useAnnotationTextDialog } from "../../store/annotationTextDialog";
 
 export default function AnnotationTextDialog() {
   const title = useAnnotationTextDialog((s) => s.title);

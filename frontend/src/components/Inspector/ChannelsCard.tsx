@@ -11,7 +11,8 @@ import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card, Pill, Select, SliderRow } from "../primitives";
+import { Pill, Select, SliderRow } from "../primitives";
+import Card from "../primitives/Card";
 
 /** Compact modeling-type tags for the per-channel select. */
 const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };

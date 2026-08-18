@@ -7,7 +7,7 @@ import { copyText } from "../../lib/clipboard";
 import { metadataRows, metadataToTSV } from "../../lib/metadata";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card } from "../primitives";
+import Card from "../primitives/Card";
 
 const DISPLAY_MAX = 220; // chars per value cell; full text goes out via Copy
 

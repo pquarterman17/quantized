@@ -6,7 +6,8 @@ import { copyText } from "../../lib/clipboard";
 import { saveBlob } from "../../lib/download";
 import { pipelineToScript } from "../../lib/pipeline";
 import { useApp } from "../../store/useApp";
-import { Button, Card } from "../primitives";
+import { Button } from "../primitives";
+import Card from "../primitives/Card";
 
 export default function MacroCard() {
   const recording = useApp((s) => s.macroRecording);
