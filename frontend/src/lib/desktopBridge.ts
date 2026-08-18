@@ -93,6 +93,8 @@ interface PyWebviewApi {
   write_project_file?: (path: string, content: string) => Promise<Record<string, unknown>>;
   open_project_file?: (directory?: string) => Promise<Record<string, unknown>>;
   read_project_file?: (path: string) => Promise<Record<string, unknown>>;
+  probe_source?: (path: string) => Promise<Record<string, unknown>>;
+  grant_source_paths?: (paths: string[]) => Promise<Record<string, unknown>>;
 }
 
 function api(): PyWebviewApi | null {
@@ -290,5 +292,76 @@ export async function saveProjectTo(
     return { path: str(out.path) ?? path };
   } catch {
     return null;
+  }
+}
+
+// -- P1.7: source probing + relink --------------------------------------
+
+/** A source path's reachability + optional fingerprint
+ *  (quantized/desktop_bridge.py's `probe_source` — see that module's doc
+ *  for the full missing/offline/changed/permission-denied consent story).
+ *  `checksum` is `null` whenever the backend didn't compute one — either
+ *  because the path wasn't read-consented this session, or the file was
+ *  reachable by stat but not by content read — never a stand-in for "the
+ *  checksum is empty". */
+export interface SourceProbe {
+  state: PathState | "permission_denied";
+  path: string | null;
+  size: number | null;
+  mtime: number | null;
+  checksum: string | null;
+}
+
+const SOURCE_PROBE_STATES: readonly SourceProbe["state"][] = [
+  "ok",
+  "missing",
+  "offline",
+  "invalid",
+  "permission_denied",
+];
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** Probe one source path. `null` = no usable bridge (relink degrades to
+ *  "source checks unavailable" in a browser — never guesses a state). Never
+ *  throws — a bridge error is reported the same as no bridge, matching
+ *  `pathState`'s convention. */
+export async function probeSource(path: string): Promise<SourceProbe | null> {
+  const bridge = api();
+  if (!bridge?.probe_source) return null;
+  try {
+    const out = await bridge.probe_source(path);
+    const state = str(out.state);
+    if (state === null || !(SOURCE_PROBE_STATES as readonly string[]).includes(state)) return null;
+    return {
+      state: state as SourceProbe["state"],
+      path: str(out.path),
+      size: num(out.size),
+      mtime: num(out.mtime),
+      checksum: str(out.checksum),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Extend read consent to paths ALREADY recorded as a project's own
+ *  `Dataset.source.path` values (quantized/desktop_bridge.py's
+ *  `grant_source_paths` — see its doc for the consent ruling: opening the
+ *  project itself already required a real dialog, and this extends that
+ *  same trust to the sources IT declares, never to an arbitrary list).
+ *  Returns the subset actually granted (files that exist), `[]` when there
+ *  is no usable bridge — callers proceed with checksum-less probing rather
+ *  than treating this as fatal, matching `openFiles`'s "no bridge = degrade,
+ *  don't fail" convention. */
+export async function grantSourceReadPaths(paths: string[]): Promise<string[]> {
+  const bridge = api();
+  if (!bridge?.grant_source_paths) return [];
+  try {
+    const out = await bridge.grant_source_paths(paths);
+    const granted = out.paths;
+    return Array.isArray(granted) ? granted.filter((p): p is string => typeof p === "string") : [];
+  } catch {
+    return [];
   }
 }

@@ -28,6 +28,7 @@
 import { create } from "zustand";
 
 import { importFile, uploadFile } from "../lib/api";
+import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginImport } from "../lib/originFolders";
@@ -87,8 +88,10 @@ interface ImportOrigin {
    *  not stat the file, and a wrong number would be worse than none). */
   size: number;
   /** Set ONLY for a path import — see `Dataset.source`'s doc for the full
-   *  "where a path is/isn't knowable" matrix. */
-  source?: { kind: "path"; path: string };
+   *  "where a path is/isn't knowable" matrix, including the P1.7
+   *  checksum/mtime/size provenance fields threaded through from
+   *  `importPaths`'s `probeSource` call below. */
+  source?: Dataset["source"];
 }
 
 interface ErrorRolesActions {
@@ -446,11 +449,30 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
       })),
 
     importPaths: (paths) =>
-      runImport(set, get, paths, pathBasename, async (path, signal) => ({
-        data: await importFile(path, signal),
+      runImport(set, get, paths, pathBasename, async (path, signal) => {
+        const data = await importFile(path, signal);
+        // P1.7 / L0.32 provenance: "record source path, import time,
+        // observed modification time, and a checksum where practical".
+        // `probeSource` returns null with no bridge (a browser tab, or a
+        // test with no mock) — degrades to path-only provenance rather
+        // than failing the import; a native pick already granted this
+        // exact path read consent moments ago (lib/importEntry.ts's
+        // `chooseAndImport` -> `pick_files`), so the checksum is real
+        // whenever a bridge is present at all.
+        const probe = await probeSource(path);
+        const source: Dataset["source"] =
+          probe?.state === "ok"
+            ? {
+                kind: "path",
+                path,
+                ...(probe.checksum != null ? { checksum: probe.checksum } : {}),
+                ...(probe.mtime != null ? { mtime: probe.mtime } : {}),
+                ...(probe.size != null ? { size: probe.size } : {}),
+              }
+            : { kind: "path", path };
         // The path is what makes this import re-importable without a picker.
-        origin: { name: pathBasename(path), size: 0, source: { kind: "path", path } },
-      })),
+        return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
+      }),
   };
 }
 

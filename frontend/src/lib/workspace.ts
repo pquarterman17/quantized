@@ -3,6 +3,7 @@
 // memory); this gives session persistence. Pure + testable; the App wires it to Save/Open commands (download + file picker).
 
 import { sanitizeDataStruct } from "./categorical";
+import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { parseFolders, pruneOrphans } from "./foldertree";
@@ -266,6 +267,11 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       // time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: d.source } : {}),
+      // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
+      // dropped entirely before (not just narrowed like `source`), so a
+      // saved-and-reopened new-version dataset lost its link to the
+      // original outright.
+      ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -313,18 +319,6 @@ function parsePending(v: unknown): BookSource | null {
   }
   if (o.kind === "upload" && typeof o.token === "string" && o.token) {
     return { kind: "upload", token: o.token, bookId: o.bookId, rows, cols };
-  }
-  return null;
-}
-
-/** Validate a persisted `Dataset.source` (MAIN_PLAN #10) — a stale/hand-edited
- *  value degrades to "no source" (the dataset just falls back to "Re-import
- *  from file…") rather than throwing. */
-function parseSource(v: unknown): { kind: "path"; path: string } | null {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  if (o.kind === "path" && typeof o.path === "string" && o.path) {
-    return { kind: "path", path: o.path };
   }
   return null;
 }
@@ -490,8 +484,10 @@ export function parseWorkspace(
     // validated the same defensive way as every other optional field here.
     const pending = parsePending(dd.pending);
     if (pending) ds.pending = pending;
-    const source = parseSource(dd.source);
+    const source = parseDatasetSource(dd.source);
     if (source) ds.source = source;
+    // P1.7 box 5: see the serializer's matching comment above.
+    if (typeof dd.versionOf === "string" && dd.versionOf) ds.versionOf = dd.versionOf;
     if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
     // Raw parse only — reconcileWorkbookRefs (below, after folders/datasets are
     // pruned) is the single place that decides whether this survives, is

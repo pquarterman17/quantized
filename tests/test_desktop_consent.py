@@ -18,10 +18,13 @@ from quantized.desktop_consent import (
     consent_count,
     consented_path,
     consented_write_path,
+    declared_source_count,
     grant_paths,
     grant_write_path,
     is_consented,
+    is_declared_source,
     is_write_consented,
+    set_declared_sources,
     write_consent_count,
 )
 
@@ -105,6 +108,56 @@ def test_clear_consent_revokes_everything(tmp_path: Path) -> None:
     grant_paths([str(_csv(tmp_path))])
     clear_consent()
     assert consent_count() == 0
+
+
+# --- declared sources (P1.7 P1-A: server-side grant_source_paths enforcement)
+#
+# This is the security boundary the adversarial review found broken: a path
+# is eligible for `grant_source_paths` ONLY when it's in this set, and this
+# set is populated ONLY from a project payload the backend itself read (see
+# desktop_bridge.py's `_read_granted`) — never from an argument the frontend
+# hands directly to this module.
+
+
+def test_declared_source_starts_empty() -> None:
+    assert declared_source_count() == 0
+    assert not is_declared_source("/anything")
+
+
+def test_set_declared_sources_normalizes_like_every_other_grant(tmp_path: Path) -> None:
+    f = _csv(tmp_path)
+    set_declared_sources([str(f)])
+    assert is_declared_source(os.path.realpath(str(f)))
+    assert declared_source_count() == 1
+
+
+def test_set_declared_sources_does_not_require_the_path_to_exist(tmp_path: Path) -> None:
+    """A declared source is a claim from a payload's own JSON, not
+    necessarily reachable — reachability is `probe_source`'s job, not this
+    store's. A missing/offline source must still be a legitimate relink
+    target once its project is open."""
+    missing = tmp_path / "does_not_exist.csv"
+    set_declared_sources([str(missing)])
+    assert is_declared_source(os.path.realpath(str(missing)))
+
+
+def test_set_declared_sources_replaces_wholesale_not_accumulates(tmp_path: Path) -> None:
+    """Opening project B must not leave project A's declared sources still
+    eligible — this is the load-bearing "no accumulation" property."""
+    a = _csv(tmp_path, "a.csv")
+    b = _csv(tmp_path, "b.csv")
+    set_declared_sources([str(a)])
+    assert is_declared_source(os.path.realpath(str(a)))
+
+    set_declared_sources([str(b)])
+    assert is_declared_source(os.path.realpath(str(b)))
+    assert not is_declared_source(os.path.realpath(str(a)))
+
+
+def test_clear_consent_also_clears_declared_sources(tmp_path: Path) -> None:
+    set_declared_sources([str(_csv(tmp_path))])
+    clear_consent()
+    assert declared_source_count() == 0
 
 
 # --- the write-consent registry (P1.1: native Save/Save As) ----------------

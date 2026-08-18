@@ -741,6 +741,42 @@ describe("workspace source reference (MAIN_PLAN #10, re-import from source)", ()
     doc.datasets[0].source = { kind: "path", path: "" }; // empty path
     expect(parseWorkspace(JSON.stringify(doc)).datasets[0].source).toBeUndefined();
   });
+
+  // P1.7 P1-B (adversarial review): parseSource used to reconstruct a bare
+  // {kind,path}, silently dropping checksum/mtime/size on every save/reload
+  // — defeating box 5's "changed source" protection the moment a project is
+  // reopened. RED-FIRST against the current parseSource.
+  it("round-trips a source's checksum/mtime/size provenance, not just its path", () => {
+    const ds = makeDataset("a", "x");
+    ds.source = { kind: "path", path: "/data/sample.dat", checksum: "sha256:abc", mtime: 1700000000, size: 42 };
+    const restored = parse(ser([ds]))[0];
+    expect(restored.source).toEqual(ds.source);
+  });
+
+  it("drops an invalid checksum/mtime/size rather than restoring garbage", () => {
+    const doc = JSON.parse(ser([makeDataset("a", "x")])) as {
+      datasets: (Omit<Dataset, "source"> & { source?: unknown })[];
+    };
+    doc.datasets[0].source = { kind: "path", path: "/data/x.dat", checksum: 123, mtime: "later", size: "big" };
+    const restored = parseWorkspace(JSON.stringify(doc)).datasets[0].source;
+    expect(restored).toEqual({ kind: "path", path: "/data/x.dat" });
+  });
+});
+
+describe("workspace versionOf (P1.7 box 5: import as new version)", () => {
+  it("round-trips versionOf so a reopened project still knows a dataset's lineage", () => {
+    const ds = makeDataset("copy", "x (new version)");
+    ds.versionOf = "orig-id";
+    const restored = parse(ser([ds]))[0];
+    expect(restored.versionOf).toBe("orig-id");
+  });
+
+  it("omits versionOf when absent", () => {
+    const restored = parse(ser([makeDataset("a", "normal")]))[0];
+    expect(restored.versionOf).toBeUndefined();
+    const doc = JSON.parse(ser([makeDataset("a", "normal")])) as { datasets: Record<string, unknown>[] };
+    expect("versionOf" in doc.datasets[0]).toBe(false);
+  });
 });
 
 describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {

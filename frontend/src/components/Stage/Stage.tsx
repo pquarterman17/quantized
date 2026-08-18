@@ -28,6 +28,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { canRenderMap } from "../../lib/mapdata";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
+import { useRelinkCommands } from "../../commands/relinkCommands";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
@@ -48,6 +49,7 @@ export default function Stage() {
   useWindowCommands();
   useHistoryCommands();
   useRecentProjectsCommands();
+  useRelinkCommands();
 
   // Owner request 2026-07-25: the Map tab is CONTEXTUAL. A 1-D dataset can
   // never produce a map, so the tab was a permanent invitation to a screen that

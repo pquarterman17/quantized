@@ -5,6 +5,7 @@
 import type { ErrorBinding } from "./errorRoles";
 
 import type { ColormapName } from "./colormap";
+import type { DatasetSource } from "./datasetSource";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -530,13 +531,12 @@ export interface Dataset {
    *  path-based `/api/parsers/import` route already validated. Set ONLY where
    *  a real path is actually knowable — mirrors `pending`'s `BookSource.kind
    *  === "path"` precedent. A browser file-picker/drag-drop upload never gets
-   *  one (the File API exposes no path, and neither the pywebview desktop
-   *  shell — no js_api bridge — nor the Tauri shell — `tauri-plugin-dialog`
-   *  is Rust-only, never invoked from the frontend — surface one today); a
-   *  sourceless dataset instead falls back to "Re-import from file…"
-   *  (re-picks via the browser dialog, see `store/reimport.ts`). Round-trips
-   *  through .dwk. */
-  source?: { kind: "path"; path: string };
+   *  one (neither File API nor pywebview/Tauri surface one today); falls back
+   *  to "Re-import from file…" instead (`store/reimport.ts`). Round-trips
+   *  through .dwk. Shape + P1.7 provenance fields: `lib/datasetSource.ts`. */
+  source?: DatasetSource;
+  /** P1.7 box 5: "Import as new version" (a changed source; never an in-place refresh, L0.32) — the original dataset's id. Round-trips `.dwk`. */
+  versionOf?: string;
   /** Containing WORKBOOK id (LIBRARY_WORKBOOK_UX_PLAN PR A1 — the
    *  folder -> workbook -> worksheet/figure/analysis/note hierarchy, L0.1).
    *  Absent = not yet assigned a workbook (pre-migration legacy data, or a
