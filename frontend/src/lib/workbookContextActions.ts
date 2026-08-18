@@ -18,7 +18,7 @@
 
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
-import { computeDependencyImpact, formatDependencyImpact } from "./dependencyImpact";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "./dependencyImpact";
 import type { LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
@@ -151,8 +151,11 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
       // PR M (L0.45 + L0.55): the full downstream closure of every member
       // worksheet — bgRef chains, derived worksheets, fits — via the SAME
       // `downstreamOf` the recalc engine itself uses (lib/dependencyImpact.ts).
-      const impact = computeDependencyImpact(useApp.getState().datasets, memberIds(t));
-      const impactText = formatDependencyImpact(impact);
+      // `removed: true` (review round P2): these members are DESTROYED, not
+      // reimported — a member's own saved fit goes with it, so it must not
+      // be listed as something that will merely go stale.
+      const impact = computeDependencyImpact(useApp.getState().datasets, memberIds(t), { removed: true });
+      const impactText = hasDependencyImpact(impact) ? ` ${formatDependencyImpact(impact)}` : "";
       return {
         title: `Delete "${t.node.entity.name}"?`,
         // P1 fix: say exactly what happens. The WORKBOOK GROUPING is gone
@@ -165,7 +168,7 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
           n > 0
             ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
             : "This workbook has no worksheets; the grouping is removed for good."
-        }${impactText ? ` ${impactText}` : ""}`,
+        }${impactText}`,
         confirmLabel: "Delete",
       };
     },

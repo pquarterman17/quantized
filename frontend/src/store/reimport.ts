@@ -41,7 +41,7 @@ import {
   uploadFile,
   type CorrectionsRequest,
 } from "../lib/api";
-import { computeDependencyImpact, formatDependencyImpact } from "../lib/dependencyImpact";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { recomputeData } from "../lib/formula";
 import { lit } from "../lib/macro";
@@ -208,9 +208,9 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
       // the SAME `downstreamOf` closure the recalc engine itself uses —
       // skipped entirely when there's nothing downstream (today's
       // frictionless no-dependents case stays frictionless).
-      const impactMsg = formatDependencyImpact(computeDependencyImpact(get().datasets, [id]));
-      if (impactMsg) {
-        const ok = await askConfirm(`Re-import "${ds.name}"?`, impactMsg, "Re-import");
+      const impact = computeDependencyImpact(get().datasets, [id]);
+      if (hasDependencyImpact(impact)) {
+        const ok = await askConfirm(`Re-import "${ds.name}"?`, formatDependencyImpact(impact), "Re-import");
         if (!ok) return;
       }
       if (ds.source) {

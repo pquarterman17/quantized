@@ -60,6 +60,27 @@ describe("computeDependencyImpact", () => {
     expect(impact.affectedDatasetNames).toEqual([]);
   });
 
+  it("excludes a source member's OWN fit when `removed: true` (delete path — review round P2)", () => {
+    // d1 (a workbook member) owns its own saved fit. Deleting the workbook
+    // destroys d1 AND its fit together — the fit must not be reported as
+    // something that will merely go stale (it won't exist to go stale).
+    const datasets = [
+      ds("d1", { name: "d1.dat", fitSpec: { model: "Linear" } }),
+      ds("d2", { name: "d2.dat" }),
+    ];
+    const impact = computeDependencyImpact(datasets, ["d1", "d2"], { removed: true });
+    expect(impact.affectedFitNames).toEqual([]);
+  });
+
+  it("still reports the source's OWN fit when NOT removed — the reimport survives (review round P2 asymmetry)", () => {
+    // Same shape as above, but this is the reimport call: the dataset
+    // SURVIVES with fresh data, so its own saved fit correctly goes stale
+    // and belongs in the preview — the opposite of the delete case above.
+    const datasets = [ds("d1", { name: "d1.dat", fitSpec: { model: "Linear" } })];
+    const impact = computeDependencyImpact(datasets, ["d1"]);
+    expect(impact.affectedFitNames).toEqual(["d1.dat"]);
+  });
+
   it("unions and dedupes across multiple source ids sharing a dependent", () => {
     const datasets = [
       ds("a"),

@@ -9,6 +9,18 @@
 // workbook's member worksheets, commonly shares downstream dependents).
 // Members of the source set itself are excluded from the "affected" list —
 // they're the thing being reimported/deleted, not a dependent of it.
+//
+// The `removed` option (review round, PR M): `downstreamOf` deliberately
+// includes sourceId's OWN fit in `down.fits` (recalc.ts, "the fit of every
+// affected dataset, including the source's own") — correct for a REIMPORT,
+// where the source dataset survives with fresh data and its saved fit goes
+// stale, so it belongs in the preview. It is WRONG for a DELETE: a workbook
+// member's own fit isn't "marked stale", it's destroyed along with the
+// worksheet, so it must not appear as an affected dependent. `sourceIds`
+// alone can't tell survives-vs-removed apart (both shapes put the acted-on
+// ids there), so the caller states it explicitly: reimport.ts calls with
+// the default (survives); workbookContextActions.ts's delete passes
+// `{ removed: true }`.
 
 import { downstreamOf } from "./recalc";
 import type { Dataset } from "./types";
@@ -24,18 +36,29 @@ export interface DependencyImpact {
 /** The full downstream closure of `sourceIds` — bgRef chains, derived
  *  worksheets, and fits — via the SAME `downstreamOf` the recalc engine
  *  itself uses, so a preview can never show something the graph wouldn't
- *  actually stale-mark (or vice versa). */
+ *  actually stale-mark (or vice versa).
+ *
+ *  `removed` (default false): pass `true` when `sourceIds` are being
+ *  DELETED rather than reimported/edited — see the module doc's asymmetry
+ *  note. It additionally strips any sourceId's own fit out of the affected
+ *  fit list (survives-and-goes-stale doesn't apply once the dataset itself
+ *  is gone). */
 export function computeDependencyImpact(
   datasets: readonly Dataset[],
   sourceIds: readonly string[],
+  options?: { removed?: boolean },
 ): DependencyImpact {
+  const removed = options?.removed ?? false;
   const sourceSet = new Set(sourceIds);
   const affectedIds = new Set<string>();
   const affectedFitIds = new Set<string>();
   for (const id of sourceIds) {
     const down = downstreamOf(datasets, id);
     for (const dId of down.datasets) if (!sourceSet.has(dId)) affectedIds.add(dId);
-    for (const fId of down.fits) affectedFitIds.add(fId);
+    for (const fId of down.fits) {
+      if (removed && sourceSet.has(fId)) continue; // destroyed with its worksheet, not staled
+      affectedFitIds.add(fId);
+    }
   }
   const nameOf = (id: string): string => datasets.find((d) => d.id === id)?.name ?? id;
   return {
