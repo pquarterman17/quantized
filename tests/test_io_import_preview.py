@@ -144,6 +144,17 @@ def test_label_role_captures_raw_strings_instead_of_discarding_them() -> None:
     assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2", "NbAu-1"]}
 
 
+def test_label_role_strips_whitespace_matching_import_csv_sidecar() -> None:
+    """P1.4 review P2-4: RED before this fix -- the wizard's `label` sidecar
+    capture skipped the `.strip()` that `io/delimited.py`'s `text_columns`
+    sidecar always applies, so a whitespace-padded cell (` NbAu-1 `) landed
+    verbatim instead of matching the generic-import convention."""
+    text = "Temp,Moment,Sample\n1,10, NbAu-1 \n2,20, NbAu-2 \n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    ds = parse_import(text, settings)
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2"]}
+
+
 def test_ignore_role_still_drops_with_no_sidecar_capture() -> None:
     """`ignore` is an explicit user choice to discard -- unlike `label`, it
     gets no text_columns capture."""

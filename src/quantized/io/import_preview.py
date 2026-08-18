@@ -296,7 +296,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:
         metadata["text_columns"] = {
-            p.names[k]: [row[k] if k < len(row) else "" for row in p.data_tokens]
+            p.names[k]: [row[k].strip() if k < len(row) else "" for row in p.data_tokens]
             for k in label_cols
         }
     return DataStruct.create(

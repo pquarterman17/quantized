@@ -39,22 +39,26 @@ function sortColumnKeys(keys: string[]): string[] {
 }
 
 /** RESOLVED plan decision (b): look for a metadata inline-text column
- *  (`metadata.origin_text_columns`, `io/origin_project/opj.py` plan item 4)
- *  whose per-row strings are a CONSISTENT label for `channel`'s numeric
- *  levels — every row sharing one level maps to exactly one non-blank text
- *  value, and every level is covered. This is a general structural check
- *  (not an Origin-specific column-name match), so it works for any parser
- *  that leaves a text column in metadata. Returns null when no column
- *  qualifies (no text columns at all, a column disagrees with itself on some
- *  level, or a level has no text anywhere) — the caller falls back to
- *  formatted numeric levels. */
+ *  (`metadata.text_columns` -- the generic `io/delimited.py`/
+ *  `io/import_preview.py` sidecar -- falling back to `metadata.
+ *  origin_text_columns`, `io/origin_project/opj.py` plan item 4; SAME
+ *  `?? ` order as `columnmeta.ts`'s `originTextColumns`, P1.4 review P2-5,
+ *  fixing this module's prior Origin-only read) whose per-row strings are a
+ *  CONSISTENT label for `channel`'s numeric levels — every row sharing one
+ *  level maps to exactly one non-blank text value, and every level is
+ *  covered. This is a general structural check (not an Origin-specific
+ *  column-name match), so it works for any parser that leaves a text
+ *  column in metadata. Returns null when no column qualifies (no text
+ *  columns at all, a column disagrees with itself on some level, or a
+ *  level has no text anywhere) — the caller falls back to formatted
+ *  numeric levels. */
 function textLabelsFor(
   data: DataStruct,
   channel: number,
   levels: readonly number[],
 ): string[] | null {
   const meta = data.metadata ?? {};
-  const textCols = meta["origin_text_columns"];
+  const textCols = meta["text_columns"] ?? meta["origin_text_columns"];
   if (!isColumnStringsMap(textCols)) return null;
   const by = colValues(data, channel);
   for (const key of sortColumnKeys(Object.keys(textCols))) {
