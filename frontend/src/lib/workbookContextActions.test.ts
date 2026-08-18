@@ -232,19 +232,62 @@ describe("workbook menu — Delete (destructive, confirms, names the member coun
     expect(spec.message).toContain("grouping itself is removed for good");
   });
 
-  it("Delete renders disabled with the stable PR M reason, and even a forced run() cannot mutate (round 3)", async () => {
+  // PR M (L0.45): the unconditional fail-closed gate is LIFTED — Delete is
+  // enabled again, and the confirm message is the real dependency-aware
+  // gate (see the impact-preview tests below).
+  it("Delete is enabled (the PR M gate lift) and actually deletes on run()", async () => {
     vi.mocked(askConfirm).mockResolvedValue(true);
-    useApp.setState({ workbooks: [{ id: "w1", name: "W" }], datasets: [] });
+    useApp.setState({ workbooks: [{ id: "w1", name: "W" }], datasets: [], history: [] });
     const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
     const t = target({ id: "w1", name: "W" });
-    expect(deleteAction.enabled?.(t)).toBe(false);
-    expect(deleteAction.disabledReason?.(t)).toBe("Workbook Delete arrives with dependency-aware Trash (PR M)");
-    // Registry convention keeps run() dispatchable on disabled items (the UI
-    // enforces disabled) — the store action itself fails closed regardless.
+    expect(deleteAction.enabled?.(t)).toBe(true);
     const item = menuItemFor(deleteAction, t);
+    expect(item.disabled).toBeFalsy();
     item.run();
     await Promise.resolve();
-    expect(useApp.getState().workbooks).toEqual([{ id: "w1", name: "W" }]);
+    expect(useApp.getState().workbooks).toEqual([]);
+  });
+
+  // PR M (L0.45 + L0.55): the confirm message names the FULL downstream
+  // dependency impact — bgRef chains, derived worksheets, fits — computed
+  // via lib/dependencyImpact.ts (the K graph, same closure the recalc
+  // engine itself uses), not just the raw worksheet count.
+  describe("dependency impact preview in the confirm message (PR M)", () => {
+    it("names a derived worksheet AND its fit as affected", () => {
+      const source: Dataset = {
+        id: "d1",
+        name: "d1.dat",
+        workbookId: "w1",
+        data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+      };
+      const derived: Dataset = {
+        id: "d2",
+        name: "derived-sheet",
+        data: { time: [0], values: [[2]], labels: ["A"], units: [""], metadata: {} },
+        derivedFrom: { datasetId: "d1", pipeline: "x" },
+        fitSpec: { model: "Linear" },
+      };
+      useApp.setState({ datasets: [source, derived] });
+      const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
+      const t = target({ id: "w1", name: "W" }, [source]);
+      const spec = deleteAction.confirm!(t);
+      expect(spec.message).toContain("derived-sheet");
+      expect(spec.message).toMatch(/marked stale/);
+    });
+
+    it("adds nothing extra when nothing depends on the workbook's members", () => {
+      const source: Dataset = {
+        id: "d1",
+        name: "d1.dat",
+        workbookId: "w1",
+        data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+      };
+      useApp.setState({ datasets: [source] });
+      const deleteAction = workbookDeleteActions.find((a) => a.id === "workbook.delete")!;
+      const t = target({ id: "w1", name: "W" }, [source]);
+      const spec = deleteAction.confirm!(t);
+      expect(spec.message).not.toMatch(/marked stale/);
+    });
   });
 });
 

@@ -18,6 +18,7 @@
 
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "./dependencyImpact";
 import type { LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
@@ -42,6 +43,9 @@ export interface WorkbookActionTarget {
 
 const memberCount = (t: WorkbookActionTarget): number =>
   t.node.children.filter((c) => c.kind === "worksheet").length;
+
+const memberIds = (t: WorkbookActionTarget): string[] =>
+  t.node.children.filter((c) => c.kind === "worksheet").map((c) => c.entity.id);
 
 export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   { id: "workbook.open", label: "Open", run: (t) => t.onOpen ? t.onOpen() : openLibraryNode(t.node) },
@@ -134,14 +138,24 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
     id: "workbook.delete",
     label: "Delete",
     destructive: true,
-    // L0.45 fail-closed (PR #139 review): disabled — with the reason — while
-    // any recovered figure/report/binding depends on a member worksheet;
-    // deleteWorkbook re-checks the same gate so the key shortcut can't
-    // bypass it. PR M's dependency-aware Trash lifts this.
+    // L0.45 (PR M, 2026-08-19): unconditionally enabled — workbookDeleteBlockers
+    // is kept as plumbing but always returns null now (see its doc). The
+    // real L0.45 gate is the confirm message below: it names EVERY
+    // consequence — the workbook grouping loss AND (PR M) the full
+    // downstream dependency impact — so the user chooses with full
+    // information instead of the command being blocked outright.
     enabled: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) == null,
     disabledReason: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) ?? "",
     confirm: (t) => {
       const n = memberCount(t);
+      // PR M (L0.45 + L0.55): the full downstream closure of every member
+      // worksheet — bgRef chains, derived worksheets, fits — via the SAME
+      // `downstreamOf` the recalc engine itself uses (lib/dependencyImpact.ts).
+      // `removed: true` (review round P2): these members are DESTROYED, not
+      // reimported — a member's own saved fit goes with it, so it must not
+      // be listed as something that will merely go stale.
+      const impact = computeDependencyImpact(useApp.getState().datasets, memberIds(t), { removed: true });
+      const impactText = hasDependencyImpact(impact) ? ` ${formatDependencyImpact(impact)}` : "";
       return {
         title: `Delete "${t.node.entity.name}"?`,
         // P1 fix: say exactly what happens. The WORKBOOK GROUPING is gone
@@ -150,10 +164,11 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
         // recoverable, and restoring one later (store/trash.ts's
         // restoreFromTrash self-heal) gives it a fresh workbook of its own
         // rather than reconstituting this one.
-        message:
+        message: `${
           n > 0
             ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
-            : "This workbook has no worksheets; the grouping is removed for good.",
+            : "This workbook has no worksheets; the grouping is removed for good."
+        }${impactText}`,
         confirmLabel: "Delete",
       };
     },
