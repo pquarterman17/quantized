@@ -106,8 +106,40 @@ worksheet virtualization; no blanking, jump, or lost final geometry.
 Playwright coverage. **Sprint priority:** pair with UX-R1/R2 in one bounded MDI
 hardening campaign after reproduction.
 
+### UX-R6 — Plot annotation must be easy and scientific-workflow aware
+
+**Observation/request:** the owner needs a fast, discoverable way to annotate
+plots—for example, label XRD peaks and add arbitrary text—without returning to
+code or hunting through publication-only tooling. General annotation, shape,
+drag and property infrastructure already exists in the active figure plans;
+this item records the missing daily-workflow acceptance rather than creating a
+second annotation model.
+
+**Goal:** add text or a callout in seconds, edit it directly, position it by
+mouse, and optionally anchor it to plot data so it behaves predictably during
+zoom/rescale. XRD peak results should offer a bounded **Label peaks** workflow
+that creates ordinary editable annotations, not a separate permanent overlay.
+
+**Acceptance:** verify an obvious toolbar/menu/context entry; click-to-place;
+double-click text editing; drag with optional snap and free positioning;
+right-click Properties; multiline copy/paste/cut; font, color, rotation,
+alignment, frame and arrow/callout controls; Greek letters plus degree,
+angstrom and common scientific symbols; session Undo; save/close/reopen and
+export/Office persistence. For XRD, support selected/all fitted peaks, a label
+template such as phase or `(hkl)` plus position, collision-aware initial
+placement, and conversion to independently editable standard annotations.
+Raw data and fitted peak results must never be rewritten by annotation edits.
+
+**Owner:** ChatGPT-Sol interaction/wording and visual acceptance; Claude Sonnet
+implementation/reliability; cheaper agents for fixtures and browser coverage.
+**Sprint priority:** daily-driver important, scheduled after G5 persistence and
+the MDI blank-window release blocker; manual text is release-relevant, bulk XRD
+label generation may be a beta follow-up if it threatens stabilization.
+
 **Routing:** UX-R1/R2/R4/R5 form one MDI usability/reliability campaign but must
 remain separately testable. UX-R3 belongs to the Library/Origin-import lane.
+UX-R6 strengthens the existing canonical annotation/peak workflows and must not
+fork a new figure-decoration state model.
 Do not bury these findings in archived MDI or Origin decoder plans; completion
 must be logged here and cross-referenced from the active Library/Primary plans.
 
