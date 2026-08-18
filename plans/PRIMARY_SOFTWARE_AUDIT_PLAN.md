@@ -691,22 +691,83 @@ appears stale.
 - [ ] Update stale wording/help.
 - [ ] E2E covers drag-to-Group, edit, undo, reopen, copy.
 
-### P1.6 — Import Wizard metadata and error roles
+### P1.6 — Import Wizard metadata and error roles [~]
 
 **Goal:** fully describe arbitrary scientific data during import and save the
 mapping as a reusable template.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5. **Dependency:** P1.4.
 
-- [ ] Preview/select multiple header/comment/metadata rows.
-- [ ] Select the default legend-label row.
-- [ ] Assign symmetric/asymmetric X and Y error roles explicitly.
-- [ ] Suggest common adjacent/name patterns, confirm ambiguity.
-- [ ] Assign categorical/text roles without losing raw strings.
-- [ ] Retain ignored preamble as searchable metadata.
-- [ ] Save/reapply mappings/transforms with mismatch explanation.
-- [ ] Live preview plus Apply/Cancel.
-- [ ] No guess can silently attach error to the wrong signal.
+**Slice 2 shipped (2026-08-18, Lane C, `claude/p16-import-wizard`, built on
+the merged P1.4 backend, PR #173):** the Import Wizard role-assignment UI
+over `routes/import_preview.py`'s payload. Backend: `ImportSettings` gains
+`label_line: int | None` (the "default legend-label row" — its per-column
+cells override each channel's display label) and every preamble line above
+`data_start_line` not consumed as header/units/label is retained verbatim
+in `metadata["comments"]` (`io/import_preview.py`, mirrors
+`io/delimited.py`'s existing convention exactly) instead of silently
+dropped. Frontend: `lib/errorRoles.ts`'s pairing algorithm extracted to a
+label-only `inferErrorBindingsFromLabels` (zero behavior change, existing
+tests pin the equivalence) so the wizard can seed error-role SUGGESTIONS
+from a preview's column names before any DataStruct exists; a new
+`ErrorRolesEditor.tsx` + `useImportErrorRoles.ts` (a second, narrower state
+hook alongside `useImportWizard.ts` — not a Zustand slice, matching that
+hook's own existing all-local-state convention) render one editable
+target/axis/side row per `error`-role column, pre-filled with the
+suggestion ONLY when unambiguous — an ambiguous column renders as an
+explicit "— unassigned —" row, never a guessed default, and only rows the
+user leaves assigned become `Dataset.errorRoles` on Import. Saved-filter
+reapply (`applyFilter`) now re-previews the CURRENT file under the
+candidate filter's settings and refuses the WHOLE apply — current
+settings/preview untouched, every unmatched column named — on a column-
+count or name mismatch (`lib/importwizard.resolveImportFilter`, mirroring
+`quickPlotTemplates.resolveTemplate`'s refusal SHAPE only, no coupling to
+that module). An explicit Cancel button was added alongside the existing
+window-close control (both leave zero state behind — `ImportWizardPanel`
+only mounts while `importWizardOpen`, AppOverlays.tsx).
+
+- [x] Preview/select multiple header/comment/metadata rows — INTERPRETED as
+  three independently-selectable rows (header/units/label, each with its
+  own field) plus automatic retention of everything else in the preamble
+  as searchable `comments` metadata, rather than a per-line multi-select
+  checkbox UI (every preamble line is ALREADY retained by default, so an
+  explicit per-line "mark as metadata" toggle would add UI weight with no
+  behavioral gain — see the Day-1 scope note if that changes).
+- [x] Select the default legend-label row — `label_line`, above.
+- [x] Assign symmetric/asymmetric X and Y error roles explicitly —
+  `ErrorRolesEditor`'s target/axis/side pickers, above.
+- [x] Suggest common adjacent/name patterns, confirm ambiguity —
+  `inferErrorBindingsFromLabels`-seeded suggestions, editable before Import.
+- [x] Assign categorical/text roles without losing raw strings — the P1.4
+  `categorical` role (and `label`'s `text_columns` capture) now appear in
+  the wizard's own `ROLE_OPTIONS` (previously P1.4 built the backend role
+  but "the existing wizard simply doesn't offer it yet" — now it does).
+- [x] Retain ignored preamble as searchable metadata — `comments`, above.
+- [x] Save/reapply mappings/transforms with mismatch explanation —
+  `resolveImportFilter`, above. Import mappings (`ImportFilterWire`/
+  `io.import_filters`) stay their OWN object; no coupling to
+  `store/quickPlotTemplates.ts` was added.
+- [x] Live preview plus Apply/Cancel — preview was already live (debounced
+  re-preview on every edit); Cancel is now an explicit button in addition
+  to the window's close control.
+- [x] No guess can silently attach error to the wrong signal — pinned
+  red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
+  with NO suggestion at all; `confirmedErrorBindings` drops any row the
+  user leaves unassigned before it ever reaches `Dataset.errorRoles`).
+
+**Explicitly booked, NOT shipped this slice — named home P1.6b (worksheet
+categorical UI, no owner/slice assigned yet):** two items from the P1.4
+review rounds that belong to the WORKSHEET, not the Import Wizard, and did
+not fall out naturally from this slice's routes/store work: (1) the
+worksheet's C/O/N modeling-type visibility — `lib/modeling.ts`'s
+`channelModelingType` already defaults a categorical channel to "nominal",
+but no worksheet UI surfaces or lets a user CHANGE a column's C/O/N badge
+today; (2) `store/cellEdit.ts`'s `setCellValue`/`setCellBlock` writing a
+raw, unguarded number into a categorical cell — degrades safely at read
+time (P2-3/P3-1's ruling) but has no level-picker/Recode-and-extend UI.
+Both need a real worksheet-UI design pass (column-header type badge +
+editor, a cell-edit guard or suggestion), not a few lines bolted onto the
+wizard; P1.6b is the placeholder name until that gets its own plan entry.
 
 ### P1.7 — Project portability and source relinking
 
@@ -1835,6 +1896,56 @@ work (its BACKLOG row).
   `plotspec.ts`/`types.ts` before it) — moved `sanitizeDataStruct` to
   `lib/categorical.ts` instead of raising the pin; `workspace.ts` lands at
   its exact original line count.
+
+#### 2026-08-18 — P1.6 Import Wizard role assignment, Slice 2 (Sonnet agent, worktree `lane-c`, branch `claude/p16-import-wizard`)
+
+- Built on the merged P1.4 backend (PR #173). Backend:
+  `src/quantized/io/import_preview.py` gains `ImportSettings.label_line`
+  and preamble-comment retention (`tests/test_io_import_preview.py`, +12
+  tests). Frontend: `lib/errorRoles.ts` (label-only extraction, +2 tests),
+  `lib/importwizard.ts` (`finalChannelOrder`/`suggestErrorBindings`/
+  `errorRoleChannels`/`seedErrorRows`/`confirmedErrorBindings`/
+  `errorTargetOptions`/`resolveImportFilter`, +18 tests), `lib/types.ts`
+  (wire shape additions), new `components/workshops/importwizard/
+  useImportErrorRoles.ts` (+6 tests) and `ErrorRolesEditor.tsx` (+7 tests),
+  `useImportWizard.ts` + `ImportWizardPanel.tsx` + `PreviewTable.tsx`
+  updated and their existing test suites extended (+2/+6/+2 tests
+  respectively) rather than replaced.
+- Red-first evidence (by hand, before each fix): label_line —
+  `ImportSettings` had no such field at all (TypeError on construction);
+  preamble comments — `parse_import`'s `metadata` never carried a
+  `"comments"` key, confirmed via a direct call before the fix. The
+  "confirm, never silently attach" invariant (item 2) is pinned going
+  forward by `suggestErrorBindings`/`confirmedErrorBindings` tests (an
+  ambiguous column yields no suggestion; an unassigned row never reaches
+  `Dataset.errorRoles`) — this is a NEW feature, not a behavior flip, so
+  "red" here means "did not exist to test" rather than "regressed"; the
+  filter-refusal tests (item 4) are the same shape. One GENUINE bug caught
+  by its own new test during development (not a review find): the reseed
+  effect in `useImportErrorRoles.ts` was gated on a `useMemo`'d signature
+  STRING as the effect dependency, so React's own value-based dependency
+  comparison silently skipped `resetErrorRows`'s forced reseed when the
+  signature string was unchanged — fixed by depending on the `columns`
+  ARRAY reference instead and doing the value comparison manually inside
+  the effect body; `useImportErrorRoles.test.ts`'s "resetErrorRows...
+  forces a fresh reseed" test is the regression guard.
+- Explicitly NOT shipped (booked, see P1.6b above): the worksheet C/O/N
+  modeling-type UI and `cellEdit`'s categorical-write guard — neither fell
+  out naturally from the routes/store work this slice owned.
+- Gates: backend `uv run pytest -q` 3469 passed / 268 skipped / 18 xfailed
+  (0 failed); `-m golden` 155 passed / 93 skipped / 0 failed, unchanged;
+  ruff + mypy --strict clean. Frontend `tsc --noEmit` clean, `eslint
+  --max-warnings=0` clean on every touched/new file, full `vitest run`:
+  **493 test files / 7332 tests, ALL passed** (0 failed). `npm run build`:
+  bundle-size OK, 841.2 kB eager (12.8 kB under the 854.0 kB budget — the
+  narrowest headroom yet; the next slice touching `useApp.ts`'s bundle
+  chunk should watch this). Also fixed in-flight (same lesson as both
+  prior rounds): `lib/types.ts`'s wire-shape additions pushed it back over
+  its `architecture.test.ts` pin (1053 lines, zero headroom yet again) —
+  compressed the new/touched doc comments to single trailing-line style
+  (matching the file's own `values: number[][]; // row-major: ...`
+  precedent) rather than raising the pin; lands at its exact original line
+  count.
 
 ## Reference baseline
 
