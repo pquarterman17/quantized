@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile } from "../lib/api";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -29,6 +30,7 @@ vi.mock("../lib/openFilePicker", () => ({
 }));
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -433,5 +435,114 @@ describe("reimportDataset — undo", () => {
     const ds = useApp.getState().datasets[0];
     expect(ds.data).toEqual(raw);
     expect(ds.raw).toEqual(raw);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR M (L0.55): preview the downstream impact
+// BEFORE committing, via the SAME `downstreamOf` closure the recalc engine
+// uses (lib/dependencyImpact.ts).
+describe("reimportDataset — dependency impact preview (PR M)", () => {
+  it("skips the confirm entirely when nothing depends on the dataset (today's frictionless case)", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [baseDataset()] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(importFile).toHaveBeenCalled();
+  });
+
+  it("previews the impact and proceeds when confirmed", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived-sheet",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    useApp.setState({ datasets: [baseDataset(), derived] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Re-import "sample.dat"?',
+      expect.stringContaining("derived-sheet"),
+      "Re-import",
+    );
+    expect(importFile).toHaveBeenCalled();
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.data).toEqual(fresh);
+  });
+
+  it("does nothing (zero mutation, no API call) when the preview is declined", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived-sheet",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    useApp.setState({ datasets: [baseDataset(), derived] });
+    const before = useApp.getState().datasets;
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR M booked finding (G5 canonical-state review):
+// a shape-changing reimport that invalidates a bound figure's groupKey
+// surfaces a clear message instead of a raw backend ValueError later.
+describe("reimportDataset — groupKey reset on reshape (PR M booked finding)", () => {
+  it("clears a bound figure's groupKey/facetKey on a column-count change and toasts why", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Figure",
+      datasetId: "d1",
+      view: defaultPlotView(),
+      groupKey: 0,
+    });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const updated = useApp.getState().editableFigures[0];
+    expect(updated.bindings.groupKey).toBeNull();
+    expect(updated.bindings.facetKey).toBeNull();
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(
+      expect.stringContaining("grouping column no longer exists"),
+      "info",
+    );
+  });
+
+  it("does not toast the groupKey message when no bound figure had one set", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    const doc = createFigureDocument({ id: "fig1", name: "Figure", datasetId: "d1", view: defaultPlotView() });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(vi.mocked(toast)).not.toHaveBeenCalledWith(expect.stringContaining("grouping column"), "info");
+  });
+
+  it("leaves groupKey untouched on a row-only reshape (columns unchanged)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2], values: [[11], [21]] }); // fewer rows, same columns
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Figure",
+      datasetId: "d1",
+      view: defaultPlotView(),
+      groupKey: 0,
+    });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().editableFigures[0].bindings.groupKey).toBe(0);
   });
 });

@@ -22,11 +22,20 @@
 // different one — see datasetViewDefaults's object literal): xKey, yKeys,
 // y2Keys, y2Lim, y2Scale, y2Step, y2AxisLabel, seriesStyles, seriesLabels,
 // errKeys/errors, seriesOrder, hiddenChannels, xLim, yLim, xStep, yStep.
-// groupKey/facetKey are deliberately left untouched — the established reset
-// preserves them too (createPlotWindowDocument always carries
-// `previous?.bindings.groupKey`/`facetKey` forward, even under
-// `resetErrors: true`), so a different choice here would be inventing a new
-// list, not mirroring the old one.
+//
+// LIBRARY_WORKBOOK_UX_PLAN PR M booked finding (G5 canonical-state review,
+// 2026-08-17): groupKey/facetKey were PREVIOUSLY left untouched here (the
+// established window-path reset preserves them too), but groupKey reaches
+// the backend as FigureSpec.group_col (lib/figureSpec.ts) for Publication
+// Preview/export — a stale index for a removed/shifted grouping column
+// raised a raw `ValueError` there instead of a clear message. Cleared here
+// like every other channel-indexed binding: once null, figureSpec.ts omits
+// `group_col` entirely (no backend call, no crash), and the CALLER
+// (store/reimport.ts's commitReimport) surfaces a clear "grouping column no
+// longer exists" toast for exactly the figures this actually resets, so the
+// loss is never silent. facetKey is inert today (no renderer reads it yet)
+// but cleared alongside groupKey for the same reason and to avoid two
+// diverging rules for two structurally identical bindings.
 //
 // The reset is unconditional WHEN CALLED; the gate lives at the call site
 // (lib/reimport.ts's `reimportColumnsChanged`). An in-range binding is not
@@ -44,6 +53,7 @@ import type { FigureDocument } from "./figureDocument";
  * shape-changed reset (see module doc): xKey/yKeys/y2Keys clear to PlotView's
  * "automatic/all channels" `null` sentinel, errors clear to `[]` (the same
  * "fresh/empty" outcome `resetErrors: true` produces on the window path),
+ * groupKey/facetKey clear to `null` (PR M booked finding — see module doc),
  * and the matching channel-indexed plot.view fields (seriesOrder,
  * hiddenChannels, seriesStyles, seriesLabels) plus the axis-range fields
  * datasetViewDefaults bundles with them (xLim/yLim/xStep/yStep,
@@ -58,6 +68,8 @@ export function resetFigureDocumentForReshape(document: FigureDocument): FigureD
       yKeys: null,
       y2Keys: null,
       errors: [],
+      groupKey: null,
+      facetKey: null,
     },
     plot: {
       ...document.plot,
