@@ -13,10 +13,10 @@ export interface DataStruct {
   labels: string[];
   units: string[];
   metadata: Record<string, unknown>;
-  /** Origin projects only: every workbook, when the file holds more than one.
-   *  Each entry is EITHER a full `DataStruct` (the `full_books=true` escape
-   *  hatch, or any entry under it) OR one of the two lazy-transport shapes
-   *  below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */
+  catLevels?: Record<number, string[]>; // P1.4: channel idx -> ordered level strings; values carry float codes 0..n-1 (lib/categorical.ts)
+  /** Origin projects only: every workbook, when the file holds more than one. Each entry is EITHER
+   *  a full `DataStruct` (the `full_books=true` escape hatch, or any entry under it) OR one of the
+   *  two lazy-transport shapes below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */
   books?: BookEntry[];
   /** Present alongside a lazy `books[]` (absent under `full_books=true`): the
    *  reference `POST /api/parsers/books/data` needs (with a book's `id`) to

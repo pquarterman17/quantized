@@ -5,6 +5,7 @@
 // DataStruct columns are all numeric, so "nominal" only fires for few-distinct
 // level-like columns; ordinal is never inferred (user override only).
 
+import { isCategoricalChannel } from "./categorical";
 import type { Dataset, ModelingType } from "./types";
 
 /** Max distinct values a column may have and still read as nominal. */
@@ -45,12 +46,16 @@ export function inferModelingType(column: readonly number[]): ModelingType {
 const modelingTypeCache = new WeakMap<readonly (readonly number[])[], Map<number, ModelingType>>();
 
 /** The effective type of a dataset channel: the user's override when set,
- *  otherwise the inferred type of that column (cached per `(values, channel)`
- *  — see the cache's doc above for why keying on the `values` array
- *  reference is safe). */
+ *  otherwise a P1.4 categorical channel's default of "nominal" (a level
+ *  table means "these are labeled categories", the strongest signal there
+ *  is — stronger than the numeric-shape heuristic below, so it's checked
+ *  first), otherwise the inferred type of that column (cached per
+ *  `(values, channel)` — see the cache's doc above for why keying on the
+ *  `values` array reference is safe). */
 export function channelModelingType(ds: Dataset, channel: number): ModelingType {
   const override = ds.channelTypes?.[channel];
   if (override) return override;
+  if (isCategoricalChannel(ds.data, channel)) return "nominal";
   const values = ds.data.values;
   let byChannel = modelingTypeCache.get(values);
   if (!byChannel) {

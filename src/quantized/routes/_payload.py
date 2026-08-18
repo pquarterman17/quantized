@@ -49,10 +49,15 @@ def to_jsonable(obj: Any) -> Any:
 
 def datastruct_payload(ds: DataStruct) -> dict[str, Any]:
     """DataStruct -> JSON-safe dict for the import response."""
-    return {
+    payload: dict[str, Any] = {
         "time": jsonify(ds.time),
         "values": jsonify(ds.values),
         "labels": list(ds.labels),
         "units": list(ds.units),
         "metadata": dict(ds.metadata),
     }
+    # P1.4: ADDITIVE, same as DataStruct.to_dict() -- omitted entirely for a
+    # pure-numeric dataset so an existing response shape never changes.
+    if ds.cat_levels is not None:
+        payload["cat_levels"] = {str(k): list(v) for k, v in ds.cat_levels.items()}
+    return payload

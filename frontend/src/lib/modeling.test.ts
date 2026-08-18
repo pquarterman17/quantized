@@ -101,3 +101,44 @@ describe("isCategorical", () => {
     expect(isCategorical("continuous")).toBe(false);
   });
 });
+
+// P1.4: a channel with a level table (lib/categorical.ts) defaults to
+// "nominal" — the strongest possible signal, so it's checked before the
+// numeric-shape inference (which would otherwise call a smooth-looking code
+// column "continuous").
+describe("channelModelingType — P1.4 categorical default", () => {
+  it("a channel with a level table reads as nominal even with a smooth-ramp code column", () => {
+    const smoothCodes = Array.from({ length: 30 }, (_, i) => [i * 0.5, i]); // 30 distinct codes -> would infer continuous
+    const d: Dataset = {
+      id: "d1",
+      name: "test",
+      data: {
+        time: smoothCodes.map((_, i) => i),
+        values: smoothCodes,
+        labels: ["x", "cat"],
+        units: ["", ""],
+        metadata: {},
+        catLevels: { 1: smoothCodes.map((_, i) => `L${i}`) },
+      },
+    };
+    expect(channelModelingType(d, 1)).toBe("nominal");
+    expect(channelModelingType(d, 0)).toBe("continuous"); // the non-categorical channel is untouched
+  });
+
+  it("a user override still wins over the categorical default", () => {
+    const d: Dataset = {
+      id: "d1",
+      name: "test",
+      data: {
+        time: [0, 1, 2],
+        values: [[0], [1], [0]],
+        labels: ["cat"],
+        units: [""],
+        metadata: {},
+        catLevels: { 0: ["A", "B"] },
+      },
+      channelTypes: { 0: "continuous" },
+    };
+    expect(channelModelingType(d, 0)).toBe("continuous");
+  });
+});

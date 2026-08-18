@@ -354,6 +354,35 @@ describe("workspace channel modeling types", () => {
   });
 });
 
+// P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN, Day-1 round-trip gate): `catLevels`
+// lives on `DataStruct` itself (not `Dataset`), so it is expected to survive
+// .dwk save/reload with ZERO changes to workspace.ts — `isDataStruct` is a
+// structural check that narrows `unknown` to `DataStruct` without stripping
+// extra fields, and `data: dd.data` keeps the whole parsed object. This
+// test is the verification the P1.4 contract calls for, per PINNED
+// FILES: "the dataset blob already carries the new optional field for
+// free — verify with a test, change nothing" (workspace.ts is untouched by
+// this slice).
+describe("workspace categorical channel levels (P1.4, workspace.ts untouched)", () => {
+  it("round-trips DataStruct.catLevels through serializeWorkspace/parseWorkspace with no workspace.ts changes needed", () => {
+    const ds = makeDataset("a", "categorical");
+    ds.data = {
+      ...ds.data,
+      values: [[10, 0], [20, 1], [30, 0]],
+      catLevels: { 1: ["NbAu-1", "NbAu-2"] },
+    };
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.catLevels).toEqual({ 1: ["NbAu-1", "NbAu-2"] });
+    expect(restored.data.values).toEqual([[10, 0], [20, 1], [30, 0]]);
+  });
+
+  it("a dataset with no catLevels round-trips with the key simply absent", () => {
+    const ds = makeDataset("a", "plain");
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.catLevels).toBeUndefined();
+  });
+});
+
 // Origin-import figures (project-organization plan item 5): a graph imported
 // from an .opj/.opju must survive save→reload. Before v2 carried them, a
 // reload silently dropped every figure (`useApp.loadWorkspace` reset the slot).
