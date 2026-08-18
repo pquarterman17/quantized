@@ -17,7 +17,7 @@ export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
 export const FIGURE_DOCUMENT_VERSION = 2 as const;
 
 /** Bindings have one owner; they are deliberately removed from visual state. */
-export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errKeys">;
+export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errKeys" | "groupKey">;
 
 export interface FigureBindings {
   datasetId: string | null;
@@ -134,7 +134,14 @@ function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBi
  * visual state so later editors cannot accidentally create two authorities.
  */
 export function createFigureDocument(input: CreateFigureDocumentInput): FigureDocument {
-  const { xKey, yKeys, y2Keys, errKeys, ...view } = clone(snapshotView(input.view));
+  // P1.5: `groupKey` is bindings-owned (like xKey/yKeys/y2Keys/errKeys) --
+  // pulled out of the view here so it never leaks into `plot.view` too.
+  // `input.groupKey` (an explicit constructor arg, unchanged from before this
+  // field existed on PlotView) stays the authority; a caller that threads a
+  // live `input.view.groupKey` passes it through `input.groupKey` explicitly
+  // (see `updateFigureDocumentFromPlotView` below) rather than this destructure
+  // silently picking it up a second, possibly-stale way.
+  const { xKey, yKeys, y2Keys, errKeys, groupKey: _viewGroupKey, ...view } = clone(snapshotView(input.view));
   const data = input.data ?? { mode: "live" as const };
   if (data.mode === "frozen" && data.snapshot === undefined) {
     throw new Error("a frozen figure document requires a data snapshot");
@@ -184,6 +191,13 @@ export function figureDocumentToPlotView(document: FigureDocument): PlotView {
     ...clone(document.plot.view),
     xKey: document.bindings.xKey,
     yKeys: clone(document.bindings.yKeys),
+    // P1.5: project the canonical groupKey binding into the live facade too
+    // -- without this a window's durable groupKey (survives save/reopen/
+    // undo via the document) never reached the interactive Stage's own
+    // render pipeline (usePlotPayload), so a grouped figure opened here
+    // rendered as an ordinary ungrouped plot despite the binding being
+    // right there in `document.bindings`.
+    groupKey: document.bindings.groupKey,
     y2Keys: clone(document.bindings.y2Keys),
     errKeys: errKeysFromBindings(document.bindings.errors),
   };
@@ -211,7 +225,13 @@ export function updateFigureDocumentFromPlotView(
     datasetId: input.datasetId === undefined ? document.bindings.datasetId : input.datasetId,
     view: input.view,
     mark: document.plot.mark,
-    groupKey: document.bindings.groupKey,
+    // P1.5: commit the LIVE facade's groupKey back to the canonical document
+    // (mirrors xKey/yKeys/errKeys above being sourced from `input.view`,
+    // not the stale `document.bindings` copy) -- an in-Stage grouping edit
+    // (Graph Builder commit, or a future direct picker) now round-trips
+    // through undo/redo, close/reopen, and export exactly like every other
+    // binding already did.
+    groupKey: input.view.groupKey,
     facetKey: document.bindings.facetKey,
     errors: [...richErrors, ...legacyErrorBindings(input.view.errKeys)],
     data: document.data,
@@ -309,10 +329,11 @@ function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
     ...(isObject(value) ? value : {}),
     xKey: bindings.xKey,
     yKeys: bindings.yKeys,
+    groupKey: bindings.groupKey,
     y2Keys: bindings.y2Keys,
     errKeys: errKeysFromBindings(bindings.errors),
   });
-  const { xKey: _xKey, yKeys: _yKeys, y2Keys: _y2Keys, errKeys: _errKeys, ...view } = sanitized;
+  const { xKey: _xKey, yKeys: _yKeys, groupKey: _groupKey, y2Keys: _y2Keys, errKeys: _errKeys, ...view } = sanitized;
   return clone(view);
 }
 

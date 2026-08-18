@@ -103,6 +103,7 @@ describe("Quick Figure Builder preview vs the created figure's render pipeline (
       xScale: "linear",
       xKey: view.xKey,
       yKeys: view.yKeys,
+      groupKey: view.groupKey,
       y2Keys: view.y2Keys,
       seriesOrder: view.seriesOrder,
       seriesStyles: view.seriesStyles,

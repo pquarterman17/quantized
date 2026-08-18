@@ -31,21 +31,24 @@
 // split (`calc.plotting.build_grouped_series`) at both preview-render and
 // export time.
 //
-// A second architectural fact shapes the "edit on Stage" step below: the
-// interactive uPlot Stage canvas has NO live rendering for a group split at
-// all today — useGraphBuilder.ts's own `commitToPlot` toasts "series-split
-// by group is preview-only in v1 (lands with faceting)" the moment a
-// grouped spec is committed to a plot window, and
-// FIGURE_AUTHORING_WORKFLOW_PLAN's F4.4 ("Complete live grouping/faceting
-// parity") is still open/unchecked. The ONLY surface that actually renders
-// AND edits a grouped figure's real per-level series is the canonical
-// Publication Preview — a real matplotlib round trip, server-rendered —
-// which is exactly the surface a `bindings.groupKey`-carrying
-// FigureDocument is built, edited, saved into `editableFigures`, reopened
-// from the Library, and exported through. So "edit on Stage" here means
-// editing that canonical draft through ITS real UI (property panels +
-// preview click-to-select) — the "Stage" a grouped figure actually has
-// today, not a fabricated interaction with a feature that doesn't exist.
+// A second architectural fact used to shape the "edit on Stage" step below:
+// until PRIMARY_SOFTWARE_AUDIT_PLAN's P1.5 ("Live Graph Builder grouping
+// parity"), the interactive uPlot Stage canvas had NO live rendering for a
+// group split at all — `commitToPlot` toasted "series-split by group is
+// preview-only in v1" the moment a grouped spec was committed to a plot
+// window. P1.5 closed that gap: `store.groupKey` (a durable, focused-window
+// facade field alongside `xKey`/`yKeys`, projected through
+// `FigureDocument.bindings.groupKey` <-> `PlotView.groupKey` exactly like
+// every other binding) now drives the SAME client-side split
+// (`lib/plotGroupSplit.ts`'s `applyGroupSplit`, algorithm-identical to the
+// backend's `build_grouped_series` and this file's own Publication Preview
+// path) on the live Stage canvas too — see the SEPARATE "live Stage" test
+// below for that coverage (drag-to-Group -> live canvas renders one series
+// per level -> undo -> reopen -> export parity, GROUP_LEVELS.length legend
+// rows throughout). This test keeps exercising the canonical Publication
+// Preview surface specifically (property panels + preview click-to-select)
+// -- both surfaces are real and both are covered, in two separate tests
+// rather than overloading one.
 //
 // Verifying "one series per group with the expected labels" without OCR:
 // `/api/export/figure-hitmap` returns per-element PIXEL boxes only (no
@@ -290,4 +293,152 @@ test("Group well builds one series per level, survives Stage edit + save/reopen,
   for (const label of EXPECTED_SERIES_LABELS) {
     expect(svg, `exported SVG carries the "${label}" series label`).toContain(label);
   }
+});
+
+// P1.5 (PRIMARY_SOFTWARE_AUDIT_PLAN): "Durable live grouped series" — the
+// SAME Group well now also drives the INTERACTIVE Stage canvas, not just
+// Publication Preview. drag-to-Group -> live legend shows one row per level
+// -> undo/redo -> close/reopen (via undo-of-close, the same real-UI pattern
+// window-arrange journeys use) -> export parity, all through the real uPlot
+// canvas + store, no mocks.
+// CI review round (PR #182): the live interactive legend row renders the
+// series label as a bare text node (PlotLegend.tsx's `<RichText text={text}
+// />` — a Fragment, no wrapper element, for the common no-markup-syntax
+// case this fixture's labels always are) directly alongside a SEPARATE
+// `<span>` holding the "move earlier/later" draw-order buttons (▲/▼) when
+// more than one series is plotted (`plotted.length > 1`, true here: three
+// grouped series). `allTextContents()` on the whole `.it` row therefore
+// picked up "Value (Run=1)▲▼" instead of "Value (Run=1)" — confirmed by
+// reading PlotLegend.tsx before touching anything: the glyphs are that
+// reorder control's own button text, not an unexpected surface. Rather than
+// a glyph regex (which would silently mask any FUTURE unrelated garbage the
+// same way), this reads each row's OWN direct child text nodes only —
+// robust to whatever else the row's DOM grows, since it structurally
+// excludes the button `<span>` (and the `<LegendSample>` swatch, which
+// renders no text) without depending on the buttons' exact glyphs at all.
+async function legendSeriesLabels(page: Page): Promise<string[]> {
+  const rows = page.locator(".qzk-legend .it").filter({ hasText: /\(Run=/ });
+  return rows.evaluateAll((elements) =>
+    elements.map((el) => {
+      let text = "";
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? "";
+      }
+      return text.trim();
+    }),
+  );
+}
+
+function storeGroupKey(page: Page): Promise<number | null> {
+  return page.evaluate(
+    () => (window as unknown as { __qz: { useApp: { getState: () => { groupKey: number | null } } } })
+      .__qz.useApp.getState().groupKey,
+  );
+}
+
+test("Group well renders live on the interactive Stage, undoes, survives a window close/reopen, and exports the same group binding", async ({ page }) => {
+  test.setTimeout(90_000);
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("grouped-runs.csv"));
+  await waitForDatasetCount(page, 1);
+
+  // ── Drag-to-Group via the Graph Builder's real UI, then commit to a NEW
+  //    interactive plot window (not Publication Preview this time). ────────
+  const graphBuilder = await openGraphBuilder(page);
+  await graphBuilder.getByLabel("Assign a channel to Y", { exact: true }).selectOption({ label: "Value" });
+  await graphBuilder.getByLabel("Assign a channel to Group", { exact: true }).selectOption({ label: "Run" });
+  await graphBuilder.getByRole("button", { name: "Create New Plot" }).click();
+
+  // ── Live canvas renders one legend row per group level (P1.5 item 1) ────
+  await expect.poll(() => legendSeriesLabels(page)).toHaveLength(GROUP_LEVELS.length);
+  expect(await legendSeriesLabels(page)).toEqual(expect.arrayContaining(EXPECTED_SERIES_LABELS));
+  expect(await storeGroupKey(page)).toBe(1);
+
+  // ── Edit: undo the group commit -> the live canvas collapses back to ONE
+  //    ordinary series (the grouping binding is a first-class undoable edit,
+  //    same as X/Y channel selection always was). ─────────────────────────
+  // CI review round (PR #182): a positional `.qzk-stage` click at a
+  // hardcoded corner is fragile here -- the Graph Builder's own floating
+  // glass window is open at this exact point (grouping was just committed
+  // FROM it) and can legitimately overlay the stage's top-left corner,
+  // which is exactly what CI hit ("<details class=\"qz-card\">... intercepts
+  // pointer events"). The real INTENT was never "click the stage" -- it was
+  // "make sure Control+z below isn't swallowed by a focused text input" (no
+  // input is focused at this point in the journey, but the mechanism should
+  // hold regardless of window layout). A direct `document.activeElement`
+  // blur achieves that with no positional click, no overlay collision
+  // possible at all -- there is no DOM element an overlay could intercept,
+  // since nothing is dispatched THROUGH the page's hit-testing/paint tree.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => storeGroupKey(page)).toBeNull();
+  await expect.poll(() => legendSeriesLabels(page)).toHaveLength(0);
+
+  // ── Redo restores the split. ─────────────────────────────────────────────
+  await page.keyboard.press("Control+Shift+z");
+  await expect.poll(() => storeGroupKey(page)).toBe(1);
+  await expect.poll(() => legendSeriesLabels(page)).toHaveLength(GROUP_LEVELS.length);
+
+  // CI review round (PR #182, third collision): Graph Builder's job is done
+  // -- the group is committed to the live window and re-proven through
+  // undo/redo above. It has been sitting at its fixed default screen
+  // position (every floating ToolWindow in this app opens there) for the
+  // whole test so far, which is exactly what caused THREE separate
+  // interception failures in a row as the journey moved into window
+  // management below (a right-click titlebar, next a Close Window
+  // menuitem, and it would have hit the export dialog too). Rather than
+  // route around it interaction by interaction, close it ONCE here, the
+  // same real "the app's own close control" way the sibling test above
+  // already does (setGraphBuilderOpen(false) IS what GraphBuilderPanel's
+  // own × control calls -- store/graphBuilder.ts, not a test-only
+  // shortcut) -- structurally removing every remaining overlay risk for
+  // the rest of this journey (see the export step's own note for why the
+  // final "Export figure…" no longer needs Graph Builder open at all).
+  await page.evaluate(() =>
+    (window as unknown as { __qz: { useApp: { getState: () => { setGraphBuilderOpen: (open: boolean) => void } } } })
+      .__qz.useApp.getState().setGraphBuilderOpen(false),
+  );
+  await expect(graphBuilder).toBeHidden();
+
+  // ── Close/reopen: close the grouped window via the real title-bar context
+  //    menu (window-arrange.spec.ts's own path), then undo the close — a
+  //    genuine close-then-restore round trip, not a fabricated one (the
+  //    original default window stays open throughout, so the ≥1-window
+  //    invariant is never at risk). The restored window's groupKey and live
+  //    legend must read back exactly as they did before closing. Graph
+  //    Builder is closed by this point (above), so nothing can overlap
+  //    this titlebar or the context menu it opens. ───────────────────────
+  const focusedTitlebar = page.locator(".qzk-plotwin.focused .qzk-plotwin-titlebar");
+  await expect(focusedTitlebar).toBeVisible();
+  await focusedTitlebar.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Close Window", exact: true }).click();
+  await expect.poll(() => storeGroupKey(page)).toBeNull(); // the OTHER (default) window is now focused, ungrouped
+  await page.keyboard.press("Control+z"); // undo the close
+  await expect.poll(() => storeGroupKey(page)).toBe(1);
+  await expect.poll(() => legendSeriesLabels(page)).toEqual(expect.arrayContaining(EXPECTED_SERIES_LABELS));
+
+  // ── Export parity: the reopened window's OWN canonical document carries
+  //    the SAME group binding into a real export request. Routed through
+  //    the command palette's "Export figure…" (File menu command,
+  //    commands/fileCommands.ts -> the SAME runExportFigureCommand Graph
+  //    Builder's own "Export" button calls) rather than Graph Builder's
+  //    button, now that Graph Builder is closed -- runPaletteCommand is
+  //    also this repo's own established robust driver (utils/palette.ts),
+  //    used by the sibling test above for "Publication preview". This also
+  //    makes the assertion STRICTER than before: without Graph Builder's
+  //    own applyToCurrent() re-commit in the path, group_col below is
+  //    proven to come PURELY from the reopened window's persisted/restored
+  //    state, not partly re-derived from a fresh commit. ────────────────
+  const exportDialog = page.locator(".qz-dialog").filter({ has: page.getByRole("heading", { name: "Export figure" }) });
+  const exportResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure",
+  );
+  await runPaletteCommand(page, "Export figure");
+  await expect(exportDialog).toBeVisible();
+  await exportDialog.getByRole("button", { name: "Run" }).click();
+  const response = await exportResponse;
+  expect(response.ok()).toBe(true);
+  const body = response.request().postDataJSON() as { group_col?: number; y_keys?: number[] };
+  expect(body.y_keys).toEqual([0]);
+  expect(body.group_col, "the reopened window's export carries the same group binding").toBe(1);
 });

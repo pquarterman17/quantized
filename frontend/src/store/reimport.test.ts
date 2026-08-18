@@ -72,6 +72,7 @@ beforeEach(() => {
     history: [],
     future: [],
     status: "",
+    groupKey: null,
   });
 });
 
@@ -544,5 +545,19 @@ describe("reimportDataset — groupKey reset on reshape (PR M booked finding)", 
     await useApp.getState().reimportDataset("d1");
 
     expect(useApp.getState().editableFigures[0].bindings.groupKey).toBe(0);
+  });
+
+  // P1.5 review round P1: the LIVE view's groupKey singleton is a SEPARATE
+  // reset target from editableFigures above (it didn't exist as a PlotView
+  // field until P1.5) -- it must clear through the SAME datasetViewDefaults
+  // choke point commitReimport's `viewReset` already routes xKey/yKeys
+  // through on a shape-changed reimport of the ACTIVE dataset.
+  it("clears the LIVE groupKey singleton on a shape-changed reimport of the active dataset", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    useApp.setState({ datasets: [baseDataset()], activeId: "d1", groupKey: 0 });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().groupKey).toBeNull();
   });
 });

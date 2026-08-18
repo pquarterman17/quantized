@@ -657,10 +657,12 @@ output, not a caught error).
   column layout, so it now always carries the table forward unchanged);
   merge CARRIES-IF-IDENTICAL (a channel's level table survives only when
   every merged dataset agrees on it, same strings, same order; any mismatch
-  drops just that channel, never the whole merge) with REAL conflict
-  resolution — remapping each dataset's codes onto one union level table
-  when they disagree — explicitly BOOKED under P1.5 (today's drop-on-
-  mismatch is the safe default, not the final answer). Filter/recipes/
+  drops just that channel, never the whole merge) — REAL conflict
+  resolution (remapping each dataset's codes onto one union level table when
+  they disagree) SHIPPED under P1.5 (2026-08-18): `lib/merge.ts`'s
+  `planChannel`/`remapFor` now do exactly that; the one remaining drop case
+  (a channel missing its table on even one input) is unchanged, since there
+  is nothing to remap FROM. Filter/recipes/
   export propagation is still unaudited. Also found this round, booked (not
   fixed) for P1.6/the worksheet-UI slice: `store/cellEdit.ts`'s
   `setCellValue`/`setCellBlock` write a raw `number` into any cell,
@@ -695,16 +697,146 @@ Figure Builder, workspace, and export.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P1.4.
 
-**Current evidence:** grouped FigureDoc/export exists, while the Graph Builder
-live path still treats group splitting as preview-oriented; some help wording
-appears stale.
+**Slice shipped (2026-08-18, Lane C, `claude/p15-live-grouping`):** the Group
+well's channel is now a durable LIVE binding, not just a Publication-Preview-
+only one. Root cause traced precisely before writing any code: the canonical
+`FigureDocument.bindings.groupKey` already existed (F2.3h) and already drove
+Publication Preview + backend export (`calc.plotting.build_grouped_series`)
+end to end — but `figureDocumentToPlotView`, the ONE bridge that projects a
+document into the shape the interactive Stage canvas (`usePlotPayload` ->
+`PlotViewport`/uPlot) actually reads, silently dropped `groupKey` on the
+floor. `PlotView` gains a `groupKey: number | null` field (bindings-owned,
+excluded from `FigureViewState` exactly like `xKey`/`yKeys`/`errKeys` —
+`figureDocument.ts`); `store/useApp.ts` gains a `groupKey` singleton +
+`setGroupKey` (mirrors `setXKey` — undo history + macro record) that rides
+the SAME `snapshotView`/`hydrateView`/`.dwk` machinery every other PlotView
+field already does, for free, since `VIEW_KEYS` is derived from
+`defaultPlotView()`'s own keys. A new `lib/plotGroupSplit.ts` (a fresh
+sibling module, funding itself rather than growing `lib/plotdata.ts` past
+its `architecture.test.ts` pin) INDEPENDENTLY implements the same split
+algorithm `lib/plotspec.ts`'s `buildXY` already has (same finite-code sort,
+same `${label} (${groupLabel}=${levelLabel})` format, same
+`lib/categorical.ts` `groupLevelLabel` accessor) — review round P2
+corrected an initial claim that this was merely "a second call site" of
+shared code; it is two hand-written functions, proven equivalent by a REAL
+runtime parity test (`plotGroupSplit.test.ts`: builds the identical payload
+through both and asserts `toEqual`), not by construction. That test also
+caught and fixed one real, if previously inert, divergence: `applyGroupSplit`
+was missing `buildXY`'s explicit `Number.isFinite` mask on a non-finite Y
+value (harmless today only because the upstream fetch already nulls
+non-finite values before either function sees them — fixed to not rely on
+that invariant). Item 3 is satisfied by this proven equivalence, not by a
+new backend/frontend label-resolution site. `usePlotPayload.ts` calls
+it client-side, row-position-aligned to the already-loaded dataset, on the
+never-decimated fetch (`plotDecimate.ts`'s `decimationRequestEligible` gains
+`hasGroupSplit`, same "can't tolerate a reduced row set" reasoning error
+bars/color-by-column already established). `useGraphBuilder.ts`'s
+`commitToPlot` now calls `setGroupKey` instead of toasting "series-split by
+group is preview-only in v1" (item 6's stale wording — the toast itself
+WAS the stale artifact; removed, not reworded).
 
-- [ ] Durable live grouped series with stable identity/style.
-- [ ] Supported statistical/scientific faceting.
-- [ ] Explicit edit-one/edit-all behavior.
-- [ ] Hide/order/restyle/legend/Inspector/menu/undo/reopen/export parity.
-- [ ] Update stale wording/help.
-- [ ] E2E covers drag-to-Group, edit, undo, reopen, copy.
+- [x] Durable live grouped series with stable identity/style — GROUP-WELL
+  CORE, per the dispatch's own scoping. Identity is stable by construction:
+  `usePlotPayload`'s `plotted` array (the SAME array `styleList`/
+  `labelList`/`hidden`/`PlotLegend.tsx`/`PlotContextMenu.tsx` already keyed
+  restyle/hide/legend/context-menu against) repeats each real channel once
+  per level rather than inventing a separate per-level identity — see the
+  edit-one/edit-all ruling below for why. Survives hide/reorder/restyle/
+  legend-interaction/undo/redo/close-reopen/export — pinned in
+  `usePlotPayload.groupSplit.test.ts`, `groupKey.test.ts` (undo + `.dwk`
+  round trip), `useGraphBuilder.test.ts`, and the E2E journey below.
+  A genuine bug caught by the `.dwk`-round-trip test before it shipped:
+  `windowDocumentPersistence.ts`'s `migrateLegacyWindow` (the pre-F1/
+  document-less window bridge) built its `FigureDocument` without threading
+  `view.groupKey` through at all — a document-less grouped window would have
+  silently lost its binding on the very next save/reload. Fixed
+  (`groupKey: window.view.groupKey` now threaded explicitly, since
+  `createFigureDocument`'s `groupKey` is bindings-owned and never reads
+  `view.groupKey` on its own — see that function's own doc).
+- [x] Explicit edit-one/edit-all behavior — RULING (JMP-parity, pinned in
+  `lib/plotGroupSplit.ts`'s header, not re-litigated per call site): restyle,
+  hide/show, and legend-click on ANY one of a group's expanded levels affect
+  the WHOLE group — there is no separate per-level identity to edit
+  individually. Matches (a) JMP Graph Builder's own default overlay
+  behavior (one style setup per grouping variable; per-level colour is
+  automatic, not independently editable) and (b) this codebase's OWN
+  pre-existing Figure Builder precedent (`GroupingPanel.tsx`'s single
+  group-by picker + one `seriesStyles[channel]` entry per Y channel, no
+  per-level styling surface already existed before this slice). The
+  Inspector needs no changes at all under this ruling — it always operated
+  on real dataset channel indices, never the render-time expanded series, so
+  a grouped channel's Inspector entry is unaffected by construction.
+- [x] Editable after Send (G4 commit semantics) — confirmed already-durable
+  via the canonical `FigureDocument.bindings.groupKey` path (unchanged this
+  slice); the NEW live-Stage wiring rides the identical binding, so a
+  grouped figure committed from Graph Builder, edited on either surface
+  (live Stage OR Publication Preview), and reopened from either the Library
+  or a `.dwk` load, reads back the same group.
+- [x] Merge level-table remap (P1.4's booked item) — `lib/merge.ts`'s
+  `mergeDatasets` now does REAL conflict resolution instead of the P1.4-era
+  safe "drop the channel on any mismatch" default: a channel whose datasets
+  ALL carry SOME level table (possibly differing in strings or order) merges
+  onto a coherent UNION table (first dataset's own order, then each
+  subsequent dataset's genuinely NEW levels appended in first-seen order),
+  remapping every dataset's own codes losslessly (`planChannel`/`remapFor`).
+  The one remaining drop case — a channel with NO table at all on even one
+  input dataset — is intentionally unchanged: there is nothing to remap FROM
+  when a dataset's raw values were never codes into anything.
+- [x] Update stale wording/help — the "preview-only" toast (the one stale
+  artifact a repo-wide search found) is gone; `group-facet-journey.spec.ts`'s
+  own header, which had explicitly documented "the interactive uPlot Stage
+  canvas has NO live rendering for a group split at all today" as an
+  architectural fact shaping that journey's scope, is corrected to describe
+  the new reality and points at the new live-Stage test below.
+- [x] E2E covers drag-to-Group, edit, undo, reopen, export parity —
+  `group-facet-journey.spec.ts` gains a SECOND journey (the first,
+  Publication-Preview-only journey is untouched and still passes): drag Y +
+  Group via the real Graph Builder wells -> "Create New Plot" -> the live
+  Stage legend renders one row per group level (real uPlot canvas, no
+  mocks) -> undo collapses to one series -> redo restores the split ->
+  close the window (real title-bar context menu) -> undo-the-close (a
+  genuine close/reopen round trip through the real UI, mirroring
+  `window-arrange.spec.ts`'s own close pattern — the original default
+  window stays open throughout, so the ≥1-window invariant is never at
+  risk) -> a real "Export figure…" request from the reopened window still
+  carries `group_col`. NOT independently run in this session's sandbox: the
+  Playwright browser download (`cdn.playwright.dev`) is blocked by this
+  session's egress policy (confirmed via the agent-proxy's own diagnostic,
+  not assumed) — the spec is verified syntactically (`tsc -p e2e/tsconfig.json`
+  clean, `playwright test --list` discovers both tests) but has NOT been
+  executed against a real browser this session. Needs a CI run or a
+  developer machine with network access before merge.
+
+**Review round fixed same-day:** P1 (probe-proven blocker) — `groupKey` was
+a channel-indexed field that never reached `store/windowDefaults.ts`'s
+`datasetViewDefaults()` reset table, the shared choke point `setActive`
+(Library click), `addDataset` (import/paste/merge), and a shape-changed
+reimport all rely on; a stale group binding rode into a differently-shaped
+dataset. Fixed with the one-line addition the choke point's own design
+calls for, plus a NEW coverage test pinning `datasetViewDefaults`'s full
+channel-indexed field list (`store/windows.test.ts`) so the next such field
+addition can't silently skip it the same way. P2 (doc accuracy) —
+`plotGroupSplit.ts`'s "second call site of the identical algorithm" claim
+was falsifiable as written (two independently hand-written functions, no
+shared code, no runtime check backing the claim); fixed with a REAL
+parity test (`plotGroupSplit.test.ts`, `buildXY` exported for it) plus the
+one real (previously inert) divergence it surfaced — `applyGroupSplit`
+missing `buildXY`'s explicit non-finite-Y mask, harmless today only because
+the upstream fetch already nulls those values first. P3 (nitpick) — a
+one-line comment in the E2E spec now names which assertion is load-bearing
+for the close/reopen proof, since the final export step also re-commits
+the Graph Builder's own live spec.
+- [ ] Supported statistical/scientific faceting — booked, NOT this slice
+  (the dispatch's own "Group-well core + what falls out naturally" scope;
+  Facet already has its OWN live mechanism, `facetByColumn`'s small-multiples
+  composition, structurally unrelated to the within-panel colour split this
+  slice closes — see `group-facet-journey.spec.ts`'s own header for exactly
+  why `FigureDocument.bindings.facetKey` remains unwired, unchanged by this
+  slice).
+- [ ] Data Filter / Tabulate / Stat Stage workbench wiring through
+  `is_categorical`/`isCategoricalChannel` — booked to a future slice, named
+  home not yet assigned (P1.4's own booking, restated here since it's
+  P1.5-adjacent territory the dispatch explicitly named but scoped out).
 
 ### P1.6 — Import Wizard metadata and error roles [~]
 
@@ -2163,6 +2295,108 @@ work (its BACKLOG row).
   (matching the file's own `values: number[][]; // row-major: ...`
   precedent) rather than raising the pin; lands at its exact original line
   count.
+
+#### 2026-08-18 — P1.5 live Graph Builder grouping parity (Sonnet agent, worktree `lane-c`, branch `claude/p15-live-grouping`)
+
+- Root cause traced before writing code: `FigureDocument.bindings.groupKey`
+  already existed and already drove Publication Preview + backend export;
+  `figureDocumentToPlotView` (the ONE bridge into the interactive Stage's
+  render pipeline) silently dropped it. `lib/plotview.ts` (`PlotView.
+  groupKey`, `+3` net lines after two ratchet trims to stay at its
+  978-line pin — `wc -l` undercounts this repo's `split("\n").length`-based
+  guards by 1 whenever a file ends with a trailing newline, a discrepancy
+  worth remembering for future line-budget arithmetic), `lib/figureDocument.ts`
+  (bindings-owned exclusion + the two projection functions), `store/useApp.ts`
+  (`groupKey` singleton + `setGroupKey`, mirrors `setXKey`), new
+  `lib/plotGroupSplit.ts` (a fresh sibling module funding itself rather than
+  growing `lib/plotdata.ts` past ITS pin — `applyGroupSplit`/
+  `groupSplitChannelMap`, algorithm-identical to `plotspec.ts`'s `buildXY`),
+  `components/Stage/usePlotPayload.ts` (wires it into the fetch pipeline,
+  suppresses error-bars/spans/color-by when grouped, same ruling `buildXY`'s
+  own preview already applies), `components/workshops/graphbuilder/
+  useGraphBuilder.ts` (`commitToPlot` calls `setGroupKey` instead of
+  toasting "preview-only"). `lib/merge.ts`'s real conflict-resolution remap
+  (P1.4's booked item) shipped alongside it. `lib/windowDocumentPersistence.ts`
+  gained one real bug fix caught by its own new red-first test:
+  `migrateLegacyWindow` never threaded `view.groupKey` into
+  `createFigureDocument`, silently losing a document-less grouped window's
+  binding on its very next save/reload.
+- Red-first evidence: `useGraphBuilder.test.ts`'s 3 new P1.5 tests confirmed
+  RED (`groupKey` stayed null / stale-2 leaked / toast still showed) before
+  the `commitToPlot` fix; `groupKey.test.ts`'s `.dwk`-round-trip test caught
+  the `migrateLegacyWindow` bug as a genuine RED (not manufactured) before
+  that fix; `merge.test.ts`'s remap assertions were hand-computed against
+  the algorithm before running, confirmed correct on first green run.
+  `usePlotPayload.groupSplit.test.ts`/`plotGroupSplit.test.ts` were composed
+  alongside their (carefully hand-traced) implementations rather than
+  strictly red-first, given the small blast radius of pure functions — noted
+  honestly rather than overclaimed.
+- Explicitly booked, NOT shipped: statistical/scientific faceting parity
+  (Facet's own live mechanism, `facetByColumn`, is structurally unrelated —
+  see `group-facet-journey.spec.ts`'s header) and the Data Filter/Tabulate/
+  Stat Stage workbench wiring through `is_categorical` (P1.4's own booking,
+  still no named-home slice).
+- Gates: no `src/` (backend) files touched this slice, so no backend gate
+  run. Frontend `tsc --noEmit` clean; `eslint --max-warnings=0` clean on
+  every touched/new file except ONE pre-existing warning in
+  `useGraphBuilder.ts` (line 184, an unrelated effect ~170 lines from this
+  slice's own 6-line diff there — confirmed pre-existing via `git diff`
+  line-correlation, not introduced by this slice); full `vitest run`:
+  **514 test files / 7574 tests, ALL passed** (0 failed) — this run also
+  caught and fixed 2 genuine regressions in a PRE-EXISTING F2.5b export
+  test file (`exportFigureCommand.test.ts`): two tests constructed a
+  `FigureDocument` with `groupKey` set directly without ALSO setting the
+  new live `groupKey` singleton, which `windowsForSave()`'s existing
+  live-view rebuild (an established pattern the SAME file's own header
+  already documents for `xKey`/`yKeys`) now legitimately overwrites — fixed
+  by setting the singleton too, matching that established pattern, plus a
+  stale doc-comment correction (item 6) in the same file. `npm run build`:
+  bundle-size OK, 849.9 kB eager (34.0 kB under the 883.9 kB budget).
+  E2E: `group-facet-journey.spec.ts` extended with a second journey (live
+  Stage render/undo/redo/close-reopen/export) and its stale header
+  corrected; verified via `tsc -p e2e/tsconfig.json --noEmit` (clean) and
+  `playwright test --list` (both tests discovered) but NOT executed against
+  a real browser this session — Playwright's Chromium download
+  (`cdn.playwright.dev`) is blocked by this sandbox's egress policy
+  (confirmed via the agent-proxy's own status diagnostic). Needs a CI run
+  or a networked dev machine before merge.
+
+#### 2026-08-18 — P1.5 review round: P1 blocker + P2 doc-accuracy fixed same-day (Sonnet agent, worktree `lane-c`, branch `claude/p15-live-grouping`)
+
+- P1 (probe-proven): `store/windowDefaults.ts`'s `datasetViewDefaults()` —
+  the shared choke point `setActive`/`addDataset`/a shape-changed reimport
+  all rely on to reset channel-indexed PlotView fields — never listed
+  `groupKey`, so a stale group binding survived a dataset switch and rode
+  into the new dataset's (differently-shaped) columns. One-line fix
+  (`groupKey: null` added to the reset object), plus a new coverage test
+  (`store/windows.test.ts`) pinning the full channel-indexed field list so
+  a future field can't slip the same way unnoticed.
+- P2 (doc accuracy): `plotGroupSplit.ts`'s claim that `applyGroupSplit` was
+  "a second call site of the identical algorithm" `buildXY` uses was
+  falsifiable — the two share no code and the existing test never checked
+  against `buildXY` at runtime. Fixed with a REAL parity test
+  (`plotGroupSplit.test.ts`, `buildXY` exported to make it possible), which
+  surfaced one genuine (previously inert) divergence — `applyGroupSplit`
+  lacked `buildXY`'s explicit non-finite-Y mask — fixed to not rely on the
+  upstream-already-nulled coincidence that made it harmless today.
+- P3 (nitpick): one-line comment added to the E2E spec naming which
+  assertion is load-bearing for the close/reopen proof.
+- Red-first evidence: P1's 4 new tests (setActive/addDataset/reimport/
+  coverage) all confirmed genuinely RED against the pre-fix
+  `datasetViewDefaults` (quoted: `expected 1 to be null` / `expected 2 to
+  be null` / `expected +0 to be null` / a missing `"groupKey"` key in the
+  coverage diff) before the one-line fix. P2's finite-guard divergence was
+  verified to actually matter (not just theoretically) by temporarily
+  reverting the guard and confirming the new direct unit test failed
+  (`expected [...NaN...] to equal [...null...]`) before restoring it.
+- Gates: no backend files touched. `tsc --noEmit` clean; `eslint
+  --max-warnings=0` clean on every touched file; full `vitest run`:
+  **514 test files / 7584 tests, ALL passed** (+10 over the prior count,
+  matching the new tests added this round). `npm run build`: bundle-size
+  OK, 849.9 kB eager (34.0 kB under the 883.9 kB budget, unchanged). E2E:
+  `tsc -p e2e/tsconfig.json --noEmit` clean, `playwright test --list`
+  still discovers both tests — still not executable in this sandbox (same
+  blocked-host constraint as the prior entry).
 
 ## Reference baseline
 

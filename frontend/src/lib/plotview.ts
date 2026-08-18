@@ -145,6 +145,7 @@ export interface PlotView {
   yAxisLabel: string;
   xKey: number | null;
   yKeys: number[] | null;
+  groupKey: number | null; // P1.5 "Group" well channel -- one series per level; bindings-owned like xKey/yKeys
   y2Keys: number[] | null;
   y2Lim: [number, number] | null;
   y2Scale: AxisScale | null;
@@ -211,6 +212,7 @@ export function defaultPlotView(): PlotView {
     yAxisLabel: "",
     xKey: null,
     yKeys: null,
+    groupKey: null,
     y2Keys: null,
     y2Lim: null,
     y2Scale: null,
@@ -735,6 +737,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     yAxisLabel: strOrDefault(o.yAxisLabel, fb.yAxisLabel),
     xKey: numOrNull(o.xKey),
     yKeys: Array.isArray(o.yKeys) ? o.yKeys.filter((n): n is number => typeof n === "number") : null,
+    groupKey: numOrNull(o.groupKey),
     y2Keys: Array.isArray(o.y2Keys) ? o.y2Keys.filter((n): n is number => typeof n === "number") : null,
     y2Lim: isRange(o.y2Lim) ? o.y2Lim : null,
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),

@@ -5,6 +5,7 @@ import { exportFigure } from "../../../lib/api";
 import { facetPanelsOf, spatialPanelsOf } from "../../../lib/composition";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useToasts } from "../../../store/toasts";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { useGraphBuilder } from "./useGraphBuilder";
 
@@ -62,6 +63,7 @@ beforeEach(() => {
     status: "",
     xKey: null,
     yKeys: null,
+    groupKey: null,
     y2Keys: null,
     statMode: false,
     statStageSeed: null,
@@ -429,6 +431,51 @@ describe("useGraphBuilder — explicit plot destinations", () => {
     const s = useApp.getState();
     expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
+  });
+});
+
+// P1.5 (PRIMARY_SOFTWARE_AUDIT_PLAN): "durable live grouped series" -- a
+// Group-well drop used to only drive the Graph Builder's OWN offline
+// preview; committing to the actual Stage window silently dropped it behind
+// a "preview-only" toast (this describe's RED-first baseline). It's now a
+// first-class live window binding (store.groupKey), the same durability
+// facetByColumn already had.
+describe("useGraphBuilder — Group well reaches the live Stage (P1.5)", () => {
+  it("scatter/line WITH a group zone sets the live groupKey on commit", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("group", 2)); // 2-level nominal grouping column
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().groupKey).toBe(2);
+  });
+
+  it("does NOT show a preview-only toast anymore", () => {
+    useToasts.setState({ toasts: [] });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("group", 2));
+    act(() => result.current.applyToCurrent());
+    expect(useToasts.getState().toasts.some((t) => /preview-only/i.test(t.msg))).toBe(false);
+  });
+
+  it("scatter/line WITHOUT a group zone clears any stale live groupKey", () => {
+    useApp.setState({ groupKey: 2 }); // a stale binding from a PRIOR grouped commit
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("createNewPlot on a fresh window also carries the group binding", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("group", 2));
+    act(() => result.current.createNewPlot());
+    expect(useApp.getState().groupKey).toBe(2);
   });
 });
 

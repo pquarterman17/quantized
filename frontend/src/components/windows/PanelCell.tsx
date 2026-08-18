@@ -80,6 +80,7 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
     xScale: CELL_VIEW.xScale,
     xKey: CELL_VIEW.xKey,
     yKeys: CELL_VIEW.yKeys,
+    groupKey: CELL_VIEW.groupKey,
     y2Keys: CELL_VIEW.y2Keys,
     seriesOrder: CELL_VIEW.seriesOrder,
     seriesStyles: CELL_VIEW.seriesStyles,

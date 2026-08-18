@@ -74,6 +74,7 @@ export default function PlotStage() {
   const waterfall = useApp((s) => s.waterfall);
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const xKey = useApp((s) => s.xKey);
+  const groupKey = useApp((s) => s.groupKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const y2Lim = useApp((s) => s.y2Lim);
@@ -166,6 +167,7 @@ export default function PlotStage() {
     xScale,
     xKey,
     yKeys,
+    groupKey,
     y2Keys,
     seriesOrder,
     seriesStyles,

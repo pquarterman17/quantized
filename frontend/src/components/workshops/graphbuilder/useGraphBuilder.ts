@@ -352,9 +352,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // closes the save/reopen/apply loop. A v1 spec (no blocks) makes zero
       // calls here — see plotspecApply.ts's regression-pin note.
       applySpecBlocks(spec, useApp.getState);
-      if (spec.zones.group) {
-        toast("series-split by group is preview-only in v1 (lands with faceting)", "info");
-      }
+      // P1.5: durable live binding (store.groupKey) -- clears any stale group
+      // left over from a prior commit when this one carries none.
+      useApp.getState().setGroupKey(spec.zones.group?.channel ?? null);
       // Facet zone filled (gap #21 residual): enter the main Stage's facet
       // grid instead of the flat plot. facetByColumn is called AFTER
       // setXKey/setYKeys above, so its own "carry the current x/y selection

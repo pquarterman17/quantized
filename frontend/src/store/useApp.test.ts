@@ -858,6 +858,45 @@ describe("useApp x-axis channel", () => {
   });
 });
 
+// P1.5 review round P1: groupKey is a CHANNEL-INDEXED PlotView field exactly
+// like xKey (indexes the ACTIVE dataset's columns) -- it must reset through
+// the SAME datasetViewDefaults choke point the "resets xKey" test above
+// covers, or a stale index rides into a differently-shaped dataset and
+// renders a bogus per-value split (or silently degrades to ungrouped if the
+// stale code is out of range for the new dataset). RED before the fix:
+// datasetViewDefaults's object literal never mentioned groupKey at all, so
+// it survived every one of these resets untouched.
+describe("useApp groupKey channel-indexed reset (P1.5 review P1)", () => {
+  it("resets groupKey to null when setActive switches to a different dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      groupKey: 1,
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("resets groupKey to null when addDataset adds a new dataset", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      groupKey: 2,
+    });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("loadWorkspace resets groupKey", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old", groupKey: 3 });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "n", data: raw }] });
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+});
+
 // PLOT_WORKFLOW_PLAN item 5, end-to-end through the real store (setActive ->
 // windows.ts's focusedRebindPatch, the actual capture/apply call site).
 // lib/techniqueViewMemory.test.ts covers the pure logic; store/windows.test.ts
