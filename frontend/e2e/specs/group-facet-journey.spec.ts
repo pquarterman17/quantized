@@ -357,7 +357,19 @@ test("Group well renders live on the interactive Stage, undoes, survives a windo
   // ── Edit: undo the group commit -> the live canvas collapses back to ONE
   //    ordinary series (the grouping binding is a first-class undoable edit,
   //    same as X/Y channel selection always was). ─────────────────────────
-  await page.locator(".qzk-stage").click({ position: { x: 4, y: 4 } }); // move focus off any input
+  // CI review round (PR #182): a positional `.qzk-stage` click at a
+  // hardcoded corner is fragile here -- the Graph Builder's own floating
+  // glass window is open at this exact point (grouping was just committed
+  // FROM it) and can legitimately overlay the stage's top-left corner,
+  // which is exactly what CI hit ("<details class=\"qz-card\">... intercepts
+  // pointer events"). The real INTENT was never "click the stage" -- it was
+  // "make sure Control+z below isn't swallowed by a focused text input" (no
+  // input is focused at this point in the journey, but the mechanism should
+  // hold regardless of window layout). A direct `document.activeElement`
+  // blur achieves that with no positional click, no overlay collision
+  // possible at all -- there is no DOM element an overlay could intercept,
+  // since nothing is dispatched THROUGH the page's hit-testing/paint tree.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("Control+z");
   await expect.poll(() => storeGroupKey(page)).toBeNull();
   await expect.poll(() => legendSeriesLabels(page)).toHaveLength(0);
