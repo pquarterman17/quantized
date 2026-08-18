@@ -16,8 +16,13 @@ from quantized.app import app
 from quantized.desktop_consent import (
     clear_consent,
     consent_count,
+    consented_path,
+    consented_write_path,
     grant_paths,
+    grant_write_path,
     is_consented,
+    is_write_consented,
+    write_consent_count,
 )
 
 client = TestClient(app)
@@ -100,6 +105,93 @@ def test_clear_consent_revokes_everything(tmp_path: Path) -> None:
     grant_paths([str(_csv(tmp_path))])
     clear_consent()
     assert consent_count() == 0
+
+
+# --- the write-consent registry (P1.1: native Save/Save As) ----------------
+#
+# Mirrors the read-side suite above exactly — same bounded-with-eviction,
+# recency-refresh, and clear-everything mechanics — plus the one property
+# that only matters once TWO grant kinds exist: a write grant must never
+# answer a read-consent question and vice versa. `grant_write_path` does NOT
+# require the path to exist (a Save As destination usually doesn't yet), so
+# these use plain paths under `tmp_path` rather than `_csv`'s real files.
+
+
+def test_write_grant_returns_normalized_path(tmp_path: Path) -> None:
+    """Both sides must agree on normalization or consent silently never
+    matches — write_project_file compares the realpath."""
+    dest = tmp_path / "new_workspace.dwk"
+    granted = grant_write_path(str(dest))
+    assert granted == os.path.realpath(str(dest))
+    assert is_write_consented(os.path.realpath(str(dest)))
+
+
+def test_write_grant_is_bounded(tmp_path: Path) -> None:
+    """A long desktop session must not accumulate an ever-growing write
+    allowlist either."""
+    from quantized.desktop_consent import _MAX_ENTRIES
+
+    for i in range(_MAX_ENTRIES + 20):
+        grant_write_path(str(tmp_path / f"f{i}.dwk"))
+    assert write_consent_count() == _MAX_ENTRIES
+
+
+def test_oldest_write_grant_is_evicted_first(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_ENTRIES
+
+    first = tmp_path / "first.dwk"
+    grant_write_path(str(first))
+    for i in range(_MAX_ENTRIES):
+        grant_write_path(str(tmp_path / f"f{i}.dwk"))
+    assert not is_write_consented(os.path.realpath(str(first)))
+
+
+def test_regranting_write_refreshes_recency(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_ENTRIES
+
+    first = tmp_path / "first.dwk"
+    grant_write_path(str(first))
+    for i in range(_MAX_ENTRIES - 1):
+        grant_write_path(str(tmp_path / f"f{i}.dwk"))
+    grant_write_path(str(first))  # re-picked (re-saved) -> newest again
+    grant_write_path(str(tmp_path / "extra.dwk"))
+    assert is_write_consented(os.path.realpath(str(first)))
+
+
+def test_clear_consent_revokes_write_grants_too(tmp_path: Path) -> None:
+    grant_write_path(str(tmp_path / "workspace.dwk"))
+    clear_consent()
+    assert write_consent_count() == 0
+
+
+def test_consented_write_path_returns_the_stored_string(tmp_path: Path) -> None:
+    dest = tmp_path / "workspace.dwk"
+    granted = grant_write_path(str(dest))
+    assert consented_write_path(os.path.realpath(str(dest))) == granted
+    assert consented_write_path("/never/granted.dwk") is None
+
+
+# --- read/write consent isolation (P1.1) ------------------------------------
+
+
+def test_a_write_grant_never_answers_a_read_consent_question(tmp_path: Path) -> None:
+    """Picking a SAVE destination must not also grant READ access to it —
+    the two consent kinds are deliberately independent (see the module
+    doc)."""
+    dest = tmp_path / "workspace.dwk"
+    grant_write_path(str(dest))
+    resolved = os.path.realpath(str(dest))
+    assert not is_consented(resolved)
+    assert consented_path(resolved) is None
+
+
+def test_a_read_grant_never_answers_a_write_consent_question(tmp_path: Path) -> None:
+    """Opening/picking a file must not also authorize overwriting it."""
+    f = _csv(tmp_path, "picked.dwk")
+    grant_paths([str(f)])
+    resolved = os.path.realpath(str(f))
+    assert not is_write_consented(resolved)
+    assert consented_write_path(resolved) is None
 
 
 # --- the /import guard -----------------------------------------------------

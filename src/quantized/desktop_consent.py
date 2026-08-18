@@ -24,6 +24,15 @@ What it is NOT:
   * Not unbounded or permanent. Entries are capped and live only for the
     process, so a long desktop session cannot accumulate an ever-growing
     ambient allowlist.
+
+P1.1 adds a SECOND, separate grant kind for WRITES (``grant_write_path`` /
+``is_write_consented`` / ``consented_write_path``), used by the native
+Save/Save As project flow. It follows the exact same rules above — granted
+only from an in-process dialog result, per exact path, capped — with one
+difference: a write grant does not require the path to already exist, since
+a Save As destination usually does not yet. Read and write grants are
+tracked independently: opening a file never authorizes overwriting it, and
+choosing a save destination never authorizes reading an unrelated file.
 """
 
 from __future__ import annotations
@@ -36,8 +45,12 @@ __all__ = [
     "clear_consent",
     "consent_count",
     "consented_path",
+    "consented_write_path",
     "grant_paths",
+    "grant_write_path",
     "is_consented",
+    "is_write_consented",
+    "write_consent_count",
 ]
 
 # Bounded so a very long session cannot grow this without limit. Comfortably
@@ -50,6 +63,18 @@ _MAX_ENTRIES = 512
 # string back to the caller so an accepted import reads the path this module
 # recorded, never the one the request supplied (see its docstring).
 _granted: OrderedDict[str, str] = OrderedDict()
+
+# P1.1: a SEPARATE store for WRITE consent (native "Save"/"Save As" project
+# dialogs), never merged with `_granted` above. The two are not
+# interchangeable: `_granted` only ever accepts a path that ALREADY EXISTS
+# (`grant_paths` requires `os.path.isfile`), which is correct for something
+# the user just opened, but wrong for something they are about to CREATE —
+# a "Save As" path chosen in a native save dialog is routinely a file that
+# does not exist yet. Keeping the two sets apart also means read access to
+# an arbitrary existing file can never be granted merely by having picked a
+# save destination near it, and vice versa: picking a file to open never
+# grants permission to overwrite it.
+_write_granted: OrderedDict[str, str] = OrderedDict()
 
 
 def _normalize(path: str) -> str | None:
@@ -108,7 +133,43 @@ def consent_count() -> int:
     return len(_granted)
 
 
+# -- write consent (P1.1: native Save / Save As project dialogs) ------------
+
+
+def grant_write_path(path: str) -> str | None:
+    """Record a path the user just chose in a native SAVE dialog. Unlike
+    `grant_paths`, this does NOT require the path to already exist — a Save
+    As destination is normally new. Returns the normalized path (what the
+    frontend should send back on the write call), or `None` when the path
+    cannot even be resolved."""
+    resolved = _normalize(path)
+    if resolved is None:
+        return None
+    _write_granted.pop(resolved, None)  # re-picking refreshes recency
+    _write_granted[resolved] = resolved
+    while len(_write_granted) > _MAX_ENTRIES:
+        _write_granted.popitem(last=False)
+    return resolved
+
+
+def is_write_consented(resolved_path: str) -> bool:
+    """True when this EXACT resolved path was granted for WRITING."""
+    return resolved_path in _write_granted
+
+
+def consented_write_path(resolved_path: str) -> str | None:
+    """The GRANTED string for an exact write-consented path, or `None`. Same
+    "use the stored string, not the request's" rationale as `consented_path`
+    — see that function's docstring."""
+    return _write_granted.get(resolved_path)
+
+
+def write_consent_count() -> int:
+    return len(_write_granted)
+
+
 def clear_consent() -> None:
-    """Drop every grant. Used by tests, and available for a future
-    "forget picked files" action."""
+    """Drop every grant, read AND write. Used by tests, and available for a
+    future "forget picked files" action."""
     _granted.clear()
+    _write_granted.clear()
