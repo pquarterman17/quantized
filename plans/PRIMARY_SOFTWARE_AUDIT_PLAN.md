@@ -713,13 +713,20 @@ the SAME `snapshotView`/`hydrateView`/`.dwk` machinery every other PlotView
 field already does, for free, since `VIEW_KEYS` is derived from
 `defaultPlotView()`'s own keys. A new `lib/plotGroupSplit.ts` (a fresh
 sibling module, funding itself rather than growing `lib/plotdata.ts` past
-its `architecture.test.ts` pin) reuses the IDENTICAL split algorithm
-`lib/plotspec.ts`'s `buildXY` already uses (same finite-code sort, same
-`${label} (${groupLabel}=${levelLabel})` format, same `lib/categorical.ts`
-`groupLevelLabel` accessor) as a SECOND call site, not a reimplementation —
-so there is no new label-resolution site needing a parity-fixture extension
-(item 3 is satisfied by construction; pinned directly against `buildXY`'s
-documented behavior in `plotGroupSplit.test.ts`). `usePlotPayload.ts` calls
+its `architecture.test.ts` pin) INDEPENDENTLY implements the same split
+algorithm `lib/plotspec.ts`'s `buildXY` already has (same finite-code sort,
+same `${label} (${groupLabel}=${levelLabel})` format, same
+`lib/categorical.ts` `groupLevelLabel` accessor) — review round P2
+corrected an initial claim that this was merely "a second call site" of
+shared code; it is two hand-written functions, proven equivalent by a REAL
+runtime parity test (`plotGroupSplit.test.ts`: builds the identical payload
+through both and asserts `toEqual`), not by construction. That test also
+caught and fixed one real, if previously inert, divergence: `applyGroupSplit`
+was missing `buildXY`'s explicit `Number.isFinite` mask on a non-finite Y
+value (harmless today only because the upstream fetch already nulls
+non-finite values before either function sees them — fixed to not rely on
+that invariant). Item 3 is satisfied by this proven equivalence, not by a
+new backend/frontend label-resolution site. `usePlotPayload.ts` calls
 it client-side, row-position-aligned to the already-loaded dataset, on the
 never-decimated fetch (`plotDecimate.ts`'s `decimationRequestEligible` gains
 `hasGroupSplit`, same "can't tolerate a reduced row set" reasoning error
@@ -799,6 +806,26 @@ WAS the stale artifact; removed, not reworded).
   clean, `playwright test --list` discovers both tests) but has NOT been
   executed against a real browser this session. Needs a CI run or a
   developer machine with network access before merge.
+
+**Review round fixed same-day:** P1 (probe-proven blocker) — `groupKey` was
+a channel-indexed field that never reached `store/windowDefaults.ts`'s
+`datasetViewDefaults()` reset table, the shared choke point `setActive`
+(Library click), `addDataset` (import/paste/merge), and a shape-changed
+reimport all rely on; a stale group binding rode into a differently-shaped
+dataset. Fixed with the one-line addition the choke point's own design
+calls for, plus a NEW coverage test pinning `datasetViewDefaults`'s full
+channel-indexed field list (`store/windows.test.ts`) so the next such field
+addition can't silently skip it the same way. P2 (doc accuracy) —
+`plotGroupSplit.ts`'s "second call site of the identical algorithm" claim
+was falsifiable as written (two independently hand-written functions, no
+shared code, no runtime check backing the claim); fixed with a REAL
+parity test (`plotGroupSplit.test.ts`, `buildXY` exported for it) plus the
+one real (previously inert) divergence it surfaced — `applyGroupSplit`
+missing `buildXY`'s explicit non-finite-Y mask, harmless today only because
+the upstream fetch already nulls those values first. P3 (nitpick) — a
+one-line comment in the E2E spec now names which assertion is load-bearing
+for the close/reopen proof, since the final export step also re-commits
+the Graph Builder's own live spec.
 - [ ] Supported statistical/scientific faceting — booked, NOT this slice
   (the dispatch's own "Group-well core + what falls out naturally" scope;
   Facet already has its OWN live mechanism, `facetByColumn`'s small-multiples
@@ -2163,6 +2190,43 @@ work (its BACKLOG row).
   (`cdn.playwright.dev`) is blocked by this sandbox's egress policy
   (confirmed via the agent-proxy's own status diagnostic). Needs a CI run
   or a networked dev machine before merge.
+
+#### 2026-08-18 — P1.5 review round: P1 blocker + P2 doc-accuracy fixed same-day (Sonnet agent, worktree `lane-c`, branch `claude/p15-live-grouping`)
+
+- P1 (probe-proven): `store/windowDefaults.ts`'s `datasetViewDefaults()` —
+  the shared choke point `setActive`/`addDataset`/a shape-changed reimport
+  all rely on to reset channel-indexed PlotView fields — never listed
+  `groupKey`, so a stale group binding survived a dataset switch and rode
+  into the new dataset's (differently-shaped) columns. One-line fix
+  (`groupKey: null` added to the reset object), plus a new coverage test
+  (`store/windows.test.ts`) pinning the full channel-indexed field list so
+  a future field can't slip the same way unnoticed.
+- P2 (doc accuracy): `plotGroupSplit.ts`'s claim that `applyGroupSplit` was
+  "a second call site of the identical algorithm" `buildXY` uses was
+  falsifiable — the two share no code and the existing test never checked
+  against `buildXY` at runtime. Fixed with a REAL parity test
+  (`plotGroupSplit.test.ts`, `buildXY` exported to make it possible), which
+  surfaced one genuine (previously inert) divergence — `applyGroupSplit`
+  lacked `buildXY`'s explicit non-finite-Y mask — fixed to not rely on the
+  upstream-already-nulled coincidence that made it harmless today.
+- P3 (nitpick): one-line comment added to the E2E spec naming which
+  assertion is load-bearing for the close/reopen proof.
+- Red-first evidence: P1's 4 new tests (setActive/addDataset/reimport/
+  coverage) all confirmed genuinely RED against the pre-fix
+  `datasetViewDefaults` (quoted: `expected 1 to be null` / `expected 2 to
+  be null` / `expected +0 to be null` / a missing `"groupKey"` key in the
+  coverage diff) before the one-line fix. P2's finite-guard divergence was
+  verified to actually matter (not just theoretically) by temporarily
+  reverting the guard and confirming the new direct unit test failed
+  (`expected [...NaN...] to equal [...null...]`) before restoring it.
+- Gates: no backend files touched. `tsc --noEmit` clean; `eslint
+  --max-warnings=0` clean on every touched file; full `vitest run`:
+  **514 test files / 7584 tests, ALL passed** (+10 over the prior count,
+  matching the new tests added this round). `npm run build`: bundle-size
+  OK, 849.9 kB eager (34.0 kB under the 883.9 kB budget, unchanged). E2E:
+  `tsc -p e2e/tsconfig.json --noEmit` clean, `playwright test --list`
+  still discovers both tests — still not executable in this sandbox (same
+  blocked-host constraint as the prior entry).
 
 ## Reference baseline
 
