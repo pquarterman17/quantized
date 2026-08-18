@@ -11,6 +11,12 @@ export default function TitleBar() {
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const setCalculatorsOpen = useApp((s) => s.setCalculatorsOpen);
+  // P1.2 box 1: project name + dirty marker. Only rendered once a project
+  // has a durable identity (a native open/save) — a fresh/browser-only
+  // session has nothing named yet, so the brand area stays exactly as it
+  // was pre-P1.2 rather than showing a synthetic "Untitled".
+  const currentProject = useApp((s) => s.currentProject);
+  const projectDirty = useApp((s) => s.projectDirty);
 
   const name = active?.name ?? "";
   const ext = name.match(/\.[^.]+$/)?.[0] ?? "";
@@ -23,6 +29,12 @@ export default function TitleBar() {
           ⎓
         </span>
         <span className="nm">Quantized</span>
+        {currentProject && (
+          <span className="qzk-project" title={currentProject.path}>
+            — {currentProject.name}
+            {projectDirty && <span className="qzk-project-dirty"> •</span>}
+          </span>
+        )}
       </div>
       <div className="qzk-doc">
         {stem}

@@ -25,6 +25,16 @@ export interface Generation {
  *  into an unbounded archive — #32 explicitly wants recovery storage bounded. */
 export const MAX_GENERATIONS = 3;
 
+/** How long a generation stays worth offering for recovery. 30 days covers
+ *  "I opened this after a long trip" without autosave quietly becoming a
+ *  permanent archive of every project ever opened (P1.2 box "bounded autosave
+ *  generations by count/age/total size" — count is `MAX_GENERATIONS` above,
+ *  size is `capBySize` below; this is the third bound). Generous next to the
+ *  count cap: in practice `MAX_GENERATIONS` prunes first on an active
+ *  project, and this mostly matters for a project nobody has reopened in a
+ *  long while. */
+export const MAX_GENERATION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** Add `next` as the newest generation, dropping the oldest beyond the cap.
  *
  *  Newest-first ordering is the invariant every other function here relies on.
@@ -66,6 +76,20 @@ export function newestFirst(generations: readonly Generation[]): Generation[] {
  *  is what a browser quota actually counts for stored strings. */
 export function totalSize(generations: readonly Generation[]): number {
   return generations.reduce((sum, g) => sum + g.text.length, 0);
+}
+
+/** Drop generations older than `maxAgeMs` relative to `now`, ALWAYS keeping at
+ *  least the newest one — same "never evict the most recent good generation"
+ *  guarantee `capBySize` makes below, on the age axis instead of the byte
+ *  axis. `now` is caller-supplied (never `Date.now()` read in here) for the
+ *  same reproducibility reason `Generation.at` itself is caller-supplied. */
+export function capByAge(
+  generations: readonly Generation[],
+  now: number,
+  maxAgeMs: number = MAX_GENERATION_AGE_MS,
+): Generation[] {
+  const ordered = newestFirst(generations);
+  return ordered.filter((gen, i) => i === 0 || now - gen.at <= maxAgeMs);
 }
 
 /** Drop the oldest generations until the set fits `maxBytes`, ALWAYS keeping at

@@ -836,6 +836,15 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // Worksheet selection slice: row selection per window (UI state)
   worksheetSelections: "row selection per worksheet window; UI state, not persistent edit",
 
+  // project slice (P1.2 box 1): the CURRENT project's name/path + dirty flag.
+  // Session-local identity/status about WHERE the workspace lives and
+  // whether it matches disk — not an edit to the workspace's own data, so
+  // stepping Ctrl+Z through it would be meaningless (undoing to "a different
+  // file is open" isn't a content edit). Never serialized into a `.dwk`
+  // either (see store/project.ts's header).
+  currentProject: "current project name/path identity; session-local, not an undoable data edit",
+  projectDirty: "unsaved-changes flag for the current project; derived status, not an undoable data edit",
+
   // shell/layout UI state (retrospective-audit sweep: fields declared directly on AppState, newly visible to this guard)
   leftCollapsed: "left panel collapsed; shell layout UI",
   rightCollapsed: "right panel collapsed; shell layout UI",

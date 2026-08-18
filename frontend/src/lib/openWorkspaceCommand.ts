@@ -10,6 +10,7 @@ import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
 import { parseWorkspace, type LoadedWorkspace } from "./workspace";
 import { withOp } from "../store/pendingOps";
+import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 
 /** Basename of a native path, tolerant of either separator — mirrors
@@ -58,7 +59,13 @@ function baseName(path: string): string {
 export function openWorkspaceCommand(
   s: StoreGet,
   verb: string,
-  dispatch: (ws: LoadedWorkspace) => void,
+  // P1.2 box 1: `dispatch` now also receives the NATIVE identity (name+path)
+  // when this open came from a real dialog, so a caller that actually
+  // performs the replace (fileCommands.ts) can adopt it as `currentProject`
+  // at the exact moment the replace happens — never before a confirm gate a
+  // caller might still say no to. Undefined on the browser-picker path
+  // (there is no durable path to adopt).
+  dispatch: (ws: LoadedWorkspace, native?: ProjectIdentity) => void,
 ): () => void {
   const label = verb === "open" ? "Opening workspace…" : "Appending workspace…";
   const viaPicker = () =>
@@ -86,7 +93,7 @@ export function openWorkspaceCommand(
       void withOp(label, () => Promise.resolve(parseWorkspace(native.content, currentViewport())))
         .then((ws) => {
           useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
-          dispatch(ws);
+          dispatch(ws, { name: baseName(native.path), path: native.path });
         })
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),

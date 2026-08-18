@@ -31,6 +31,24 @@
   font-weight: var(--weight-semibold);
 }
 
+/* P1.2 box 5: the recovery chooser's SOURCE/TIME summary. */
+.qz-recovery-summary {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--pad);
+}
+.qz-recovery-summary dt {
+  font-weight: var(--weight-semibold);
+  color: var(--text-dim);
+}
+.qz-recovery-summary dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+
 /* ── command palette ── */
 .qz-cmdk {
   position: absolute;

@@ -159,7 +159,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
-      // like every other one in this list.
+      // like every other one in this list. Always prompts (native Save As
+      // dialog, or a browser download) — never reuses a known project path.
+      // P1.2 originally renamed this to "...as (.dwk)…" to disambiguate from
+      // a sibling quick-save command (⌘S); that command was later removed
+      // for bundle-size reasons (AppOverlays.tsx's eager budget), leaving
+      // the "as" with nothing left to disambiguate FROM — reverted back to
+      // the original label, which is also the exact-text locator
+      // e2e/specs/quick-figure-lifecycle.spec.ts drives to trigger a real
+      // browser download (pinned by commands/fileCommands.test.ts).
       run: () => s().saveWorkspaceToFile(),
     },
     {
@@ -173,10 +181,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
         void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
-          (ok) => ok && replaceWorkspace(s, ws),
+          (ok) => ok && replaceWorkspace(s, ws, native),
         );
       }),
     },
@@ -188,15 +196,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
           "Replace the current workspace?",
           replaceConfirmMessage(s().datasets.length, extra),
           "Replace",
           true,
-        ).then((ok) => ok && replaceWorkspaceSafely(s, ws));
+        ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
       }),
     },
     {

@@ -55,6 +55,7 @@ import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
+import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
@@ -137,6 +138,11 @@ const PreferencesDialog = lazyPanel(() => import("./components/overlays/Preferen
 // so a plain lazyPanel — not useKeepMountedAfterOpen — matches its former
 // always-mounted-but-self-hiding behavior exactly.
 const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"));
+// P1.2 box 5: the crash-recovery chooser. Rare (only when a startup autosave
+// candidate outdates the last-known named project — see
+// lib/recoveryChoice.ts), so it stays out of the eager bundle like every
+// other on-demand dialog above.
+const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"));
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -179,6 +185,7 @@ export default function AppOverlays() {
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
+  const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
   const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
@@ -232,6 +239,7 @@ export default function AppOverlays() {
       {helpOpen && <HelpDialog />}
       {textFormatHelpMounted && <TextFormatHelp />}
       {prefsMounted && <PreferencesDialog />}
+      {recoveryPending && <RecoveryChoiceDialog />}
       <Toaster />
     </>
   );

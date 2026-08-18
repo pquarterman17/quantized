@@ -73,7 +73,7 @@ import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocum
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-import { runAppendWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
+import { runAppendWorkspace, runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
@@ -95,6 +95,7 @@ import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workb
 import { recomputeStaleFits } from "./recalcFits";
 import { removeDatasetsPatch } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
+import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
@@ -286,7 +287,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -536,6 +537,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // serializes + downloads. Owns its own status/toast messaging so the
   // command itself stays a thin `run: () => s().saveWorkspaceToFile()`.
   saveWorkspaceToFile: () => Promise<void>;
+  // P1.2 box 1: "Save" (Ctrl+S) — writes to the known project path with no
+  // dialog when one exists; otherwise identical to saveWorkspaceToFile.
+  saveWorkspace: () => Promise<void>;
   // Apply a stored figure after resolving lazy source books; unresolved = no-op.
   // `opts.newWindow` (item 9) opens a fresh window (bound to the figure's
   // dataset) and focuses it FIRST, so the rest of the apply logic — already
@@ -875,6 +879,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
+  ...createProjectSlice(set),
   ...createFigureLifecycleSlice(set, get),
   ...createQuickPlotActionSlice(set, get),
   ...createQuickFigureCreateSlice(set, get),
@@ -1131,6 +1136,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Body lives in ./workspaceIO (store-size ratchet offset for MAIN_PLAN
   // #16's appendWorkspace — see that file's doc).
   saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
+  saveWorkspace: () => runSaveWorkspace(get),
 
   applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);

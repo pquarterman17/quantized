@@ -37,7 +37,15 @@ beforeEach(() => {
   useCommands.setState({ menuCommands: [] });
   useToasts.setState({ toasts: [] });
   useRecentProjects.setState({ recentProjects: [] });
-  useApp.setState({ datasets: [], activeId: null, selectedIds: [], folders: [], workbooks: [] });
+  useApp.setState({
+    datasets: [],
+    activeId: null,
+    selectedIds: [],
+    folders: [],
+    workbooks: [],
+    currentProject: null,
+    projectDirty: false,
+  });
 });
 afterEach(() => useCommands.setState({ menuCommands: [] }));
 
@@ -83,6 +91,16 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     await act(() => action("recent-project-/p/workspace.dwk").run());
     expect(readProject).toHaveBeenCalledWith("/p/workspace.dwk");
     expect(askConfirm).not.toHaveBeenCalled();
+  });
+
+  it("records the project identity on a successful reopen (P1.2 box 1)", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(() => action("recent-project-/p/workspace.dwk").run());
+    expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
+    expect(useApp.getState().projectDirty).toBe(false);
   });
 
   it("ok + non-empty session: confirms before replacing, same as Open workspace", async () => {

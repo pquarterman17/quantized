@@ -5,16 +5,26 @@
 
 import { useEffect } from "react";
 
-import { autosaveHealth, loadAutosave, saveAutosave } from "./lib/autosave";
+import { autosaveHealth, loadAutosaveGeneration, saveAutosave } from "./lib/autosave";
+import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
 import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
+import { useRecentProjects } from "./store/recentProjects";
+import { useRecoveryChoice } from "./store/recoveryChoice";
 import { toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
 import { stageWorkspaceRestore } from "./store/windowHydration";
 
+function lastKnownProject(): LastProjectRef | null {
+  const entry = useRecentProjects.getState().recentProjects[0];
+  return entry ? { name: entry.name, path: entry.path, at: Date.parse(entry.at) } : null;
+}
+
 /** Every store field serialized into a .dwk workspace. Keep this list in one
- * place so autosave cannot silently omit a newly-persisted artifact. */
+ * place so autosave cannot silently omit a newly-persisted artifact — its
+ * test file's "AutosaveState completeness sweep" cross-checks it against
+ * lib/workspace.ts's real WorkspaceDoc shape so this can't drift unnoticed. */
 export type AutosaveState = Pick<
   AppState,
   | "datasets"
@@ -23,6 +33,11 @@ export type AutosaveState = Pick<
   | "selectedIds"
   | "expandedFolders"
   | "originFigures"
+  // P2-1 (adversarial review, 2026-08-18): `originFidelity` persists
+  // (lib/workspace.ts) and mutates independently via
+  // store/originImport.ts's `addOriginFidelity` — no other tracked field
+  // necessarily changes alongside it.
+  | "originFidelity"
   | "smartFolders"
   | "reports"
   | "macroSteps"
@@ -32,7 +47,15 @@ export type AutosaveState = Pick<
   | "pages"
   | "plotWindows"
   | "focusedWindowId"
+  // P2-1: persists (lib/workspace.ts) and mutates independently via
+  // store/toolwindows.ts's setToolWindowLayout/toggleToolWindowCollapsed/
+  // resetToolWindowPositions — dragging or collapsing a tool window
+  // previously left the dirty marker false and scheduled no autosave.
+  | "toolWindowLayout"
   | "savedPlotSpecs"
+  // P2-1: PR H's saved Quick Plot templates — persist, mutate independently
+  // (store/quickPlotTemplates.ts), had no trigger here.
+  | "quickPlotTemplates"
   // LIBRARY_WORKBOOK_UX_PLAN PR E2: the three Library-panel fields
   // store/libraryPanel.ts's header marks "transient, E2 owns persistence".
   | "librarySelection"
@@ -44,6 +67,10 @@ export type AutosaveState = Pick<
   // unsaved until some unrelated field also changed.
   | "workbooks"
   | "savedRois"
+  // P2-1: PR L's saved-search Collections — persist, mutate independently
+  // (store/collections.ts), had no trigger here. A Collection rename/save
+  // left the title bar showing clean right up to a crash.
+  | "collections"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -54,6 +81,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.selectedIds === prev.selectedIds &&
     state.expandedFolders === prev.expandedFolders &&
     state.originFigures === prev.originFigures &&
+    state.originFidelity === prev.originFidelity &&
     state.smartFolders === prev.smartFolders &&
     state.reports === prev.reports &&
     state.macroSteps === prev.macroSteps &&
@@ -63,12 +91,15 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.pages === prev.pages &&
     state.plotWindows === prev.plotWindows &&
     state.focusedWindowId === prev.focusedWindowId &&
+    state.toolWindowLayout === prev.toolWindowLayout &&
     state.savedPlotSpecs === prev.savedPlotSpecs &&
+    state.quickPlotTemplates === prev.quickPlotTemplates &&
     state.librarySelection === prev.librarySelection &&
     state.workbookLastChild === prev.workbookLastChild &&
     state.expandedWorkbookIds === prev.expandedWorkbookIds &&
     state.workbooks === prev.workbooks &&
-    state.savedRois === prev.savedRois
+    state.savedRois === prev.savedRois &&
+    state.collections === prev.collections
   );
 }
 
@@ -85,18 +116,26 @@ export function useWorkspaceAutosave(): void {
     // installSessionMarker overwrites the flag.
     const priorEnd = priorSessionEnd();
     const teardown = installSessionMarker();
-    void loadAutosave().then((restored) => {
-      if (cancelled || !restored?.datasets.length) return;
+    void loadAutosaveGeneration().then((picked) => {
+      if (cancelled || !picked?.workspace.datasets.length) return;
+      const { workspace: restored, at: autosaveAt } = picked;
+      // P1.2 box 5: only when there IS a named last project AND the
+      // candidate is actually newer does silent auto-restore stop being
+      // safe — see lib/recoveryChoice.ts's header for the full reasoning.
+      const lastProject = lastKnownProject();
+      if (shouldOfferRecoveryChoice(autosaveAt, lastProject)) {
+        useRecoveryChoice.getState().offerRecovery({
+          workspace: restored,
+          autosaveAt,
+          datasetCount: restored.datasets.length,
+          lastProject: lastProject as LastProjectRef,
+        });
+        return;
+      }
       useApp.getState().loadWorkspace(restored);
-      // P3.4 slice 4: same synchronous-tick staging fileCommands.ts's
-      // open-workspace command uses — see stageWorkspaceRestore's doc.
       stageWorkspaceRestore(useApp.getState().plotWindows, useApp.getState().focusedWindowId);
       const n = restored.datasets.length;
       const what = `${n} dataset${n === 1 ? "" : "s"}`;
-      // #32: restoring is unremarkable after an ordinary close, but after a
-      // CRASH the user should be told — that is the case where the last few
-      // seconds may be missing and the workspace is worth checking. Toast
-      // only in that case, so the notice means something when it appears.
       if (priorEnd === "unclean") {
         setStatus(`recovered ${what} after an unexpected close`);
         toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
@@ -128,6 +167,14 @@ export function useWorkspaceAutosave(): void {
       // The helper compares the complete serialized workspace slice, including
       // reports, figure docs, macro steps, Origin figures, and recalc mode.
       if (!shouldAutosave(state, prev)) return;
+      // P1.2 box 1: the SAME comparison that decides "worth autosaving"
+      // also decides "the project no longer matches disk" — reusing it here
+      // is what keeps the title bar's dirty marker from ever disagreeing
+      // with what autosave itself just captured. A load/open resets this
+      // right back to false in the SAME synchronous tick via its own
+      // setCurrentProject call, which runs after this subscriber fires (see
+      // store/project.ts's header on why ordering there is safe).
+      useApp.getState().markProjectDirty();
       clearTimeout(timer);
       timer = setTimeout(() => {
         const s = useApp.getState();

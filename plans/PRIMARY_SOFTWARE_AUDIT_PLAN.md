@@ -488,11 +488,26 @@ but reopen freezes the main thread 5.8 s in synchronous `JSON.parse` — the
 near-term mitigation is P3.4 slice 3 (worker/chunked parse); P1.2 should
 weigh chunked/binary arrays for large members with that number in hand.
 
-- [ ] Show project name/path and dirty state.
-- [ ] Atomic temporary-write, validation, then replace.
-- [ ] Save failure preserves the last good project.
-- [ ] Bounded autosave generations by count/age/total size.
-- [ ] Explain crash recovery source/time/choices.
+- [x] Show project name/path and dirty state. (2026-08-18: `store/project.ts`
+  identity+dirty slice, Ctrl/Cmd+S "Save" routes to the known path via
+  `saveProjectTo` with no dialog, Shell `TitleBar` shows name + dirty marker.)
+- [x] Atomic temporary-write, validation, then replace. (2026-08-18:
+  `desktop_bridge.py`'s `write_project_file` gained a structural
+  format/version/datasets validation gate before the existing temp+
+  `os.replace`; a bad payload is refused before any file touches disk.)
+- [x] Save failure preserves the last good project. (2026-08-18: pytest
+  pins validation-abort + mocked `os.replace`/disk-full failures leave the
+  prior file byte-identical; frontend quick-save surfaces a clear error
+  status and does NOT fall back to a browser download on failure.)
+- [x] Bounded autosave generations by count/age/total size. (2026-08-18:
+  `autosaveGenerations.ts` gains `capByAge` — count via `MAX_GENERATIONS`,
+  age via `MAX_GENERATION_AGE_MS` (30 days), size via existing `capBySize`;
+  all three always keep the newest generation.)
+- [x] Explain crash recovery source/time/choices. (2026-08-18:
+  `RecoveryChoiceDialog` offers Recover autosave / Keep last project /
+  Cancel — with SOURCE+TIME for both candidates — ONLY when the autosave is
+  newer than the last-known named project; otherwise the pre-P1.2 silent
+  restore is unchanged, since there is nothing named to protect.)
 - [ ] Recovered work does not overwrite without explicit consent.
 - [ ] Missing sources remain relinkable, metadata-rich placeholders.
 - [ ] Define embedded versus linked portability.

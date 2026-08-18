@@ -100,6 +100,11 @@ from quantized.desktop_consent import (
     grant_paths,
     grant_write_path,
 )
+from quantized.desktop_project_file import (
+    WRITE_TEMP_PREFIX,
+    cleanup_stray_write_temps,
+    validate_workspace_payload,
+)
 
 __all__ = ["DesktopApi", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
@@ -337,8 +342,25 @@ class DesktopApi:
         for. The write itself is temp-file-plus-``os.replace`` (same
         directory, so the replace is atomic on a normal filesystem) so a
         crash mid-write cannot leave a half-written ``.dwk`` at the real
-        path — full crash *recovery* (detecting and offering to restore a
-        stray temp file) is P1.2's, not this slice's."""
+        path.
+
+        P1.2 box 2 adds a VALIDATION gate ahead of the replace: ``content``
+        must pass ``validate_workspace_payload`` or the write is refused
+        before a temp file is even opened — a bad payload can never
+        overwrite a good project file, and whatever was previously at
+        ``path`` is left byte-identical.
+
+        P1.2 (adversarial review round) also sweeps stale ``.qz-write-*``
+        temp files out of the TARGET directory before creating a new one —
+        the crash window this docstring used to punt to "P1.2" (a process
+        killed between the temp write succeeding and ``os.replace`` running)
+        left an anonymous half-written file behind forever, since nothing
+        ever looked for one. The prefix is exclusively ours, so anything
+        matching it in a write-consented directory is safe to remove; the
+        sweep is best-effort (``cleanup_stray_write_temps`` never raises)
+        so a failed cleanup — a permissions error, a race with another
+        process — can never turn an otherwise-successful save into a
+        reported failure."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
@@ -346,10 +368,14 @@ class DesktopApi:
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
+        invalid = validate_workspace_payload(content)
+        if invalid is not None:
+            return {"ok": False, "error": f"refusing to write — {invalid}"}
         directory = os.path.dirname(granted) or "."
+        cleanup_stray_write_temps(directory)
         tmp_path: str | None = None
         try:
-            fd, tmp_path = tempfile.mkstemp(prefix=".qz-write-", dir=directory)
+            fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content)
