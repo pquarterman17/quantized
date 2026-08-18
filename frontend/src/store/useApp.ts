@@ -98,6 +98,7 @@ import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
 import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./quickFigureCreate";
+import { createQuickPlotTemplatesSlice, type QuickPlotTemplatesSlice } from "./quickPlotTemplates";
 import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
@@ -274,7 +275,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -864,6 +865,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createFigureLifecycleSlice(set, get),
   ...createQuickPlotActionSlice(set, get),
   ...createQuickFigureCreateSlice(set, get),
+  ...createQuickPlotTemplatesSlice(set, get),
   ...createQuickFigureBuilderSlice(set, get),
   ...createPageDocumentsSlice(set, get),
   ...createRoisSlice(set, get),
@@ -1487,6 +1489,7 @@ export const useApp = create<AppState>((set, get) => ({
         pages: ws.pages ?? [],
         figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
+        quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
         savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
