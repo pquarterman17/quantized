@@ -6,6 +6,11 @@ import { useApp } from "./useApp";
 import { workbookDeleteBlockers } from "./workbookActions";
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView } from "../lib/plotview";
+import {
+  buildQuickPlotTemplateSignature,
+  captureQuickPlotTemplateLabels,
+  type QuickPlotTemplate,
+} from "../lib/quickPlotTemplates";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
 
@@ -17,6 +22,26 @@ const ds = (id: string, workbookId?: string, folderId?: string): Dataset => ({
   workbookId,
   folderId,
 });
+
+/** A minimal workbook-scoped Quick Plot template (PR H) for the PR M
+ *  delete-time pruning tests — mirrors lib/quickPlotTemplates.test.ts's
+ *  own `template()` fixture. */
+function quickPlotTemplate(id: string, workbookId: string): QuickPlotTemplate {
+  const dataset = ds("fixture");
+  const mapping = { xKey: 0, yKeys: [1], errorBindings: [], ignoredKeys: [] };
+  return {
+    id,
+    name: id,
+    createdAt: "2026-08-19T00:00:00.000Z",
+    modifiedAt: "2026-08-19T00:00:00.000Z",
+    scope: { kind: "workbook", workbookId },
+    technique: "generic",
+    signature: buildQuickPlotTemplateSignature(dataset),
+    mapping,
+    style: "line",
+    labels: captureQuickPlotTemplateLabels(dataset, mapping),
+  };
+}
 
 describe("workbookActions slice", () => {
   beforeEach(() => {
@@ -33,6 +58,7 @@ describe("workbookActions slice", () => {
       trash: [],
       history: [],
       future: [],
+      quickPlotTemplates: [],
     });
   });
 
@@ -88,30 +114,79 @@ describe("workbookActions slice", () => {
     });
   });
 
-  describe("deleteWorkbook — fail-closed until PR M (PR #139 review, round 3)", () => {
-    // Both prior reviews drew this boundary: EITHER an atomic workbook-aware
-    // Trash package OR disable until PR M. Trash today stores only Dataset
-    // snapshots, so even a dependent-free delete loses the grouping — the
-    // command is therefore disabled unconditionally, and the store action
-    // fails closed so no caller can bypass the UI gate.
-    it("reports the stable disabled reason regardless of dependents", () => {
-      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBe(
-        "Workbook Delete arrives with dependency-aware Trash (PR M)",
-      );
+  describe("deleteWorkbook — dependency-aware, LIFTED (PR M, L0.45)", () => {
+    // The unconditional fail-closed gate a prior review drew is lifted:
+    // workbookDeleteBlockers always returns null now (the confirm dialog is
+    // the real L0.45 gate — see lib/workbookContextActions.ts).
+    it("workbookDeleteBlockers always returns null, regardless of dependents", () => {
+      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBeNull();
       useApp.setState({
         editableFigures: [createFigureDocument({ id: "e1", name: "E", datasetId: "d1", view: defaultPlotView() })],
       });
-      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toMatch(/PR M/);
+      expect(workbookDeleteBlockers(useApp.getState(), "w1")).toBeNull();
     });
 
-    it("a direct deleteWorkbook call leaves state byte-for-byte unchanged — zero dependents included", () => {
-      const before = useApp.getState();
+    it("deletes the workbook and moves its members to Trash in ONE history entry", () => {
       useApp.getState().deleteWorkbook("w1");
       const s = useApp.getState();
-      expect(s.workbooks).toBe(before.workbooks); // untouched references, not just equal values
+      expect(s.workbooks.map((w) => w.id)).toEqual(["w2"]);
+      expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
+      expect(s.trash.map((e) => e.dataset.id).sort()).toEqual(["d1", "d2"]);
+      expect(s.history).toHaveLength(1);
+    });
+
+    // "undo happens at source, not from trash" (architecture.test.ts's
+    // HISTORY_EXCLUDED doc for `trash`) — a PRE-EXISTING, deliberate
+    // convention this test follows, not something PR M changes: undo
+    // restores workbooks/datasets/quickPlotTemplates (the real "source"),
+    // the same single step every other delete-then-undo path in this
+    // codebase already uses.
+    it("undo restores the workbook, members, and templates together in one step", () => {
+      const before = useApp.getState();
+      useApp.getState().deleteWorkbook("w1");
+      useApp.getState().undo();
+      const s = useApp.getState();
+      expect(s.workbooks).toEqual(before.workbooks);
+      expect(s.datasets).toEqual(before.datasets);
+    });
+
+    // PR H booked finding: pruning a workbook-scoped Quick Plot template
+    // when its owning workbook is actually DELETED is PR M's job (H only
+    // handles the load-time-dangling and memberless-but-alive cases).
+    it("prunes workbook-scoped Quick Plot templates naming the deleted workbook", () => {
+      useApp.setState({
+        quickPlotTemplates: [
+          quickPlotTemplate("t-w1", "w1"), // scoped to the workbook being deleted
+          quickPlotTemplate("t-w2", "w2"), // scoped to a DIFFERENT, still-alive workbook
+        ],
+      });
+      useApp.getState().deleteWorkbook("w1");
+      expect(useApp.getState().quickPlotTemplates.map((t) => t.id)).toEqual(["t-w2"]);
+    });
+
+    it("leaves schema-scoped templates untouched (they never name a workbook)", () => {
+      useApp.setState({
+        quickPlotTemplates: [{ ...quickPlotTemplate("t-schema", "w1"), scope: { kind: "schema" } }],
+      });
+      useApp.getState().deleteWorkbook("w1");
+      expect(useApp.getState().quickPlotTemplates.map((t) => t.id)).toEqual(["t-schema"]);
+    });
+
+    it("undo also restores a pruned template (rides the same atomic set())", () => {
+      useApp.setState({ quickPlotTemplates: [quickPlotTemplate("t-w1", "w1")] });
+      useApp.getState().deleteWorkbook("w1");
+      expect(useApp.getState().quickPlotTemplates).toHaveLength(0);
+      useApp.getState().undo();
+      expect(useApp.getState().quickPlotTemplates.map((t) => t.id)).toEqual(["t-w1"]);
+    });
+
+    it("a nonexistent workbook id is a no-op", () => {
+      const before = useApp.getState();
+      useApp.getState().deleteWorkbook("ghost");
+      const s = useApp.getState();
+      expect(s.workbooks).toBe(before.workbooks);
       expect(s.datasets).toBe(before.datasets);
-      expect(s.trash).toHaveLength(0);
-      expect(s.history).toHaveLength(0); // no snapshot recorded for a refused delete
+      expect(s.history).toHaveLength(0);
     });
 
     it("ordinary standalone worksheet delete -> Trash -> restore stays green (unchanged path)", () => {

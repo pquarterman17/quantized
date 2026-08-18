@@ -41,12 +41,14 @@ import {
   uploadFile,
   type CorrectionsRequest,
 } from "../lib/api";
+import { computeDependencyImpact, formatDependencyImpact } from "../lib/dependencyImpact";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { recomputeData } from "../lib/formula";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { datasetViewDefaults } from "./windows";
@@ -102,6 +104,13 @@ async function commitReimport(
   // provably valid, and a saved document is a durable artifact (see the
   // helper's module doc for why in-range indices are not proof of freshness).
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
+  // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
+  // now clears a stale groupKey (see its module doc) — capture whether any
+  // bound figure actually HAD one set, BEFORE the reset, so the toast below
+  // only fires when grouping was genuinely lost, never on every reshape.
+  const hadGroupedFigure =
+    columnsChanged &&
+    get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null);
   set((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
@@ -147,6 +156,11 @@ async function commitReimport(
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }
+  if (hadGroupedFigure) {
+    // PR M booked finding: a clear message instead of a raw backend
+    // ValueError at export/preview time (lib/figureSpec.ts's group_col).
+    toast(`"${ds.name}" re-import: a figure's grouping column no longer exists — grouping was reset`, "info");
+  }
   get().recordMacro(`Re-import "${ds.name}"`, `qz.reimportDataset(${lit(ds.name)})`);
   get().touchDataset(ds.id);
 }
@@ -190,6 +204,15 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
     reimportDataset: async (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return;
+      // PR M (L0.55): preview the downstream impact BEFORE committing, via
+      // the SAME `downstreamOf` closure the recalc engine itself uses —
+      // skipped entirely when there's nothing downstream (today's
+      // frictionless no-dependents case stays frictionless).
+      const impactMsg = formatDependencyImpact(computeDependencyImpact(get().datasets, [id]));
+      if (impactMsg) {
+        const ok = await askConfirm(`Re-import "${ds.name}"?`, impactMsg, "Re-import");
+        if (!ok) return;
+      }
       if (ds.source) {
         await runReimport(set, get, ds, () => importFile(ds.source!.path));
         return;

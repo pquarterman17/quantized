@@ -260,15 +260,17 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     vi.mocked(askConfirm).mockReset().mockResolvedValue(true);
   });
 
-  it("Delete on a selected workbook row is consumed WITHOUT a confirm or any mutation (round 3: disabled until PR M)", () => {
+  it("Delete on a selected workbook row runs the workbook's own delete flow, gated by confirm (PR M lift)", async () => {
     render(<Harness />);
     fireEvent.click(workbookRow("w1")); // WorkbookRow.select: librarySelection = {kind:"workbook", id:"w1"}
     fireEvent.keyDown(workbookRow("w1"), { key: "Delete" });
-    expect(askConfirm).not.toHaveBeenCalled(); // never confirm-then-no-op
+    expect(askConfirm).toHaveBeenCalledOnce(); // PR M: workbookDeleteBlockers is lifted, confirm gates instead
+    await act(() => Promise.resolve());
     const s = useApp.getState();
-    expect(s.workbooks.some((w) => w.id === "w1")).toBe(true); // workbook survives
-    expect(s.datasets).toHaveLength(2); // nothing removed, nothing trashed
-    expect(s.datasets.some((d) => d.id === "solo")).toBe(true);
+    expect(s.workbooks.some((w) => w.id === "w1")).toBe(false); // workbook deleted
+    expect(s.datasets.some((d) => d.id === "d1")).toBe(false); // member sent to trash
+    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
+    expect(s.datasets.some((d) => d.id === "solo")).toBe(true); // the unrelated selected/active dataset untouched
   });
 
   it("Backspace on a selected folder row runs the folder's own (reparent) confirm flow", async () => {
