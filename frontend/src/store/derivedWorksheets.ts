@@ -61,15 +61,33 @@ function summarizePipeline(params: CorrectionParams): string {
 }
 
 /** Re-run a derived worksheet's pipeline (its own `.corrections`) against its
- *  SOURCE's current raw/data — the K5c/K5d "real executor happy path".
- *  Called only from `recalcNow`; never synchronously from `touchDataset`. */
+ *  SOURCE's current displayed table — the K5c/K5d "real executor happy
+ *  path". Called only from `recalcNow`; never synchronously from
+ *  `touchDataset`.
+ *
+ *  Review round P1-1: the base is `source.data`, NEVER `source.raw`.
+ *  `.raw` means "MY OWN pristine pre-correction cache" — correct inside
+ *  store/corrections.ts for in-place re-correction, WRONG for a cross-
+ *  dataset source reference. L0.50's "source" is the source's CURRENT
+ *  displayed table: reading `.raw` here silently discards the source's own
+ *  correction pipeline, and for a chain (C derived from B, B itself
+ *  derived from A) skips straight past B's entire pipeline to A's raw
+ *  value — chains stop composing. A still-pending (lazy, preview-only)
+ *  source fails closed rather than deriving from a downsampled preview;
+ *  the caller (recalcNow) surfaces this and leaves the sheet stale. */
 export async function recomputeDerivedSheet(get: SliceGet, sheet: Dataset): Promise<Dataset> {
   const sourceId = sheet.derivedFrom?.datasetId;
   const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
-  const raw = source.raw ?? source.data;
-  const data = await applyCorrectionsApi({ dataset: raw, params: sheet.corrections ?? {} });
-  return recompute({ ...sheet, data, raw });
+  if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
+  const sourceData = source.data;
+  const data = await applyCorrectionsApi({ dataset: sourceData, params: sheet.corrections ?? {} });
+  // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
+  // applied by the CALLER (useApp.ts's recalcNow, via the shared
+  // rowsChangedGuard — see store/corrections.ts) once it can see both the
+  // old and new row counts and perform the actual `set()`; this function
+  // stays a pure "compute the new Dataset" step, same shape as before.
+  return recompute({ ...sheet, data, raw: sourceData });
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the
@@ -84,6 +102,13 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         get().setStatus("Can't create a derived worksheet: source dataset not found.");
         return null;
       }
+      // P1-1 review fix: never derive from a still-pending (lazy, downsampled
+      // preview) source — the user derives from what they SEE, and a preview
+      // is not that.
+      if (source.pending) {
+        get().setStatus("Can't create a derived worksheet: source data hasn't fully loaded yet.");
+        return null;
+      }
       const newId = nextDatasetId();
       // K4: write-time cycle rejection, wired through the same pure check
       // every other edge-creating write uses — see lib/recalc.ts's header.
@@ -96,13 +121,18 @@ export function createDerivedWorksheetsSlice(_set: SliceSet, get: SliceGet): Der
         return null;
       }
       try {
-        const raw = source.raw ?? source.data;
-        const data = await applyCorrectionsApi({ dataset: raw, params });
+        // P1-1 review fix: the base is `source.data` (what the user SEES),
+        // never `source.raw` — `.raw` means "the SOURCE's own pristine
+        // pre-correction cache", which would silently discard the source's
+        // own correction pipeline (or, for a chain, skip an intermediate
+        // derived sheet's entire pipeline and jump straight to ITS source).
+        const sourceData = source.data;
+        const data = await applyCorrectionsApi({ dataset: sourceData, params });
         const newDs: Dataset = {
           id: newId,
           name: `${source.name} (derived)`,
           data,
-          raw,
+          raw: sourceData,
           ...(Object.keys(params).length ? { corrections: params } : {}),
           derivedFrom: { datasetId: sourceId, pipeline: pipelineLabel?.trim() || summarizePipeline(params) },
           ...(source.workbookId ? { workbookId: source.workbookId } : {}),

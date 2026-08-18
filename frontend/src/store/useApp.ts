@@ -96,7 +96,7 @@ import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
-import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
+import { createCorrectionsSlice, rowsChangedGuard, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
 import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./quickFigureCreate";
@@ -2549,10 +2549,21 @@ export const useApp = create<AppState>((set, get) => ({
         if (d?.derivedFrom) {
           try {
             const updated = await recomputeDerivedSheet(get, d);
-            set((s) => ({
-              datasets: s.datasets.map((x) => (x.id === id ? updated : x)),
-              staleDatasets: s.staleDatasets.filter((x) => x !== id),
-            }));
+            // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
+            // invalidates excludedRows + the four overlays — the SAME shared
+            // helper applyCorrections uses, so the two call sites can't drift.
+            const rowsChanged = updated.data.time.length !== d.data.time.length;
+            let statusMsg: string | undefined;
+            set((s) => {
+              const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
+              statusMsg = guard.statusMessage;
+              return {
+                datasets: s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x)),
+                staleDatasets: s.staleDatasets.filter((x) => x !== id),
+                ...guard.statePatch,
+              };
+            });
+            if (statusMsg) get().setStatus(statusMsg);
           } catch (e) {
             get().setStatus(`derived worksheet recompute failed: ${e instanceof Error ? e.message : "error"}`);
             /* stays stale */

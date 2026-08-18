@@ -111,6 +111,58 @@ describe("createDerivedWorksheet (K2/K4, L0.50)", () => {
     spy.mockRestore();
   });
 
+  // Review round P1-1 (semantic root cause): the base is `source.data`
+  // (what the user SEES), never `source.raw`. The prior test at the top of
+  // this describe never caught this because its source never had `.raw`
+  // set separately from `.data` — this is the regression that would have
+  // caught it.
+  it("derives from the source's CURRENT .data, not its stale .raw (P1-1 regression)", async () => {
+    const rawData = data(); // values [[10],[20],[30]]
+    const correctedData = { ...data(), values: [[100], [200], [300]] }; // "what the user sees"
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(correctedData);
+    useApp.setState({
+      datasets: [ds("a", { raw: rawData, data: correctedData, corrections: { yOff: 90 } })],
+    });
+
+    await useApp.getState().createDerivedWorksheet("a", { xOff: 1 });
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: correctedData, params: { xOff: 1 } });
+  });
+
+  // Two-hop chain: C derived from B, B itself derived from A. Creating C
+  // must use B's CURRENT .data (B's own pipeline output), never jump past
+  // B to A's raw value — chains must compose.
+  it("a chain (C from B, B itself derived from A) uses B's data, not A's (P1-1 regression)", async () => {
+    const aData = data(); // [[10],[20],[30]]
+    const bData = { ...data(), values: [[50], [60], [70]] }; // B's OWN pipeline output
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[999], [999], [999]] });
+    useApp.setState({
+      datasets: [
+        ds("a", { data: aData }),
+        // A REAL derived worksheet's `.raw` is A's data, cached at B's last
+        // recompute — this is what makes the bug reachable: reading `.raw`
+        // here silently jumps past B's own pipeline to A's raw value.
+        ds("b", { data: bData, raw: aData, corrections: { yOff: 1 }, derivedFrom: { datasetId: "a", pipeline: "x" } }),
+      ],
+    });
+
+    await useApp.getState().createDerivedWorksheet("b", { xOff: 2 });
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: bData, params: { xOff: 2 } });
+  });
+
+  it("refuses (zero mutation, no API call) when the source is a still-pending preview", async () => {
+    useApp.setState({
+      datasets: [ds("a", { pending: { kind: "path", path: "/x.opj", bookId: "b1", rows: 5000, cols: 4 } })],
+    });
+    const before = useApp.getState().datasets;
+    const result = await useApp.getState().createDerivedWorksheet("a", {});
+    expect(result).toBeNull();
+    expect(useApp.getState().status).toMatch(/hasn't fully loaded yet/);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toBe(before);
+  });
+
   it("leaves the dataset list unchanged when the API call fails", async () => {
     vi.mocked(applyCorrectionsApi).mockRejectedValue(new Error("boom"));
     useApp.setState({ datasets: [ds("a")] });
