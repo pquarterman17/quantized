@@ -13,17 +13,33 @@ import { create } from "zustand";
 
 interface QuickPlotWithDialogState {
   datasetId: string | null;
+  /** Review-round fix (P2b): set instead of `datasetId` when the workbook
+   *  menu opens the chooser for a workbook with ZERO current worksheet
+   *  children -- there is no dataset to resolve against, but its
+   *  workbook-scoped templates must still be reachable to rename/delete
+   *  (the manage affordance must not be scope-hostage to "has a worksheet
+   *  right now"). `datasetId` and `workbookId` are mutually exclusive. */
+  workbookId: string | null;
   open: (datasetId: string) => void;
+  openForWorkbook: (workbookId: string) => void;
   close: () => void;
 }
 
 export const useQuickPlotWithDialog = create<QuickPlotWithDialogState>((set) => ({
   datasetId: null,
-  open: (datasetId) => set({ datasetId }),
-  close: () => set({ datasetId: null }),
+  workbookId: null,
+  open: (datasetId) => set({ datasetId, workbookId: null }),
+  openForWorkbook: (workbookId) => set({ datasetId: null, workbookId }),
+  close: () => set({ datasetId: null, workbookId: null }),
 }));
 
 /** Open the "Quick Plot With..." chooser for `datasetId`. */
 export function openQuickPlotWith(datasetId: string): void {
   useQuickPlotWithDialog.getState().open(datasetId);
+}
+
+/** Open the chooser in workbook-only mode (no worksheet to target yet) --
+ *  see `workbookId`'s doc above. */
+export function openQuickPlotWithForWorkbook(workbookId: string): void {
+  useQuickPlotWithDialog.getState().openForWorkbook(workbookId);
 }

@@ -201,6 +201,26 @@ export function quickPlotTemplateInScope(template: QuickPlotTemplate, dataset: D
   return template.scope.kind === "schema" || template.scope.workbookId === dataset.workbookId;
 }
 
+/** Review-round fix (the orphan bug): drop workbook-scoped templates whose
+ *  `workbookId` no longer names a LIVE workbook -- the E2
+ *  `librarySelection`/`parseWorkbookLastChild` load-time aliveness pattern,
+ *  called ONLY from `lib/workspace.ts`'s `parseWorkspace` once `workbookIds`
+ *  is known. This is DANGLING (the workbook itself is gone), never
+ *  MEMBERLESS (the workbook is alive but has zero worksheets right now) --
+ *  a memberless-but-alive workbook's templates are deliberately NOT pruned
+ *  here; they stay reachable via the manage surface (see
+ *  `workbookContextActions.ts`'s `workbook.quickPlotWith` gate and
+ *  `QuickPlotWithDialog`'s workbook-only mode). Schema-scoped templates
+ *  never dangle this way (no workbook to lose) and pass through untouched.
+ *  Pruning on an actual workbook DELETE (as opposed to a load-time replay of
+ *  an already-dangling `.dwk`) is PR M's job -- see that item's plan entry. */
+export function pruneDanglingWorkbookScopeTemplates(
+  templates: readonly QuickPlotTemplate[],
+  workbookIds: ReadonlySet<string>,
+): QuickPlotTemplate[] {
+  return templates.filter((t) => t.scope.kind !== "workbook" || workbookIds.has(t.scope.workbookId));
+}
+
 /** THE matching predicate (H4). Pure -- never mutates `template` or
  *  `dataset`. Refusal is all-or-nothing: any unresolved mapped column
  *  refuses the WHOLE apply (never a partial mapping), naming every

@@ -18,7 +18,7 @@ import {
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
-import { sanitizeQuickPlotTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
+import { pruneDanglingWorkbookScopeTemplates, sanitizeQuickPlotTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
@@ -547,13 +547,12 @@ export function parseWorkspace(
       : null;
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
-  const quickPlotTemplates = sanitizeQuickPlotTemplates(o.quickPlotTemplates);
+  const workbookIds = new Set(workbooks.map((w) => w.id)); // PR E2 — hoisted for the H-review dangling-scope prune below
+  const quickPlotTemplates = pruneDanglingWorkbookScopeTemplates(sanitizeQuickPlotTemplates(o.quickPlotTemplates), workbookIds);
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
-  // PR E2 — `workbookIds` is the same set `workbooks` above already carries.
-  const workbookIds = new Set(workbooks.map((w) => w.id));
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,

@@ -66,7 +66,9 @@ export interface QuickPlotTemplatesSlice {
     scope: QuickPlotTemplateScope,
   ) => string | null;
   /** No-op for an unknown id or a blank/unchanged name (mirrors
-   *  `renamePlotSpec`). Undoable. */
+   *  `renamePlotSpec`). A name collision with another template DEDUPES
+   *  (the same `dedupeWindowTitle` discipline `saveQuickPlotTemplate`
+   *  uses), never producing two rows under one label. Undoable. */
   renameQuickPlotTemplate: (id: string, name: string) => void;
   /** No-op for an unknown id (mirrors `deletePlotSpec`). Undoable. */
   deleteQuickPlotTemplate: (id: string) => void;
@@ -120,12 +122,21 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
     renameQuickPlotTemplate: (id, name) => {
       const nm = name.trim();
       if (!nm) return;
-      const src = get().quickPlotTemplates.find((t) => t.id === id);
+      const templates = get().quickPlotTemplates;
+      const src = templates.find((t) => t.id === id);
       if (!src || src.name === nm) return;
+      // Review-round P3(2): the SAME dedupeWindowTitle discipline
+      // `saveQuickPlotTemplate` uses -- renaming to a name another template
+      // already holds never collides two rows under one label, it dedupes
+      // ("Name" -> "Name (2)") instead. Excludes THIS template's own current
+      // name from the collision set (renaming "T" to "T" is the no-op above,
+      // not a self-collision).
+      const otherNames = templates.filter((t) => t.id !== id).map((t) => t.name);
+      const dedupedName = dedupeWindowTitle(nm, otherNames);
       get().recordHistory("Rename Quick Plot Template");
       const now = new Date().toISOString();
       set((s) => ({
-        quickPlotTemplates: s.quickPlotTemplates.map((t) => (t.id === id ? { ...t, name: nm, modifiedAt: now } : t)),
+        quickPlotTemplates: s.quickPlotTemplates.map((t) => (t.id === id ? { ...t, name: dedupedName, modifiedAt: now } : t)),
       }));
     },
 

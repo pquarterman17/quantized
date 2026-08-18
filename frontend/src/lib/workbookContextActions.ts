@@ -22,7 +22,7 @@ import type { LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
-import { openQuickPlotWith } from "../store/quickPlotWithDialog";
+import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
 
 export interface WorkbookActionTarget {
@@ -74,15 +74,24 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.quickPlotWith",
     label: "Quick Plot With…",
-    // L0.37: hidden until a template exists AND this workbook has a
-    // worksheet to target (mirrors dataset.quickPlotWith's hidden gate).
-    hidden: (t) =>
-      useApp.getState().quickPlotTemplates.length === 0 ||
-      !t.node.children.some((child) => child.kind === "worksheet"),
+    // L0.37: hidden until a template exists AND either this workbook has a
+    // worksheet to target OR it has its OWN workbook-scoped templates
+    // (review-round P2b: a memberless-but-alive workbook must not lose the
+    // manage affordance for templates scoped to it — mirrors
+    // dataset.quickPlotWith's hidden gate for the worksheet-present case).
+    hidden: (t) => {
+      const s = useApp.getState();
+      if (s.quickPlotTemplates.length === 0) return true;
+      if (t.node.children.some((child) => child.kind === "worksheet")) return false;
+      return !s.quickPlotTemplates.some(
+        (tpl) => tpl.scope.kind === "workbook" && tpl.scope.workbookId === t.node.entity.id,
+      );
+    },
     run: (t) => {
       const s = useApp.getState();
       const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
       if (worksheet) openQuickPlotWith(worksheet.id);
+      else openQuickPlotWithForWorkbook(t.node.entity.id);
     },
   },
   {

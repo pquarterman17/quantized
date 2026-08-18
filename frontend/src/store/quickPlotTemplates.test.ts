@@ -114,6 +114,27 @@ describe("renameQuickPlotTemplate / deleteQuickPlotTemplate (+ undo) (H3)", () =
     expect(useApp.getState().history.length).toBe(historyBefore);
   });
 
+  // Review-round P3(2): renaming to a name ANOTHER template already holds
+  // must dedupe (the saveQuickPlotTemplate discipline), never produce two
+  // rows sharing one label.
+  it("renaming to an existing name dedupes rather than colliding", () => {
+    const id = saved(); // "Original"
+    useApp.getState().saveQuickPlotTemplate("d1", mapping(), "line", "Taken", { kind: "schema" });
+
+    useApp.getState().renameQuickPlotTemplate(id, "Taken");
+
+    const names = useApp.getState().quickPlotTemplates.map((t) => t.name);
+    expect(names).toEqual(["Taken (2)", "Taken"]);
+  });
+
+  it("renaming a template to its OWN current name (idempotent) is still a no-op, not a self-dedupe to '(2)'", () => {
+    const id = saved(); // "Original"
+    const historyBefore = useApp.getState().history.length;
+    useApp.getState().renameQuickPlotTemplate(id, "Original");
+    expect(useApp.getState().quickPlotTemplates.find((t) => t.id === id)?.name).toBe("Original");
+    expect(useApp.getState().history.length).toBe(historyBefore);
+  });
+
   it("deletes a template and undo restores it (the savedRois-incident pin)", () => {
     const id = saved();
     const countBefore = useApp.getState().quickPlotTemplates.length;

@@ -9,6 +9,7 @@ import type { QuickFigureMapping } from "./quickFigureMapping";
 import {
   buildQuickPlotTemplateSignature,
   captureQuickPlotTemplateLabels,
+  pruneDanglingWorkbookScopeTemplates,
   quickPlotTemplateInScope,
   resolveTemplate,
   sanitizeQuickPlotTemplates,
@@ -103,6 +104,24 @@ describe("sanitizeQuickPlotTemplates (H1 .dwk boundary)", () => {
     expect(out.map((t) => t.id)).toEqual(["tpl-good"]);
   });
 
+  // Review-round P3(1): the whole-field "is it an array" check alone is not
+  // enough -- a wrongly-typed ELEMENT inside an otherwise-array field must
+  // also drop the entry (a prior version's `.every(...)` per-element guard
+  // had no test exercising this, a none-killed mutation blind spot).
+  it("drops an entry whose mapping array field holds a wrongly-typed ELEMENT (not just a wrong whole-field type)", () => {
+    const good = template({ id: "tpl-good" });
+    const badYKeysElement = {
+      ...template({ id: "tpl-bad-y" }),
+      mapping: { xKey: 0, yKeys: [0, "oops"], errorBindings: [], ignoredKeys: [] },
+    };
+    const badIgnoredElement = {
+      ...template({ id: "tpl-bad-ignored" }),
+      mapping: { xKey: 0, yKeys: [0], errorBindings: [], ignoredKeys: [1, null] },
+    };
+    const out = sanitizeQuickPlotTemplates([good, badYKeysElement, badIgnoredElement]);
+    expect(out.map((t) => t.id)).toEqual(["tpl-good"]);
+  });
+
   it("drops an entry with an unrecognized technique string", () => {
     const bad = { ...template(), technique: "not-a-real-technique" };
     expect(sanitizeQuickPlotTemplates([bad])).toEqual([]);
@@ -136,6 +155,28 @@ describe("quickPlotTemplateInScope (H4 scope gating)", () => {
     expect(quickPlotTemplateInScope(t, ds({ workbookId: "wb-1" }))).toBe(true);
     expect(quickPlotTemplateInScope(t, ds({ workbookId: "wb-2" }))).toBe(false);
     expect(quickPlotTemplateInScope(t, ds({ workbookId: undefined }))).toBe(false);
+  });
+});
+
+describe("pruneDanglingWorkbookScopeTemplates (review-round P2, the orphan bug)", () => {
+  it("drops a workbook-scoped template whose workbookId names no live workbook", () => {
+    const t = template({ scope: { kind: "workbook", workbookId: "wb-gone" } });
+    const out = pruneDanglingWorkbookScopeTemplates([t], new Set(["wb-1", "wb-2"]));
+    expect(out).toEqual([]);
+  });
+
+  it("keeps a workbook-scoped template whose workbook is still live, even with zero worksheets today", () => {
+    // Aliveness is about the WORKBOOK existing, not about it currently
+    // having members -- a memberless-but-alive workbook must not be pruned.
+    const t = template({ scope: { kind: "workbook", workbookId: "wb-1" } });
+    const out = pruneDanglingWorkbookScopeTemplates([t], new Set(["wb-1"]));
+    expect(out).toEqual([t]);
+  });
+
+  it("never touches a schema-scoped template (no workbook to dangle from)", () => {
+    const t = template({ scope: { kind: "schema" } });
+    const out = pruneDanglingWorkbookScopeTemplates([t], new Set());
+    expect(out).toEqual([t]);
   });
 });
 

@@ -165,7 +165,7 @@ export default function AppOverlays() {
   const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
-  const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null);
+  const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);

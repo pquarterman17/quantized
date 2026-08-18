@@ -12,6 +12,7 @@ import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { RoiDef } from "./roi";
 import type { Dataset, OriginFigure } from "./types";
+import type { WorkbookNode } from "./workbooks";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
 function makeDataset(id: string, name: string): Dataset {
@@ -1287,10 +1288,33 @@ describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR
     expect(JSON.stringify(reserialized.quickPlotTemplates)).toBe(JSON.stringify(original.quickPlotTemplates));
   });
 
-  it("round-trips a workbook-scoped template", () => {
+  it("round-trips a workbook-scoped template whose workbook is live", () => {
     const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-2", scope: { kind: "workbook", workbookId: "wb-1" } };
     const datasets = [makeDataset("a", "first")];
+    const workbooks: WorkbookNode[] = [{ id: "wb-1", name: "WB" }];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, workbooks, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([scoped]);
+  });
+
+  // Review-round P2 (the orphan bug): a workbook-scoped template whose
+  // workbook does NOT exist in the loaded doc is DANGLING, not merely
+  // memberless -- sanitized out at load time (the E2 aliveness pattern),
+  // like parseWorkbookLastChild already does for its own workbook-keyed field.
+  it("drops a workbook-scoped template whose workbookId names no live workbook (load-time aliveness)", () => {
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-orphan", scope: { kind: "workbook", workbookId: "wb-nonexistent" } };
+    const datasets = [makeDataset("a", "first")];
+    // No `workbooks` field at all -- "wb-nonexistent" names nothing.
     const loaded = parseWorkspace(serializeWorkspace({ datasets, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([]);
+  });
+
+  it("keeps a workbook-scoped template whose workbook is live but currently has no worksheet members", () => {
+    // Memberless-but-ALIVE must survive load — only a genuinely gone
+    // workbook is pruned. The workbook here has no dataset pointing at it.
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-memberless", scope: { kind: "workbook", workbookId: "wb-1" } };
+    const datasets = [makeDataset("a", "first")]; // unrelated to wb-1
+    const workbooks: WorkbookNode[] = [{ id: "wb-1", name: "Empty WB" }];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, workbooks, quickPlotTemplates: [scoped] }));
     expect(loaded.quickPlotTemplates).toEqual([scoped]);
   });
 
