@@ -58,29 +58,28 @@ top of it this sprint.
 
 ## IMPORTANT — NOT BLOCKING (real gaps; do not release-gate on them)
 
-- **Single-writer project locking is entirely unbuilt (PR I2).** Grepped
-  `frontend/src` and `src/` for any lock/consent mechanism around a second
-  instance opening the same project — none exists. Two Quantized windows
-  (or tabs) pointed at the same `.dwk` can silently overwrite each other's
-  saves with no warning, the exact failure L0.47 forbids. Narrow risk for
-  a single daily-driver user who does not habitually run two instances on
-  one project, but real if she ever does. Owner: `LIBRARY_WORKBOOK_UX_PLAN.md`
-  item 9b (PR I2), in flight now (`claude/i-transfer-locking`, not yet landed
-  — do not treat as resolved).
+- ~~**Single-writer project locking is entirely unbuilt (PR I2).**~~
+  **CLOSED 2026-08-19 (#184).** Landed as `lib/lockState.ts`,
+  `store/projectLock.ts`, and `useProjectLockHeartbeat.ts`: read-only second
+  open, Open as Copy, and guarded Take Over. Review caught and fixed a false
+  safety claim here — the header promised the resumed original's next write
+  would be refused, but `runSaveWorkspace` was reading a 30 s-stale cached
+  `canWriteNow()`; it now re-verifies with a fresh `provider.read()`
+  immediately before `saveProjectTo`. Save As could also overwrite a locked
+  file; that is fixed too.
 - **M's transactional multi-source "Reimport All" (L0.33) and the full
   Trash dependency-review UI (restore / delete-dependent / freeze-materialize
   as distinct choices, L0.45) are unbuilt.** Single-dataset reimport and
   delete both ship with an impact preview today (PR M slice 1, merged);
   the multi-source and full-recovery-choice cases do not. Owner:
   `LIBRARY_WORKBOOK_UX_PLAN.md` item 13 (PR M).
-- **J2 Recode workshop (merge/rename levels, find-replace) does not exist.**
-  If the owner's real data commonly needs categorical cleanup (mistyped or
-  inconsistent factor levels), there is no in-app way to fix it yet — only
-  reimport with a corrected source file works around it today. In flight
-  now (`claude/j2-recode-worksheet`, not yet landed). Owner:
-  `JMP_GAP_PLAN.md` item J2; `LIBRARY_WORKBOOK_UX_PLAN.md`'s P1.6b
-  (worksheet C/O/N type badge + categorical cell-edit guard) is the same
-  gap's worksheet-UI half.
+- ~~**J2 Recode workshop (merge/rename levels, find-replace) does not
+  exist.**~~ **CLOSED 2026-08-19 (#186).** Landed as `store/recode.ts` and
+  `components/workshops/recode/`, with P1.6b's worksheet C/O/N type badge and
+  categorical cell-edit guard in the same PR. Review caught two defects
+  pre-merge: a case-duplicate level picker that wrote the wrong code (levels
+  `["pass","PASS","Fail"]`, picking `"PASS"` wrote `0`), and a "Save mapping"
+  button whose result evaporated.
 - **P1.3 reusable plot recipes are unbuilt beyond H's Quick Plot templates.**
   H (shipped) covers mapping + style + technique/schema matching, which is
   most of the daily value; the full recipe vocabulary (axis limits, legend,
