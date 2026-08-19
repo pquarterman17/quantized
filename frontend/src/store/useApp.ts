@@ -711,7 +711,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
-  setChannelType: (channel: number, t: ModelingType | null) => void;
+  setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
   // Row state (#50): persistent per-row exclusion on a dataset. Excluded rows
   // stay visible but drop from analysis everywhere; round-trips .dwk.
   toggleRowExcluded: (id: string, row: number) => void;
@@ -2025,12 +2025,14 @@ export const useApp = create<AppState>((set, get) => ({
       `qz.setChannelRole(${channel}, ${lit(role)})`,
     );
   },
-  // Set (or clear, t=null) a modeling-type OVERRIDE on the ACTIVE dataset.
-  // Mirrors setChannelRole: overrides live on the dataset (persist across
+  // Set (or clear, t=null) a modeling-type OVERRIDE on dataset `id`. Takes an
+  // EXPLICIT id (P1.6b: the worksheet's own C/O/N header badge is the first
+  // caller that isn't always the active dataset — GUI_INTERACTION #14's
+  // floating worksheet window can browse a NON-active one) rather than
+  // `get().activeId` — overrides live on the dataset (persist across
   // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
-  setChannelType: (channel, t) => {
-    const id = get().activeId;
-    if (id == null) return;
+  setChannelType: (id, channel, t) => {
+    if (!get().datasets.some((d) => d.id === id)) return;
     get().recordHistory("channel type");
     set((s) => ({
       datasets: s.datasets.map((d) => {

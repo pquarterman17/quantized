@@ -196,7 +196,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 style={{ maxWidth: 64, minWidth: 0 }}
                 value={active.channelTypes?.[i] ?? ""}
                 onChange={(e) =>
-                  setChannelType(i, e.target.value === "" ? null : (e.target.value as ModelingType))
+                  setChannelType(active.id, i, e.target.value === "" ? null : (e.target.value as ModelingType))
                 }
                 title="Modeling type — what this column means. Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories. Auto = inferred from the values; drives categorical plotting (boxes/violins group by nominal columns)."
                 options={[

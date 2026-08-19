@@ -57,8 +57,11 @@ export function formulaLetter(baseLabelCount: number, formulaCount: number, inde
 
 /** Recompute a dataset's `data` + `formulaErrors` from a freshly-built
  *  formula list, given its (already stripped) base columns — the one place
- *  this slice folds both together so they can never disagree. */
-function withRecomputedFormulas(
+ *  this slice folds both together so they can never disagree. Exported for
+ *  store/recode.ts (J2): committing a recode column appends to `formulas`
+ *  the SAME way addFormula does, so it reuses this instead of re-deriving
+ *  the pair by hand. */
+export function withRecomputedFormulas(
   base: DataStruct,
   formulas: ComputedColumn[],
 ): { data: DataStruct; formulaErrors: Record<string, string> | undefined } {

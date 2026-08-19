@@ -21,6 +21,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { categoricalLevels } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/columnmeta";
 import {
   buildOffsets,
@@ -35,7 +36,7 @@ import {
   DEFAULT_ROW_OVERSCAN,
   windowIndices,
 } from "../../../lib/gridwindow";
-import type { CalcResult, ChannelRole, DataStruct } from "../../../lib/types";
+import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
 import GridHeader from "./GridHeader";
 import GridRow from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
@@ -59,6 +60,11 @@ export interface GridViewportProps {
   onToggleSelect: (r: number) => void;
   onSelectRange: (rows: number[]) => void;
   onEditCell: (row: number, col: number, value: number) => void;
+  /** P1.6b item 7: commit a categorical cell's picked/typed LABEL — see
+   *  GridRow's doc for why this is separate from `onEditCell`. Optional; a
+   *  categorical column still displays/edits via the plain numeric path
+   *  when omitted (every pre-existing caller/test). */
+  onEditCategoricalCell?: (row: number, col: number, label: string) => void;
   /** Channels at index >= baseCount are computed (formula) columns. */
   baseCount: number;
   onRemoveFormula: (index: number) => void;
@@ -80,6 +86,12 @@ export interface GridViewportProps {
   onResizeCol?: (col: number, width: number) => void;
   /** Double-click a header edge: autofit the column to a content sample. */
   onAutofitCol?: (col: number) => void;
+  /** P1.6b item 6 — see GridHeader's own doc for what each does; all three
+   *  optional together (omitting hides the badge, matching every existing
+   *  caller/test). */
+  modelingTypeOf?: (col: number) => ModelingType;
+  channelTypes?: Record<number, ModelingType>;
+  onChangeChannelType?: (col: number, t: ModelingType | null) => void;
 }
 
 /** The row height token, read once per mount (and on resize, in case a
@@ -107,6 +119,7 @@ export default function GridViewport({
   onToggleSelect,
   onSelectRange,
   onEditCell,
+  onEditCategoricalCell,
   baseCount,
   onRemoveFormula,
   formulaErrors,
@@ -119,6 +132,9 @@ export default function GridViewport({
   colWidths = {},
   onResizeCol = () => {},
   onAutofitCol = () => {},
+  modelingTypeOf,
+  channelTypes,
+  onChangeChannelType,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -256,6 +272,9 @@ export default function GridViewport({
         onRemoveFormula={onRemoveFormula}
         onHeaderContext={onHeaderContext}
         textCols={textCols}
+        modelingTypeOf={modelingTypeOf}
+        channelTypes={channelTypes}
+        onChangeChannelType={onChangeChannelType}
       />
       {leadingRowSpacer > 0 && <div style={{ height: leadingRowSpacer }} aria-hidden="true" />}
       {visibleRows.map((r) => (
@@ -280,6 +299,8 @@ export default function GridViewport({
           onRowContext={onRowContext}
           cellEdit={cellEdit}
           textCols={textCols}
+          catLevels={(col) => categoricalLevels(data, col)}
+          onEditCategoricalCell={onEditCategoricalCell}
         />
       ))}
       {trailingRowSpacer > 0 && <div style={{ height: trailingRowSpacer }} aria-hidden="true" />}

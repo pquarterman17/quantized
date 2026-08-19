@@ -56,3 +56,47 @@ export interface ReflectivityFftResult {
   wavelength_a?: number;
   superlattice: SuperlatticeResult;
 }
+
+// RsmPeak/RsmAnalysisResponse/RsmStrainResponse moved here verbatim from
+// lib/types.ts (J2/P1.6b Recode workshop, funding the new `ComputedColumn.
+// recode` field without raising that file's TS_MODULE_PINS ceiling) — a
+// self-contained RSM-analysis wire-response leaf, same class as the four
+// reductions results above; re-exported from lib/types.ts so no import site
+// changes (the `export type {...} from "./reductionTypes"` line there).
+
+/** One peak from POST /api/rsm/analyze. Centres/FWHM are `[omega, 2theta]` in
+ *  angle space and `[Qx, Qz]` in reciprocal space (null when no Q-space). */
+export interface RsmPeak {
+  rank: number;
+  centre_angle: [number, number];
+  centre_Q: [number | null, number | null];
+  fwhm_angle: [number, number];
+  fwhm_Q: [number | null, number | null];
+  amplitude: number;
+  background: number;
+  classification: string; // "substrate" | "film" | "unknown"
+}
+
+/** Response of POST /api/rsm/analyze. */
+export interface RsmAnalysisResponse {
+  peaks: RsmPeak[];
+  n_peaks_found: number;
+  intensity_unit: string;
+  used_q_space: boolean;
+}
+
+/** Response of POST /api/rsm/strain (NaN fields serialize as null).
+ *  `warnings` explains a null `eps_parallel`: near-symmetric reflections
+ *  (|Qx|/|Qz| below the degeneracy threshold — see calc/rsm.py) carry no
+ *  in-plane information, so eps_parallel is refused rather than fabricated
+ *  from noise. Empty when nothing was degenerate. */
+export interface RsmStrainResponse {
+  eps_parallel: number | null;
+  eps_perp: number | null;
+  a_sub_parallel: number;
+  a_sub_perp: number;
+  a_film_parallel: number;
+  a_film_perp: number;
+  relaxation: number | null;
+  warnings: string[];
+}

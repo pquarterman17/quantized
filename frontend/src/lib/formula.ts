@@ -93,6 +93,7 @@
 
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
+import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
 export type { FormulaFn, FormulaRowContext } from "./formulaTypes";
@@ -387,43 +388,70 @@ function computeFormulas(
   const values = base.values.map((row) => [...row]);
   const rowCount = base.time.length;
   const errors: Record<string, string> = {};
+  // J2: seeded from the base's own categorical channels so a recode can
+  // resolve its source's level table, and grown as each recode column is
+  // appended (see computeRecodeColumn) so a LATER column may recode an
+  // earlier recode column too.
+  const catLevels: Record<number, string[]> = base.cat_levels ? { ...base.cat_levels } : {};
   for (const f of formulas) {
-    let fn: FormulaFn | null;
-    try {
-      fn = compileFormula(f.expr);
-    } catch (e) {
-      fn = null;
-      errors[f.name] = e instanceof Error ? e.message : "formula failed to compile";
-    }
-    // One column-array snapshot per formula (not per row): captures `x` plus
-    // every channel as of just before THIS formula's own column is appended
-    // — exactly what the per-row scalar ctx below also reflects.
-    const colSnapshot: Record<string, number[]> = { x: base.time };
-    labels.forEach((_, c) => {
-      colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
-    });
-    for (let r = 0; r < rowCount; r++) {
-      let v = Number.NaN;
-      if (fn) {
-        const ctx: Record<string, number> = { x: base.time[r] };
-        labels.forEach((_, c) => {
-          ctx[channelLetter(c)] = values[r]?.[c];
-        });
-        try {
-          v = fn(ctx, { row: r, rowCount, columns: colSnapshot });
-        } catch (e) {
-          v = Number.NaN;
-          // First failing row wins (later rows' errors are usually the same
-          // root cause repeated); don't overwrite a compile-time error above.
-          if (!errors[f.name]) errors[f.name] = e instanceof Error ? e.message : "formula evaluation failed";
-        }
+    let colValues: number[];
+    if (f.recode) {
+      // J2: `catLevels` already holds every earlier column's table (base +
+      // any prior recode), so a recode may itself recode an earlier recode
+      // column — chaining through for free.
+      const sourceIdx = labels.findIndex((_, c) => channelLetter(c) === f.recode!.sourceLetter);
+      const result = computeRecodeAppend(
+        f.recode,
+        sourceIdx >= 0 ? catLevels[sourceIdx] : undefined,
+        values.map((row) => row[sourceIdx]),
+        rowCount,
+      );
+      colValues = result.codes;
+      if (result.levels) catLevels[labels.length] = result.levels; // the column this recode is about to occupy
+      if (result.error) errors[f.name] = result.error;
+    } else {
+      let fn: FormulaFn | null;
+      try {
+        fn = compileFormula(f.expr);
+      } catch (e) {
+        fn = null;
+        errors[f.name] = e instanceof Error ? e.message : "formula failed to compile";
       }
-      values[r].push(v);
+      // One column-array snapshot per formula (not per row): captures `x` plus
+      // every channel as of just before THIS formula's own column is appended
+      // — exactly what the per-row scalar ctx below also reflects.
+      const colSnapshot: Record<string, number[]> = { x: base.time };
+      labels.forEach((_, c) => {
+        colSnapshot[channelLetter(c)] = values.map((row) => row[c]);
+      });
+      colValues = [];
+      for (let r = 0; r < rowCount; r++) {
+        let v = Number.NaN;
+        if (fn) {
+          const ctx: Record<string, number> = { x: base.time[r] };
+          labels.forEach((_, c) => {
+            ctx[channelLetter(c)] = values[r]?.[c];
+          });
+          try {
+            v = fn(ctx, { row: r, rowCount, columns: colSnapshot });
+          } catch (e) {
+            v = Number.NaN;
+            // First failing row wins (later rows' errors are usually the same
+            // root cause repeated); don't overwrite a compile-time error above.
+            if (!errors[f.name]) errors[f.name] = e instanceof Error ? e.message : "formula evaluation failed";
+          }
+        }
+        colValues.push(v);
+      }
     }
+    for (let r = 0; r < rowCount; r++) values[r].push(colValues[r]);
     labels.push(f.name);
     units.push(f.unit ?? "");
   }
-  return { data: { ...base, labels, units, values }, errors };
+  return {
+    data: { ...base, labels, units, values, ...(Object.keys(catLevels).length ? { cat_levels: catLevels } : {}) },
+    errors,
+  };
 }
 
 /** Append computed columns to a base DataStruct, evaluating each formula in

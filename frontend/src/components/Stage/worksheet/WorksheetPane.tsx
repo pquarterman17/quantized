@@ -25,9 +25,12 @@
 
 import { useEffect, useState } from "react";
 
+import { isCategoricalChannel } from "../../../lib/categorical";
 import { hasOriginReportSheets } from "../../../lib/columnmeta";
+import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useRecode } from "../../../store/recode";
 import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
 import SheetTabs from "./SheetTabs";
@@ -216,6 +219,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onToggleSelect={view.toggleRowSelected}
         onSelectRange={view.setRowSelection}
         onEditCell={view.onEditCell}
+        onEditCategoricalCell={(row, col, label) => useApp.getState().setCategoricalCell(ds.id, row, col, label)}
         baseCount={view.baseCount}
         onRemoveFormula={view.onRemoveFormula}
         formulaErrors={ds.formulaErrors}
@@ -228,6 +232,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         colWidths={view.colWidths}
         onResizeCol={view.setColWidth}
         onAutofitCol={view.autofitCol}
+        modelingTypeOf={(col) => channelModelingType(ds, col)}
+        channelTypes={ds.channelTypes}
+        onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
       />
 
       {menu && (
@@ -237,21 +244,31 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
           onClose={() => setMenu(null)}
           items={
             menu.kind === "col"
-              ? columnMenuItems(menu.target, {
-                  xKey: view.xKey,
-                  yKeys: view.yKeys,
-                  labelCount: view.data.labels.length,
-                  setXKey: view.setXKey,
-                  setYKeys: view.setYKeys,
-                  sortAsc: (col) => view.setSort({ col, dir: 1 }),
-                  sortDesc: (col) => view.setSort({ col, dir: -1 }),
-                  onNewColumn: () => void view.promptColumn(),
-                  showStats: view.showStats,
-                  onToggleStats: () => view.setShowStats((v) => !v),
-                  onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
-                  onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
-                  onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
-                })
+              ? [
+                  ...columnMenuItems(menu.target, {
+                    xKey: view.xKey,
+                    yKeys: view.yKeys,
+                    labelCount: view.data.labels.length,
+                    setXKey: view.setXKey,
+                    setYKeys: view.setYKeys,
+                    sortAsc: (col) => view.setSort({ col, dir: 1 }),
+                    sortDesc: (col) => view.setSort({ col, dir: -1 }),
+                    onNewColumn: () => void view.promptColumn(),
+                    showStats: view.showStats,
+                    onToggleStats: () => view.setShowStats((v) => !v),
+                    onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
+                    onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
+                    onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
+                  }),
+                  // J2: only a real, categorical value column can be recoded
+                  // (never the x column or a column with no level table).
+                  ...(menu.target >= 0 && isCategoricalChannel(ds.data, menu.target)
+                    ? ([
+                        { separator: true },
+                        { label: "Recode…", run: () => useRecode.getState().openRecode(ds.id, menu.target) },
+                      ] as const)
+                    : []),
+                ]
               : rowMenuItems(menu.target, {
                   masked: view.masked,
                   toggleMask: view.toggleMask,

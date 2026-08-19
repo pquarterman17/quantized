@@ -64,6 +64,7 @@ import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useVariabilityStore } from "./store/variability";
 import { useRelink } from "./store/relink";
+import { useRecode } from "./store/recode";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -148,6 +149,10 @@ const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/Recov
 // action (opened from the command palette, never on startup), so it stays
 // out of the eager bundle like every other workshop panel above.
 const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"));
+// J2: the Recode workshop, opened from the worksheet's column context menu
+// (a categorical column only) — rare-ish, on-demand, so it stays out of the
+// eager bundle like every other workshop panel above.
+const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"));
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -192,6 +197,7 @@ export default function AppOverlays() {
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelink((s) => s.open);
+  const recodeOpen = useRecode((s) => s.open);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
   const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
@@ -247,6 +253,7 @@ export default function AppOverlays() {
       {prefsMounted && <PreferencesDialog />}
       {recoveryPending && <RecoveryChoiceDialog />}
       {relinkOpen && <RelinkPanel />}
+      {recodeOpen && <RecodePanel />}
       <Toaster />
     </>
   );

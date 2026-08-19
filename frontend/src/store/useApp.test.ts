@@ -3853,20 +3853,36 @@ describe("useApp channel modeling types — per dataset", () => {
     metadata: {},
   };
 
-  it("sets and clears a type override on the active dataset", () => {
+  it("sets and clears a type override on the named dataset", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "a", data: wide }], activeId: "d1" });
-    useApp.getState().setChannelType(1, "nominal");
+    useApp.getState().setChannelType("d1", 1, "nominal");
     expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "nominal" });
-    useApp.getState().setChannelType(1, "ordinal");
+    useApp.getState().setChannelType("d1", 1, "ordinal");
     expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "ordinal" });
-    useApp.getState().setChannelType(1, null);
+    useApp.getState().setChannelType("d1", 1, null);
     expect(useApp.getState().datasets[0].channelTypes).toBeUndefined(); // empties to undefined
   });
 
-  it("is a no-op with no active dataset", () => {
+  it("is a no-op for an unknown dataset id", () => {
     useApp.setState({ datasets: [], activeId: null });
-    useApp.getState().setChannelType(0, "nominal");
+    useApp.getState().setChannelType("nope", 0, "nominal");
     expect(useApp.getState().datasets).toEqual([]);
+  });
+
+  // P1.6b: the worksheet's floating window (GUI_INTERACTION #14) can browse a
+  // NON-active dataset — setChannelType must act on the EXPLICIT id, not
+  // silently mutate whatever happens to be active.
+  it("acts on the named dataset even when a DIFFERENT one is active", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: wide },
+        { id: "d2", name: "b", data: wide },
+      ],
+      activeId: "d1",
+    });
+    useApp.getState().setChannelType("d2", 1, "nominal");
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.channelTypes).toBeUndefined();
+    expect(useApp.getState().datasets.find((d) => d.id === "d2")!.channelTypes).toEqual({ 1: "nominal" });
   });
 });
 

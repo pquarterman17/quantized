@@ -704,3 +704,64 @@ describe("formulaErrors", () => {
     expect(withErrors.errors).toEqual(formulaErrors(baseColumns(base, formulas.length), formulas));
   });
 });
+
+// J2 Recode workshop / P1.4: a `ComputedColumn.recode` entry computes via the
+// recode recipe instead of compiling `expr` — see lib/recode.ts.
+describe("computeFormulas — recode columns (J2)", () => {
+  const cat: DataStruct = {
+    time: [1, 2, 3, 4],
+    values: [[0], [1], [2], [1]],
+    labels: ["Grade"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["Pass", "OK", "Fail"] },
+  };
+
+  it("appends a recoded column with its own cat_levels entry, never touching the source", () => {
+    const formulas: ComputedColumn[] = [
+      {
+        name: "GradeGroup",
+        expr: "",
+        recode: { sourceLetter: "A", mapping: { groups: [{ newLabel: "Pass", from: ["Pass", "OK"] }] } },
+      },
+    ];
+    const out = applyFormulas(cat, formulas);
+    expect(out.labels).toEqual(["Grade", "GradeGroup"]);
+    // source column (channel 0) is byte-identical — raw stays immutable.
+    expect(out.values.map((r) => r[0])).toEqual([0, 1, 2, 1]);
+    // Pass(0) and OK(1) both fold onto the SAME new code; Fail(2) keeps its own.
+    expect(out.values.map((r) => r[1])).toEqual([0, 0, 1, 0]);
+    expect(out.cat_levels?.[1]).toEqual(["Pass", "Fail"]);
+    // the source's own level table survives untouched alongside the new one.
+    expect(out.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail"]);
+  });
+
+  it("records a formula error (not a throw) when the named source isn't categorical", () => {
+    const plain: DataStruct = { time: [1, 2], values: [[5], [6]], labels: ["X"], units: [""], metadata: {} };
+    const formulas: ComputedColumn[] = [
+      { name: "R", expr: "", recode: { sourceLetter: "A", mapping: { groups: [] } } },
+    ];
+    const errs = formulaErrors(plain, formulas);
+    expect(errs.R).toMatch(/not categorical/);
+    // column count stays stable even on failure (matches the plain-formula-failure contract).
+    expect(applyFormulas(plain, formulas).labels).toEqual(["X", "R"]);
+  });
+
+  it("a later column may recode ANOTHER recode column (chains through cat_levels)", () => {
+    const formulas: ComputedColumn[] = [
+      {
+        name: "Coarse",
+        expr: "",
+        recode: { sourceLetter: "A", mapping: { groups: [{ newLabel: "Pass", from: ["Pass", "OK"] }] } },
+      },
+      {
+        name: "Binary",
+        expr: "",
+        recode: { sourceLetter: "B", mapping: { groups: [{ newLabel: "Not Pass", from: ["Fail"] }] } },
+      },
+    ];
+    const out = applyFormulas(cat, formulas);
+    expect(out.cat_levels?.[2]).toEqual(["Pass", "Not Pass"]);
+    expect(out.values.map((r) => r[2])).toEqual([0, 0, 1, 0]);
+  });
+});

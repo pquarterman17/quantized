@@ -300,3 +300,145 @@ describe("GridViewport formula-error marking (K5b)", () => {
     expect(screen.queryByTitle(/Formula error/)).not.toBeInTheDocument();
   });
 });
+
+// P1.6b item 6: the worksheet header's C/O/N modeling-type badge + editor.
+describe("GridViewport modeling-type badge (P1.6b)", () => {
+  function renderTyped(channelTypes?: Record<number, "continuous" | "ordinal" | "nominal">) {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[0], [1]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Pass", "Fail"] },
+    };
+    const onChangeChannelType = vi.fn();
+    const utils = render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={1}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+        modelingTypeOf={() => "nominal"}
+        channelTypes={channelTypes}
+        onChangeChannelType={onChangeChannelType}
+      />,
+    );
+    return { ...utils, onChangeChannelType };
+  }
+
+  it("omits the badge entirely when modelingTypeOf isn't supplied (every pre-existing caller)", () => {
+    renderGrid(2);
+    expect(screen.queryByTitle(/Modeling type/)).not.toBeInTheDocument();
+  });
+
+  it("shows 'auto·N' for a categorical column with no override", () => {
+    renderTyped();
+    expect(screen.getByTitle(/Modeling type/)).toHaveValue("");
+    expect(screen.getByText("auto·N")).toBeInTheDocument();
+  });
+
+  it("reflects a user override in the select's value", () => {
+    renderTyped({ 0: "ordinal" });
+    expect(screen.getByTitle(/Modeling type/)).toHaveValue("ordinal");
+  });
+
+  it("changing the select calls onChangeChannelType with the new type (or null for auto)", () => {
+    const { onChangeChannelType } = renderTyped();
+    const select = screen.getByTitle(/Modeling type/);
+    fireEvent.change(select, { target: { value: "ordinal" } });
+    expect(onChangeChannelType).toHaveBeenCalledWith(0, "ordinal");
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onChangeChannelType).toHaveBeenCalledWith(0, null);
+  });
+});
+
+// P1.6b item 7: the worksheet's categorical cell display + level-picker edit.
+describe("GridViewport categorical cells (P1.6b)", () => {
+  function renderCategorical(onEditCategoricalCell = vi.fn()) {
+    const data: DataStruct = {
+      time: [10, 11, 12], // distinct from the codes below, so "0.0000"/"1.0000" can't be the x cell
+      values: [[0], [1], [Number.NaN]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Pass", "Fail"] },
+    };
+    const utils = render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1, 2]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        onEditCategoricalCell={onEditCategoricalCell}
+        baseCount={1}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+      />,
+    );
+    return { ...utils, onEditCategoricalCell };
+  }
+
+  it("displays the LEVEL LABEL, not the raw numeric code", () => {
+    renderCategorical();
+    expect(screen.getByText("Pass")).toBeInTheDocument();
+    expect(screen.getByText("Fail")).toBeInTheDocument();
+    expect(screen.queryByText("0.0000")).not.toBeInTheDocument();
+  });
+
+  it("double-clicking opens a level-picker <select>, not a free text input", () => {
+    renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    const select = screen.getByRole("combobox");
+    expect(select).toHaveValue("Pass");
+  });
+
+  it("picking an existing level commits it and closes the editor", () => {
+    const { onEditCategoricalCell } = renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Fail" } });
+    expect(onEditCategoricalCell).toHaveBeenCalledWith(0, 0, "Fail");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument(); // editor closed
+  });
+
+  it("choosing '+ Add new level…' reveals a text input; Enter commits the typed label", () => {
+    const { onEditCategoricalCell } = renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "__new__" } });
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Incomplete" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onEditCategoricalCell).toHaveBeenCalledWith(0, 0, "Incomplete");
+  });
+});
