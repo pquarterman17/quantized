@@ -159,7 +159,7 @@ describe("setCellBlock — categorical guard (P1.6b)", () => {
     useApp.setState({ datasets: [catDs()], activeId: "d1" });
   });
 
-  it("silently skips an invalid categorical cell but applies the rest of the block", () => {
+  it("skips an invalid categorical cell but applies the rest of the block", () => {
     useApp.getState().setCellBlock(
       "d1",
       [
@@ -170,6 +170,33 @@ describe("setCellBlock — categorical guard (P1.6b)", () => {
     );
     expect(active().data.values[0][0]).toBe(0); // untouched
     expect(active().data.values[1][0]).toBe(2);
+  });
+
+  // Adversarial review P2: a partial paste must say what it skipped and
+  // why — matching setCellValue's voice two paragraphs above, not staying
+  // silent the way the pre-existing computed-column filter did.
+  it("reports how many cells it skipped, not silently (matches setCellValue's voice)", () => {
+    useApp.getState().setCellBlock(
+      "d1",
+      [
+        { row: 0, col: 0, value: 99 }, // invalid — skipped
+        { row: 1, col: 0, value: 2 }, // valid — applied
+      ],
+      "paste cells",
+    );
+    expect(useApp.getState().status).toMatch(/skipped 1/);
+  });
+
+  it("reports a full refusal (not silence) when EVERY cell is invalid", () => {
+    useApp.getState().setCellBlock("d1", [{ row: 0, col: 0, value: 99 }], "paste cells");
+    expect(active().data.values[0][0]).toBe(0); // unchanged
+    expect(useApp.getState().status).toMatch(/skipped|invalid|nothing/i);
+  });
+
+  it("reports nothing when the whole block applies cleanly", () => {
+    useApp.setState({ status: "" });
+    useApp.getState().setCellBlock("d1", [{ row: 0, col: 0, value: 2 }], "paste cells");
+    expect(useApp.getState().status).toBe("");
   });
 });
 
@@ -187,6 +214,21 @@ describe("setCategoricalCell (P1.6b: level picker / extend-the-table / clear)", 
   it("picks an existing level case-insensitively", () => {
     useApp.getState().setCategoricalCell("d1", 0, 0, "fail");
     expect(active().data.values[0][0]).toBe(2);
+  });
+
+  // Adversarial review P2: a case-insensitive match under the explicit
+  // "type a new level" gesture is CORRECT (no near-duplicate created) but
+  // was WRONG-FEEDBACK silent — the user typed "fail" expecting a new
+  // level and got no sign it resolved to the existing "Fail" instead.
+  it("reports a case-insensitive match under the typed-new-level path, not silently", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "fail");
+    expect(useApp.getState().status).toMatch(/matched existing level "Fail"/i);
+  });
+
+  it("reports NOTHING extra for an exact-case match (not a surprising resolution)", () => {
+    useApp.setState({ status: "" });
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Fail"); // exact case — the expected/unsurprising pick
+    expect(useApp.getState().status).toBe("");
   });
 
   it("EXTENDS the level table for a genuinely new label", () => {

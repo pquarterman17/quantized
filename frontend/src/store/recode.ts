@@ -27,6 +27,26 @@
 // `quickPlotTemplates` hook-in) costs 4-5 lines there alone. Deferred, named
 // home: the next slice that earns workspace.ts headroom (an extraction, not
 // a bump) should wire `savedRecodeMappings` in exactly that shape.
+// RecodePanel.tsx's Save control + the saved-mapping list both visibly
+// disclose the session-only limitation in the UI (adversarial review P1) —
+// don't remove that disclosure without landing real persistence first.
+//
+// BOOKED, not fixed this slice (adversarial review): the non-modal
+// RecodePanel keeps `channel` as a plain index while the panel is open —
+// if the SAME dataset's columns shift underneath it mid-edit (a formula/
+// recode column removed elsewhere, a reimport) the panel could silently
+// end up pointed at a DIFFERENT column than the one the user opened it on.
+// Degrades gracefully today (no crash, no data corruption — `commitRecode`
+// still validates `isCategoricalChannel` at commit time and refuses if
+// that specific index no longer resolves to a categorical column; worst
+// case is committing against the wrong-but-still-categorical column at
+// that index). Real fix needs a stable column IDENTITY (a channel LETTER,
+// like `ComputedColumn.deps` already uses, resolved positionally at open
+// AND re-resolved at commit) rather than a raw index frozen at open time —
+// out of scope for this slice; named home: the next Recode-workshop pass,
+// or whenever `lib/channelRemap.ts`'s index-shift handling grows a shared
+// "resolve a remembered channel through a later shift" primitive other
+// panels could reuse too.
 
 import { create } from "zustand";
 
@@ -163,6 +183,18 @@ export const useRecode = create<RecodeState>((set, get) => ({
     const name = newColumnName.trim() || `${ds.data.labels[channel]} (recoded)`;
     const sourceLetter = channelLetter(channel);
     const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
+    // Adversarial review P3: this branch is UNREACHABLE at this call site
+    // today (mutation-deleting it produces zero test failures) — `target`
+    // is the letter the BRAND-NEW column is about to occupy, so nothing in
+    // the graph can already reference it, and `sourceLetter -> target` is a
+    // fresh edge that can't close an existing cycle either. Kept anyway,
+    // deliberately: it mirrors `computedColumns.ts`'s `addFormula`, which
+    // has the EXACT same property and the SAME accepted-pattern reasoning
+    // there (a real cycle risk only exists for `updateFormula`, editing an
+    // EXISTING column's deps) — consistency with that precedent, and a
+    // guard against this function's shape changing later, not a currently-
+    // exercised safety net. Do not read its presence as evidence this path
+    // is tested.
     const reason = wouldCreateCycle(app.datasets, {
       from: recalcNodes.column(datasetId, sourceLetter),
       to: recalcNodes.column(datasetId, target),

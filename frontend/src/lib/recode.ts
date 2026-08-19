@@ -111,6 +111,21 @@ export function recodeColumnValues(
   const { newLevels } = buildRecodePreview(sourceLevels, mapping);
   const indexOf = new Map(newLevels.map((l, i) => [l, i]));
   const codes = sourceValues.map((code) => {
+    // Adversarial review P3: `!Number.isInteger(code)` here is BELT-AND-
+    // BRACES, not an independently-tested invariant — no test can actually
+    // distinguish removing it, because JS array indexing already coincides
+    // with the outcome this line wants: `sourceLevels[1.5]` is `undefined`
+    // (a non-integer numeric key is never a real array index), so
+    // `resolveLevel(mapping, undefined as unknown as string)` falls through
+    // to its identity branch and returns that same `undefined`, which
+    // `indexOf.get(undefined)` then also misses -> NaN, the SAME result
+    // this explicit check produces. Kept anyway for clarity/intent (a
+    // non-integer code is semantically invalid input, not "happens to
+    // index nothing") and as a hedge against a future refactor that stops
+    // reading `sourceLevels` via bare `[]` indexing (e.g. a Map-backed
+    // level table, where an out-of-range non-integer key would NOT
+    // coincidentally degrade the same way) — do not remove it expecting a
+    // test to catch the regression, because none can today.
     if (!Number.isFinite(code) || !Number.isInteger(code) || code < 0 || code >= sourceLevels.length) {
       return Number.NaN;
     }

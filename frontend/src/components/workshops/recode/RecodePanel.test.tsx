@@ -4,7 +4,7 @@
 // calls useApp.getState()/setState() directly — the same shape
 // store/relink.ts's commit does.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -79,13 +79,33 @@ describe("RecodePanel", () => {
     render(<RecodePanel />);
     fireEvent.change(screen.getByLabelText("new level for OK"), { target: { value: "Passing" } });
     fireEvent.blur(screen.getByLabelText("new level for OK"));
-    fireEvent.change(screen.getByPlaceholderText("save this mapping as…"), { target: { value: "OK->Passing" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save mapping" }));
+    fireEvent.change(screen.getByPlaceholderText(/save this mapping as/), { target: { value: "OK->Passing" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save mapping/ }));
     expect(screen.getByText("OK->Passing")).toBeInTheDocument();
 
     // Reset the draft, then reapply the saved mapping.
     useRecode.setState({ mapping: { groups: [] } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(useRecode.getState().mapping.groups).toEqual([{ newLabel: "Passing", from: ["OK"] }]);
+  });
+
+  // Adversarial review P1: the "Save mapping" control must visibly disclose
+  // that it's session-only — a code comment and a plan-doc deferral don't
+  // reach the user. Pinned so the disclosure can't silently regress when
+  // this eventually gets real persistence (at which point THIS test should
+  // be the one that fails and prompts removing the caveat).
+  it("visibly discloses that saved mappings are session-only, both near Save and on the saved-list row", () => {
+    useRecode.getState().openRecode("d1", 0);
+    render(<RecodePanel />);
+    expect(screen.getAllByText(/session only/i).length).toBeGreaterThan(0); // the standing caveat line
+    expect(screen.getByRole("button", { name: /Save mapping/ }).textContent).toMatch(/session only/i);
+
+    fireEvent.change(screen.getByLabelText("new level for OK"), { target: { value: "Passing" } });
+    fireEvent.blur(screen.getByLabelText("new level for OK"));
+    fireEvent.change(screen.getByPlaceholderText(/save this mapping as/), { target: { value: "OK->Passing" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save mapping/ }));
+    // The saved row ITSELF also says so, not just the button that created it.
+    const row = screen.getByText("OK->Passing").closest("div")!;
+    expect(within(row).getByText(/session only/i)).toBeInTheDocument();
   });
 });

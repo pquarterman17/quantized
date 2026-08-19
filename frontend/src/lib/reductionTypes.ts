@@ -1,14 +1,19 @@
 // Wire shapes of POST /api/reductions/{williamson-hall,fft-thickness,
-// reflectivity-fft} (routes/reductions.py -> calc.reductions*). Split out of
-// lib/types.ts (LIBRARY_WORKBOOK_UX_PLAN PR A1, 2026-08-14) so a first-class
-// `WorkbookNode`/`Dataset.workbookId` addition could land there without
-// raising its pinned ceiling (architecture.test.ts's TS_MODULE_PINS) — this
-// block was a self-contained, single-domain leaf (nothing else in types.ts
-// references these interfaces), so it moved verbatim with no behavior change.
+// reflectivity-fft} (routes/reductions.py -> calc.reductions*) PLUS
+// POST /api/rsm/{analyze,strain} (routes/rsm.py -> calc.rsm) — the RSM trio
+// (RsmPeak/RsmAnalysisResponse/RsmStrainResponse) joined this file 2026-08-19
+// (J2/P1.6b), moved verbatim from lib/types.ts for the same reason the
+// original reductions block moved: funding a new field under that file's
+// pinned ceiling (architecture.test.ts's TS_MODULE_PINS) without raising it.
+// Split out of lib/types.ts (LIBRARY_WORKBOOK_UX_PLAN PR A1, 2026-08-14) so a
+// first-class `WorkbookNode`/`Dataset.workbookId` addition could land there
+// without raising its pinned ceiling — this block was a self-contained,
+// single-domain leaf (nothing else in types.ts references these
+// interfaces), so it moved verbatim with no behavior change.
 // NaN-typed fields (undefined grain size, no superlattice detected) serialize
 // as null — the routes return `dict[str, Any]`, which FastAPI runs through
 // pydantic's JSON-mode encoder, converting NaN to null (verified empirically;
-// same convention as RsmStrainResponse in lib/types.ts).
+// same convention as `RsmStrainResponse` below).
 
 /** Response of POST /api/reductions/williamson-hall. */
 export interface WilliamsonHallResult {

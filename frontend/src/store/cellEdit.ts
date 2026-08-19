@@ -179,9 +179,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // arriving from anywhere else must not be able to bypass the rule.
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     // P1.6b item 7: same guard as setCellValue, applied per-cell — a bulk
-    // paste that hits a categorical column silently drops just the invalid
-    // cells (matching the computed-column filter right below), not the
-    // whole block.
+    // paste that hits a categorical column drops just the invalid cells
+    // (matching the pre-existing computed-column/out-of-range filter here),
+    // not the whole block. Adversarial review P2: unlike setCellValue,
+    // this used to drop cells with ZERO feedback — a paste spanning
+    // categorical + numeric columns could silently lose cells with no clue
+    // why. `skipped` reports a count either way (partial or total refusal),
+    // matching setCellValue's "name the reason" voice rather than staying
+    // quiet — the SAME honesty fix covers the pre-existing computed-column
+    // silence too, since both reasons fold into one filter/one count.
     const usable = edits.filter(
       (e) =>
         e.col < baseCount &&
@@ -189,7 +195,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         e.row < ds.data.time.length &&
         (!Number.isFinite(e.value) || isValidExistingCode(ds, e.col, e.value)),
     );
-    if (usable.length === 0) return;
+    const skipped = edits.length - usable.length;
+    if (usable.length === 0) {
+      if (skipped > 0) {
+        get().setStatus(
+          `${label}: nothing pasted — all ${skipped} cell${skipped === 1 ? "" : "s"} were read-only/out-of-range or not a valid level code for a categorical column.`,
+        );
+      }
+      return;
+    }
     get().recordHistory(label);
     // Index by row so the map below is O(rows + edits) rather than
     // O(rows x edits) — a paste can be thousands of cells and this runs on the
@@ -216,6 +230,11 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     }));
     get().recordMacro(`${label} on ${ds.name}`, `qz.setCells(${lit(ds.name)}, ${usable.length})`);
     get().touchDataset(id);
+    if (skipped > 0) {
+      get().setStatus(
+        `${label}: pasted ${usable.length} cell${usable.length === 1 ? "" : "s"}, skipped ${skipped} (read-only/out-of-range or not a valid level code for a categorical column).`,
+      );
+    }
   },
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
@@ -234,6 +253,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     } else {
       const existing = levels.findIndex((l) => l.toLowerCase() === text.toLowerCase());
       code = existing >= 0 ? existing : levels.length; // pick existing, or extend the table
+      // Adversarial review P2: this is the "+ Add new level…" TYPED path —
+      // a case-insensitive match here is the CORRECT call (no near-
+      // duplicate "fail"/"Fail" pair created) but was silent, so a user who
+      // typed expecting a genuinely new level had no sign it didn't happen.
+      // An EXACT-case match isn't a surprise (that's the ordinary "you
+      // retyped what's already there" case), so it says nothing extra.
+      if (existing >= 0 && levels[existing] !== text) {
+        get().setStatus(`Matched existing level "${levels[existing]}" (case-insensitive) — no new level added.`);
+      }
     }
     get().recordHistory("cell edit");
     set((s) => ({

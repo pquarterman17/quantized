@@ -13,11 +13,11 @@
 // P1.6b item 7: a categorical cell (`catLevels(col)` non-null) displays its
 // LEVEL LABEL, never the raw numeric code, and edits through a level-picker
 // `<select>` instead of the plain numeric `<input>` — see `catCell`'s doc
-// below for the pick/extend affordance. `onEditCategoricalCell` is a
-// SEPARATE callback from `onCommit` (which is numeric-only, `useCellEdit`'s
-// contract) because the store's `setCategoricalCell` takes the typed LABEL
-// and decides pick-vs-extend-vs-clear itself (store/cellEdit.ts) — this
-// component has no opinion on that, it only collects the text.
+// below for the pick/extend affordance, and its own doc for why PICKING an
+// option commits by CODE (`onEditCell`) while TYPING a new one commits by
+// LABEL (`onEditCategoricalCell`, the store's `setCategoricalCell` pick/
+// extend/clear decision) — two different callbacks on purpose, not
+// redundant ones.
 
 import { useState } from "react";
 
@@ -60,8 +60,22 @@ export interface GridRowProps {
    *  Optional so every existing caller/test (plain numeric grids) is
    *  unaffected — omitting it renders every column the old numeric way. */
   catLevels?: (col: number) => string[] | null;
-  /** P1.6b: commit a categorical cell's typed/picked LABEL — see module doc. */
+  /** P1.6b: commit a categorical cell's TYPED label (the "+ Add new
+   *  level…" text box only) — see module doc. NOT used for picking an
+   *  EXISTING option; that commits by CODE via `onEditCell` below
+   *  (adversarial review P1: two levels differing only by case, e.g.
+   *  "pass"/"PASS", are only unambiguous by INDEX — re-deriving the code
+   *  from the picked label text through a case-insensitive match would
+   *  silently resolve to the WRONG one). */
   onEditCategoricalCell?: (row: number, col: number, label: string) => void;
+  /** The plain numeric cell committer (GridViewport's own `onEditCell`,
+   *  forwarded through) — the categorical picker's "pick an existing
+   *  option" path uses THIS, passing the option's own index directly,
+   *  rather than going through `onEditCategoricalCell`'s label-based
+   *  (case-insensitive) resolution. Required whenever `catLevels` is
+   *  supplied; every existing caller/test that omits `catLevels` never
+   *  reads it. */
+  onEditCell?: (row: number, col: number, value: number) => void;
 }
 
 export default function GridRow({
@@ -86,6 +100,7 @@ export default function GridRow({
   textCols,
   catLevels,
   onEditCategoricalCell,
+  onEditCell,
 }: GridRowProps) {
   const rowTitle = isMasked
     ? "excluded row"
@@ -103,26 +118,37 @@ export default function GridRow({
   /** P1.6b's categorical cell editor: pick an existing level (commits
    *  immediately, matching a plain select's usual feel) or "+ Add new
    *  level…" to switch into a text box (Enter commits the typed text,
-   *  Escape backs out to the picker without losing the edit entirely). The
-   *  STORE decides pick-vs-extend-vs-clear (`setCategoricalCell`) — this
-   *  only collects a label string. */
+   *  Escape backs out to the picker without losing the edit entirely).
+   *
+   *  PICKING an option commits by its own INDEX, via the plain numeric
+   *  `onEditCell` — never by re-deriving the code from the picked label
+   *  text (adversarial review P1: `setCategoricalCell`'s label resolution
+   *  is case-INSENSITIVE, so two levels differing only by case, e.g.
+   *  "pass"/"PASS", would silently collapse onto whichever sorts first —
+   *  the <select> itself already disambiguates them by DOM `<option>`
+   *  identity, so the fix is to never throw that information away). TYPING
+   *  a new label still goes through `onEditCategoricalCell` (the store's
+   *  pick/extend/clear decision) — case-insensitive matching there is
+   *  correct and wanted: it's how a stray-case retype of an existing level
+   *  avoids creating a near-duplicate. */
   const catCell = (col: number, levels: string[], code: number) => {
-    const current = labelForCode(levels, code) ?? "";
-    const commit = (label: string) => {
-      onEditCategoricalCell?.(r, col, label);
-      setAddingNew(false);
-      cellEdit.cancel();
-    };
+    const currentIndex =
+      Number.isInteger(code) && code >= 0 && code < levels.length ? String(code) : "";
     if (addingNew) {
+      const commitTyped = (label: string) => {
+        onEditCategoricalCell?.(r, col, label);
+        setAddingNew(false);
+        cellEdit.cancel();
+      };
       return (
         <input
           className="qz-input qzk-cell-edit"
           autoFocus
           value={cellEdit.draft}
           onChange={(e) => cellEdit.setDraft(e.target.value)}
-          onBlur={() => commit(cellEdit.draft)}
+          onBlur={() => commitTyped(cellEdit.draft)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit(cellEdit.draft);
+            if (e.key === "Enter") commitTyped(cellEdit.draft);
             if (e.key === "Escape") setAddingNew(false); // back to the picker, still editing
           }}
         />
@@ -132,20 +158,23 @@ export default function GridRow({
       <select
         className="qz-select qzk-cell-edit"
         autoFocus
-        value={current}
+        value={currentIndex}
         onChange={(e) => {
           if (e.target.value === ADD_NEW) {
             cellEdit.setDraft("");
             setAddingNew(true);
-          } else {
-            commit(e.target.value);
+            return;
           }
+          // "" (— missing —) -> NaN; otherwise the picked option's own
+          // index -> that EXACT code, by construction always valid.
+          onEditCell?.(r, col, e.target.value === "" ? Number.NaN : Number(e.target.value));
+          cellEdit.cancel();
         }}
         onKeyDown={(e) => e.key === "Escape" && cellEdit.cancel()}
       >
         <option value="">— missing —</option>
-        {levels.map((l) => (
-          <option key={l} value={l}>
+        {levels.map((l, idx) => (
+          <option key={idx} value={idx}>
             {l}
           </option>
         ))}
