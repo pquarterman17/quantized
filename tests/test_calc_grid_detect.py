@@ -106,6 +106,54 @@ def test_detects_grid_with_per_line_float_jitter() -> None:
     assert grid.ny == 6
 
 
+def test_detects_grid_with_6dp_representable_pitch() -> None:
+    # Sanity/regression guard for the quantization fix below: a pitch that
+    # IS exactly representable at 6 decimal places has zero rounding jitter,
+    # so it must keep hitting regardless of how the tolerance is computed.
+    n, pitch, start = 1000, 0.0008, 20.0
+    om = np.round(np.arange(n) * pitch + start, 6)
+    tt = np.round(np.arange(n) * pitch + 40.0, 6)
+    x, y = _mesh(tt, om)
+    grid = detect_regular_grid(x, y)
+    assert grid is not None
+    assert grid.nx == n
+    assert grid.ny == n
+
+
+def test_detects_grid_with_non_representable_pitch_quantization_1000() -> None:
+    # Real instrument export: angular positions are written as decimal text
+    # at 6 places (tools/baselines/rsm.py, every committed .xrdml fixture).
+    # A pitch that is NOT itself 6dp-representable (0.00083333...) means each
+    # coordinate's rounding to the nearest 1e-6 injects up to ~5e-7 absolute
+    # error, independent of the pitch -- so at this fine a pitch the RELATIVE
+    # jitter (~1.2e-3) exceeds the old purely-relative _SPACING_RTOL (1e-3)
+    # even though the grid is perfectly real. Must detect.
+    n, pitch, start = 1000, 0.00083333, 20.00007
+    om = np.round(np.arange(n) * pitch + start, 6)
+    tt = np.round(np.arange(n) * pitch + 40.0, 6)
+    x, y = _mesh(tt, om)
+    grid = detect_regular_grid(x, y)
+    assert grid is not None
+    assert grid.nx == n
+    assert grid.ny == n
+
+
+def test_detects_grid_with_non_representable_pitch_quantization_2000() -> None:
+    # Same as above but finer pitch (0.00041667) -> the same ~5e-7 absolute
+    # quantization error is now a LARGER fraction of pitch (~2.4e-3 relative)
+    # -- demonstrating the old relative-only test gets WORSE, not better, as
+    # the grid gets finer (exactly backwards: fine pitch = big map = the case
+    # that most needs the fast path). Must detect.
+    n, pitch, start = 2000, 0.00041667, 20.00007
+    om = np.round(np.arange(n) * pitch + start, 6)
+    tt = np.round(np.arange(n) * pitch + 40.0, 6)
+    x, y = _mesh(tt, om)
+    grid = detect_regular_grid(x, y)
+    assert grid is not None
+    assert grid.nx == n
+    assert grid.ny == n
+
+
 # ── reject: not actually a grid ────────────────────────────────────────────
 
 
@@ -127,6 +175,33 @@ def test_rejects_two_merged_grids_different_spacing() -> None:
     x2, y2 = _mesh(np.linspace(5.6, 10.0, 9), ys)  # pitch 0.55, offset start
     x = np.concatenate([x1, x2])
     y = np.concatenate([y1, y2])
+    assert detect_regular_grid(x, y) is None
+
+
+def test_rejects_log_spaced_axis_with_6dp_quantization() -> None:
+    # Same rejection as test_rejects_log_spaced_axis, but with the axis
+    # additionally rounded to 6dp the way a real instrument export would
+    # write it -- proves the new quantum-derived absolute term doesn't
+    # accidentally rescue a log axis just because its *values* happen to sit
+    # on a 1e-6 lattice. The pitch itself is still wildly non-uniform
+    # (spans orders of magnitude), which no plausible quantum-based
+    # absolute tolerance should paper over.
+    x, y = _mesh(np.round(np.logspace(0.0, 2.0, 20), 6), np.linspace(0.0, 5.0, 10))
+    assert detect_regular_grid(x, y) is None
+
+
+def test_rejects_genuinely_irregular_axis_beyond_quantization_bound() -> None:
+    # A coarse-pitch axis (median pitch 0.01, well above the 1e-6 coordinate
+    # quantum) with a deliberate, real pitch defect of 5e-5 -- 50x the
+    # coordinate quantum and 5e-3 relative to the pitch, i.e. far past both
+    # _SPACING_RTOL*pitch and any reasonable k*q absolute term. This is not
+    # instrument quantization noise, it's a genuinely irregular axis (e.g. a
+    # dropped/duplicated step), and must keep being rejected -- proves the
+    # fix didn't just widen the tolerance until everything passes.
+    xs = np.round(np.arange(21) * 0.01 + 40.0, 6)
+    xs[10:] += 5e-5  # a real, physical pitch jump partway through the axis
+    ys = np.linspace(0.0, 5.0, 10)
+    x, y = _mesh(xs, ys)
     assert detect_regular_grid(x, y) is None
 
 
