@@ -42,13 +42,16 @@ import {
   type CorrectionsRequest,
 } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
+import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { recomputeData } from "../lib/formula";
+import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { useRelink } from "./relink";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { datasetViewDefaults } from "./windows";
@@ -214,6 +217,24 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
         if (!ok) return;
       }
       if (ds.source) {
+        // PR I requirement 4: a workbook pasted from another instance/
+        // project (or one whose source drive is simply gone) may name a
+        // path this MACHINE can never read, no matter how many times the
+        // backend is asked. Probing first (only possible with a desktop
+        // bridge — see pathState's own "unknown, never guessed missing"
+        // doc) turns that into an honest "Source unavailable" + the LANDED
+        // P1.7 Relink Source path, instead of a raw backend import error
+        // that leaves the user nowhere to go. Anything short of a CONFIRMED
+        // "missing" (ok/offline/invalid/unknown, or no bridge at all —
+        // every existing browser-mode behavior) falls through to the
+        // ordinary reimport unchanged.
+        if (hasDesktopShell() && (await pathState(ds.source.path)) === "missing") {
+          const msg = `source unavailable — "${ds.name}" (${ds.source.path})`;
+          get().setStatus(msg);
+          toast(msg, "danger");
+          useRelink.getState().openPanel({ oldRoot: parentDirectory(ds.source.path) });
+          return;
+        }
         await runReimport(set, get, ds, () => importFile(ds.source!.path));
         return;
       }

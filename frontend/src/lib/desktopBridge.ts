@@ -249,13 +249,39 @@ export async function readProject(path: string): Promise<OpenProjectResult | nul
   }
 }
 
+/** Native "Save As" dialog ONLY — no write. Split out of `saveProjectAs`
+ *  below (P2, adversarial review) for a caller that must insert a check
+ *  BETWEEN the destination pick and the actual write — "a fresh native
+ *  dialog is a deliberate destination pick" is not automatically a SAFE
+ *  one (store/workspaceIO.ts's `runSaveWorkspaceToFile` uses this to refuse
+ *  overwriting a path another LIVE instance holds the project lock for,
+ *  before ever calling `saveProjectTo`). Same null/`CANCELLED` semantics as
+ *  every other dialog method here: `null` = no usable bridge, `CANCELLED` =
+ *  the user backed out. Requires BOTH `save_file_dialog` AND
+ *  `write_project_file` to exist — the latter is what the caller will use
+ *  next — so a caller is never handed a destination it then has no bridge
+ *  method to write to. */
+export async function pickSaveDestination(suggestedName: string): Promise<string | Cancelled | null> {
+  const bridge = api();
+  if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
+  try {
+    const dialogOut = await bridge.save_file_dialog(suggestedName);
+    return str(dialogOut.path) ?? CANCELLED;
+  } catch {
+    return null;
+  }
+}
+
 /** Native "Save As" dialog, then an in-process write of `contents` to the
  *  chosen path (quantized/desktop_bridge.py's `save_file_dialog` +
  *  `write_project_file`). `null` = no usable bridge OR the write itself
  *  failed after a real pick (fall back to the browser download — the
  *  content is not lost, just not landed at a native path); `CANCELLED` = the
  *  user backed out of the save dialog — do nothing, never fall back to a
- *  download the user did not ask for. */
+ *  download the user did not ask for. A plain "dialog then write" combo for
+ *  a caller with no reason to check anything between the two steps; a
+ *  caller that DOES (store/workspaceIO.ts's lock-aware Save As) uses
+ *  `pickSaveDestination` + `saveProjectTo` instead. */
 export async function saveProjectAs(
   suggestedName: string,
   contents: string,

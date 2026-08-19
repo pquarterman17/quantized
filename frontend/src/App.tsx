@@ -21,6 +21,7 @@ import {
 } from "./lib/libraryViewPrefs";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
+import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
@@ -62,6 +63,7 @@ export default function App() {
   // Restore the autosaved library on startup + debounce-save workspace changes
   // (extracted — component-ceiling ratchet).
   useWorkspaceAutosave();
+  useProjectLockHeartbeat();
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──
   // The app is a single-page view with no in-app navigation, so a "back"

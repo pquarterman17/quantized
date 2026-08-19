@@ -3,7 +3,12 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-08-10 (plan-hygiene reconciliation: tier-section items
+**Updated:** 2026-08-19 (Day-5 sprint reconciliation, QA lane): J4 was still
+`[ ]` though PRIMARY P1.5 shipped its exact acceptance criteria on
+2026-08-18 (merged `440b0cb`) — flipped to `[x]` with evidence at the item.
+J1 and J2 were already accurately tracked (`[~]` and `[ ]` respectively,
+matching PRIMARY P1.4's own state and the still-unlanded J2/worksheet-UI
+work) and needed no correction. Prior: 2026-08-10 (plan-hygiene reconciliation: tier-section items
 3/6/7/8/9/10/11/12/13/14 — J3, J6, J7, J8, J9, J10, J11, J12, J17, and the
 Module-size follow-ups — were struck "SHIPPED (see Completed)" in their own
 text but the tier-section copies were never deleted; removed as duplicates,
@@ -244,10 +249,20 @@ replacements and its priority case is now stronger, not different.
    provenance recorded; mapping saveable/reapplicable. Includes plain
    find-replace over text cells.
 
-4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
+4. **[x] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
    the Group well, editable after Send, parity across
-   Stage/export/reopen.
+   Stage/export/reopen. **Day-5 reconciliation (2026-08-19):** PRIMARY P1.5
+   shipped this slice 2026-08-18 (`claude/p15-live-grouping`, merged
+   `440b0cb`) — `store/useApp.ts`'s `groupKey` field, `lib/plotGroupSplit.ts`,
+   and a regression test literally titled "does NOT show a preview-only
+   toast anymore" (`useGraphBuilder.test.ts:453`) confirm the exact gap this
+   row named ("series-split by group is preview-only in v1") is closed: the
+   Group well is a durable live binding now, editable after Send, surviving
+   undo/redo/close/reopen/export (P1.5's own checkboxes). P1.5 itself stays
+   `[~]` for two items outside J4's acceptance text — statistical/scientific
+   faceting and Data Filter/Tabulate/Stat Stage wiring — see that section in
+   `PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
 
 5. **[x] J5 — Grouped-plot mark completion.** COMPLETE 2026-07-29:
    items 1–3 (deterministic-jitter raw points, mean ± 95% t-CI marker,

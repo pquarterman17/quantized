@@ -3,7 +3,20 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-13 latest (second child plan registered:
+**Updated:** 2026-08-19 latest (Day-5 sprint reconciliation, QA lane): P1.1,
+P1.2, and P1.5 had shipped partial slices (2026-08-17/18) with no `[~]`
+status tag in their section headers, unlike P1.4/P1.6/P1.7 — added the tag
+to all three for consistency; flipped two stale P1.2 boxes to `[x]`
+("recovered work does not overwrite without consent" — `RecoveryChoiceDialog`
++ `applyRecoveryChoice.ts` already gate every named-project overwrite behind
+an explicit three-way choice; "define embedded versus linked portability" —
+P1.7's `lib/projectPortability.ts` already defines all three modes). No
+overclaim found in P1.1/P1.2/P1.4/P1.5/P1.6/P1.7's own per-box text — each
+narrows its claim inline already (a discipline this plan already practices
+well); the corrections here are status-tag/checkbox omissions, not content
+fixes. Full list, the release-blocker list, and the N verdict are in
+`plans/RELEASE_BLOCKERS.md` and `plans/LIBRARY_WORKBOOK_UX_PLAN.md`'s item
+14. Prior: 2026-08-13 (second child plan registered:
 `LIBRARY_WORKBOOK_UX_PLAN.md`, ChatGPT-Sol's 2026-08-12 Library / workbook /
 Quick Plot UX discovery from an owner interview — decisions L0.1–L0.14
 recorded, LQ.1 confirmed 2026-08-13, NO implementation authorized yet.
@@ -90,7 +103,15 @@ Primary-software readiness is **not yet proven**. The largest risks are:
 1. No completed real switch-trigger project and no owner sign-off on the
    Origin screenshot matrix (currently 0/353 owner-reviewed).
 2. No unified native Tauri lifecycle for real paths, named Save/Save As,
-   workspace recents, atomic recovery, and network/offline paths.
+   workspace recents, atomic recovery, and network/offline paths. **Day-5
+   reconciliation note (2026-08-19):** this verdict predates the P1.1/P1.2
+   slices — the shipped bridge uses pywebview (`desktop_bridge.py`,
+   matching CLAUDE.md's actual stack), not Tauri, and named Save/Save As,
+   recents, atomic write-validate-replace, bounded autosave generations, and
+   a consent-gated recovery dialog are now real (see P1.1 `[~]`/P1.2 `[~]`
+   below for the itemized, still-partial state). Packaged Windows/macOS E2E
+   and long-Unicode/network-path behavior remain unverified — that part of
+   this risk item still stands.
 3. Saved graph templates capture style, not a complete reusable plot recipe.
 4. Preserved text and metadata are not uniformly first-class Group/Facet/X
    channels.
@@ -411,7 +432,7 @@ complete**. Gate A determines their evidence-based order and exact scope.
 Agents implement them afterward; the owner is needed again only for the
 acceptance journeys explicitly named by the gates.
 
-### P1.1 — Native desktop file and project bridge
+### P1.1 — Native desktop file and project bridge [~]
 
 **Goal:** native Open, re-import, Save/Save As, recents, working directories,
 and safe missing/offline path handling in packaged Tauri.
@@ -427,11 +448,15 @@ the existing remote-IPC security boundary must remain.
   `desktop_bridge.py`'s `open_project_file`/`read_project_file`,
   `desktopBridge.ts`'s `openProject`; pywebview only. Datasets already had
   this via `pick_files` — MAIN_PLAN #31 — this ships it for **projects**.)
-- [ ] Save/Save As chooses and retains a project identity. Save AS ships
+- [x] Save/Save As chooses and retains a project identity. Save AS shipped
   this slice (`saveProjectAs` — native dialog, real path, direct write);
   project IDENTITY (open path + dirty-state tracking, so a plain "Save"
-  exists as distinct from "Save As") is **P1.2's** — `saveProjectTo` exists
-  in the frontend contract for it but nothing calls it from a UI command yet.
+  exists as distinct from "Save As") was **P1.2's** to wire up, and it did:
+  **Day-5 reconciliation (2026-08-19):** this box read "nothing calls
+  [`saveProjectTo`] from a UI command yet," but P1.2 (2026-08-18,
+  `store/workspaceIO.ts:138`) wires Ctrl/Cmd+S to it via `store/project.ts`'s
+  identity+dirty slice, with no dialog on the known path. Verified with a
+  grep of `frontend/src` for `saveProjectTo` call sites — flipped to `[x]`.
 - [ ] Re-import uses its path and distinguishes offline from deletion.
   Datasets already had this (MAIN_PLAN #31, `pathState`/`path_status`).
   Projects get the same distinction this slice, reused verbatim
@@ -470,7 +495,7 @@ the existing remote-IPC security boundary must remain.
   `desktop_bridge.py`'s docstring (different consent story, cross-process
   IPC rather than in-process js_api).
 
-### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace [~]
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -508,9 +533,23 @@ weigh chunked/binary arrays for large members with that number in hand.
   Cancel — with SOURCE+TIME for both candidates — ONLY when the autosave is
   newer than the last-known named project; otherwise the pre-P1.2 silent
   restore is unchanged, since there is nothing named to protect.)
-- [ ] Recovered work does not overwrite without explicit consent.
+- [x] Recovered work does not overwrite without explicit consent. **Day-5
+  reconciliation (2026-08-19):** `RecoveryChoiceDialog`/
+  `lib/applyRecoveryChoice.ts` (landed with the 2026-08-18 items above) gate
+  every recovery behind an explicit Recover autosave / Keep last project /
+  Cancel choice with source+time shown — narrowly, only when there IS a
+  named project the autosave is newer than; with nothing named to protect,
+  the pre-P1.2 silent restore is unchanged (stated in this section's own
+  "Current evidence" text above), which is not a consent gap since nothing
+  named could be overwritten in that case.
 - [ ] Missing sources remain relinkable, metadata-rich placeholders.
-- [ ] Define embedded versus linked portability.
+- [x] Define embedded versus linked portability. **Day-5 reconciliation
+  (2026-08-19):** shipped under P1.7 slice 1, not this item —
+  `lib/projectPortability.ts`'s `ProjectPortabilityMode = "embedded" |
+  "linked" | "portable"` defines all three with full rationale; only
+  "embedded" is implemented, "linked"/"portable" are named and deferred to a
+  P1.7 follow-up (see that section). The definition itself — this box's
+  actual ask — is done.
 - [ ] Add workspace version/migration tests.
 - [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
 - [ ] Kill-process/interrupted-write and old-version round trips pass.
@@ -690,7 +729,7 @@ output, not a caught error).
   byte_identical` and the full existing suite passing unmodified (`uv run
   pytest -m golden`: 155 passed, 0 failed, same as pre-slice).
 
-### P1.5 — Live Graph Builder grouping parity
+### P1.5 — Live Graph Builder grouping parity [~]
 
 **Goal:** Group/Facet must match and remain editable across preview, Stage,
 Figure Builder, workspace, and export.
