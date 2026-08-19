@@ -43,6 +43,7 @@ function emptyWorkspace(): LoadedWorkspace {
     workbookLastChild: {},
     expandedWorkbookIds: [],
     collections: [],
+    visibleDetailsColumns: [],
   };
 }
 

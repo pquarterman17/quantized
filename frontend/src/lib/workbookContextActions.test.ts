@@ -15,6 +15,7 @@ import type { Dataset } from "./types";
 import type { WorkbookNode } from "./workbooks";
 import { useApp } from "../store/useApp";
 import { useQuickPlotWithDialog } from "../store/quickPlotWithDialog";
+import { useCombineDialog } from "../store/combineDialog";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
@@ -381,6 +382,14 @@ describe("workbook.quickPlotWith (PR H, L0.37)", () => {
   });
 });
 
+describe("workbook.combine (LIBRARY_WORKBOOK_UX_PLAN PR J slice 2, L0.32-L0.34)", () => {
+  it("seeds the Combine dialog with this workbook's own id", () => {
+    useCombineDialog.getState().close();
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    menuItemFor(find("workbook.combine"), target(wb, [])).run();
+    expect(useCombineDialog.getState().seed).toEqual({ workbookIds: ["w1"], worksheetIds: [] });
+  });
+});
 // PR I: Copy/Duplicate (L0.23/L0.36 — these two now have a contract; Paste
 // stays a folder/root-target command, not a per-workbook menu row, see
 // commands/workbookTransferCommands.ts).

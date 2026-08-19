@@ -806,6 +806,14 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // already in HistorySnapshot), same class as splitDialogTargetId above.
   separatePreview: "Separate-worksheet affected-item preview; transient dialog state, discarded on commit/cancel, not an undoable edit",
 
+  // libraryDetailsColumns slice (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2,
+  // L0.56): the Details view's selected metadata columns. Persists in
+  // `.dwk` (PR E2/E's own `expandedWorkbookIds`/`librarySelection` precedent
+  // right above — persisted view state is not the same as undoable) — a
+  // column visibility toggle should never eat a Ctrl+Z step meant for an
+  // actual data edit.
+  visibleDetailsColumns: "Details view selected metadata columns; persisted view state (PR L slice 2), not an undoable edit",
+
   // toolwindows slice: window geometry (separate from persistent layout in plotWindows)
   toolWindowLayout: "transient tool window positions (unclear if persists, mark for review)",
 

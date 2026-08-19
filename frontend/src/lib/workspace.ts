@@ -36,6 +36,7 @@ import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeCollections, type Collection } from "./collections";
+import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyComputedColumnsExtras, serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
@@ -55,20 +56,17 @@ import type {
 } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
-// v2 (project-organization plan item 2): adds the folder tree, active/selection,
-// and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
-// mode, per-dataset fit specs, and reports; later also smart folders (org #9),
-// the plot window layout (MULTI_PLOT_PLAN item 7), and the ToolWindow layout
-// registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed.
-// v4 (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds the workbook layer confirmed by
-// L0.1 (folder -> workbook -> worksheet/figure/analysis/note) — `workbooks[]`
-// plus per-dataset `workbookId`. A v1-v3 doc has neither field; parseWorkspace
-// derives them the same way it already migrates folders/pipeline/etc. — ONE
-// parse path for every version (lib/workbooks.ts's `deriveWorkbooks`/
-// `reconcileWorkbookRefs`, ported verbatim from PR A1). See that call site
-// below for the exact per-version behavior, including the v1 `group`-string
-// case (deliberate — see workspace.workbooks.test.ts for the pinned test).
-// Older docs still load — migrated on parse with safe defaults.
+// v2 (project-organization plan item 2): adds the folder tree, active/selection, and folder-expansion.
+// v3 (gap #5): adds the typed pipeline steps, the recalc mode, per-dataset fit specs, and reports;
+// later also smart folders (org #9), the plot window layout (MULTI_PLOT_PLAN item 7), and the
+// ToolWindow layout registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed. v4
+// (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds the workbook layer confirmed by L0.1 (folder -> workbook ->
+// worksheet/figure/analysis/note) — `workbooks[]` plus per-dataset `workbookId`. A v1-v3 doc has
+// neither field; parseWorkspace derives them the same way it already migrates folders/pipeline/etc. —
+// ONE parse path for every version (lib/workbooks.ts's `deriveWorkbooks`/`reconcileWorkbookRefs`,
+// ported verbatim from PR A1) — see that call site below for the exact per-version behavior, including
+// the v1 `group`-string case (deliberate — see workspace.workbooks.test.ts for the pinned test). Older
+// docs still load — migrated on parse with safe defaults.
 export const WORKSPACE_VERSION = 4;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
@@ -123,6 +121,7 @@ export interface WorkspaceState {
   expandedWorkbookIds?: string[];
   /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
   collections?: Collection[];
+  visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -159,6 +158,7 @@ export interface LoadedWorkspace {
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
   collections: Collection[]; // PR L — always populated
+  visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
 }
 
 interface WorkspaceDoc {
@@ -191,6 +191,7 @@ interface WorkspaceDoc {
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
   collections: Collection[];
+  visibleDetailsColumns: LibraryDetailsColumnKey[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -235,6 +236,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     workbookLastChild: ws.workbookLastChild ?? {},
     expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
     collections: ws.collections ?? [],
+    visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -584,6 +586,7 @@ export function parseWorkspace(
     workbookLastChild,
     expandedWorkbookIds,
     collections,
+    visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
   };
 }
 

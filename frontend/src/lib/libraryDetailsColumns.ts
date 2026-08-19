@@ -34,3 +34,26 @@ export const LIBRARY_DETAILS_COLUMNS: readonly LibraryDetailsColumnDef[] = [
 export function defaultVisibleDetailsColumns(): Set<LibraryDetailsColumnKey> {
   return new Set(LIBRARY_DETAILS_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
 }
+
+/** Same default set as `defaultVisibleDetailsColumns`, as an ORDERED array —
+ *  the shape `.dwk` persistence (lib/workspace.ts) and the store round-trip,
+ *  since a `Set`'s iteration order isn't a contract worth leaning on across a
+ *  JSON boundary. */
+export function defaultVisibleDetailsColumnKeys(): LibraryDetailsColumnKey[] {
+  return LIBRARY_DETAILS_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key);
+}
+
+const KNOWN_COLUMN_KEYS = new Set<string>(LIBRARY_DETAILS_COLUMNS.map((c) => c.key));
+
+/** PR L slice 2 (L0.56's "persist the Details column selection"): sanitize a
+ *  `.dwk`-loaded column list the same defensive way `sanitizeCollections`/
+ *  `sanitizeSmartFolders` treat their own arrays — drop anything that isn't a
+ *  recognized column key (a hand-edited doc, or a key retired since the doc
+ *  was saved), never throw. `undefined`/malformed input (an older doc, or one
+ *  with no field at all) falls back to today's seven-column default so an
+ *  existing session's table renders unchanged. */
+export function sanitizeVisibleDetailsColumns(value: unknown): LibraryDetailsColumnKey[] {
+  if (!Array.isArray(value)) return defaultVisibleDetailsColumnKeys();
+  const kept = value.filter((v): v is LibraryDetailsColumnKey => typeof v === "string" && KNOWN_COLUMN_KEYS.has(v));
+  return kept;
+}
