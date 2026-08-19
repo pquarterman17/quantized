@@ -1267,7 +1267,37 @@ build, and focused interaction coverage where appropriate.
     not reached into. Booked home: `desktop_bridge.py`'s next slice, "PR I2
     filesystem lock provider" — `LockProvider`'s interface is exactly the
     seam that slice plugs into (`setProvider`); nothing else changes shape
-    when it lands.
+    when it lands. **Two-browser-tabs-one-backend, answered explicitly (P2,
+    adversarial review round, 2026-08-19):** this item's own booking asked
+    for that story to be defined — running `qz` (no `--desktop`) over HTTP,
+    two ordinary browser tabs against the SAME server get ZERO protection
+    today (every lock-machine call site is gated behind `hasDesktopShell()`
+    or a native-open identity, neither of which a browser tab has), so two
+    tabs can quick-save the same project and silently clobber each other —
+    the exact failure L0.47 exists to prevent for two desktop instances.
+    This is a SEPARATE gap from the filesystem-provider defer above, not
+    automatically closed by it: a filesystem-backed `LockProvider` shares a
+    record across OS PROCESSES, but two tabs in one browser share no
+    filesystem access at all. Booked as its own named home, "PR I2 cross-tab
+    lock provider" (an in-browser channel — `BroadcastChannel` or a
+    `localStorage` storage-event listener — backed by the same
+    `LockProvider` interface so the pure state machine stays the single
+    source of truth either way). See `store/projectLock.ts`'s module doc for
+    the identical record in code. **Booked, not built (adversarial review,
+    2026-08-19):** a PERSISTENT read-only status indicator (a status-bar/
+    title-bar chip that stays visible for the whole read-only session, not
+    just the one-shot toast `registerWithLockStateMachine` fires when a
+    read-only open resolves) — today the toast is the only signal, and it
+    fades; a user who missed it, or who is deep in a long editing session,
+    has no ambient way to notice they're read-only short of trying to save
+    and hitting the refusal. Named home: a small `Shell/`-chrome component
+    reading `useProjectLock`'s `status`/`canWriteNow` reactively, alongside
+    the existing project name/dirty-state display (store/project.ts's
+    header names that exact display as the precedent to extend). Not built
+    in this round because it's new UI surface under real bundle pressure
+    (867.7/883.9 kB at the time of this review, with more lanes still
+    landing) — the owner asked to measure the INTEGRATED build before any
+    more UI lands, not churn at freeze.
 10. [~] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
@@ -2120,6 +2150,46 @@ back to the owner. No Library implementation is authorized by this pause.
   run` green (see this session's own final tally); `npm run build` 867.7 kB
   eager (16.2 kB under the 883.9 kB budget); backend `pytest -q` and `ruff
   check src tests` green (no backend files touched by this slice).
+- **2026-08-19 — Review round (adversarial verdict SOUND-WITH-FIXES), same
+  commit range as the entry above:** the reviewer independently
+  re-enumerated every id-bearing field in PR I and found nothing missed,
+  probed the round trip for real (computed columns, `derivedFrom`, `cat_levels`,
+  `downstreamOf`), and confirmed the missing-vs-offline reimport distinction
+  is real wiring — PR I shipped clean. Four PR I2 fixes: **P1**
+  (`lib/lockState.ts`'s "very next write attempt is refused" claim was true
+  only for the periodic ~30s heartbeat, not the actual write path) —
+  `store/workspaceIO.ts`'s `runSaveWorkspace` now re-verifies against a
+  FRESH provider read immediately before `saveProjectTo`, making the claim
+  true for the one write path that exists, and the module doc was corrected
+  to name exactly which callers enforce it. **P2a** (Save As could silently
+  overwrite a path another LIVE instance holds) — `desktopBridge.ts`'s
+  `saveProjectAs` split into `pickSaveDestination` (dialog only) +
+  `saveProjectTo` (write) so `runSaveWorkspaceToFile` can refuse between the
+  two when the resolved destination is live-locked; a stale/unheld
+  destination still proceeds. **P2b** (the two-browser-tabs-one-backend
+  story the item's own booking asked for was still undefined) — stated
+  explicitly in `store/projectLock.ts`'s module doc and this item's own
+  entry above: browser/multi-tab mode is ungated today, a SEPARATE gap from
+  the filesystem-provider defer, booked as its own "PR I2 cross-tab lock
+  provider" home. **P3** (a synchronous/async ordering gap in
+  `lib/openWorkspaceReplace.ts` let `useApp.currentProject.path` name the
+  new project while `useProjectLock.path` still named the old one for a
+  window save gates could observe and skip) — `reserveLockForSwitch` now
+  points the lock machine at the new path SYNCHRONOUSLY, before
+  `setCurrentProject`, with a conservative read-only placeholder status
+  resolved to the real one once the async check completes; releasing the
+  prior lock moved off the `releaseLock` action (which reads live state,
+  now already overwritten) onto a captured snapshot + direct
+  `provider.clear`. Booked without building: a persistent read-only status
+  indicator, and `buildTransferPackage`'s materialize-then-size-check order
+  (both documented above and in-code, deferred for bundle-pressure/warranted-
+  need reasons respectively). Red-first for all four, each with a genuine
+  pre-fix failing run quoted in the session transcript (not synthetic
+  mutations) plus one mutation check each on the two most safety-critical
+  (P1's fresh re-verification, confirmed exactly one test catches its
+  removal). Gate: `tsc --noEmit` clean; `eslint --max-warnings=0` clean on
+  every touched file; full `vitest run` green; `npm run build` budget green
+  (exact post-fix numbers in the session's own final report).
 - **2026-08-17 — Claude, PR H implementation checkpoint (pending review):**
   Quick Plot template persistence, scopes, and matching. `lib/quickPlotTemplates.ts`
   (H1 template object + `sanitizeQuickPlotTemplates`; H4 pure `resolveTemplate`

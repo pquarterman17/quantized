@@ -116,7 +116,23 @@ export const WORKBOOK_TRANSFER_VERSION = 1;
  *  documented hard cap, but a very large string risks browser-specific
  *  slowdown or failure with no good error surface to report through, so this
  *  refuses cleanly, in advance, with the actual size named — rather than
- *  attempting a multi-MB clipboard write and finding out. */
+ *  attempting a multi-MB clipboard write and finding out.
+ *
+ *  DOCUMENTED TRADEOFF (booked, not built — adversarial review, 2026-08-19):
+ *  `buildTransferPackage`/`parseTransferPackage` below materialize the FULL
+ *  JSON string (`JSON.stringify`) BEFORE comparing its length against this
+ *  bound, so an oversize workbook is briefly fully in memory (both the
+ *  object graph and its serialized text) at the moment it gets refused,
+ *  rather than the check short-circuiting mid-serialize. Accepted because
+ *  the worst case is still BOUNDED — one attempt costs at most one package's
+ *  worth of memory, never unbounded growth — and because "serialize fully,
+ *  then gate on the real byte count" is the SAME pattern `lib/workspace.ts`'s
+ *  `serializeWorkspace` already uses for the whole-project `.dwk` save (no
+ *  streaming/incremental size check exists anywhere else in this codebase
+ *  either). A streaming/early-abort serializer would need its own design
+ *  (which nested arrays to size-check first, whether an early abort can
+ *  still produce a useful "how much over" number) and is not warranted
+ *  until a real workbook is observed to actually approach this bound. */
 export const MAX_TRANSFER_PACKAGE_CHARS = 8_000_000;
 
 export interface WorkbookTransferPackage {

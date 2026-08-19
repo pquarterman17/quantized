@@ -45,6 +45,33 @@
 // is not weakened, duplicated, or reached into by this slice at all — the
 // in-memory provider below never calls into it, and the booked filesystem
 // provider's OWN future write must go through the real module unmodified.
+//
+// TWO-BROWSER-TABS-ONE-BACKEND — STATED EXPLICITLY, NOT SILENTLY GAPPED
+// (P2, adversarial review, 2026-08-19; this was the platform-boundary
+// question item 9b's own booking asked to be answered, and the first
+// version of this slice answered only the `qz --desktop` process-pair half
+// of it). Running `qz` (no `--desktop`) serves the API + SPA over HTTP;
+// nothing stops opening the SAME project in two ordinary browser TABS
+// against that one server. Today that pair gets ZERO protection from this
+// module: `hasDesktopShell()` gates every call site that would register
+// with the lock machine at all (`store/workspaceIO.ts`'s `runSaveWorkspace`
+// short-circuits to Save-As before ever reaching the lock check;
+// `lib/openWorkspaceReplace.ts`'s `registerWithLockStateMachine` only fires
+// on a `native` identity, which a browser tab never has), so two tabs can
+// quick-save the same project and silently clobber each other exactly the
+// way L0.47 exists to prevent for two DESKTOP instances. This is not the
+// same gap as the booked filesystem-provider defer above and is NOT
+// automatically fixed by it: a filesystem-backed `LockProvider` gives two
+// separate OS PROCESSES a shared record, but two tabs in the SAME browser
+// share no filesystem access at all — closing this gap needs a different
+// mechanism entirely (an in-browser cross-tab channel, e.g.
+// `BroadcastChannel`/a `localStorage` "storage" event listener, backed by
+// the SAME `LockProvider` interface so `classifyLock`/`takeOver`/
+// `verifyBeforeWrite` stay the single source of truth either way). Booked
+// alongside the filesystem provider as a SECOND, SEPARATE named home:
+// "PR I2 cross-tab lock provider" — until it lands, browser/multi-tab mode
+// is honestly ungated, and this paragraph is the record of that, not a
+// promise the code doesn't keep.
 
 import { create } from "zustand";
 

@@ -116,4 +116,61 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
     expect(store.has("/p/b.dwk")).toBe(true);
     expect(useProjectLock.getState().path).toBe("/p/b.dwk");
   });
+
+  // P3 (adversarial review, 2026-08-19): `setCurrentProject` inside
+  // `replaceWorkspace` is SYNCHRONOUS, but the old `registerWithLockStateMachine`
+  // only pointed `useProjectLock.path` at the new project INSIDE an async
+  // IIFE — so there was a real window, observable with zero `await`, where
+  // `useApp.currentProject.path` already named the new project while
+  // `useProjectLock.path` still named the old one (or nothing at all). Any
+  // save gate that compares the two (`lock.path === project.path`) sees a
+  // manufactured mismatch and skips its own check entirely — ungated.
+  it("closes the ungated micro-window: useProjectLock.path already matches the new project the INSTANT currentProject flips, no await needed (P3)", () => {
+    const s = () => useApp.getState();
+    replaceWorkspace(s, emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    // Deliberately NO await above — these assertions run in the exact
+    // micro-window a same-tick Ctrl+S could land in.
+    expect(s().currentProject?.path).toBe("/p/demo.dwk");
+    expect(useProjectLock.getState().path).toBe("/p/demo.dwk");
+    // Conservative-by-default placeholder: a write is refused until the
+    // real check resolves, never silently allowed through the gap.
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+
+  it("the placeholder resolves to the real, accurate status once the async check completes", async () => {
+    const s = () => useApp.getState();
+    replaceWorkspace(s, emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    await new Promise((r) => setTimeout(r, 0));
+    // An unlocked project settles to genuinely writable, not stuck on the
+    // conservative placeholder forever.
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+
+  it("still releases the OLD project's lock across a switch even though the placeholder now occupies `path` first (P3 regression guard)", async () => {
+    const store = new Map<string, { instanceId: string; acquiredAt: number; heartbeatAt: number }>();
+    useProjectLock.setState({
+      provider: {
+        read: async (p) => store.get(p) ?? null,
+        write: async (p, r) => {
+          store.set(p, r);
+          return true;
+        },
+        clear: async (p) => {
+          store.delete(p);
+          return true;
+        },
+      },
+    });
+    const s = () => useApp.getState();
+    replaceWorkspace(s, emptyWorkspace(), { name: "a.dwk", path: "/p/a.dwk" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.has("/p/a.dwk")).toBe(true);
+
+    replaceWorkspace(s, emptyWorkspace(), { name: "b.dwk", path: "/p/b.dwk" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(store.has("/p/a.dwk")).toBe(false); // still released, not stranded by the placeholder
+    expect(store.has("/p/b.dwk")).toBe(true);
+  });
 });

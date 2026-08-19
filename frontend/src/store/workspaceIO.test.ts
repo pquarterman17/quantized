@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveBlob } from "../lib/download";
 import type { DataStruct } from "../lib/types";
+import type { LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
+import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
@@ -33,11 +35,39 @@ const data: DataStruct = {
   metadata: {},
 };
 
+/** A fresh, genuinely path-keyed in-memory lock provider — the same shape
+ *  store/projectLock.ts's own real default uses (unlike a fixed-record fake,
+ *  this correctly reports "unlocked" for any path nothing was ever written
+ *  to). Reset every test so a lock scenario one test sets up can never leak
+ *  into the next (P2 review round: an earlier fixed-record fake here DID
+ *  leak and corrupted unrelated tests' `openProject` results). */
+function freshLockProvider(): LockProvider {
+  const store = new Map<string, LockRecord>();
+  return {
+    read: async (path) => store.get(path) ?? null,
+    write: async (path, record) => {
+      store.set(path, record);
+      return true;
+    },
+    clear: async (path) => {
+      store.delete(path);
+      return true;
+    },
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   setShell(null);
   localStorage.clear();
   useRecentProjects.setState({ recentProjects: [] });
+  useProjectLock.setState({
+    status: "unlocked",
+    record: null,
+    path: null,
+    openedAsCopy: false,
+    provider: freshLockProvider(),
+  });
   useApp.setState({
     datasets: [{ id: "a", name: "a.dat", data }],
     activeId: "a",
@@ -124,6 +154,79 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     setShell({});
     await useApp.getState().saveWorkspaceToFile();
     expect(saveBlob).toHaveBeenCalledTimes(1);
+  });
+
+  // P2 (adversarial review, 2026-08-19): "a fresh native dialog is a
+  // deliberate destination pick" is not automatically a SAFE one — nothing
+  // previously checked that the picked destination isn't the very path
+  // another LIVE instance holds the write lock for. A read-only session
+  // could Save As, navigate back to the original .dwk, and silently
+  // overwrite it.
+  it("refuses to overwrite a destination another LIVE instance holds the lock for — never writes, never downloads", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/locked.dwk" }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/locked.dwk" }),
+      write_project_file: write,
+    });
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({
+      status: "held-by-other-live",
+      path: "/proj/locked.dwk",
+      openedAsCopy: false,
+      provider: {
+        read: async () => ({ instanceId: "intruder", acquiredAt: 1, heartbeatAt: Date.now() }),
+        write: async () => true,
+        clear: async () => true,
+      },
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled(); // a refusal, not a failure — no surprise download either
+    expect(useApp.getState().status).toMatch(/refused|another instance/i);
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  it("Save As onto a DIFFERENT, unheld destination still works normally", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/elsewhere.dwk" }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/elsewhere.dwk" }),
+      write_project_file: write,
+    });
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({
+      status: "held-by-other-live",
+      path: "/proj/locked.dwk", // a DIFFERENT path than the one just picked
+      openedAsCopy: false,
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledWith("/proj/elsewhere.dwk", expect.any(String));
+  });
+
+  it("Save As onto a path with only a STALE other holder still proceeds (not blocked, per the P2 ruling)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/stale.dwk" }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/stale.dwk" }),
+      write_project_file: write,
+    });
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({
+      status: "held-by-other-stale",
+      path: "/proj/stale.dwk",
+      openedAsCopy: false,
+      provider: {
+        read: async () => ({ instanceId: "long-gone", acquiredAt: 1, heartbeatAt: 1 }), // ancient heartbeat
+        write: async () => true,
+        clear: async () => true,
+      },
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledWith("/proj/stale.dwk", expect.any(String));
   });
 });
 
@@ -243,10 +346,48 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
     setShell({ save_file_dialog: vi.fn(), write_project_file: write });
     useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
     const { useProjectLock } = await import("./projectLock");
-    useProjectLock.setState({ status: "held-by-me", path: "/proj/workspace.dwk", openedAsCopy: false });
+    // Genuinely acquire (not just poke the cached `status` field) — this
+    // writes a real record into the provider naming THIS instance, which
+    // the fresh re-verification below (P1) actually reads back.
+    await useProjectLock.getState().openProject("/proj/workspace.dwk");
+    expect(useProjectLock.getState().status).toBe("held-by-me");
 
     await useApp.getState().saveWorkspace();
 
     expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String));
+  });
+
+  // P1 (adversarial review, 2026-08-19): the CACHED `status` field above is
+  // only refreshed by the ~30s heartbeat tick (store/projectLock.ts's
+  // `heartbeat`) — it can be stale. The actual guarantee runSaveWorkspace's
+  // own doc claims ("the very next write attempt is refused") requires a
+  // FRESH provider read immediately before the write itself, not a cached
+  // flag. This is the case the pre-fix test suite never exercised: cached
+  // status still says "held-by-me" while the provider's record has ALREADY
+  // been overwritten by another instance underneath this one.
+  it("re-verifies against a FRESH provider read immediately before writing — refuses even though the cached status still says held-by-me (P1)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    const { useProjectLock } = await import("./projectLock");
+    await useProjectLock.getState().openProject("/proj/workspace.dwk"); // genuinely held-by-me
+
+    // Simulate a takeover from an OUTSIDE process — a direct provider write,
+    // bypassing every action on this store (the same simulation
+    // store/projectLock.test.ts's heartbeat tests already use).
+    const provider = useProjectLock.getState().provider;
+    await provider.write("/proj/workspace.dwk", {
+      instanceId: "intruder",
+      acquiredAt: Date.now(),
+      heartbeatAt: Date.now(),
+    });
+    // The cached field is untouched by that direct provider write — this IS
+    // the stale-cache condition the fix must catch.
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/refused|another instance/i);
   });
 });

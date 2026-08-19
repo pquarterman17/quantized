@@ -32,15 +32,23 @@
 // first later resumes, BOTH could believe they hold the lock. This module's
 // answer is not to make the heuristic never wrong (impossible without a true
 // process-liveness check this pure module cannot perform) but to make being
-// wrong SAFE: `verifyBeforeWrite` is the second check every write-intending
-// caller must pass — the moment the original holder's own next heartbeat
-// attempt (or write) observes that the lock record no longer names its own
-// `instanceId`, it has definitively lost the lock and must demote itself to
-// read-only rather than trust its own earlier belief that it still held it.
-// A stale-takeover false positive can cause a brief window of two instances
-// both BELIEVING they can write; it can never cause two instances that both
-// successfully commit a write the other doesn't know about, because the
-// resumed original's very next write attempt is refused by this check.
+// wrong SAFE: `verifyBeforeWrite` is a check that CAN close the window, but
+// it only does so where a caller actually calls it against a FRESH provider
+// read taken immediately before a write commits. Two real callers exist
+// today: `store/projectLock.ts`'s `heartbeat()` (periodic — every
+// `HEARTBEAT_INTERVAL_MS`, ~30 s) and `store/workspaceIO.ts`'s
+// `runSaveWorkspace` (per-write — a fresh provider read taken right before
+// `saveProjectTo`, not the store's cached `status`). The per-write call is
+// what actually makes "the resumed original's very next SAVE is refused"
+// true; the periodic heartbeat call is a courtesy that demotes a stale
+// session's UI/status even between explicit writes, and is the ONLY
+// enforcement for any write path that does not itself re-verify (there is
+// exactly one such write path in this codebase today, `runSaveWorkspace`,
+// and it re-verifies — see its own doc). A future write path that skips
+// calling `verifyBeforeWrite` against a fresh read immediately before it
+// writes gets NO protection from this module beyond the cached `status`
+// the periodic heartbeat maintains — that gap is on the write path's own
+// author, not a guarantee this module can make on their behalf.
 
 export interface LockRecord {
   /** Opaque id unique to one running Quantized process (a session/tab, not
