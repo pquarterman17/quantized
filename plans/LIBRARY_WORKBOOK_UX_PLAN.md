@@ -1,10 +1,15 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5's automated
-hardening (including the canonical-state review) is complete — only the
-release-candidate human visual acceptance pass remains
+**Status:** Active — milestone 1 (A-G) complete; milestone 2/3 in progress:
+H shipped and reviewed, J/K/L each have slice 1 landed (K also has slice 2),
+M slice 1 landed, N deferred with evidence (see item 14), I/I2 not started
 **Created:** 2026-08-12  
-**Updated:** 2026-08-17 — Claude completed the G5 canonical-state review,
+**Updated:** 2026-08-19 — Day-5 sprint reconciliation (QA lane): corrected H
+(`[~]`→`[x]`, merged+reviewed since 2026-08-17), M (`[ ]`→`[~]`, slice 1
+landed 2026-08-18 as PR #179 was never reflected here), two derived-data
+integrity requirements flipped to `[x]` with evidence, the stale L1.4 booking
+note closed, and a BUILD/DEFER evidence verdict added to the N entry. Prior:
+2026-08-17 — Claude completed the G5 canonical-state review,
 correcting an independent reviewer's merge-blocking overclaim flag on the
 prior lifecycle-proof slice's `[x]`; see the PR G / G5 entries and the
 change-log for the full record
@@ -360,8 +365,17 @@ as a CSS-only tree redesign.
   derived worksheets, and analyses with a clear explanation. (PR K slices
   1-2: `lib/recalc.ts`'s `wouldCreateCycle`, wired into addFormula/
   updateFormula, applyCorrections' bgRef, and createDerivedWorksheet.)
-- [ ] Mark stale/error states without replacing the last valid output.
-- [ ] Preview the effect of deleting or moving a dependency before committing.
+- [x] Mark stale/error states without replacing the last valid output.
+  **Day-5 reconciliation (2026-08-19):** `Dataset.formulaErrors`
+  (`store/useApp.ts:155-163`, K5b) marks a failing formula column visibly
+  while `recomputeData` keeps the last valid values; K5c stale-marks a
+  `derivedFrom` worksheet without synchronously recomputing it
+  (`downstreamOf`'s generalization, PR K slice 1).
+- [x] Preview the effect of deleting or moving a dependency before
+  committing. **Day-5 reconciliation (2026-08-19):** delete preview is
+  `lib/dependencyImpact.ts` (PR M slice 1, merged `ab3861a`); move preview
+  is `lib/workbookSeparate.ts`'s `computeSeparatePlan` (PR J slice 1, merged
+  `abbf0ae`) — both build the affected-item list before the user commits.
 - [ ] Preserve formulas, pipeline parameters, units, exclusions, and provenance
   through project save/load and workbook copy/paste.
 - [ ] Keep recalculation deterministic and auditable; never hide an automatic
@@ -500,12 +514,19 @@ Library presentation without changing organization or duplicating objects.
     switching cancellation remains E-c.
 - [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
-  - [ ] Booking (2026-08-15 retrospective audit): artifact-row context menus
-    and registry Delete actions (the "later PR (L0.39/L0.40)" promised at
-    the consume-only Delete sites in LibraryTree.tsx/LibraryDetails.tsx)
-    have no owning slice — assign at the next kickoff (candidates: D2 while
-    it touches Details rows, or E's shared-action pass). Until assigned,
-    those sites correctly consume the keystroke and do nothing.
+  - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
+    reconciliation (2026-08-19):** artifact-row context menus and registry
+    Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
+    `c07b136`, see item 5's E-b2 entry above) assigned and shipped it —
+    `LibraryTree.tsx` and `LibraryDetails.tsx` both import
+    `buildArtifactMenu`/`deleteArtifactConfirmed` from
+    `artifactContextActions.ts` (grepped both files, 2026-08-19: `LibraryTree
+    .tsx`'s keyboard handler at line ~223 is commented "Artifact rows
+    (E-b2): Delete routes through the SAME registry action";
+    `LibraryDetails.tsx` line ~307 likewise). The consume-only no-op sites
+    this booking described no longer exist. L1.4's BROADER claim (full
+    rename/move/drag-drop parity across all three views) remains unverified
+    and this parent checkbox stays open for that reason alone.
 - [x] **L1.5 Wide tile surface design:** produced thorough mockups and confirmed
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
@@ -1051,8 +1072,14 @@ build, and focused interaction coverage where appropriate.
        `frontend/src/store/quickFigureReimport.test.ts`). G5's remaining
        line is unchanged: the release-candidate human visual acceptance
        pass noted above.
-8. [~] **PR H — template persistence and scopes.** Save named mappings/styles
-   with explicit scope and safe mismatch behavior. Implemented-pending-review
+8. [x] **PR H — template persistence and scopes.** Save named mappings/styles
+   with explicit scope and safe mismatch behavior. **Day-5 reconciliation
+   correction (2026-08-19):** this line read `[~]` "implemented-pending-review"
+   even though PR H merged to `main` as PR #171 (`55f723e`, 2026-08-17) and its
+   review round (the orphan-template bug, documented in this item's own
+   "Review round (2026-08-18)" bullet below) is already closed — `git log
+   --oneline main` shows both `55f723e` and the follow-up fix `2749c2c`.
+   Corrected to `[x]`; no further H work is open. Shipped
    (2026-08-17): `lib/quickPlotTemplates.ts` (H1 object + sanitizer, H4
    `resolveTemplate`), `store/quickPlotTemplates.ts` (H3 CRUD +
    apply-delegation), the `.dwk` `quickPlotTemplates` field
@@ -1358,10 +1385,38 @@ build, and focused interaction coverage where appropriate.
     view metadata UI, tags, Collections store/persistence only — workbook
     combine/split (Lane E-J), derived worksheets/computedColumns
     (Lane D2), and the Import Wizard (Lane C) untouched.
-13. [ ] **PR M — dependency-aware reimport and deletion.** Add previews,
+13. [~] **PR M — dependency-aware reimport and deletion.** Add previews,
     transactional propagation, stale analysis state, Trash dependency review,
-    and freeze/materialize recovery from L0.45 and L0.55. **Booked finding
-    (G5 canonical-state review, 2026-08-17):** a shape-changing reimport
+    and freeze/materialize recovery from L0.45 and L0.55. **Day-5
+    reconciliation correction (2026-08-19):** this item was still marked `[ ]`
+    with no slice recorded, but slice 1 merged as PR #179 (`ab3861a`,
+    2026-08-18) — `git log` shows it on `main`. **Slice 1 — impact preview +
+    confirm gating (merged):** `lib/dependencyImpact.ts`'s
+    `computeDependencyImpact`/`formatDependencyImpact` (pure, built on K's
+    `downstreamOf` graph) computes the affected-dataset/affected-fit closure
+    for BOTH reimport (`store/reimport.ts`) and delete
+    (`lib/workbookContextActions.ts`), and both confirm dialogs now name the
+    dependents before the user commits. This ALSO lifted L0.45's blocking
+    condition: `store/workbookActions.ts`'s `workbookDeleteBlockers` was
+    changed from unconditional-disable (PR #139 round 3) to always-`null`
+    (`workbookActions.ts:27`, comment "LIFTED by PR M") — workbook Delete is
+    now enabled, sends members to the SAME single-dataset Trash
+    (`removeDatasetsPatch`) under one history entry, and the confirm dialog
+    states the grouping-loss consequence explicitly (L0.45's "never break a
+    dependency silently" satisfied by disclosure, not by a second
+    workbook-aware Trash format — deliberately, see that file's header). The
+    same commit also closes the "Booked finding (PR H review round,
+    2026-08-18)" below: `deleteWorkbook` now calls
+    `pruneDanglingWorkbookScopeTemplates` in the SAME atomic update, so a
+    workbook's own Quick Plot templates are pruned on actual deletion, not
+    just at load time. **Still NOT built (narrowing the claim, not the
+    scope):** L0.33's transactional multi-source "Reimport All" (grepped
+    `frontend/src` for `reimportAll`/`ReimportAll` — no hits); the full Trash
+    dependency-review UI offering restore/delete-dependent/freeze-materialize
+    as distinct choices (today's UI is preview-then-confirm-then-Trash only);
+    one-session Undo spanning a multi-source reimport transaction. These stay
+    open under PR M. **Booked finding (G5 canonical-state review, 2026-08-17,
+    STILL OPEN):** a shape-changing reimport
     resets a FigureDocument's `bindings.xKey/yKeys/y2Keys/errors` (and every
     channel-indexed `plot.view` field) to the safe null/empty sentinel, but
     deliberately leaves `bindings.groupKey`/`facetKey` untouched
@@ -1389,6 +1444,75 @@ build, and focused interaction coverage where appropriate.
 14. [ ] **PR N — managed large-data sidecars.** Add threshold policy,
     explicit externalization, missing/offline recovery, **Relink Data...**, and
     portable **Pack Project...** from L0.54.
+
+    **Day-5 evidence verdict (2026-08-19, QA lane reconciliation): DEFER WITH
+    EVIDENCE.** The sprint plan gates N on existing large-data evidence
+    (`ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md`: "N ships only if existing
+    large-data evidence justifies it; otherwise its evidence-backed defer is
+    the correct closure"). The evidence in hand does not justify building it
+    this sprint:
+
+    - **The numbers, quoted from `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P0.4**
+      (measured 2026-07-26, `be40a69`): a large `.dwk` with a 1M-row member
+      plus derived data/figures/results is **188 MB**, serializes in
+      **641 ms**, and autosaves successfully with a full integrity round
+      trip — writing is not the problem. Reopening it **freezes the main
+      thread 5.8 s in synchronous `JSON.parse`**. At the ordinary scale N
+      would otherwise target — 50+ datasets, 20+ plot windows — P1.2's own
+      measurement is 13 ms serialize / 3.6 MB file / 194 ms restore / ~17 ms
+      autosave, and P0.4 explicitly answered "compressed containers/chunked
+      binary arrays only if required" as **NOT REQUIRED at that scale**
+      (P0.4 acceptance bullet, `PRIMARY_SOFTWARE_AUDIT_PLAN.md:361`). The
+      pain is concentrated in one large-member residual case, not the
+      common project shape.
+    - **P3.4 already investigated the SAME freeze mechanism and found parse
+      is not the dominant cost.** P3.4 slice 3 (also 2026-07-26, `481e0ea`)
+      shipped an off-main-thread worker parse for workspace open (with a
+      sync fallback) specifically to attack this freeze, and measured that
+      the wall-clock freeze **did not move** (~6.5 s A/B both ways) on its
+      own fixture because `JSON.parse` was only ~0.4-0.6 s of the total —
+      the dominant cost was render/mount, which slice 4 (staged restore,
+      time-to-first-paint 906→106 ms) and the later WeakMap-cache fix
+      (heavy window mount 6,066→~3,800 ms; restore freeze 5,604→~3,660 ms)
+      then substantially reduced. That is direct evidence the reopen-freeze
+      class of problem responds to **mount/render optimization**
+      (P3.4's territory, already shipping real wins) rather than to moving
+      bytes out of the project file into a managed external store
+      (N's mechanism) — the two plan sections are not measuring
+      contradictory things, but P3.4's fix path is already showing returns
+      where N's would be speculative.
+    - **A genuine evidence gap, disclosed rather than papered over:** no one
+      has re-measured the SPECIFIC 188 MB/1M-row-member `.dwk` reopen AFTER
+      P3.4's worker-parse + mount-cache fixes landed. The 5.8 s figure
+      predates those fixes. Building N now would be sizing a storage
+      architecture against a number that may already be smaller.
+    - **N's own nominal trigger (very large 2-D payloads, L0.54) doesn't
+      currently point at storage either.** P0.4's 2-D map measurements
+      (500²/1000²/2000² backend; 12-13 s / 52-59 s browser-side to
+      map-visible) are attributed to a named, DIFFERENT mechanism — full-input
+      re-triangulation per regrid — booked as a P2.8 class fix, not a
+      storage-format problem.
+    - **Deferring doesn't waste the sprint's investment.** P1.7 slice 1
+      (merged, `claude/p17-relink-portability`) already built the exact
+      primitives a future sidecar/Pack-Project mechanism would reuse:
+      checksum/mtime/size provenance probing, atomic dry-run-then-commit
+      relink, and cross-platform path matching. P1.7's own text says so
+      explicitly: "the raw-file-copying 'Pack Project' packer is explicitly
+      booked to PR-N territory" and "the relink machinery this slice ships
+      is exactly what a future packer would reuse." Nothing here needs to
+      be rebuilt when N is eventually picked up.
+
+    **What would flip this to BUILD N NOW:** either (a) a re-measurement of
+    the 188 MB/1M-row-member `.dwk` reopen taken AFTER the P3.4 mount/render
+    fixes, showing the freeze still exceeds a real usability threshold
+    (say, >2-3 s) with `JSON.parse` — not mount — as the dominant remaining
+    term, i.e. proof this specific number is actually a storage/parse
+    problem and not a mount problem in disguise; or (b) evidence from the
+    owner's OWN data (the still-outstanding P0.1 switch-trigger project) that
+    multi-hundred-MB `.dwk` files are the NORMAL case for her workflow, not a
+    synthetic 1M-row stress fixture — i.e., that this is a daily-driver
+    blocker rather than an edge case. Re-open this item the moment either
+    measurement exists; until then the defer stands.
 
 ## Agent and model routing
 
@@ -2077,6 +2201,31 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-08-19 — Claude (QA lane), Day-5 sprint reconciliation:** verified
+  every H-N checkbox against `main` (`git log`, direct file reads) rather
+  than the plan's own prose, per the sprint's Day-5 gate ("Reconcile the
+  H-N plan entries and every linked unchecked item"). Corrections made, each
+  cited at its own location above: PR H's checkbox was `[~]`
+  "implementation checkpoint (pending review)" though PR #171 merged and its
+  review round closed on 2026-08-17-18 — flipped to `[x]`. PR M's checkbox
+  was `[ ]` with no text at all though slice 1 merged as PR #179
+  (`ab3861a`, 2026-08-18) — flipped to `[~]` and given a full slice-1
+  summary, narrowing what remains (Reimport All, full Trash dependency
+  review, multi-source Undo) rather than claiming the whole item. Two
+  "Derived-data integrity requirements" boxes ("mark stale/error state",
+  "preview a dependency's removal before committing") were still `[ ]`
+  though K5b/K5c and M's `dependencyImpact.ts`/J's `computeSeparatePlan`
+  already satisfy them — flipped to `[x]`. The L1.4 "artifact-row context
+  menu" booking note from the 2026-08-15 retrospective audit was still
+  open though PR E-b2 (`c07b136`) closed it — marked closed with the
+  current grep evidence. No item was found overclaiming (marked `[x]` for
+  narrower-than-described work) in this pass; all corrections were
+  under-claims (stale `[ ]`/`[~]` left behind after real merges). Added a
+  BUILD/DEFER evidence verdict to the N entry (item 14): **DEFER WITH
+  EVIDENCE**, full reasoning and the flip condition there. See
+  `plans/RELEASE_BLOCKERS.md` for the sprint-wide release-blocker list this
+  reconciliation feeds.
 
 - **2026-08-16 — Claude (Fable):** PR #146 (E-a1 hardening) reviewed and
   merged (`98ea821`) under the owner's overnight handle-everything directive.
