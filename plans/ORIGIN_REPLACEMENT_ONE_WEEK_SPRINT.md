@@ -103,74 +103,109 @@ justifies it; otherwise its evidence-backed defer is the correct closure.
 Lanes B, C, F, and G are the schedule risks. They must begin with bounded contract PRs,
 not large implementations based on assumptions.
 
+## Reconciliation status (2026-08-19, orchestrator)
+
+**Days 0-5 are complete; Days 6-7 have not started.** The sprint reached
+feature freeze, not release. Recorded here because the checkboxes below were
+never ticked as work landed and the document read as though nothing had
+happened.
+
+Basis for a tick: a merged PR that delivers the item, adversarially reviewed
+by an agent other than its implementer, green on CI. That is the plan's own
+definition of done. Twenty lane PRs (#167-#186) landed this way; `main` tip
+`0ff2ff7` is green on all 13 checks.
+
+Three classes of item are deliberately NOT ticked:
+
+- **OWNER** — requires the owner at a real machine with real data. Cannot be
+  manufactured by an agent: the baseline preview build + 20-minute Quick
+  Figure smoke, the switch-trigger friction log, and Windows/macOS Office
+  copy/paste.
+- **SOL** — ChatGPT-Sol's wording/menu/preview/recovery review (Day 4).
+- **DEFERRED WITH EVIDENCE** — lane N (managed large-data sidecars). The
+  sprint's own rule gates N on existing large-data evidence justifying it;
+  the QA lane found it did not. See `LIBRARY_WORKBOOK_UX_PLAN.md` item 14.
+  This is the sanctioned closure for that lane, not hidden unfinished work.
+
+**Correction to the Day-5 release-blocker list.** Both items
+`RELEASE_BLOCKERS.md` filed as BLOCKER were already fixed on 2026-07-31,
+three weeks before the list was compiled; the list quotes their pre-fix
+measurements. P2.8's map regrid shipped as `231a1b8` (37.0 -> 1.24 s at 1M
+points, via `calc/_grid_detect.py`) and P3.4's payload decimation shipped as
+`d775100` (147.5 -> 3.5 MB at 1M x 7, via `calc/decimate.py`). The residuals
+those fixes explicitly left open are a separate, smaller question and are
+being measured on current `main` before anything is called a blocker.
+
 ## Merge sequence and daily gates
 
 ### Day 0 — baseline and dispatch (2026-08-17)
 
-- [ ] Merge G5 only after Claude's save/close/reopen/project-reload proof passes.
+- [x] Merge G5 only after Claude's save/close/reopen/project-reload proof passes. **(#160.)**
 - [ ] Tag or record the baseline preview build and run the owner’s 20-minute
-  Quick Figure smoke workflow.
+  Quick Figure smoke workflow. **— OWNER, still open.**
 - [ ] Owner starts the real switch-trigger project/friction log and confirms
-  Windows/macOS Office copy/paste; agents cannot manufacture this evidence.
-- [ ] Create worktrees and publish pickup briefs for lanes A–G.
-- [ ] Opus freezes native project (P1.1/P1.2/P1.7), categorical/grouping
+  Windows/macOS Office copy/paste; agents cannot manufacture this evidence. **— OWNER, still open.**
+- [x] Create worktrees and publish pickup briefs for lanes A–G. **(lanes A-G worktrees + briefs published.)**
+- [x] Opus freezes native project (P1.1/P1.2/P1.7), categorical/grouping
   (P1.4/P1.5/P1.6), dependencies (K/M/J), transfer/locking (I/I2), and
-  project/sidecar references (N).
-- [ ] Record exact file ownership so concurrent lanes do not collide.
+  project/sidecar references (N). **(contracts frozen before implementation.)**
+- [x] Record exact file ownership so concurrent lanes do not collide. **(no two lanes owned the same files; `useApp.ts` was the one shared chokepoint and the orchestrator was its sole integrator.)**
 
 ### Day 1 — foundations
 
-- [ ] Lane A implements H storage, scopes, compatibility and corrupt-template
-  behavior as independently reviewable slices.
-- [ ] Lane B lands P1.1's native bridge contract and first Open/Save path.
-- [ ] Lane C lands P1.4's lossless categorical/metadata representation and
-  import round-trip tests.
-- [ ] Lane D lands K's acyclic dependency model and deterministic evaluation
-  tests before derived-workbook UI.
-- [ ] Lane E builds L metadata selection/edit primitives without waiting for
-  Collections polish.
-- [ ] Lanes F/G finish contract tests and schemas; implementation begins only
-  after adversarial review.
+- [x] Lane A implements H storage, scopes, compatibility and corrupt-template
+  behavior as independently reviewable slices. **(#171.)**
+- [x] Lane B lands P1.1's native bridge contract and first Open/Save path. **(#169.)**
+- [x] Lane C lands P1.4's lossless categorical/metadata representation and
+  import round-trip tests. **(#173.)**
+- [x] Lane D lands K's acyclic dependency model and deterministic evaluation
+  tests before derived-workbook UI. **(#172.)**
+- [x] Lane E builds L metadata selection/edit primitives without waiting for
+  Collections polish. **(#176.)**
+- [x] Lanes F/G finish contract tests and schemas; implementation begins only
+  after adversarial review. **(F: #184. G: contract work concluded in the evidence-backed defer below.)**
 - **Gate:** no unresolved schema ambiguity enters Day 2 silently.
 
 ### Day 2 — first user-visible integrations
 
-- [ ] Merge H after Quick Plot With / mismatch / no-auto-overwrite browser proof.
-- [ ] Complete P1.2 named atomic save/recovery on the P1.1 bridge; begin P1.7.
-- [ ] Complete P1.6 import role assignment and begin P1.5 grouping on P1.4.
-- [ ] Complete K derived worksheet + Freeze Copy happy path.
-- [ ] Complete L batch metadata + basic project-local Collections.
-- [ ] Begin J combine/split against the frozen dependency contract.
-- [ ] I package round-trip and I2 lock-state machine pass pure tests.
+- [x] Merge H after Quick Plot With / mismatch / no-auto-overwrite browser proof. **(#171.)**
+- [x] Complete P1.2 named atomic save/recovery on the P1.1 bridge; begin P1.7. **(#180; P1.7 begun.)**
+- [x] Complete P1.6 import role assignment and begin P1.5 grouping on P1.4. **(#177; P1.5 begun.)**
+- [x] Complete K derived worksheet + Freeze Copy happy path. **(#175.)**
+- [x] Complete L batch metadata + basic project-local Collections. **(#176.)**
+- [x] Begin J combine/split against the frozen dependency contract. **(#174.)**
+- [x] I package round-trip and I2 lock-state machine pass pure tests. **(#184.)**
 - **Gate:** nightly integrated build and owner 30-minute smoke test.
 
 ### Day 3 — structural and destructive workflows
 
-- [ ] Merge K and L if green; rebase J and M immediately.
-- [ ] Merge P1.4/P1.6 and P1.1/P1.2 foundations; rebase all consumers.
-- [ ] Complete J collision-safe combine/split and multi-source provenance.
-- [ ] Complete M impact preview and atomic reimport/delete transaction core.
-- [ ] Complete I small-package cross-instance round trip with fresh-ID rewrite.
-- [ ] N atomic sidecar write/read/checksum and unavailable-vs-deleted states pass.
+- [x] Merge K and L if green; rebase J and M immediately. **(#172/#175/#176 merged; J and M rebased.)**
+- [x] Merge P1.4/P1.6 and P1.1/P1.2 foundations; rebase all consumers. **(#173/#177 and #169/#180 merged; consumers rebased.)**
+- [x] Complete J collision-safe combine/split and multi-source provenance. **(#174, #185, #186.)**
+- [x] Complete M impact preview and atomic reimport/delete transaction core. **(#179.)**
+- [x] Complete I small-package cross-instance round trip with fresh-ID rewrite. **(#184.)**
+- [ ] N atomic sidecar write/read/checksum and unavailable-vs-deleted states pass. **— DEFERRED WITH EVIDENCE** (see `LIBRARY_WORKBOOK_UX_PLAN.md` item 14; the sprint rule "N ships only if existing large-data evidence justifies it" was applied, and the evidence did not justify it).
 - **Gate:** failure injection is mandatory; happy-path-only PRs do not merge.
 
 ### Day 4 — platform and recovery
 
-- [ ] Finish I bounded large transfer cleanup and incompatible/expired handling.
-- [ ] Finish I2 read-only second open, Open as Copy, and guarded Take Over.
-- [ ] Finish M stale/frozen/dependent recovery and one-session Undo behavior.
-- [ ] Finish N Relink Data, cleanup limits, and portable Pack Project.
-- [ ] Finish P1.7 Relink/portability and P1.5 live grouping/facet behavior.
-- [ ] ChatGPT-Sol reviews wording, menus, previews and recovery affordances.
+- [x] Finish I bounded large transfer cleanup and incompatible/expired handling. **(#184.)**
+- [x] Finish I2 read-only second open, Open as Copy, and guarded Take Over. **(#184.)**
+- [x] Finish M stale/frozen/dependent recovery and one-session Undo behavior. **(#179.)**
+- [ ] Finish N Relink Data, cleanup limits, and portable Pack Project. **— DEFERRED WITH EVIDENCE**, same closure as the Day-3 N row.
+- [x] Finish P1.7 Relink/portability and P1.5 live grouping/facet behavior. **(#181 / #182.)**
+- [ ] ChatGPT-Sol reviews wording, menus, previews and recovery affordances. **— SOL, still open.**
 - **Gate:** Windows and macOS paths are required; Ubuntu is best-effort.
 
 ### Day 5 — feature freeze
 
-- [ ] Merge remaining feature PRs in dependency order: P1.1 → P1.2 → P1.7;
-  P1.4 → P1.6/P1.5; G5 → H/P1.3; K → J/L → M; then N → I/I2.
-- [ ] Run full frontend/backend/unit/E2E suites plus architecture and bundle pins.
-- [ ] Reconcile H–N plan entries and every linked unchecked item.
-- [ ] Create one release-blocker list; everything else moves to post-sprint.
+- [x] Merge remaining feature PRs in dependency order: P1.1 → P1.2 → P1.7;
+  P1.4 → P1.6/P1.5; G5 → H/P1.3; K → J/L → M; then N → I/I2. **(all 20 lane
+  PRs #167-#186 merged in dependency order; N deferred, so I/I2 landed on the
+  frozen project schema directly.)**
+- [x] Run full frontend/backend/unit/E2E suites plus architecture and bundle pins. **(13/13 green on `main` tip `0ff2ff7`: CI matrix, frontend x2, E2E, CodeQL x4. Bundle pin held at 878.2 kB against the 883.9 kB budget.)**
+- [x] Reconcile H–N plan entries and every linked unchecked item. **(#183.)**
+- [x] Create one release-blocker list; everything else moves to post-sprint. **(`plans/RELEASE_BLOCKERS.md`; corrected 2026-08-19 — see the reconciliation status block above.)**
 - **Gate:** no new features after this point.
 
 ### Day 6 — stabilization
