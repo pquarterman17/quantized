@@ -4,10 +4,89 @@
 // general 500-line ceiling), the same way lib/exportFigureCommand.ts
 // already carries a command's body out of the curated command list.
 
+import { canRelease, type LockRecord } from "../lib/lockState";
 import { stageWorkspaceRestore } from "../store/windowHydration";
+import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
+import { toast } from "../store/toasts";
 import type { StoreGet } from "./exportActive";
 import type { LoadedWorkspace } from "./workspace";
+
+/** Snapshot of the lock this instance held BEFORE a project switch —
+ *  captured by `reserveLockForSwitch` synchronously, before that function
+ *  overwrites `useProjectLock`'s live `path`/`record`, so the async release
+ *  step in `registerWithLockStateMachine` still knows what (if anything) to
+ *  release even though the live store no longer reflects it. */
+interface PriorLock {
+  path: string | null;
+  record: LockRecord | null;
+  instanceId: string;
+  provider: LockProvider;
+}
+
+/** P3 (adversarial review, 2026-08-19) — the SYNCHRONOUS half of PR I2's
+ *  registration, called BEFORE `setCurrentProject` (never after): reserves
+ *  `useProjectLock.path` at the NEW project's path immediately, with a
+ *  conservative read-only PLACEHOLDER status, so there is NO window where
+ *  `useApp.currentProject.path` already names the new project while
+ *  `useProjectLock.path` still names the old one (or nothing). That window
+ *  used to exist because the old code pointed the lock machine at the new
+ *  path only inside an async IIFE, entirely AFTER `setCurrentProject` had
+ *  already run — any save gate comparing `lock.path === project.path`
+ *  during that gap saw a manufactured mismatch and skipped its own check
+ *  entirely, writing completely ungated. The placeholder status
+ *  (`"held-by-other-live"`, reused rather than adding a fifth `LockStatus`
+ *  just for this — it already means exactly "read-only, not yet writable"
+ *  everywhere `canWriteNow`/`isReadOnly` read it) is overwritten with the
+ *  REAL status the moment `openProject`'s async read resolves, in
+ *  `registerWithLockStateMachine` below; the only user-visible cost is a
+ *  possible spurious one-tick "read-only" refusal from a save that lands in
+ *  the now-milliseconds-wide gap, never a silent ungated write.
+ *
+ *  Returns the PRIOR lock (captured before being overwritten) for the async
+ *  continuation to release, or `null` when there is nothing to reserve
+ *  (`native` absent) or nothing to change (already tracking this exact
+ *  path — a same-path reopen needs neither a placeholder nor a release). */
+function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | null {
+  if (!native) return null;
+  const prev = useProjectLock.getState();
+  const prior: PriorLock = { path: prev.path, record: prev.record, instanceId: prev.instanceId, provider: prev.provider };
+  if (prev.path === native.path) return prior; // same project — nothing to reserve or release
+  useProjectLock.setState({ path: native.path, status: "held-by-other-live", record: null, openedAsCopy: false });
+  return prior;
+}
+
+/** PR I2 (L0.47): the ASYNC half — releases the prior project's lock (if
+ *  this instance genuinely held one, and it differs from the new path —
+ *  see `reserveLockForSwitch`'s doc for why switching projects must never
+ *  strand the old lock), then resolves the placeholder `reserveLockForSwitch`
+ *  set into the REAL status via `openProject`. Fire-and-forget relative to
+ *  the synchronous replace (this function's own callers already gate the
+ *  replace itself behind a confirm dialog; re-litigating "should this open
+ *  happen" against an async lock check would mean either blocking the whole
+ *  open on it, or building a second confirm surface — both deferred, see
+ *  store/projectLock.ts's header for the full booked scope). A toast
+ *  explains a read-only result with the two named next steps (Take Over
+ *  Editing / Open as Copy — commands/projectLockCommands.ts). `openProject`
+ *  itself never throws (see that module's own doc), so no `.catch` is
+ *  needed here; releasing goes straight through `prior.provider.clear`
+ *  (not the `releaseLock` action, which reads LIVE store state that
+ *  `reserveLockForSwitch` has already overwritten by the time this runs). */
+function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
+  if (!native || !prior) return;
+  void (async () => {
+    if (prior.path && prior.path !== native.path && canRelease(prior.record, prior.instanceId)) {
+      await prior.provider.clear(prior.path).catch(() => false);
+    }
+    const result = await useProjectLock.getState().openProject(native.path);
+    if (!result.readOnly) return;
+    const reason =
+      result.status === "held-by-other-stale"
+        ? "another (unresponsive) instance has this project open — Take Over Editing is available"
+        : "another instance has this project open for editing — opened read-only";
+    toast(`"${native.name}": ${reason}`, "info");
+  })();
+}
 
 /** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
  *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
@@ -24,8 +103,13 @@ import type { LoadedWorkspace } from "./workspace";
 export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace");
   s().loadWorkspace(ws);
+  // P3: reserve the lock machine's `path` at the NEW identity BEFORE
+  // `setCurrentProject` flips `useApp.currentProject` — see
+  // `reserveLockForSwitch`'s doc for why the ordering itself is the fix.
+  const priorLock = reserveLockForSwitch(native);
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+  registerWithLockStateMachine(native, priorLock);
 }
 
 /** "Open Without Layout…" (PR E2's safe-open) — same replace as
@@ -36,8 +120,10 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
 export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace without layout");
   s().loadWorkspace(ws, { skipLayout: true });
+  const priorLock = reserveLockForSwitch(native); // P3 — see replaceWorkspace's identical comment
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+  registerWithLockStateMachine(native, priorLock);
 }
 
 /** Whether the CURRENT session holds anything a workspace replace would

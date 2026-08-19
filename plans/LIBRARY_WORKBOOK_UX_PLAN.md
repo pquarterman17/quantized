@@ -398,25 +398,41 @@ as a CSS-only tree redesign.
 
 ### Cross-session workbook transfer requirements
 
-- [ ] Transfer worksheets/data, editable figures, analyses/derived results,
+- [x] Transfer worksheets/data, editable figures, analyses/derived results,
   notes, metadata, templates scoped to that workbook, and internal links as one
-  coherent bundle.
-- [ ] Generate fresh destination IDs and rewrite internal references so the
-  pasted workbook cannot mutate or collide with its source.
-- [ ] Preserve provenance and original source-path metadata without requiring
-  the source project to remain open.
-- [ ] Support Windows and macOS desktop instances. Use a versioned portable
+  coherent bundle. (PR I, `lib/workbookTransfer.ts`'s `buildTransferPackage`.
+  Legacy `FigureDoc`/multi-panel `PageDocument`s/`originFigures` deliberately
+  excluded — see PR I's plan-doc entry.)
+- [x] Generate fresh destination IDs and rewrite internal references so the
+  pasted workbook cannot mutate or collide with its source. (PR I,
+  `pasteTransferPackage` — unconditional fresh ids, mutation-tested.)
+- [x] Preserve provenance and original source-path metadata without requiring
+  the source project to remain open. (PR I — `Dataset.source` rides
+  untouched; unreachable sources get an honest "Source unavailable" +
+  Relink Source, not a raw import error, on Reimport.)
+- [x] Support Windows and macOS desktop instances. Use a versioned portable
   transfer format rather than assuming two processes share Zustand state.
-- [ ] Avoid placing an unbounded scientific payload directly on the system
+  (PR I — plain `format`/`version`-stamped JSON text; the transport is the
+  browser Clipboard API pywebview embeds identically on both platforms, no
+  OS-specific code path.)
+- [~] Avoid placing an unbounded scientific payload directly on the system
   clipboard. A robust implementation may use a small clipboard descriptor plus
   a guarded temporary transfer package for large workbooks, with expiry and
-  cleanup safeguards.
-- [ ] If the transfer package is unavailable or incompatible, explain the
-  failure and leave the destination unchanged.
-- [ ] Preserve normal text/file clipboard behavior; Quantized-specific Paste is
-  enabled only when a compatible workbook payload is present.
-- [ ] Add cross-process contract tests for ID remapping, internal links,
-  version compatibility, missing transfer packages, and cleanup.
+  cleanup safeguards. (PR I ships the BOUND — refuse above
+  `MAX_TRANSFER_PACKAGE_CHARS` with the size named — not the small-descriptor/
+  temp-package scheme; that file-based fallback is an explicit, booked defer,
+  see PR I's plan-doc entry for the write-consent reasoning.)
+- [x] If the transfer package is unavailable or incompatible, explain the
+  failure and leave the destination unchanged. (PR I — every refusal path
+  returns before `recordHistory`/`set`, tested.)
+- [x] Preserve normal text/file clipboard behavior; Quantized-specific Paste is
+  enabled only when a compatible workbook payload is present. (PR I —
+  `canPasteWorkbook`; no clipboard interception beyond the plain
+  `writeText`/`readText` calls every other clipboard feature already uses.)
+- [x] Add cross-process contract tests for ID remapping, internal links,
+  version compatibility, missing transfer packages, and cleanup. (PR I —
+  `lib/workbookTransfer.test.ts`/`store/workbookTransfer.test.ts`; "cleanup"
+  is N/A for the shipped clipboard-only transport, no temp files are created.)
 
 ## Template-matching contract (CONFIRMED 2026-08-13 — see L0.14)
 
@@ -1143,15 +1159,145 @@ build, and focused interaction coverage where appropriate.
      keeps inline rename/delete fully functional (L0.36: disabled with
      reason, never hidden). Pruning on an actual workbook DELETE is booked
      under PR M, not here — see that item's entry above.
-9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
-   bounded Copy/Paste package, fresh-ID rewrite, provenance, and failure-safe
-   cleanup contract from L0.23-L0.24.
-9b. [ ] **PR I2 — single-writer project locking.** Implement L0.47:
-    second-instance read-only open, **Open as Copy**, and guarded stale-lock
-    **Take Over Editing**. Requires the same platform-boundary answer as PR I
-    (backend `io/` + thin route on the served modes; define the two-browser-
-    tabs-one-backend story explicitly). (Booked 2026-08-14 — L0.47 previously
-    had no owning slice.)
+9. [x] **PR I — cross-instance workbook transfer (Claude Opus 5, worktree
+   agent, sprint Day-5, `claude/i-transfer-locking`).** Implemented the
+   versioned, bounded Copy/Paste package, fresh-ID rewrite, provenance, and
+   failure-safe cleanup contract from L0.23-L0.24. `lib/workbookTransfer.ts`
+   (pure): `buildTransferPackage` gathers a workbook's worksheets + the
+   editable figures/reports/quickPlotTemplates scoped to it (single-`datasetId`
+   membership, per PR J slice-1's own finding) into a `format`/`version`-
+   stamped `WorkbookTransferPackage`, BOUNDED at `MAX_TRANSFER_PACKAGE_CHARS`
+   (8,000,000 chars) with the size named in the refusal; `parseTransferPackage`
+   validates a package read back from text by wrapping it in a synthetic
+   single-workbook `.dwk` document and reusing `lib/workspace.ts`'s own
+   `parseWorkspace` sanitizers wholesale (DataStruct/bgRef/derivedFrom/
+   FigureDocument-version-skip/dsId-scoped filtering all come for free —
+   no parallel validator); `pasteTransferPackage` is the fresh-id-rewrite
+   core Paste and Duplicate both share — EVERY id (workbook, dataset, figure,
+   report, template) is reassigned unconditionally (never only on collision,
+   the deliberate divergence from `lib/workspaceMerge.ts`'s same-session
+   append policy — see that module's own header for why cross-process needs
+   the stronger rule), and every internal edge (`bgRef`/`derivedFrom`/
+   `versionOf`/figure+report `datasetId`/template `scope.workbookId`) is
+   rewritten through the resulting id map or dropped (never aliased) when it
+   points outside the pasted set. `store/workbookTransfer.ts` orchestrates:
+   `copyWorkbookToClipboard` (resolves pending worksheets, builds, writes via
+   `lib/clipboard.ts`'s `copyText`), `pasteWorkbookFromClipboard` (reads,
+   validates, builds the COMPLETE replacement arrays, THEN one
+   `recordHistory` + one `set()` — a refused paste never touches state),
+   `duplicateWorkbook` (same core, round-tripped through the identical
+   parse validation, lands in the source's own folder, "X copy" naming).
+   Composed into `useApp.ts` per the size-ratchet convention (one import
+   line, one extends-union word, one creator-spread line; pin unchanged at
+   2818). **Transport ruling (frozen-scope item 2):** clipboard-text only
+   (`navigator.clipboard.writeText`/`readText`, the same pair every other
+   clipboard feature in this app uses) — a file-based fallback for
+   oversize/unavailable-clipboard cases is EXPLICITLY DEFERRED (new
+   filesystem-write authority needs its own adversarially-reviewed contract
+   PR, the `grant_source_paths` precedent) and booked as `desktop_bridge.py`'s
+   next slice. **Provenance (requirement 4):** `Dataset.source` rides
+   untouched through the id rewrite; `reimportDataset` (`store/reimport.ts`)
+   now probes an unreachable source (`hasDesktopShell()` + `pathState`) and
+   reports "source unavailable" + opens the LANDED P1.7 `useRelink` panel
+   instead of surfacing a raw backend import error. **Deliberately NOT
+   carried** (documented scope, not a silent gap): legacy `FigureDoc`
+   (superseded by `editableFigures`), multi-panel `PageDocument`s (can span
+   several workbooks), `originFigures`/`originFidelity` (keyed to the
+   source project's own book layout). UI: Copy/Duplicate wired as workbook
+   context-menu rows (`lib/workbookContextActions.ts`); Paste as a
+   command-palette entry (`commands/workbookTransferCommands.ts`) targeting
+   the Library root — a folder-targeted Paste context-menu row is deferred
+   until this codebase grows a folder/root context-menu surface, the same
+   "expose a tested action contract, UI wiring is the next slice's job"
+   scoping PR J/K slice 1 already used (`pasteWorkbookFromClipboard` already
+   accepts `targetFolderId` for that follow-up). Red-first throughout,
+   including two mutation-tested pins (the unconditional-fresh-id collision
+   guarantee, and the build-fully-before-touching-history ordering).
+9b. [~] **PR I2 — single-writer project locking (Claude Opus 5, worktree
+    agent, sprint Day-5, `claude/i-transfer-locking`).** Implemented L0.47's
+    state machine and UX; the actual cross-process filesystem enforcement
+    is an honest, named defer (see below — this item's own booking already
+    flagged "requires the same platform-boundary answer as PR I", and that
+    boundary answer is what's deferred). `lib/lockState.ts` (pure): four
+    states (unlocked / held-by-me / held-by-other-live / held-by-other-stale),
+    staleness = heartbeat older than `STALE_AFTER_MS` (3× a 30s heartbeat
+    interval — documented false-positive risk: a suspended/paused instance
+    can look stale before it's actually gone; the safety net is
+    `verifyBeforeWrite`, re-checked on every heartbeat tick, which forces a
+    resumed original holder to detect a stale-takeover raced ahead of it and
+    demote to read-only rather than risk a silent concurrent write — pinned
+    by a dedicated "forces the resumed-holder race" test). `canTakeOver`
+    gates **Take Over Editing** to `held-by-other-stale` ONLY, enforced again
+    at the data level inside `takeOver` itself (never trusts a caller to have
+    checked it first) — mutation-tested. `store/projectLock.ts`: a standalone
+    store (ambient session state, never HistorySnapshot-tracked, zero
+    `useApp.ts` footprint) orchestrating an injectable `LockProvider`
+    (`read`/`write`/`clear`); `openProject` acquires directly when possible
+    else surfaces read-only + the takeover choice; `takeOverEditing`
+    re-verifies staleness against a FRESH read right before writing (a
+    preview-then-commit TOCTOU guard, mutation-tested); `openAsCopy` clears
+    `currentProject` without touching the original lock. Wired for real: a
+    genuine native workspace open (`lib/openWorkspaceReplace.ts`) registers
+    with the lock machine and releases any PREVIOUS project this same
+    instance held; the quick-save path (`store/workspaceIO.ts`'s
+    `runSaveWorkspace`) refuses when the lock is tracking the current
+    project's path and this instance isn't the allowed writer (Save As stays
+    ungated — a fresh native dialog is always a deliberate new destination);
+    `useProjectLockHeartbeat.ts` schedules the actual heartbeat interval
+    (App-level hook, mirrors `useWorkspaceAutosave.ts`'s "hook wires the
+    effect, store stays pure" split) so a healthy session never goes falsely
+    stale; **Take Over Editing**/**Open as Copy** ship as command-palette
+    entries (`commands/projectLockCommands.ts`) that refuse gracefully with
+    a reason when not applicable (this app's `Action` type has no `disabled`
+    field). **Consent ruling applied (frozen-scope item 8's explicit escape
+    hatch, taken deliberately):** the shipped `LockProvider` is IN-MEMORY,
+    process-local — it exercises the complete state machine in every
+    environment but is NOT genuinely cross-process (two separate `qz
+    --desktop` processes each get their own empty lock table). Making it
+    real needs a lock record that survives outside one process — a file
+    beside the project, written through the EXACT write-consent discipline
+    `desktop_bridge.py`'s `save_file_dialog`/`write_project_file` pair
+    already established (backend-verifiable, never caller-asserted). That is
+    new js_api surface (an `acquire_lock`/`refresh_lock`/`release_lock`
+    triple deriving a sibling `.qzlock` path from an ALREADY write-consented
+    project path — the same "derive from, don't invent, an existing consent"
+    shape the P1.7 `grant_source_paths` ruling used) which this slice's
+    budget does not allow to design and adversarially review responsibly.
+    `desktop_consent.py` itself is untouched — not weakened, not duplicated,
+    not reached into. Booked home: `desktop_bridge.py`'s next slice, "PR I2
+    filesystem lock provider" — `LockProvider`'s interface is exactly the
+    seam that slice plugs into (`setProvider`); nothing else changes shape
+    when it lands. **Two-browser-tabs-one-backend, answered explicitly (P2,
+    adversarial review round, 2026-08-19):** this item's own booking asked
+    for that story to be defined — running `qz` (no `--desktop`) over HTTP,
+    two ordinary browser tabs against the SAME server get ZERO protection
+    today (every lock-machine call site is gated behind `hasDesktopShell()`
+    or a native-open identity, neither of which a browser tab has), so two
+    tabs can quick-save the same project and silently clobber each other —
+    the exact failure L0.47 exists to prevent for two desktop instances.
+    This is a SEPARATE gap from the filesystem-provider defer above, not
+    automatically closed by it: a filesystem-backed `LockProvider` shares a
+    record across OS PROCESSES, but two tabs in one browser share no
+    filesystem access at all. Booked as its own named home, "PR I2 cross-tab
+    lock provider" (an in-browser channel — `BroadcastChannel` or a
+    `localStorage` storage-event listener — backed by the same
+    `LockProvider` interface so the pure state machine stays the single
+    source of truth either way). See `store/projectLock.ts`'s module doc for
+    the identical record in code. **Booked, not built (adversarial review,
+    2026-08-19):** a PERSISTENT read-only status indicator (a status-bar/
+    title-bar chip that stays visible for the whole read-only session, not
+    just the one-shot toast `registerWithLockStateMachine` fires when a
+    read-only open resolves) — today the toast is the only signal, and it
+    fades; a user who missed it, or who is deep in a long editing session,
+    has no ambient way to notice they're read-only short of trying to save
+    and hitting the refusal. Named home: a small `Shell/`-chrome component
+    reading `useProjectLock`'s `status`/`canWriteNow` reactively, alongside
+    the existing project name/dirty-state display (store/project.ts's
+    header names that exact display as the precedent to extend). Not built
+    in this round because it's new UI surface under real bundle pressure
+    (867.7/883.9 kB at the time of this review, with more lanes still
+    landing) — the owner asked to measure the INTEGRATED build before any
+    more UI lands, not churn at freeze.
 10. [~] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
@@ -1977,6 +2123,73 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **2026-08-19 — Claude Opus 5, PR I + PR I2 implementation (worktree agent,
+  sprint Day-5, `claude/i-transfer-locking`, pending review):** cross-instance
+  workbook transfer (L0.23/L0.24) and single-writer project locking (L0.47).
+  Full detail lives on items 9/9b above and the "Cross-session workbook
+  transfer requirements" checklist; summary: `lib/workbookTransfer.ts` (pure
+  build/parse/paste, unconditional fresh-id rewrite, `MAX_TRANSFER_PACKAGE_CHARS`
+  bound) + `store/workbookTransfer.ts` (clipboard-text Copy/Paste, Duplicate
+  sharing the same core) ship PR I complete against its frozen scope, with the
+  file-based-transport fallback and folder-targeted Paste context-menu row
+  both explicitly booked, not silently dropped. `lib/lockState.ts` (pure
+  four-state machine, staleness + false-positive safety net) +
+  `store/projectLock.ts` (injectable `LockProvider`, in-memory by default)
+  ship PR I2's state machine and UX (Take Over Editing / Open as Copy as
+  palette commands, quick-save gated, a real heartbeat scheduler) against the
+  frozen scope's own explicit escape hatch — the filesystem-backed
+  `LockProvider` making this genuinely cross-process is a named, reasoned
+  defer (`desktop_bridge.py`'s next slice), never invented ad hoc against
+  `desktop_consent.py`. Reimport now reports "Source unavailable" and opens
+  the LANDED P1.7 Relink Source panel for an unreachable source (requirement
+  4), rather than a raw backend error. Red-first throughout; the fresh-id
+  collision guarantee, the takeover TOCTOU re-verification, and the
+  false-positive write-safety-net were each mutation-tested (temporarily
+  broken, confirmed the test catches it, reverted). Gate: `tsc --noEmit`
+  clean; `eslint --max-warnings=0` clean on every touched file; full `vitest
+  run` green (see this session's own final tally); `npm run build` 867.7 kB
+  eager (16.2 kB under the 883.9 kB budget); backend `pytest -q` and `ruff
+  check src tests` green (no backend files touched by this slice).
+- **2026-08-19 — Review round (adversarial verdict SOUND-WITH-FIXES), same
+  commit range as the entry above:** the reviewer independently
+  re-enumerated every id-bearing field in PR I and found nothing missed,
+  probed the round trip for real (computed columns, `derivedFrom`, `cat_levels`,
+  `downstreamOf`), and confirmed the missing-vs-offline reimport distinction
+  is real wiring — PR I shipped clean. Four PR I2 fixes: **P1**
+  (`lib/lockState.ts`'s "very next write attempt is refused" claim was true
+  only for the periodic ~30s heartbeat, not the actual write path) —
+  `store/workspaceIO.ts`'s `runSaveWorkspace` now re-verifies against a
+  FRESH provider read immediately before `saveProjectTo`, making the claim
+  true for the one write path that exists, and the module doc was corrected
+  to name exactly which callers enforce it. **P2a** (Save As could silently
+  overwrite a path another LIVE instance holds) — `desktopBridge.ts`'s
+  `saveProjectAs` split into `pickSaveDestination` (dialog only) +
+  `saveProjectTo` (write) so `runSaveWorkspaceToFile` can refuse between the
+  two when the resolved destination is live-locked; a stale/unheld
+  destination still proceeds. **P2b** (the two-browser-tabs-one-backend
+  story the item's own booking asked for was still undefined) — stated
+  explicitly in `store/projectLock.ts`'s module doc and this item's own
+  entry above: browser/multi-tab mode is ungated today, a SEPARATE gap from
+  the filesystem-provider defer, booked as its own "PR I2 cross-tab lock
+  provider" home. **P3** (a synchronous/async ordering gap in
+  `lib/openWorkspaceReplace.ts` let `useApp.currentProject.path` name the
+  new project while `useProjectLock.path` still named the old one for a
+  window save gates could observe and skip) — `reserveLockForSwitch` now
+  points the lock machine at the new path SYNCHRONOUSLY, before
+  `setCurrentProject`, with a conservative read-only placeholder status
+  resolved to the real one once the async check completes; releasing the
+  prior lock moved off the `releaseLock` action (which reads live state,
+  now already overwritten) onto a captured snapshot + direct
+  `provider.clear`. Booked without building: a persistent read-only status
+  indicator, and `buildTransferPackage`'s materialize-then-size-check order
+  (both documented above and in-code, deferred for bundle-pressure/warranted-
+  need reasons respectively). Red-first for all four, each with a genuine
+  pre-fix failing run quoted in the session transcript (not synthetic
+  mutations) plus one mutation check each on the two most safety-critical
+  (P1's fresh re-verification, confirmed exactly one test catches its
+  removal). Gate: `tsc --noEmit` clean; `eslint --max-warnings=0` clean on
+  every touched file; full `vitest run` green; `npm run build` budget green
+  (exact post-fix numbers in the session's own final report).
 - **2026-08-17 — Claude, PR H implementation checkpoint (pending review):**
   Quick Plot template persistence, scopes, and matching. `lib/quickPlotTemplates.ts`
   (H1 template object + `sanitizeQuickPlotTemplates`; H4 pure `resolveTemplate`

@@ -380,3 +380,32 @@ describe("workbook.quickPlotWith (PR H, L0.37)", () => {
     });
   });
 });
+
+// PR I: Copy/Duplicate (L0.23/L0.36 — these two now have a contract; Paste
+// stays a folder/root-target command, not a per-workbook menu row, see
+// commands/workbookTransferCommands.ts).
+describe("Copy / Duplicate (PR I)", () => {
+  const wb: WorkbookNode = { id: "w1", name: "W" };
+
+  it("Copy calls copyWorkbookToClipboard for this workbook and is disabled with a reason when memberless", () => {
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ workbooks: [wb], datasets: [d1] });
+    const copyWorkbookToClipboard = vi.fn();
+    useApp.setState({ copyWorkbookToClipboard });
+    menuItemFor(find("workbook.copy"), target(wb, [d1])).run();
+    expect(copyWorkbookToClipboard).toHaveBeenCalledWith("w1");
+
+    expect(menuItemFor(find("workbook.copy"), target(wb, [])).disabled).toBe(true);
+  });
+
+  it("Duplicate calls duplicateWorkbook for this workbook and is disabled with a reason when memberless", () => {
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ workbooks: [wb], datasets: [d1] });
+    const duplicateWorkbook = vi.fn();
+    useApp.setState({ duplicateWorkbook });
+    menuItemFor(find("workbook.duplicate"), target(wb, [d1])).run();
+    expect(duplicateWorkbook).toHaveBeenCalledWith("w1");
+
+    expect(menuItemFor(find("workbook.duplicate"), target(wb, [])).disabled).toBe(true);
+  });
+});
