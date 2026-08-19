@@ -973,19 +973,36 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
   user leaves unassigned before it ever reaches `Dataset.errorRoles`).
 
-**Explicitly booked, NOT shipped this slice — named home P1.6b (worksheet
-categorical UI, no owner/slice assigned yet):** two items from the P1.4
-review rounds that belong to the WORKSHEET, not the Import Wizard, and did
-not fall out naturally from this slice's routes/store work: (1) the
-worksheet's C/O/N modeling-type visibility — `lib/modeling.ts`'s
-`channelModelingType` already defaults a categorical channel to "nominal",
-but no worksheet UI surfaces or lets a user CHANGE a column's C/O/N badge
-today; (2) `store/cellEdit.ts`'s `setCellValue`/`setCellBlock` writing a
-raw, unguarded number into a categorical cell — degrades safely at read
-time (P2-3/P3-1's ruling) but has no level-picker/Recode-and-extend UI.
-Both need a real worksheet-UI design pass (column-header type badge +
-editor, a cell-edit guard or suggestion), not a few lines bolted onto the
-wizard; P1.6b is the placeholder name until that gets its own plan entry.
+**P1.6b (worksheet categorical UI) — SHIPPED 2026-08-19 (Lane C2,
+`claude/j2-recode-worksheet`, same slice as JMP_GAP_PLAN's J2 Recode
+workshop — the two share `store/cellEdit.ts`/`lib/categorical.ts`, which is
+why one lane owned both):** the two items booked here, not shipped in the
+P1.4 review slice below —
+1. Worksheet C/O/N modeling-type visibility: `GridHeader.tsx` now shows a
+   per-column badge/select (`auto·C`/`auto·O`/`auto·N` or an explicit
+   override), wired to `setChannelType`. That action's signature widened to
+   take an EXPLICIT dataset id rather than `get().activeId` — the
+   worksheet's floating MDI window (GUI_INTERACTION #14) can browse a
+   NON-active dataset, so the old signature would have silently mutated
+   the wrong one the first time this control was used from there.
+2. `store/cellEdit.ts`'s categorical cell-edit guard: `setCellValue`/
+   `setCellBlock` now REFUSE (zero mutation, status message) a non-NaN
+   numeric write that isn't an existing level code for a categorical
+   column. RULING on the three named options (pick-existing / extend-the-
+   table / refuse) — all three are offered, at different layers: the new
+   `setCategoricalCell(id, row, col, label)` action is the level-aware
+   entry point the worksheet's cell editor calls with a TYPED LABEL (not a
+   code) — it picks an existing level case-insensitively, extends the
+   table with a genuinely new label (one undo entry, never implicit), or
+   clears to missing on blank input; the raw numeric path
+   (`setCellValue`/`setCellBlock`, used by paste/fill) REFUSES an
+   out-of-range/non-integer code instead, since a bare number gives no
+   signal whether it's a typo or a deliberate pre-coded paste. `GridRow.tsx`
+   displays the LEVEL LABEL (not the raw code) and edits via a level-picker
+   `<select>` (+ "Add new level…") instead of a free numeric input.
+   Gates: full `vitest run` 522 files / 7705 tests passed; bundle-size OK,
+   862.0 kB eager (21.9 kB under budget) — the Recode workshop itself is a
+   separate lazy chunk, not part of this cost.
 
 ### P1.7 — Project portability and source relinking [~]
 

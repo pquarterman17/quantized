@@ -3,7 +3,12 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-08-19 (Day-5 sprint reconciliation, QA lane): J4 was still
+**Updated:** 2026-08-19 (Lane C2, `claude/j2-recode-worksheet`): J2 —
+Recode workshop — SHIPPED; flipped `[ ]` → `[x]` at the item, with the
+same slice also closing PRIMARY P1.6b (worksheet C/O/N badge + categorical
+cell-edit guard). J1 stays `[~]` — recode riding on top of it does not by
+itself close J1's remaining open sub-item (user-settable level ORDER).
+Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): J4 was still
 `[ ]` though PRIMARY P1.5 shipped its exact acceptance criteria on
 2026-08-18 (merged `440b0cb`) — flipped to `[x]` with evidence at the item.
 J1 and J2 were already accurately tracked (`[~]` and `[ ]` respectively,
@@ -243,11 +248,28 @@ replacements and its priority case is now stronger, not different.
      construction, proven by the full pre-existing suite passing
      unmodified plus a dedicated byte-identical-when-absent test.
 
-2. **[ ] J2 — Recode workshop.** Merge/rename/bin levels of a
+2. **[x] J2 — Recode workshop.** Merge/rename/bin levels of a
    categorical column with live preview (old → new mapping table),
    producing a derived column (raw immutable), one undo entry,
    provenance recorded; mapping saveable/reapplicable. Includes plain
-   find-replace over text cells.
+   find-replace over text cells. **Shipped 2026-08-19 (Lane C2,
+   `claude/j2-recode-worksheet`):** `lib/recode.ts` (pure mapping math —
+   merge/rename/identity groups, `buildRecodePreview`'s live old→new table,
+   `mappingFromFindReplace`, `resolveRecodeMapping`'s all-or-nothing
+   refusal for a saved mapping reapplied to a mismatched column) +
+   `store/recode.ts` (the workshop's standalone store — the
+   `store/relink.ts` precedent, since `store/useApp.ts` sits close to its
+   size-ratchet pin) + `components/workshops/recode/`. A recode column is a
+   `ComputedColumn` with `.recode` set instead of a parsed `expr` —
+   `lib/formula.ts`'s `computeFormulas` branches on it — so it inherits the
+   existing computed-column machinery for free: appended (raw untouched),
+   auto-recomputed on every base-data edit, K3/K4 recalc-graph
+   participation, and channel-removal remapping. Saved mappings are
+   session-only (not yet `.dwk`-persisted — `lib/workspace.ts` had no
+   headroom under its own pin this slice; named deferral in
+   `store/recode.ts`'s header). Also ships PRIMARY P1.6b (the worksheet C/O/N
+   badge + the categorical cell-edit guard) in the same slice — see that
+   plan's entry.
 
 4. **[x] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
@@ -325,6 +347,17 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**J2 — Recode workshop**~~ (2026-08-19, Lane C2,
+  `claude/j2-recode-worksheet`) — merge/rename/bin categorical levels with
+  a live old→new preview table, a derived (non-destructive) column, one
+  undo entry, provenance, find-replace over level text, and a saveable/
+  reapplicable mapping with all-or-nothing refusal on mismatch. Same slice
+  ships PRIMARY P1.6b (worksheet C/O/N badge + categorical cell-edit
+  guard) — see PRIMARY_SOFTWARE_AUDIT_PLAN.md's entry for that half. Gates:
+  full `vitest run` 522 files / 7705 tests passed; `tsc`/`eslint --max-
+  warnings=0` clean; bundle-size OK, 862.0 kB eager (21.9 kB under the
+  883.9 kB budget) — the workshop panel is its own lazy chunk.
 
 - ~~**Residual wave: J8 UI, J10 export, J3 mosaic+band, J7 curve-fit By,
   Dixon verify**~~ (2026-07-31, merged `060c11c`) — one Sonnet agent, 5

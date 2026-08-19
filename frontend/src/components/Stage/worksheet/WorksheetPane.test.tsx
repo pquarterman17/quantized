@@ -7,6 +7,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
+import { useRecode } from "../../../store/recode";
 import { useApp } from "../../../store/useApp";
 import WorksheetPane from "./WorksheetPane";
 
@@ -65,6 +66,48 @@ describe("WorksheetPane window-scoped selection (GUI_INTERACTION #14)", () => {
     useApp.setState({ activeId: "full1" }); // even though its OWN dataset IS active
     const a = render(<WorksheetPane datasetId="full1" windowId="win-a" />);
     expect(within(a.container).queryByText(/Linked to plot/)).not.toBeInTheDocument();
+  });
+});
+
+// J2: the "Recode…" column context-menu entry (categorical columns only).
+describe("WorksheetPane column context menu — Recode entry (J2)", () => {
+  const withCategorical: Dataset = {
+    id: "cat1",
+    name: "grades.dat",
+    data: {
+      time: [0, 1],
+      values: [
+        [10, 0],
+        [20, 1],
+      ],
+      labels: ["Field", "Grade"],
+      units: ["Oe", ""],
+      metadata: {},
+      cat_levels: { 1: ["Pass", "Fail"] },
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [withCategorical], activeId: "cat1" });
+    useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "", savedMappings: [] });
+  });
+
+  const headerFor = (label: string) =>
+    screen.getAllByRole("columnheader").find((h) => h.textContent?.startsWith(label))!;
+
+  it("offers Recode… on a categorical column header, opening the workshop on that column", () => {
+    render(<WorksheetPane datasetId="cat1" />);
+    fireEvent.contextMenu(headerFor("Grade"));
+    fireEvent.click(screen.getByText("Recode…"));
+    expect(useRecode.getState().open).toBe(true);
+    expect(useRecode.getState().datasetId).toBe("cat1");
+    expect(useRecode.getState().channel).toBe(1);
+  });
+
+  it("offers no Recode… entry on a plain (non-categorical) column header", () => {
+    render(<WorksheetPane datasetId="cat1" />);
+    fireEvent.contextMenu(headerFor("Field"));
+    expect(screen.queryByText("Recode…")).not.toBeInTheDocument();
   });
 });
 

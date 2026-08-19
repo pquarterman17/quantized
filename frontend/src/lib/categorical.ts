@@ -40,14 +40,24 @@ export function categoricalLevels(ds: DataStruct, channel: number): string[] | n
   return isValidLevelList(list) ? list : null;
 }
 
+/** Same resolution `levelLabel` does, against an already-fetched level array
+ *  rather than a full DataStruct -- for a caller (the worksheet grid,
+ *  GridRow's categorical cell display/edit, P1.6b) that already has the
+ *  levels on hand and shouldn't reconstruct a lookup DataStruct just to call
+ *  the channel-indexed accessor below. Same "never throws, degrades to
+ *  null" contract. */
+export function labelForCode(levels: readonly string[], code: number): string | null {
+  if (!Number.isFinite(code) || !Number.isInteger(code)) return null;
+  return code >= 0 && code < levels.length ? levels[code] : null;
+}
+
 /** The level string for one numeric `code` (a cell value from
  *  `ds.values`), or `null` for a non-categorical channel, a non-finite code
  *  (NaN = missing), a non-integer code, or an out-of-range one -- never
  *  throws, so a caller can pass a raw cell value with no pre-check. */
 export function levelLabel(ds: DataStruct, channel: number, code: number): string | null {
   const levels = categoricalLevels(ds, channel);
-  if (!levels || !Number.isFinite(code) || !Number.isInteger(code)) return null;
-  return code >= 0 && code < levels.length ? levels[code] : null;
+  return levels ? labelForCode(levels, code) : null;
 }
 
 /** Structural repair of a possibly-corrupted DataStruct's `cat_levels` (P1.4

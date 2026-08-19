@@ -6,6 +6,7 @@ import type { ErrorBinding } from "./errorRoles";
 
 import type { ColormapName } from "./colormap";
 import type { DatasetSource } from "./datasetSource";
+import type { RecodeSpec } from "./recode";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -288,42 +289,11 @@ export interface MapResponse {
   z: { label: string; unit: string; min: number | null; max: number | null };
 }
 
-/** One peak from POST /api/rsm/analyze. Centres/FWHM are `[omega, 2theta]` in
- *  angle space and `[Qx, Qz]` in reciprocal space (null when no Q-space). */
-export interface RsmPeak {
-  rank: number;
-  centre_angle: [number, number];
-  centre_Q: [number | null, number | null];
-  fwhm_angle: [number, number];
-  fwhm_Q: [number | null, number | null];
-  amplitude: number;
-  background: number;
-  classification: string; // "substrate" | "film" | "unknown"
-}
-
-/** Response of POST /api/rsm/analyze. */
-export interface RsmAnalysisResponse {
-  peaks: RsmPeak[];
-  n_peaks_found: number;
-  intensity_unit: string;
-  used_q_space: boolean;
-}
-
-/** Response of POST /api/rsm/strain (NaN fields serialize as null).
- *  `warnings` explains a null `eps_parallel`: near-symmetric reflections
- *  (|Qx|/|Qz| below the degeneracy threshold — see calc/rsm.py) carry no
- *  in-plane information, so eps_parallel is refused rather than fabricated
- *  from noise. Empty when nothing was degenerate. */
-export interface RsmStrainResponse {
-  eps_parallel: number | null;
-  eps_perp: number | null;
-  a_sub_parallel: number;
-  a_sub_perp: number;
-  a_film_parallel: number;
-  a_film_perp: number;
-  relaxation: number | null;
-  warnings: string[];
-}
+// RsmPeak/RsmAnalysisResponse/RsmStrainResponse moved to lib/reductionTypes.ts
+// (J2/P1.6b, funding the new ComputedColumn.recode field below without
+// raising this file's TS_MODULE_PINS ceiling) — re-exported so every import
+// site (`from "./types"`) is unaffected.
+export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductionTypes";
 
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `raw` is the pristine import; `data` is the currently displayed (corrected)
@@ -338,6 +308,10 @@ export interface ComputedColumn {
   unit?: string;
   /** PR K: referenced columns (formula.referencedColumns) — feeds recalc's col→col edges; legacy columns re-derive. */
   deps?: string[];
+  /** J2 Recode workshop: set only for a recode-produced column, mutually
+   *  exclusive with a real `expr` (formula.computeFormulas branches on this
+   *  field instead of compiling `expr` when present) — see lib/recode.ts. */
+  recode?: RecodeSpec;
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..

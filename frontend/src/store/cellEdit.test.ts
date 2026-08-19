@@ -104,6 +104,159 @@ describe("setCellBlock", () => {
   });
 });
 
+// P1.6b item 7: setCellValue/setCellBlock guard categorical cells rather than
+// writing an unvalidated raw code, and a new setCategoricalCell gives the
+// worksheet UI a level-aware entry point (pick-existing / extend-the-table /
+// clear-to-missing — see cellEdit.ts's header for the ruling).
+const catDs = (): Dataset => ({
+  id: "d1",
+  name: "grades.dat",
+  data: {
+    time: [0, 1, 2],
+    values: [[0], [1], [2]],
+    labels: ["Grade"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["Pass", "OK", "Fail"] },
+  },
+});
+
+describe("setCellValue — categorical guard (P1.6b)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [catDs()], activeId: "d1" });
+  });
+
+  it("refuses an out-of-range code, leaving the cell untouched", () => {
+    useApp.getState().setCellValue("d1", 0, 0, 99);
+    expect(active().data.values[0][0]).toBe(0); // unchanged
+    expect(useApp.getState().status).toMatch(/not a valid level code/);
+  });
+
+  it("refuses a non-integer code", () => {
+    useApp.getState().setCellValue("d1", 0, 0, 1.5);
+    expect(active().data.values[0][0]).toBe(0);
+  });
+
+  it("accepts an in-range existing code", () => {
+    useApp.getState().setCellValue("d1", 0, 0, 2);
+    expect(active().data.values[0][0]).toBe(2);
+  });
+
+  it("NaN (clear to missing) is always allowed", () => {
+    useApp.getState().setCellValue("d1", 0, 0, Number.NaN);
+    expect(active().data.values[0][0]).toBeNaN();
+  });
+
+  it("a plain (non-categorical) column is unaffected by the guard", () => {
+    useApp.setState({ datasets: [ds()], activeId: "d1" });
+    useApp.getState().setCellValue("d1", 0, 0, 12345);
+    expect(active().data.values[0][0]).toBe(12345);
+  });
+});
+
+describe("setCellBlock — categorical guard (P1.6b)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [catDs()], activeId: "d1" });
+  });
+
+  it("skips an invalid categorical cell but applies the rest of the block", () => {
+    useApp.getState().setCellBlock(
+      "d1",
+      [
+        { row: 0, col: 0, value: 99 }, // invalid — skipped
+        { row: 1, col: 0, value: 2 }, // valid — applied
+      ],
+      "paste cells",
+    );
+    expect(active().data.values[0][0]).toBe(0); // untouched
+    expect(active().data.values[1][0]).toBe(2);
+  });
+
+  // Adversarial review P2: a partial paste must say what it skipped and
+  // why — matching setCellValue's voice two paragraphs above, not staying
+  // silent the way the pre-existing computed-column filter did.
+  it("reports how many cells it skipped, not silently (matches setCellValue's voice)", () => {
+    useApp.getState().setCellBlock(
+      "d1",
+      [
+        { row: 0, col: 0, value: 99 }, // invalid — skipped
+        { row: 1, col: 0, value: 2 }, // valid — applied
+      ],
+      "paste cells",
+    );
+    expect(useApp.getState().status).toMatch(/skipped 1/);
+  });
+
+  it("reports a full refusal (not silence) when EVERY cell is invalid", () => {
+    useApp.getState().setCellBlock("d1", [{ row: 0, col: 0, value: 99 }], "paste cells");
+    expect(active().data.values[0][0]).toBe(0); // unchanged
+    expect(useApp.getState().status).toMatch(/skipped|invalid|nothing/i);
+  });
+
+  it("reports nothing when the whole block applies cleanly", () => {
+    useApp.setState({ status: "" });
+    useApp.getState().setCellBlock("d1", [{ row: 0, col: 0, value: 2 }], "paste cells");
+    expect(useApp.getState().status).toBe("");
+  });
+});
+
+describe("setCategoricalCell (P1.6b: level picker / extend-the-table / clear)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [catDs()], activeId: "d1" });
+  });
+
+  it("picks an EXISTING level by exact label, writing its code", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Fail");
+    expect(active().data.values[0][0]).toBe(2);
+    expect(active().data.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail"]); // table unchanged
+  });
+
+  it("picks an existing level case-insensitively", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "fail");
+    expect(active().data.values[0][0]).toBe(2);
+  });
+
+  // Adversarial review P2: a case-insensitive match under the explicit
+  // "type a new level" gesture is CORRECT (no near-duplicate created) but
+  // was WRONG-FEEDBACK silent — the user typed "fail" expecting a new
+  // level and got no sign it resolved to the existing "Fail" instead.
+  it("reports a case-insensitive match under the typed-new-level path, not silently", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "fail");
+    expect(useApp.getState().status).toMatch(/matched existing level "Fail"/i);
+  });
+
+  it("reports NOTHING extra for an exact-case match (not a surprising resolution)", () => {
+    useApp.setState({ status: "" });
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Fail"); // exact case — the expected/unsurprising pick
+    expect(useApp.getState().status).toBe("");
+  });
+
+  it("EXTENDS the level table for a genuinely new label", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Incomplete");
+    expect(active().data.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail", "Incomplete"]);
+    expect(active().data.values[0][0]).toBe(3); // the newly appended code
+  });
+
+  it("is ONE undo entry for the whole extend-the-table commit", () => {
+    const before = active().data;
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Incomplete");
+    useApp.getState().undo();
+    expect(active().data).toEqual(before);
+  });
+
+  it("clears to missing (NaN) on blank input — never a refusal", () => {
+    useApp.getState().setCategoricalCell("d1", 0, 0, "   ");
+    expect(active().data.values[0][0]).toBeNaN();
+    expect(active().data.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail"]); // table unchanged
+  });
+
+  it("refuses a non-categorical column", () => {
+    useApp.setState({ datasets: [ds()], activeId: "d1" });
+    useApp.getState().setCategoricalCell("d1", 0, 0, "whatever");
+    expect(active().data.values[0][0]).toBe(10); // unchanged (ds()'s original value)
+  });
+});
+
 describe("insertRows / deleteRows (MAIN #34)", () => {
   const withExclusions = () => ({
     ...ds(),

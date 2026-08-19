@@ -30,7 +30,13 @@
 
 import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta, type TextColumn } from "../../../lib/columnmeta";
 import { channelLetter } from "../../../lib/formula";
-import type { ChannelRole, DataStruct } from "../../../lib/types";
+import type { ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
+import { Select } from "../../primitives";
+
+/** Compact modeling-type tags — same table as ChannelsCard's, kept in sync
+ *  by hand (P1.6b: the worksheet header is the SECOND surface for this, not
+ *  a new source of truth — `lib/modeling.channelModelingType` is that). */
+const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
 export interface GridHeaderProps {
   data: DataStruct;
@@ -63,6 +69,16 @@ export interface GridHeaderProps {
   /** Read-only Origin text columns (item 8), unvirtualized, always appended
    *  after the numeric/computed run (and its trailing spacer). */
   textCols: TextColumn[];
+  /** P1.6b item 6 (worksheet C/O/N visibility): the EFFECTIVE modeling type
+   *  per column (override-or-inferred — `lib/modeling.channelModelingType`).
+   *  Optional so every existing caller/test (which never rendered a badge)
+   *  is unaffected — omitting it hides the badge entirely. */
+  modelingTypeOf?: (col: number) => ModelingType;
+  /** Per-column user OVERRIDE (absent = auto-inferred) — the select's
+   *  controlled value; distinct from `modelingTypeOf`'s EFFECTIVE type so
+   *  the select can show "auto·C" vs an explicit "Cont"/"Ord"/"Nom". */
+  channelTypes?: Record<number, ModelingType>;
+  onChangeChannelType?: (col: number, t: ModelingType | null) => void;
 }
 
 /** True short-name-aware role badge for one value channel: computed columns
@@ -119,6 +135,9 @@ export default function GridHeader({
   formulaErrors,
   onHeaderContext,
   textCols,
+  modelingTypeOf,
+  channelTypes,
+  onChangeChannelType,
 }: GridHeaderProps) {
   const colMeta = columnMetaList(data);
   const selStyle = (selected: boolean): React.CSSProperties =>
@@ -204,6 +223,25 @@ export default function GridHeader({
               {data.units[c] ? ` · ${data.units[c]}` : ""}
               {sortMark(c)}
             </span>
+            {modelingTypeOf && onChangeChannelType && (
+              <Select
+                className="qzk-col-type"
+                style={{ width: "100%", marginTop: 2 }}
+                value={channelTypes?.[c] ?? ""}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onChangeChannelType(c, e.target.value === "" ? null : (e.target.value as ModelingType));
+                }}
+                title="Modeling type — Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories. Auto = inferred (a level table always reads as nominal)."
+                options={[
+                  { value: "", label: `auto·${TYPE_TAG[modelingTypeOf(c)]}` },
+                  { value: "continuous", label: "Cont" },
+                  { value: "ordinal", label: "Ord" },
+                  { value: "nominal", label: "Nom" },
+                ]}
+              />
+            )}
             {meta?.comment && (
               <span className="comment" title={meta.comment}>
                 {meta.comment}
