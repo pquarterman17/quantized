@@ -5,6 +5,7 @@ import LibraryDetails from "./LibraryDetails";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
 import type { Dataset } from "../../lib/types";
+import { defaultVisibleDetailsColumnKeys } from "../../lib/libraryDetailsColumns";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { askParams, type ParamValues } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
@@ -43,6 +44,7 @@ beforeEach(() => {
     trash: [],
     history: [],
     confirmRemove: false,
+    visibleDetailsColumns: defaultVisibleDetailsColumnKeys(),
   });
   vi.mocked(askParams).mockReset();
 });
@@ -111,6 +113,19 @@ describe("LibraryDetails — selectable metadata columns (PR L, L0.56)", () => {
 
     fireEvent.click(screen.getByLabelText("Tags"));
     expect(screen.queryByRole("columnheader", { name: /^Tags/ })).not.toBeInTheDocument();
+  });
+
+  // PR L slice 2 (L0.56 booked follow-up): the column selection now rides
+  // the store field (store/libraryDetailsColumns.ts), not component-local
+  // state — it must survive a remount (e.g. switching Library view modes)
+  // the same way every other .dwk-persisted preference does.
+  it("survives a remount — the selection lives in the store, not component-local state", () => {
+    const { unmount } = render(<LibraryDetails hierarchy={hierarchy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Columns ▾" }));
+    fireEvent.click(screen.getByLabelText("Notes"));
+    unmount();
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(screen.getByRole("columnheader", { name: /^Notes/ })).toBeInTheDocument();
   });
 });
 

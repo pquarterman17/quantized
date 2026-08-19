@@ -59,6 +59,21 @@ describe("workbookSeparate slice", () => {
       useApp.getState().previewSeparateWorksheets(["d1"]);
       expect(useApp.getState().separatePreview?.newWorkbookFolderId).toBe("f1");
     });
+
+    // P3 slice-2 fix (booked at slice 1, 2026-08-18): `nextWorkbookId()` used
+    // to mint a fresh session-unique id on EVERY preview open, burning ids
+    // for no reason a live-updating preview would make worse. The plan's own
+    // `newWorkbookId` is now a fixed placeholder shared by every preview —
+    // the REAL id is minted once, at commit.
+    it("does not mint a fresh workbook id on every preview open", () => {
+      useApp.getState().previewSeparateWorksheets(["d1"]);
+      const firstPlanId = useApp.getState().separatePreview?.newWorkbookId;
+      useApp.getState().closeSeparatePreview();
+      useApp.getState().previewSeparateWorksheets(["d2"]);
+      const secondPlanId = useApp.getState().separatePreview?.newWorkbookId;
+      expect(firstPlanId).toBeDefined();
+      expect(secondPlanId).toBe(firstPlanId);
+    });
   });
 
   describe("commitSeparateWorksheets", () => {
@@ -72,9 +87,13 @@ describe("workbookSeparate slice", () => {
 
     it("applies exactly the previewed plan: new workbook, moving dataset(s) reassigned, one history entry", () => {
       useApp.getState().previewSeparateWorksheets(["d1"]);
+      const planId = useApp.getState().separatePreview?.newWorkbookId;
       const newId = useApp.getState().commitSeparateWorksheets();
       const s = useApp.getState();
       expect(newId).not.toBeNull();
+      // P3 slice-2 fix: the committed id is minted FRESH at commit time, not
+      // reused from the preview's shared placeholder.
+      expect(newId).not.toBe(planId);
       expect(s.workbooks.some((w) => w.id === newId && w.folderId === "f1")).toBe(true);
       expect(s.datasets.find((d) => d.id === "d1")?.workbookId).toBe(newId);
       expect(s.datasets.find((d) => d.id === "d2")?.workbookId).toBe("w1"); // untouched

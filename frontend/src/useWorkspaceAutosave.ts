@@ -71,6 +71,10 @@ export type AutosaveState = Pick<
   // (store/collections.ts), had no trigger here. A Collection rename/save
   // left the title bar showing clean right up to a crash.
   | "collections"
+  // PR L slice 2: the Details view's selected metadata columns — persist
+  // (lib/workspace.ts), mutate independently (store/libraryDetailsColumns.ts),
+  // same completeness-sweep class as collections/quickPlotTemplates above.
+  | "visibleDetailsColumns"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -99,7 +103,8 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.expandedWorkbookIds === prev.expandedWorkbookIds &&
     state.workbooks === prev.workbooks &&
     state.savedRois === prev.savedRois &&
-    state.collections === prev.collections
+    state.collections === prev.collections &&
+    state.visibleDetailsColumns === prev.visibleDetailsColumns
   );
 }
 

@@ -9,11 +9,7 @@ import {
   type LibraryDetailsSortDirection,
   type LibraryDetailsSortKey,
 } from "../../lib/libraryDetails";
-import {
-  defaultVisibleDetailsColumns,
-  LIBRARY_DETAILS_COLUMNS,
-  type LibraryDetailsColumnKey,
-} from "../../lib/libraryDetailsColumns";
+import { LIBRARY_DETAILS_COLUMNS } from "../../lib/libraryDetailsColumns";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
 import { parseQuery } from "../../lib/smartfolders";
@@ -72,23 +68,17 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
-  // PR L (L0.56): the user's selected metadata columns — session-local (not
-  // yet .dwk-persisted; see the plan's "basics" scope). Defaults to exactly
-  // the original seven so an existing session's table renders unchanged
-  // until the picker is opened.
-  const [visibleColumns, setVisibleColumns] = useState<Set<LibraryDetailsColumnKey>>(defaultVisibleDetailsColumns);
+  // PR L slice 2 (L0.56): the user's selected metadata columns — now the
+  // store field (store/libraryDetailsColumns.ts), .dwk-persisted (additive;
+  // absent on an older doc loads as today's original seven, unchanged).
+  const visibleColumnsArr = useApp((s) => s.visibleDetailsColumns);
+  const toggleColumn = useApp((s) => s.toggleVisibleDetailsColumn);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const visibleColumns = useMemo(() => new Set(visibleColumnsArr), [visibleColumnsArr]);
   const columns = useMemo(
     () => [NAME_COLUMN, ...LIBRARY_DETAILS_COLUMNS.filter((c) => visibleColumns.has(c.key))],
     [visibleColumns],
   );
-  const toggleColumn = (key: LibraryDetailsColumnKey): void =>
-    setVisibleColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   const searching = searchQuery != null && searchQuery.trim() !== "";
   const rows = useMemo(() => {
     let projected = libraryDetailsRows(hierarchy);

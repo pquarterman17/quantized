@@ -36,6 +36,18 @@ import type { AppState } from "./useApp";
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+// P3 slice-2 fix (booked at slice 1, 2026-08-18): `nextWorkbookId()` used to
+// be minted directly in `previewSeparateWorksheets`, once per call — safe
+// for a static preview opened once per gesture, but a live-updating preview
+// (recomputed as the user tweaks the separate selection) would burn a fresh
+// session-unique id on every recompute for no reason. Every preview now
+// shares this fixed placeholder instead; `computeSeparatePlan` only uses it
+// as a structural key to diff "moves under the new workbook" in its
+// hypothetical hierarchy build (lib/workbookSeparate.ts's header), never as
+// an identity anyone persists — the REAL id is minted exactly once, in
+// `commitSeparateWorksheets`, below.
+const PENDING_SEPARATE_WORKBOOK_ID = "wb-pending-separate";
+
 function hierarchyInput(s: AppState) {
   return {
     folders: s.folders,
@@ -85,15 +97,9 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
         get().setStatus("Separate unavailable: nothing selected");
         return;
       }
-      // P3 booking (adversarial review, 2026-08-18): `nextWorkbookId()` is
-      // minted HERE, once per open, which is safe today (a static preview,
-      // opened once per gesture). A slice-2 LIVE-UPDATING preview (e.g.
-      // re-running as the user tweaks the selection) must NOT call this on
-      // every keystroke/recompute — mint once at commit instead, or memoize
-      // the id across recomputes of the same open preview, or a cancelled
-      // preview leaks session-unique ids for no reason (harmless individually,
-      // but needless churn). Tracked in the plan's PR J slice-2 line.
-      const plan = computeSeparatePlan(hierarchyInput(get()), worksheetIds, nextWorkbookId());
+      // P3 slice-2 fix: shared placeholder, not a fresh mint per open — see
+      // PENDING_SEPARATE_WORKBOOK_ID's doc above.
+      const plan = computeSeparatePlan(hierarchyInput(get()), worksheetIds, PENDING_SEPARATE_WORKBOOK_ID);
       set({ separatePreview: plan });
     },
 
@@ -114,7 +120,11 @@ export function createWorkbookSeparateSlice(set: SliceSet, get: SliceGet): Workb
 
       const trimmedName = (name ?? "").trim() || plan.suggestedName || "New Workbook";
       const movingSet = new Set(plan.movingDatasetIds);
-      const newWorkbookId = plan.newWorkbookId;
+      // P3 slice-2 fix: the REAL session-unique id is minted HERE, exactly
+      // once, at commit — never during preview (see
+      // PENDING_SEPARATE_WORKBOOK_ID's doc above). `plan.newWorkbookId`
+      // (the shared placeholder) is deliberately never used past this point.
+      const newWorkbookId = nextWorkbookId();
 
       get().recordHistory("separate worksheet");
       const newFolderId = plan.newWorkbookFolderId;
