@@ -237,3 +237,108 @@ safeguards, not loopholes.
 - **2026-08-17 — Claude (orchestrator):** Owner adopted the sprint. Folded the
   four review adjustments in; Day 0 dispatch begun (contract scouts for
   P1.1/P1.4/K, useApp.ts slack pre-bank, lane briefs).
+- **2026-08-19 — Claude (QA lane), Day-5 retrospective:** see the dedicated
+  `## Day-5 retrospective` section below for the full record — what the
+  adversarial-review process caught this week, and the two process lessons
+  worth keeping into the next frontend-heavy wave.
+
+## Day-5 retrospective (QA lane, 2026-08-19)
+
+This is the sprint's Day-5 "reconcile and take stock" checkpoint, not a
+sprint-close: Days 6-7 (stabilization, release candidate) are still ahead,
+and three lanes (I/I2, J slice 2 + L slice 2 UI, J2 recode + P1.6b) are
+in flight past this point. Full plan-by-plan corrections are in each plan's
+own Day-5 change-log entry (`LIBRARY_WORKBOOK_UX_PLAN.md`,
+`PRIMARY_SOFTWARE_AUDIT_PLAN.md`, `JMP_GAP_PLAN.md`) and the release-blocker
+list is `plans/RELEASE_BLOCKERS.md`. This section is what the *process*
+itself is worth recording, separate from the feature status.
+
+### What the adversarial-review pipeline actually caught
+
+The sprint's "tiered review depth" rule (contract PRs get full adversarial
+review) earned its cost this week. Six real defects were caught before they
+reached a released state — four in review rounds, two only by CI (never
+locally, since this sandbox cannot run Playwright — see below):
+
+- **A chain-composition bug that silently used pristine instead of
+  corrected data** (PR K review round, commit `866277b`).
+  `store/derivedWorksheets.ts` read `source.raw ?? source.data` when
+  deriving a new worksheet from an existing one — correct for
+  re-correcting a dataset in place, wrong for deriving FROM another
+  dataset, whose `.raw` means "that dataset's own pristine cache," not
+  "the corrected table the user is looking at." A two-hop derived chain
+  (C from B, B from A) silently skipped B's entire correction pipeline and
+  derived from A's raw values instead, at both creation time and every
+  recalc. Caught by review, not by the original test suite — the original
+  tests never exercised a chain more than one hop deep.
+- **A stale-index split-brain across two hierarchies** (PR J review round,
+  commit `8b0b294`). `combineWorkbooks`/`commitSeparateWorksheets`
+  reassigned `Dataset.workbookId` on move but left `folderId` untouched,
+  breaking the documented invariant that folder placement is owned by the
+  workbook (`lib/workbooks.ts:52-54`) — a worksheet moved by Combine or
+  Separate would vanish from Folder view while still showing correctly in
+  the workbook tree, two hierarchies disagreeing about where the same
+  dataset lived.
+- **An arbitrary-local-file-read consent hole** (PR P1.7 review round,
+  commit `47e6b89`). The first version of the new `grant_source_paths`
+  bridge method was a bare passthrough trusting the frontend's own argument
+  list as authority — any JS running in the window could self-grant read
+  consent for an arbitrary path (a user's SSH key, cited as the concrete
+  example) with no dialog and no project even open, then read it through
+  the existing import route. Fixed by making the declared-source set
+  backend-tracked, populated only as a side effect of a real native
+  open-project dialog parsing that project's own declared source paths.
+- **A dirty-flag blind spot that made edits crash-lossy** (PR P1.2 review
+  round, commit `f2f5b01`). `AutosaveState`/`shouldAutosave` were missing
+  `collections` and `quickPlotTemplates` from their tracked-fields list —
+  both persist in `.dwk` but had no autosave/dirty trigger, so renaming a
+  Collection or saving a Quick Plot template left the project looking
+  "clean" right up until a crash lost the edit. A completeness sweep during
+  the same review round caught two more fields in the same class
+  (`toolWindowLayout`, `originFidelity`) before they shipped with the same
+  gap.
+- **CI-only catch — a Windows null-path never-raises violation** (commit
+  `c756291`). `desktop_source_probe.py`'s `probe_source_path` promises
+  "never raises into JS," but only caught `OSError`; a malformed path
+  (embedded null byte) makes `os.path.realpath` succeed silently on
+  Windows with no OS-level validation, deferring the real failure to
+  `os.stat`/`open()`, which raise `ValueError` — a different exception
+  class the guard didn't catch. Invisible on Linux/macOS, where `realpath`
+  itself degrades the same input through `OSError`. Found only because
+  Windows CI actually ran the test; reproduced deterministically on Linux
+  afterward by monkeypatching the exact Windows error class.
+- **CI-only catch — four blind-authored E2E interaction artifacts**
+  (commits `3f4859a`, `ac62a63`, `5f9e493`, `f71a782`). A Graph Builder
+  overlay left open intercepted a positional Stage click; a legend-label
+  selector picked up the reorder buttons' own glyphs as if they were series
+  labels; a Graph Builder close needed to happen once, structurally, not
+  per-collision; and a UI label change (P1.2's "Save workspace (.dwk)…")
+  broke an E2E assertion pinned to the old exact text. None were caught
+  locally — they surfaced only when GitHub Actions ran the real browser.
+
+### Two process lessons worth keeping
+
+1. **`git stash` is repo-wide and cross-contaminates concurrent worktrees —
+   use plain commits instead.** With multiple lanes running in parallel
+   worktrees against the same repository, a `git stash` in one worktree is
+   visible (and poppable) from any other, since the stash ref is shared
+   git state, not worktree-local. A plain WIP commit in the lane's own
+   branch has no such cross-talk and costs nothing extra to clean up later.
+   This sprint's own operating rules already banned it for exactly this
+   reason; recorded here so the NEXT multi-worktree sprint states it as a
+   rule from Day 0 rather than rediscovering it.
+2. **Playwright cannot run in this sandbox, so every E2E journey is
+   authored blind and costs a ~15-minute CI round to find out if it's
+   right.** Every spec in this sprint was written against the real
+   component tree and DOM contract but never executed locally before its
+   first CI run — confirmed directly this week (P1.5's own change-log entry
+   states the Playwright download is blocked by this session's egress
+   policy, verified via the agent-proxy diagnostic, not assumed). The four
+   E2E artifacts above are the direct cost of that: real defects, but ones
+   a two-second local run would have caught in seconds instead of a CI
+   round-trip. Recommendation before the next frontend-heavy wave: give at
+   least one lane (or the integrator) a local machine with real Playwright
+   installed, and route E2E-touching diffs through it before pushing —
+   the marginal cost of one CI round is small, but it compounds linearly
+   with the number of E2E specs a sprint adds, and this sprint added a lot
+   of them.
