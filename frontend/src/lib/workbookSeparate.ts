@@ -82,9 +82,15 @@ export interface SeparatePlan {
    *  requested worksheets plus their exclusive-dependency closure. Empty
    *  when nothing requested still exists. */
   movingDatasetIds: string[];
-  /** The id `commitSeparateWorksheets` mints the new WorkbookNode under —
-   *  supplied by the caller so preview and commit share one id and can
-   *  never disagree about which workbook the plan describes. */
+  /** A caller-supplied key identifying "the new workbook" for THIS plan
+   *  build — used only structurally, to diff the hypothetical post-separate
+   *  hierarchy against the current one (see `computeSeparatePlan`'s doc).
+   *  P3 slice-2 fix (2026-08-19): during PREVIEW this is a fixed shared
+   *  placeholder (`store/workbookSeparate.ts`'s `PENDING_SEPARATE_WORKBOOK_ID`),
+   *  never a freshly minted session-unique id — minting one per preview open
+   *  wasted ids for no reason a live-updating preview would only make worse.
+   *  `commitSeparateWorksheets` mints the REAL `WorkbookNode.id` itself, once,
+   *  at commit time, and never reads this field back. */
   newWorkbookId: string;
   /** Default name for the dialog (the primary/first requested worksheet's
    *  own name for a single-worksheet separate; overridable by the caller). */
@@ -102,8 +108,9 @@ export interface SeparatePlan {
 }
 
 /** Build the affected-item plan for separating `worksheetIds` out of the
- *  Library into a new workbook (`newWorkbookId`, minted by the caller — see
- *  `SeparatePlan.newWorkbookId`'s doc). Pure; reads `input` only. */
+ *  Library into a new workbook (`newWorkbookId`, a caller-supplied
+ *  structural key — see `SeparatePlan.newWorkbookId`'s doc for why it need
+ *  not be the eventual real id). Pure; reads `input` only. */
 export function computeSeparatePlan(
   input: LibraryHierarchyInput,
   worksheetIds: readonly string[],

@@ -62,6 +62,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       workbookLastChild: {},
       expandedWorkbookIds: [],
       collections: [],
+      visibleDetailsColumns: [],
     };
   }
 
@@ -491,6 +492,7 @@ describe("mergeWorkspace never imports the LIBRARY_WORKBOOK_UX_PLAN PR E2 sessio
       workbookLastChild: { poison: "worksheet:x" },
       expandedWorkbookIds: ["poison"],
       collections: [],
+      visibleDetailsColumns: [],
     };
     const genId2 = () => "unused";
     const genWorkbookId2 = () => "unused-wb";

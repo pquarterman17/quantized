@@ -29,6 +29,7 @@ import {
   runContextAction,
   type DatasetActionTarget,
 } from "../../lib/contextActions";
+import { datasetCombineSeparateActions } from "../../lib/combineSeparateActions";
 import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
 import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { Dataset, FolderNode } from "../../lib/types";
@@ -98,6 +99,11 @@ export function buildDatasetRowMenu(
     // entry gates its OWN visibility (hidden), so this splices unconditionally.
     { separator: true },
     ...buildMenuItems(datasetDerivedWorksheetActions, target),
+    // PR J slice 2 (L0.32-L0.34/L0.51): Combine (multi-selection only, gates
+    // itself hidden) / Separate (any selection) — same unconditional-splice
+    // convention as the derived-worksheet group right above.
+    { separator: true },
+    ...buildMenuItems(datasetCombineSeparateActions, target),
     // Merge / panel / overlay quick picks for the multi-selection (item 19).
     ...(selected && selectedCount > 1
       ? [{ separator: true } as ContextMenuItem, ...buildMenuItems(datasetMultiSelectActions, target)]

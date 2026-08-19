@@ -15,6 +15,7 @@ import type { Dataset } from "./types";
 import type { WorkbookNode } from "./workbooks";
 import { useApp } from "../store/useApp";
 import { useQuickPlotWithDialog } from "../store/quickPlotWithDialog";
+import { useCombineDialog } from "../store/combineDialog";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
@@ -378,5 +379,42 @@ describe("workbook.quickPlotWith (PR H, L0.37)", () => {
       expect(useQuickPlotWithDialog.getState().workbookId).toBe("w1");
       expect(useQuickPlotWithDialog.getState().datasetId).toBeNull();
     });
+  });
+});
+
+describe("workbook.combine (LIBRARY_WORKBOOK_UX_PLAN PR J slice 2, L0.32-L0.34)", () => {
+  it("seeds the Combine dialog with this workbook's own id", () => {
+    useCombineDialog.getState().close();
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    menuItemFor(find("workbook.combine"), target(wb, [])).run();
+    expect(useCombineDialog.getState().seed).toEqual({ workbookIds: ["w1"], worksheetIds: [] });
+  });
+});
+// PR I: Copy/Duplicate (L0.23/L0.36 — these two now have a contract; Paste
+// stays a folder/root-target command, not a per-workbook menu row, see
+// commands/workbookTransferCommands.ts).
+describe("Copy / Duplicate (PR I)", () => {
+  const wb: WorkbookNode = { id: "w1", name: "W" };
+
+  it("Copy calls copyWorkbookToClipboard for this workbook and is disabled with a reason when memberless", () => {
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ workbooks: [wb], datasets: [d1] });
+    const copyWorkbookToClipboard = vi.fn();
+    useApp.setState({ copyWorkbookToClipboard });
+    menuItemFor(find("workbook.copy"), target(wb, [d1])).run();
+    expect(copyWorkbookToClipboard).toHaveBeenCalledWith("w1");
+
+    expect(menuItemFor(find("workbook.copy"), target(wb, [])).disabled).toBe(true);
+  });
+
+  it("Duplicate calls duplicateWorkbook for this workbook and is disabled with a reason when memberless", () => {
+    const d1 = recognizedDataset("d1", "w1");
+    useApp.setState({ workbooks: [wb], datasets: [d1] });
+    const duplicateWorkbook = vi.fn();
+    useApp.setState({ duplicateWorkbook });
+    menuItemFor(find("workbook.duplicate"), target(wb, [d1])).run();
+    expect(duplicateWorkbook).toHaveBeenCalledWith("w1");
+
+    expect(menuItemFor(find("workbook.duplicate"), target(wb, [])).disabled).toBe(true);
   });
 });

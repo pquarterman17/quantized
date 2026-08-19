@@ -12,6 +12,7 @@ import type { Dataset, DataStruct, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useToasts } from "../../store/toasts";
 import { askParams, type ParamValues } from "../overlays/ParamDialog";
+import { useCombineDialog } from "../../store/combineDialog";
 
 vi.mock("../../lib/api", () => ({ exportConsolidated: vi.fn() }));
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
@@ -22,6 +23,7 @@ const fld = (id: string, name: string): FolderNode => ({ id, name, parentId: nul
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useCombineDialog.setState({ seed: null });
   const s = useApp.getState();
   useApp.setState({
     datasets: [ds("a"), ds("b"), ds("c")],
@@ -141,5 +143,14 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
     render(<MultiSelectBar />);
     fireEvent.click(screen.getByText("Clear"));
     expect(useApp.getState().selectedIds).toEqual([]);
+  });
+
+  // LIBRARY_WORKBOOK_UX_PLAN PR J slice 2 (L0.32-L0.34): seeds the Combine
+  // dialog with the whole bar's selection — the same discoverable-from-the-
+  // multi-selection entry point as Plot/Move/Tag/Export above.
+  it("Combine opens the Combine dialog seeded with the whole selection", () => {
+    render(<MultiSelectBar />);
+    fireEvent.click(screen.getByText("Combine"));
+    expect(useCombineDialog.getState().seed).toEqual({ workbookIds: [], worksheetIds: ["a", "b"] });
   });
 });

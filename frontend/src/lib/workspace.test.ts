@@ -956,6 +956,27 @@ describe("workspace Collections (LIBRARY_WORKBOOK_UX_PLAN PR L, L0.48/L0.49)", (
   });
 });
 
+describe("workspace Details columns (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2)", () => {
+  it("round-trips the selected Details columns (additive-optional — no version bump)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, visibleDetailsColumns: ["type", "sample", "group"] }),
+    );
+    expect(loaded.visibleDetailsColumns).toEqual(["type", "sample", "group"]);
+  });
+
+  it("sanitizes an unknown column key on load and defaults to the original seven for an older doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.visibleDetailsColumns = ["type", "not-a-real-column", 7, "notes"];
+    expect(parseWorkspace(JSON.stringify(doc)).visibleDetailsColumns).toEqual(["type", "notes"]);
+    delete doc.visibleDetailsColumns; // a pre-slice-2 doc
+    expect(parseWorkspace(JSON.stringify(doc)).visibleDetailsColumns).toEqual([
+      "type", "location", "dimensions", "dataType", "source", "modified", "tags",
+    ]);
+  });
+});
+
 describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, no version bump)", () => {
   const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
     id: "w1",

@@ -24,6 +24,7 @@ import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkb
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";
+import { openCombineDialog } from "../store/combineDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
 
 export interface WorkbookActionTarget {
@@ -106,6 +107,39 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     run: (t) => t.onBrowse?.(),
   },
   { id: "workbook.rename", label: "Rename…", run: (t) => t.onRename() },
+  // PR J slice 2 (L0.32-L0.34): seeds the Combine dialog with THIS workbook
+  // as the starting selection — the dialog itself is where the user
+  // "chooses/confirms the selection" (uncheck any member before naming the
+  // result), never a second full Library picker (see
+  // CombineWorkbooksDialog.tsx's header). The richer entry point is the
+  // dataset multi-select's own "Combine…" (lib/combineSeparateActions.ts) —
+  // this one exists so a workbook is reachable without first hand-selecting
+  // its members.
+  {
+    id: "workbook.combine",
+    label: "Combine…",
+    run: (t) => openCombineDialog({ workbookIds: [t.node.entity.id], worksheetIds: [] }),
+  },
+  // PR I (L0.23/L0.36): Copy/Duplicate now have a settled contract
+  // (store/workbookTransfer.ts) — Paste is deliberately NOT a per-workbook
+  // menu row (pasting targets a FOLDER or the Library root, not an existing
+  // workbook — see commands/workbookTransferCommands.ts, which offers it as
+  // a command-palette entry until this codebase grows a folder/root
+  // context-menu surface to host it natively).
+  {
+    id: "workbook.copy",
+    label: "Copy",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets to copy",
+    run: (t) => void useApp.getState().copyWorkbookToClipboard(t.node.entity.id),
+  },
+  {
+    id: "workbook.duplicate",
+    label: "Duplicate",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets to duplicate",
+    run: (t) => void useApp.getState().duplicateWorkbook(t.node.entity.id),
+  },
 ];
 
 export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [

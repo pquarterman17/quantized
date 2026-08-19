@@ -3459,6 +3459,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       workbookLastChild: {},
       expandedWorkbookIds: [],
       collections: [],
+      visibleDetailsColumns: [],
     };
   }
 

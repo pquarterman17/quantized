@@ -47,6 +47,7 @@ const base: AutosaveState = {
   workbooks: [],
   savedRois: [],
   collections: [],
+  visibleDetailsColumns: [],
 };
 
 describe("shouldAutosave", () => {
@@ -157,6 +158,18 @@ describe("dirty tracking (P1.2 box 1)", () => {
     renderHook(() => useWorkspaceAutosave());
     act(() => {
       useApp.setState({ collections: [{ id: "c1", name: "Recent XRD", query: "" }] });
+    });
+    expect(useApp.getState().projectDirty).toBe(true);
+  });
+
+  // PR L slice 2: visibleDetailsColumns persists (lib/workspace.ts) and
+  // mutates independently via store/libraryDetailsColumns.ts's
+  // toggleVisibleDetailsColumn — same completeness-sweep class as
+  // collections/quickPlotTemplates right above.
+  it("marks the project dirty on a visibleDetailsColumns-only change", () => {
+    renderHook(() => useWorkspaceAutosave());
+    act(() => {
+      useApp.getState().toggleVisibleDetailsColumn("sample");
     });
     expect(useApp.getState().projectDirty).toBe(true);
   });

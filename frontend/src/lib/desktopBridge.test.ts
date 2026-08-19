@@ -12,6 +12,7 @@ import {
   openFiles,
   openProject,
   pickNativeFiles,
+  pickSaveDestination,
   probe,
   readProject,
   saveProjectAs,
@@ -133,6 +134,39 @@ describe("readProject", () => {
   it("returns null when the path was never consented", async () => {
     setShell({ read_project_file: async () => ({ path: null, error: "not consented" }) });
     expect(await readProject("/p/w.dwk")).toBeNull();
+  });
+});
+
+// P2 (adversarial review, 2026-08-19): dialog-only half of the old combined
+// `saveProjectAs`, split out so a caller (store/workspaceIO.ts's
+// `runSaveWorkspaceToFile`) can insert a lock check between the pick and the
+// write. Same null/CANCELLED semantics as every other dialog method here.
+describe("pickSaveDestination", () => {
+  it("returns null with no bridge", async () => {
+    expect(await pickSaveDestination("w.dwk")).toBeNull();
+  });
+
+  it("returns the picked path, without writing anything", async () => {
+    let wrote = false;
+    setShell({
+      save_file_dialog: async () => ({ path: "/p/w.dwk" }),
+      write_project_file: async () => {
+        wrote = true;
+        return { ok: true };
+      },
+    });
+    expect(await pickSaveDestination("w.dwk")).toBe("/p/w.dwk");
+    expect(wrote).toBe(false);
+  });
+
+  it("returns CANCELLED (not null) when the dialog is cancelled", async () => {
+    setShell({ save_file_dialog: async () => ({ path: null }), write_project_file: async () => ({ ok: true }) });
+    expect(await pickSaveDestination("w.dwk")).toBe(CANCELLED);
+  });
+
+  it("returns null when the shell exposes only one of the two required methods", async () => {
+    setShell({ save_file_dialog: async () => ({ path: "/p/w.dwk" }) });
+    expect(await pickSaveDestination("w.dwk")).toBeNull();
   });
 });
 

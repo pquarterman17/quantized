@@ -65,6 +65,7 @@ import { useMultivarStore } from "./store/multivar";
 import { useVariabilityStore } from "./store/variability";
 import { useRelink } from "./store/relink";
 import { useRecode } from "./store/recode";
+import { useCombineDialog } from "./store/combineDialog";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -131,6 +132,10 @@ const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
 // already in this composition root, so loading them only when opened removes
 // their implementation (and dialog-only helpers) from first-paint JS.
 const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
+// LIBRARY_WORKBOOK_UX_PLAN PR J slice 2 (L0.32-L0.34/L0.51): same "on-demand
+// dialog with no startup responsibility" class as SplitDatasetDialog above.
+const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"));
+const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"));
 const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
 const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
@@ -190,6 +195,8 @@ export default function AppOverlays() {
   const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
+  const combineDialogOpen = useCombineDialog((s) => s.seed !== null);
+  const separateDialogOpen = useApp((s) => s.separatePreview !== null);
   const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
   const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
@@ -199,6 +206,8 @@ export default function AppOverlays() {
   const relinkOpen = useRelink((s) => s.open);
   const recodeOpen = useRecode((s) => s.open);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
+  const combineDialogMounted = useKeepMountedAfterOpen(combineDialogOpen);
+  const separateDialogMounted = useKeepMountedAfterOpen(separateDialogOpen);
   const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
@@ -210,6 +219,8 @@ export default function AppOverlays() {
       <ConfirmDialog />
       {annotationTextOpen && <AnnotationTextDialog />}
       {splitDialogMounted && <SplitDatasetDialog />}
+      {combineDialogMounted && <CombineWorkbooksDialog />}
+      {separateDialogMounted && <SeparateWorksheetsDialog />}
       {quickPlotWithMounted && <QuickPlotWithDialog />}
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
