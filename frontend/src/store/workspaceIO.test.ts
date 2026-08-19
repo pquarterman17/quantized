@@ -203,3 +203,50 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     expect(saveBlob).toHaveBeenCalledTimes(1);
   });
 });
+
+// PR I2 (L0.47): "never permit silent concurrent writes to one project" —
+// the quick-save (Ctrl+S) path is the one write that goes straight to a
+// KNOWN project path with no fresh dialog, so it is the one this slice
+// gates directly against the lock's last-known status for that exact path.
+// Save As always goes through a NEW native dialog (a deliberate destination
+// pick) and is left ungated — see store/workspaceIO.ts's comment.
+describe("saveWorkspace — refuses when this instance does not hold the write lock (PR I2)", () => {
+  it("refuses and leaves the project dirty when the lock is held read-only for this exact path", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    useApp.getState().markProjectDirty();
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({ status: "held-by-other-live", path: "/proj/workspace.dwk", openedAsCopy: false });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(useApp.getState().projectDirty).toBe(true);
+    expect(useApp.getState().status).toMatch(/read-only|take over/i);
+  });
+
+  it("proceeds normally when the lock tracks a DIFFERENT path (the lock system hasn't opined on this project)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({ status: "held-by-other-live", path: "/some/other/project.dwk", openedAsCopy: false });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String));
+  });
+
+  it("proceeds normally when this instance holds the lock (held-by-me)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    const { useProjectLock } = await import("./projectLock");
+    useProjectLock.setState({ status: "held-by-me", path: "/proj/workspace.dwk", openedAsCopy: false });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String));
+  });
+});

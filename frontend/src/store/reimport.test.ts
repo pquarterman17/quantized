@@ -31,6 +31,10 @@ vi.mock("../lib/openFilePicker", () => ({
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+vi.mock("../lib/desktopBridge", () => ({
+  hasDesktopShell: vi.fn(() => false),
+  pathState: vi.fn(async () => "unknown"),
+}));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -559,5 +563,54 @@ describe("reimportDataset — groupKey reset on reshape (PR M booked finding)", 
     await useApp.getState().reimportDataset("d1");
 
     expect(useApp.getState().groupKey).toBeNull();
+  });
+});
+
+// PR I requirement 4: a pasted-workbook worksheet's source may not be
+// reachable from the destination machine at all — Reimport must report
+// "Source unavailable" and offer the LANDED P1.7 Relink Source path, never a
+// raw backend error and never a silent no-op.
+describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
+  it("reports Source unavailable and opens Relink Source, without ever calling importFile, when the desktop bridge confirms the path is missing", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("missing");
+    const { useRelink } = await import("./relink");
+    const openPanel = vi.fn();
+    useRelink.setState({ openPanel });
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/source unavailable/i);
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/source unavailable/i), "danger");
+    expect(openPanel).toHaveBeenCalledWith({ oldRoot: "/data" });
+    // The dataset itself is left completely untouched.
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+  });
+
+  it("proceeds with the ordinary reimport when the bridge reports the path is reachable", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(importFile).mockResolvedValue(fresh);
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).toHaveBeenCalledWith("/data/sample.dat");
+    expect(useApp.getState().datasets[0].data).toEqual(fresh);
+  });
+
+  it("proceeds with the ordinary reimport in browser mode (no desktop bridge) — never guesses missing", async () => {
+    const { hasDesktopShell } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(false);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).toHaveBeenCalledWith("/data/sample.dat");
   });
 });

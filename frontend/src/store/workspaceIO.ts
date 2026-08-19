@@ -25,6 +25,7 @@ import { CANCELLED, hasDesktopShell, saveProjectAs, saveProjectTo } from "../lib
 import { saveBlob } from "../lib/download";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
+import { useProjectLock } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
@@ -131,6 +132,28 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   const project = get().currentProject;
   if (project === null || !hasDesktopShell()) {
     return runSaveWorkspaceToFile(get);
+  }
+  // PR I2 (L0.47): quick-save is the ONE write that lands on a KNOWN path
+  // with no fresh dialog — the exact write "never permit silent concurrent
+  // writes to one project" guards. Refuses whenever `useProjectLock` is
+  // tracking THIS project's path and this instance is not the one allowed
+  // to write it (a live OR stale other holder, and this instance hasn't
+  // taken over). Any OTHER lock-tracked path, or no lock tracked at all
+  // (the booked-defer in-memory provider's honest default — see
+  // store/projectLock.ts's header), is left alone: this gate can only ever
+  // make a write MORE cautious, never invent a refusal the lock state
+  // itself doesn't support. Save As is deliberately ungated (a fresh native
+  // dialog is always a new, deliberate destination pick, not a silent
+  // write to the locked path).
+  const lock = useProjectLock.getState();
+  if (lock.path === project.path && !lock.canWriteNow()) {
+    const msg =
+      lock.status === "held-by-other-stale"
+        ? `read-only — another (unresponsive) instance has this project open; use Take Over Editing`
+        : `read-only — another instance has this project open for editing`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
   }
   const content = await serializeCurrentWorkspace(get);
   if (content === null) return;

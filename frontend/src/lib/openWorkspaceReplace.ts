@@ -5,9 +5,46 @@
 // already carries a command's body out of the curated command list.
 
 import { stageWorkspaceRestore } from "../store/windowHydration";
+import { useProjectLock } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
+import { toast } from "../store/toasts";
 import type { StoreGet } from "./exportActive";
 import type { LoadedWorkspace } from "./workspace";
+
+/** PR I2 (L0.47): a genuine native open (a real `native.path`) registers
+ *  with the lock state machine — fire-and-forget, AFTER the replace already
+ *  committed (this function's own callers already gate the replace itself
+ *  behind a confirm dialog; re-litigating "should this open happen" against
+ *  an async lock check would mean either blocking the whole open on it, or
+ *  building a second confirm surface — both deferred, see
+ *  store/projectLock.ts's header for the full booked scope). What DOES
+ *  happen synchronously with today's slice: read-only status lands in
+ *  `useProjectLock`, gating the next quick-save (store/workspaceIO.ts's
+ *  `runSaveWorkspace`) the moment the check resolves, and a toast explains
+ *  the situation with the two named next steps (Take Over Editing / Open
+ *  as Copy — commands/projectLockCommands.ts). `openProject` itself never
+ *  throws (see that module's own doc), so no `.catch` is needed here. */
+function registerWithLockStateMachine(native: ProjectIdentity | undefined): void {
+  if (!native) return;
+  void (async () => {
+    // A previously-open project this SAME instance held must be released
+    // before acquiring the new one — otherwise switching projects (Open
+    // replacing an already-open one) would strand the old lock forever,
+    // the exact "silent" failure mode L0.47 exists to prevent, just aimed
+    // at the instance's OWN prior session instead of another instance's.
+    const prev = useProjectLock.getState();
+    if (prev.path && prev.path !== native.path && prev.status === "held-by-me") {
+      await prev.releaseLock();
+    }
+    const result = await useProjectLock.getState().openProject(native.path);
+    if (!result.readOnly) return;
+    const reason =
+      result.status === "held-by-other-stale"
+        ? "another (unresponsive) instance has this project open — Take Over Editing is available"
+        : "another instance has this project open for editing — opened read-only";
+    toast(`"${native.name}": ${reason}`, "info");
+  })();
+}
 
 /** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
  *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
@@ -26,6 +63,7 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
   s().loadWorkspace(ws);
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+  registerWithLockStateMachine(native);
 }
 
 /** "Open Without Layout…" (PR E2's safe-open) — same replace as
@@ -38,6 +76,7 @@ export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?
   s().loadWorkspace(ws, { skipLayout: true });
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+  registerWithLockStateMachine(native);
 }
 
 /** Whether the CURRENT session holds anything a workspace replace would
