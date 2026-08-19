@@ -13,9 +13,7 @@
 
 import { openCombineDialog } from "../store/combineDialog";
 import { useApp } from "../store/useApp";
-import type { ContextAction, DatasetActionTarget } from "./contextActions";
-
-const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
+import { multiSelected, type ContextAction, type DatasetActionTarget } from "./contextActions";
 
 /** This row's target ids for a selection-scoped action — the whole
  *  multi-selection when this row is part of one, else just this row alone

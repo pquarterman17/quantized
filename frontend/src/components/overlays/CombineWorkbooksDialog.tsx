@@ -9,10 +9,21 @@
 //
 // "Choose/confirm the selection" (the plan's UI brief): the SEED
 // (`store/combineDialog.ts`) is resolved to its flat worksheet list ONCE, on
-// open (`resolveCombineTargets`) — the dialog only lets the user NARROW that
+// open (`resolveCombineTargets`, called inside the re-seed effect against a
+// non-reactive `useApp.getState().datasets` snapshot — NOT the reactive
+// `datasets` subscription, which would re-run the resolve on every
+// unrelated store change and silently re-widen a workbook-scoped seed as
+// datasets are added elsewhere while the dialog sits open, adversarial-
+// review P1, 2026-08-19) — the dialog only lets the user NARROW that FROZEN
 // list (uncheck an item), never widen it to arbitrary other Library items
 // the invoking gesture never named. That keeps this dialog a genuine
-// "confirm" step, not a second full Library picker.
+// "confirm" step, not a second full Library picker. Committing reads ONLY
+// this frozen `resolvedIds` (via `includedIds`) — never re-resolves the
+// seed — so the freeze can't be undone one layer down at commit time. The
+// mirror case (a frozen id whose dataset was DELETED while the dialog sat
+// open) is handled at commit: dead ids are dropped, the survivors combine
+// with an honest "skipped N" notice, and a fully-dead selection refuses
+// outright with an inline message instead of silently doing nothing.
 //
 // Collision suffixing is shown, not just applied (L0.34's "never overwrite
 // silently" — visible, not just true): the live preview below the checklist
@@ -24,6 +35,7 @@ import { useEffect, useState } from "react";
 
 import { dedupeWorksheetNames, resolveCombineTargets, suggestCombinedWorkbookName } from "../../lib/workbookCombine";
 import { Button } from "../primitives";
+import { toast } from "../../store/toasts";
 import { useCombineDialog } from "../../store/combineDialog";
 import { useApp } from "../../store/useApp";
 
@@ -34,17 +46,33 @@ export default function CombineWorkbooksDialog() {
   const workbooks = useApp((s) => s.workbooks);
   const combineWorkbooks = useApp((s) => s.combineWorkbooks);
 
+  // Adversarial-review P1 fix (2026-08-19): FROZEN at open, not re-derived
+  // from live `datasets` on every render — the bug this closes is a
+  // workbook-scoped seed silently re-widening as datasets change under an
+  // open dialog (a background import landing in the seeded workbook used to
+  // appear pre-checked and get combined without ever being shown to the
+  // user). `resolveCombineTargets` is called exactly ONCE per open, inside
+  // this SAME re-seed effect, against `useApp.getState().datasets` (a
+  // non-reactive snapshot at the moment of open — deliberately NOT the
+  // reactive `datasets` above, which would defeat the freeze the instant it
+  // changed). Committing below reads ONLY this frozen list (via
+  // `includedIds`), never re-resolves the seed, so the freeze can't be
+  // silently undone one layer down.
+  const [resolvedIds, setResolvedIds] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [name, setName] = useState("");
   const [nameDirty, setNameDirty] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
 
   // Re-seed every time the dialog opens for a (possibly different) seed
   // selection — never carry a stale checklist/name from the last time it was
   // open (SplitDatasetDialog's identical re-seed-on-open discipline).
   useEffect(() => {
+    setResolvedIds(seed ? resolveCombineTargets(seed, useApp.getState().datasets) : []);
     setExcluded(new Set());
     setName("");
     setNameDirty(false);
+    setCommitError(null);
   }, [seed]);
 
   useEffect(() => {
@@ -61,7 +89,6 @@ export default function CombineWorkbooksDialog() {
 
   // Hooks run unconditionally (same discipline as SplitDatasetDialog) — the
   // "closed" case is handled by an empty resolved list, not by skipping a hook.
-  const resolvedIds = seed ? resolveCombineTargets(seed, datasets) : [];
   const includedIds = resolvedIds.filter((id) => !excluded.has(id));
   const includedNames = includedIds.map((id) => datasets.find((d) => d.id === id)?.name ?? id);
   const dedupedNames = dedupeWorksheetNames(includedNames);
@@ -79,10 +106,27 @@ export default function CombineWorkbooksDialog() {
 
   const canCombine = includedIds.length >= 1 && name.trim() !== "";
 
+  // Mirror case the freeze introduces (adversarial-review P1): a frozen id
+  // whose dataset was deleted (by some other gesture) while the dialog sat
+  // open. Never silently resurrect it or crash — drop it here, at the LAST
+  // possible moment before commit, and either combine the survivors with an
+  // honest notice of what was skipped, or refuse outright (fail-closed,
+  // matching SeparateWorksheetsDialog's own voice) when nothing survives.
   const runCombine = (): void => {
     if (!canCombine) return;
-    const newId = combineWorkbooks({ workbookIds: [], worksheetIds: includedIds }, name);
-    if (newId) close();
+    const live = new Set(useApp.getState().datasets.map((d) => d.id));
+    const liveIds = includedIds.filter((id) => live.has(id));
+    const droppedCount = includedIds.length - liveIds.length;
+    if (liveIds.length === 0) {
+      setCommitError("Combine unavailable: every selected worksheet no longer exists — re-open Combine to refresh the selection");
+      return;
+    }
+    const newId = combineWorkbooks({ workbookIds: [], worksheetIds: liveIds }, name);
+    if (!newId) return;
+    if (droppedCount > 0) {
+      toast(`combined ${liveIds.length} worksheet(s) — skipped ${droppedCount} that no longer exist`, "ok");
+    }
+    close();
   };
 
   const toggle = (id: string): void =>
@@ -139,6 +183,11 @@ export default function CombineWorkbooksDialog() {
             dedupedNames.map((n, i) => <span key={`${n}-${i}`}>{n}</span>)
           )}
         </div>
+        {commitError && (
+          <div className="qzk-ds-meta" style={{ color: "var(--danger, #d33)", marginTop: 8 }}>
+            {commitError}
+          </div>
+        )}
         <div className="qz-btn-row">
           <Button onClick={close}>Cancel</Button>
           <Button variant="primary" disabled={!canCombine} onClick={runCombine}>
