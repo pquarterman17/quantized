@@ -50,7 +50,8 @@ fixes below). Update this line to the actual tagged SHA at cut time.
 ### Performance (measured, un-instrumented, on the merged tree)
 - **Large 2-D map regrid** (#189): realistic instrument-precision RSM maps
   now hit the regular-grid fast path. 1M points: 29.8 → **3.3 s**;
-  4M: 141.6 → **17.3 s** (200×200 output).
+  4M: 141.6 → **~13 s cold / ~9 s warm** after #191's detection dedupe
+  (200×200 output).
 - **Scattered-cloud maps** (#188): input denser than the output raster is
   bin-averaged before triangulation. Random 1M points: 20.4 → **2.7 s**;
   4M: 88.2 → **4.8 s** (200×200). Below the threshold the path is
@@ -66,8 +67,8 @@ fixes below). Update this line to the actual tagged SHA at cut time.
 - **Managed large-data sidecars** (N) deliberately deferred with evidence —
   multi-hundred-MB projects load, but reopen of a ~188 MB project measures
   ~5.8 s; if that is your normal case, say so and N gets rebuilt into scope.
-- **Very large maps**: 4M-point regrid is ~17 s (was 141 s). A further
-  ~8 s dedupe is booked post-sprint (`RELEASE_BLOCKERS.md`, IMPORTANT).
+- **Very large maps**: 4M-point regrid is ~9-18 s depending on cache state
+  (was 141 s); the duplicate grid-detection call was deduped in #191.
 - **Packaged-desktop E2E is not agent-tested**: the desktop bridge is
   covered by mocked tests + CI sidecar smoke only; the packaged-app smoke
   pass is the owner's Day-6/7 checklist item.

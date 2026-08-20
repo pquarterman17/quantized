@@ -87,12 +87,16 @@ top of it this sprint.
 
 ## IMPORTANT — NOT BLOCKING (real gaps; do not release-gate on them)
 
-- **Map fast path runs `detect_regular_grid` twice for `method="linear"`
-  above the thinning threshold** (once as #188's gate in `regrid2d`, once
-  inside `_interp_scattered`): ~4.1 s per call at 4M points, so ~8 s of the
-  remaining 17.3 s at 4M is duplicated work. Dedupe by threading the
-  detection result (or a "already checked" hint) from `regrid2d` into
-  `interpolate2d`. Straightforward, measured, post-sprint.
+- ~~**Map fast path runs `detect_regular_grid` twice for `method="linear"`
+  above the thinning threshold.**~~ **CLOSED 2026-08-20 (#191).** The
+  detection result is now threaded from `regrid2d` into `interpolate2d`
+  via a sentinel-typed `_grid_hint` ("didn't check" re-detects; "checked,
+  found None" does not), with a positional-misalignment guard falling back
+  to a fresh detect if duplicate-row dedup shrinks the cloud. Call-count
+  spy tests pin exactly one detection in all three boundary cases; output
+  byte-identical to the two-call path. Measured same-box controlled
+  comparison at 4M/200x200: ~22.9 s -> ~18.6 s (exactly one ~4.3 s call
+  removed); warm steady-state on the merged tree measures ~9 s.
 
 - ~~**Single-writer project locking is entirely unbuilt (PR I2).**~~
   **CLOSED 2026-08-19 (#184).** Landed as `lib/lockState.ts`,
