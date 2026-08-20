@@ -10,7 +10,7 @@ import pytest
 from scipy.interpolate import griddata
 
 from quantized.calc._grid_detect import detect_regular_grid
-from quantized.calc.interp2d import interpolate2d, regrid2d
+from quantized.calc.interp2d import _THIN_K, interpolate2d, regrid2d
 
 
 def _scattered(g: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -324,3 +324,161 @@ def test_regrid2d_linear_on_realistic_mesh_shape() -> None:
     assert zq.shape == (25, 30)
     assert np.isfinite(zq).all()  # output grid sits fully inside the input's rectangular hull
     assert zq.max() == pytest.approx(4012.0, rel=0.05)  # near the Gaussian peak
+
+
+# ── RELEASE_BLOCKERS item 3: scattered-input pre-aggregation (_thin_scattered) ─
+#
+# `_interp_scattered`'s ungridded ("linear") branch Delaunay-triangulates the
+# WHOLE input cloud regardless of output resolution -- measured 29.8s/141.6s
+# on `main` at 1M/4M input points into a 500x500 output. `regrid2d` now bin-
+# averages the input onto a (2*ny)x(2*nx) grid before triangulation once the
+# input exceeds `_THIN_K` (=4) times the output cell count -- see interp2d.py's
+# module docstring and `_THIN_K`'s comment for the threshold/resolution
+# justification. These tests are differential, mirroring the P2.8 tests
+# above: below the threshold, bit-exact with the untouched old path (the
+# golden suite pins this); above it, close to (never identical to) a full
+# un-thinned build on smooth data, with a NaN/hole pattern that still agrees
+# closely. All clouds here are genuinely uniform-random -- never a pitch that
+# `detect_regular_grid` would find -- so the P2.8 grid fast path never
+# confounds these results.
+
+
+def test_thin_below_threshold_is_bit_identical_to_old_path() -> None:
+    """At exactly `_THIN_K * nx * ny` points (not exceeding), thinning must
+    not engage at all: `regrid2d`'s output is byte-identical (including NaN
+    positions) to calling `griddata` directly on the untouched cloud.
+    """
+    nx = ny = 10
+    n = _THIN_K * nx * ny  # == threshold; "exceeds" is a strict `>`, so this must NOT thin
+    rng = np.random.default_rng(11)
+    x = rng.uniform(0.0, 10.0, n)
+    y = rng.uniform(0.0, 6.0, n)
+    z = np.sin(x * 0.7) * np.cos(y * 0.5)
+    assert detect_regular_grid(x, y) is None
+
+    xq, yq, zq = regrid2d(x, y, z, nx=nx, ny=ny, method="linear")
+    want = griddata(
+        np.column_stack([x, y]), z, np.column_stack([xq.ravel(), yq.ravel()]), method="linear"
+    ).reshape(xq.shape)
+    assert np.array_equal(zq, want, equal_nan=True)
+
+
+def test_thin_at_or_below_threshold_hands_griddata_every_point(monkeypatch: Any) -> None:
+    """A size probe (not a golden comparison) that the `> _THIN_K*nx*ny`
+    boundary is where thinning actually starts: at the threshold, griddata
+    still receives every input point; one point past it, it receives fewer.
+    """
+    import quantized.calc.interp2d as interp2d_mod
+
+    nx = ny = 8
+    threshold = _THIN_K * nx * ny
+    rng = np.random.default_rng(12)
+
+    counts: list[int] = []
+    real_griddata = interp2d_mod.griddata
+
+    def _spy(points: Any, *a: Any, **kw: Any) -> Any:
+        counts.append(points.shape[0])
+        return real_griddata(points, *a, **kw)
+
+    monkeypatch.setattr(interp2d_mod, "griddata", _spy)
+
+    x = rng.uniform(0.0, 10.0, threshold)
+    y = rng.uniform(0.0, 6.0, threshold)
+    z = rng.uniform(0.0, 1.0, threshold)
+    assert detect_regular_grid(x, y) is None
+    regrid2d(x, y, z, nx=nx, ny=ny, method="linear")
+    assert counts[-1] == threshold  # unchanged input size -> no thinning
+
+    x2 = rng.uniform(0.0, 10.0, threshold + 1)
+    y2 = rng.uniform(0.0, 6.0, threshold + 1)
+    z2 = rng.uniform(0.0, 1.0, threshold + 1)
+    assert detect_regular_grid(x2, y2) is None
+    regrid2d(x2, y2, z2, nx=nx, ny=ny, method="linear")
+    assert counts[-1] < threshold + 1  # thinning engaged, fewer points reached griddata
+
+
+def test_thin_above_threshold_touches_far_fewer_points_and_stays_close(
+    monkeypatch: Any,
+) -> None:
+    """Above the threshold: griddata sees far fewer points than were input,
+    and the thinned result stays close to (never identical to -- see
+    docstring) a full un-thinned build on a smooth field. This is the load-
+    invariant half of the "measure, don't clock" rule -- the actual wall-
+    clock win is reported manually, never asserted here.
+    """
+    import quantized.calc.interp2d as interp2d_mod
+
+    nx = ny = 30  # 900 output cells; threshold = 3,600
+    n = 20_000  # ~5.6x the threshold
+    rng = np.random.default_rng(123)
+    x = rng.uniform(0.0, 10.0, n)
+    y = rng.uniform(0.0, 6.0, n)
+    z = np.sin(x * 0.7) * np.cos(y * 0.5) + 0.05 * x
+    assert detect_regular_grid(x, y) is None
+
+    counts: list[int] = []
+    real_griddata = interp2d_mod.griddata
+
+    def _spy(points: Any, *a: Any, **kw: Any) -> Any:
+        counts.append(points.shape[0])
+        return real_griddata(points, *a, **kw)
+
+    monkeypatch.setattr(interp2d_mod, "griddata", _spy)
+    _, _, zq_thin = regrid2d(x.copy(), y.copy(), z.copy(), nx=nx, ny=ny, method="linear")
+    assert counts, "thinning must still route through griddata (bin representatives)"
+    assert counts[-1] < n // 2  # measured: 3,586 of 20,000 reached griddata (~18%)
+    monkeypatch.undo()
+
+    # Reference: griddata over the untouched cloud, onto the same query grid
+    # regrid2d builds internally (data extent, since xlim/ylim were omitted).
+    xs = np.linspace(float(x.min()), float(x.max()), nx)
+    ys = np.linspace(float(y.min()), float(y.max()), ny)
+    qgx, qgy = np.meshgrid(xs, ys)
+    zq_ref = griddata(
+        np.column_stack([x, y]), z, np.column_stack([qgx.ravel(), qgy.ravel()]), method="linear"
+    ).reshape(qgx.shape)
+
+    assert not np.array_equal(zq_thin, zq_ref, equal_nan=True)  # documented divergence
+    both_finite = np.isfinite(zq_thin) & np.isfinite(zq_ref)
+    assert both_finite.mean() > 0.8
+    # Measured max |diff| ~2.2e-3 on this fixture (field range ~2.5); atol=0.02
+    # keeps a >9x margin, matching the P2.8 tolerance style above.
+    np.testing.assert_allclose(zq_thin[both_finite], zq_ref[both_finite], atol=0.02)
+
+
+def test_thin_preserves_spatial_holes_above_threshold() -> None:
+    """A genuine spatial gap (a corner with zero input coverage, well above
+    the thinning threshold) produces the same NaN/hole pattern -- via convex-
+    hull exclusion -- whether or not thinning engaged, since bin-averaging
+    an empty region still leaves it empty (no representative point is
+    invented there). Confirms thinning doesn't paper over real dead-zone
+    holes with an interpolated guess.
+    """
+    nx = ny = 30
+    rng = np.random.default_rng(7)
+    n = 20_000
+    x = rng.uniform(0.0, 10.0, n)
+    y = rng.uniform(0.0, 6.0, n)
+    z = np.sin(x * 0.7) * np.cos(y * 0.5) + 0.05 * x
+    hole = (x > 7.5) & (y > 4.0)  # a real dead corner: zero points here
+    x, y, z = x[~hole], y[~hole], z[~hole]
+    assert detect_regular_grid(x, y) is None
+    assert x.size > _THIN_K * nx * ny
+
+    xq, yq, zq_thin = regrid2d(x.copy(), y.copy(), z.copy(), nx=nx, ny=ny, method="linear")
+
+    xs = np.linspace(float(x.min()), float(x.max()), nx)
+    ys = np.linspace(float(y.min()), float(y.max()), ny)
+    qgx, qgy = np.meshgrid(xs, ys)
+    zq_ref = griddata(
+        np.column_stack([x, y]), z, np.column_stack([qgx.ravel(), qgy.ravel()]), method="linear"
+    ).reshape(qgx.shape)
+
+    nan_thin = np.isnan(zq_thin)
+    nan_ref = np.isnan(zq_ref)
+    assert nan_thin.sum() > 0  # the carved-out corner is genuinely a hole in both
+    assert nan_ref.sum() > 0
+    assert (nan_thin == nan_ref).mean() > 0.95  # NaN pattern agrees almost everywhere
+    corner = (qgx > 7.5) & (qgy > 4.0)
+    assert nan_thin[corner].any()  # the dead corner itself is NaN, not bridged/guessed
