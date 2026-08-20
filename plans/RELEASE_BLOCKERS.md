@@ -29,54 +29,49 @@ Quantized as her daily driver today; those move to post-sprint.
 
 ## BLOCKER — must close (or get an owner-approved defer) before release
 
-1. **Large 2-D map render at 1M-4M points (29.8 s / 141.6 s measured
-   2026-08-19 on `main`).** The P2.8 regrid fast path
-   (`calc/_grid_detect.py` routing detected grids through
-   `RegularGridInterpolator`) DID ship, and works: an exact-precision 1M
-   grid regrids in ~1.6 s. But it does not ENGAGE on realistic instrument
-   data. `_grid_detect.py:69` tests pitch uniformity purely relatively
-   (`_SPACING_RTOL = 1e-3`), while instrument exports quantize angular
-   positions to 6 decimal places (`tools/baselines/rsm.py:69`,
-   `f"{...:.6f}"`, and every committed `.xrdml` fixture). Quantization
-   perturbs each consecutive gap by a fixed ~2e-6 ABSOLUTE, so relative
-   jitter is ~2e-6/pitch and GROWS as the grid gets finer - backwards,
-   since fine pitch is exactly the large-map case. Reproduced at three
-   sizes: a 6dp-representable pitch (0.0008) has no jitter and still hits;
-   an arbitrary pitch of 0.00083333 at 1000² jitters 1.2e-3 and falls
-   back to Delaunay; 0.00041667 at 2000² jitters 2.4e-3 and is worse.
-   **Why it blocks:** unchanged from the original entry - RSM/XRD maps are
-   core to this owner's technique mix, and a 30-140 s wait sends a real
-   session back to Origin. **Status:** fix in progress on
-   `claude/p28-grid-detect-quantization` (quantization-aware combined
-   absolute+relative tolerance; deliberately NOT a blanket rtol raise,
-   which would weaken the near-miss guarantee the module's own comments
-   and `test_calc_grid_detect.py` protect).
+All three items below are now CLOSED (2026-08-20). The section is kept for
+the record; nothing currently rises to BLOCKER.
+
+1. ~~**Large 2-D map render at 1M-4M points (29.8 s / 141.6 s measured
+   2026-08-19 on `main`).**~~ **CLOSED 2026-08-20 (#189).** Root cause was a
+   quantization/tolerance mismatch: `_grid_detect` tested pitch uniformity
+   purely relatively (`_SPACING_RTOL = 1e-3`) while instrument exports
+   quantize coordinates to 6 decimals, so relative jitter (~2e-6/pitch)
+   grew as pitch shrank and the largest maps fell back to full Delaunay.
+   Fix: combined relative + absolute tolerance where the absolute term is
+   derived from the data's own inferred decimal lattice (`_infer_quantum`),
+   capped at 1% of pitch so round-numbered irregular axes cannot smuggle in
+   a loose bound; continuous (non-lattice) jitter of the same magnitude
+   still rejects, log-axis/irregular negative tests pinned. **Re-measured
+   on merged `main` (`11e71a5`), un-instrumented, 200x200 output:**
+   250k: 0.51 s; 1M: 29.8 -> **3.3 s**; 4M: 141.6 -> **17.3 s** (both
+   detection now HITs on the realistic `.xrdml` fixtures). Residual note:
+   of the 17.3 s at 4M, ~8 s is `detect_regular_grid` running twice on the
+   linear path (once as #188's thinning gate in `regrid2d`, once inside
+   `_interp_scattered`) at ~4.1 s per call on 4M points - a straightforward
+   post-sprint dedupe, booked below under IMPORTANT, not a blocker.
 
 2. ~~**Server-side plot-payload decimation for very large series.**~~
-   **CLOSED.** Shipped 2026-07-31 as `calc/decimate.py`, wired into
-   `routes/plot.py`. Measured 2026-08-19 on `main` by driving the route's
-   own path (`build_series` -> `decimate_columns` -> `jsonify` ->
-   `json.dumps`) over a synthetic 1M x 7 DataStruct: **154.3 MB
-   full-resolution -> 2.73 MB at `decimate_width=1280` (56x), 4.08 MB at
-   1920.** The original entry's 78 MB figure was a pre-fix measurement.
-   Zoom-refetch is also closed: `PlotRequest` carries `x_min`/`x_max`
-   (`routes/plot.py:42-58`) and windows before decimating
-   (`routes/plot.py:87-99`), with frontend wiring in
-   `usePlotPayload.ts:412-451`.
+   **CLOSED** (unchanged from the 2026-08-19 correction: shipped 2026-07-31;
+   measured 154.3 MB -> 2.73 MB at `decimate_width=1280`; zoom-refetch and
+   P3.4 slice 4 confirmed closed in code).
 
-3. **4M-point maps have no mitigation at all — new, not previously
-   listed.** Distinct from item 1 and not closed by it. `/api/plot/map`
-   (`routes/plot.py:139-156`) is a plain synchronous FastAPI endpoint: it
-   is not routed through `routes/jobs_api` (whose only producer is still
-   the DREAM/bumps fit), and there is no input-side decimation anywhere in
-   `calc/map.py` or `calc/interp2d.py` for the scattered fallback. So a 4M
-   map request today is a ~140 s blocking HTTP call with no progress and
-   no cancel — qualitatively different from merely slow, because of
-   proxy/browser timeout risk. Fixing item 1 should cut the common case
-   dramatically; this entry covers what remains when the fast path
-   legitimately cannot apply (genuinely scattered data).
+3. ~~**4M-point maps have no mitigation at all.**~~ **CLOSED 2026-08-20
+   (#188).** Genuinely scattered input denser than `4 * nx * ny` is now
+   bin-averaged onto a 2x-output-resolution grid before Delaunay (actual
+   coordinates averaged, not bin centres; bit-exact passthrough below the
+   threshold, pinned by test against a direct scipy reference; hull holes
+   preserved, never bridged; golden suite byte-identical). Measured at the
+   route's default 200x200 output: 1M random points 20.4 -> **2.7 s**,
+   4M 88.2 -> **4.8 s**; 500x500 output @4M: 94.7 -> **21.9 s**. With #189
+   detecting realistic gridded data, this path now serves only true
+   scattered clouds. The endpoint remains synchronous (no job-queue
+   routing/progress/cancel) - acceptable at seconds-scale; revisit only if
+   a real workload still exceeds ~10 s after both fixes.
 
-No other item found in this reconciliation rises to BLOCKER. P3.4 slice 4
+No other item found in this reconciliation rises to BLOCKER.
+(Reconfirmed 2026-08-20 after #188/#189: the blocker section above is fully
+closed; the map double-detection dedupe is listed below.) P3.4 slice 4
 (staged render/mount on workspace restore) is likewise confirmed closed in
 code: `frontend/src/store/windowHydration.ts` implements one-per-frame
 hydration and is wired from the `loadWorkspace`/`appendWorkspace` call sites. The core
@@ -91,6 +86,13 @@ top of it this sprint.
 ---
 
 ## IMPORTANT — NOT BLOCKING (real gaps; do not release-gate on them)
+
+- **Map fast path runs `detect_regular_grid` twice for `method="linear"`
+  above the thinning threshold** (once as #188's gate in `regrid2d`, once
+  inside `_interp_scattered`): ~4.1 s per call at 4M points, so ~8 s of the
+  remaining 17.3 s at 4M is duplicated work. Dedupe by threading the
+  detection result (or a "already checked" hint) from `regrid2d` into
+  `interpolate2d`. Straightforward, measured, post-sprint.
 
 - ~~**Single-writer project locking is entirely unbuilt (PR I2).**~~
   **CLOSED 2026-08-19 (#184).** Landed as `lib/lockState.ts`,
