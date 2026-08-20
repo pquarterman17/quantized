@@ -8,6 +8,15 @@ reconciling `LIBRARY_WORKBOOK_UX_PLAN.md` (H-N), `PRIMARY_SOFTWARE_AUDIT_PLAN.md
 (commit `440b0cb` at compile time). Detail lives at the cited plan entries;
 this doc stays a pointer index, not a duplicate.
 
+**Corrected 2026-08-19 (orchestrator).** The original compile read the plans'
+detailed evidence entries without checking the same plans' status headers, so
+it was stale in BOTH directions: it quoted pre-fix measurements for two fixes
+that had already shipped, and it listed two items as "in flight, not yet
+landed" that merged during the sprint (#184, #186). Every entry below has now
+been checked against code or measured on `main` rather than against a
+document. One of the two original BLOCKERs survives that check - but for a
+different reason than it was filed under, and a new one was found.
+
 **Status:** Active
 **Created:** 2026-08-19 (QA lane, Day-5 reconciliation)
 **Parent:** `plans/ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md`
@@ -20,32 +29,57 @@ Quantized as her daily driver today; those move to post-sprint.
 
 ## BLOCKER — must close (or get an owner-approved defer) before release
 
-1. **Large 2-D map interactive render time (12-59 s to visible at
-   500²-2000²).** Measured 2026-07-27 (`PRIMARY_SOFTWARE_AUDIT_PLAN.md`
-   P0.4): browser-side map-visible time is 12-13 s at 500² and 52-59 s at
-   1000², mechanism identified as full-input re-triangulation per regrid.
-   **Why it blocks:** XRD/XRR reciprocal-space maps and SIMS-adjacent 2-D
-   data are core to this owner's actual technique mix (see CLAUDE.md);
-   a 12-59 s wait to see a map render is exactly the kind of friction that
-   sends a real session back to Origin, and the mechanism (not merely
-   "slow hardware") is already diagnosed. **Owner:** booked as a P2.8 class
-   fix, `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P2.8; the 4M-point decimation
-   case is separately noted as pending in P0.4.
+1. **Large 2-D map render at 1M-4M points (29.8 s / 141.6 s measured
+   2026-08-19 on `main`).** The P2.8 regrid fast path
+   (`calc/_grid_detect.py` routing detected grids through
+   `RegularGridInterpolator`) DID ship, and works: an exact-precision 1M
+   grid regrids in ~1.6 s. But it does not ENGAGE on realistic instrument
+   data. `_grid_detect.py:69` tests pitch uniformity purely relatively
+   (`_SPACING_RTOL = 1e-3`), while instrument exports quantize angular
+   positions to 6 decimal places (`tools/baselines/rsm.py:69`,
+   `f"{...:.6f}"`, and every committed `.xrdml` fixture). Quantization
+   perturbs each consecutive gap by a fixed ~2e-6 ABSOLUTE, so relative
+   jitter is ~2e-6/pitch and GROWS as the grid gets finer - backwards,
+   since fine pitch is exactly the large-map case. Reproduced at three
+   sizes: a 6dp-representable pitch (0.0008) has no jitter and still hits;
+   an arbitrary pitch of 0.00083333 at 1000² jitters 1.2e-3 and falls
+   back to Delaunay; 0.00041667 at 2000² jitters 2.4e-3 and is worse.
+   **Why it blocks:** unchanged from the original entry - RSM/XRD maps are
+   core to this owner's technique mix, and a 30-140 s wait sends a real
+   session back to Origin. **Status:** fix in progress on
+   `claude/p28-grid-detect-quantization` (quantization-aware combined
+   absolute+relative tolerance; deliberately NOT a blanket rtol raise,
+   which would weaken the near-miss guarantee the module's own comments
+   and `test_calc_grid_detect.py` protect).
 
-2. **Server-side plot-payload decimation for very large series.**
-   `/api/plot/series` ships 78 MB of JSON for a 1M×7 payload; network +
-   encode + parse (~2-5 s) is the measured remaining term in both
-   window-mount (~3.8 s) and workspace-restore freeze (~3.7 s vs. the
-   1.5 s target), per `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.4's own
-   pre-authorized next slice. **Why it blocks:** every other P3.4 slice in
-   this chain already shipped and measurably helped (TTFP 906→106 ms,
-   window mount 6,066→~3,800 ms) — this is the one still-open piece of an
-   otherwise-closed performance chain, and it is the dominant remaining
-   term for anyone with a million-row-class dataset. **Owner:** P3.4,
-   `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P3.4, the "Server-side plot-payload
-   decimation" bullet.
+2. ~~**Server-side plot-payload decimation for very large series.**~~
+   **CLOSED.** Shipped 2026-07-31 as `calc/decimate.py`, wired into
+   `routes/plot.py`. Measured 2026-08-19 on `main` by driving the route's
+   own path (`build_series` -> `decimate_columns` -> `jsonify` ->
+   `json.dumps`) over a synthetic 1M x 7 DataStruct: **154.3 MB
+   full-resolution -> 2.73 MB at `decimate_width=1280` (56x), 4.08 MB at
+   1920.** The original entry's 78 MB figure was a pre-fix measurement.
+   Zoom-refetch is also closed: `PlotRequest` carries `x_min`/`x_max`
+   (`routes/plot.py:42-58`) and windows before decimating
+   (`routes/plot.py:87-99`), with frontend wiring in
+   `usePlotPayload.ts:412-451`.
 
-No other item found in this reconciliation rises to BLOCKER. The core
+3. **4M-point maps have no mitigation at all — new, not previously
+   listed.** Distinct from item 1 and not closed by it. `/api/plot/map`
+   (`routes/plot.py:139-156`) is a plain synchronous FastAPI endpoint: it
+   is not routed through `routes/jobs_api` (whose only producer is still
+   the DREAM/bumps fit), and there is no input-side decimation anywhere in
+   `calc/map.py` or `calc/interp2d.py` for the scattered fallback. So a 4M
+   map request today is a ~140 s blocking HTTP call with no progress and
+   no cancel — qualitatively different from merely slow, because of
+   proxy/browser timeout risk. Fixing item 1 should cut the common case
+   dramatically; this entry covers what remains when the fast path
+   legitimately cannot apply (genuinely scattered data).
+
+No other item found in this reconciliation rises to BLOCKER. P3.4 slice 4
+(staged render/mount on workspace restore) is likewise confirmed closed in
+code: `frontend/src/store/windowHydration.ts` implements one-per-frame
+hydration and is wired from the `loadWorkspace`/`appendWorkspace` call sites. The core
 import → organize → Quick Plot/Quick Figure Builder → edit → save → close →
 reopen loop has strong automated evidence behind it — G5's real-Chromium
 lifecycle journey (`plans/LIBRARY_WORKBOOK_UX_PLAN.md` item 7's G5 entry)
@@ -58,29 +92,28 @@ top of it this sprint.
 
 ## IMPORTANT — NOT BLOCKING (real gaps; do not release-gate on them)
 
-- **Single-writer project locking is entirely unbuilt (PR I2).** Grepped
-  `frontend/src` and `src/` for any lock/consent mechanism around a second
-  instance opening the same project — none exists. Two Quantized windows
-  (or tabs) pointed at the same `.dwk` can silently overwrite each other's
-  saves with no warning, the exact failure L0.47 forbids. Narrow risk for
-  a single daily-driver user who does not habitually run two instances on
-  one project, but real if she ever does. Owner: `LIBRARY_WORKBOOK_UX_PLAN.md`
-  item 9b (PR I2), in flight now (`claude/i-transfer-locking`, not yet landed
-  — do not treat as resolved).
+- ~~**Single-writer project locking is entirely unbuilt (PR I2).**~~
+  **CLOSED 2026-08-19 (#184).** Landed as `lib/lockState.ts`,
+  `store/projectLock.ts`, and `useProjectLockHeartbeat.ts`: read-only second
+  open, Open as Copy, and guarded Take Over. Review caught and fixed a false
+  safety claim here — the header promised the resumed original's next write
+  would be refused, but `runSaveWorkspace` was reading a 30 s-stale cached
+  `canWriteNow()`; it now re-verifies with a fresh `provider.read()`
+  immediately before `saveProjectTo`. Save As could also overwrite a locked
+  file; that is fixed too.
 - **M's transactional multi-source "Reimport All" (L0.33) and the full
   Trash dependency-review UI (restore / delete-dependent / freeze-materialize
   as distinct choices, L0.45) are unbuilt.** Single-dataset reimport and
   delete both ship with an impact preview today (PR M slice 1, merged);
   the multi-source and full-recovery-choice cases do not. Owner:
   `LIBRARY_WORKBOOK_UX_PLAN.md` item 13 (PR M).
-- **J2 Recode workshop (merge/rename levels, find-replace) does not exist.**
-  If the owner's real data commonly needs categorical cleanup (mistyped or
-  inconsistent factor levels), there is no in-app way to fix it yet — only
-  reimport with a corrected source file works around it today. In flight
-  now (`claude/j2-recode-worksheet`, not yet landed). Owner:
-  `JMP_GAP_PLAN.md` item J2; `LIBRARY_WORKBOOK_UX_PLAN.md`'s P1.6b
-  (worksheet C/O/N type badge + categorical cell-edit guard) is the same
-  gap's worksheet-UI half.
+- ~~**J2 Recode workshop (merge/rename levels, find-replace) does not
+  exist.**~~ **CLOSED 2026-08-19 (#186).** Landed as `store/recode.ts` and
+  `components/workshops/recode/`, with P1.6b's worksheet C/O/N type badge and
+  categorical cell-edit guard in the same PR. Review caught two defects
+  pre-merge: a case-duplicate level picker that wrote the wrong code (levels
+  `["pass","PASS","Fail"]`, picking `"PASS"` wrote `0`), and a "Save mapping"
+  button whose result evaporated.
 - **P1.3 reusable plot recipes are unbuilt beyond H's Quick Plot templates.**
   H (shipped) covers mapping + style + technique/schema matching, which is
   most of the daily value; the full recipe vocabulary (axis limits, legend,
