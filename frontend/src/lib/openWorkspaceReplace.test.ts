@@ -11,6 +11,7 @@ import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { useProjectLock } from "../store/projectLock";
+import { useRecentProjects } from "../store/recentProjects";
 
 vi.mock("../store/toasts", () => ({ toast: vi.fn() }));
 
@@ -60,6 +61,7 @@ beforeEach(() => {
       clear: async () => true,
     },
   });
+  useRecentProjects.setState({ recentProjects: [] });
 });
 
 describe("replaceWorkspace — PR I2 lock registration", () => {
@@ -173,5 +175,27 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
 
     expect(store.has("/p/a.dwk")).toBe(false); // still released, not stranded by the placeholder
     expect(store.has("/p/b.dwk")).toBe(true);
+  });
+});
+
+// DEFECT A (Sol audit P1-6): the Recent Projects push moved here from
+// lib/openWorkspaceCommand.ts's native-open READ, so it fires exactly once
+// the replace is actually applied — see recordNativeOpen's doc.
+describe("replaceWorkspace / replaceWorkspaceSafely — Recent Projects push (DEFECT A)", () => {
+  it("replaceWorkspace records a Recent Projects entry for a native identity", () => {
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    const recent = useRecentProjects.getState().recentProjects;
+    expect(recent).toHaveLength(1);
+    expect(recent[0]).toMatchObject({ name: "demo.dwk", path: "/p/demo.dwk" });
+  });
+
+  it("replaceWorkspaceSafely records a Recent Projects entry for a native identity too", () => {
+    replaceWorkspaceSafely(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(1);
+  });
+
+  it("neither records anything for a browser-picker open (no native identity)", () => {
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace());
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
   });
 });
