@@ -15,6 +15,7 @@
 // breaks) a formula keeps both in sync.
 
 import { applyFormulas, baseColumns, channelLetter, formulaErrors, referencedColumns } from "../lib/formula";
+import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, DataStruct } from "../lib/types";
@@ -68,6 +69,20 @@ export function withRecomputedFormulas(
   const data = applyFormulas(base, formulas);
   const errors = formulaErrors(base, formulas);
   return { data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+}
+
+/** `withRecomputedFormulas`, plus `forced` merged in (winning over whatever
+ *  `lib/formula.ts`'s own evaluation independently produced) — `removeFormula`
+ *  (DEFECT A, Sol audit P1-3) uses this so a forced "references removed
+ *  column X" message is never masked by a generic "unknown variable" one. */
+function withRecomputedFormulasAnd(
+  base: DataStruct,
+  formulas: ComputedColumn[],
+  forced: Record<string, string>,
+): { data: DataStruct; formulaErrors: Record<string, string> | undefined } {
+  const recomputed = withRecomputedFormulas(base, formulas);
+  if (!Object.keys(forced).length) return recomputed;
+  return { data: recomputed.data, formulaErrors: { ...(recomputed.formulaErrors ?? {}), ...forced } };
 }
 
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
@@ -155,11 +170,17 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         const datasets = s.datasets.map((d) => {
           if (d.id !== id || !d.formulas) return d;
           const base = baseColumns(d.data, d.formulas.length);
-          const formulas = d.formulas.filter((_, i) => i !== index);
+          const survivors = d.formulas.filter((_, i) => i !== index);
+          // DEFECT A (Sol audit P1-3): a surviving formula's expr/deps (or a
+          // recode's sourceLetter) resolve column letters POSITIONALLY, so
+          // every reference past `removedCol` must shift down WITH it, and
+          // any reference straight AT it must become an explicit error —
+          // never silently re-point at whatever shifted into that letter.
+          const { formulas, forcedErrors } = remapSurvivingFormulas(survivors, removedCol);
           return {
             ...d,
             formulas: formulas.length ? formulas : undefined,
-            ...withRecomputedFormulas(base, formulas),
+            ...withRecomputedFormulasAnd(base, formulas, forcedErrors),
             ...remapDatasetChannels(d, removedCol),
           };
         });

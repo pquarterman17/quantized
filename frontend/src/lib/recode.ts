@@ -242,6 +242,39 @@ export function resolveRecodeMapping(
   return { ok: true };
 }
 
+export type RecodeChannelResolution = { ok: true; channel: number } | { ok: false; reason: string };
+
+/** DEFECT B closure (Sol audit P1-3): the non-modal RecodePanel keeps
+ *  `channel` as a plain index for the life of the panel, so a column shift
+ *  elsewhere mid-edit (a formula/recode column removed, a reimport) can
+ *  silently retarget it at a DIFFERENT column sitting at that same index.
+ *  Re-resolve the identity captured at open time (`openLabel`) against the
+ *  dataset's CURRENT labels before any commit trusts `channel`:
+ *   - still the same label at that index -> unchanged, proceed.
+ *   - a different label there now, but exactly ONE column elsewhere in the
+ *     dataset still carries `openLabel` -> retarget to that column.
+ *   - zero, or more than one, match -> refuse (name the column) rather than
+ *     guess which one the user meant. */
+export function resolveRecodeChannel(
+  labels: readonly string[],
+  channel: number,
+  openLabel: string,
+): RecodeChannelResolution {
+  if (labels[channel] === openLabel) return { ok: true, channel };
+  const matches: number[] = [];
+  labels.forEach((label, i) => {
+    if (label === openLabel) matches.push(i);
+  });
+  if (matches.length === 1) return { ok: true, channel: matches[0] };
+  if (matches.length === 0) {
+    return { ok: false, reason: `can't commit recode: column "${openLabel}" no longer exists` };
+  }
+  return {
+    ok: false,
+    reason: `can't commit recode: "${openLabel}" is ambiguous now (${matches.length} columns share that name) — reopen Recode on the column you want`,
+  };
+}
+
 /** A saved, re-applicable recode recipe (J2 item 3). Session-scoped (see
  *  store/recode.ts's header for why this doesn't round-trip `.dwk` yet) --
  *  `sourceLevels` is kept for DISPLAY only ("built from: Pass, Fail, Retry");

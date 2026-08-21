@@ -115,7 +115,7 @@ const FUNCS: Record<string, (...a: number[]) => number> = {
 };
 const CONSTS: Record<string, number> = { pi: Math.PI, e: Math.E };
 
-function tokenize(src: string): Tok[] {
+export function tokenize(src: string): Tok[] {
   const toks: Tok[] = [];
   let i = 0;
   while (i < src.length) {
@@ -163,11 +163,12 @@ function tokenize(src: string): Tok[] {
 
 /** Compile an expression to a per-row evaluator. Throws on a parse error.
  *  `onRef`, when given, is called once (at PARSE time, not per row/eval) for
- *  every bare column-letter/variable reference the expression contains — the
- *  single collection point `referencedColumns` below reuses so the two can
- *  never disagree (LIBRARY_WORKBOOK_UX_PLAN PR K, K1). Ordinary callers pass
- *  nothing and pay no cost beyond one extra no-op call per reference. */
-export function compileFormula(src: string, onRef?: (name: string) => void): FormulaFn {
+ *  every bare column-letter/variable reference, with its token index in
+ *  `tokenize(src)` — the single collection point `referencedColumns` below
+ *  (and `lib/formulaRename.ts`'s column-shift rewrite) reuses so none can
+ *  ever disagree (LIBRARY_WORKBOOK_UX_PLAN PR K, K1). Ordinary callers pass
+ *  nothing and pay no cost beyond one no-op call per reference. */
+export function compileFormula(src: string, onRef?: (name: string, tokenIndex: number) => void): FormulaFn {
   const toks = tokenize(src);
   let pos = 0;
   const peek = (): Tok | undefined => toks[pos];
@@ -178,7 +179,7 @@ export function compileFormula(src: string, onRef?: (name: string) => void): For
     if (!t || t.t !== "op" || t.v !== v) throw new Error(`expected "${v}"`);
   };
   const isKeyword = (t: Tok | undefined, kw: string): boolean => !!t && t.t === "name" && t.v === kw;
-  const ref = onRef ?? ((): void => {});
+  const ref = (name: string): void => onRef?.(name, pos - 1); // pos-1: ref() always fires right after eat()
 
   function parseOr(): FormulaFn {
     let left = parseAnd();
