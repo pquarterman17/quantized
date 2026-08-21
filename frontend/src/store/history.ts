@@ -5,7 +5,7 @@
 // snapshots share array/object structure with the live state, nothing is
 // deep-cloned. Composed into the ONE useApp store instance exactly like
 // ./windows (read its header first): `useApp` spreads
-// `createHistorySlice(set)` into the store, so every existing
+// `createHistorySlice(set, get)` into the store, so every existing
 // `useApp((s) => ...)` selector and `useApp.getState()` call keeps working —
 // this file is a code boundary, not a second store.
 //
@@ -214,11 +214,34 @@ function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppState> {
 export interface HistorySlice {
   history: HistoryEntry[];
   future: HistoryEntry[];
+  /** True while a `withHistoryBatch` batch is running — `recordHistory`
+   *  becomes a no-op for its duration (see `withHistoryBatch`'s own doc).
+   *  Session-only control state, not user data — HISTORY_EXCLUDED, same
+   *  class as `history`/`future` themselves. Never set directly outside
+   *  this module. */
+  historySuppressed: boolean;
   /** Push the CURRENT state onto the undo stack under `label` and clear
    *  redo (any newly-recorded action invalidates whatever was undone).
    *  Call this at the very top of a participating mutation, BEFORE its own
-   *  `set()`, so the pushed snapshot is the PRE-mutation state. */
+   *  `set()`, so the pushed snapshot is the PRE-mutation state. A no-op
+   *  while `historySuppressed` (inside a `withHistoryBatch`) — the batch
+   *  owns pushing the one entry for the whole operation instead. */
   recordHistory: (label: string) => void;
+  /** Run `fn` as ONE undo step, no matter how many ordinary
+   *  `recordHistory("...")` calls happen inside it (store/relink.ts's
+   *  `commit()` hand-rolled this exact shape for its own batch before this
+   *  existed — see that module's doc; this generalizes it). Snapshots the
+   *  PRE-batch state up front, suppresses every `recordHistory` call for
+   *  `fn`'s duration, then — only if at least one suppressed call actually
+   *  fired (i.e. `fn` mutated participating state at all) — pushes ONE
+   *  entry under `label` holding that pre-batch snapshot. A batch whose
+   *  `fn` mutates nothing (e.g. an import that fails outright) pushes NO
+   *  entry, exactly matching what an unbatched call site would have done.
+   *
+   *  Reentrant: calling this from inside an already-running batch just runs
+   *  `fn` — the outer batch owns the one entry; nesting never creates a
+   *  second undo step. */
+  withHistoryBatch: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
   /** No-op on an empty stack (callers that want a "nothing to undo" toast
    *  check `history.length` themselves — see components/history). */
   undo: () => void;
@@ -231,18 +254,52 @@ export interface HistorySlice {
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
 
-export function createHistorySlice(set: SliceSet): HistorySlice {
+export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
+  // Set by `recordHistory` whenever it's called while suppressed — tells
+  // the (non-reentrant, so never more than one at a time) active batch
+  // whether ANYTHING inside it actually would have recorded. A module-level
+  // closure variable rather than a store field: it's read/written only by
+  // this one synchronous handshake between recordHistory and
+  // withHistoryBatch, never by a component, so it doesn't need to be
+  // reactive state (and doesn't need a HISTORY_EXCLUDED entry of its own).
+  let batchHadRecord = false;
+
   return {
     history: [],
     future: [],
     viewHistory: [],
     viewFuture: [],
-    recordHistory: (label) =>
+    historySuppressed: false,
+    recordHistory: (label) => {
+      if (get().historySuppressed) {
+        batchHadRecord = true;
+        return;
+      }
       set((s) => ({
         history: [...s.history, { label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
         future: [],
-      })),
+      }));
+    },
+    withHistoryBatch: async (label, fn) => {
+      if (get().historySuppressed) return fn(); // reentrant — outer batch owns the one entry
+      const preSnapshot = snapshotOf(get());
+      batchHadRecord = false;
+      set({ historySuppressed: true });
+      try {
+        return await fn();
+      } finally {
+        const had = batchHadRecord;
+        batchHadRecord = false;
+        set((s) => ({
+          historySuppressed: false,
+          ...(had
+            ? { history: [...s.history, { label, snapshot: preSnapshot }].slice(-HISTORY_DEPTH), future: [] }
+            : {}),
+        }));
+      }
+    },
     undo: () =>
       set((s) => {
         const top = s.history[s.history.length - 1];

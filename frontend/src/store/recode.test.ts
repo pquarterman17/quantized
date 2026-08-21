@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Dataset } from "../lib/types";
+import type { ComputedColumn, Dataset } from "../lib/types";
 import { activeRecodePreview, useRecode } from "./recode";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -129,6 +129,109 @@ describe("commitRecode", () => {
     const letter = useRecode.getState().commitRecode();
     expect(letter).toBeNull();
     expect(active()).toBe(before);
+  });
+});
+
+describe("commitRecode — DEFECT B closure (Sol audit P1-3): stale-index resync/refuse", () => {
+  // Three categorical columns: base "Grade" (A), then two REAL recode
+  // columns of it, "Grade2" (identity recode, letter C) and "Grade3"
+  // (identity recode, letter D) — both regenerate their own cat_levels on
+  // any recompute (unlike a plain `expr` formula), so they stay genuinely
+  // categorical across the shift this test forces, keeping the test focused
+  // on IDENTITY resolution rather than an unrelated categorical-ness lapse.
+  // An unrelated plain formula "Filler" (letter B) sits BEFORE them so
+  // removing it shifts both down by one: Grade2 C->B, Grade3 D->C.
+  function shiftableDataset(): Dataset {
+    const levels = ["Pass", "OK", "Fail"];
+    const code: number[] = [0, 1, 2, 1];
+    return {
+      id: "d1",
+      name: "grades.dat",
+      data: {
+        time: [0, 1, 2, 3],
+        values: code.map((c) => [c, 0, c, c]),
+        labels: ["Grade", "Filler", "Grade2", "Grade3"],
+        units: ["", "", "", ""],
+        metadata: {},
+        cat_levels: { 0: levels, 2: levels, 3: levels },
+      },
+      formulas: [
+        { name: "Filler", expr: "A * 0", deps: ["A"] },
+        { name: "Grade2", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } },
+        { name: "Grade3", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } },
+      ] satisfies ComputedColumn[],
+    };
+  }
+
+  it("RETARGETS to the column the panel actually opened on, never the column that shifted into the stale index", () => {
+    useApp.setState({ datasets: [shiftableDataset()], activeId: "d1" });
+    useRecode.getState().openRecode("d1", 2); // "Grade2" — channel=2, openLabel="Grade2"
+    expect(useRecode.getState().openLabel).toBe("Grade2");
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+
+    // Remove "Filler" elsewhere (the SAME index-shift removeFormula produces
+    // for DEFECT A) — Grade2 shifts C->B, Grade3 shifts D->C, so the STALE
+    // channel index (2) now names Grade3, not Grade2.
+    useApp.getState().removeFormula("d1", 0);
+    expect(active().data.labels).toEqual(["Grade", "Grade2", "Grade3"]);
+
+    const letter = useRecode.getState().commitRecode();
+
+    expect(letter).not.toBeNull();
+    const committed = active().formulas?.at(-1);
+    expect(committed?.name).toBe("Grade2 (recoded)");
+    // Must be sourced from Grade2 (now letter B) — NOT Grade3 (letter C),
+    // which is what the stale index would have silently produced pre-fix.
+    expect(committed?.recode?.sourceLetter).toBe("B");
+  });
+
+  it("REFUSES (panel stays open, draft intact) when the opened column no longer exists anywhere", () => {
+    useApp.setState({ datasets: [shiftableDataset()], activeId: "d1" });
+    useRecode.getState().openRecode("d1", 2); // "Grade2"
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+    const draftBefore = useRecode.getState().mapping;
+
+    // Simulate a reimport that renamed the column away entirely (reimport.ts
+    // never touches useRecode — this reproduces that gap directly).
+    useApp.setState((s) => ({
+      datasets: [{ ...s.datasets[0], data: { ...s.datasets[0].data, labels: ["Grade", "Filler", "Renamed", "Grade3"] } }],
+    }));
+
+    const letter = useRecode.getState().commitRecode();
+
+    expect(letter).toBeNull();
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Grade2/), "danger");
+    expect(useRecode.getState().open).toBe(true); // panel stays open
+    expect(useRecode.getState().mapping).toBe(draftBefore); // draft untouched
+  });
+
+  it("REFUSES (never guesses) when the opened column's label is now ambiguous", () => {
+    useApp.setState({ datasets: [shiftableDataset()], activeId: "d1" });
+    useRecode.getState().openRecode("d1", 2); // "Grade2"
+
+    // Two columns now carry the opened label, and the stale index isn't
+    // either of them.
+    useApp.setState((s) => ({
+      datasets: [{ ...s.datasets[0], data: { ...s.datasets[0].data, labels: ["Grade2", "Filler", "Other", "Grade2"] } }],
+    }));
+
+    const letter = useRecode.getState().commitRecode();
+
+    expect(letter).toBeNull();
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/ambiguous/), "danger");
+    expect(useRecode.getState().open).toBe(true);
+  });
+
+  it("activeRecodePreview resyncs the same way (never previews the wrong column)", () => {
+    useApp.setState({ datasets: [shiftableDataset()], activeId: "d1" });
+    useRecode.getState().openRecode("d1", 2); // "Grade2"
+    useApp.getState().removeFormula("d1", 0); // Grade2 shifts C->B
+
+    const preview = activeRecodePreview();
+
+    // Grade2's levels (identity recode of Grade) — NOT Grade3's, and NOT
+    // null just because the raw index moved.
+    expect(preview?.newLevels).toEqual(["Pass", "OK", "Fail"]);
   });
 });
 

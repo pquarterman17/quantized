@@ -75,6 +75,68 @@ describe("RelinkPanel", () => {
     expect(screen.getAllByRole("button", { name: /^Relink 1$/ })[0]).toBeEnabled();
   });
 
+  // P1-2 defect 2b/2c (RED-FIRST): the pre-fix panel rendered an "unknown"
+  // row IDENTICALLY to a verified "unchanged" one — no visual distinction,
+  // no way to tell a user "this one still needs verification" from "this
+  // one is fine". It must render distinctly (a "needs verification" label,
+  // a distinct color token) and offer a per-row escalation.
+  it("renders an 'unknown' row distinctly (needs-verification wording) and excludes it from the Relink count", () => {
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/a.csv",
+          candidatePath: "/new/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: null,
+          candidateSize: null,
+        },
+        {
+          datasetId: "b",
+          datasetName: "b.csv",
+          oldPath: "/old/b.csv",
+          candidatePath: "/new/b.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:b",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    render(<RelinkPanel />);
+
+    // Only the "unchanged" row counts toward the committable total.
+    expect(screen.getByRole("button", { name: /^Relink 1$/ })).toBeEnabled();
+    expect(screen.getByText(/needs verification/i)).toBeInTheDocument();
+  });
+
+  it("a per-row 'use anyway' action escalates ONLY that row (per-row consent, not a global bypass)", () => {
+    const spy = vi.fn();
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/a.csv",
+          candidatePath: "/new/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: null,
+          candidateSize: null,
+        },
+      ],
+      escalateUnknownRow: spy,
+    });
+    render(<RelinkPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /use anyway/i }));
+    expect(spy).toHaveBeenCalledWith("a");
+  });
+
   it("offers 'Import as new version' only for a changed row, and it calls the store action", () => {
     const spy = vi.fn().mockResolvedValue(undefined);
     useRelink.setState({

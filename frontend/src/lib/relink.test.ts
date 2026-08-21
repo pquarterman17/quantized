@@ -135,4 +135,44 @@ describe("sourceChangeVerdict", () => {
     // and neither side has size/mtime to fall back to.
     expect(sourceChangeVerdict({ checksum: "sha256:aa" }, { checksum: null })).toBe("unknown");
   });
+
+  // P1-2 DEFECT 1 (RED-FIRST): the pre-fix code short-circuited past the
+  // checksum branch whenever EITHER side's checksum was falsy, and silently
+  // fell through to size/mtime — so a recorded checksum + a legitimately
+  // unavailable probe checksum (content-read consent lapsed this session,
+  // desktopBridge.ts:329-332) returned a confident "unchanged"/"changed"
+  // grounded in a weaker signal than what was actually recorded. A recorded
+  // checksum is authoritative: unavailable-this-session must report
+  // "unknown", never silently downgrade to the metadata fallback.
+  it("is unknown (not unchanged) when a recorded checksum's probe is unavailable, even if size/mtime match", () => {
+    expect(
+      sourceChangeVerdict(
+        { checksum: "sha256:aa", size: 10, mtime: 100 },
+        { checksum: null, size: 10, mtime: 100 },
+      ),
+    ).toBe("unknown");
+  });
+
+  it("is unknown (not changed) when a recorded checksum's probe is unavailable, even if size/mtime differ", () => {
+    // Falling through to metadata must not happen in EITHER direction: an
+    // unavailable checksum probe is not evidence of "changed" either.
+    expect(
+      sourceChangeVerdict(
+        { checksum: "sha256:aa", size: 10, mtime: 100 },
+        { checksum: null, size: 999, mtime: 999 },
+      ),
+    ).toBe("unknown");
+  });
+
+  it("keeps the legitimate metadata fallback when NO checksum was ever recorded", () => {
+    // Recorded checksum absent (a browser import, or a dataset from before
+    // this slice) — falling back to size/mtime here is the intended
+    // degraded mode, not the defect.
+    expect(sourceChangeVerdict({ size: 10, mtime: 100 }, { checksum: null, size: 10, mtime: 100 })).toBe(
+      "unchanged",
+    );
+    expect(sourceChangeVerdict({ size: 10, mtime: 100 }, { checksum: null, size: 11, mtime: 100 })).toBe(
+      "changed",
+    );
+  });
 });

@@ -24,6 +24,7 @@ import {
   withColumnName,
   withColumnUnit,
   withRole,
+  xRoleConflictMessage,
   type WizardErrorRow,
 } from "../../../lib/importwizard";
 import type {
@@ -55,6 +56,12 @@ export interface ImportWizardState {
   imported: boolean; // one-shot success flag (view shows a done state)
   /** P1.6 item 2: one row per `error`-role column, editable target/axis/side. */
   errorRows: WizardErrorRow[];
+  /** P1-5 DEFECT 1: null unless more than one column is currently marked
+   *  `x` -- non-null names the conflicting columns and BLOCKS `doImport`
+   *  (parse_import only ever keeps the first x column, silently dropping
+   *  every other one). The view disables Import and shows this message
+   *  while it's set. */
+  xConflict: string | null;
   pickFile: (f: File) => Promise<void>;
   patchSettings: (patch: Partial<ImportSettingsWire>) => void;
   setColumnRole: (index: number, role: ImportColumnRole) => void;
@@ -235,8 +242,21 @@ export function useImportWizard(): ImportWizardState {
     }
   }
 
+  // P1-5 DEFECT 1: derived from `columns` (the optimistic overlay), so a
+  // role edit shows the conflict/clears it instantly, same as every other
+  // column-edit affordance in this hook.
+  const xConflict = useMemo(() => xRoleConflictMessage(columns), [columns]);
+
   async function doImport(): Promise<void> {
     if (!file || !settings || !text) return;
+    // Defense in depth: the view disables Import while `xConflict` is set,
+    // but doImport itself must also refuse -- never send a request the
+    // backend would have to reject (or, worse, that an older backend
+    // silently truncated).
+    if (xConflict) {
+      setError(xConflict);
+      return;
+    }
     setImporting(true);
     setError(null);
     try {
@@ -293,6 +313,7 @@ export function useImportWizard(): ImportWizardState {
     error,
     imported,
     errorRows,
+    xConflict,
     pickFile,
     patchSettings,
     setColumnRole,

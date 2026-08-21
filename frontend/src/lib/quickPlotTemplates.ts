@@ -235,10 +235,32 @@ export function resolveTemplate(template: QuickPlotTemplate, dataset: Dataset): 
 
   const currentLabels = dataset.data.labels;
   const currentUnits = dataset.data.units;
+  // P1-4 (Sol's Day-6 audit): label+unit match alone is not enough evidence
+  // that a resolved column is still the SAME kind of column -- a value
+  // column can end up with the exact label+unit an error channel had at
+  // save time (a rename, a different file with the same header). Compare
+  // the saved errorRole against the target's CURRENT classification (the
+  // same source `captureQuickPlotTemplateLabels`/the builder itself uses:
+  // an explicit per-dataset override if set, else the label-based
+  // inference) and refuse a mismatch. Deliberately refuses the WHOLE
+  // template rather than just dropping the mismatched error binding -- a
+  // template that half-applies (silently drops the error bars the user
+  // asked for) is worse than one that says exactly why it can't apply.
+  const currentBindings = dataset.errorRoles ?? inferErrorBindings(dataset.data);
   const unmatched: string[] = [];
   const resolve = (ch: number, role: string): number | null => {
     const resolved = resolveChannel(template, currentLabels, currentUnits, ch);
-    if (resolved === null) unmatched.push(fieldName(role, template.labels[ch]));
+    if (resolved === null) {
+      unmatched.push(fieldName(role, template.labels[ch]));
+      return null;
+    }
+    const savedRole = template.signature.channels[ch]?.errorRole ?? "value";
+    const currentRole = errorRoleFor(currentBindings, resolved);
+    if (savedRole !== currentRole) {
+      const name = fieldName(role, template.labels[ch]);
+      unmatched.push(`${name}: saved as "${savedRole}", now classified as "${currentRole}"`);
+      return null;
+    }
     return resolved;
   };
 

@@ -57,44 +57,54 @@ type SliceGet = () => AppState;
 
 export function createDatasetMetaSlice(set: SliceSet, get: SliceGet): DatasetMetaSlice {
   return {
+    // P2-2 (Sol's Day-6 audit): every single-row action below computes its
+    // effective change FIRST and bails before recordHistory on a no-op --
+    // missing id, blank/duplicate/absent tag, or an unchanged value must
+    // never push a phantom undo entry, the same discipline
+    // batchEditDatasetMetadata already applies (and is tested for) just
+    // below.
     setDatasetNotes: (id, notes) => {
+      const d = get().datasets.find((x) => x.id === id);
+      if (!d) return; // no such dataset -- nothing to record
+      const next = notes.trim() ? notes : undefined;
+      if (d.notes === next) return; // unchanged value -- no-op
       get().recordHistory("edit notes");
       set((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id ? { ...d, notes: notes.trim() ? notes : undefined } : d,
-        ),
+        datasets: s.datasets.map((x) => (x.id === id ? { ...x, notes: next } : x)),
       }));
     },
     addDatasetTag: (id, tag) => {
+      const t = tag.trim();
+      if (!t) return; // blank tag -- no-op
+      const d = get().datasets.find((x) => x.id === id);
+      if (!d) return; // no such dataset -- nothing to record
+      const tags = d.tags ?? [];
+      if (tags.includes(t)) return; // duplicate tag -- no-op
       get().recordHistory("add tag");
-      set((s) => {
-        const t = tag.trim();
-        if (!t) return {};
-        return {
-          datasets: s.datasets.map((d) => {
-            if (d.id !== id) return d;
-            const tags = d.tags ?? [];
-            return tags.includes(t) ? d : { ...d, tags: [...tags, t] };
-          }),
-        };
-      });
+      set((s) => ({
+        datasets: s.datasets.map((x) => (x.id === id ? { ...x, tags: [...(x.tags ?? []), t] } : x)),
+      }));
     },
     removeDatasetTag: (id, tag) => {
+      const d = get().datasets.find((x) => x.id === id);
+      if (!d || !d.tags || !d.tags.includes(tag)) return; // no such dataset / absent tag -- no-op
       get().recordHistory("remove tag");
       set((s) => ({
-        datasets: s.datasets.map((d) => {
-          if (d.id !== id || !d.tags) return d;
-          const tags = d.tags.filter((x) => x !== tag);
-          return { ...d, tags: tags.length ? tags : undefined };
+        datasets: s.datasets.map((x) => {
+          if (x.id !== id || !x.tags) return x;
+          const tags = x.tags.filter((v) => v !== tag);
+          return { ...x, tags: tags.length ? tags : undefined };
         }),
       }));
     },
     setDatasetGroup: (id, group) => {
+      const d = get().datasets.find((x) => x.id === id);
+      if (!d) return; // no such dataset -- nothing to record
+      const next = group.trim() ? group.trim() : undefined;
+      if (d.group === next) return; // unchanged value -- no-op
       get().recordHistory("set group");
       set((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
-        ),
+        datasets: s.datasets.map((x) => (x.id === id ? { ...x, group: next } : x)),
       }));
     },
     batchEditDatasetMetadata: (ids, patch) => {

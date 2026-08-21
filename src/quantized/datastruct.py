@@ -103,6 +103,38 @@ def _normalize_cat_levels(
     return MappingProxyType(normalized)
 
 
+def _parse_cat_levels_payload(raw: Any) -> dict[int, tuple[str, ...]] | None:
+    """Parse the wire-format ``cat_levels`` payload (``DataStruct.from_dict``'s
+    deserialization boundary -- P2-1, Sol's Day-6 audit).
+
+    ``raw`` is UNTRUSTED (a request body, a hand-edited ``.dwk``): the prior
+    one-liner (``{int(k): tuple(v) ...}``) assumed a clean
+    ``{channel_index: [level, ...]}`` shape and blew up on anything else --
+    a non-dict payload raised ``AttributeError`` (an uncaught 500 at the
+    route boundary), a non-int key raised ``ValueError``, and a STRING value
+    (``{"0": "abc"}``) didn't raise at all -- ``tuple("abc")`` silently split
+    it into ``('a', 'b', 'c')``, a wrong-but-successful level table.
+
+    Every per-entry check below degrades instead of raising -- a malformed
+    entry is simply DROPPED, consistent with ``_normalize_cat_levels``'s
+    documented "degrade, never raise" philosophy (see the module docstring's
+    VALIDATION SCOPE section) -- so a corrupted payload still constructs a
+    ``DataStruct`` (possibly with ``cat_levels=None``) rather than 500ing.
+    Well-formed payloads round-trip identically to the old one-liner."""
+    if not isinstance(raw, Mapping) or not raw:
+        return None
+    out: dict[int, tuple[str, ...]] = {}
+    for k, v in raw.items():
+        try:
+            idx = int(k)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(v, (str, bytes)) or not isinstance(v, (list, tuple)):
+            continue
+        out[idx] = tuple(v)
+    return out or None
+
+
 @dataclass(frozen=True, slots=True)
 class DataStruct:
     """Immutable, parser-agnostic dataset. Build via :meth:`create`."""
@@ -231,9 +263,7 @@ class DataStruct:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> DataStruct:
         raw_cat_levels = payload.get("cat_levels")
-        cat_levels = (
-            {int(k): tuple(v) for k, v in raw_cat_levels.items()} if raw_cat_levels else None
-        )
+        cat_levels = _parse_cat_levels_payload(raw_cat_levels)
         return cls.create(
             time=payload["time"],
             values=payload["values"],

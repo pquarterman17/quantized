@@ -121,6 +121,30 @@ export function withColumnUnit(
   return columns.map((c, i) => composeColumnLabel(c.name, i === index ? unit : c.unit));
 }
 
+// ── P1-5 DEFECT 1: multi-x validation ────────────────────────────────────────
+// `parse_import` only ever keeps `x_cols[0]` as the axis -- an x role on a
+// SECOND column used to vanish from the imported DataStruct entirely (not a
+// channel, not text, nothing). The backend now rejects it (defense in
+// depth); this is the UI-side detector so the wizard can surface the
+// conflict on the affected selects and disable Import before the request
+// is even sent, matching the "make it unreachable" half of the fix.
+
+/** Every column currently marked role `"x"`, in column order. Length <= 1
+ *  is the valid state; length > 1 is the DEFECT 1 conflict. */
+export function xRoleColumns(columns: readonly ImportPreviewColumn[]): ImportPreviewColumn[] {
+  return columns.filter((c) => c.role === "x");
+}
+
+/** `null` when 0 or 1 columns are marked x (the valid states); otherwise a
+ *  human-readable message NAMING every conflicting column, for both the
+ *  per-select validation and the panel-level banner. */
+export function xRoleConflictMessage(columns: readonly ImportPreviewColumn[]): string | null {
+  const xs = xRoleColumns(columns);
+  if (xs.length <= 1) return null;
+  const names = xs.map((c) => c.name.trim() || `column ${c.index + 1}`).join(", ");
+  return `${xs.length} columns are set to the x role (${names}) — only one column can be x. Change the others to y/error/label/ignore before importing.`;
+}
+
 /** Parse a "line index" text field: blank -> `null` (no such line), else the
  *  finite integer, else `null` (an in-progress edit like `"-"` doesn't crash). */
 export function parseLineField(raw: string): number | null {
@@ -152,7 +176,11 @@ export function finalChannelOrder(columns: readonly ImportPreviewColumn[]): Wiza
   return [...numeric, ...categorical].map((c, channel) => ({
     channel,
     sourceIndex: c.index,
-    label: c.name,
+    // P1-5 DEFECT 2: classify against the EFFECTIVE name (post-label_line
+    // override, `preview_import`'s `effective_name`) -- the name the
+    // dataset will actually carry once imported -- falling back to the raw
+    // header `name` when the field is absent (older/mocked previews).
+    label: c.effective_name ?? c.name,
   }));
 }
 

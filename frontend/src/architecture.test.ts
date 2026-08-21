@@ -747,6 +747,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   future: "redo stack; the history system itself, not undoable data",
   viewHistory: "zoom/pan navigation history; separate Back/Forward, not edit undo",
   viewFuture: "zoom/pan redo stack; separate Back/Forward, not edit undo",
+  historySuppressed: "withHistoryBatch's in-flight flag; history-system control state, not undoable data",
 
   // libraryPanel slice: UI state only
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
