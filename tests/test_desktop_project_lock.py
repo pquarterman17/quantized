@@ -18,6 +18,10 @@ import os
 import time
 from pathlib import Path
 
+import pytest
+
+import quantized.desktop_project_lock as lockmod
+
 from quantized.desktop_project_lock import (
     LockRecord,
     UnverifiableLock,
@@ -417,3 +421,56 @@ def test_two_real_processes_never_hold_the_lock_concurrently(tmp_path: Path) -> 
             f"lock held concurrently: worker {a_worker} [{a_start},{a_end}] "
             f"overlaps worker {b_worker} [{b_start},{b_end}]"
         )
+
+
+# -- Windows release tombstone (the #199 CI fix) ---------------------------
+
+
+def test_release_on_windows_tombstones_instead_of_deleting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows, `release` cannot delete a file it holds open+locked, so
+    it must overwrite the record with a released tombstone (and NOT report
+    released=False, the pre-fix CI failure). Simulated by patching
+    sys.platform — only the runtime unlink branch keys on it."""
+    import sys as _sys
+
+    path = _project(tmp_path)
+    ok, record = lockmod.acquire(path, "inst-a", now=time.time())
+    assert ok and isinstance(record, lockmod.LockRecord)
+    monkeypatch.setattr(_sys, "platform", "win32")
+    released, reason = lockmod.release(path, record.token)
+    assert released is True, reason
+    lock_file = Path(str(path) + ".lock")
+    assert lock_file.is_file()  # tombstone left behind, not deleted
+    assert json.loads(lock_file.read_text(encoding="utf-8")).get("released") is True
+    # A tombstone reads as "no lock" — never unverifiable.
+    assert lockmod.read(path) is None
+
+
+def test_acquire_over_a_release_tombstone_succeeds(tmp_path: Path) -> None:
+    """`acquire` must CAS-replace a tombstone file (O_EXCL cannot create
+    over it) — the release→re-acquire cycle the two-process test exercises
+    on Windows."""
+    path = _project(tmp_path)
+    lock_file = Path(str(path) + ".lock")
+    lock_file.write_text(json.dumps({"version": 1, "released": True}), encoding="utf-8")
+    ok, record = lockmod.acquire(path, "inst-b", now=time.time())
+    assert ok is True and isinstance(record, lockmod.LockRecord)
+    assert record.instance_id == "inst-b"
+    # The written record is the live one on disk.
+    on_disk = lockmod.read(path)
+    assert isinstance(on_disk, lockmod.LockRecord) and on_disk.token == record.token
+
+
+def test_acquire_refuses_when_tombstone_was_reacquired_first(tmp_path: Path) -> None:
+    """The tombstone CAS loses honestly when another instance re-acquired
+    between the read and the replace — simulated by a fresh record already
+    on disk when `_replace_tombstone` runs directly."""
+    path = _project(tmp_path)
+    ok, record = lockmod.acquire(path, "winner", now=time.time())
+    assert ok and isinstance(record, lockmod.LockRecord)
+    fresh = lockmod._make_record("loser", time.time(), None, None)
+    won, current = lockmod._replace_tombstone(str(path) + ".lock", fresh)
+    assert won is False
+    assert isinstance(current, lockmod.LockRecord) and current.instance_id == "winner"

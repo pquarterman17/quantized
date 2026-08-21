@@ -169,6 +169,13 @@ def _parse_record(raw: str) -> LockRecord | UnverifiableLock | None:
         return UnverifiableLock(f"corrupt lock file: {exc}")
     if not isinstance(obj, dict):
         return UnverifiableLock("lock file is not a JSON object")
+    if obj.get("released") is True:
+        # A release TOMBSTONE (see `release`): on Windows the releasing
+        # process cannot delete a file it still holds open+locked, so it
+        # overwrites the record with this sentinel instead -- semantically
+        # identical to "no lock file". `acquire` CAS-replaces a tombstone
+        # rather than O_EXCL-creating over it.
+        return None
     try:
         return LockRecord(
             version=int(obj["version"]),
@@ -387,6 +394,43 @@ def _create_new(lock_path: str, record: LockRecord) -> LockRecord | Unverifiable
     return record
 
 
+def _replace_tombstone(lock_path: str, fresh: LockRecord) -> CasResult:
+    """CAS-replace a release tombstone with `fresh` under the exclusive OS
+    lock. Wins only if the file still parses as released at write time; a
+    concurrent winner's record is reported honestly instead."""
+    try:
+        fh = open(lock_path, "r+b")
+    except FileNotFoundError:
+        created = _create_new(lock_path, fresh)
+        if isinstance(created, LockRecord):
+            return True, created
+        return False, created if isinstance(created, UnverifiableLock) else None
+    except (OSError, ValueError) as exc:
+        return False, UnverifiableLock(str(exc))
+    try:
+        if not _acquire_os_lock(fh):
+            return False, UnverifiableLock("timed out waiting for the exclusive lock")
+        try:
+            fh.seek(0)
+            current = _parse_record(fh.read().decode("utf-8"))
+            if isinstance(current, UnverifiableLock):
+                return False, current
+            if current is not None:
+                return False, current  # someone re-acquired first
+            fh.seek(0)
+            fh.write(json.dumps(_record_to_dict(fresh)).encode("utf-8"))
+            fh.truncate()
+            fh.flush()
+            os.fsync(fh.fileno())
+            return True, fresh
+        finally:
+            _unlock(fh)
+    except (OSError, ValueError) as exc:
+        return False, UnverifiableLock(str(exc))
+    finally:
+        fh.close()
+
+
 def acquire(
     path: str,
     instance_id: str,
@@ -412,15 +456,16 @@ def acquire(
 
     current = read(path)
     if current is None:
-        # Raced with a release between our O_EXCL failure and this read —
-        # one more attempt; if that ALSO loses, someone else was faster
-        # still and this call honestly reports their record.
+        # Either the file vanished (raced a POSIX release-unlink) or it
+        # holds a release TOMBSTONE (the Windows release path). Try the
+        # O_EXCL create once more for the vanished case; if the file still
+        # exists, CAS-replace the tombstone under the OS lock.
         created = _create_new(lock_path, fresh)
         if isinstance(created, LockRecord):
             return True, created
         if isinstance(created, UnverifiableLock):
             return False, created
-        return False, read(path)
+        return _replace_tombstone(lock_path, fresh)
     if isinstance(current, UnverifiableLock):
         return False, current
     if now - current.heartbeat_at <= ttl_seconds:
@@ -459,10 +504,25 @@ def release(path: str, token: str) -> tuple[bool, str | None]:
                 return False, f"lock file unverifiable: {current.reason}"
             if current is None or current.token != token:
                 return False, "token mismatch"
+            # Overwrite with the release TOMBSTONE under the OS lock: the
+            # semantic release. POSIX can ALSO unlink right here (legal
+            # while holding the open fh); Windows cannot -- and a
+            # delete-after-close would race a legitimate re-acquire
+            # (deleting THEIR fresh lock), so Windows keeps the tombstone
+            # file and `acquire` CAS-replaces it.
             try:
-                os.remove(lock_path)
-            except OSError as exc:
+                fh.seek(0)
+                fh.write(json.dumps({"version": 1, "released": True}).encode("utf-8"))
+                fh.truncate()
+                fh.flush()
+                os.fsync(fh.fileno())
+            except (OSError, ValueError) as exc:
                 return False, str(exc)
+            if sys.platform != "win32":
+                try:
+                    os.remove(lock_path)
+                except OSError:
+                    pass  # tombstone already released it semantically
             return True, None
         finally:
             _unlock(fh)
