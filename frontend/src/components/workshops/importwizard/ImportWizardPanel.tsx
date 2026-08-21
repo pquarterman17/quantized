@@ -155,6 +155,12 @@ export default function ImportWizardPanel() {
             </div>
           )}
 
+          {w.xConflict && (
+            <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginBottom: 8 }}>
+              {w.xConflict}
+            </div>
+          )}
+
           {w.busy && !w.preview && (
             <div className="qzk-ds-meta" style={faint}>
               Loading preview…
@@ -192,7 +198,7 @@ export default function ImportWizardPanel() {
             <Button
               variant="primary"
               size="sm"
-              disabled={!w.preview || w.importing}
+              disabled={!w.preview || w.importing || !!w.xConflict}
               onClick={() => void w.doImport()}
             >
               {w.importing ? "Importing…" : w.imported ? "Imported ✓ — import again" : "Import"}

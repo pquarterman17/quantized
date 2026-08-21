@@ -329,3 +329,79 @@ def test_comments_survive_alongside_label_rows_and_text_columns() -> None:
     ds = parse_import(text, settings)
     assert ds.metadata["comments"] == ["# Instrument log"]
     assert ds.metadata["text_columns"] == {"Sample": ["A", "B"]}
+
+
+# --- P1-5 DEFECT 1: multiple x-role columns must be rejected, not silently ---
+# --- truncated to x_cols[0] (parse_import used to keep only the FIRST x   ---
+# --- column and drop every other one -- not a channel, not text, nothing). --
+
+
+def test_multiple_x_roles_is_rejected_naming_the_columns() -> None:
+    """RED before the fix: two columns marked 'x' used to silently import
+    with only the FIRST as the axis -- the second x column vanished from the
+    DataStruct entirely (not a channel, not a text_columns entry, no trace).
+    parse_import must instead reject with a message naming the columns."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "x"])
+    with pytest.raises(ValueError, match="Temp") as exc_info:
+        parse_import(_LABEL_TEXT, settings)
+    assert "Sample" in str(exc_info.value)
+
+
+def test_single_x_role_still_imports_fine() -> None:
+    """Sanity: the rejection is specific to MULTIPLE x columns -- a single x
+    column (the overwhelmingly common case) is untouched."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.metadata["x_column_name"] == "Temp"
+
+
+def test_no_x_role_still_falls_back_to_sample_index() -> None:
+    """Sanity: zero x columns is unaffected -- the existing sample-index
+    fallback still applies."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["y", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.metadata["x_column_name"] == "Sample Index"
+
+
+# --- P1-5 DEFECT 2: preview_import must report the EFFECTIVE (post-label_line) --
+# --- name per column, since the wizard's suggestion engine classifies against --
+# --- whatever name preview_import returns, and parse_import (not preview_import) --
+# --- is the one that actually applies label_line overrides today.          ---
+
+
+def test_preview_reports_effective_name_matching_label_line_override() -> None:
+    """RED before the fix: preview_import's `columns[k].name` is always the
+    HEADER-derived name -- it never applies `_label_row_overrides`, unlike
+    parse_import. A wizard classifying error-role suggestions against
+    `columns[k].name` (the only name preview_import offers today) would
+    therefore classify against a name the final dataset never carries
+    whenever label_line is set."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert [c["name"] for c in pv["columns"]] == ["Temp", "M1", "M2"]
+    assert [c["effective_name"] for c in pv["columns"]] == ["Temp", "NbAu-1", "NbAu-2"]
+
+
+def test_preview_effective_name_matches_parse_import_labels_exactly() -> None:
+    """The whole point of `effective_name`: on the SAME fixture, the channel
+    columns' effective_name must equal parse_import's actual .labels, so the
+    wizard classifies against the name the dataset will really carry."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    channel_effective_names = [
+        c["effective_name"] for c in pv["columns"] if c["role"] in ("y", "error", "categorical")
+    ]
+    assert tuple(channel_effective_names) == ds.labels
+
+
+def test_preview_effective_name_without_label_line_matches_header_name() -> None:
+    """Absent label_line, effective_name is just the header-derived name --
+    additive, no behavior change for the common no-label_line case."""
+    settings = ImportSettings(header_line=0, units_line=1, data_start_line=3, roles=["x", "y", "y"])
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert [c["effective_name"] for c in pv["columns"]] == [c["name"] for c in pv["columns"]]

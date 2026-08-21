@@ -68,6 +68,36 @@ describe("useImportErrorRoles", () => {
     expect(result.current.errorRows[0].target).toBe(0); // dR2 no longer base-matches -> falls back to nearest preceding (R, channel 0)
   });
 
+  it("P1-5 DEFECT 2: reseeds when only effective_name changes (a label_line edit), even though the raw header name stays put", () => {
+    // RED before the fix: the reseed signature tracked `role:name` only, so
+    // a label_line edit that changes classification-relevant effective_name
+    // WITHOUT touching the raw header name left the stale suggestion in
+    // place instead of re-running seedErrorRows against the new names.
+    const raw: ImportPreviewColumn[] = [
+      { index: 0, name: "Col1", effective_name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "Col2", effective_name: "Col2", unit: "", role: "y" },
+      { index: 2, name: "Col3", effective_name: "Col3", unit: "", role: "error" },
+    ];
+    const { result, rerender } = renderHook(({ columns }) => useImportErrorRoles(columns), {
+      initialProps: { columns: raw },
+    });
+    expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "Col3", target: null, axis: "y", side: "both" }, // no base-name match yet
+    ]);
+
+    // A label_line edit lands: raw `name`s are untouched, but effective_name
+    // now makes "R"/"dR" an unambiguous base-name pairing.
+    const labeled: ImportPreviewColumn[] = [
+      { index: 0, name: "Col1", effective_name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "Col2", effective_name: "R", unit: "", role: "y" },
+      { index: 2, name: "Col3", effective_name: "dR", unit: "", role: "error" },
+    ];
+    rerender({ columns: labeled });
+    expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+    ]);
+  });
+
   it("resetErrorRows clears state and forces a fresh reseed on the next columns", () => {
     const { result, rerender } = renderHook(({ columns }) => useImportErrorRoles(columns), {
       initialProps: { columns: cols() },

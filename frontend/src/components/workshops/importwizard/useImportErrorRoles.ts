@@ -36,7 +36,12 @@ export interface ImportErrorRolesState {
 }
 
 function signatureOf(columns: readonly ImportPreviewColumn[]): string {
-  return columns.map((c) => `${c.role}:${c.name}`).join("|");
+  // P1-5 DEFECT 2: include `effective_name` (falling back to `name`) too --
+  // seedErrorRows classifies against the EFFECTIVE name (lib/importwizard.
+  // finalChannelOrder), so a label_line edit that changes effective_name
+  // without touching the raw header name is a real arrangement change and
+  // must reseed, not persist a suggestion computed against a stale name.
+  return columns.map((c) => `${c.role}:${c.name}:${c.effective_name ?? c.name}`).join("|");
 }
 
 export function useImportErrorRoles(columns: ImportPreviewColumn[]): ImportErrorRolesState {

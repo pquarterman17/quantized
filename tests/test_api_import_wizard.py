@@ -70,6 +70,37 @@ def test_parse_no_channels_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_parse_multiple_x_roles_is_422_naming_the_columns() -> None:
+    """P1-5 DEFECT 1 defense-in-depth: the wizard UI should make this
+    unreachable, but a direct API caller (or a stale saved filter) hitting
+    /api/import/parse with >1 x-role column must be rejected, not silently
+    truncated to the first x column."""
+    resp = client.post(
+        "/api/import/parse",
+        json={
+            "text": "A,B,C\n1,2,3\n4,5,6\n",
+            "settings": {"header_line": 0, "data_start_line": 1, "roles": ["x", "y", "x"]},
+        },
+    )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "A" in detail and "C" in detail
+
+
+def test_preview_returns_effective_name_for_the_wizard() -> None:
+    """P1-5 DEFECT 2: preview must expose the post-label_line effective name,
+    not just the raw header name, over the wire -- the wizard's suggestion
+    engine needs this to classify against the name the dataset will
+    actually carry."""
+    text = "Temp,M1\n,NbAu-1\n1,10\n2,20\n"
+    settings = {"header_line": 0, "label_line": 1, "data_start_line": 2, "roles": ["x", "y"]}
+    pv = client.post("/api/import/preview", json={"text": text, "settings": settings})
+    assert pv.status_code == 200
+    cols = pv.json()["columns"]
+    assert [c["name"] for c in cols] == ["Temp", "M1"]
+    assert [c["effective_name"] for c in cols] == ["Temp", "NbAu-1"]
+
+
 # ── /api/import/filters CRUD ─────────────────────────────────────────────
 
 
