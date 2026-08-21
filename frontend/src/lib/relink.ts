@@ -92,20 +92,29 @@ export interface ProbedProvenance {
 export type SourceChangeVerdict = "unchanged" | "changed" | "unknown";
 
 /** Did the SOURCE FILE's content change since it was imported or last
- *  relinked? Checksum is authoritative whenever BOTH sides have one —
+ *  relinked? Checksum is authoritative whenever a checksum was RECORDED —
  *  content identity, not a proxy for it. Falls back to comparing size and
- *  mtime only when no checksum is available on either side (a dataset
- *  imported before this slice, or a browser import that never had bridge
- *  access to compute one). Reports `"unknown"` — NEVER `"unchanged"` — when
- *  there simply isn't enough recorded or probed information to say
- *  anything at all: a browser-imported dataset with no recorded provenance
- *  must never be silently reported as fine just because nothing
- *  contradicts it. */
+ *  mtime only when no checksum was ever recorded (a dataset imported before
+ *  this slice, or a browser import that never had bridge access to compute
+ *  one) — that is the legitimate degraded mode. Reports `"unknown"` —
+ *  NEVER `"unchanged"` or `"changed"` — when there simply isn't enough
+ *  information to say anything at all: a browser-imported dataset with no
+ *  recorded provenance must never be silently reported as fine just because
+ *  nothing contradicts it, AND (P1-2 defect 1) a RECORDED checksum whose
+ *  fresh probe came back unavailable — content-read consent lapsed this
+ *  session, desktopBridge.ts's `SourceProbe.checksum` doc — must never
+ *  silently fall through to size/mtime: that would answer with a WEAKER
+ *  signal than the one actually on record, which is worse than admitting
+ *  the question can't be answered right now. */
 export function sourceChangeVerdict(
   recorded: RecordedProvenance,
   probed: ProbedProvenance,
 ): SourceChangeVerdict {
-  if (recorded.checksum && probed.checksum) {
+  if (recorded.checksum) {
+    // A checksum was recorded: it is the ONLY signal trusted from here on,
+    // never demoted to size/mtime just because the fresh probe couldn't
+    // compute one this session.
+    if (!probed.checksum) return "unknown";
     return recorded.checksum === probed.checksum ? "unchanged" : "changed";
   }
   const haveSize = recorded.size !== undefined && probed.size != null;

@@ -45,8 +45,18 @@ export interface RelinkPreviewRow {
   status: RelinkRowStatus;
   /** "changed" rows are EXCLUDED from `commit()` — box 5: a changed source
    *  warns and can be imported as a new version, it is never silently
-   *  folded into the existing dataset by a plain relink. */
+   *  folded into the existing dataset by a plain relink. "unknown" rows
+   *  (P1-2 defect 2) are ALSO excluded from a bulk commit by default — a
+   *  recorded checksum that couldn't be freshly confirmed this session
+   *  (`lib/relink.sourceChangeVerdict`'s defect-1 fix) must never commit
+   *  silently as if verified. `escalated` is the one way past that: an
+   *  explicit PER-ROW "use anyway" click (never a global bypass). */
   changeVerdict: "unchanged" | "changed" | "unknown";
+  /** Set only by `escalateUnknownRow(datasetId)` — per-row consent to commit an
+   *  "unknown" row despite the unresolved checksum. Never true on a row
+   *  fresh out of `runPreview`; cleared implicitly whenever a new preview
+   *  replaces the row (Preview always resets `preview`). */
+  escalated?: boolean;
   candidateChecksum: string | null;
   candidateMtime: number | null;
   candidateSize: number | null;
@@ -65,6 +75,10 @@ interface RelinkState {
   setNewRoot: (v: string) => void;
   runPreview: () => Promise<void>;
   commit: () => Promise<void>;
+  /** Per-row escalation (box 2/5, P1-2 defect 2c): explicit user consent to
+   *  commit ONE "unknown" row despite its unresolved checksum. Never a
+   *  global bypass — every other unknown row stays excluded. */
+  escalateUnknownRow: (datasetId: string) => void;
   importChangedAsNewVersion: (datasetId: string) => Promise<void>;
 }
 
@@ -189,7 +203,13 @@ export const useRelink = create<RelinkState>((set, get) => ({
   commit: async () => {
     const { preview } = get();
     const candidates = preview.filter(
-      (r) => r.status === "resolved" && r.candidatePath && r.changeVerdict !== "changed",
+      (r) =>
+        r.status === "resolved" &&
+        r.candidatePath &&
+        r.changeVerdict !== "changed" &&
+        // P1-2 defect 2: an "unknown" row commits ONLY once explicitly
+        // escalated via `escalateUnknownRow` — a bulk commit never sweeps it in.
+        (r.changeVerdict !== "unknown" || r.escalated),
     );
     if (candidates.length === 0) {
       toast("nothing to relink — no resolved, unchanged candidates", "danger");
@@ -263,34 +283,62 @@ export const useRelink = create<RelinkState>((set, get) => ({
       }),
     }));
     const skippedChanged = preview.filter((r) => r.changeVerdict === "changed").length;
+    // P1-2 defect 2: named separately from `skippedChanged` — "unknown" isn't
+    // a rejection (the content might well be fine), it's a row nothing
+    // committable was ever confirmed for. Escalated rows aren't counted here
+    // (they were candidates, not exclusions).
+    const skippedUnknown = preview.filter((r) => r.changeVerdict === "unknown" && !r.escalated).length;
     const summary = `relinked ${resolved.length} dataset${resolved.length === 1 ? "" : "s"}`;
     const notes = [
       skippedChanged > 0 ? `${skippedChanged} changed source${skippedChanged === 1 ? "" : "s"} skipped (import as new version instead)` : null,
+      skippedUnknown > 0
+        ? `${skippedUnknown} needs verification (unresolved checksum) skipped — use "use anyway" per row to include`
+        : null,
       staleSinceCommit > 0 ? `${staleSinceCommit} candidate${staleSinceCommit === 1 ? "" : "s"} changed since Preview, skipped` : null,
     ].filter((n): n is string => n !== null);
     toast(notes.length > 0 ? `${summary} — ${notes.join("; ")}` : summary, "ok");
     set({ open: false, preview: [] });
   },
 
+  escalateUnknownRow: (datasetId) =>
+    set((s) => ({
+      preview: s.preview.map((r) => (r.datasetId === datasetId ? { ...r, escalated: true } : r)),
+    })),
+
   // Box 5: "changed source warns and can import as a NEW VERSION" — reuses
   // the EXISTING import path (never an in-place refresh, per L0.32), then
   // tags the freshly created dataset(s) with `versionOf` so the link back
   // to the original survives.
+  //
+  // P1-2 defect 3: `importPaths` records ONE history entry PER created
+  // dataset (`addDataset` calls `recordHistory` every time it's called —
+  // see useApp.ts), and a multi-book Origin source creates several. Left
+  // alone, the trailing versionOf `setState` below would ride on whatever
+  // entry happened to land last, so Undo only reverted the LAST book and
+  // stranded every earlier one's versionOf tag. `withHistoryBatch` collapses
+  // the whole thing — import of ALL created datasets + versionOf tagging —
+  // into exactly ONE undo step, the same guarantee `commit()` above already
+  // has (its own comment: "ONE recordHistory call for the whole batch").
   importChangedAsNewVersion: async (datasetId) => {
     const s = useApp.getState();
     const ds = s.datasets.find((d) => d.id === datasetId);
     if (!ds?.source) return;
-    const before = new Set(s.datasets.map((d) => d.id));
-    await s.importPaths([ds.source.path]);
-    const createdIds = useApp
-      .getState()
-      .datasets.filter((d) => !before.has(d.id))
-      .map((d) => d.id);
-    if (createdIds.length === 0) return;
-    const createdSet = new Set(createdIds);
-    useApp.setState((state) => ({
-      datasets: state.datasets.map((d) => (createdSet.has(d.id) ? { ...d, versionOf: datasetId } : d)),
-    }));
-    toast(`imported "${ds.name}" as a new version`, "ok");
+    const sourcePath = ds.source.path;
+    let created = false;
+    await useApp.getState().withHistoryBatch(`import "${ds.name}" as a new version`, async () => {
+      const before = new Set(useApp.getState().datasets.map((d) => d.id));
+      await useApp.getState().importPaths([sourcePath]);
+      const createdIds = useApp
+        .getState()
+        .datasets.filter((d) => !before.has(d.id))
+        .map((d) => d.id);
+      if (createdIds.length === 0) return;
+      created = true;
+      const createdSet = new Set(createdIds);
+      useApp.setState((state) => ({
+        datasets: state.datasets.map((d) => (createdSet.has(d.id) ? { ...d, versionOf: datasetId } : d)),
+      }));
+    });
+    if (created) toast(`imported "${ds.name}" as a new version`, "ok");
   },
 }));
