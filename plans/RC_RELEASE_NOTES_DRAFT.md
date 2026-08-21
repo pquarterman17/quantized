@@ -19,9 +19,13 @@ fixes below). Update this line to the actual tagged SHA at cut time.
   relinked; project references survive relocation. Backend-enforced
   declared-source consent — the app can only be granted paths it already
   declared, never arbitrary local files.
-- **Single-writer locking** (I2): a second instance opening the same
-  project gets read-only, **Open as Copy**, or a guarded **Take Over**;
-  the displaced writer's next save is refused with a fresh lock check.
+- **Single-writer locking** (I2, hardened in the audit wave): a second
+  desktop instance opening the same project gets read-only, **Open as
+  Copy**, or a guarded **Take Over** — enforced by a real cross-process
+  lock file (atomic create + OS-level compare-and-swap) with saves bound
+  to the held lock token, so a displaced writer's save is refused, not
+  silently applied. Browser multi-tab is NOT protected (known
+  limitation below).
 - **Workbook transfer packages** (I): export/import a workbook package
   across instances with fresh-ID rewrite; bounded large transfers,
   incompatible/expired package handling.
@@ -59,6 +63,27 @@ fixes below). Update this line to the actual tagged SHA at cut time.
 - (Earlier, already in v0.22.0: plot payloads decimated server-side,
   154 MB → 2.7 MB at 1M×7; staged window hydration on workspace restore.)
 
+### Audit-wave correctness fixes (post-freeze, pre-RC — #194-#199)
+An independent Day-6 audit gated the RC on a correctness pass; all fixes
+landed with red-first regression tests:
+- **Formula integrity on column removal**: deleting a computed column no
+  longer lets later formulas silently read a shifted (wrong) column —
+  references are rewritten by the parser, and references to the removed
+  column become explicit errors (#198). Recode commits are identity-checked
+  against the column the panel was opened on (#198).
+- **Relink honesty**: when a recorded checksum can't be re-verified, the
+  verdict is "unknown" — and unknown rows are excluded from bulk commit
+  unless individually confirmed (#196). Import-as-new-version is one undo
+  step (#196).
+- **Import wizard**: multiple X-role assignments are rejected loudly at
+  both ends instead of silently dropping columns; error-role suggestions
+  use the names the import will actually assign (#197).
+- **Quick Plot templates** refuse to bind a value column as an error
+  column (#195). Malformed categorical metadata degrades instead of
+  crashing (#195). No-op edits no longer create phantom Undo entries
+  (#195). Canceled dialogs and offline sources settle cleanly with real
+  recovery paths (#194).
+
 ## Known limitations (shipping as-is in this RC)
 - **Reimport All (multi-source)** and the full Trash dependency-review UI
   are not built; single-dataset reimport/delete with impact preview is.
@@ -69,6 +94,9 @@ fixes below). Update this line to the actual tagged SHA at cut time.
   ~5.8 s; if that is your normal case, say so and N gets rebuilt into scope.
 - **Very large maps**: 4M-point regrid is ~9-18 s depending on cache state
   (was 141 s); the duplicate grid-detection call was deduped in #191.
+- **Browser multi-tab is not protected by the project lock** — the
+  cross-process lock (#199) covers desktop instances; two browser tabs on
+  the same project remain a booked defer.
 - **Packaged-desktop E2E is not agent-tested**: the desktop bridge is
   covered by mocked tests + CI sidecar smoke only; the packaged-app smoke
   pass is the owner's Day-6/7 checklist item.
