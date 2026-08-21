@@ -164,7 +164,14 @@ def test_release_verifies_token_before_deleting(tmp_path: Path) -> None:
     ok2, reason2 = release(path, rec.token)
     assert ok2 is True
     assert reason2 is None
-    assert not os.path.isfile(path + ".lock")
+    # The SEMANTIC property, platform-neutral: the lock reads as released.
+    # POSIX also unlinks the file; Windows deliberately leaves a released
+    # TOMBSTONE instead (see `release`'s doc) -- asserting file absence
+    # here was the Windows CI failure this replaced.
+    assert read(path) is None
+    if os.path.isfile(path + ".lock"):
+        payload = json.loads(Path(path + ".lock").read_text(encoding="utf-8"))
+        assert payload.get("released") is True
 
 
 def test_release_with_no_lock_file_is_idempotent_success(tmp_path: Path) -> None:
