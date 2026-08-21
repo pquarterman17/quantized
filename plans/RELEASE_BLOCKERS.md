@@ -99,14 +99,21 @@ top of it this sprint.
   removed); warm steady-state on the merged tree measures ~9 s.
 
 - ~~**Single-writer project locking is entirely unbuilt (PR I2).**~~
-  **CLOSED 2026-08-19 (#184).** Landed as `lib/lockState.ts`,
-  `store/projectLock.ts`, and `useProjectLockHeartbeat.ts`: read-only second
-  open, Open as Copy, and guarded Take Over. Review caught and fixed a false
-  safety claim here — the header promised the resumed original's next write
-  would be refused, but `runSaveWorkspace` was reading a 30 s-stale cached
-  `canWriteNow()`; it now re-verifies with a fresh `provider.read()`
-  immediately before `saveProjectTo`. Save As could also overwrite a locked
-  file; that is fixed too.
+  **CLOSED — for real this time — 2026-08-21 (#184 + #199).** #184 landed
+  the UI state machine (read-only second open, Open as Copy, guarded Take
+  Over) but its default provider was an in-memory, process-local Map —
+  honest in the code header, oversold in release docs, and correctly
+  called out by Sol's Day-6 audit (P0-3). #199 makes the claim true on
+  desktop: an atomic lock file beside the project (`O_EXCL` creation +
+  `fcntl`/`msvcrt` compare-and-swap), consent-gated bridge methods with a
+  server-minted instance id, token-bound `write_project_file` (a lost
+  lock refuses the save), Save As acquire-new/release-old, and a real
+  two-process race test. The orchestrator's review round then found and
+  fixed a genuine mutual-exclusion race (locking an orphaned inode after
+  a release unlink — fixed with post-lock fstat/stat identity checks) and
+  a Windows release failure (delete-while-locked — fixed with a released
+  tombstone). **Browser multi-tab remains a labeled defer** (the in-memory
+  provider is the browser fallback).
 - **M's transactional multi-source "Reimport All" (L0.33) and the full
   Trash dependency-review UI (restore / delete-dependent / freeze-materialize
   as distinct choices, L0.45) are unbuilt.** Single-dataset reimport and

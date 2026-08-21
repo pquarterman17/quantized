@@ -234,91 +234,91 @@ limitation, before Day 7 begins.
   packaged Windows and macOS workflows, the owner's 60–90 minute real-data
   session, installer/icon checks, and the outstanding ChatGPT-Sol wording,
   menu, preview and recovery review. Do not infer these from unit/E2E CI.
-  **Owner:** owner + Claude Sonnet; **review:** ChatGPT-Sol.
+  **Owner:** owner + Claude Sonnet; **review:** ChatGPT-Sol. **— OWNER/SOL, still open (agents cannot run these).**
 - [ ] **Test an installed, packaged app rather than only its build and sidecar.**
   On Windows and macOS, install and launch the candidate and exercise import →
   browse → Quick Plot → configure/edit → copy/paste → save/reopen → reimport →
   delete/restore → recovery. Include real native dialogs, cancel paths, Unicode
   and network/offline paths. Record OS, artifact, exact SHA and outcome.
-  **Owner:** Claude Sonnet + owner; **review:** ChatGPT-Sol.
-- [ ] **Correct the I2 single-writer claim before release.** The current default
+  **Owner:** Claude Sonnet + owner; **review:** ChatGPT-Sol. **— OWNER, still open; fresh post-audit installers will be linked when built.**
+- [x] **Correct the I2 single-writer claim before release.** The current default
   lock provider is a process-local `Map`; it cannot protect two desktop
   processes or browser tabs, although the sprint, release-blocker list and RC
   notes currently describe I2 as closed. Either ship a filesystem/native shared
   provider with atomic conditional acquisition and packaged two-process tests,
   or label the feature preview/deferred and correct every release claim and
-  limitation. **Design/review:** Claude Opus; **implementation:** Claude Sonnet.
+  limitation. **Design/review:** Claude Opus; **implementation:** Claude Sonnet. **(#199: shipped a REAL cross-process provider — atomic O_EXCL + fcntl/msvcrt CAS lock file beside the project, consent-gated bridge methods, token-bound saves, real two-process test. Release claims corrected in `RELEASE_BLOCKERS.md`/`RC_RELEASE_NOTES_DRAFT.md`; browser multi-tab remains the labeled defer.)**
 
 ### P1 — correctness fixes required for the candidate
 
-- [ ] **Make lock ownership atomic across open, takeover and write.** Replace the
+- [x] **Make lock ownership atomic across open, takeover and write.** Replace the
   read/classify/unconditional-write sequence with compare-and-swap or equivalent
   OS-lock semantics; bind the verified lock token to the project replacement;
   test simultaneous open/takeover. Save As must acquire the new path and release
   the old path, including failure/rename cases. **Owner:** Claude Opus for the
-  contract, Claude Sonnet for implementation and tests.
-- [ ] **Make relink commit re-probe the candidate safely.** Recompute the verdict
+  contract, Claude Sonnet for implementation and tests. **(#199. Orchestrator review additionally found and fixed an orphan-inode race that genuinely broke mutual exclusion — post-lock fstat/stat identity verification on every mutation — plus a Windows release tombstone; see the PR comments.)**
+- [x] **Make relink commit re-probe the candidate safely.** Recompute the verdict
   against original provenance immediately before commit and reject changed or
   insufficiently verified rows. When a recorded checksum exists but a fresh one
   is unavailable, return `unknown` rather than falling back to metadata. Make
   “Import as new version” plus `versionOf` one undoable history transaction.
-  **Owner:** Claude Sonnet; **review:** Claude Opus.
-- [ ] **Repair positional-column correctness.** Deleting a computed/recode column
+  **Owner:** Claude Sonnet; **review:** Claude Opus. **(#196. NOTE: the "does not recompute before commit" half of this row was REFUTED on verification — `commit()` already TOCTOU re-probes; the real fixes were checksum-unavailable → unknown, unknown rows excluded from bulk commit with per-row escalation, and one-undo import-as-new-version.)**
+- [x] **Repair positional-column correctness.** Deleting a computed/recode column
   must remap or explicitly invalidate downstream formula dependencies instead
   of creating shifted/self references. An open Recode workshop must retain a
   stable channel identity and must not silently target a different categorical
   column after removal/reimport/index shift. Add chained formula/recode and open-
-  panel index-shift regressions. **Owner:** Claude Sonnet; **review:** ChatGPT-Sol.
-- [ ] **Validate Quick Plot error roles when applying templates.** A saved
+  panel index-shift regressions. **Owner:** Claude Sonnet; **review:** ChatGPT-Sol. **(#198: parser-based expr/deps letter rewrite on removal, explicit "references removed column" errors, identity-checked Recode commits with retarget-or-refuse.)**
+- [x] **Validate Quick Plot error roles when applying templates.** A saved
   template records `errorRole` but resolution currently checks only label/unit,
   so an ordinary value column can be rebound as an error column. Compare every
   referenced channel's saved/current error classification and refuse mismatches
   with an actionable explanation. **Owner:** Claude Sonnet; **review:**
-  ChatGPT-Sol.
-- [ ] **Prevent silent multi-X data loss in Import Wizard.** The UI permits
+  ChatGPT-Sol. **(#195: resolution now compares saved vs current errorRole and refuses the whole template with an actionable message.)**
+- [x] **Prevent silent multi-X data loss in Import Wizard.** The UI permits
   multiple X roles while the importer selects the first and omits the others.
   Enforce zero or one X role with visible validation and backend/UI regressions.
   Error-role suggestions must also use the effective label-row name used by the
   final import, not only the raw header. **Owner:** Claude Sonnet; **review:**
-  ChatGPT-Sol.
-- [ ] **Fix command cancellation and stale-path semantics.** Add Recent Projects
+  ChatGPT-Sol. **(#197: backend rejects >1 x-role naming the columns; UI validates + disables Import; suggestions classify against label_line-effective names with a preview/parse parity test.)**
+- [x] **Fix command cancellation and stale-path semantics.** Add Recent Projects
   only after replacement is accepted. Ensure a canceled reimport picker settles
   without a hanging promise. Treat an offline/network-unavailable source
   distinctly from a deleted/missing source and present recovery rather than a
   generic backend failure. **Owner:** ChatGPT-Sol for UX contract; Claude Sonnet
-  for implementation/reliability tests.
-- [ ] **Perform and record independent review of high-risk sprint PRs.** The
+  for implementation/reliability tests. **(#194. NOTE: the offline sub-claim was imprecise — offline previously got NO handling (missing got better treatment); it now has its own recovery branch.)**
+- [x] **Perform and record independent review of high-risk sprint PRs.** The
   sprint says all lane PRs were independently reviewed, but sampled high-risk
   PRs have no durable GitHub review/comment evidence. Record reviewer, verdict,
   fixes and residual risk from any transcript review, or conduct a fresh review
   of locking, persistence, relink, recovery, imports and derived-data work.
-  **Owner:** Claude Opus for backend/state; ChatGPT-Sol for GUI/workflows.
+  **Owner:** Claude Opus for backend/state; ChatGPT-Sol for GUI/workflows. **(durable review-evidence comments posted on #184, #180, #181, #179, #186 — reviewer, verdict, pre-merge defects, rejected suggestions, residual risk; #188/#189/#194-#199 carry verification evidence in their PR bodies.)**
 
 ### P2 — fix if bounded; otherwise name the post-RC issue
 
-- [ ] Harden malformed categorical `cat_levels` payloads so list/string/wrong-
+- [x] Harden malformed categorical `cat_levels` payloads so list/string/wrong-
   mapping corruption degrades safely instead of escaping as `AttributeError` or
   splitting strings into characters. Add route-level corruption tests.
-  **Owner:** Claude Sonnet.
-- [ ] Avoid phantom Undo entries for missing datasets, blank/duplicate tags and
+  **Owner:** Claude Sonnet. **(#195: `_parse_cat_levels_payload` drops malformed entries instead of raising or splitting strings; route-level corruption tests via /api/corrections/apply.)**
+- [x] Avoid phantom Undo entries for missing datasets, blank/duplicate tags and
   unchanged metadata by recording history only after computing a real patch.
-  **Owner:** Claude Haiku or Sonnet; **review:** Claude Sonnet.
-- [ ] Make performance closure reproducible: retain a benchmark command/artifact
+  **Owner:** Claude Haiku or Sonnet; **review:** Claude Sonnet. **(#195: the four single-row metadata actions + removeFormula now compute the effective change before recording history.)**
+- [x] Make performance closure reproducible: retain a benchmark command/artifact
   for the reported 1M/4M map timings and a bounded regression test. Current
   smaller functional tests do not substantiate the documented timings.
-  **Owner:** Claude Sonnet.
-- [ ] Reconcile release documentation to the exact candidate SHA. Update the RC
+  **Owner:** Claude Sonnet. **(`tools/baselines/BENCH.md`, added with this closure — exact commands for the 1M/4M map measurements.)**
+- [x] Reconcile release documentation to the exact candidate SHA. Update the RC
   notes beyond PR #189, disclose every accepted limitation (especially locking),
   and track unverified updater/install/upgrade, interrupted-write, old-workspace,
   long Unicode/network-path and browser multi-tab cases. **Owner:** Claude Haiku
-  for mechanical reconciliation; **review:** Claude Sonnet + ChatGPT-Sol.
+  for mechanical reconciliation; **review:** Claude Sonnet + ChatGPT-Sol. **(this closure pass: I2 claims corrected in `RELEASE_BLOCKERS.md` + `RC_RELEASE_NOTES_DRAFT.md`, audit-fix section added to the RC notes, bundle-budget raise documented in `check-bundle-size.mjs`. The RC notes retain the re-point-at-final-SHA instruction for tag time.)**
 
 ### Audit closure gate
 
-- [ ] All P0/P1 rows above have a linked fixing PR and independent verdict, or an
-  owner-approved defer with user-visible limitation and a named follow-up issue.
+- [x] All P0/P1 rows above have a linked fixing PR and independent verdict, or an
+  owner-approved defer with user-visible limitation and a named follow-up issue. **(every P0/P1 code row: #194-#199 + the P1-7 comment links; the two remaining P0 rows are owner/Sol-only and stay open above.)**
 - [ ] Re-run the complete matrix on the resulting exact SHA; do not reuse green
-  checks from `1721716b` after fixes land.
+  checks from `1721716b` after fixes land. **— pending at tag time: a fresh dry-run release build will be triggered post-closure so the owner smokes post-audit artifacts; the tag itself re-runs the matrix on the exact candidate SHA.**
 
 ### Day 7 — release candidate and audit closure
 
