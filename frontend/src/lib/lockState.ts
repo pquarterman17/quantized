@@ -52,7 +52,11 @@
 
 export interface LockRecord {
   /** Opaque id unique to one running Quantized process (a session/tab, not
-   *  a user) — store/projectLock.ts mints this once per process lifetime. */
+   *  a user) — store/projectLock.ts mints this once per process lifetime
+   *  for the in-memory provider; the desktop filesystem provider's id is
+   *  minted SERVER-side (`desktop_bridge.py`'s `DesktopApi.__init__`) and
+   *  adopted by the store the first time a lock call reports it — see
+   *  store/projectLock.ts's `instanceId` doc. */
   instanceId: string;
   /** Epoch ms the lock was first acquired (informational — Properties/
    *  status display; no transition below reads it). */
@@ -64,6 +68,16 @@ export interface LockRecord {
    *  browser tab has none). Never load-bearing for any transition here;
    *  carried only for a human-readable "held by pid N" status line. */
   pid?: string;
+  /** Opaque possession token (I2 audit fix, P0-3/P1-1) — what a
+   *  `LockProvider`'s atomic verbs (`refresh`/`takeOver`/`release`) use to
+   *  prove ownership server-side via compare-and-swap, instead of a plain
+   *  read-then-write. Deliberately NOT read by any transition in this pure
+   *  module (classification stays `instanceId`-based, unchanged) —
+   *  `store/projectLock.ts` is the only reader, and only to pass it back
+   *  to the provider on the NEXT call. Optional so a provider that has no
+   *  concept of a token (there is none left; every provider mints one, in-
+   *  memory included) can still satisfy this type. */
+  token?: string;
 }
 
 export type LockStatus = "unlocked" | "held-by-me" | "held-by-other-live" | "held-by-other-stale";

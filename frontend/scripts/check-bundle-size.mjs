@@ -65,6 +65,21 @@ import { fileURLToPath } from "node:url";
  *  without the same measure-first discipline — split a panel out or defer a
  *  module instead.
  *
+ *  2026-08-21 — 907,264 (886.0 kB) after the Sol Day-6 audit wave
+ *  (#194-#199) landed six correctness fixes whose logic is legitimately
+ *  EAGER store/lib code: the formula-reference rewrite on column removal,
+ *  atomic LockProvider verbs + token-bound saves, relink unknown-verdict
+ *  handling, import-wizard multi-X validation, cancellation guards, and
+ *  phantom-undo checks. The one lazy-able piece (the desktop lock
+ *  wire+adapter, lib/desktopLockBridge.ts + lib/desktopLockProvider.ts) WAS
+ *  deferred first via dynamic import in App.tsx (-1.4 kB); the remaining
+ *  overage after that split measured 884.0 kB vs the old 883.9 kB budget —
+ *  0.1 kB of irreducible synchronous store logic, not a deferrable panel.
+ *  Raised by the minimal honest margin (+2.1 kB incl. small headroom)
+ *  rather than degrading store code to dodge a tripwire. The next raise
+ *  still requires this same written-justification treatment: lazy-chunk
+ *  FIRST, raise only for measured, irreducible eager logic.
+ *
  *  2026-08-16 — pinned at 874,461 after the E-c1 extraction pass, booked by
  *  the owner's E-c split ("address the eager bundle budget first" — the
  *  0.2 kB of remaining headroom was one feature away from red). Three
@@ -117,7 +132,7 @@ import { fileURLToPath } from "node:url";
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
  *  before first paint. */
-const EAGER_JS_BUDGET = 905_104;
+const EAGER_JS_BUDGET = 907_264;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
