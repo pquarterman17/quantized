@@ -285,4 +285,29 @@ describe("resolveTemplate (H4 matching)", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.mapping.ignoredKeys).toEqual([]);
   });
+
+  // P1-4 (Sol's Day-6 audit): a channel can match by label AND unit and still
+  // be the WRONG column to bind as an error series, if its current
+  // errorRole classification no longer agrees with what was saved. Without
+  // this check an ordinary value column can be silently rebound as an error
+  // column just because someone renamed/re-used the "Yerr" label elsewhere.
+  it("refuses the whole template when a resolved channel's errorRole no longer matches, even though label+unit still match", () => {
+    // Same label ("Yerr") and same unit ("Oe") as the template's saved
+    // error channel, but this dataset explicitly overrides channel 2 to be
+    // classified as a plain value column (not inferred/bound as an error).
+    const target = ds({ errorRoles: [] });
+    const result = resolveTemplate(template(), target);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Names the channel and both classifications so the refusal is actionable.
+      expect(result.unmatched.some((u) => u.includes("Yerr") && u.includes("error-y") && u.includes("value"))).toBe(true);
+    }
+  });
+
+  it("refuses (not partial-applies) when only the error-role classification is stale but the rest of the mapping would still resolve", () => {
+    const t = template({ mapping: mapping({ yKeys: [1], errorBindings: [{ channel: 2, target: 1, axis: "y", side: "both" }] }) });
+    const target = ds({ errorRoles: [] });
+    const result = resolveTemplate(t, target);
+    expect(result.ok).toBe(false);
+  });
 });

@@ -179,6 +179,55 @@ def test_cat_levels_json_round_trip() -> None:
     assert list(back.cat_levels)[0] == 1  # int key recovered, not "1"
 
 
+class TestCatLevelsPayloadHardening:
+    """P2-1 (Sol's Day-6 audit): `from_dict`'s `cat_levels` payload is
+    UNTRUSTED wire data -- a malformed shape must degrade (drop the bad
+    entry/field), never raise `AttributeError`/`ValueError` out of
+    `from_dict` itself."""
+
+    def _payload(self, cat_levels: object) -> dict[str, object]:
+        return {
+            "time": [0.0, 1.0],
+            "values": [[10.0, 0.0], [20.0, 1.0]],
+            "labels": ["Moment", "Region"],
+            "units": ["emu", ""],
+            "cat_levels": cat_levels,
+        }
+
+    def test_string_payload_degrades_instead_of_attributeerror(self) -> None:
+        # Previously `"abc".items()` -> uncaught AttributeError (a 500 at
+        # the route boundary). Must degrade to cat_levels=None.
+        ds = DataStruct.from_dict(self._payload("abc"))
+        assert ds.cat_levels is None
+
+    def test_list_payload_degrades_instead_of_attributeerror(self) -> None:
+        ds = DataStruct.from_dict(self._payload([1, 2, 3]))
+        assert ds.cat_levels is None
+
+    def test_string_value_is_dropped_not_char_split(self) -> None:
+        # Previously `tuple("abc")` silently split a string VALUE into
+        # `('a', 'b', 'c')` -- a wrong-but-successful level table. Must be
+        # dropped instead.
+        ds = DataStruct.from_dict(self._payload({"0": "abc"}))
+        assert ds.cat_levels is None
+
+    def test_non_int_key_is_dropped_not_valueerror(self) -> None:
+        # Previously `int("not-a-number")` -> uncaught ValueError.
+        ds = DataStruct.from_dict(self._payload({"not-a-number": ["a", "b"]}))
+        assert ds.cat_levels is None
+
+    def test_well_formed_entries_survive_alongside_dropped_malformed_ones(self) -> None:
+        ds = DataStruct.from_dict(
+            self._payload({"1": ["North", "South"], "0": "abc", "not-a-number": ["x"]})
+        )
+        assert ds.cat_levels == {1: ("North", "South")}
+
+    def test_well_formed_payload_round_trips_identically(self) -> None:
+        ds = _cat_ds()
+        back = DataStruct.from_dict(ds.to_dict())
+        assert back.cat_levels == ds.cat_levels
+
+
 def test_cat_levels_lossless_invertible() -> None:
     """The core P1.4 invariant: levels[code] recovers the ORIGINAL string for
     every non-missing cell."""

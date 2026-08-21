@@ -127,3 +127,89 @@ describe("batchEditDatasetMetadata", () => {
     expect(after.raw).toBe(before.raw);
   });
 });
+
+// P2-2 (Sol's Day-6 audit): the single-row actions must retrofit the SAME
+// "compute the effective patch first, bail before recordHistory on a no-op"
+// shape batchEditDatasetMetadata already has above -- a missing id, a blank
+// tag, a duplicate tag, an absent tag, or an unchanged value must never push
+// a phantom undo entry that Ctrl+Z silently no-ops on.
+describe("single-row dataset-meta actions never record a phantom no-op undo entry (P2-2)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        ds("d1", { tags: ["alpha"], notes: "existing note", group: "existing group" }),
+      ],
+      history: [],
+      future: [],
+    });
+  });
+
+  it("setDatasetNotes: missing id records no history", () => {
+    useApp.getState().setDatasetNotes("nope", "x");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("setDatasetNotes: unchanged value records no history", () => {
+    useApp.getState().setDatasetNotes("d1", "existing note");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("setDatasetNotes: a genuine change records exactly one history entry", () => {
+    useApp.getState().setDatasetNotes("d1", "new note");
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.notes).toBe("new note");
+  });
+
+  it("addDatasetTag: missing id records no history", () => {
+    useApp.getState().addDatasetTag("nope", "beta");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("addDatasetTag: blank tag records no history", () => {
+    useApp.getState().addDatasetTag("d1", "   ");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("addDatasetTag: duplicate tag records no history", () => {
+    useApp.getState().addDatasetTag("d1", "alpha");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("addDatasetTag: a genuine new tag records exactly one history entry", () => {
+    useApp.getState().addDatasetTag("d1", "beta");
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.tags).toEqual(["alpha", "beta"]);
+  });
+
+  it("removeDatasetTag: missing id records no history", () => {
+    useApp.getState().removeDatasetTag("nope", "alpha");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("removeDatasetTag: absent tag records no history", () => {
+    useApp.getState().removeDatasetTag("d1", "not-there");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("removeDatasetTag: a genuine removal records exactly one history entry", () => {
+    useApp.getState().removeDatasetTag("d1", "alpha");
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.tags).toBeUndefined();
+  });
+
+  it("setDatasetGroup: missing id records no history", () => {
+    useApp.getState().setDatasetGroup("nope", "x");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("setDatasetGroup: unchanged value records no history", () => {
+    useApp.getState().setDatasetGroup("d1", "existing group");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("setDatasetGroup: a genuine change records exactly one history entry", () => {
+    useApp.getState().setDatasetGroup("d1", "new group");
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.group).toBe("new group");
+  });
+});
