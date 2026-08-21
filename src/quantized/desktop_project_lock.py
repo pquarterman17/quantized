@@ -240,6 +240,57 @@ def _acquire_os_lock(fh: IO[bytes]) -> bool:
     return False
 
 
+def _open_locked(
+    lock_path: str, mode: str = "r+b"
+) -> tuple[str, IO[bytes] | None, str | None]:
+    """Open `lock_path` and take the exclusive OS lock, verifying AFTER the
+    lock is held that the handle still refers to the file the path names
+    (`fstat` vs `stat`, device+inode). Locking an ORPHANED inode is the
+    race the two-process test caught red-handed: a POSIX release unlinks
+    the file, a waiter that had already opened the old path locks the
+    orphan, "wins" a CAS against content nobody else can see, and a third
+    process O_EXCL-creates a brand-new lock file — two holders at once.
+    On identity mismatch: unlock, reopen, retry (bounded).
+
+    Returns `("ok", fh, None)` with the lock HELD (caller must `_unlock`
+    then `close`), `("absent", None, None)` when the path stops existing,
+    or `("error", None, reason)` (nothing held, nothing open)."""
+    for _ in range(_LOCK_RETRY_ATTEMPTS):
+        try:
+            fh = open(lock_path, mode)
+        except FileNotFoundError:
+            return "absent", None, None
+        except (OSError, ValueError) as exc:
+            return "error", None, str(exc)
+        try:
+            locked = _acquire_os_lock(fh)
+        except (OSError, ValueError) as exc:
+            fh.close()
+            return "error", None, str(exc)
+        if not locked:
+            fh.close()
+            return "error", None, "timed out waiting for the exclusive lock"
+        stale = False
+        try:
+            fst = os.fstat(fh.fileno())
+            try:
+                pst = os.stat(lock_path)
+            except FileNotFoundError:
+                stale = True
+            else:
+                stale = (fst.st_dev, fst.st_ino) != (pst.st_dev, pst.st_ino)
+        except (OSError, ValueError) as exc:
+            _unlock(fh)
+            fh.close()
+            return "error", None, str(exc)
+        if not stale:
+            return "ok", fh, None
+        _unlock(fh)
+        fh.close()
+        time.sleep(_LOCK_RETRY_DELAY_S)
+    return "error", None, "lock file kept changing identity under the open/lock race"
+
+
 # -- reads --------------------------------------------------------------
 
 
@@ -277,15 +328,12 @@ def token_still_valid(path: str, token: str) -> bool:
     AND for `UnverifiableLock` — a lock file whose content cannot be
     trusted must never be treated as "no lock", the same fail-closed rule
     `read`'s own doc states for every other caller."""
-    try:
-        fh = open(_lock_path(path), "rb")
-    except FileNotFoundError:
+    state, fh, _err = _open_locked(_lock_path(path), mode="rb")
+    if state == "absent":
         return True
-    except (OSError, ValueError):
+    if fh is None:
         return False
     try:
-        if not _acquire_os_lock(fh):
-            return False
         try:
             current = _parse_record(fh.read().decode("utf-8"))
         finally:
@@ -306,15 +354,12 @@ def _cas_write(path: str, expected_token: str, new_record: LockRecord) -> CasRes
     equals `expected_token`. This is the one place a lock record is ever
     mutated after creation — `refresh` and `take_over` are both thin
     callers of this."""
-    try:
-        fh = open(_lock_path(path), "r+b")
-    except FileNotFoundError:
+    state, fh, err = _open_locked(_lock_path(path))
+    if state == "absent":
         return False, None
-    except (OSError, ValueError) as exc:
-        return False, UnverifiableLock(str(exc))
+    if fh is None:
+        return False, UnverifiableLock(err or "could not lock the lock file")
     try:
-        if not _acquire_os_lock(fh):
-            return False, UnverifiableLock("timed out waiting for the exclusive lock")
         try:
             fh.seek(0)
             current = _parse_record(fh.read().decode("utf-8"))
@@ -398,18 +443,15 @@ def _replace_tombstone(lock_path: str, fresh: LockRecord) -> CasResult:
     """CAS-replace a release tombstone with `fresh` under the exclusive OS
     lock. Wins only if the file still parses as released at write time; a
     concurrent winner's record is reported honestly instead."""
-    try:
-        fh = open(lock_path, "r+b")
-    except FileNotFoundError:
+    state, fh, err = _open_locked(lock_path)
+    if state == "absent":
         created = _create_new(lock_path, fresh)
         if isinstance(created, LockRecord):
             return True, created
         return False, created if isinstance(created, UnverifiableLock) else None
-    except (OSError, ValueError) as exc:
-        return False, UnverifiableLock(str(exc))
+    if fh is None:
+        return False, UnverifiableLock(err or "could not lock the lock file")
     try:
-        if not _acquire_os_lock(fh):
-            return False, UnverifiableLock("timed out waiting for the exclusive lock")
         try:
             fh.seek(0)
             current = _parse_record(fh.read().decode("utf-8"))
@@ -488,15 +530,12 @@ def release(path: str, token: str) -> tuple[bool, str | None]:
     completely untouched by that failure, still bearing this token, so a
     caller can simply retry."""
     lock_path = _lock_path(path)
-    try:
-        fh = open(lock_path, "r+b")
-    except FileNotFoundError:
+    state, fh, err = _open_locked(lock_path)
+    if state == "absent":
         return True, None
-    except (OSError, ValueError) as exc:
-        return False, str(exc)
+    if fh is None:
+        return False, err or "could not lock the lock file"
     try:
-        if not _acquire_os_lock(fh):
-            return False, "timed out waiting for the exclusive lock"
         try:
             fh.seek(0)
             current = _parse_record(fh.read().decode("utf-8"))

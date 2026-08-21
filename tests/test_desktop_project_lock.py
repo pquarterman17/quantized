@@ -21,7 +21,6 @@ from pathlib import Path
 import pytest
 
 import quantized.desktop_project_lock as lockmod
-
 from quantized.desktop_project_lock import (
     LockRecord,
     UnverifiableLock,
@@ -353,7 +352,11 @@ def _worker(
     log_path = os.path.join(log_dir, f"worker-{worker_id}.log")
     held = 0
     with open(log_path, "w", encoding="utf-8") as log:
-        deadline = time.time() + 5.0
+        deadline = time.time() + 20.0  # generous: holds are 10 ms; the budget
+        # only matters on an oversubscribed CI/dev box where spawn+scheduling
+        # can starve workers (observed at load average ~30 on 4 cores). The
+        # asserted property (no overlap) is load-invariant; this clock is a
+        # backstop, never the assertion.
         while held < iterations and time.time() < deadline:
             now = time.time()
             ok, record = lockmod.acquire(path, f"worker-{worker_id}", now=now, ttl_seconds=2.0)
@@ -392,7 +395,7 @@ def test_two_real_processes_never_hold_the_lock_concurrently(tmp_path: Path) -> 
     for p in procs:
         p.start()
     for p in procs:
-        p.join(timeout=9.0)
+        p.join(timeout=40.0)
         assert not p.is_alive(), "worker process hung"
         assert p.exitcode == 0, f"worker process crashed (exitcode {p.exitcode})"
 
