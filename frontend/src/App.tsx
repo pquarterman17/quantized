@@ -15,7 +15,6 @@ import CommandPalette, { type Action } from "./components/overlays/CommandPalett
 import { buildAppActions } from "./appCommands";
 import { health } from "./lib/api";
 import { hasDesktopShell } from "./lib/desktopBridge";
-import { createDesktopLockProvider } from "./lib/desktopLockProvider";
 import {
   loadLibraryViewMode,
   saveLibraryViewMode,
@@ -75,9 +74,15 @@ export default function App() {
   // injected before this component's effects run). A browser tab (no
   // `window.pywebview`) keeps the in-memory default — see
   // store/projectLock.ts's header for why that split is correct, not a gap.
+  // Dynamic import keeps the lock wire+adapter out of the eager bundle —
+  // browser tabs never need it, and in desktop mode the module resolves in
+  // milliseconds at startup, long before any user gesture can reach an
+  // open/save path that consults the provider.
   useEffect(() => {
     if (hasDesktopShell()) {
-      useProjectLock.getState().setProvider(createDesktopLockProvider());
+      void import("./lib/desktopLockProvider").then((m) => {
+        useProjectLock.getState().setProvider(m.createDesktopLockProvider());
+      });
     }
   }, []);
 
