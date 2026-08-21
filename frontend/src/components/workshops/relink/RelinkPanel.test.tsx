@@ -130,7 +130,7 @@ describe("RelinkPanel", () => {
           candidateSize: null,
         },
       ],
-      useAnyway: spy,
+      escalateUnknownRow: spy,
     });
     render(<RelinkPanel />);
     fireEvent.click(screen.getByRole("button", { name: /use anyway/i }));

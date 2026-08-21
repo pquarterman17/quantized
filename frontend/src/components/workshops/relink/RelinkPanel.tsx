@@ -41,14 +41,14 @@ export default function RelinkPanel() {
   const commit = useRelink((s) => s.commit);
   const closePanel = useRelink((s) => s.closePanel);
   const importChangedAsNewVersion = useRelink((s) => s.importChangedAsNewVersion);
-  const useAnyway = useRelink((s) => s.useAnyway);
+  const escalateUnknownRow = useRelink((s) => s.escalateUnknownRow);
 
   if (!open) return null;
 
   const candidateCount = relinkableDatasets().length;
   // P1-2 defect 2: an "unknown" row (recorded checksum, unresolved this
   // session — lib/relink.sourceChangeVerdict) is committable ONLY once
-  // per-row escalated via `useAnyway`; a bulk commit never sweeps it in
+  // per-row escalated via `escalateUnknownRow`; a bulk commit never sweeps it in
   // (store/relink.ts's `commit()` filter mirrors this exactly).
   const committable = preview.filter(
     (r) =>
@@ -143,7 +143,7 @@ export default function RelinkPanel() {
                     Import as new version
                   </Button>
                 ) : isUnknown && !row.escalated ? (
-                  <Button key="u" size="sm" onClick={() => useAnyway(row.datasetId)}>
+                  <Button key="u" size="sm" onClick={() => escalateUnknownRow(row.datasetId)}>
                     Use anyway
                   </Button>
                 ) : (

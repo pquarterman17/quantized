@@ -52,7 +52,7 @@ export interface RelinkPreviewRow {
    *  silently as if verified. `escalated` is the one way past that: an
    *  explicit PER-ROW "use anyway" click (never a global bypass). */
   changeVerdict: "unchanged" | "changed" | "unknown";
-  /** Set only by `useAnyway(datasetId)` — per-row consent to commit an
+  /** Set only by `escalateUnknownRow(datasetId)` — per-row consent to commit an
    *  "unknown" row despite the unresolved checksum. Never true on a row
    *  fresh out of `runPreview`; cleared implicitly whenever a new preview
    *  replaces the row (Preview always resets `preview`). */
@@ -78,7 +78,7 @@ interface RelinkState {
   /** Per-row escalation (box 2/5, P1-2 defect 2c): explicit user consent to
    *  commit ONE "unknown" row despite its unresolved checksum. Never a
    *  global bypass — every other unknown row stays excluded. */
-  useAnyway: (datasetId: string) => void;
+  escalateUnknownRow: (datasetId: string) => void;
   importChangedAsNewVersion: (datasetId: string) => Promise<void>;
 }
 
@@ -208,7 +208,7 @@ export const useRelink = create<RelinkState>((set, get) => ({
         r.candidatePath &&
         r.changeVerdict !== "changed" &&
         // P1-2 defect 2: an "unknown" row commits ONLY once explicitly
-        // escalated via `useAnyway` — a bulk commit never sweeps it in.
+        // escalated via `escalateUnknownRow` — a bulk commit never sweeps it in.
         (r.changeVerdict !== "unknown" || r.escalated),
     );
     if (candidates.length === 0) {
@@ -300,7 +300,7 @@ export const useRelink = create<RelinkState>((set, get) => ({
     set({ open: false, preview: [] });
   },
 
-  useAnyway: (datasetId) =>
+  escalateUnknownRow: (datasetId) =>
     set((s) => ({
       preview: s.preview.map((r) => (r.datasetId === datasetId ? { ...r, escalated: true } : r)),
     })),

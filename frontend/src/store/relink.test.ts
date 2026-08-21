@@ -403,7 +403,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(msg).toContain("1"); // names the exclusion count
   });
 
-  it("commits an 'unknown' row once it has been escalated via useAnyway (per-row consent, not a global bypass)", async () => {
+  it("commits an 'unknown' row once it has been escalated via escalateUnknownRow (per-row consent, not a global bypass)", async () => {
     useApp.setState({
       datasets: [
         baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:old" } }),
@@ -444,7 +444,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       checksum: null, // still no fresh checksum this session — escalation is what unlocks it, not a magic re-probe
     }));
 
-    useRelink.getState().useAnyway("a"); // only "a" gets per-row consent
+    useRelink.getState().escalateUnknownRow("a"); // only "a" gets per-row consent
 
     await useRelink.getState().commit();
 
