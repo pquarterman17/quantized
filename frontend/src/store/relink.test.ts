@@ -184,7 +184,10 @@ describe("commit (box 3: atomic, one undo entry)", () => {
           oldPath: "/old/data/a.csv",
           candidatePath: "/new/place/a.csv",
           status: "resolved",
-          changeVerdict: "unknown",
+          // "unchanged" (not "unknown" — P1-2 defect 2 excludes unknown
+          // rows from a bulk commit; this test is about the atomic-batch
+          // guarantee for ordinarily committable rows, not that filter).
+          changeVerdict: "unchanged",
           candidateChecksum: "sha256:a",
           candidateMtime: 1,
           candidateSize: 1,
@@ -195,7 +198,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
           oldPath: "/old/data/b.csv",
           candidatePath: "/new/place/b.csv",
           status: "resolved",
-          changeVerdict: "unknown",
+          changeVerdict: "unchanged",
           candidateChecksum: "sha256:b",
           candidateMtime: 2,
           candidateSize: 2,
@@ -240,7 +243,10 @@ describe("commit (box 3: atomic, one undo entry)", () => {
           oldPath: "/old/data/a.csv",
           candidatePath: "/new/place/a.csv",
           status: "resolved",
-          changeVerdict: "unknown",
+          // "unchanged" — this test exercises the commit-time TOCTOU
+          // re-probe/drop path specifically, not the unknown-row exclusion
+          // (a separate test below covers that).
+          changeVerdict: "unchanged",
           candidateChecksum: "sha256:preview-time",
           candidateMtime: 1,
           candidateSize: 1,
@@ -278,7 +284,9 @@ describe("commit (box 3: atomic, one undo entry)", () => {
           oldPath: "/old/data/a.csv",
           candidatePath: "/new/place/a.csv",
           status: "resolved",
-          changeVerdict: "unknown",
+          // "unchanged" — exercises the re-probe/vanished path, not the
+          // unknown-row exclusion.
+          changeVerdict: "unchanged",
           candidateChecksum: null,
           candidateMtime: null,
           candidateSize: null,
@@ -329,6 +337,126 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(useApp.getState().history).toHaveLength(0); // nothing committed, nothing to undo
   });
 
+  // P1-2 DEFECT 2 (RED-FIRST): the pre-fix filter was `changeVerdict !==
+  // "changed"`, which let "unknown" rows straight through — commit()
+  // silently wrote a fresh path (and backfilled checksum/mtime/size) for a
+  // row whose checksum could never be confirmed, exactly as if it had been
+  // verified. "unknown" must be excluded from a BULK commit, and the
+  // exclusion count must be named in the completion status.
+  it("excludes an 'unknown' row from a bulk commit and names the exclusion count", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:old" } }),
+        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv" } }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          // recorded a checksum, but this session's probe couldn't confirm
+          // it (defect 1's fix produces exactly this row shape).
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 5,
+          candidateSize: 5,
+        },
+        {
+          datasetId: "b",
+          datasetName: "b.csv",
+          oldPath: "/old/data/b.csv",
+          candidatePath: "/new/place/b.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:b",
+          candidateMtime: 2,
+          candidateSize: 2,
+        },
+      ],
+    });
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/b.csv",
+      size: 2,
+      mtime: 2,
+      checksum: "sha256:b",
+    });
+
+    await useRelink.getState().commit();
+
+    // Row "a" (unknown) is untouched; row "b" (unchanged) relinked.
+    const datasets = useApp.getState().datasets;
+    expect(datasets.find((d) => d.id === "a")!.source).toEqual({
+      kind: "path",
+      path: "/old/data/a.csv",
+      checksum: "sha256:old",
+    });
+    expect(datasets.find((d) => d.id === "b")!.source?.path).toBe("/new/place/b.csv");
+    expect(useApp.getState().history).toHaveLength(1); // still one entry for the whole batch
+    const calls = vi.mocked(toast).mock.calls;
+    const [msg] = calls[calls.length - 1];
+    expect(msg).toMatch(/unverified|unknown|needs verification/i);
+    expect(msg).toContain("1"); // names the exclusion count
+  });
+
+  it("commits an 'unknown' row once it has been escalated via useAnyway (per-row consent, not a global bypass)", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:old" } }),
+        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv", checksum: "sha256:old-b" } }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 5,
+          candidateSize: 5,
+        },
+        {
+          datasetId: "b",
+          datasetName: "b.csv",
+          oldPath: "/old/data/b.csv",
+          candidatePath: "/new/place/b.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 6,
+          candidateSize: 6,
+        },
+      ],
+    });
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) => ({
+      state: "ok",
+      path,
+      size: path.endsWith("a.csv") ? 5 : 6,
+      mtime: path.endsWith("a.csv") ? 5 : 6,
+      checksum: null, // still no fresh checksum this session — escalation is what unlocks it, not a magic re-probe
+    }));
+
+    useRelink.getState().useAnyway("a"); // only "a" gets per-row consent
+
+    await useRelink.getState().commit();
+
+    const datasets = useApp.getState().datasets;
+    expect(datasets.find((d) => d.id === "a")!.source?.path).toBe("/new/place/a.csv"); // escalated: committed
+    expect(datasets.find((d) => d.id === "b")!.source).toEqual({
+      kind: "path",
+      path: "/old/data/b.csv",
+      checksum: "sha256:old-b",
+    }); // NOT escalated: still excluded
+  });
+
   it("reports nothing-to-relink instead of committing an empty batch", async () => {
     useRelink.setState({
       preview: [
@@ -374,5 +502,52 @@ describe("importChangedAsNewVersion (box 5)", () => {
     const created = datasets.find((d) => d.id !== "orig")!;
     expect(original.data.values).toEqual([[1], [2]]); // untouched, per L0.32 "never refreshes in place"
     expect(created.versionOf).toBe("orig");
+  });
+
+  // P1-2 DEFECT 3 (RED-FIRST): `importPaths` records ONE history entry PER
+  // created dataset (addDataset -> recordHistory each time), so a
+  // multi-book Origin source produced N history entries here, and the
+  // trailing versionOf setState rode on whatever entry happened to end up
+  // last — Undo stranded the earlier books' versionOf tags (and only
+  // reverted the last-created book). The whole operation — import of ALL
+  // created datasets + versionOf tagging — must land as exactly ONE undo
+  // step, the same guarantee commit() already has (relink.test.ts's "ONE
+  // history entry for the whole batch", pinned right above).
+  it("records exactly ONE history entry for a multi-dataset import, and one Undo reverts BOTH the datasets and the versionOf tags", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      time: [0],
+      values: [[0]],
+      labels: ["m"],
+      units: ["emu"],
+      metadata: {},
+      books: [
+        { time: [0], values: [[1]], labels: ["m"], units: ["emu"], metadata: { origin_book: "Book1" } },
+        { time: [0], values: [[2]], labels: ["m"], units: ["emu"], metadata: { origin_book: "Book2" } },
+      ],
+    });
+    useApp.setState({
+      datasets: [baseDataset({ id: "orig", source: { kind: "path", path: "/old/data/run1.opj" } })],
+      history: [],
+    });
+    const before = useApp.getState().history.length;
+
+    await useRelink.getState().importChangedAsNewVersion("orig");
+
+    // The fan-out really happened (2 books from 1 source) — otherwise this
+    // test would pass vacuously.
+    const datasetsAfter = useApp.getState().datasets;
+    expect(datasetsAfter).toHaveLength(3);
+    const created = datasetsAfter.filter((d) => d.id !== "orig");
+    expect(created).toHaveLength(2);
+    expect(created.every((d) => d.versionOf === "orig")).toBe(true);
+
+    expect(useApp.getState().history.length - before).toBe(1); // ONE entry for the whole batch
+
+    useApp.getState().undo();
+
+    const datasetsUndone = useApp.getState().datasets;
+    expect(datasetsUndone).toHaveLength(1); // BOTH created datasets gone
+    expect(datasetsUndone[0].id).toBe("orig");
+    expect(datasetsUndone.some((d) => d.versionOf === "orig")).toBe(false); // no stranded versionOf tag
   });
 });

@@ -862,7 +862,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Composed slices — one create*Slice per store/ file, each self-documented.
   ...createWindowsSlice(set, get),
   ...createWorksheetSelectionSlice(set),
-  ...createHistorySlice(set),
+  ...createHistorySlice(set, get),
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createPanelsSlice(set),
