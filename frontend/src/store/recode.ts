@@ -31,22 +31,21 @@
 // disclose the session-only limitation in the UI (adversarial review P1) —
 // don't remove that disclosure without landing real persistence first.
 //
-// BOOKED, not fixed this slice (adversarial review): the non-modal
-// RecodePanel keeps `channel` as a plain index while the panel is open —
-// if the SAME dataset's columns shift underneath it mid-edit (a formula/
-// recode column removed elsewhere, a reimport) the panel could silently
-// end up pointed at a DIFFERENT column than the one the user opened it on.
-// Degrades gracefully today (no crash, no data corruption — `commitRecode`
-// still validates `isCategoricalChannel` at commit time and refuses if
-// that specific index no longer resolves to a categorical column; worst
-// case is committing against the wrong-but-still-categorical column at
-// that index). Real fix needs a stable column IDENTITY (a channel LETTER,
-// like `ComputedColumn.deps` already uses, resolved positionally at open
-// AND re-resolved at commit) rather than a raw index frozen at open time —
-// out of scope for this slice; named home: the next Recode-workshop pass,
-// or whenever `lib/channelRemap.ts`'s index-shift handling grows a shared
-// "resolve a remembered channel through a later shift" primitive other
-// panels could reuse too.
+// CLOSED (Sol audit P1-3, DEFECT B — was BOOKED, not fixed, per the prior
+// note below): the non-modal RecodePanel keeps `channel` as a plain index
+// while the panel is open — if the SAME dataset's columns shift underneath
+// it mid-edit (a formula/recode column removed elsewhere, a reimport) the
+// panel could silently end up pointed at a DIFFERENT column than the one
+// the user opened it on. `openRecode` now also captures the column's LABEL
+// (`openLabel`) and LETTER (`openLetter`) at open time — a stable identity
+// independent of position. `commitRecode` re-resolves that identity against
+// the dataset's CURRENT labels via `lib/recode.ts`'s `resolveRecodeChannel`
+// before trusting `channel` at all: unchanged if the label still matches,
+// silently RETARGETS `channel` to the column that now carries `openLabel`
+// if exactly one does, or REFUSES the commit (toast naming the column,
+// panel stays open, draft intact) if that label is gone or now ambiguous.
+// `activeRecodePreview` resyncs the same way, returning null rather than
+// reading a column the panel didn't open on.
 
 import { create } from "zustand";
 
@@ -57,6 +56,7 @@ import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import {
   buildRecodePreview,
   mappingFromFindReplace,
+  resolveRecodeChannel,
   resolveRecodeMapping,
   type RecodeGroup,
   type RecodeMapping,
@@ -73,6 +73,14 @@ interface RecodeState {
   open: boolean;
   datasetId: string | null;
   channel: number | null;
+  /** DEFECT B: the column's identity AS OF OPEN TIME, independent of
+   *  `channel`'s position — `commitRecode` re-resolves `channel` against
+   *  `openLabel` before trusting it. `openLetter` is carried for messaging/
+   *  debugging symmetry (`channel`'s letter form) but is not itself part of
+   *  the identity check (it's channel-index-derived, so by definition it
+   *  never matches the shifted position). */
+  openLabel: string | null;
+  openLetter: string | null;
   mapping: RecodeMapping;
   newColumnName: string;
   savedMappings: SavedRecodeMapping[];
@@ -124,6 +132,8 @@ export const useRecode = create<RecodeState>((set, get) => ({
   open: false,
   datasetId: null,
   channel: null,
+  openLabel: null,
+  openLetter: null,
   mapping: { groups: [] },
   newColumnName: "",
   savedMappings: [],
@@ -138,11 +148,14 @@ export const useRecode = create<RecodeState>((set, get) => ({
       open: true,
       datasetId,
       channel,
+      openLabel: ds.data.labels[channel],
+      openLetter: channelLetter(channel),
       mapping: { groups: [] },
       newColumnName: `${ds.data.labels[channel]} (recoded)`,
     });
   },
-  closeRecode: () => set({ open: false, datasetId: null, channel: null, mapping: { groups: [] } }),
+  closeRecode: () =>
+    set({ open: false, datasetId: null, channel: null, openLabel: null, openLetter: null, mapping: { groups: [] } }),
   setNewColumnName: (name) => set({ newColumnName: name }),
   setMapping: (mapping) => set({ mapping }),
   setGroup: (newLabel, levels) => {
@@ -168,20 +181,33 @@ export const useRecode = create<RecodeState>((set, get) => ({
   },
 
   commitRecode: () => {
-    const { datasetId, channel, mapping, newColumnName } = get();
-    if (datasetId == null || channel == null) return null;
+    const { datasetId, channel, mapping, newColumnName, openLabel } = get();
+    if (datasetId == null || channel == null || openLabel == null) return null;
     const app = useApp.getState();
     const ds = app.datasets.find((d) => d.id === datasetId);
     if (!ds) {
       toast("can't recode: dataset not found", "danger");
       return null;
     }
-    if (!isCategoricalChannel(ds.data, channel)) {
-      toast(`can't recode "${ds.data.labels[channel]}": no longer categorical`, "danger");
+    // DEFECT B (Sol audit P1-3): `channel` is a plain index that can have
+    // gone stale (a column removed/reimported elsewhere) since `openRecode`
+    // captured it — re-resolve the LABEL identity before trusting it at all.
+    // A resolved retarget updates `channel` in the panel state too, so the
+    // rest of this function (and every later read of `get().channel`) sees
+    // the corrected index; a refusal returns with the draft untouched.
+    const resolved = resolveRecodeChannel(ds.data.labels, channel, openLabel);
+    if (!resolved.ok) {
+      toast(resolved.reason, "danger");
       return null;
     }
-    const name = newColumnName.trim() || `${ds.data.labels[channel]} (recoded)`;
-    const sourceLetter = channelLetter(channel);
+    const resolvedChannel = resolved.channel;
+    if (resolvedChannel !== channel) set({ channel: resolvedChannel });
+    if (!isCategoricalChannel(ds.data, resolvedChannel)) {
+      toast(`can't recode "${ds.data.labels[resolvedChannel]}": no longer categorical`, "danger");
+      return null;
+    }
+    const name = newColumnName.trim() || `${ds.data.labels[resolvedChannel]} (recoded)`;
+    const sourceLetter = channelLetter(resolvedChannel);
     const target = formulaLetter(ds.data.labels.length, ds.formulas?.length ?? 0, ds.formulas?.length ?? 0);
     // Adversarial review P3: this branch is UNREACHABLE at this call site
     // today (mutation-deleting it produces zero test failures) — `target`
@@ -217,8 +243,8 @@ export const useRecode = create<RecodeState>((set, get) => ({
     }));
     app.recordMacro(`Recode ${sourceLetter} → ${name}`, `qz.recode(${JSON.stringify(ds.name)}, ${JSON.stringify(sourceLetter)}, ${JSON.stringify(name)})`);
     app.touchDataset(datasetId);
-    toast(`recoded "${ds.data.labels[channel]}" → "${name}"`, "ok");
-    set({ open: false, datasetId: null, channel: null, mapping: { groups: [] } });
+    toast(`recoded "${ds.data.labels[resolvedChannel]}" → "${name}"`, "ok");
+    set({ open: false, datasetId: null, channel: null, openLabel: null, openLetter: null, mapping: { groups: [] } });
     return target;
   },
 
@@ -257,11 +283,16 @@ export const useRecode = create<RecodeState>((set, get) => ({
 
 /** Live preview for the currently-open panel (old -> new mapping table +
  *  resulting level count) — a thin wrapper so the view doesn't need to
- *  import `lib/recode.ts` AND read the store's dataset/channel by hand. */
+ *  import `lib/recode.ts` AND read the store's dataset/channel by hand.
+ *  DEFECT B miniature: resyncs `channel` against `openLabel` the same way
+ *  `commitRecode` does (silently, since this is a read, not a mutation) so a
+ *  mid-edit shift doesn't preview against the wrong column either; `null`
+ *  when the identity can't be resolved at all (ambiguous/gone). */
 export function activeRecodePreview() {
-  const { datasetId, channel, mapping } = useRecode.getState();
+  const { datasetId, channel, openLabel, mapping } = useRecode.getState();
   const ds = datasetId != null ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
-  const levels = ds && channel != null ? categoricalLevels(ds.data, channel) : null;
+  const resolved = ds && channel != null && openLabel != null ? resolveRecodeChannel(ds.data.labels, channel, openLabel) : null;
+  const levels = ds && resolved?.ok ? categoricalLevels(ds.data, resolved.channel) : null;
   if (!levels) return null;
   return buildRecodePreview(levels, mapping);
 }

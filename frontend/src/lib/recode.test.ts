@@ -5,6 +5,7 @@ import {
   mappingFromFindReplace,
   recodeColumnValues,
   resolveLevel,
+  resolveRecodeChannel,
   resolveRecodeMapping,
   type RecodeMapping,
 } from "./recode";
@@ -136,5 +137,30 @@ describe("resolveRecodeMapping — refusal-with-explanation on reapply mismatch 
     const r = resolveRecodeMapping(wide, ["A1"]); // A2 and B1 both missing
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.unmatched).toEqual(["A2", "B1"]);
+  });
+});
+
+describe("resolveRecodeChannel (DEFECT B, Sol audit P1-3)", () => {
+  it("unchanged: the label at `channel` still matches openLabel", () => {
+    const r = resolveRecodeChannel(["A", "B", "C"], 1, "B");
+    expect(r).toEqual({ ok: true, channel: 1 });
+  });
+
+  it("retargets to the unique column that now carries openLabel", () => {
+    // "B" shifted from index 1 to index 0; a different column now sits at 1.
+    const r = resolveRecodeChannel(["B", "X", "C"], 1, "B");
+    expect(r).toEqual({ ok: true, channel: 0 });
+  });
+
+  it("refuses when openLabel exists nowhere anymore", () => {
+    const r = resolveRecodeChannel(["A", "X", "C"], 1, "B");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/"B".*no longer exists/);
+  });
+
+  it("refuses (never guesses) when openLabel is now ambiguous", () => {
+    const r = resolveRecodeChannel(["B", "X", "B"], 1, "B");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/ambiguous/);
   });
 });
