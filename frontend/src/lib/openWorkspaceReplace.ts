@@ -69,14 +69,14 @@ function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | 
  *  explains a read-only result with the two named next steps (Take Over
  *  Editing / Open as Copy — commands/projectLockCommands.ts). `openProject`
  *  itself never throws (see that module's own doc), so no `.catch` is
- *  needed here; releasing goes straight through `prior.provider.clear`
+ *  needed here; releasing goes straight through `prior.provider.release`
  *  (not the `releaseLock` action, which reads LIVE store state that
  *  `reserveLockForSwitch` has already overwritten by the time this runs). */
 function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
   if (!native || !prior) return;
   void (async () => {
     if (prior.path && prior.path !== native.path && canRelease(prior.record, prior.instanceId)) {
-      await prior.provider.clear(prior.path).catch(() => false);
+      await prior.provider.release(prior.path, prior.record?.token ?? "").catch(() => false);
     }
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;

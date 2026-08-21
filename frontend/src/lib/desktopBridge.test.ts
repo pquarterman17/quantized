@@ -5,10 +5,11 @@
 // `null` ("no usable bridge") and a well-formed cancel/empty result must
 // never collapse into each other.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CANCELLED,
+  LOCK_LOST,
   openFiles,
   openProject,
   pickNativeFiles,
@@ -25,7 +26,7 @@ interface FakeApi {
   open_project_file?: (dir?: string) => Promise<Record<string, unknown>>;
   read_project_file?: (path: string) => Promise<Record<string, unknown>>;
   save_file_dialog?: (name?: string) => Promise<Record<string, unknown>>;
-  write_project_file?: (path: string, content: string) => Promise<Record<string, unknown>>;
+  write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
 }
 
 function setShell(api: FakeApi | null): void {
@@ -223,4 +224,36 @@ describe("saveProjectTo", () => {
     setShell({ write_project_file: async () => ({ ok: false, error: "not consented" }) });
     expect(await saveProjectTo("/p/w.dwk", "{}")).toBeNull();
   });
+
+  // I2 (P0-3/P1-1): the lock-token binding — LOCK_LOST must be
+  // distinguishable from a generic write failure (`null`), since the
+  // caller's response differs (drop to read-only, no download fallback).
+  describe("I2 lock-token binding", () => {
+    it("forwards the token as the write call's third argument", async () => {
+      const write = vi.fn(async (path: string) => ({ ok: true, path }));
+      setShell({ write_project_file: write });
+      await saveProjectTo("/p/w.dwk", "{}", "the-token");
+      expect(write).toHaveBeenCalledWith("/p/w.dwk", "{}", "the-token");
+    });
+
+    it("passes an empty string when no token is supplied — pre-I2 behavior preserved", async () => {
+      const write = vi.fn(async (path: string) => ({ ok: true, path }));
+      setShell({ write_project_file: write });
+      await saveProjectTo("/p/w.dwk", "{}");
+      expect(write).toHaveBeenCalledWith("/p/w.dwk", "{}", "");
+    });
+
+    it('returns LOCK_LOST (not null) when the backend reports "lock lost"', async () => {
+      setShell({ write_project_file: async () => ({ ok: false, error: "lock lost" }) });
+      expect(await saveProjectTo("/p/w.dwk", "{}", "stale-token")).toBe(LOCK_LOST);
+    });
+
+    it("a generic write failure still returns null, not LOCK_LOST", async () => {
+      setShell({ write_project_file: async () => ({ ok: false, error: "disk full" }) });
+      expect(await saveProjectTo("/p/w.dwk", "{}", "some-token")).toBeNull();
+    });
+  });
 });
+
+// PR I2's filesystem project lock wire calls (acquireProjectLock etc.) —
+// see lib/desktopLockBridge.test.ts, split out alongside the module itself.

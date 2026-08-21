@@ -19,7 +19,13 @@ beforeEach(() => {
     record: null,
     path: null,
     openedAsCopy: false,
-    provider: { read: async () => null, write: async () => true, clear: async () => true },
+    provider: {
+      read: async () => null,
+      tryAcquire: async () => ({ acquired: true, record: null }),
+      refresh: async () => ({ acquired: true, record: null }),
+      takeOver: async () => ({ acquired: true, record: null }),
+      release: async () => true,
+    },
   });
 });
 

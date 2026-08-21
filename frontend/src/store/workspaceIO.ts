@@ -24,12 +24,19 @@
 // Recent Projects entry — see lib/recentProjects.ts's module doc for why a
 // browser download, which has no path, never does.
 
-import { CANCELLED, hasDesktopShell, pickSaveDestination, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
+import {
+  CANCELLED,
+  LOCK_LOST,
+  hasDesktopShell,
+  pickSaveDestination,
+  saveProjectTo,
+  type SaveProjectResult,
+} from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
-import { classifyLock, verifyBeforeWrite } from "../lib/lockState";
+import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
-import { useProjectLock } from "./projectLock";
+import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
@@ -88,6 +95,50 @@ async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> 
   return serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
 }
 
+/** I2 (P0-3/P1-1): acquire the lock for a Save-As DESTINATION before ever
+ *  writing to it — a single read+classify+CAS-acquire sequence against the
+ *  LIVE `useProjectLock` provider, but deliberately WITHOUT touching the
+ *  store's live `path`/`status`/`record` until the write itself has
+ *  actually succeeded (`runSaveWorkspaceToFile` below does that transfer).
+ *  Pointing `useProjectLock.path` at the new destination before a write
+ *  that might still fail would desync it from `useApp.currentProject` —
+ *  the exact P3 bug `lib/openWorkspaceReplace.ts`'s `reserveLockForSwitch`
+ *  exists to avoid, applied here to the Save-As path too.
+ *
+ *  A LIVE other holder refuses outright. A STALE one is taken over
+ *  DIRECTLY, with no "Take Over Editing" UI gate — Save As has always been
+ *  allowed to proceed over a merely-stale destination (the pre-existing P2
+ *  ruling this preserves: a fresh, deliberately-dialog-picked destination
+ *  is not the silent background write L0.47's explicit-takeover gate
+ *  exists to prevent). */
+async function acquireDestinationLock(
+  provider: LockProvider,
+  instanceId: string,
+  destination: string,
+): Promise<{ ok: true; record: LockRecord } | { ok: false; status: LockStatus }> {
+  const now = Date.now();
+  let current: LockRecord | null;
+  try {
+    current = await provider.read(destination);
+  } catch {
+    return { ok: false, status: "held-by-other-live" };
+  }
+  const status = classifyLock(current, instanceId, now);
+  if (status === "held-by-other-live") return { ok: false, status };
+  try {
+    const result =
+      status === "held-by-other-stale"
+        ? await provider.takeOver(destination, current?.token ?? "")
+        : await provider.tryAcquire(destination);
+    if (!result.acquired || result.record === null) {
+      return { ok: false, status: classifyLock(result.record, instanceId, Date.now()) };
+    }
+    return { ok: true, record: result.record };
+  } catch {
+    return { ok: false, status: "held-by-other-live" };
+  }
+}
+
 export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   const content = await serializeCurrentWorkspace(get);
   if (content === null) return;
@@ -105,24 +156,47 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
-    // Only a LIVE other holder refuses — a stale one, or no lock tracked at
-    // all, proceeds exactly as before (this can only ever make a write MORE
-    // cautious, never invent a refusal the lock state itself doesn't
-    // support; matches runSaveWorkspace's identical "gate can only ever make
-    // a write more cautious" rule).
+    // I2 (P0-3/P1-1): ACQUIRE the destination's lock first — see
+    // `acquireDestinationLock`'s own doc. This replaces the old
+    // "only check IF the lock happens to already be tracking this exact
+    // path" gate with a real acquisition attempt against ANY destination,
+    // whether or not this session ever opened it before.
     const lock = useProjectLock.getState();
-    if (lock.path === destination) {
-      const current = await lock.provider.read(destination).catch(() => null);
-      const status = classifyLock(current, lock.instanceId, Date.now());
-      if (status === "held-by-other-live") {
-        useProjectLock.setState({ status, record: current });
-        const msg = `save refused — "${baseName(destination)}" is open for editing in another instance`;
-        get().setStatus(msg);
-        toast(msg, "danger");
-        return; // a deliberate refusal, not a failure — no download fallback either
-      }
+    const acquired = await acquireDestinationLock(lock.provider, lock.instanceId, destination);
+    if (!acquired.ok) {
+      const msg =
+        acquired.status === "held-by-other-live"
+          ? `save refused — "${baseName(destination)}" is open for editing in another instance`
+          : `save refused — "${baseName(destination)}" is currently locked by another instance`;
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return; // a deliberate refusal, not a failure — no download fallback either
     }
-    native = await saveProjectTo(destination, content);
+    const write = await saveProjectTo(destination, content, acquired.record.token);
+    if (write !== null && write !== LOCK_LOST) {
+      native = write;
+      // Success: release the OLD lock — a DIFFERENT path this instance
+      // actually held — now that the NEW path is the project's identity.
+      // Never strand the prior lock; mirrors
+      // lib/openWorkspaceReplace.ts's identical "switching releases the
+      // old" rule for the ordinary open path.
+      if (lock.path !== null && lock.path !== destination && canRelease(lock.record, lock.instanceId)) {
+        await lock.provider.release(lock.path, lock.record?.token ?? "").catch(() => false);
+      }
+      useProjectLock.setState({
+        status: "held-by-me",
+        record: acquired.record,
+        path: destination,
+        openedAsCopy: false,
+        instanceId: acquired.record.instanceId,
+      });
+    } else {
+      // Write failed (or a razor-thin race lost the lock right after this
+      // instance acquired it) — release the JUST-acquired new lock and
+      // leave the OLD lock completely untouched: the user is still
+      // working in the prior project, this Save As simply didn't happen.
+      await lock.provider.release(destination, acquired.record.token ?? "").catch(() => false);
+    }
   }
   if (native !== null) {
     // P1.2 box 1: a native Save As always establishes (or renames) the
@@ -194,30 +268,36 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   const content = await serializeCurrentWorkspace(get);
   if (content === null) return;
 
-  // P1 (adversarial review, 2026-08-19): THE actual enforcement point — a
-  // fresh read straight from the lock provider, taken immediately before the
-  // write itself, not the cached status above. This is what makes
-  // `lib/lockState.ts`'s `verifyBeforeWrite` doc ("the resumed original's
-  // very next write attempt is refused") true for a REAL write path, not
-  // only for the periodic heartbeat tick. Re-reads `useProjectLock.getState()`
-  // fresh (not the `cachedLock` captured above) in case a takeover happened
-  // via the UI while `serializeCurrentWorkspace` was running. Save As is
-  // still deliberately left ungated here — a fresh native dialog is always a
-  // new, deliberate destination pick; see P2's separate destination-overwrite
-  // guard on that path instead.
+  // I2 (P0-3/P1-1): THE actual enforcement point — the CURRENTLY held
+  // token (re-reads `useProjectLock.getState()` fresh, not the `cachedLock`
+  // captured above, in case a takeover happened via the UI while
+  // `serializeCurrentWorkspace` was running) travels straight into the
+  // write call. `write_project_file`'s own exclusive-OS-lock CAS is what
+  // actually verifies it, IMMEDIATELY before the write, in the SAME
+  // round-trip as the write itself — closing the save TOCTOU a separate
+  // frontend "read, then write" could never truly close across processes
+  // (there is always a gap between two round-trips; there is none within
+  // one). No token to hold (the lock system hasn't opined on this exact
+  // path) means an empty string, which skips the backend check entirely —
+  // this can only ever make a write MORE cautious, never invent a refusal
+  // the lock state itself doesn't support. Save As is still deliberately
+  // left ungated here — a fresh native dialog is always a new, deliberate
+  // destination pick; see `acquireDestinationLock` on that path instead.
   const lock = useProjectLock.getState();
-  if (lock.path === project.path) {
+  const token = lock.path === project.path ? (lock.record?.token ?? "") : "";
+  const result = await saveProjectTo(project.path, content, token);
+  if (result === LOCK_LOST) {
+    // Drop to read-only honestly (a fresh read reports who, if anyone,
+    // holds it now) and STOP — no retry loop, and specifically no fallback
+    // to a browser download, which would silently create a second,
+    // divergent copy of the user's edits instead of surfacing the loss.
     const current = await lock.provider.read(project.path).catch(() => null);
-    if (!verifyBeforeWrite(current, lock.instanceId)) {
-      useProjectLock.setState({ status: classifyLock(current, lock.instanceId, Date.now()), record: current });
-      const msg = "save refused — another instance now holds this project's lock";
-      get().setStatus(msg);
-      toast(msg, "danger");
-      return;
-    }
+    useProjectLock.setState({ status: classifyLock(current, lock.instanceId, Date.now()), record: current });
+    const msg = "save refused — the project lock was lost (another instance may hold it now)";
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
   }
-
-  const result = await saveProjectTo(project.path, content);
   if (result === null) {
     const msg = `save failed — could not write to ${project.path} (try Save As)`;
     get().setStatus(msg);

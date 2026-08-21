@@ -75,6 +75,16 @@ export type PathState = "ok" | "missing" | "offline" | "invalid" | "unknown";
 export const CANCELLED = "qz/desktop-bridge/cancelled" as const;
 export type Cancelled = typeof CANCELLED;
 
+/** I2 (P0-3/P1-1): `saveProjectTo`'s distinct outcome when a supplied lock
+ *  token was refused by `desktop_bridge.py`'s `write_project_file` (the
+ *  save-TOCTOU fix — see that method's doc). Distinct from `null` ("no
+ *  bridge, or a generic write failure") because the caller's response must
+ *  differ: a lock loss means "someone else may hold this now — drop to
+ *  read-only, do not retry, do not fall back to a browser download that
+ *  would silently create a SECOND copy of the user's edits". */
+export const LOCK_LOST = "qz/desktop-bridge/lock-lost" as const;
+export type LockLost = typeof LOCK_LOST;
+
 export interface OpenProjectResult {
   path: string;
   content: string;
@@ -90,14 +100,24 @@ interface PyWebviewApi {
   pick_directory?: (directory?: string) => Promise<Record<string, unknown>>;
   path_status?: (path: string) => Promise<Record<string, unknown>>;
   save_file_dialog?: (suggestedName?: string) => Promise<Record<string, unknown>>;
-  write_project_file?: (path: string, content: string) => Promise<Record<string, unknown>>;
+  write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
   open_project_file?: (directory?: string) => Promise<Record<string, unknown>>;
   read_project_file?: (path: string) => Promise<Record<string, unknown>>;
   probe_source?: (path: string) => Promise<Record<string, unknown>>;
   grant_source_paths?: (paths: string[]) => Promise<Record<string, unknown>>;
+  project_lock_acquire?: (path: string) => Promise<Record<string, unknown>>;
+  project_lock_read?: (path: string) => Promise<Record<string, unknown>>;
+  project_lock_refresh?: (path: string, token: string) => Promise<Record<string, unknown>>;
+  project_lock_takeover?: (path: string, expectedToken: string) => Promise<Record<string, unknown>>;
+  project_lock_release?: (path: string, token: string) => Promise<Record<string, unknown>>;
 }
 
-function api(): PyWebviewApi | null {
+/** Exported (alongside `str`/`bool`/`num` below) so `lib/desktopLockBridge.ts`
+ *  — the PR I2 lock wire calls, split out once this file neared the repo's
+ *  general 500-line `.ts` ceiling (architecture.test.ts's RSM_CUTS_PLAN #20
+ *  guard) — can reach the SAME `window.pywebview.api` accessor and
+ *  type-narrowing helpers instead of duplicating them. */
+export function api(): PyWebviewApi | null {
   const w = globalThis as { pywebview?: { api?: PyWebviewApi } };
   return w.pywebview?.api ?? null;
 }
@@ -108,8 +128,8 @@ export function hasDesktopShell(): boolean {
   return api() !== null;
 }
 
-const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-const bool = (v: unknown): boolean => v === true;
+export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+export const bool = (v: unknown): boolean => v === true;
 const shellKind = (v: unknown): DesktopShellKind | null =>
   v === "pywebview" || v === "tauri" || v === "browser" ? v : null;
 
@@ -301,19 +321,26 @@ export async function saveProjectAs(
 }
 
 /** Write `contents` directly to an already-known project `path` — no dialog.
- *  Exists for a future "Save" (as opposed to "Save As") once P1.2 tracks
- *  project identity; nothing in this slice calls it from a UI command yet
- *  (see desktop_bridge.py's "explicitly deferred" section). `null` covers
- *  both "no bridge" and "the write failed / the path was never consented" —
- *  there is no dialog here to cancel, so no `CANCELLED` outcome. */
+ *  `null` covers both "no bridge" and "the write failed / the path was
+ *  never consented" — there is no dialog here to cancel, so no `CANCELLED`
+ *  outcome. `lockToken`, when supplied, is forwarded to
+ *  `write_project_file`'s I2 lock-token binding (P0-3/P1-1): the backend
+ *  verifies it under the SAME exclusive-OS-lock CAS every other lock
+ *  mutation uses, immediately before the write, and this resolves
+ *  `LOCK_LOST` (never `null`) when it was refused — see that constant's
+ *  doc for why the two must stay distinguishable to the caller. Omitting
+ *  `lockToken` (or passing `""`) skips the check entirely, byte-identical
+ *  to this function's pre-I2 behavior. */
 export async function saveProjectTo(
   path: string,
   contents: string,
-): Promise<SaveProjectResult | null> {
+  lockToken?: string,
+): Promise<SaveProjectResult | LockLost | null> {
   const bridge = api();
   if (!bridge?.write_project_file) return null;
   try {
-    const out = await bridge.write_project_file(path, contents);
+    const out = await bridge.write_project_file(path, contents, lockToken ?? "");
+    if (str(out.error) === "lock lost") return LOCK_LOST;
     if (!bool(out.ok)) return null;
     return { path: str(out.path) ?? path };
   } catch {
@@ -346,7 +373,7 @@ const SOURCE_PROBE_STATES: readonly SourceProbe["state"][] = [
   "permission_denied",
 ];
 
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** Probe one source path. `null` = no usable bridge (relink degrades to
  *  "source checks unavailable" in a browser — never guesses a state). Never
@@ -391,3 +418,9 @@ export async function grantSourceReadPaths(paths: string[]): Promise<string[]> {
     return [];
   }
 }
+
+// PR I2's filesystem project lock (P0-3/P1-1) wire calls live in the
+// sibling lib/desktopLockBridge.ts — split out once this file neared the
+// repo's general 500-line `.ts` ceiling (architecture.test.ts's
+// RSM_CUTS_PLAN #20 guard). It reuses `api`/`str`/`bool`/`num` exported
+// above rather than duplicating them.

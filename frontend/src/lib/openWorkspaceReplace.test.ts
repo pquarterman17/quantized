@@ -2,7 +2,10 @@
 // state machine — the wiring this file adds to replaceWorkspace/
 // replaceWorkspaceSafely, exercised against the real store (loadWorkspace,
 // setCurrentProject) and the real useProjectLock (its default in-memory
-// provider, per its own module doc).
+// provider, per its own module doc). I2 (P0-3/P1-1): every fake provider
+// below uses the ATOMIC-VERB shape (`tryAcquire`/`refresh`/`takeOver`/
+// `release`) — no test composes a mutation out of a separate read followed
+// by an unconditional write.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,7 +13,8 @@ import type { LoadedWorkspace } from "./workspace";
 import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
-import { useProjectLock } from "../store/projectLock";
+import { useProjectLock, type LockProvider } from "../store/projectLock";
+import type { LockRecord } from "./lockState";
 
 vi.mock("../store/toasts", () => ({ toast: vi.fn() }));
 
@@ -47,6 +51,47 @@ function emptyWorkspace(): LoadedWorkspace {
   };
 }
 
+let tokenSeq = 0;
+function withToken(record: Omit<LockRecord, "token">): LockRecord {
+  return { ...record, token: `test-token-${++tokenSeq}` };
+}
+
+/** A genuinely path-keyed, atomic-verb fake provider backed by `store` —
+ *  exposed so a test can seed a pre-existing record OR inspect what ended
+ *  up on record after a switch. */
+function pathKeyedProvider(): LockProvider & { store: Map<string, LockRecord> } {
+  const store = new Map<string, LockRecord>();
+  return {
+    store,
+    read: async (p) => store.get(p) ?? null,
+    tryAcquire: async (p) => {
+      const record = withToken({ instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now() });
+      store.set(p, record);
+      return { acquired: true, record };
+    },
+    refresh: async (p, token) => {
+      const current = store.get(p) ?? null;
+      if (current === null || current.token !== token) return { acquired: false, record: current };
+      const updated = { ...current, heartbeatAt: Date.now() };
+      store.set(p, updated);
+      return { acquired: true, record: updated };
+    },
+    takeOver: async (p, expectedToken) => {
+      const current = store.get(p) ?? null;
+      if (current === null || current.token !== expectedToken) return { acquired: false, record: current };
+      const record = withToken({ instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now() });
+      store.set(p, record);
+      return { acquired: true, record };
+    },
+    release: async (p, token) => {
+      const current = store.get(p) ?? null;
+      if (current === null || current.token !== token) return false;
+      store.delete(p);
+      return true;
+    },
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useProjectLock.setState({
@@ -54,11 +99,7 @@ beforeEach(() => {
     record: null,
     path: null,
     openedAsCopy: false,
-    provider: {
-      read: async () => null,
-      write: async () => true,
-      clear: async () => true,
-    },
+    provider: pathKeyedProvider(),
   });
 });
 
@@ -78,13 +119,8 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
   });
 
   it("toasts an honest read-only notice when the project is already locked by another live instance", async () => {
-    useProjectLock.setState({
-      provider: {
-        read: async () => ({ instanceId: "other", acquiredAt: 1, heartbeatAt: Date.now() }),
-        write: async () => true,
-        clear: async () => true,
-      },
-    });
+    const provider = useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>;
+    provider.store.set("/p/demo.dwk", withToken({ instanceId: "other", acquiredAt: 1, heartbeatAt: Date.now() }));
     replaceWorkspaceSafely(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
     await new Promise((r) => setTimeout(r, 0));
     expect(useProjectLock.getState().status).toBe("held-by-other-live");
@@ -92,20 +128,7 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
   });
 
   it("releases a PREVIOUS project's lock this instance held before acquiring the newly opened one", async () => {
-    const store = new Map<string, { instanceId: string; acquiredAt: number; heartbeatAt: number }>();
-    useProjectLock.setState({
-      provider: {
-        read: async (p) => store.get(p) ?? null,
-        write: async (p, r) => {
-          store.set(p, r);
-          return true;
-        },
-        clear: async (p) => {
-          store.delete(p);
-          return true;
-        },
-      },
-    });
+    const store = (useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>).store;
     replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "a.dwk", path: "/p/a.dwk" });
     await new Promise((r) => setTimeout(r, 0));
     expect(store.has("/p/a.dwk")).toBe(true);
@@ -149,20 +172,7 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
   });
 
   it("still releases the OLD project's lock across a switch even though the placeholder now occupies `path` first (P3 regression guard)", async () => {
-    const store = new Map<string, { instanceId: string; acquiredAt: number; heartbeatAt: number }>();
-    useProjectLock.setState({
-      provider: {
-        read: async (p) => store.get(p) ?? null,
-        write: async (p, r) => {
-          store.set(p, r);
-          return true;
-        },
-        clear: async (p) => {
-          store.delete(p);
-          return true;
-        },
-      },
-    });
+    const store = (useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>).store;
     const s = () => useApp.getState();
     replaceWorkspace(s, emptyWorkspace(), { name: "a.dwk", path: "/p/a.dwk" });
     await new Promise((r) => setTimeout(r, 0));
