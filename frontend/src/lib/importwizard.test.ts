@@ -16,6 +16,8 @@ import {
   withColumnName,
   withColumnUnit,
   withRole,
+  xRoleColumns,
+  xRoleConflictMessage,
 } from "./importwizard";
 import type { ImportFilterWire, ImportPreviewColumn, ImportPreviewResponse } from "./types";
 
@@ -110,6 +112,25 @@ describe("finalChannelOrder", () => {
     ];
     expect(finalChannelOrder(cs).map((c) => c.label)).toEqual(["M", "Sample"]);
   });
+
+  it("P1-5 DEFECT 2: uses effective_name (the post-label_line name) over the raw header name when present", () => {
+    // RED before the fix: finalChannelOrder read `c.name` -- the raw header
+    // text -- even though preview_import's `effective_name` is the name the
+    // dataset will actually carry once label_line overrides apply.
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Temp", effective_name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "M1", effective_name: "NbAu-1", unit: "emu", role: "y" },
+    ];
+    expect(finalChannelOrder(cs).map((c) => c.label)).toEqual(["NbAu-1"]);
+  });
+
+  it("falls back to name when effective_name is absent (older/mocked previews)", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "M1", unit: "emu", role: "y" },
+    ];
+    expect(finalChannelOrder(cs).map((c) => c.label)).toEqual(["M1"]);
+  });
 });
 
 describe("suggestErrorBindings (P1.6 item 2 — 'no guess can silently attach')", () => {
@@ -118,6 +139,20 @@ describe("suggestErrorBindings (P1.6 item 2 — 'no guess can silently attach')"
       { index: 0, name: "Temp", unit: "K", role: "x" },
       { index: 1, name: "R", unit: "", role: "y" },
       { index: 2, name: "dR", unit: "", role: "error" },
+    ];
+    expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("P1-5 DEFECT 2: classifies against effective_name, not the raw header name, when label_line overrides it", () => {
+    // RED before the fix: the raw header names ("Col2"/"Col3") share no
+    // base-name relationship at all, so the OLD name-only classifier finds
+    // nothing -- but the label_line-overridden effective_names ("R"/"dR")
+    // are an unambiguous base-name pairing, exactly the name the dataset
+    // will actually carry once imported.
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Col1", effective_name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "Col2", effective_name: "R", unit: "", role: "y" },
+      { index: 2, name: "Col3", effective_name: "dR", unit: "", role: "error" },
     ];
     expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
   });
@@ -389,5 +424,40 @@ describe("resolveImportFilter — line-position sanity (P1.6 review P1-2)", () =
     // naturalDataStart set past label_line so the position check doesn't
     // fire either -- isolates the "no row there" numeric-heuristic guard.
     expect(resolveImportFilter(outOfRangeFilter, shortFresh, 100).ok).toBe(true);
+  });
+});
+
+// ── P1-5 DEFECT 1: multi-x validation ────────────────────────────────────────
+
+describe("xRoleConflictMessage", () => {
+  it("is null when zero or one column is marked x", () => {
+    expect(xRoleConflictMessage([])).toBeNull();
+    expect(
+      xRoleConflictMessage([
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "M", unit: "", role: "y" },
+      ]),
+    ).toBeNull();
+  });
+
+  it("names every column currently marked x when more than one is selected", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "Field", unit: "Oe", role: "x" },
+      { index: 2, name: "M", unit: "", role: "y" },
+    ];
+    const msg = xRoleConflictMessage(cs);
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("Temp");
+    expect(msg).toContain("Field");
+  });
+
+  it("xRoleColumns returns exactly the x-marked columns, in column order", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Temp", unit: "K", role: "x" },
+      { index: 1, name: "M", unit: "", role: "y" },
+      { index: 2, name: "Field", unit: "Oe", role: "x" },
+    ];
+    expect(xRoleColumns(cs).map((c) => c.index)).toEqual([0, 2]);
   });
 });

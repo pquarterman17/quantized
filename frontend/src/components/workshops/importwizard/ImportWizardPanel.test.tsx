@@ -137,6 +137,48 @@ describe("ImportWizardPanel", () => {
     expect(useApp.getState().datasets).toHaveLength(0);
   });
 
+  it("P1-5 DEFECT 1: disables Import and shows a named-column conflict message when two columns are marked x", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "x" },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+
+    const importButton = screen.getByRole("button", { name: "Import" });
+    expect(importButton).toBeDisabled();
+    expect(screen.getAllByText(/only one column can be x/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Temp/).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(/column \d role/).length).toBeGreaterThan(0);
+    // Both offending role selects are marked invalid.
+    expect(screen.getByLabelText("column 1 role")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("column 2 role")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("P1-5 DEFECT 1: re-enables Import once the conflict is resolved back to a single x column", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "x" },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+
+    importPreviewMock.mockResolvedValue(PREVIEW); // back to a single x column
+    fireEvent.change(screen.getByLabelText("column 2 role"), { target: { value: "y" } });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Import" })).not.toBeDisabled());
+    expect(screen.queryByText(/only one column can be x/)).not.toBeInTheDocument();
+  });
+
   it("saves the confirmed settings as a named filter via the param dialog", async () => {
     const saved: ImportFilterWire = { name: "run1", glob: "*.dat", settings: SETTINGS, updated: "t" };
     saveImportFilterMock.mockResolvedValue(saved);

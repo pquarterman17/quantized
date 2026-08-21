@@ -989,6 +989,14 @@ export interface ImportSettingsWire {
 export interface ImportPreviewColumn {
   index: number;
   name: string;
+  /** P1-5 DEFECT 2: the name this column's channel/label will ACTUALLY
+   *  carry once imported -- `name` with any `label_line` override applied
+   *  (io/import_preview.py's `_effective_names`, the same rule
+   *  `parse_import` uses for `.labels`). Optional on the wire type (older
+   *  fixtures / mocked previews may omit it); callers that need the true
+   *  post-import name should read `c.effective_name ?? c.name`. Equal to
+   *  `name` whenever no `label_line` override applies to this column. */
+  effective_name?: string;
   unit: string;
   role: ImportColumnRole;
 }

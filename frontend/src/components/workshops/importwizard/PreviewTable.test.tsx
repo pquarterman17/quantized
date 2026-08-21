@@ -86,6 +86,30 @@ describe("PreviewTable", () => {
     expect(onRoleChange).toHaveBeenCalledWith(1, "error");
   });
 
+  it("P1-5 DEFECT 1: marks every column currently set to x as invalid, with a message, when more than one is x", () => {
+    const multiX: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "x" },
+      ],
+    };
+    render(
+      <PreviewTable preview={multiX} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    expect(screen.getByLabelText("column 1 role")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("column 2 role")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByText(/only one column can be x/).length).toBeGreaterThan(0);
+  });
+
+  it("does not mark a single x column as invalid", () => {
+    render(
+      <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    expect(screen.getByLabelText("column 1 role")).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText(/only one column can be x/)).not.toBeInTheDocument();
+  });
+
   it("offers the P1.4/P1.6 categorical role in the column role picker", () => {
     render(
       <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,

@@ -352,6 +352,45 @@ describe("useImportWizard", () => {
     expect(result.current.settings).toEqual(settingsBefore); // never partially applied
   });
 
+  it("P1-5 DEFECT 1: surfaces a conflict message and refuses to import when more than one column is marked x", async () => {
+    const multiX: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Field", unit: "Oe", role: "x" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(multiX);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.preview).toEqual(multiX));
+
+    expect(result.current.xConflict).not.toBeNull();
+    expect(result.current.xConflict).toContain("Temp");
+    expect(result.current.xConflict).toContain("Field");
+
+    // Defense in depth: doImport must not call the backend at all while a
+    // conflict is outstanding (the panel disables the button, but the hook
+    // itself must also refuse).
+    await act(async () => {
+      await result.current.doImport();
+    });
+    expect(importParse).not.toHaveBeenCalled();
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(0);
+  });
+
+  it("P1-5 DEFECT 1: xConflict clears once only one column is marked x again", async () => {
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => {
+      await result.current.pickFile(fakeFile("run1.dat"));
+    });
+    await waitFor(() => expect(result.current.preview).toEqual(PREVIEW));
+    expect(result.current.xConflict).toBeNull();
+  });
+
   it("removes a saved filter", async () => {
     const filt: ImportFilterWire = { name: "Messy", glob: "*.dat", settings: SETTINGS, updated: "t" };
     vi.mocked(listImportFilters).mockResolvedValue([filt]);

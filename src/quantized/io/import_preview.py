@@ -240,6 +240,21 @@ def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> l
     return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
 
 
+def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int) -> list[str]:
+    """P1-5 DEFECT 2: the name each column's DataStruct channel/label will
+    ACTUALLY carry -- `label_overrides[k]` when set (P1.6 `label_line`),
+    else the header-derived `p.names[k]` unchanged. This is the SAME rule
+    `parse_import`'s local `label_for` applies; factored out here so
+    `preview_import` can report it too (`columns[k].effective_name`)
+    instead of only ever offering the raw header name, which a wizard
+    classifying error-role suggestions against would otherwise be matching
+    a name the final dataset never carries whenever `label_line` is set."""
+    return [
+        label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
+        for k in range(n_cols)
+    ]
+
+
 def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
     """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
     consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
@@ -288,8 +303,22 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         [None if np.isnan(v) else float(v) for v in p.matrix[i, :]]
         for i in range(min(n_rows, max_rows))
     ]
+    # P1-5 DEFECT 2: `effective_name` alongside the raw header `name` -- the
+    # name parse_import's label_for would ACTUALLY assign this column once
+    # `label_line` overrides are applied, so the wizard's suggestion engine
+    # can classify against what the dataset will really carry instead of
+    # the header text alone (`name` stays the raw header text, unchanged,
+    # for display of what the file itself says).
+    label_overrides = _label_row_overrides(p, settings, n_cols)
+    effective_names = _effective_names(p, label_overrides, n_cols)
     columns = [
-        {"index": k, "name": p.names[k], "unit": p.units[k], "role": p.roles[k]}
+        {
+            "index": k,
+            "name": p.names[k],
+            "unit": p.units[k],
+            "role": p.roles[k],
+            "effective_name": effective_names[k],
+        }
         for k in range(n_cols)
     ]
     return {
@@ -322,6 +351,15 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     which never had this role to begin with and so never dropped anything).
     ``ignore`` columns are dropped entirely, with no sidecar capture --the
     user explicitly asked for that.
+
+    Raises ``ValueError`` when MORE THAN ONE column is marked ``x`` (P1-5
+    DEFECT 1) -- previously this silently kept only ``x_cols[0]`` as the
+    axis and dropped every OTHER x column entirely: not a channel, not a
+    ``text_columns`` entry, no trace anywhere in the resulting DataStruct.
+    The wizard UI makes this unreachable by disabling Import on the same
+    condition; this is defense-in-depth for any other caller (a direct API
+    request, a stale saved filter) that reaches ``parse_import`` with an
+    invalid multi-x selection.
     """
     p = _parse_core(text, settings)
     n_rows, n_cols = p.matrix.shape
@@ -333,6 +371,12 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     cat_cols = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
     if not chan_cols and not cat_cols:
         raise ValueError("no y/error columns (or categorical) selected to import")
+    if len(x_cols) > 1:
+        names = ", ".join(p.names[k] for k in x_cols)
+        raise ValueError(
+            f"more than one column is marked as the x role ({names}) -- "
+            "only one column can be x; change the others to y/error/label/ignore"
+        )
     if x_cols:
         x = p.matrix[:, x_cols[0]]
         x_name, x_unit = p.names[x_cols[0]], p.units[x_cols[0]]
@@ -342,14 +386,12 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
 
     # P1.6: the "default legend-label row" overrides a channel's LABEL (not
     # its unit) -- absent (None) leaves the header-derived name untouched.
+    # P1-5 DEFECT 2: shared with `preview_import` via `_effective_names` so
+    # the two never drift apart.
     label_overrides = _label_row_overrides(p, settings, n_cols)
+    effective_names = _effective_names(p, label_overrides, n_cols)
 
-    def label_for(k: int) -> str:
-        if label_overrides and label_overrides[k]:
-            return label_overrides[k]
-        return p.names[k]
-
-    labels = [label_for(k) for k in chan_cols]
+    labels = [effective_names[k] for k in chan_cols]
     units = [p.units[k] for k in chan_cols]
     values = p.matrix[:, chan_cols] if chan_cols else np.empty((n_rows, 0), dtype=float)
 
@@ -362,7 +404,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
             cells = [row[k] if k < len(row) else "" for row in p.data_tokens]
             codes, levels = _encode_categorical(cells)
             cat_levels[len(labels)] = levels
-            labels.append(label_for(k))
+            labels.append(effective_names[k])
             units.append(p.units[k])
             cat_arrays.append(codes)
         values = np.hstack([values, np.column_stack(cat_arrays)])
