@@ -168,6 +168,73 @@ def test_apply_zero_scale_is_422_not_500() -> None:
     assert "non-zero" in resp.json()["detail"]
 
 
+# --- P2-1 (Sol's Day-6 audit): cat_levels payload hardening -----------------
+# `DataStruct.from_dict` deserializes the posted `dataset` dict, including its
+# optional `cat_levels` field -- this route is the audit's cited real-world
+# consumer of that boundary. A malformed shape (a hand-edited body, a client
+# bug) must never 500; it degrades to cat_levels=None (dropped) and the
+# request still succeeds with the rest of the dataset intact.
+
+
+def _cat_dataset(cat_levels: Any) -> dict[str, Any]:
+    return {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[10.0], [20.0], [30.0]],
+        "labels": ["m"],
+        "units": ["emu"],
+        "metadata": {},
+        "cat_levels": cat_levels,
+    }
+
+
+def test_apply_string_cat_levels_payload_is_200_not_500() -> None:
+    """Previously `"garbage".items()` -> uncaught AttributeError -> 500."""
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": _cat_dataset("garbage"), "params": {"yOff": 5.0}},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[5.0], [15.0], [25.0]]
+
+
+def test_apply_list_cat_levels_payload_is_200_not_500() -> None:
+    """Previously `[1, 2, 3].items()` -> uncaught AttributeError -> 500."""
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": _cat_dataset([1, 2, 3]), "params": {"yOff": 5.0}},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[5.0], [15.0], [25.0]]
+
+
+def test_apply_non_int_cat_levels_key_is_200_not_500() -> None:
+    """Previously `int("not-a-number")` -> uncaught ValueError -> 500 (the
+    outer try/except only catches ValueError raised BY calc, this one was
+    raised earlier, inside `DataStruct.from_dict` itself, uncaught)."""
+    resp = client.post(
+        "/api/corrections/apply",
+        json={
+            "dataset": _cat_dataset({"not-a-number": ["a", "b"]}),
+            "params": {"yOff": 5.0},
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[5.0], [15.0], [25.0]]
+
+
+def test_apply_string_cat_levels_value_is_dropped_not_char_split() -> None:
+    """Previously `tuple("abc")` silently split a string VALUE into
+    `('a', 'b', 'c')` -- wrong-but-successful, not even a 500. Still a
+    corruption bug: verify it degrades to no categorical channel rather
+    than fabricating a 3-level table."""
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": _cat_dataset({"0": "abc"}), "params": {"yOff": 5.0}},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[5.0], [15.0], [25.0]]
+
+
 def test_apply_non_finite_scale_is_rejected() -> None:
     """Reachable only via a RAW body: Python's json encoder refuses to emit
     ``inf``, but its decoder happily accepts ``1e400`` from a JS client and
