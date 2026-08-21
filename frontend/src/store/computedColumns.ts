@@ -162,9 +162,14 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
     // view's xKey/yKeys/styles/hidden/errKeys. See lib/channelRemap.ts for
     // why the view half was missing until 2026-07-19.
     removeFormula: (id, index) => {
-      get().recordHistory("remove column");
+      // P2-2 (Sol's Day-6 audit): existence check moved BEFORE recordHistory
+      // -- a missing dataset/no-formulas id must not push a phantom undo
+      // entry. Minimal reorder only (no other restructuring), per the
+      // concurrent edit on claude/audit-positional-columns touching this
+      // function's body.
       const target = get().datasets.find((d) => d.id === id);
       if (!target?.formulas) return;
+      get().recordHistory("remove column");
       const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
       set((s) => {
         const datasets = s.datasets.map((d) => {

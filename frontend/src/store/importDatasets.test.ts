@@ -167,6 +167,29 @@ describe("importFiles still behaves as before", () => {
     expect(ds.name).toBe("browser.csv");
     expect(ds.source).toBeUndefined();
   });
+
+  // DEFECT B fallout (Sol audit P1-6, 2026-08-21): openFilePicker now fires
+  // `onPick([])` on a canceled dialog, and several call sites
+  // (lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts) pass
+  // that straight into importFiles/importPaths with no length check.
+  // `runImport`'s `label(0)` used to read `describe(items[0])` on an empty
+  // array and throw — this is the single choke-point guard.
+  it("importFiles([]) is a silent no-op — no crash, no upload, no status/toast change", async () => {
+    useApp.setState({ status: "untouched" });
+    await useApp.getState().importFiles([]);
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().status).toBe("untouched");
+    expect(toastMsgs()).toHaveLength(0);
+  });
+
+  it("importPaths([]) is likewise a silent no-op", async () => {
+    useApp.setState({ status: "untouched" });
+    await useApp.getState().importPaths([]);
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().status).toBe("untouched");
+  });
 });
 
 describe("import roles and provenance (MAIN #33)", () => {

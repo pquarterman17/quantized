@@ -8,6 +8,7 @@ import { canRelease, type LockRecord } from "../lib/lockState";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
+import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 import type { StoreGet } from "./exportActive";
 import type { LoadedWorkspace } from "./workspace";
@@ -88,6 +89,32 @@ function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior
   })();
 }
 
+/** DEFECT A fix (2026-08-21, Sol audit item P1-6): record a Recent Projects
+ *  entry ONLY once a native open is actually APPLIED to the session, never
+ *  before. The native read itself (lib/openWorkspaceCommand.ts's
+ *  `openWorkspaceCommand`) can succeed while the caller still declines to
+ *  load it — "open-workspace"/"open-workspace-safe" gate the replace behind
+ *  an async `askConfirm("Replace the current workspace?")` a user can
+ *  Cancel — so pushing at the READ used to record files the user explicitly
+ *  backed out of loading. `replaceWorkspace`/`replaceWorkspaceSafely` below
+ *  are the single choke point every accepted replace passes through
+ *  (fileCommands.ts's two open commands AND recentProjectsCommands.ts's
+ *  "Open recent project…" reopen all call one of these two, never
+ *  `loadWorkspace` directly), so pushing HERE — after `loadWorkspace` has
+ *  actually run — is provably gated on acceptance without needing a second
+ *  "did the confirm say yes" signal threaded through. `append-workspace`
+ *  does not call either of these (appendWorkspace merges rather than
+ *  replacing, and never gates on a confirm at all — see fileCommands.ts's
+ *  own comment), so it pushes at ITS commit point instead
+ *  (fileCommands.ts's append-workspace dispatch) — same rule, different
+ *  chokepoint, because there IS no shared "apply" function to hang it on
+ *  there. A browser-picker open (`native` undefined) still never records
+ *  (unchanged from before — lib/recentProjects.ts's module doc). */
+function recordNativeOpen(native: ProjectIdentity | undefined): void {
+  if (!native) return;
+  useRecentProjects.getState().pushRecentProject(native.name, native.path);
+}
+
 /** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
  *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
  *  two branches (empty library, and the confirmed-replace path) so the
@@ -110,6 +137,7 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   registerWithLockStateMachine(native, priorLock);
+  recordNativeOpen(native); // DEFECT A — see recordNativeOpen's doc
 }
 
 /** "Open Without Layout…" (PR E2's safe-open) — same replace as
@@ -124,6 +152,7 @@ export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   registerWithLockStateMachine(native, priorLock);
+  recordNativeOpen(native); // DEFECT A — see recordNativeOpen's doc
 }
 
 /** Whether the CURRENT session holds anything a workspace replace would

@@ -34,6 +34,7 @@ import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
+import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
@@ -216,7 +217,17 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // P3.4 slice 4: no stageWorkspaceRestore call here — appendWorkspace
       // only merges `datasets` (store/useApp.ts), never `plotWindows`, so an
       // append can't trigger the multi-window mount storm loadWorkspace can.
-      run: openWorkspaceCommand(s, "append", (ws) => s().appendWorkspace(ws)),
+      //
+      // DEFECT A fix (2026-08-21): append never gates on a confirm (unlike
+      // open/open-safe — see the comment on that guard above), so recording
+      // the Recent Projects entry right here, at the actual merge, can never
+      // over-record; it just can't share openWorkspaceReplace.ts's
+      // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
+      // its own push at its own commit point instead.
+      run: openWorkspaceCommand(s, "append", (ws, native) => {
+        s().appendWorkspace(ws);
+        if (native) useRecentProjects.getState().pushRecentProject(native.name, native.path);
+      }),
     },
     {
       id: "clear-autosave",

@@ -366,3 +366,31 @@ describe("addFormula/updateFormula history + macro (K5e precursor)", () => {
     expect(useApp.getState().history.length).toBe(before);
   });
 });
+
+// P2-2 (Sol's Day-6 audit): removeFormula's existence check must run BEFORE
+// recordHistory -- a no-op removal (missing dataset id, or a dataset with no
+// formulas at all) must never push a phantom undo entry.
+describe("removeFormula never records a phantom no-op undo entry (P2-2)", () => {
+  it("missing dataset id records no history", () => {
+    useApp.setState({ datasets: [baseDs("a")] });
+    const before = useApp.getState().history.length;
+    useApp.getState().removeFormula("nope", 0);
+    expect(useApp.getState().history.length).toBe(before);
+  });
+
+  it("a dataset with no formulas records no history", () => {
+    useApp.setState({ datasets: [baseDs("a")] }); // no `formulas` field at all
+    const before = useApp.getState().history.length;
+    useApp.getState().removeFormula("a", 0);
+    expect(useApp.getState().history.length).toBe(before);
+  });
+
+  it("a genuine removal still records exactly one history entry", () => {
+    const ds = dsWithFormulas("a", [{ name: "b", expr: "A * 2", deps: ["A"] }]);
+    useApp.setState({ datasets: [ds] });
+    const before = useApp.getState().history.length;
+    useApp.getState().removeFormula("a", 0);
+    expect(useApp.getState().history.length).toBe(before + 1);
+    expect(useApp.getState().datasets.find((d) => d.id === "a")?.formulas).toBeUndefined();
+  });
+});
