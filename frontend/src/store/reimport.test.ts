@@ -356,18 +356,22 @@ describe("reimportDataset — no-source fallback", () => {
     expect(ds.source).toBeUndefined(); // an upload still never learns a path
   });
 
-  it("does nothing when the picker is cancelled (no file chosen)", async () => {
-    openFilePickerMock.mockImplementation(() => {
-      /* user cancelled — onPick never called, so the returned promise never
-       * resolves either (matches every other openFilePicker call site). */
-    });
+  // DEFECT B (Sol audit P1-6, 2026-08-21): a canceled picker now settles the
+  // promise with `null` (openFilePicker's new `cancel`-event handling) —
+  // reimportDataset's continuation must actually run, set a brief status,
+  // and attempt nothing else.
+  it("settles quietly on a cancelled picker — status set, no import attempted, dataset untouched", async () => {
+    openFilePickerMock.mockImplementation((onPick: (files: File[]) => void) => onPick([]));
     useApp.setState({ datasets: [baseDataset({ source: undefined })] });
 
-    void useApp.getState().reimportDataset("d1"); // never resolves — don't await
-    await Promise.resolve();
+    await useApp.getState().reimportDataset("d1"); // must actually resolve now
 
     expect(uploadFile).not.toHaveBeenCalled();
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("re-import canceled");
     expect(useApp.getState().datasets[0].data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 
@@ -612,5 +616,34 @@ describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
     await useApp.getState().reimportDataset("d1");
 
     expect(importFile).toHaveBeenCalledWith("/data/sample.dat");
+  });
+
+  // DEFECT C (Sol audit P1-6, 2026-08-21): an "offline" source used to fall
+  // through this whole check (only "missing" was tested) and attempt the
+  // ordinary reimport, which then failed with a raw "re-import failed: …"
+  // toast — RelinkPanel/reopenRecent.ts already treat offline as its own
+  // distinct, non-destructive state; this flow had not caught up.
+  it("offline: reports a distinct message, opens Relink, and never attempts the doomed import", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("offline");
+    const { useRelink } = await import("./relink");
+    const openPanel = vi.fn();
+    useRelink.setState({ openPanel });
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
+    const status = useApp.getState().status;
+    expect(status).toMatch(/unreachable/i);
+    // Distinct from the "missing" message (never says "not found" for an
+    // offline volume — the file is presumably fine, just unmounted).
+    expect(status).not.toMatch(/source unavailable/i);
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/unreachable/i), "danger");
+    expect(openPanel).toHaveBeenCalledWith({ oldRoot: "/data" });
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });

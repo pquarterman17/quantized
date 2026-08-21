@@ -114,6 +114,36 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     expect(askConfirm).toHaveBeenCalledOnce();
   });
 
+  // DEFECT A (Sol audit P1-6): reopening a Recent Projects entry now flows
+  // through the SAME replaceWorkspace chokepoint the native-open command
+  // uses, so it picks up that chokepoint's Recent Projects push for free —
+  // and, symmetrically, must NOT push when the replace confirm is declined.
+  it("refreshes (not duplicates) the Recent Projects entry on a successful reopen (DEFECT A)", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(() => action("recent-project-/p/workspace.dwk").run());
+    const recent = useRecentProjects.getState().recentProjects;
+    expect(recent).toHaveLength(1); // deduped by path — refreshed, not doubled
+    expect(recent[0].path).toBe("/p/workspace.dwk");
+  });
+
+  it("does NOT refresh the Recent Projects entry when the replace confirm is declined (DEFECT A)", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }],
+    });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
+    const before = useRecentProjects.getState().recentProjects[0].at;
+    renderHook(() => useRecentProjectsCommands());
+    await act(() => action("recent-project-/p/workspace.dwk").run());
+    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(useRecentProjects.getState().recentProjects[0].at).toBe(before); // untouched
+  });
+
   it("offline: toasts and does NOT attempt a read", async () => {
     vi.mocked(pathState).mockResolvedValue("offline");
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/mnt/share/workspace.dwk");

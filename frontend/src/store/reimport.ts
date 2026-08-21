@@ -193,9 +193,15 @@ async function runReimport(
 }
 
 /** Promisify the native file dialog for the no-source fallback — resolves the
- *  FIRST picked file, or never resolves on cancel (the picker's `<input>`
- *  fires no event then; matches every other `openFilePicker` call site in
- *  this codebase, none of which await completion either). */
+ *  FIRST picked file, or `null` on cancel. DEFECT B fix (Sol audit P1-6,
+ *  2026-08-21): this used to document itself as "never resolves on cancel",
+ *  because `openFilePicker`'s `<input>` fired no event on Cancel and this is
+ *  the ONE call site in the codebase that actually `await`s the result — a
+ *  canceled picker left `reimportDataset`'s continuation (the status
+ *  cleanup below) permanently suspended. `openFilePicker` now also fires
+ *  `onPick([])` on the `<input>`'s `cancel` event, and `files[0] ?? null`
+ *  here already turns an empty array into `null` — no other change needed
+ *  in this function itself. */
 function pickOneFile(): Promise<File | null> {
   return new Promise((resolve) => {
     openFilePicker((files) => resolve(files[0] ?? null), IMPORT_ACCEPT);
@@ -225,15 +231,33 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
         // doc) turns that into an honest "Source unavailable" + the LANDED
         // P1.7 Relink Source path, instead of a raw backend import error
         // that leaves the user nowhere to go. Anything short of a CONFIRMED
-        // "missing" (ok/offline/invalid/unknown, or no bridge at all —
+        // "missing"/"offline" (ok/invalid/unknown, or no bridge at all —
         // every existing browser-mode behavior) falls through to the
         // ordinary reimport unchanged.
-        if (hasDesktopShell() && (await pathState(ds.source.path)) === "missing") {
-          const msg = `source unavailable — "${ds.name}" (${ds.source.path})`;
-          get().setStatus(msg);
-          toast(msg, "danger");
-          useRelink.getState().openPanel({ oldRoot: parentDirectory(ds.source.path) });
-          return;
+        //
+        // DEFECT C fix (Sol audit P1-6, 2026-08-21): "offline" (the volume
+        // itself is unreachable — desktop_source_probe.py's
+        // FileNotFoundError-but-volume-absent branch) used to fall through
+        // here too, past the check above (only "missing" was tested), and
+        // land on the ordinary reimport — which then failed with a raw
+        // "re-import failed: <fetch error>" toast instead of the same
+        // honest Relink recovery a confirmed-missing source gets.
+        // RelinkPanel/lib/reopenRecent.ts already treat offline as its own
+        // distinct, non-destructive state ("the file is probably fine, the
+        // share is just not mounted" — reopenRecent.ts's own module doc);
+        // this is the one flow that had not caught up.
+        if (hasDesktopShell()) {
+          const state = await pathState(ds.source.path);
+          if (state === "missing" || state === "offline") {
+            const msg =
+              state === "offline"
+                ? `source volume unreachable — reconnect the drive/network and retry, or relink "${ds.name}"`
+                : `source unavailable — "${ds.name}" (${ds.source.path})`;
+            get().setStatus(msg);
+            toast(msg, "danger");
+            useRelink.getState().openPanel({ oldRoot: parentDirectory(ds.source.path) });
+            return;
+          }
         }
         await runReimport(set, get, ds, () => importFile(ds.source!.path));
         return;
@@ -241,8 +265,17 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
       // No known source (a browser upload never carries a real path) — the
       // fallback re-opens the picker and merges through the SAME logic; it
       // never sets `source` (an upload still can't know a path).
+      //
+      // DEFECT B fix (Sol audit P1-6, 2026-08-21): a canceled picker now
+      // resolves `null` (pickOneFile's doc) instead of hanging forever, so
+      // this settles quietly — a brief status, no toast, no import attempt —
+      // rather than leaving the earlier "re-importing …" status stuck on
+      // screen with nothing ever following it up.
       const file = await pickOneFile();
-      if (!file) return;
+      if (!file) {
+        get().setStatus("re-import canceled");
+        return;
+      }
       await runReimport(set, get, ds, () => uploadFile(file));
     },
   };

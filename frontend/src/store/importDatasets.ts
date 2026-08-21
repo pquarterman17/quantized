@@ -333,6 +333,16 @@ async function runImport<T>(
   describe: (item: T) => string,
   load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
 ): Promise<void> {
+  // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
+  // are called directly (no length guard) by several `openFilePicker` sites
+  // — lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts (x3) —
+  // now that a canceled picker settles with `onPick([])` instead of never
+  // firing. Without this guard `label(0)` below reads `describe(items[0])`
+  // on an empty array and throws. A single choke point here (rather than
+  // patching every one of those call sites) protects every current AND
+  // future caller the same way; a silent no-op matches every other
+  // openFilePicker cancel path in this codebase (no status/toast change).
+  if (items.length === 0) return;
   if (useImportBatch.getState().running) {
     get().setStatus(ALREADY_RUNNING_MSG);
     toast(ALREADY_RUNNING_MSG, "danger");

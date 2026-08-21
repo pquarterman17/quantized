@@ -136,12 +136,33 @@ describe("open-workspace — native branch", () => {
     run("open-workspace");
     await settle();
     expect(askConfirm).toHaveBeenCalledOnce();
-    // Declined — the recent entry is still recorded (the FILE was opened and
-    // read successfully; only loading it into the session was declined).
-    expect(useRecentProjects.getState().recentProjects).toHaveLength(1);
-    // But the project identity must NOT change — nothing was actually
+    // DEFECT A (Sol audit P1-6): declined — the FILE was opened and read
+    // successfully, but the replace itself was never applied, so the recent
+    // entry must NOT be recorded either. Recording on a mere successful
+    // native READ (regardless of whether the user actually loaded it) is
+    // exactly the bug — canceling the confirm must leave Recent Projects
+    // untouched.
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+    // The project identity must NOT change either — nothing was actually
     // loaded, so the session's existing project (if any) stays correct.
     expect(useApp.getState().currentProject).toBeNull();
+  });
+
+  // DEFECT A red test: accept the SAME confirm — now recents ARE recorded,
+  // proving the push is gated on acceptance rather than simply removed.
+  it("a native pick's recent entry IS recorded once the confirm is accepted", async () => {
+    setShell({ open_project_file: async () => ({ path: "/p/workspace.dwk", content: WS }) });
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }],
+    });
+    run("open-workspace");
+    await settle();
+    expect(askConfirm).toHaveBeenCalledOnce();
+    const recent = useRecentProjects.getState().recentProjects;
+    expect(recent).toHaveLength(1);
+    expect(recent[0]).toMatchObject({ name: "workspace.dwk", path: "/p/workspace.dwk" });
+    expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
   });
 });
 

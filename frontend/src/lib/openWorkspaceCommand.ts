@@ -11,7 +11,6 @@ import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
 import { parseWorkspace, type LoadedWorkspace } from "./workspace";
 import { withOp } from "../store/pendingOps";
 import type { ProjectIdentity } from "../store/project";
-import { useRecentProjects } from "../store/recentProjects";
 
 /** Basename of a native path, tolerant of either separator — mirrors
  *  lib/importEntry.ts's `parentDirectory` (the complementary half of a
@@ -41,7 +40,18 @@ function baseName(path: string): string {
  *  browser picker right after would shove a second dialog in their face.
  *  Only a genuine native open records a Recent Projects entry
  *  (lib/recentProjects.ts's module doc explains why a browser-picked file,
- *  which the desktop bridge never saw, does not).
+ *  which the desktop bridge never saw, does not) — and, per DEFECT A's fix
+ *  (2026-08-21), that push happens only once the workspace is ACTUALLY
+ *  applied, not here: "open"/"open-safe" route through
+ *  openWorkspaceReplace.ts's `replaceWorkspace`/`replaceWorkspaceSafely`
+ *  (which sit behind fileCommands.ts's cancelable "Replace the current
+ *  workspace?" confirm), and "append" pushes itself right where it commits
+ *  (fileCommands.ts's append-workspace dispatch — appendWorkspace never
+ *  gates on a confirm, so pushing there is never at risk of over-recording).
+ *  A file read via the native dialog but never actually loaded (the confirm
+ *  declined) must not pollute Recent Projects — see openWorkspaceReplace.ts's
+ *  doc for why THAT is the single choke point for the two confirm-gated
+ *  commands.
  *
  *  P3.4 slice 3: the picker's `onchange` callback fires the moment a file is
  *  chosen — well before any parsing starts — so the `withOp` busy state is
@@ -91,10 +101,7 @@ export function openWorkspaceCommand(
         return;
       }
       void withOp(label, () => Promise.resolve(parseWorkspace(native.content, currentViewport())))
-        .then((ws) => {
-          useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
-          dispatch(ws, { name: baseName(native.path), path: native.path });
-        })
+        .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
         );
