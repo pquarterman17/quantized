@@ -217,6 +217,109 @@ being measured on current `main` before anything is called a blocker.
 - [ ] Owner performs a 60–90 minute real-data session and records friction.
 - [ ] Verify installer/logo/desktop/taskbar behavior in the release artifact.
 
+## Independent Day-6 audit — required before Day 7
+
+**Added 2026-08-20 by ChatGPT-Sol.** This is an independent review of the
+merged Day 0–6 work on `origin/main` through `1721716b`. The audit made no
+application-code fixes. The local frontend suite passed (535 files / 7,849
+tests), TypeScript typecheck passed, and the candidate's GitHub CI, E2E and
+CodeQL checks were green. Those results do not cover the release, concurrency
+and workflow defects below. Every P0 and P1 item must be fixed and independently
+reviewed, or explicitly deferred by the owner with an honest user-facing
+limitation, before Day 7 begins.
+
+### P0 — release gates and claims
+
+- [ ] **Complete the four Day-6 gates above with recorded evidence.** Run the
+  packaged Windows and macOS workflows, the owner's 60–90 minute real-data
+  session, installer/icon checks, and the outstanding ChatGPT-Sol wording,
+  menu, preview and recovery review. Do not infer these from unit/E2E CI.
+  **Owner:** owner + Claude Sonnet; **review:** ChatGPT-Sol.
+- [ ] **Test an installed, packaged app rather than only its build and sidecar.**
+  On Windows and macOS, install and launch the candidate and exercise import →
+  browse → Quick Plot → configure/edit → copy/paste → save/reopen → reimport →
+  delete/restore → recovery. Include real native dialogs, cancel paths, Unicode
+  and network/offline paths. Record OS, artifact, exact SHA and outcome.
+  **Owner:** Claude Sonnet + owner; **review:** ChatGPT-Sol.
+- [ ] **Correct the I2 single-writer claim before release.** The current default
+  lock provider is a process-local `Map`; it cannot protect two desktop
+  processes or browser tabs, although the sprint, release-blocker list and RC
+  notes currently describe I2 as closed. Either ship a filesystem/native shared
+  provider with atomic conditional acquisition and packaged two-process tests,
+  or label the feature preview/deferred and correct every release claim and
+  limitation. **Design/review:** Claude Opus; **implementation:** Claude Sonnet.
+
+### P1 — correctness fixes required for the candidate
+
+- [ ] **Make lock ownership atomic across open, takeover and write.** Replace the
+  read/classify/unconditional-write sequence with compare-and-swap or equivalent
+  OS-lock semantics; bind the verified lock token to the project replacement;
+  test simultaneous open/takeover. Save As must acquire the new path and release
+  the old path, including failure/rename cases. **Owner:** Claude Opus for the
+  contract, Claude Sonnet for implementation and tests.
+- [ ] **Make relink commit re-probe the candidate safely.** Recompute the verdict
+  against original provenance immediately before commit and reject changed or
+  insufficiently verified rows. When a recorded checksum exists but a fresh one
+  is unavailable, return `unknown` rather than falling back to metadata. Make
+  “Import as new version” plus `versionOf` one undoable history transaction.
+  **Owner:** Claude Sonnet; **review:** Claude Opus.
+- [ ] **Repair positional-column correctness.** Deleting a computed/recode column
+  must remap or explicitly invalidate downstream formula dependencies instead
+  of creating shifted/self references. An open Recode workshop must retain a
+  stable channel identity and must not silently target a different categorical
+  column after removal/reimport/index shift. Add chained formula/recode and open-
+  panel index-shift regressions. **Owner:** Claude Sonnet; **review:** ChatGPT-Sol.
+- [ ] **Validate Quick Plot error roles when applying templates.** A saved
+  template records `errorRole` but resolution currently checks only label/unit,
+  so an ordinary value column can be rebound as an error column. Compare every
+  referenced channel's saved/current error classification and refuse mismatches
+  with an actionable explanation. **Owner:** Claude Sonnet; **review:**
+  ChatGPT-Sol.
+- [ ] **Prevent silent multi-X data loss in Import Wizard.** The UI permits
+  multiple X roles while the importer selects the first and omits the others.
+  Enforce zero or one X role with visible validation and backend/UI regressions.
+  Error-role suggestions must also use the effective label-row name used by the
+  final import, not only the raw header. **Owner:** Claude Sonnet; **review:**
+  ChatGPT-Sol.
+- [ ] **Fix command cancellation and stale-path semantics.** Add Recent Projects
+  only after replacement is accepted. Ensure a canceled reimport picker settles
+  without a hanging promise. Treat an offline/network-unavailable source
+  distinctly from a deleted/missing source and present recovery rather than a
+  generic backend failure. **Owner:** ChatGPT-Sol for UX contract; Claude Sonnet
+  for implementation/reliability tests.
+- [ ] **Perform and record independent review of high-risk sprint PRs.** The
+  sprint says all lane PRs were independently reviewed, but sampled high-risk
+  PRs have no durable GitHub review/comment evidence. Record reviewer, verdict,
+  fixes and residual risk from any transcript review, or conduct a fresh review
+  of locking, persistence, relink, recovery, imports and derived-data work.
+  **Owner:** Claude Opus for backend/state; ChatGPT-Sol for GUI/workflows.
+
+### P2 — fix if bounded; otherwise name the post-RC issue
+
+- [ ] Harden malformed categorical `cat_levels` payloads so list/string/wrong-
+  mapping corruption degrades safely instead of escaping as `AttributeError` or
+  splitting strings into characters. Add route-level corruption tests.
+  **Owner:** Claude Sonnet.
+- [ ] Avoid phantom Undo entries for missing datasets, blank/duplicate tags and
+  unchanged metadata by recording history only after computing a real patch.
+  **Owner:** Claude Haiku or Sonnet; **review:** Claude Sonnet.
+- [ ] Make performance closure reproducible: retain a benchmark command/artifact
+  for the reported 1M/4M map timings and a bounded regression test. Current
+  smaller functional tests do not substantiate the documented timings.
+  **Owner:** Claude Sonnet.
+- [ ] Reconcile release documentation to the exact candidate SHA. Update the RC
+  notes beyond PR #189, disclose every accepted limitation (especially locking),
+  and track unverified updater/install/upgrade, interrupted-write, old-workspace,
+  long Unicode/network-path and browser multi-tab cases. **Owner:** Claude Haiku
+  for mechanical reconciliation; **review:** Claude Sonnet + ChatGPT-Sol.
+
+### Audit closure gate
+
+- [ ] All P0/P1 rows above have a linked fixing PR and independent verdict, or an
+  owner-approved defer with user-visible limitation and a named follow-up issue.
+- [ ] Re-run the complete matrix on the resulting exact SHA; do not reuse green
+  checks from `1721716b` after fixes land.
+
 ### Day 7 — release candidate and audit closure
 
 - [ ] Re-run the release matrix on the exact candidate commit.
