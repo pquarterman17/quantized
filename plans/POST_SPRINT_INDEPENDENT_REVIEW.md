@@ -38,6 +38,27 @@ currently exercise.
 
 ### [ ] R1. Hold project ownership through the actual project-file replacement
 
+**Implementation status (2026-08-22, implementer=this lane, on branch
+`claude/r1-lock-held-write`) — still open pending independent review:**
+New operation `desktop_project_lock_write.write_holding_token(path, token,
+write_fn)` takes the same exclusive OS lock `refresh`/`take_over` use,
+verifies `token` against the parsed on-disk record, and — only on a match
+— invokes `write_fn()` (the real temp-write + `os.replace`) while still
+holding that lock, releasing only after `write_fn` returns or raises. An
+absent lock file (or a release tombstone, which parses identically) with a
+non-empty token now returns `LockLost` — refused — rather than the old
+`token_still_valid`'s "nothing to check against, proceed"; that function
+has been removed, fully superseded. `desktop_bridge.py::write_project_file`
+routes a non-empty `lock_token` through this operation and an empty one
+through the unchanged legacy no-lock path. The module's shared OS-lock
+retry budget was raised from ~1s to ~5s (`_LOCK_RETRY_ATTEMPTS`/
+`_LOCK_RETRY_DELAY_S` in `desktop_project_lock.py`) so a concurrent
+heartbeat's `refresh` does not spuriously report the lock lost while a
+large in-flight save is still holding it — forced and verified by a
+dedicated contention test, not sampled. See the closure log below (reviewer
+row left blank for the orchestrator to assign) — this item stays open
+until an independent reviewer signs off.
+
 **Problem:** `desktop_bridge.py::write_project_file` calls
 `desktop_project_lock.token_still_valid`, releases that function's OS-level lock,
 and only afterward creates/writes the temporary file and calls `os.replace`.
@@ -51,16 +72,30 @@ same cross-process lock for the complete ownership-sensitive write boundary.
 
 **Required work:**
 
-- [ ] Define a backend operation that verifies the token and retains the lock
+- [x] Define a backend operation that verifies the token and retains the lock
   through temporary-file completion and atomic replacement.
-- [ ] Treat an absent lock as token failure when a non-empty token was supplied.
-- [ ] Preserve the existing no-lock compatibility path only for callers that
-  intentionally supply no token.
-- [ ] Add a real two-process regression in which takeover/release/reacquire races
+  (`desktop_project_lock_write.write_holding_token`)
+- [x] Treat an absent lock as token failure when a non-empty token was supplied.
+  (`test_absent_lock_with_a_non_empty_token_refuses_write_fn_never_called`,
+  `test_write_project_file_with_a_non_empty_token_refuses_when_no_lock_file_exists`)
+- [x] Preserve the existing no-lock compatibility path only for callers that
+  intentionally supply no token. (empty `lock_token` still skips
+  `write_holding_token` entirely in `write_project_file`.)
+- [x] Add a real two-process regression in which takeover/release/reacquire races
   an in-progress save; the displaced writer must never replace the project.
-- [ ] Test Windows and POSIX behavior, including tombstones and orphaned-inode
-  handling.
-- [ ] Correct release documentation if implementation is deferred.
+  (`test_two_real_processes_a_concurrent_takeover_never_lands_mid_write`,
+  spawn-context multiprocessing, forced ordering via an `Event` signalled
+  from inside `write_fn`.)
+- [x] Test Windows and POSIX behavior, including tombstones and orphaned-inode
+  handling. Tombstone: `test_a_release_tombstone_refuses_the_pre_release_token`
+  (tombstone content written directly so it runs on every CI OS). Orphaned-
+  inode: NOT a new test — `write_holding_token` calls the existing, unmodified
+  `_open_locked` primitive (the same one `refresh`/`take_over` use), so the
+  existing orphan-inode protection and its 3-OS CI matrix coverage apply
+  unchanged; no new code path was introduced that could reintroduce it.
+- [ ] Correct release documentation if implementation is deferred. — N/A;
+  implemented, not deferred. `RC_RELEASE_NOTES_DRAFT.md`'s claim was
+  instead strengthened to match the now-true stronger guarantee.
 
 **Suggested owner:** Claude Opus for the concurrency contract and adversarial
 review; Claude Sonnet for implementation and platform tests.  
@@ -270,4 +305,5 @@ agent can distinguish implementation from verification:
 | Date | Item | PR/commit | Implementer | Independent reviewer | Evidence and residual risk |
 |---|---|---|---|---|---|
 | 2026-08-22 | Audit created | — | ChatGPT-Sol | — | Read-only review; no application fixes made |
+| 2026-08-22 | R1 fix | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | `write_holding_token` holds the exclusive OS lock across verify + temp-write + `os.replace`; absent lock + non-empty token now refuses (`token_still_valid` removed). Red-first: `tests/test_desktop_project_lock_write.py` (9 tests: basic contract, absent/mismatched/corrupt/tombstoned-token refusal, a real 2-process takeover-during-write race via `multiprocessing` spawn, and 2 forced contention-budget tests proving the old ~1s OS-lock retry budget could spuriously fail a concurrent `refresh` mid-save and the new ~5s budget does not) plus updated `tests/test_desktop_bridge_lock.py`/`test_desktop_project_lock.py`. Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests, full `pytest -q` (see PR/report for exact counts). Residual risk: not yet independently reviewed; real packaged Windows/macOS orphaned-inode behavior still only covered by the pre-existing shared `_open_locked` primitive and its 3-OS CI matrix, not a dedicated new adversarial test against `write_holding_token` specifically. |
 

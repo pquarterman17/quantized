@@ -29,7 +29,6 @@ from quantized.desktop_project_lock import (
     refresh,
     release,
     take_over,
-    token_still_valid,
 )
 
 
@@ -193,33 +192,13 @@ def test_release_then_acquire_gets_a_clean_lock(tmp_path: Path) -> None:
     assert rec2.token != rec.token
 
 
-# -- token_still_valid (the write_project_file save-TOCTOU primitive) -------
-
-
-def test_token_still_valid_true_when_no_lock_file_exists(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    assert token_still_valid(path, "any-token") is True
-
-
-def test_token_still_valid_true_for_the_current_holder(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
-    assert isinstance(rec, LockRecord)
-    assert token_still_valid(path, rec.token) is True
-
-
-def test_token_still_valid_false_for_a_stale_token_after_takeover(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    _, rec1 = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
-    assert isinstance(rec1, LockRecord)
-    take_over(path, rec1.token, "instance-b", now=1300.0)
-    assert token_still_valid(path, rec1.token) is False
-
-
-def test_token_still_valid_false_for_a_corrupt_lock_file(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    Path(path + ".lock").write_text("not json", encoding="utf-8")
-    assert token_still_valid(path, "any-token") is False
+# NOTE: `token_still_valid` (the pre-R1 "verify then release" primitive) has
+# been REMOVED — see `desktop_project_lock.py`'s module doc's "R1 fix"
+# section. It is fully superseded by
+# `desktop_project_lock_write.write_holding_token`, which verifies the token
+# and keeps the SAME exclusive OS lock held through the caller's own write
+# instead of releasing it first. That operation's tests live in
+# `tests/test_desktop_project_lock_write.py`.
 
 
 # -- corrupt / unverifiable — never an exception -----------------------------

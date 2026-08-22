@@ -240,13 +240,30 @@ def test_write_project_file_succeeds_with_the_current_lock_token(tmp_path: Path)
     assert Path(path).read_text(encoding="utf-8") == _workspace_json("ok")
 
 
-def test_write_project_file_with_a_token_proceeds_when_no_lock_file_exists(
+def test_write_project_file_with_a_non_empty_token_refuses_when_no_lock_file_exists(
     tmp_path: Path,
 ) -> None:
-    """Per the frozen contract: the token check only applies when a lock
-    file for `path` actually exists. A caller passing a token against a
-    never-acquired (or already-released) lock is NOT refused — there is
-    nothing to have lost."""
+    """R1 fix (defect (b)): an ABSENT lock file with a NON-EMPTY supplied
+    token is now refused, not waved through. The old contract ("nothing to
+    check against, proceed") let a caller whose lock had been released or
+    replaced elsewhere claim ownership was still verified when it was not
+    verifiable at all. `write_project_file` must never touch the file in
+    that case."""
     api, path = _write_consented(tmp_path)
+    original = _workspace_json("pre-existing")
+    Path(path).write_text(original, encoding="utf-8")
     out = api.write_project_file(path, _workspace_json("x"), lock_token="some-token-never-acquired")
+    assert out["ok"] is False
+    assert out["error"] == "lock lost"
+    assert Path(path).read_text(encoding="utf-8") == original
+
+
+def test_write_project_file_with_an_empty_token_still_writes_when_no_lock_file_exists(
+    tmp_path: Path,
+) -> None:
+    """The legacy no-lock path (empty token) is UNCHANGED by the R1 fix —
+    it never verifies anything, lock file present or not."""
+    api, path = _write_consented(tmp_path)
+    out = api.write_project_file(path, _workspace_json("x"))
     assert out["ok"] is True
+    assert Path(path).read_text(encoding="utf-8") == _workspace_json("x")

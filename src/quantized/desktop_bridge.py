@@ -90,6 +90,7 @@ import uuid
 from typing import Any
 
 from quantized import desktop_project_lock as lockmod
+from quantized import desktop_project_lock_write as lockwrite
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
 from quantized.desktop_consent import consented_write_path
 from quantized.desktop_project_file import (
@@ -148,20 +149,26 @@ class DesktopApi(DesktopDialogBridge):
         path. ``content`` must pass ``validate_workspace_payload`` or the
         write is refused before a temp file is even opened.
 
-        **I2 lock-token binding (P1-1):** when `lock_token` is non-empty, it
-        is verified via `desktop_project_lock.token_still_valid` —
-        IMMEDIATELY before the write, under the SAME exclusive-OS-lock CAS
-        every other lock mutation uses (never a plain, separately-timed
-        read) — this is what closes the save TOCTOU the read/classify/
-        unconditional-write shape left open (a session that lost the lock
-        between its last heartbeat and this save must never land its
-        write). A mismatch (including an unverifiable lock file) refuses
-        with a DISTINCT error string (`"error": "lock lost"`) the frontend
-        recognizes and surfaces as exactly that, rather than a generic
-        write failure. An EMPTY token, OR no lock file existing at all for
-        `path`, skips the check entirely — the pre-I2, no lock-provider-
-        wired behavior — so a caller that never acquired a lock (or the
-        browser/in-memory-only path) writes exactly as before.
+        **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
+        non-empty, the token is verified AND the temp-write-plus-`os.replace`
+        below runs while STILL HOLDING the SAME exclusive OS lock every
+        other lock mutation uses — see
+        `quantized.desktop_project_lock_write.write_holding_token`. This
+        closes the save TOCTOU a verify-then-release shape left open: a
+        session that lost the lock between its last heartbeat and this save
+        can no longer land its write in the gap, because there is no gap —
+        another process's takeover/refresh/release on the same lock file
+        blocks until this save has completed and released it. A verification
+        failure (a token mismatch, an ABSENT lock file, or an unverifiable
+        one) refuses with a DISTINCT error string (`"error": "lock lost"`)
+        the frontend recognizes and surfaces as exactly that, rather than a
+        generic write failure — an absent lock is refused here, not treated
+        as "nothing to check, proceed" (that was the prior defect: a lock
+        that had been released or replaced by someone else must never read
+        as "still yours"). An EMPTY token skips verification and the lock
+        entirely — the pre-I2, no lock-provider-wired legacy behavior — so a
+        caller that never acquired a lock (or the browser/in-memory-only
+        path) writes exactly as before, unlocked.
         """
         try:
             resolved = os.path.realpath(path)
@@ -170,15 +177,14 @@ class DesktopApi(DesktopDialogBridge):
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        if lock_token and not lockmod.token_still_valid(granted, lock_token):
-            return {"ok": False, "error": "lock lost"}
         invalid = validate_workspace_payload(content)
         if invalid is not None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
         directory = os.path.dirname(granted) or "."
         cleanup_stray_write_temps(directory)
-        tmp_path: str | None = None
-        try:
+
+        def _replace() -> None:
+            tmp_path: str | None = None
             fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -191,6 +197,14 @@ class DesktopApi(DesktopDialogBridge):
                         os.remove(tmp_path)
                     except OSError:
                         pass
+
+        try:
+            if lock_token:
+                result = lockwrite.write_holding_token(granted, lock_token, _replace)
+                if isinstance(result, lockwrite.LockLost):
+                    return {"ok": False, "error": "lock lost"}
+            else:
+                _replace()
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "path": granted}

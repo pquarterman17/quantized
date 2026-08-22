@@ -54,6 +54,25 @@ importable (and testable) without the web stack, called in-process by
 reachable over HTTP, matching every other filesystem-authority module in
 this codebase (``desktop_consent.py``'s module doc has the same rule for
 read/write path consent).
+
+**R1 fix (see ``plans/POST_SPRINT_INDEPENDENT_REVIEW.md``'s R1 section).**
+This module used to expose ``token_still_valid`` — a CAS-protected check
+that verified a token and then RELEASED the OS lock, leaving the
+caller's actual project-file write to happen outside any lock. That left
+two defects: (a) a takeover/release/reacquire from another process could
+land in the gap between verification and ``os.replace``, and (b) an
+ABSENT lock file returned ``True`` for any supplied token, so a caller
+whose lock had been released or replaced by someone else was told to
+proceed rather than refused. ``token_still_valid`` has been removed
+entirely — it is fully superseded by
+:func:`quantized.desktop_project_lock_write.write_holding_token`, which
+verifies the token and then keeps the SAME exclusive OS lock held through
+the caller's own write, closing exactly the gap this module's own CAS
+mutations (:func:`refresh`, :func:`take_over`) never had. That function
+lives in the sibling ``desktop_project_lock_write`` module (not here) so
+it can import this module's private OS-lock primitives (``_open_locked``,
+``_unlock``) without a circular import, and to keep this module under the
+repo's 500-line ceiling.
 """
 
 from __future__ import annotations
@@ -87,7 +106,6 @@ __all__ = [
     "refresh",
     "release",
     "take_over",
-    "token_still_valid",
 ]
 
 
@@ -97,11 +115,23 @@ __all__ = [
 # TypeScript boundary to share them.
 DEFAULT_TTL_SECONDS = 90.0
 
-# Bounded retry budget for the exclusive OS-level lock below: real contention
-# between two processes racing a heartbeat/takeover resolves within a few
-# milliseconds, so ~1s of total budget is generous headroom, not a hang risk
-# for a caller (or a test) that expects this to return promptly either way.
-_LOCK_RETRY_ATTEMPTS = 100
+# Bounded retry budget for the exclusive OS-level lock below. Plain
+# heartbeat/takeover contention between two processes resolves in a few
+# milliseconds, but R1's `write_holding_token` (desktop_project_lock_write.py)
+# now holds this SAME lock for the duration of a real project-file write —
+# a large `.dwk` payload's temp-write + `os.replace` can plausibly run into
+# the low hundreds of milliseconds to a couple of seconds on a slow disk or a
+# loaded CI runner. The prior ~1s budget (100 * 10ms) could make a concurrent
+# heartbeat's `refresh` time out and report the lock lost while a save was
+# merely still in flight — a spurious demotion, not a real loss (the frontend
+# heartbeat in `useProjectLockHeartbeat.ts` does not retry a single failed
+# refresh; see `test_desktop_project_lock_write.py`'s contention test for the
+# forced race this budget is sized against). 5s (500 * 10ms) stays bounded —
+# nowhere near the 90s `DEFAULT_TTL_SECONDS` staleness window a genuinely
+# dead holder would need to trigger a takeover — while giving a legitimate
+# in-flight write enough headroom that a healthy heartbeat never loses the
+# race against its own holder's save.
+_LOCK_RETRY_ATTEMPTS = 500
 _LOCK_RETRY_DELAY_S = 0.01
 _LOCK_REGION_BYTES = 1  # Windows locks a byte RANGE, not the whole file.
 
@@ -225,40 +255,6 @@ def read(path: str) -> LockRecord | UnverifiableLock | None:
     except (UnicodeDecodeError, ValueError) as exc:
         return UnverifiableLock(str(exc))
     return _parse_record(text)
-
-
-def token_still_valid(path: str, token: str) -> bool:
-    """CAS-PROTECTED check — is `token` still the current lock holder's
-    token for `path`, verified under the SAME exclusive OS lock every
-    mutation here uses (never a plain, unprotected `read()`). This is what
-    `desktop_bridge.py`'s `write_project_file` calls IMMEDIATELY before a
-    write to close the save TOCTOU: an unprotected read taken a moment
-    earlier could race a concurrent `refresh`/`take_over`/`release` on the
-    SAME lock file and observe a torn intermediate state; this cannot,
-    because the OS lock excludes every other mutator for the duration of
-    the compare.
-
-    `True` (proceed) when there is NO lock file at all — nothing to verify
-    a token against, matching `write_project_file`'s "only enforced when a
-    lock file exists" contract. `False` (refuse) for an actual mismatch
-    AND for `UnverifiableLock` — a lock file whose content cannot be
-    trusted must never be treated as "no lock", the same fail-closed rule
-    `read`'s own doc states for every other caller."""
-    state, fh, _err = _open_locked(_lock_path(path), mode="rb")
-    if state == "absent":
-        return True
-    if fh is None:
-        return False
-    try:
-        try:
-            current = _parse_record(fh.read().decode("utf-8"))
-        finally:
-            _unlock(fh)
-    except (OSError, ValueError):
-        return False
-    finally:
-        fh.close()
-    return isinstance(current, LockRecord) and current.token == token
 
 
 # -- the CAS primitive ----------------------------------------------------
