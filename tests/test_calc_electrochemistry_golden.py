@@ -1,9 +1,8 @@
 """Electrochemistry: golden parity vs MATLAB calc.electrochemistry.
 
-STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_electrochemistry_*.json``
-golden fixtures that do not exist yet in this checkout -- ``load_golden`` skips
-cleanly until the owner runs MATLAB against ``tools/matlab/freeze_diraculator_values.m`` and
-commits the frozen JSON.
+DIRACULATOR_AUDIT P1 fixtures were frozen on 2026-08-21 using
+``tools/matlab/freeze_diraculator_values.m`` against
+``quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e``.
 
 Every MATLAB ``calc.electrochemistry.*`` struct also carries a ``.latex``
 display field that the Python port intentionally omits (see the module

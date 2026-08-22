@@ -2,7 +2,20 @@
   "source_repo": "../quantized_matlab",
   "source_commit": "95e1994",
   "frozen": "2026-06-21",
-  "note": "Regenerate via MATLAB: addpath('tools/matlab'); freeze_reference_values(). Bump source_commit when an upstream formula changes.",
+  "note": "The top-level source_commit is the default provenance for legacy fixtures. Campaign entries override it for their matching fixture set.",
+  "campaigns": {
+    "diraculator_w4": {
+      "fixtures": "calc_dira_*.json",
+      "case_count": 93,
+      "source_repo": "../quantized_matlab",
+      "source_commit": "aee70d12ddd13024a33ac8d29fafbd3245442c7e",
+      "frozen": "2026-08-21",
+      "freeze_script": "tools/matlab/freeze_diraculator_values.m",
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "note": "W4 DiraCulator calculator campaign. Intentional divergences and Python-only extensions are documented in the companion golden tests and DIRACULATOR_AUDIT_PLAN.md."
+    }
+  },
   "cases": {
     "origin_export": {
       "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",

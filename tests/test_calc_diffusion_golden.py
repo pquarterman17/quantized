@@ -1,9 +1,8 @@
 """Diffusion: golden parity vs MATLAB DiraCulator.m buildDiffusionTab.
 
-STAGED (DIRACULATOR_AUDIT P1): these tests load ``calc_dira_diffusion_*.json``
-golden fixtures that do not exist yet in this checkout -- ``load_golden``
-skips cleanly until the owner runs MATLAB against
-``tools/matlab/freeze_diraculator_values.m`` and commits the frozen JSON.
+DIRACULATOR_AUDIT P1 fixtures were frozen on 2026-08-21 using
+``tools/matlab/freeze_diraculator_values.m`` against
+``quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e``.
 
 No ``+calc/+diffusion`` package exists in ``quantized_matlab`` -- all three
 formulas are embedded directly in ``buildDiffusionTab``'s nested callbacks
