@@ -142,7 +142,17 @@ def write_holding_token(
             "write_holding_token requires a non-empty token; route an empty "
             "token through the legacy no-lock write path instead"
         )
-    state, fh, err = _open_locked(_lock_path(path))
+    # `mode="rb"` (R1 round-3 fix): this function only ever READS the lock
+    # file's content (the actual mutation, `write_fn`, targets the PROJECT
+    # file, a different path entirely) — `_open_locked`'s "r+b" default is
+    # for the CAS mutators in `desktop_project_lock.py` that overwrite this
+    # file in place. Opening read-write here meant a lock file this process
+    # could only READ (but not write) misreported "lock lost" instead of
+    # verifying the token it could perfectly well see. Both platforms'
+    # locking calls accept a read-only handle: `msvcrt.locking` locks a
+    # byte range on any open handle regardless of access mode, and
+    # `fcntl.flock` locks the whole open file description the same way.
+    state, fh, err = _open_locked(_lock_path(path), mode="rb")
     if state == "absent":
         return LockLost(None)
     if fh is None:

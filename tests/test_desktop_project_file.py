@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,8 @@ import pytest
 from quantized.desktop_project_file import (
     WORKSPACE_FORMAT,
     WORKSPACE_VERSIONS,
+    WRITE_TEMP_PREFIX,
+    cleanup_stray_write_temps,
     extract_declared_source_paths,
     validate_workspace_payload,
 )
@@ -152,3 +156,45 @@ def test_extract_declared_source_paths_ignores_everything_but_source_path() -> N
     tempted to also scan."""
     payload = '{"datasets": [{"id": "a", "pending": {"kind": "path", "path": "/sneaky/a.csv"}}]}'
     assert extract_declared_source_paths(payload) == []
+
+
+# -- cleanup_stray_write_temps's age floor (R1 round-3 review, F3) ----------
+
+
+def test_cleanup_stray_write_temps_spares_a_young_file(tmp_path: Path) -> None:
+    """A freshly-created `.qz-write-*` file is plausibly a DIFFERENT,
+    still in-flight save's own temp file — never a genuine crash leftover
+    on the timescale a save actually takes — so the default age floor
+    (10 minutes) must spare it."""
+    stray = tmp_path / f"{WRITE_TEMP_PREFIX}fresh"
+    stray.write_text("in flight", encoding="utf-8")
+    cleanup_stray_write_temps(str(tmp_path))
+    assert stray.exists()
+
+
+def test_cleanup_stray_write_temps_removes_a_genuinely_old_file(tmp_path: Path) -> None:
+    stray = tmp_path / f"{WRITE_TEMP_PREFIX}ancient"
+    stray.write_text("crashed a while ago", encoding="utf-8")
+    old = time.time() - 3600.0
+    os.utime(stray, (old, old))
+    cleanup_stray_write_temps(str(tmp_path))
+    assert not stray.exists()
+
+
+def test_cleanup_stray_write_temps_min_age_seconds_is_overridable(tmp_path: Path) -> None:
+    """The default is a sensible belt-and-braces floor for the unlocked
+    legacy call site, but is a plain keyword argument, not a hardcoded
+    constant, in case a caller ever needs a different budget."""
+    stray = tmp_path / f"{WRITE_TEMP_PREFIX}barely_young"
+    stray.write_text("x", encoding="utf-8")
+    cleanup_stray_write_temps(str(tmp_path), min_age_seconds=0.0)
+    assert not stray.exists()
+
+
+def test_cleanup_stray_write_temps_ignores_files_without_the_prefix(tmp_path: Path) -> None:
+    other = tmp_path / "not-ours.txt"
+    other.write_text("leave me alone", encoding="utf-8")
+    old = time.time() - 3600.0
+    os.utime(other, (old, old))
+    cleanup_stray_write_temps(str(tmp_path), min_age_seconds=0.0)
+    assert other.exists()

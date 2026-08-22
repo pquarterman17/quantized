@@ -39,8 +39,8 @@ currently exercise.
 ### [ ] R1. Hold project ownership through the actual project-file replacement
 
 **Implementation status (2026-08-22, implementer=this lane, on branch
-`claude/r1-lock-held-write`) — still open pending independent review, TWO
-rounds so far:**
+`claude/r1-lock-held-write`) — still open pending independent review,
+THREE rounds so far:**
 
 *Round 1.* New operation `desktop_project_lock_write.write_holding_token(
 path, token, write_fn)` takes the same exclusive OS lock `refresh`/
@@ -83,8 +83,66 @@ pulled into its own `desktop_project_lock_oslock.py` module so
 `desktop_project_lock.py` and `desktop_project_lock_write.py` both import
 it the ordinary way instead of one reaching into the other's private
 names — a proportionate response to `desktop_project_lock.py` exceeding
-the 500-line ceiling once `Contended`'s documentation landed. See the
-closure log below (reviewer row left blank for the orchestrator to
+the 500-line ceiling once `Contended`'s documentation landed.
+
+*Round 3 (second code-review pass, on round 2 — 6 findings, all fixed).*
+**BLOCKING (F1+F4): a genuine single-writer violation through round 2's
+own soft-success path.** Two independent gaps combined into a token-
+laundering route: (F4) `_remember` cached a `LockRecord` from ANY outcome,
+including a REFUSED acquire or a plain `project_lock_read` — both of
+which can carry a DIFFERENT instance's live record, not this one's own;
+and (F1) the soft-success mapping never checked that the cached record's
+token matched the CALLER's presented token before echoing it back.
+Poisoning path: a displaced instance A reads live holder B's record
+(caching it, pre-fix); A's own stale-token heartbeat later hits
+`Contended`; the bridge answers `refreshed: true` with B's record; the
+frontend adopts B's live token as "its own"; A's NEXT save presents that
+token and WINS — two writers believing they each hold the lock. Fixed at
+BOTH ends: `_remember` now caches ONLY on an `ok: True` acquire/refresh/
+takeover (never a refusal or a plain read), and the soft-success branch
+additionally requires `cached.token == token` before ever firing — belt
+AND braces, not either/or. **F2:** the `Contended` reclassification from a
+`PermissionError` is now WIN32-ONLY (`_classify_permission_error` in
+`desktop_project_lock_oslock.py`, and a `sys.platform` guard in `read`) —
+on POSIX, `fcntl.flock` is advisory, so contention can never make a plain
+`open()` raise `PermissionError`; one there is a REAL, persistent
+permissions failure and must surface honestly (`UnverifiableLock`,
+un-retried), never get masked behind a soft success forever the way
+round 2's platform-blind version would have. **F3:** moved
+`cleanup_stray_write_temps` INSIDE `write_project_file`'s `_replace`
+closure (so a `lock_token` save now runs it under `write_holding_token`'s
+held lock, serializing it against any other LOCKED save on the same
+path) and gave `cleanup_stray_write_temps` itself a 10-minute age floor
+(`desktop_project_file.py`) as belt-and-braces for the legacy, unlocked
+no-token path, which has no such serialization at all — round 2's version
+could let a second concurrent save delete a first save's still-open temp
+file outright. **F5:** `write_holding_token` now opens the lock file
+`mode="rb"` (it only ever reads it) instead of `_open_locked`'s `"r+b"`
+default meant for the CAS mutators — a lock file this process can only
+READ no longer misreports "lock lost"; both `msvcrt.locking` and
+`fcntl.flock` accept a read-only handle. **F6:** bounded the soft-success
+mechanism itself — `desktop_bridge.py` now caps consecutive `Contended`
+soft-successes per path at 2 (`_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES`,
+resetting on any non-contended outcome); a third consecutive contended
+tick returns the honest refusal (the frontend demotes), matching the TTL
+design's own rationale that ONE missed/contended tick is what
+`STALE_AFTER_MS` is sized to absorb, not an unbounded run of them.
+Red-first (forced, not sampled): `tests/test_desktop_bridge_lock.py` gets
+a mismatched-token refusal test, two `_remember`-scoping tests, a full
+end-to-end token-laundering-path-is-closed test, and two streak-bound
+tests (all independently verified to fail against a reverted patch of
+each fix, per `docs/testing.md`'s evidence standard);
+`tests/test_desktop_project_lock.py` gets a POSIX-`PermissionError`-never-
+softens test alongside the existing (now win32-scoped)
+Windows-simulation tests; `tests/test_desktop_project_lock_write.py` gets
+a `mode="rb"` structural spy test; `tests/test_desktop_bridge.py` and
+`tests/test_desktop_project_file.py` get a forced two-thread
+concurrent-save-temp-survives test (`os.replace` paused mid-call via a
+real thread + `Event`) plus direct age-floor unit tests. Full gates
+green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests
+(119 passed), full `pytest -q` (3723 passed, 175 skipped, 18 xfailed).
+
+See the closure log below (reviewer row left blank for the orchestrator to
 assign) — this item stays open until an independent reviewer signs off.
 
 **Problem:** `desktop_bridge.py::write_project_file` calls
@@ -335,4 +393,5 @@ agent can distinguish implementation from verification:
 | 2026-08-22 | Audit created | — | ChatGPT-Sol | — | Read-only review; no application fixes made |
 | 2026-08-22 | R1 fix (round 1) | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | `write_holding_token` holds the exclusive OS lock across verify + temp-write + `os.replace`; absent lock + non-empty token now refuses (`token_still_valid` removed). Red-first: `tests/test_desktop_project_lock_write.py` (9 tests: basic contract, absent/mismatched/corrupt/tombstoned-token refusal, a real 2-process takeover-during-write race via `multiprocessing` spawn, and 2 forced contention-budget tests proving the old ~1s OS-lock retry budget could spuriously fail a concurrent `refresh` mid-save and the new ~5s budget does not) plus updated `tests/test_desktop_bridge_lock.py`/`test_desktop_project_lock.py`. Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests, full `pytest -q`. Residual risk flagged at the time: not yet independently reviewed; a code-review pass (see the round-2 row) found the retry-budget fix incomplete. |
 | 2026-08-22 | R1 fix (round 2 — code review of round 1) | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | Fixed 4 real findings + 1 cleanup from a code-review pass on round 1. BLOCKING finding: Windows `msvcrt` locks are mandatory, so `refresh`'s unprotected pre-read hit `PermissionError` immediately during a concurrent save and misclassified it as `UnverifiableLock` (demotion), bypassing round 1's enlarged budget entirely. Fixed with a new `Contended` outcome (`desktop_project_lock_record.py`), folding `refresh`'s read into its own locked CAS section (`_cas_update`), the same retry-then-classify treatment for `read`'s other callers (`acquire`, `project_lock_read`), and a bridge-side non-demoting "soft success" mapping for a `Contended` refresh that echoes the last genuinely-observed record (never null/fabricated) — verified `frontend/src/store/projectLock.ts` needs no change. Split the overloaded retry constant into two modest, independent ones and pulled the OS-lock mechanism into its own `desktop_project_lock_oslock.py` module (kept every touched module under the 500-line ceiling). Cleaned up a dead `tmp_path` pre-assignment in `desktop_bridge.py`. Red-first: real forced-contention tests (`threading`, not sampled) in `tests/test_desktop_project_lock_write.py` (`Contended` from both `refresh` and `write_holding_token` while a real writer holds the lock), `tests/test_desktop_project_lock.py` (Windows-PermissionError simulated via `builtins.open` monkeypatching — the real proof is the Windows CI leg — plus a structural "refresh must not pre-read" guard), and `tests/test_desktop_bridge_lock.py` (the end-to-end soft-success mapping under real contention, its no-cached-record fallback, and the generic `Contended`→`unverifiable` mapping for `read`/`acquire`). Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests (110 passed), full `pytest -q`. Residual risk: still not independently reviewed; real Windows CI leg is the only genuine proof of the mandatory-lock behavior these tests simulate. |
+| 2026-08-22 | R1 fix (round 3 — second code review, on round 2) | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | Fixed 6 findings from a second code-review pass on round 2. BLOCKING (F1+F4): a genuine single-writer violation through round 2's own `Contended` soft-success — `_remember` cached a record from ANY outcome (including a REFUSED acquire or a plain read, either of which can carry a DIFFERENT instance's live record), and the soft-success branch never checked the cached record's token against the caller's presented one, together opening a token-laundering path where a displaced instance could echo back a live holder's token and win a later save. Fixed at both ends: `_remember` now caches ONLY on an `ok:True` self-win; the soft-success branch additionally requires `cached.token == token`. F2: the `PermissionError`→`Contended` reclassification is now WIN32-ONLY (`_classify_permission_error`, `desktop_project_lock_oslock.py`; a `sys.platform` guard in `read`) — POSIX's advisory `fcntl.flock` means a `PermissionError` there is a real persistent permissions failure, not contention, and must surface honestly rather than get masked behind soft-success forever. F3: moved `cleanup_stray_write_temps` inside `write_project_file`'s `_replace` (so a locked save now runs it under `write_holding_token`'s held lock, serializing it against other locked saves) and gave the function itself a 10-minute age floor (`desktop_project_file.py`) as belt-and-braces for the still-unlocked legacy no-token path — round 2's version could let a concurrent save delete a different in-flight save's temp file outright. F5: `write_holding_token` now opens the lock file `mode="rb"` (it only ever reads it) instead of `_open_locked`'s `"r+b"` default, so a read-only-accessible lock file no longer misreports "lock lost". F6: bounded consecutive `Contended` soft-successes per path to 2 (`_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES`, resets on any non-contended outcome) — a third consecutive contended tick now returns the honest refusal, matching the TTL design's "one tick absorbed" rationale rather than tolerating an unbounded run. Red-first, every fix independently verified to fail against a reverted patch (per `docs/testing.md`'s evidence standard): `tests/test_desktop_bridge_lock.py` (mismatched-token refusal, `_remember`-scoping x2, full end-to-end laundering-path-closed, streak-bound x2), `tests/test_desktop_project_lock.py` (POSIX-`PermissionError`-never-softens, alongside the existing tests now correctly win32-scoped), `tests/test_desktop_project_lock_write.py` (a `mode="rb"` structural spy test), `tests/test_desktop_bridge.py` + `tests/test_desktop_project_file.py` (a forced two-thread concurrent-save-temp-survives test via a paused `os.replace`, plus direct age-floor unit tests). Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests (119 passed), full `pytest -q` (3723 passed, 175 skipped, 18 xfailed). Residual risk: still not independently reviewed; the Windows CI leg remains the only genuine proof of the platform-specific mandatory-lock behavior these tests simulate. |
 

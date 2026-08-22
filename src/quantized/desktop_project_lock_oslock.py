@@ -93,6 +93,24 @@ else:
             pass  # best-effort — the fh is about to be closed regardless
 
 
+def _classify_permission_error(exc: PermissionError) -> tuple[str, str]:
+    """R1 round-3 fix (code review): a `PermissionError` means genuinely
+    different things on the two platforms. On WINDOWS, `msvcrt` region
+    locks are MANDATORY — another handle holding this package's lock can
+    make an ordinary open/read/identity-check fail with exactly this
+    exception, so it is real, transient CONTENDED-ness. On POSIX,
+    `fcntl.flock` is advisory: nothing about another handle holding it can
+    ever make a plain `open()` raise `PermissionError` — a `PermissionError`
+    there reflects a REAL, persistent permissions problem (wrong file mode
+    or ownership), not contention, and must surface as an honest error.
+    Round 2's version classified this the same way on both platforms,
+    which would have silently masked a genuine POSIX permissions failure
+    behind `Contended`'s soft-success handling forever."""
+    if sys.platform == "win32":
+        return "contended", str(exc)
+    return "error", str(exc)
+
+
 def _acquire_os_lock(fh: IO[bytes]) -> bool:
     for attempt in range(_LOCK_ACQUIRE_RETRY_ATTEMPTS):
         if _try_lock(fh):
@@ -117,25 +135,28 @@ def _open_locked(lock_path: str, mode: str = "r+b") -> tuple[str, IO[bytes] | No
     Returns `("ok", fh, None)` with the lock HELD (caller must `_unlock`
     then `close`), `("absent", None, None)` when the path stops existing,
     `("contended", None, reason)` when another live handle genuinely holds
-    it right now (the OS-lock acquire timed out, or — Windows only — a
-    mandatory-lock `PermissionError` on the open/identity-check itself —
-    see `desktop_project_lock_record.Contended`'s doc for why this is
-    reported distinctly from `"error"`), or `("error", None, reason)` for
-    anything else (nothing held, nothing open)."""
+    it right now (the OS-lock acquire timed out on EITHER platform, or —
+    WINDOWS ONLY — a mandatory-lock `PermissionError` on the open/
+    identity-check itself; see `_classify_permission_error`'s and
+    `desktop_project_lock_record.Contended`'s docs for why a POSIX
+    `PermissionError` is never classified this way), or `("error", None,
+    reason)` for anything else (nothing held, nothing open)."""
     for _ in range(_IDENTITY_RETRY_ATTEMPTS):
         try:
             fh = open(lock_path, mode)
         except FileNotFoundError:
             return "absent", None, None
         except PermissionError as exc:
-            return "contended", None, str(exc)
+            state, reason = _classify_permission_error(exc)
+            return state, None, reason
         except (OSError, ValueError) as exc:
             return "error", None, str(exc)
         try:
             locked = _acquire_os_lock(fh)
         except PermissionError as exc:
             fh.close()
-            return "contended", None, str(exc)
+            state, reason = _classify_permission_error(exc)
+            return state, None, reason
         except (OSError, ValueError) as exc:
             fh.close()
             return "error", None, str(exc)
@@ -154,7 +175,8 @@ def _open_locked(lock_path: str, mode: str = "r+b") -> tuple[str, IO[bytes] | No
         except PermissionError as exc:
             _unlock(fh)
             fh.close()
-            return "contended", None, str(exc)
+            state, reason = _classify_permission_error(exc)
+            return state, None, reason
         except (OSError, ValueError) as exc:
             _unlock(fh)
             fh.close()

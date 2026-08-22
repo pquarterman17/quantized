@@ -158,13 +158,20 @@ def read(path: str) -> LockRecord | UnverifiableLock | Contended | None:
     lock itself (that would make every mere "peek" contend with real
     mutations for no reason). On POSIX that's fine: `fcntl.flock` is
     advisory, so a plain read always succeeds regardless of who holds the
-    lock. On WINDOWS, `msvcrt` region locks are MANDATORY — while another
-    handle holds this package's exclusive lock, this read can fail
-    immediately with `PermissionError`. That is retried a SMALL bounded
-    number of times (`_READ_RETRY_ATTEMPTS` — a "is a save merely still in
-    progress" window, not a "wait out a whole save" one) and, if it never
-    clears, reported as `Contended` — NOT `UnverifiableLock`, which is
-    reserved for content that IS readable but cannot be trusted (corrupt/
+    lock — a `PermissionError` there can only be a REAL, persistent
+    permissions problem (wrong file mode/ownership), so it is reported as
+    `UnverifiableLock` immediately, never retried, never `Contended` (R1
+    round-3 fix: round 2 retried and soft-classified this identically on
+    both platforms, which would have silently masked a genuine POSIX
+    permissions failure behind `Contended` forever). On WINDOWS, `msvcrt`
+    region locks are MANDATORY — while another handle holds this
+    package's exclusive lock, this read can fail immediately with that
+    SAME exception for a completely different, transient reason. THERE
+    ONLY, it is retried a SMALL bounded number of times
+    (`_READ_RETRY_ATTEMPTS` — a "is a save merely still in progress"
+    window, not a "wait out a whole save" one) and, if it never clears,
+    reported as `Contended` — NOT `UnverifiableLock`, which is reserved
+    for content that IS readable but cannot be trusted (corrupt/
     unparseable). Callers besides `refresh` (which has its own bespoke,
     non-demoting handling — see its doc) should treat `Contended` the same
     conservative way as `UnverifiableLock`: cannot verify right now, never
@@ -177,6 +184,8 @@ def read(path: str) -> LockRecord | UnverifiableLock | Contended | None:
         except FileNotFoundError:
             return None
         except PermissionError as exc:
+            if sys.platform != "win32":
+                return UnverifiableLock(str(exc))
             if attempt == _READ_RETRY_ATTEMPTS - 1:
                 return Contended(str(exc))
             time.sleep(_READ_RETRY_DELAY_S)

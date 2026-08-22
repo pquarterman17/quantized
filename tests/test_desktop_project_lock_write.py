@@ -36,6 +36,9 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
+import quantized.desktop_project_lock_write as lockwrite_mod
 from quantized.desktop_project_lock import Contended, LockRecord, UnverifiableLock, acquire, refresh
 from quantized.desktop_project_lock_write import LockLost, LockVerified, write_holding_token
 
@@ -80,6 +83,43 @@ def test_write_holding_token_requires_a_non_empty_token(tmp_path: Path) -> None:
         pass
     else:
         raise AssertionError("expected ValueError for an empty token")
+
+
+def test_write_holding_token_opens_the_lock_file_read_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F5 (R1 round-3 review): `write_holding_token` only ever READS the
+    lock file's content — the actual mutation (`write_fn`) targets the
+    PROJECT file, a completely different path. It must open the lock file
+    with `mode="rb"`, not `_open_locked`'s `"r+b"` default the CAS
+    mutators need — a lock file this process can only READ (restrictive
+    permissions, a read-only-mounted directory, ...) must still allow
+    token verification instead of misreporting the lock lost merely
+    because THIS file isn't writable. Both platforms' locking calls
+    accept a read-only handle regardless: `msvcrt.locking` locks a byte
+    range on any open handle irrespective of its access mode, and
+    `fcntl.flock` locks the whole open file description the same way."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+
+    real_open_locked = lockwrite_mod._open_locked
+    seen_modes: list[str] = []
+
+    def _spy(lock_path: str, mode: str = "r+b") -> object:
+        seen_modes.append(mode)
+        return real_open_locked(lock_path, mode)
+
+    monkeypatch.setattr(lockwrite_mod, "_open_locked", _spy)
+    calls: list[int] = []
+
+    def _write_fn() -> None:
+        calls.append(1)
+
+    result = write_holding_token(path, rec.token, _write_fn)
+    assert isinstance(result, LockVerified)
+    assert calls == [1]
+    assert seen_modes == ["rb"]
 
 
 # -- (ii) absent lock + non-empty token refuses --------------------------

@@ -255,17 +255,20 @@ def test_embedded_null_path_never_raises() -> None:
 # Windows semantics simulated on Linux dev: `msvcrt` region locks are
 # MANDATORY, so a plain, unprotected read of a locked byte range fails
 # immediately with `PermissionError` — simulated here by monkeypatching
-# `builtins.open` to raise it for the lock file specifically. The real
-# proof that this actually happens on Windows is the Windows CI leg (this
-# repo's 3-OS matrix); these tests prove `read`'s CLASSIFICATION logic is
-# correct given that a `PermissionError` occurs, independent of platform.
+# `builtins.open` to raise it for the lock file specifically, AND (since
+# the classification is now platform-gated — F2 of the round-3 review)
+# `sys.platform` to `"win32"`, the same pattern
+# `test_release_on_windows_tombstones_instead_of_deleting` already uses.
+# The real proof that this actually happens on Windows is the Windows CI
+# leg (this repo's 3-OS matrix); these tests prove `read`'s CLASSIFICATION
+# logic is correct given that a `PermissionError` occurs on that platform.
 
 
 def _lock_file_path(path: str) -> str:
     return path + ".lock"
 
 
-def test_read_retries_a_permission_error_then_classifies_contended(
+def test_read_retries_a_permission_error_then_classifies_contended_on_windows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _project(tmp_path)
@@ -282,6 +285,7 @@ def test_read_retries_a_permission_error_then_classifies_contended(
         return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(builtins, "open", _always_denied)
+    monkeypatch.setattr(lockmod.sys, "platform", "win32")
     result = read(path)
     assert isinstance(result, Contended)
     # Actually retried (not a single immediate failure) — the SMALL bounded
@@ -289,7 +293,7 @@ def test_read_retries_a_permission_error_then_classifies_contended(
     assert calls["n"] == lockmod._READ_RETRY_ATTEMPTS
 
 
-def test_read_succeeds_once_a_transient_permission_error_clears(
+def test_read_succeeds_once_a_transient_permission_error_clears_on_windows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Proves the retry is not merely cosmetic: a `PermissionError` that
@@ -309,10 +313,41 @@ def test_read_succeeds_once_a_transient_permission_error_clears(
         return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(builtins, "open", _denied_twice)
+    monkeypatch.setattr(lockmod.sys, "platform", "win32")
     result = read(path)
     assert isinstance(result, LockRecord)
     assert result.token == rec.token
     assert calls["n"] == 2
+
+
+def test_read_never_retries_or_softens_a_posix_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F2 (R1 round-3 review): on POSIX, `fcntl.flock` is advisory, so
+    contention can NEVER make a plain `open()`/`read()` raise
+    `PermissionError` — one there is a REAL, persistent permissions
+    problem (wrong file mode/ownership) and must surface honestly as
+    `UnverifiableLock`, on the FIRST attempt, never retried and never
+    softened to `Contended` (which would mask it behind soft-success
+    forever at the bridge layer)."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _always_denied(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file:
+            calls["n"] += 1
+            raise PermissionError("simulated real POSIX permissions failure")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _always_denied)
+    monkeypatch.setattr(lockmod.sys, "platform", "linux")
+    result = read(path)
+    assert isinstance(result, UnverifiableLock)
+    assert calls["n"] == 1  # no retry at all — this is not "busy", it's broken
 
 
 def test_acquire_propagates_contended_from_read_rather_than_guessing(
