@@ -197,6 +197,11 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
         record: acquired.record,
         path: destination,
         openedAsCopy: false,
+        // F2 (code review round 3): the THIRD fresh-acquisition site (with
+        // openProject/takeOverEditing in store/projectLock.ts) that must
+        // reset the streak — a carried-over count from the OLD project
+        // must never demote this brand-new lock after one more blip.
+        unverifiableHeartbeats: 0,
         instanceId: acquired.record.instanceId,
       });
     } else {

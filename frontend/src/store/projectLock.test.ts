@@ -13,7 +13,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopLockProvider } from "../lib/desktopLockProvider";
-import { STALE_AFTER_MS, UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
+import { canTakeOver, STALE_AFTER_MS, UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import {
   createInMemoryLockProvider,
@@ -161,6 +161,33 @@ describe("openProject", () => {
     expect(useProjectLock.getState().status).toBe("held-by-me"); // NOT demoted after one miss
     expect(useProjectLock.getState().canWriteNow()).toBe(true);
   });
+
+  // F1 (code review round 3, BLOCKING): a provider reporting `acquired:
+  // true` alongside `record: null` (e.g. the wire record failed to parse —
+  // a version-skew class of bug) is NOT a success. Trusting it would store
+  // `status: "held-by-me"` with `record: null`, which then poisons
+  // `heartbeat()` (early-returns forever on `record === null`, never
+  // demoting) and `runSaveWorkspace` (computes `token: ""`, which by its
+  // own documented contract SKIPS the backend's lock verification — an
+  // UNGATED write).
+  it("a success outcome with a null parsed record is treated as unverifiable, never promoted to held-by-me", async () => {
+    useProjectLock.setState({
+      provider: {
+        read: async () => null,
+        tryAcquire: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        refresh: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        takeOver: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    const result = await useProjectLock.getState().openProject(PATH);
+
+    expect(result.status).not.toBe("held-by-me");
+    expect(result.readOnly).toBe(true);
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+    expect(useProjectLock.getState().record).toBeNull();
+  });
 });
 
 describe("takeOverEditing", () => {
@@ -201,6 +228,28 @@ describe("takeOverEditing", () => {
 
     expect(ok).toBe(true);
     expect(useProjectLock.getState().unverifiableHeartbeats).toBe(0);
+  });
+
+  // F1 (code review round 3, BLOCKING) at the takeOverEditing site: a
+  // provider reporting `acquired: true` with `record: null` must never be
+  // trusted as a won takeover.
+  it("a success outcome with a null parsed record is treated as unverifiable, never a won takeover", async () => {
+    await seedStale();
+    useProjectLock.setState({
+      provider: {
+        read: async () => null,
+        tryAcquire: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        refresh: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        takeOver: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    const ok = await useProjectLock.getState().takeOverEditing();
+
+    expect(ok).toBe(false);
+    expect(useProjectLock.getState().status).not.toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
   });
 
   it("refuses via the provider's own CAS when a THIRD instance already took over between reads", async () => {
@@ -339,6 +388,61 @@ describe("heartbeat — R4 fail-closed demotion when the bridge is UNVERIFIABLE 
     for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER; i++) await useProjectLock.getState().heartbeat();
 
     expect(useProjectLock.getState().record).toEqual(recordBefore);
+  });
+});
+
+// F1 (code review round 3, BLOCKING) at the heartbeat site: a provider
+// reporting `acquired: true` with `record: null` must never be trusted as
+// a success — it would store `record: null` while `status` stays
+// "held-by-me", and EVERY subsequent heartbeat tick early-returns on its
+// own `record === null` guard forever, never demoting. Treated as
+// unverifiable instead, it correctly joins the existing demotion streak.
+describe("heartbeat — F1 a null-record success is treated as unverifiable, never trusted", () => {
+  it("does not report success, and joins the unverifiable streak rather than getting stuck forever", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    const nullRecordSuccess: LockCasResult = { acquired: true, record: null };
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => nullRecordSuccess) });
+
+    const ok = await useProjectLock.getState().heartbeat();
+
+    expect(ok).toBe(false);
+    expect(useProjectLock.getState().status).toBe("held-by-me"); // one miss, below threshold
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(1); // counted, not stuck/ignored
+    expect(useProjectLock.getState().record).not.toBeNull(); // still has something to re-verify against
+
+    // Confirm it actually DEMOTES after the threshold — proving this
+    // never gets stuck in a permanent silent no-op.
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER - 1; i++) await useProjectLock.getState().heartbeat();
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+});
+
+// F4 (code review round 3, ownership pre-check): heartbeat() used to call
+// provider.refresh with the SNAPSHOT record's token before any ownership
+// check — a real backend CAS validates by token match, not caller
+// identity, so sending a FOREIGN instanceId's record's token can
+// legitimately succeed, bumping the intruder's own heartbeatAt on disk
+// and delaying a legitimate third instance's stale-takeover. The post-
+// await re-validation elsewhere only ever protected this session's own
+// LOCAL state, never that remote side-effect of the call itself.
+describe("heartbeat — F4 never calls provider.refresh with a foreign-instanceId record", () => {
+  it("bails before the refresh call when the snapshot record names someone else", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    const refreshSpy = vi.fn(goodProvider.refresh);
+    const intruderRecord = withToken({ instanceId: "intruder", acquiredAt: Date.now(), heartbeatAt: Date.now() });
+    useProjectLock.setState({
+      provider: withRefresh(goodProvider, refreshSpy),
+      record: intruderRecord,
+      status: "held-by-other-live",
+    });
+
+    const ok = await useProjectLock.getState().heartbeat();
+
+    expect(ok).toBe(false);
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -577,6 +681,29 @@ describe("openAsCopy", () => {
 
     expect(provider.store.get(PATH)).toEqual(other); // untouched — never released someone else's lock
     expect(useProjectLock.getState().path).toBeNull(); // this session still stops tracking it locally
+  });
+
+  // F5 (code review round 3): clearing path/record alone left `status` at
+  // whatever "held-by-other-*" value it had before — a PHANTOM lock the
+  // status-gated Take Over Editing command would still act on (offering a
+  // takeover, or a misleading "not available" toast) for a lock this
+  // session no longer tracks at all.
+  it("resets status to unlocked — the Take Over Editing gate no longer offers a phantom lock", async () => {
+    const provider = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    provider.store.set(
+      PATH,
+      withToken({
+        instanceId: "other-dead",
+        acquiredAt: Date.now() - STALE_AFTER_MS - 100_000,
+        heartbeatAt: Date.now() - STALE_AFTER_MS - 1_000,
+      }),
+    );
+    await useProjectLock.getState().openProject(PATH); // held-by-other-stale — Take Over would be offered
+
+    useProjectLock.getState().openAsCopy();
+
+    expect(useProjectLock.getState().status).toBe("unlocked");
+    expect(canTakeOver(useProjectLock.getState().status)).toBe(false);
   });
 });
 

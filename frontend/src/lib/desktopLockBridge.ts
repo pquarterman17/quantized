@@ -96,6 +96,38 @@ function parseLockRecord(v: unknown): LockWireRecord | null {
   };
 }
 
+/** F3 (code review round 3): a wire response naming a record (`raw !==
+ *  null`) that FAILS TO PARSE (missing `token`/`instanceId`, wrong field
+ *  types, or not even an object) is NOT the same as "no record at all" —
+ *  the backend HAS a lock file, it just couldn't be read reliably (a
+ *  version-skew class of bug, or a read racing a concurrent write). That
+ *  must be treated the SAME conservative way a corrupt lock file
+ *  (`unverifiable: true`) already is. A genuinely absent record
+ *  (`raw === null`) is real, verified information — "nothing holds this
+ *  lock" — and stays `unparseable: false`. Every call site below ORs this
+ *  into its own `unverifiable` bit. */
+function parseRecordField(raw: unknown): { record: LockWireRecord | null; unparseable: boolean } {
+  if (raw === null) return { record: null, unparseable: false };
+  const record = parseLockRecord(raw);
+  return { record, unparseable: record === null };
+}
+
+/** F6 (code review round 3, dedup): acquire/refresh/takeover collapse to
+ *  the exact same parse — they differed ONLY in which field name carries
+ *  "did this call succeed" (`acquired` for acquire/takeover, `refreshed`
+ *  for refresh), which had left the shared `isPlausibleOutcome` +
+ *  field-coercion block triplicated. Also applies F3's fix uniformly via
+ *  `parseRecordField`. */
+function parseCasOutcome(out: Record<string, unknown>, okField: "acquired" | "refreshed"): LockWireOutcome {
+  const { record, unparseable } = parseRecordField(out.record);
+  return {
+    ok: bool(out[okField]),
+    record,
+    unverifiable: bool(out.unverifiable) || unparseable,
+    contended: bool(out.contended),
+  };
+}
+
 /** Acquire (or observe) the cross-process lock for `path` — the atomic
  *  create-or-take-over-if-stale primitive (`desktop_project_lock.acquire`).
  *  `ok` is `acquired`; a refusal still carries whatever record IS current. */
@@ -105,12 +137,7 @@ export async function acquireProjectLock(path: string): Promise<LockWireOutcome 
   try {
     const out = await bridge.project_lock_acquire(path);
     if (!isPlausibleOutcome(out)) return null;
-    return {
-      ok: bool(out.acquired),
-      record: parseLockRecord(out.record),
-      unverifiable: bool(out.unverifiable),
-      contended: bool(out.contended),
-    };
+    return parseCasOutcome(out, "acquired");
   } catch {
     return null;
   }
@@ -125,7 +152,8 @@ export async function readProjectLock(path: string): Promise<LockWireOutcome | n
   try {
     const out = await bridge.project_lock_read(path);
     if (!isPlausibleOutcome(out)) return null;
-    return { ok: false, record: parseLockRecord(out.record), unverifiable: bool(out.unverifiable) };
+    const { record, unparseable } = parseRecordField(out.record);
+    return { ok: false, record, unverifiable: bool(out.unverifiable) || unparseable };
   } catch {
     return null;
   }
@@ -140,12 +168,7 @@ export async function refreshProjectLock(path: string, token: string): Promise<L
   try {
     const out = await bridge.project_lock_refresh(path, token);
     if (!isPlausibleOutcome(out)) return null;
-    return {
-      ok: bool(out.refreshed),
-      record: parseLockRecord(out.record),
-      unverifiable: bool(out.unverifiable),
-      contended: bool(out.contended),
-    };
+    return parseCasOutcome(out, "refreshed");
   } catch {
     return null;
   }
@@ -159,12 +182,7 @@ export async function takeOverProjectLock(path: string, expectedToken: string): 
   try {
     const out = await bridge.project_lock_takeover(path, expectedToken);
     if (!isPlausibleOutcome(out)) return null;
-    return {
-      ok: bool(out.acquired),
-      record: parseLockRecord(out.record),
-      unverifiable: bool(out.unverifiable),
-      contended: bool(out.contended),
-    };
+    return parseCasOutcome(out, "acquired");
   } catch {
     return null;
   }

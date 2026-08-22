@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveBlob } from "../lib/download";
 import type { DataStruct } from "../lib/types";
-import type { LockRecord } from "../lib/lockState";
+import { UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
@@ -258,6 +258,41 @@ describe("saveWorkspaceToFile — desktop shell", () => {
       expect(provider.store.has("/proj/new.dwk")).toBe(true); // acquired
       expect(useProjectLock.getState().path).toBe("/proj/new.dwk");
       expect(useProjectLock.getState().status).toBe("held-by-me");
+    });
+
+    // F2 (code review round 3): this is the THIRD fresh-acquisition site
+    // (alongside openProject/takeOverEditing) that must reset
+    // `unverifiableHeartbeats` on success — a streak carried over from the
+    // OLD project must never demote the brand-new lock on the NEW path
+    // after just one more blip.
+    it("resets a carried-over unverifiableHeartbeats streak on a successful Save As acquisition", async () => {
+      setShell({
+        save_file_dialog: async () => ({ path: "/proj/new.dwk" }),
+        write_project_file: async () => ({ ok: true, path: "/proj/new.dwk" }),
+      });
+      await useProjectLock.getState().openProject("/proj/old.dwk");
+      useProjectLock.setState({ unverifiableHeartbeats: UNVERIFIABLE_DEMOTE_AFTER - 1 }); // leftover from the OLD project
+
+      await useApp.getState().saveWorkspaceToFile();
+
+      expect(useProjectLock.getState().path).toBe("/proj/new.dwk");
+      expect(useProjectLock.getState().unverifiableHeartbeats).toBe(0);
+
+      const goodProvider = useProjectLock.getState().provider;
+      useProjectLock.setState({
+        provider: {
+          read: goodProvider.read,
+          tryAcquire: goodProvider.tryAcquire,
+          refresh: async () => ({ acquired: false, record: null, unverifiable: true }),
+          takeOver: goodProvider.takeOver,
+          release: goodProvider.release,
+        },
+      });
+      const ok = await useProjectLock.getState().heartbeat(); // ONE miss on the NEW lock
+
+      expect(ok).toBe(false);
+      expect(useProjectLock.getState().status).toBe("held-by-me"); // NOT demoted after one miss
+      expect(useProjectLock.getState().canWriteNow()).toBe(true);
     });
 
     it("on a write FAILURE, releases the JUST-acquired new lock and leaves the OLD lock untouched", async () => {

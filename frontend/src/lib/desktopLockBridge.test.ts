@@ -95,6 +95,20 @@ describe("acquireProjectLock", () => {
     setShell({ project_lock_acquire: async () => [] as unknown as Record<string, unknown> });
     expect(await acquireProjectLock("/p/w.dwk")).toBeNull();
   });
+
+  // F3 (code review round 3): a NON-NULL wire record that fails to parse
+  // (missing token/instanceId — a version-skew class of bug) is NOT the
+  // same as "no record at all" — the backend HAS a lock file, it just
+  // couldn't be read reliably. Without this, it collapses to
+  // `{record: null, unverifiable: false}`, indistinguishable from a
+  // genuinely unlocked path, and `openProject` would report `readOnly:
+  // false` without ever having acquired anything.
+  it("a present-but-unparseable record (missing required fields) is flagged unverifiable, never treated as no record", async () => {
+    setShell({ project_lock_acquire: async () => ({ acquired: true, record: { hostname: "box", pid: 4242 } }) });
+    const out = await acquireProjectLock("/p/w.dwk");
+    expect(out?.unverifiable).toBe(true);
+    expect(out?.record).toBeNull();
+  });
 });
 
 describe("readProjectLock", () => {
@@ -112,6 +126,16 @@ describe("readProjectLock", () => {
     setShell({ project_lock_read: async () => ({ acquired: null, record: wireRecord }) });
     const out = await readProjectLock("/p/w.dwk");
     expect(out?.record).toEqual(wireRecord);
+  });
+
+  // F3 (code review round 3), at the actual OPEN path this bug reaches
+  // `openProject` through: a present-but-unparseable record read must
+  // fail closed, never silently report "unlocked".
+  it("a present-but-unparseable record is flagged unverifiable, never treated as no record", async () => {
+    setShell({ project_lock_read: async () => ({ acquired: null, record: { hostname: "box" } }) });
+    const out = await readProjectLock("/p/w.dwk");
+    expect(out?.unverifiable).toBe(true);
+    expect(out?.record).toBeNull();
   });
 });
 
@@ -143,6 +167,18 @@ describe("refreshProjectLock", () => {
   it("an ARRAY response is treated as no bridge (heartbeat call path), never coerced into a definite loss", async () => {
     setShell({ project_lock_refresh: async () => [] as unknown as Record<string, unknown> });
     expect(await refreshProjectLock("/p/w.dwk", "tok-1")).toBeNull();
+  });
+
+  // F3 (code review round 3): same fix, heartbeat call path — a
+  // present-but-unparseable record must count as unverifiable (a
+  // tolerated miss toward the demotion streak), never as a genuine
+  // "nothing holds this lock" that store/projectLock.ts's `heartbeat()`
+  // would otherwise treat as a definite loss.
+  it("a present-but-unparseable record is flagged unverifiable, never a definite loss", async () => {
+    setShell({ project_lock_refresh: async () => ({ refreshed: false, record: { hostname: "box" } }) });
+    const out = await refreshProjectLock("/p/w.dwk", "tok-1");
+    expect(out?.unverifiable).toBe(true);
+    expect(out?.record).toBeNull();
   });
 });
 

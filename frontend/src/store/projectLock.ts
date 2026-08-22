@@ -288,6 +288,21 @@ export function statusFromRefusal(result: LockCasResult, instanceId: string, now
   return classifyLock(result.record, instanceId, now);
 }
 
+/** F1 (round 3, BLOCKING): `acquired: true` with `record: null` (a wire
+ *  record that failed to parse — version skew) is NOT a success —
+ *  trusting it stores `held-by-me`/`record: null`, which poisons
+ *  `heartbeat()` (early-returns on `record === null` forever, never
+ *  demoting) and `runSaveWorkspace` (empty token skips its own backend
+ *  check — ungated write). Normalize into `unverifiable` so every
+ *  existing handler (the demotion streak, `statusFromRefusal`) covers it —
+ *  mirrors `acquireDestinationLock`'s pre-existing ad hoc guard. */
+function normalizeCasResult(result: LockCasResult): LockCasResult {
+  if (result.acquired && result.record === null) {
+    return { acquired: false, record: null, unverifiable: true };
+  }
+  return result;
+}
+
 export const useProjectLock = create<ProjectLockState>((set, get) => ({
   status: "unlocked",
   record: null,
@@ -326,7 +341,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     }
     let result: LockCasResult;
     try {
-      result = await provider.tryAcquire(path);
+      result = normalizeCasResult(await provider.tryAcquire(path)); // F1
     } catch {
       return failClosed("held-by-other-live", current);
     }
@@ -355,7 +370,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     if (path === null || record === null || !canTakeOver(get().status)) return false;
     let result: LockCasResult;
     try {
-      result = await provider.takeOver(path, record.token ?? "");
+      result = normalizeCasResult(await provider.takeOver(path, record.token ?? "")); // F1
     } catch {
       return false;
     }
@@ -379,34 +394,35 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
 
   openAsCopy: () => {
     // `canRelease` refuses unless `record` actually names THIS instance,
-    // so an ordinary "someone else holds it" case is completely
-    // unaffected here — exactly the original behavior.
-    //
-    // F5 (code review follow-up, R4): when `record` DOES still name this
-    // instance — the unverifiable-demotion recovery path, where
-    // `heartbeat()` deliberately kept `record`/token intact through a
-    // demotion so a returning bridge could re-verify — Open as Copy is the
-    // user EXPLICITLY declining that claim. Leaving path/record/the streak
-    // in place would let a LATER successful heartbeat silently promote
-    // this session back to "held-by-me" on the path just relinquished (the
-    // heartbeat interval keeps polling on `unverifiableHeartbeats > 0`
-    // alone — see useProjectLockHeartbeat.ts — so it would still be
-    // running), blocking every other instance indefinitely with no visible
-    // "current project" left to release it from. Clear the local claim
-    // outright and best-effort release the real lock too, so a
-    // genuinely-still-held token is actually freed rather than left to
-    // expire only via staleness.
+    // so an ordinary "someone else holds it" case is unaffected. When it
+    // DOES name us (the unverifiable-demotion recovery path — `heartbeat()`
+    // deliberately keeps record/token through a demotion so a returning
+    // bridge can re-verify), Open as Copy is the user EXPLICITLY declining
+    // that claim: clear path/record/streak/status (F5 round 2+3 — leaving
+    // ANY of them would let a later successful heartbeat silently
+    // re-promote this session, or leave `status` a PHANTOM lock the
+    // status-gated Take Over command would still act on) and best-effort
+    // release the real lock so a genuinely-still-held token is freed
+    // rather than left to expire only via staleness.
     const { provider, path, record, instanceId } = get();
     if (path !== null && record !== null && canRelease(record, instanceId)) {
       void provider.release(path, record.token ?? "").catch(() => false);
     }
     useApp.getState().setCurrentProject(null);
-    set({ openedAsCopy: true, path: null, record: null, unverifiableHeartbeats: 0 });
+    set({ openedAsCopy: true, status: "unlocked", path: null, record: null, unverifiableHeartbeats: 0 });
   },
 
   heartbeat: async () => {
-    const { provider, path, record } = get();
+    const { provider, path, record, instanceId } = get();
     if (path === null || record === null) return false;
+    // F4 (round 3): bail BEFORE calling provider.refresh at all when the
+    // snapshot record no longer names THIS instance — a real CAS validates
+    // by token match, not caller identity, so sending a foreign token can
+    // legitimately succeed, bumping the INTRUDER's heartbeatAt on disk and
+    // delaying its legitimate stale-takeover. The post-await re-validation
+    // below only ever protected this session's own LOCAL state, never
+    // that remote side-effect of the call itself.
+    if (record.instanceId !== instanceId) return false;
     const token = record.token ?? "";
     // A thrown call is the SAME "unverifiable" shape a provider that
     // catches its own exceptions already reports (R4) — one failure mode.
@@ -416,21 +432,16 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     } catch {
       result = { acquired: false, record: null, unverifiable: true };
     }
-    // F1 (code review follow-up): re-validate against the LIVE store
-    // BEFORE any set() below — `path`/`record` above are a snapshot from
-    // before this await, during which the session could have switched
-    // projects (a straggler tick for the OLD path must never touch the
-    // NEW one) or already been superseded by a DIFFERENT completed call —
-    // including a straggler success CAS-succeeding on ANOTHER holder's own
-    // currently-valid token, which a real backend legitimately accepts
-    // regardless of who asked. Token AND instanceId both still matching
-    // the LIVE record (mirrors releaseLock's own instanceId guard) is
-    // exactly "the record on file still names the SAME identity this call
-    // started with" — by construction only `held-by-me` or an
-    // unverifiable-demoted placeholder (record kept, never touched) can
-    // satisfy it; a definite-loss/other-holder record never does, since
-    // only OUR OWN successful acquire/takeover ever adopts `instanceId` to
-    // match a record.
+    result = normalizeCasResult(result); // F1 (round 3): a null-record "success" is not a success
+    // F1 (round 2): re-validate against the LIVE store before any set()
+    // below — a straggler tick resolving after the session switched
+    // projects, or CAS-succeeding on ANOTHER holder's own currently-valid
+    // token (a real backend accepts by token match, not caller identity),
+    // must never write. Token AND instanceId both still matching the LIVE
+    // record (mirrors releaseLock's guard) is exactly "still the SAME
+    // identity this call started with" — a definite-loss/other-holder
+    // record never satisfies it, since only OUR OWN acquire/takeover ever
+    // adopts `instanceId` to match a record.
     const live = get();
     if (live.path !== path || live.record === null || live.record.token !== token || live.record.instanceId !== live.instanceId) {
       return false; // stale tick — drop the write entirely, touch nothing
