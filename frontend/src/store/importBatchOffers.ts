@@ -132,19 +132,36 @@ export async function presentBatchOutcome(
   // list is already in memory, so it's checked first; the global list is
   // only hydrated (dynamically imported) when that alone didn't settle it.
   if (createdIds.length === 1) {
-    const hasProjectRecipes = get().plotRecipes.length > 0;
-    const hasAnyRecipes =
-      hasProjectRecipes || (await import("./globalPlotRecipes")).hydratedGlobalRecipes().length > 0;
-    const dataset = hasAnyRecipes ? get().datasets.find((d) => d.id === createdIds[0]) : undefined;
-    const recipe = dataset ? await get().cleanMatchingPlotRecipe(dataset) : null;
-    if (recipe && dataset) {
-      // FINDING 7: lead with "imported N file(s)" like every other candidate
-      // toast in this cascade, not a silent exception.
-      toast(`imported ${added} file${added === 1 ? "" : "s"} — apply recipe "${recipe.name}"?`, "ok", {
-        action: { label: "Apply", onClick: () => void get().applyPlotRecipeObject(recipe, dataset.id) },
-        ttlMs: TOAST_ACTION_TTL,
-      });
-      return;
+    // FINDING 3 (final code-review round): this whole branch is wrapped so
+    // `presentBatchOutcome` can NEVER reject. The caller
+    // (importDatasets.ts's `runImport`) awaits this call and then
+    // unconditionally checks `if (lastError) toast(..., "danger")` right
+    // after it -- an uncaught rejection here (e.g. a dynamic chunk-load
+    // failure in `cleanMatchingPlotRecipe`'s own `recipeLibs()`/
+    // `globalPlotRecipes.ts` imports) would propagate out of this function,
+    // skip that danger toast for a genuinely failed file, AND leak an
+    // unhandled rejection out of `runImport` -- a suggestion feature must
+    // never be able to break error reporting for an unrelated failure in
+    // the same batch. A failure here silently degrades to the plain
+    // "imported N" toast below, exactly like "no clean match found" already
+    // does.
+    try {
+      const hasProjectRecipes = get().plotRecipes.length > 0;
+      const hasAnyRecipes =
+        hasProjectRecipes || (await import("./globalPlotRecipes")).hydratedGlobalRecipes().length > 0;
+      const dataset = hasAnyRecipes ? get().datasets.find((d) => d.id === createdIds[0]) : undefined;
+      const recipe = dataset ? await get().cleanMatchingPlotRecipe(dataset) : null;
+      if (recipe && dataset) {
+        // FINDING 7: lead with "imported N file(s)" like every other
+        // candidate toast in this cascade, not a silent exception.
+        toast(`imported ${added} file${added === 1 ? "" : "s"} — apply recipe "${recipe.name}"?`, "ok", {
+          action: { label: "Apply", onClick: () => void get().applyPlotRecipeObject(recipe, dataset.id) },
+          ttlMs: TOAST_ACTION_TTL,
+        });
+        return;
+      }
+    } catch {
+      // Fall through to the plain toast below.
     }
   }
   toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");

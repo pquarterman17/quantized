@@ -7,6 +7,8 @@ import { captureRecipe, type PlotRecipe } from "../../../lib/plotRecipe";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
+import type { PendingPlotRecipeApplication } from "../../../store/plotRecipes";
+import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import RecipeManagerPanel from "./RecipeManagerPanel";
 
@@ -44,6 +46,7 @@ beforeEach(() => {
     status: "",
   });
   useGlobalPlotRecipes.setState({ recipes: [], hydrated: true });
+  useRecipeManager.setState({ open: false });
 });
 
 describe("RecipeManagerPanel — listing", () => {
@@ -138,6 +141,61 @@ describe("RecipeManagerPanel — actions", () => {
     // STATE, not the call itself -- waits on the real async apply-path
     // (recipeLibs()'s dynamic import) to actually land its figure.
     await waitFor(() => expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1));
+  });
+
+  // FINDING 2 (code-review): both handlers from a rapid double-click pass
+  // `applyRow`'s synchronous checks before either await on the apply
+  // path's dynamic chunk load resolves, so without a guard, BOTH complete
+  // and TWO figures land from one gesture.
+  it("a rapid double-click on Apply creates only ONE figure", async () => {
+    useApp.setState({ plotRecipes: [recipe("p1", "Original")] });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    render(<RecipeManagerPanel />);
+    const applyButton = screen.getByRole("button", { name: "Apply" });
+    fireEvent.click(applyButton);
+    fireEvent.click(applyButton); // no await between -- the race
+
+    await waitFor(() => expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1));
+    // Give a second, unguarded apply every chance to also land before
+    // asserting it didn't.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+  });
+
+  // FINDING 5 (code-review): the manager can open OVER an existing staged
+  // preview+confirm dialog (e.g. via the command palette) -- the panel's
+  // close-on-staged check must be able to tell "THIS apply staged
+  // something" from "a pending was already sitting there before I ever
+  // clicked Apply". A refused apply (technique mismatch) never touches
+  // `pendingRecipeApplication` at all, so the pre-existing one is still
+  // there afterward -- the old `pendingRecipeApplication truthy` check
+  // couldn't distinguish that from "I just staged one", and closed anyway.
+  it("a refused apply with a pre-existing staged pending leaves it untouched AND keeps the panel open", async () => {
+    const projectRecipe = recipe("p1", "XRD Recipe"); // captured for xrd.powder
+    const mismatchedDataset = dataset("d2");
+    mismatchedDataset.data.metadata = { technique: "magnetometry.mvsh" };
+    useApp.setState({
+      plotRecipes: [projectRecipe],
+      datasets: [dataset("d1"), mismatchedDataset],
+    });
+    const preExisting = {
+      recipe: projectRecipe,
+      datasetId: "d1",
+      resolution: {} as PendingPlotRecipeApplication["resolution"],
+    } satisfies PendingPlotRecipeApplication;
+    useApp.setState({ pendingRecipeApplication: preExisting });
+    useRecipeManager.setState({ open: true });
+
+    render(<RecipeManagerPanel />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "d2" } }); // mismatched technique
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(useApp.getState().status).toContain("unavailable"));
+    expect(useApp.getState().pendingRecipeApplication).toBe(preExisting); // identity, untouched
+    expect(useRecipeManager.getState().open).toBe(true); // the panel never closed itself
   });
 
   it("surfaces the malformed-import error message inline", async () => {

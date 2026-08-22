@@ -16,6 +16,14 @@
 // uses -- not by id alone, so two rows that happen to share an id across
 // scopes (legacy data, or any future edge case) can never cross-wire their
 // rename inputs.
+//
+// FINDING 2/5 (final code-review round): `applyRow` below carries a
+// per-PANEL in-flight guard (finding 2 -- a rapid double-click must not
+// create two figures) and captures `pendingRecipeApplication` BEFORE
+// calling apply, comparing it by IDENTITY against the post-apply value
+// (finding 5 -- the manager can open over an ALREADY-staged preview+confirm
+// dialog, and a refused apply never touches that pre-existing pending, so a
+// bare truthiness check can't tell "mine" from "someone else's").
 
 import { useEffect, useRef, useState } from "react";
 
@@ -57,6 +65,16 @@ export default function RecipeManagerPanel() {
   const [error, setError] = useState<string | null>(null);
   const projectImportRef = useRef<HTMLInputElement>(null);
   const globalImportRef = useRef<HTMLInputElement>(null);
+  // FINDING 2 (code-review): a per-PANEL in-flight guard, not per-row --
+  // `applyRow`'s only synchronous checks used to be `datasetId`/refusal, so
+  // two rapid clicks (even on two DIFFERENT rows) both pass them before
+  // either await on the apply path's dynamic chunk load resolves, landing
+  // TWO figures from what should read as one gesture. `applyingRef` is the
+  // actual bail check (belt) -- synchronous, so it closes the window a
+  // same-tick second click could slip through before React re-renders the
+  // `disabled` prop (braces) that blocks the ordinary double-click case.
+  const applyingRef = useRef(false);
+  const [applying, setApplying] = useState(false);
 
   // Defensive re-hydrate: App.tsx's boot effect already loads the global list
   // once (see store/globalPlotRecipes.ts's header), but `hydrate()` itself is
@@ -91,12 +109,26 @@ export default function RecipeManagerPanel() {
   };
 
   const applyRow = (row: (typeof rows)[number]): void => {
-    if (!datasetId) return;
+    if (!datasetId || applyingRef.current) return; // finding 2: bail while an apply is already in flight
+    applyingRef.current = true;
+    setApplying(true);
+    // FINDING 5 (code-review): captured BEFORE the apply -- the manager can
+    // open OVER an already-staged preview+confirm dialog (e.g. via the
+    // palette), and a REFUSED apply never touches `pendingRecipeApplication`
+    // at all, leaving that pre-existing one sitting there. Comparing the
+    // post-apply value against THIS captured snapshot (by identity, not just
+    // truthiness) is what tells "this apply just staged something new" apart
+    // from "there was already one there that isn't mine".
+    const pendingBefore = useApp.getState().pendingRecipeApplication;
     void applyRecipeToDataset(row.recipe, datasetId).then((ok) => {
+      applyingRef.current = false;
+      setApplying(false);
+      const pendingAfter = useApp.getState().pendingRecipeApplication;
       // Close on a clean apply OR once a preview+confirm has been staged for
-      // it (PlotRecipeApplyDialog takes over from there) -- stay open only on
-      // an outright refusal, so the user can try a different dataset.
-      if (ok || useApp.getState().pendingRecipeApplication) close();
+      // THIS gesture (PlotRecipeApplyDialog takes over from there) -- stay
+      // open on an outright refusal (even with an unrelated pending still
+      // sitting there), so the user can try a different dataset.
+      if (ok || (pendingAfter !== null && pendingAfter !== pendingBefore)) close();
     });
   };
 
@@ -174,7 +206,7 @@ export default function RecipeManagerPanel() {
                     {row.recipe.name}
                   </span>
                 )}
-                <Button size="sm" disabled={!datasetId} onClick={() => applyRow(row)}>
+                <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(row)}>
                   Apply
                 </Button>
                 <Button

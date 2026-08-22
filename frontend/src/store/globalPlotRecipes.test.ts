@@ -195,3 +195,80 @@ describe("finding 5 — hydrate-before-mutate guard", () => {
     expect(persisted).toHaveLength(2);
   });
 });
+
+// FINDING 1 (final code-review round): hydrate-once + a whole-list `setAll`
+// built from the CACHED `.recipes` is last-writer-wins at list granularity --
+// a second tab's write landing on disk between this tab's hydrate and its
+// next mutation gets silently erased, because the mutation computes its new
+// list from the stale in-memory cache, never re-checking disk. Every
+// mutating action must re-read localStorage FRESH immediately before
+// computing its own single by-id mutation (the GraphTemplate precedent,
+// lib/figuredoc.ts's `saveGraphTemplate`/`deleteGraphTemplate`, each of which
+// calls `loadGraphTemplates()` fresh at the top of its own body).
+describe("finding 1 — fresh-read-before-write survives a concurrent tab's write", () => {
+  it("a raw write simulating another tab, landing between hydrate and a local rename, survives the rename", () => {
+    // Tab A hydrates, seeing only "r1".
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "Original")]));
+    useGlobalPlotRecipes.getState().hydrate();
+    expect(useGlobalPlotRecipes.getState().recipes.map((r) => r.id)).toEqual(["r1"]);
+
+    // Tab B writes "r2" directly to storage -- Tab A's in-memory cache never
+    // sees this (no cross-tab storage-event listener in this store).
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "Original"), recipe("r2", "FromTabB")]),
+    );
+
+    // Tab A renames r1, working off its (now stale) cache.
+    useGlobalPlotRecipes.getState().rename("r1", "Renamed");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id).sort()).toEqual(["r1", "r2"]); // tab B's recipe survived
+    expect(persisted.find((r) => r.id === "r2")?.name).toBe("FromTabB");
+    expect(persisted.find((r) => r.id === "r1")?.name).toBe("Renamed");
+  });
+
+  it("duplicate survives a concurrent tab's write", () => {
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "One")]));
+    useGlobalPlotRecipes.getState().hydrate();
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "One"), recipe("r2", "FromTabB")]),
+    );
+
+    useGlobalPlotRecipes.getState().duplicate("r1");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toContain("r2"); // tab B's recipe survived
+    expect(persisted).toHaveLength(3); // r1, r2 (tab B), r1's duplicate
+  });
+
+  it("remove survives a concurrent tab's write", () => {
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "One")]));
+    useGlobalPlotRecipes.getState().hydrate();
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "One"), recipe("r2", "FromTabB")]),
+    );
+
+    useGlobalPlotRecipes.getState().remove("r1");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toEqual(["r2"]); // tab B's recipe survived the removal of r1
+  });
+
+  it("copyIn survives a concurrent tab's write", () => {
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "One")]));
+    useGlobalPlotRecipes.getState().hydrate();
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "One"), recipe("r2", "FromTabB")]),
+    );
+
+    useGlobalPlotRecipes.getState().copyIn(recipe("external-id", "External"));
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toContain("r2"); // tab B's recipe survived
+    expect(persisted).toHaveLength(3);
+  });
+});

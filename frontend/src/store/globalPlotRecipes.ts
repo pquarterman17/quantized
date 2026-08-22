@@ -42,24 +42,25 @@
 // synchronously in the same call, so the in-memory `recipes` array and
 // localStorage never drift apart.
 //
-// FINDING 5 (code-review): every mutating action below calls `get().hydrate()`
-// as its OWN first statement, before reading `get().recipes` to compute the
-// list it will persist. Without this, a mutation that runs before ANY
-// hydrate() has landed this session (a race with App.tsx's boot effect, or a
-// direct call from a test/entry point that skips it) would read the
-// in-memory `[]` default and persist a list built from THAT -- clobbering
-// whatever was already in localStorage down to just the one new/changed
-// entry. `hydrate()` itself is synchronous (a plain localStorage read) and
-// idempotent (guarded by `hydrated`), so calling it unconditionally here
-// costs nothing on the common already-hydrated path. `setAll` itself is
-// deliberately NOT included in this guard -- its whole contract is "replace
-// the list with EXACTLY what the caller computed"; the guard belongs at the
-// point a new list gets COMPUTED from `.recipes`, which is every other
-// action below (and `hydratedGlobalRecipes()`, the external read every
-// OTHER module that needs this list -- store/plotRecipes.ts's
-// matchingPlotRecipes/cleanMatchingPlotRecipe, store/importBatchOffers.ts's
-// empty-scope check, recipeManagerActions.ts's copy/import -- must call
-// instead of touching `.recipes` raw).
+// FINDING 5 (code-review, superseded by FINDING 1 below): every mutating
+// action originally called `get().hydrate()` as its own first statement,
+// before reading `get().recipes` to compute the list it would persist --
+// fixing the case where a mutation runs before ANY hydrate() has landed this
+// session. FINDING 1 (final code-review round) found that guard insufficient:
+// once hydrated, EVERY mutating action kept computing its new list from the
+// CACHED `.recipes` -- last-writer-wins at list granularity, silently
+// erasing a write another tab made to localStorage directly (no
+// `storage`-event listener syncs this store across tabs) between this tab's
+// hydrate and its next mutation. `rename`/`duplicate`/`remove`/`copyIn` below
+// now each RE-READ `loadGlobalPlotRecipes()` FRESH, immediately before
+// computing their own single by-id mutation -- the GraphTemplate precedent
+// (`lib/figuredoc.ts`'s `saveGraphTemplate`/`deleteGraphTemplate`, which each
+// call `loadGraphTemplates()` fresh at the top of their own body) rather than
+// trusting any in-memory cache. This also strictly subsumes FINDING 5's
+// original guard (a fresh disk read is correct whether or not `hydrate()`
+// ever ran) so the separate `get().hydrate()` calls are gone -- `setAll`
+// (the final persist+cache-update step every action still funnels through)
+// now also stamps `hydrated: true`, since a fresh read IS an up-to-date view.
 
 import { create } from "zustand";
 
@@ -76,26 +77,30 @@ interface GlobalPlotRecipesState {
   /** Load from localStorage once; a repeat call after the first is a no-op
    *  (never clobbers an in-session edit with a stale disk read). */
   hydrate: () => void;
-  /** Replace the whole list verbatim AND persist it -- the seam every other
-   *  action below funnels through. Deliberately does NOT hydrate first (see
-   *  the module doc's FINDING 5 note) -- the caller is trusted to have
-   *  already computed the complete intended list. */
+  /** Persist `list` verbatim and update the in-memory cache to match -- the
+   *  final persist+cache-update step every other action below funnels
+   *  through, AFTER it has already computed `list` from a FRESH disk read
+   *  (finding 1). Also stamps `hydrated: true`: a list this action just
+   *  wrote IS the current, authoritative disk state, so a later `hydrate()`
+   *  call correctly treats this session as already up to date. */
   setAll: (list: PlotRecipe[]) => void;
   /** No-op for an unknown id or a blank/unchanged name. A name collision
    *  with another GLOBAL recipe DEDUPES (mirrors `renamePlotRecipe`).
-   *  Hydrates first (finding 5). */
+   *  Re-reads localStorage fresh before mutating (finding 1). */
   rename: (id: string, name: string) => void;
-  /** No-op (null) for an unknown id. Returns the copy's id. Hydrates first
-   *  (finding 5). */
+  /** No-op (null) for an unknown id. Returns the copy's id. Re-reads
+   *  localStorage fresh before mutating (finding 1). */
   duplicate: (id: string) => string | null;
-  /** No-op for an unknown id. Hydrates first (finding 5). */
+  /** No-op for an unknown id. Re-reads localStorage fresh before mutating
+   *  (finding 1). */
   remove: (id: string) => void;
   /** ORCHESTRATOR RULING B: add an EXTERNAL recipe (e.g. from the project
    *  scope) under a FRESH id -- never the source's own -- with its name
    *  deduped against this scope's own list. The source is never read or
    *  mutated by this action; the caller (recipeManagerActions.ts's
    *  `copyRecipeToOtherScope`) owns finding it and deciding whether to
-   *  remove/keep it. Returns the new copy's id. Hydrates first (finding 5). */
+   *  remove/keep it. Returns the new copy's id. Re-reads localStorage fresh
+   *  before mutating (finding 1). */
   copyIn: (recipe: PlotRecipe) => string;
 }
 
@@ -110,14 +115,13 @@ export const useGlobalPlotRecipes = create<GlobalPlotRecipesState>((set, get) =>
 
   setAll: (list) => {
     saveGlobalPlotRecipes(list);
-    set({ recipes: list });
+    set({ recipes: list, hydrated: true });
   },
 
   rename: (id, name) => {
-    get().hydrate(); // finding 5
     const nm = name.trim();
     if (!nm) return;
-    const list = get().recipes;
+    const list = loadGlobalPlotRecipes(); // finding 1: fresh, never the cached `.recipes`
     const src = list.find((r) => r.id === id);
     if (!src || src.name === nm) return;
     const dedupedName = dedupeWindowTitle(nm, list.filter((r) => r.id !== id).map((r) => r.name));
@@ -126,8 +130,7 @@ export const useGlobalPlotRecipes = create<GlobalPlotRecipesState>((set, get) =>
   },
 
   duplicate: (id) => {
-    get().hydrate(); // finding 5
-    const list = get().recipes;
+    const list = loadGlobalPlotRecipes(); // finding 1
     const src = list.find((r) => r.id === id);
     if (!src) return null;
     const dedupedName = dedupeWindowTitle(`${src.name} copy`, list.map((r) => r.name));
@@ -138,14 +141,13 @@ export const useGlobalPlotRecipes = create<GlobalPlotRecipesState>((set, get) =>
   },
 
   remove: (id) => {
-    get().hydrate(); // finding 5
-    if (!get().recipes.some((r) => r.id === id)) return;
-    get().setAll(get().recipes.filter((r) => r.id !== id));
+    const list = loadGlobalPlotRecipes(); // finding 1
+    if (!list.some((r) => r.id === id)) return;
+    get().setAll(list.filter((r) => r.id !== id));
   },
 
   copyIn: (recipe) => {
-    get().hydrate(); // finding 5
-    const list = get().recipes;
+    const list = loadGlobalPlotRecipes(); // finding 1
     const dedupedName = dedupeWindowTitle(recipe.name, list.map((r) => r.name));
     const now = new Date().toISOString();
     const copy: PlotRecipe = { ...structuredClone(recipe), id: nextGlobalRecipeId(), name: dedupedName, createdAt: now, modifiedAt: now };

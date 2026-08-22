@@ -208,22 +208,18 @@ export interface PlotRecipesSlice {
    *  quickPlotTemplates ?? []` at workspace load -- a load is not a user
    *  edit). */
   setPlotRecipes: (list: PlotRecipe[]) => void;
-  /** Resolve `recipeId` against `datasetId`'s live dataset
-   *  (`resolveRecipe`) and either apply immediately (a clean match),
-   *  stage a `pendingRecipeApplication` (some fields unmatched -- zero
-   *  mutation until confirmed), or refuse (zero mutation, a status message).
-   *  Returns true only when a new figure was created THIS call -- a staged
-   *  pending apply returns false, same as a refusal. Async: lazy-loads
-   *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
+  /** Look up `recipeId` -- PROJECT scope first, then (finding 4) the
+   *  hydrated GLOBAL list on a project miss (composes with
+   *  `matchingPlotRecipes`'s both-scope results) -- then resolve against
+   *  `datasetId`'s live dataset and apply (clean match) / stage (unmatched)
+   *  / refuse. True only when a new figure was created THIS call. Async:
+   *  lazy-loads `resolveRecipe` (LAZY-LOADED note). */
   applyPlotRecipe: (recipeId: string, datasetId: string, opts?: ApplyPlotRecipeOptions) => Promise<boolean>;
-  /** Same resolve/apply/stage/refuse contract as `applyPlotRecipe`, but takes
-   *  the `PlotRecipe` OBJECT directly instead of an id looked up in
-   *  `state.plotRecipes` -- the seam a GLOBAL-scope recipe (never a member of
-   *  that project-scoped list; see `lib/plotRecipeStorage.ts`'s header on
-   *  `PlotRecipe` being location-agnostic) needs to apply through the SAME
-   *  canonical path a project-scope recipe uses, rather than the Recipe
-   *  Manager panel re-deriving its own apply logic. Async: lazy-loads
-   *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
+  /** Same contract as `applyPlotRecipe`, but takes the `PlotRecipe` OBJECT
+   *  directly instead of an id looked up across both scopes -- for a caller
+   *  that already HAS it (the Recipe Manager panel; `PlotRecipe` is
+   *  location-agnostic, `lib/plotRecipeStorage.ts`'s header). Async:
+   *  lazy-loads `resolveRecipe` (LAZY-LOADED note). */
   applyPlotRecipeObject: (recipe: PlotRecipe, datasetId: string, opts?: ApplyPlotRecipeOptions) => Promise<boolean>;
   /** Confirm a staged apply. Never trusts the staged resolution -- RE-RESOLVES
    *  against `pending.datasetId`'s CURRENT dataset first (see the module
@@ -368,7 +364,11 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
 
     applyPlotRecipe: async (recipeId, datasetId) => {
       const { resolveRecipe } = await recipeLibs();
-      const recipe = get().plotRecipes.find((r) => r.id === recipeId);
+      // Finding 4: fall back to the hydrated global list on a project miss
+      // (dynamic import, never static -- LAZY-LOADED note), so this composes
+      // with matchingPlotRecipes's own both-scope results.
+      let recipe = get().plotRecipes.find((r) => r.id === recipeId);
+      if (!recipe) recipe = (await import("./globalPlotRecipes")).hydratedGlobalRecipes().find((r) => r.id === recipeId);
       if (!recipe) {
         set({ status: "Plot Recipe unavailable: recipe not found" });
         return false;

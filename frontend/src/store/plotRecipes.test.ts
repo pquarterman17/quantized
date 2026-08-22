@@ -331,6 +331,27 @@ describe("applyPlotRecipe", () => {
     expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
   });
 
+  // FINDING 4 (final code-review round): matchingPlotRecipes/
+  // cleanMatchingPlotRecipe already span BOTH scopes -- applyPlotRecipe(id)
+  // looking ONLY at the project list means the advertised pair ("here's a
+  // matching recipe" / "apply it by id") doesn't compose for a global result.
+  it("applies a GLOBAL-only recipe by id -- the project-list miss falls back to the hydrated global list", async () => {
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const globalOnly = captureRecipe(dataset("d1"), view, null, {
+      id: "global-only-id",
+      name: "Global Recipe",
+      appVersion: "0",
+    });
+    useGlobalPlotRecipes.setState({ recipes: [globalOnly], hydrated: true });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipe("global-only-id", "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().plotRecipes).toHaveLength(0); // never copied into the project list
+  });
+
   it("unmatched fields stage a pending application (zero mutation)", async () => {
     const id = await saved();
     const savedRecipes = useApp.getState().plotRecipes;
