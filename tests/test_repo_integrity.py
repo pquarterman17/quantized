@@ -85,8 +85,9 @@ def test_no_god_modules() -> None:
 # drifted to 506 — the lib/api.ts failure class, one directory over). Same
 # ceiling; files already over it are pinned at their found size and may only
 # shrink. Never add a pin — split instead.
-TOOLS_PINS = {
-    "tools/origin_compare/export_origin_graphs.py": 506,
+TOOLS_PINS: dict[str, int] = {
+    # (export_origin_graphs.py graduated 2026-08-21: manifest checkpoint
+    # helpers extracted to manifest_checkpoint.py, 507 -> 489 lines.)
 }
 
 
