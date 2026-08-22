@@ -103,14 +103,12 @@ the ones specific to THIS script (found live, 2026-07-09, while building it):
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any
 
 TARGET_WIDTH_PX = 1200
 SUSPICIOUS_BYTES_FLOOR = 10_000  # a real graph render should exceed this
@@ -212,12 +210,13 @@ def png_dims(path: Path) -> tuple[int, int] | None:
 
 from manifest_checkpoint import load_manifest, write_manifest  # noqa: E402
 
-
 # ── the export run ───────────────────────────────────────────────────────────
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("project", type=Path, help="path to an Origin .opj/.opju project file")
     ap.add_argument("--out", type=Path, default=None,
                      help="output dir (default: <project's parent>/_exports/<stem>)")
