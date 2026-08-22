@@ -824,6 +824,13 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // split slice: dialog state
   splitDialogTargetId: "target dataset for split operation; UI dialog state, ephemeral",
 
+  // plotRecipes slice (P1.3 wave 2 Lane B): the staged unmatched-fields
+  // preview+confirm result. Transient gesture state discarded on confirm/
+  // cancel -- never an edit itself (confirmPendingRecipeApplication's actual
+  // figure creation is the undoable gesture, via editableFigures/plotWindows
+  // already in HistorySnapshot), same class as separatePreview above.
+  pendingRecipeApplication: "staged plot-recipe apply preview (unmatched fields); transient gesture state, discarded on confirm/cancel, not an undoable edit",
+
   // workbookSeparate slice (LIBRARY_WORKBOOK_UX_PLAN PR J, L0.51): the
   // affected-item preview plan. Transient dialog state discarded on
   // commit/cancel — never an edit itself (commitSeparateWorksheets is the
