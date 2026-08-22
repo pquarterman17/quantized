@@ -39,44 +39,67 @@ function toLockRecord(wire: LockWireRecord | null): LockRecord | null {
   };
 }
 
-/** An `UnverifiableLock` (corrupt/unparseable lock file — never an
- *  exception) refuses outright (`acquired: false, record: null`) AND sets
- *  `unverifiable: true` — the flag `store/projectLock.ts`'s
- *  `statusFromRefusal` checks BEFORE deriving a `LockStatus`, specifically
- *  so a corrupt lock file is never classified as `"unlocked"` (which
- *  `classifyLock(null, ...)` would otherwise report — the exact "assume
- *  free" guess this whole path exists to prevent). */
-function toCasResult(out: LockWireOutcome | null, fallbackOk: boolean): LockCasResult {
-  if (out === null) return { acquired: fallbackOk, record: null };
+/** R4 fix (post-sprint independent review — was: `toCasResult(null, false)`
+ *  returned a refusal with `record: null` and NO `unverifiable` flag,
+ *  which `store/projectLock.ts`'s `statusFromRefusal` then classified as
+ *  plain `"unlocked"` — the exact "assume free" guess this whole path
+ *  exists to prevent, and precisely how open/heartbeat/takeover could
+ *  report `readOnly: false` after the bridge call never actually
+ *  succeeded).
+ *
+ *  `out === null` covers THREE distinct failure shapes, collapsed at the
+ *  wire layer (`lib/desktopLockBridge.ts`'s own doc): no bridge method at
+ *  all, the bridge call THROWING, and a MALFORMED response (not even a
+ *  plain object — `isPlausibleOutcome`'s guard there). None of the three
+ *  is "nothing holds this lock" — they are all "we could not ask", so
+ *  every one of them now maps to the SAME explicit `unverifiable: true`
+ *  refusal a corrupt/unparseable lock file already produced (an
+ *  `UnverifiableLock`, `out.unverifiable === true`, never an exception).
+ *  There is deliberately no longer a `fallbackOk` parameter — every call
+ *  site below always wanted `false` (never guess acquired on ANY failure
+ *  shape), and the parameter's mere existence is what let the `out ===
+ *  null` branch quietly skip setting the flag in the first place.
+ *
+ *  `out.contended` — R1's now-landed backend contract (main@fc85560):
+ *  `contended` rides a SUCCESS (`ok`/`acquired: true`, a "soft success"
+ *  after the backend internally retried past momentary OS-lock
+ *  contention) — purely informational, never a refusal on its own. A
+ *  BOUNDED refusal (contention exhausted its retry budget) arrives as an
+ *  ordinary `unverifiable: true` refusal, already handled above. This
+ *  function therefore does NOT special-case `contended` at all — it is
+ *  passed straight through on whatever `out.ok` actually says, exactly
+ *  like every other informational field. (An earlier version of this
+ *  function forced `contended: true` into a fake `acquired: false`
+ *  refusal, based on a since-superseded pre-landing guess at the wire
+ *  shape — that would have silently dropped every real soft-success.) */
+function toCasResult(out: LockWireOutcome | null): LockCasResult {
+  if (out === null) return { acquired: false, record: null, unverifiable: true };
   if (out.unverifiable) return { acquired: false, record: null, unverifiable: true };
-  return { acquired: out.ok, record: toLockRecord(out.record) };
+  return { acquired: out.ok, record: toLockRecord(out.record), contended: out.contended };
 }
 
 export function createDesktopLockProvider(): LockProvider {
   return {
+    // `read` stays a bare `LockRecord | null` (store/projectLock.ts's
+    // `LockProvider.read` contract — display/classification only, never
+    // itself a write decision) — a `null` here from ANY cause (no bridge,
+    // a thrown call, a malformed response, OR a genuinely unverifiable
+    // lock file) is equally non-authoritative, because every MUTATING verb
+    // below re-verifies independently via its own CAS and now correctly
+    // flags `unverifiable` on refusal regardless of what a prior `read`
+    // believed — see this module's header and `store/projectLock.ts`'s own
+    // "read is the one non-mutating, best-effort member" doc.
     read: async (path) => {
       const out = await readProjectLock(path);
       if (out === null || out.unverifiable) return null;
       return toLockRecord(out.record);
     },
 
-    tryAcquire: async (path) => {
-      const out = await acquireProjectLock(path);
-      // `out === null` ("no bridge, or a thrown exception") must NEVER be
-      // treated as "acquired" — `fallbackOk: false` is what keeps this
-      // fail-closed, unlike a bare `out?.ok ?? true` would.
-      return toCasResult(out, false);
-    },
+    tryAcquire: async (path) => toCasResult(await acquireProjectLock(path)),
 
-    refresh: async (path, token) => {
-      const out = await refreshProjectLock(path, token);
-      return toCasResult(out, false);
-    },
+    refresh: async (path, token) => toCasResult(await refreshProjectLock(path, token)),
 
-    takeOver: async (path, expectedToken) => {
-      const out = await takeOverProjectLock(path, expectedToken);
-      return toCasResult(out, false);
-    },
+    takeOver: async (path, expectedToken) => toCasResult(await takeOverProjectLock(path, expectedToken)),
 
     release: async (path, token) => {
       return releaseProjectLock(path, token);

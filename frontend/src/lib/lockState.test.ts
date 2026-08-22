@@ -11,6 +11,7 @@ import {
   refreshHeartbeat,
   STALE_AFTER_MS,
   takeOver,
+  UNVERIFIABLE_DEMOTE_AFTER,
   verifyBeforeWrite,
   type LockRecord,
 } from "./lockState";
@@ -50,6 +51,13 @@ describe("classifyLock — the four-state table", () => {
 
   it("STALE_AFTER_MS is three heartbeat intervals (documented reasoning, pinned)", () => {
     expect(STALE_AFTER_MS).toBe(3 * HEARTBEAT_INTERVAL_MS);
+  });
+});
+
+describe("UNVERIFIABLE_DEMOTE_AFTER — R4's heartbeat fail-closed demotion trigger", () => {
+  it("is three consecutive heartbeats — the same wall-clock budget as STALE_AFTER_MS (documented reasoning, pinned)", () => {
+    expect(UNVERIFIABLE_DEMOTE_AFTER).toBe(3);
+    expect(UNVERIFIABLE_DEMOTE_AFTER * HEARTBEAT_INTERVAL_MS).toBe(STALE_AFTER_MS);
   });
 });
 

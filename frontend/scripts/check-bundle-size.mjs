@@ -176,8 +176,70 @@ import { fileURLToPath } from "node:url";
  *  remaining delta is the slice itself — synchronous store logic of the
  *  same class the 2026-08-21 entry declined to degrade to dodge this
  *  tripwire. Measured 918,771 B; budget = measured + 1,024. Same rule
- *  stands: never raise without measuring, defer panels/modules first. */
-const EAGER_JS_BUDGET = 919_795;
+ *  stands: never raise without measuring, defer panels/modules first.
+ *
+ *  2026-08-22 (same day, R4 code-review follow-up, findings F1/F3/F5) —
+ *  921,068 after two BLOCKING two-writer/fail-open fixes in
+ *  store/projectLock.ts's `heartbeat()` (F1: re-validate the LIVE store's
+ *  path + record identity — token AND instanceId — immediately after the
+ *  CAS await and before ANY set(), or a straggler tick resolving after a
+ *  project switch, or CAS-succeeding on ANOTHER holder's own
+ *  currently-valid token, could silently promote this session onto a lock
+ *  it does not own) plus two correctness gaps the same review found (F3:
+ *  `openProject`/`takeOverEditing` must reset `unverifiableHeartbeats` on
+ *  success, or a carried streak demotes a brand-new session after one
+ *  blip; F5: `openAsCopy` must clear path/record/the streak, or a
+ *  recovering bridge could silently re-acquire a lock the user explicitly
+ *  relinquished). None of the four is a deferrable panel or user-action-
+ *  gated module — this is the SAME session-lifecycle store logic the
+ *  2026-08-21/22 entries above already established as the irreducible-
+ *  eager class; `createInMemoryLockProvider` was extracted to its own
+ *  sibling module (store/inMemoryLockProvider.ts) first for the SEPARATE
+ *  500-line god-module ceiling, which does not change eager byte count
+ *  (same code, still statically imported). Local-variable trims (removed
+ *  redundant `startPath`/`startToken` snapshots in favor of the
+ *  already-destructured `path`/`token`) recovered only ~4 B — minification
+ *  already collapses identifier names, confirming the remaining delta is
+ *  real new branching, not naming. Measured 920,044 B; budget = measured +
+ *  1,024, same 1 kB rounding-room convention as the two entries above.
+ *  NEVER raise this again without the same measure-first discipline —
+ *  split a panel out or defer a module instead.
+ *
+ *  2026-08-22 (same day, R4 round-3 code review, findings F1/F2/F4/F5) —
+ *  921,226 after a further BLOCKING two-writer/fail-open fix (F1: a
+ *  provider reporting `acquired: true` with `record: null` — a wire
+ *  record that failed to parse — was NOT normalized into `unverifiable`
+ *  at THREE call sites in store/projectLock.ts, so it could be stored as
+ *  `held-by-me`/`record: null`, poisoning `heartbeat()` — stuck forever,
+ *  never demoting — and `runSaveWorkspace` — an empty token skips its own
+ *  backend check, an ungated write) plus three more correctness gaps (F2:
+ *  a third fresh-acquisition site, store/workspaceIO.ts's Save-As success
+ *  path, also needed the F3-round-2 `unverifiableHeartbeats` reset; F4: an
+ *  ownership pre-check in `heartbeat()` BEFORE calling `provider.refresh`
+ *  at all, so a foreign-instanceId record's token is never sent to a real
+ *  backend CAS in the first place — closing a remote side-effect the
+ *  round-2 post-await re-validation could only ever half-close locally;
+ *  F5: `openAsCopy` must also reset `status` to `"unlocked"`, not just
+ *  clear path/record, or a phantom "held-by-other-*" status keeps the
+ *  Take Over Editing gate acting on a lock this session no longer tracks).
+ *  Same irreducible session-lifecycle-store class as every prior entry.
+ *  F6 of the SAME review (deduplicating `lib/desktopLockBridge.ts`'s
+ *  triplicated acquire/refresh/takeover parsing into one
+ *  `parseCasOutcome` helper) was expected to recoup eager bytes but did
+ *  NOT move this number at all — `desktopLockBridge.ts`/
+ *  `desktopLockProvider.ts` are reached only through `App.tsx`'s dynamic
+ *  `import("./lib/desktopLockProvider")` (verified: no static importer
+ *  exists anywhere in `src/`), so that file was never part of the EAGER
+ *  graph this script measures; the dedup is a real, worthwhile
+ *  simplification of a LAZY chunk, just not a lever on this number. The
+ *  net effect this round is genuinely a small further RAISE, not the
+ *  lowering the review anticipated: measured 920,202 B (up from the prior
+ *  920,044 B entry — real new eager branching, not measurement noise);
+ *  920,202 + 1,024 = 921,226. Still comfortably inside `SLACK` of the
+ *  prior pin, so no forced ratchet-down applies here either direction.
+ *  NEVER raise this again without the same measure-first discipline —
+ *  split a panel out or defer a module instead. */
+const EAGER_JS_BUDGET = 921_226;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
