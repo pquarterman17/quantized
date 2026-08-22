@@ -42,7 +42,7 @@ single-byte read silently dropped every note past ~127 chars, fixed
 2026-07-06 against ``notes_real.opju`` (a real 717-char note loaded via
 ``open -n``, holding Windows paths and inequalities). Text decodes
 UTF-8-first (latin-1 fallback), and the internal-junk filter keys on named
-OriginStorage/CDATA tokens only — NOT bare ``\``/``<``/``>``, which real
+OriginStorage/CDATA tokens only — NOT bare ``\\``/``<``/``>``, which real
 notes legitimately carry. It still matches **zero** records across the whole
 real corpus (none carry a notes window), so it attaches nothing
 speculatively — the false-positive bar the earlier log-only scan set. Notes
