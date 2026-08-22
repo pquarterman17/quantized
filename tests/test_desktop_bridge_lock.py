@@ -7,13 +7,16 @@ js_api adapters over :mod:`quantized.desktop_project_lock`, plus
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import quantized.desktop_project_lock as lockmod
 from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import clear_consent
+from quantized.desktop_project_lock_write import LockVerified, write_holding_token
 
 
 class FakeWindow:
@@ -240,13 +243,302 @@ def test_write_project_file_succeeds_with_the_current_lock_token(tmp_path: Path)
     assert Path(path).read_text(encoding="utf-8") == _workspace_json("ok")
 
 
-def test_write_project_file_with_a_token_proceeds_when_no_lock_file_exists(
+def test_write_project_file_with_a_non_empty_token_refuses_when_no_lock_file_exists(
     tmp_path: Path,
 ) -> None:
-    """Per the frozen contract: the token check only applies when a lock
-    file for `path` actually exists. A caller passing a token against a
-    never-acquired (or already-released) lock is NOT refused — there is
-    nothing to have lost."""
+    """R1 fix (defect (b)): an ABSENT lock file with a NON-EMPTY supplied
+    token is now refused, not waved through. The old contract ("nothing to
+    check against, proceed") let a caller whose lock had been released or
+    replaced elsewhere claim ownership was still verified when it was not
+    verifiable at all. `write_project_file` must never touch the file in
+    that case."""
     api, path = _write_consented(tmp_path)
+    original = _workspace_json("pre-existing")
+    Path(path).write_text(original, encoding="utf-8")
     out = api.write_project_file(path, _workspace_json("x"), lock_token="some-token-never-acquired")
+    assert out["ok"] is False
+    assert out["error"] == "lock lost"
+    assert Path(path).read_text(encoding="utf-8") == original
+
+
+def test_write_project_file_with_an_empty_token_still_writes_when_no_lock_file_exists(
+    tmp_path: Path,
+) -> None:
+    """The legacy no-lock path (empty token) is UNCHANGED by the R1 fix —
+    it never verifies anything, lock file present or not."""
+    api, path = _write_consented(tmp_path)
+    out = api.write_project_file(path, _workspace_json("x"))
     assert out["ok"] is True
+    assert Path(path).read_text(encoding="utf-8") == _workspace_json("x")
+
+
+# -- CONTENDED soft success (R1 code-review follow-up) -----------------------
+
+
+def _hold_the_lock_in_a_thread(
+    path: str, token: str, started: threading.Event, release: threading.Event
+) -> threading.Thread:
+    def _slow_write() -> None:
+        started.set()
+        release.wait(timeout=10.0)
+
+    def _run() -> None:
+        result = write_holding_token(path, token, _slow_write)
+        assert isinstance(result, LockVerified)
+
+    t = threading.Thread(target=_run)
+    t.start()
+    assert started.wait(timeout=2.0), "writer thread never acquired the lock"
+    return t
+
+
+def test_project_lock_refresh_maps_contended_to_a_non_demoting_soft_success(
+    tmp_path: Path,
+) -> None:
+    """RED-FIRST, end-to-end: a REAL second thread holds the exclusive OS
+    lock (via `write_holding_token`, the actual save path) for the whole
+    duration of `project_lock_refresh`'s own bounded acquire retry. The
+    bridge must report `refreshed: True` (never a demotion-worthy
+    `False`) carrying the LAST record this same `DesktopApi` genuinely
+    observed (from its own prior `project_lock_acquire`) — proving the
+    frontend's `record.token` for its NEXT save is never nulled out by a
+    merely-busy heartbeat tick (see `desktop_bridge.py`'s "CONTENDED soft
+    success" doc section for why a null record there would silently
+    defeat the R1 lock-held write for the very next save)."""
+    api, path = _write_consented(tmp_path)
+    acquired = api.project_lock_acquire(path)
+    assert acquired["acquired"] is True
+    token = acquired["record"]["token"]
+
+    started = threading.Event()
+    release = threading.Event()
+    writer = _hold_the_lock_in_a_thread(path, token, started, release)
+    try:
+        out = api.project_lock_refresh(path, token)
+    finally:
+        release.set()
+        writer.join(timeout=10.0)
+
+    assert out["refreshed"] is True
+    assert out.get("contended") is True
+    assert "unverifiable" not in out
+    assert out["record"] is not None
+    assert out["record"]["token"] == token  # echoed from the cache, never null/fabricated
+
+
+def test_project_lock_refresh_with_no_cached_record_falls_back_to_honest_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Guardrail on the soft-success mapping: without a previously
+    observed record to echo, the bridge must NOT fabricate a success —
+    it falls through to the same conservative `unverifiable: true`
+    refusal every other `Contended` case gets."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+    out = api.project_lock_refresh(path, "some-token")
+    assert out["refreshed"] is False
+    assert out.get("unverifiable") is True
+    assert out["record"] is None
+
+
+def test_project_lock_read_maps_contended_to_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`project_lock_read` is one of the "every other unprotected read
+    caller" sites the R1 follow-up ruling names — a busy lock is reported
+    the same conservative way an unverifiable one already is (the
+    frontend already treats that as "cannot verify — read-only")."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(_path: str) -> lockmod.Contended:
+        return lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "read", _contended)
+    out = api.project_lock_read(path)
+    assert out["record"] is None
+    assert out.get("unverifiable") is True
+
+
+def test_project_lock_acquire_maps_contended_to_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A one-shot acquire attempt that finds the lock merely busy reports
+    the same conservative `unverifiable: true` refusal — unlike `refresh`,
+    a one-shot user action has no recurring-heartbeat demotion hazard to
+    soften, so an honest "busy, try again" is correct here."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "acquire", _contended)
+    out = api.project_lock_acquire(path)
+    assert out["acquired"] is False
+    assert out.get("unverifiable") is True
+
+
+# -- F1/F4 (R1 round-3 review): the single-writer violation through the ----
+# CONTENDED soft success — token laundering via a poisoned cache.
+
+
+def test_project_lock_refresh_never_soft_succeeds_with_a_mismatched_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F1 (a): the soft-success mapping must compare the CALLER's own
+    presented token against the cached record's token — never soft-succeed
+    just because SOME record happens to be cached for this path. Simulates
+    a displaced/stale caller presenting a token that does not match what
+    this instance's cache actually holds; the honest refusal must win
+    (this is the exact shape a real cross-instance async race could hit
+    even with `_remember`'s cache scoping (F4, below) already fixed)."""
+    api, path = _write_consented(tmp_path)
+    acquired = api.project_lock_acquire(path)
+    assert acquired["acquired"] is True
+    real_token = acquired["record"]["token"]  # now cached under `path`
+    assert real_token
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+    out = api.project_lock_refresh(path, "a-different-stale-token")
+    assert out["refreshed"] is False
+    assert out.get("unverifiable") is True
+    assert out.get("contended") is not True  # never soft-succeeded
+
+
+def test_remember_never_caches_from_a_refused_acquire(tmp_path: Path) -> None:
+    """F4 (b): a REFUSED acquire's record belongs to WHOEVER currently
+    holds the lock — possibly a completely different instance. Caching it
+    would let a LATER contended heartbeat from THIS instance echo back
+    that other holder's live token (the token-laundering poisoning path
+    the round-3 review found)."""
+    api_a, path = _write_consented(tmp_path)
+    acquired_a = api_a.project_lock_acquire(path)
+    assert acquired_a["acquired"] is True
+
+    api_b = DesktopApi()
+    api_b.attach(FakeWindow([path]))
+    api_b.save_file_dialog(Path(path).name)
+    refused = api_b.project_lock_acquire(path)  # refused — the record is A's
+    assert refused["acquired"] is False
+    assert refused["record"]["instanceId"] == api_a._instance_id  # noqa: SLF001
+    assert path not in api_b._last_known_lock_record  # noqa: SLF001
+
+
+def test_remember_never_caches_from_a_plain_read(tmp_path: Path) -> None:
+    """F4 (b): a plain `project_lock_read` has no "mine vs. theirs" concept
+    at all — it reports WHATEVER is on disk, which may belong to a
+    different instance entirely."""
+    api_a, path = _write_consented(tmp_path)
+    assert api_a.project_lock_acquire(path)["acquired"] is True
+
+    api_b = DesktopApi()
+    api_b.attach(FakeWindow([path]))
+    api_b.save_file_dialog(Path(path).name)
+    read_out = api_b.project_lock_read(path)  # sees A's record, no side effect
+    assert read_out["record"] is not None
+    assert read_out["record"]["instanceId"] == api_a._instance_id  # noqa: SLF001
+    assert path not in api_b._last_known_lock_record  # noqa: SLF001
+
+
+def test_end_to_end_token_laundering_path_is_closed(tmp_path: Path) -> None:
+    """The FULL poisoning path the round-3 review described, run for
+    real: instance A reads B's live record (no caching happens per F4),
+    then A's own stale-token heartbeat hits contention — it must refuse
+    honestly rather than echo B's record and hand B's live token back to
+    the frontend as though it were A's own."""
+    api_b, path = _write_consented(tmp_path)
+    acquired_b = api_b.project_lock_acquire(path)
+    assert acquired_b["acquired"] is True
+    token_b = acquired_b["record"]["token"]
+
+    api_a = DesktopApi()
+    api_a.attach(FakeWindow([path]))
+    api_a.save_file_dialog(Path(path).name)
+    stale_token_a = "a-token-a-never-actually-won"
+    read_by_a = api_a.project_lock_read(path)  # A observes B's record
+    assert read_by_a["record"]["token"] == token_b
+
+    started = threading.Event()
+    release = threading.Event()
+    writer = _hold_the_lock_in_a_thread(path, token_b, started, release)
+    try:
+        out = api_a.project_lock_refresh(path, stale_token_a)
+    finally:
+        release.set()
+        writer.join(timeout=10.0)
+
+    assert out["refreshed"] is False
+    assert out.get("contended") is not True
+    assert out.get("unverifiable") is True
+    # Never echoes B's live token to A under any key in the response.
+    assert token_b not in repr(out)
+
+
+# -- F6 (R1 round-3 review): bound consecutive CONTENDED soft successes ----
+
+
+def test_project_lock_refresh_demotes_after_two_consecutive_contended_ticks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6: the soft-success budget is bounded PER PATH — after
+    `_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES` (2) in a row, the NEXT
+    contended tick returns the honest refusal instead (the frontend
+    demotes), matching the TTL design's own rationale (`STALE_AFTER_MS` =
+    3 heartbeat ticks absorbs ONE contended tick, not an unbounded run of
+    them on a pathologically or permanently contended path)."""
+    api, path = _write_consented(tmp_path)
+    acquired = api.project_lock_acquire(path)
+    token = acquired["record"]["token"]
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+
+    first = api.project_lock_refresh(path, token)
+    assert first["refreshed"] is True
+    assert first.get("contended") is True
+
+    second = api.project_lock_refresh(path, token)
+    assert second["refreshed"] is True
+    assert second.get("contended") is True
+
+    third = api.project_lock_refresh(path, token)
+    assert third["refreshed"] is False
+    assert third.get("unverifiable") is True
+
+
+def test_project_lock_refresh_streak_resets_after_a_genuine_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The consecutive-soft-success counter resets on any NON-contended
+    outcome — a genuinely successful refresh does not leave a stale streak
+    behind that would demote the very next merely-busy tick."""
+    api, path = _write_consented(tmp_path)
+    acquired = api.project_lock_acquire(path)
+    token = acquired["record"]["token"]
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+    api.project_lock_refresh(path, token)
+    api.project_lock_refresh(path, token)
+    monkeypatch.undo()  # restore the REAL `lockmod.refresh` — a genuine success
+
+    real = api.project_lock_refresh(path, token)
+    assert real["refreshed"] is True
+    assert "contended" not in real
+
+    # The streak reset — two MORE contended ticks succeed again, rather
+    # than immediately demoting as if the earlier streak had carried over.
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+    again = api.project_lock_refresh(path, token)
+    assert again["refreshed"] is True
+    assert again.get("contended") is True

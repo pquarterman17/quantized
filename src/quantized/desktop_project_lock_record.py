@@ -41,10 +41,43 @@ class UnverifiableLock:
     reason: str
 
 
+@dataclass(frozen=True)
+class Contended:
+    """The lock file's content is (or would be) perfectly trustworthy, but
+    it could not be READ or the exclusive OS lock could not be ACQUIRED
+    right now because another live handle genuinely holds it — as opposed
+    to `UnverifiableLock`'s "content IS accessible but cannot be trusted".
+
+    **Why this exists as its own outcome (the R1 follow-up fix).** On
+    Windows, `msvcrt` region locks are MANDATORY: while one handle holds
+    the exclusive lock this package uses, ANY other handle's plain,
+    unprotected read of that byte range — no locking attempted, just an
+    ordinary `open()`+`read()` — fails immediately with `PermissionError`.
+    That is a completely different situation from a corrupt lock file, and
+    conflating the two (the pre-fix behavior: both landed on
+    `UnverifiableLock`) had a real consequence: `refresh`'s heartbeat call
+    would report its own healthy holder's lock "unverifiable" — which
+    reads as "lost" to a caller — every time a normal, healthy save was
+    merely in progress on Windows. On POSIX, `fcntl.flock` is advisory, so
+    a plain read never raises for this reason at all; `Contended` there
+    can only come from the bounded OS-lock ACQUIRE retry loop timing out
+    (`_open_locked`), which is a real, platform-neutral "busy right now"
+    condition on both OSes.
+
+    Callers must still treat this conservatively for anything that is NOT
+    the recurring heartbeat (a one-shot acquire/read/takeover reports this
+    as "cannot verify right now", same as `UnverifiableLock`, which is
+    already the correct fail-closed default). `refresh` is the one
+    exception with bespoke handling — see its own doc and
+    `desktop_bridge.py::project_lock_refresh`'s "soft success" mapping."""
+
+    reason: str
+
+
 # `(success, resulting_or_current_record)` — the shape every mutating
 # function below returns. Named so those signatures fit the line-length
 # gate without folding the union onto its own awkward line.
-CasResult = tuple[bool, "LockRecord | UnverifiableLock | None"]
+CasResult = tuple[bool, "LockRecord | UnverifiableLock | Contended | None"]
 
 
 def _lock_path(project_path: str) -> str:

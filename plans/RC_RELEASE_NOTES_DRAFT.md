@@ -29,13 +29,18 @@ audit wave #194–#199)
   relinked; project references survive relocation. Backend-enforced
   declared-source consent — the app can only be granted paths it already
   declared, never arbitrary local files.
-- **Single-writer locking** (I2, hardened in the audit wave): a second
-  desktop instance opening the same project gets read-only, **Open as
-  Copy**, or a guarded **Take Over** — enforced by a real cross-process
-  lock file (atomic create + OS-level compare-and-swap) with saves bound
-  to the held lock token, so a displaced writer's save is refused, not
-  silently applied. Browser multi-tab is NOT protected (known
-  limitation below).
+- **Single-writer locking** (I2, hardened in the audit wave; R1-fixed
+  2026-08-22): a second desktop instance opening the same project gets
+  read-only, **Open as Copy**, or a guarded **Take Over** — enforced by a
+  real cross-process lock file (atomic create + OS-level compare-and-swap).
+  A save verifies its lock token AND performs the actual file replacement
+  while holding that SAME exclusive OS lock the whole time
+  (`desktop_project_lock_write.write_holding_token`), so a displaced
+  writer's save is refused, never silently applied, with no gap between
+  verification and replacement for another process to land in. An absent
+  lock file is treated as an unverifiable claim (refused), not as "nothing
+  to check, proceed." Browser multi-tab is NOT protected (known limitation
+  below).
 - **Workbook transfer packages** (I): export/import a workbook package
   across instances with fresh-ID rewrite; bounded large transfers,
   incompatible/expired package handling.

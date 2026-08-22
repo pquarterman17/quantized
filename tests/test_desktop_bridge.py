@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -779,9 +781,15 @@ def test_write_project_file_removes_a_stray_qz_write_temp_before_the_next_save(
 
     # Simulate a crash between a PRIOR write's temp-file creation and its
     # `os.replace` — exactly the module's own naming convention, so this is
-    # unambiguously ours to clean up (never someone else's dotfile).
+    # unambiguously ours to clean up (never someone else's dotfile). Backdated
+    # past `cleanup_stray_write_temps`'s age floor (R1 round-3, F3): a
+    # genuinely stale crash leftover is old by the time cleanup runs again,
+    # unlike a DIFFERENT save's temp file that is only ever seconds old —
+    # see the sibling test below for that distinction being load-bearing.
     stray = tmp_path / ".qz-write-deadbeef"
     stray.write_text("half-written garbage from a crashed save", encoding="utf-8")
+    old = time.time() - 3600.0
+    os.utime(stray, (old, old))
 
     second = _workspace_json("second")
     out = api.write_project_file(save_out["path"], second)
@@ -809,6 +817,8 @@ def test_write_project_file_stray_cleanup_is_best_effort_and_never_blocks_the_sa
 
     stray = tmp_path / ".qz-write-cannotremove"
     stray.write_text("x", encoding="utf-8")
+    old = time.time() - 3600.0
+    os.utime(stray, (old, old))  # past the age floor (R1 round-3, F3) — eligible for cleanup
 
     real_remove = os.remove
 
@@ -827,3 +837,78 @@ def test_write_project_file_stray_cleanup_is_best_effort_and_never_blocks_the_sa
     # The stray survives (cleanup failed, as forced above) but the save
     # itself must have succeeded regardless.
     assert stray.exists()
+
+
+def test_write_project_file_a_concurrent_save_never_deletes_the_others_in_flight_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F3 (R1 round-3 review): `cleanup_stray_write_temps` used to run
+    UNPROTECTED right before every write's own temp-file creation and
+    swept up ANY `.qz-write-*` file regardless of age — including a
+    DIFFERENT, still in-flight save's own temp file. A second, ALSO
+    unlocked (no `lock_token`) save to the same directory could delete the
+    first save's temp file out from under it between its `os.fdopen` and
+    its `os.replace`, failing that `os.replace` outright.
+
+    Forced here (not sampled): save 1's `os.replace` is paused mid-call, on
+    a real thread, via an `Event` — so its temp file is GUARANTEED to
+    still be on disk while save 2 runs its own cleanup pass on the exact
+    same directory. Proves save 1's temp survives that pass, and save 1
+    itself still completes successfully once released."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    path = save_out["path"]
+
+    real_replace = os.replace
+    paused_once = threading.Event()
+    release_replace = threading.Event()
+    call_count = {"n": 0}
+
+    def _pausing_replace(src: str, dst: str) -> None:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            paused_once.set()
+            assert release_replace.wait(timeout=10.0), "test never released the paused replace"
+        real_replace(src, dst)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.replace", _pausing_replace)
+
+    outcome: dict[str, Any] = {}
+
+    def _save_one() -> None:
+        outcome["one"] = api.write_project_file(path, _workspace_json("from-save-one"))
+
+    t = threading.Thread(target=_save_one)
+    t.start()
+    try:
+        assert paused_once.wait(timeout=5.0), "save 1 never reached its paused os.replace"
+
+        # Save 1's temp file must still be on disk RIGHT NOW — its
+        # `os.replace` is blocked above, so nothing has renamed it away yet.
+        in_flight_before = sorted(p.name for p in tmp_path.glob(".qz-write-*"))
+        assert len(in_flight_before) == 1, in_flight_before
+
+        # Save 2: a completely separate, ALSO-unlocked save to the SAME
+        # directory. Its own `_replace` runs `cleanup_stray_write_temps`
+        # FIRST — the exact call that, pre-fix, deleted save 1's temp file.
+        out_two = api.write_project_file(path, _workspace_json("from-save-two"))
+        assert out_two["ok"] is True
+
+        # Save 1's temp file must have SURVIVED save 2's cleanup pass.
+        in_flight_after = sorted(p.name for p in tmp_path.glob(".qz-write-*"))
+        assert in_flight_after == in_flight_before, (
+            f"save 2's cleanup deleted save 1's in-flight temp file: "
+            f"before={in_flight_before} after={in_flight_after}"
+        )
+    finally:
+        release_replace.set()
+        t.join(timeout=10.0)
+
+    assert not t.is_alive(), "save 1's thread hung"
+    one = outcome["one"]
+    assert isinstance(one, dict)
+    assert one["ok"] is True, one
+    # Save 1 replaced LAST (it was paused, then released) — its content wins.
+    assert dest.read_text(encoding="utf-8") == _workspace_json("from-save-one")
