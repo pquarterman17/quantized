@@ -240,6 +240,14 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          # An -rc tag publishes a PRERELEASE: GitHub excludes prereleases
+          # from releases/latest, so installed apps' auto-update (which reads
+          # releases/latest/download/latest.json) keeps serving the prior
+          # stable until the RC is promoted with a plain vX.Y.Z tag — the
+          # rollback invariant RC_RELEASE_NOTES_DRAFT.md's Rollback section
+          # states. Without this flag the RC would become "latest" and
+          # auto-update every install to an unsmoked build.
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
           files: |
             ${{ matrix.installer-glob }}
             ${{ matrix.updater-glob }}

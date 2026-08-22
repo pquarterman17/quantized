@@ -1,15 +1,25 @@
 # Release-candidate notes draft — v0.23.0-rc1 (proposed)
 
-**Status:** DRAFT — for the owner's Day-7 review. Do not tag or publish
-without her explicit go. The Day-7 gate also requires re-running the release
-matrix on the exact candidate commit before tagging.
+**Status:** FINAL for v0.23.0-rc1 — owner gave the explicit tag go on
+2026-08-22 after the audit wave (#194–#200) and her local verification
+campaign (corpus re-sweep 350 graphs / 0 renderer failures, DiraCulator
+golden freeze, live Origin COM oracles) landed. Published as a GitHub
+**prerelease**: auto-update keeps serving v0.22.0 until promotion.
 
-**Candidate commit at draft time:** `main` after #189 (the two performance
-fixes below). Update this line to the actual tagged SHA at cut time.
+**Candidate commit:** the `v0.23.0-rc1` tag target (main after #200 + the
+2026-08-21 verification-campaign commits).
+
+**Acceptance still owed against THIS build (owner's explicit call —
+deliberately deferred past the tag, not forgotten):** the packaged
+Windows/macOS install + workflow smoke pass, the 60–90 min interactive
+real-data session with friction log, the installer/icon/taskbar check, and
+ChatGPT-Sol's wording/menu review. Promotion to plain v0.23.0 waits on
+those.
 
 ---
 
-## What's new (Origin-replacement sprint, PRs #167–#186 + #188/#189)
+## What's new (Origin-replacement sprint, PRs #167–#186 + #188/#189 + the
+audit wave #194–#199)
 
 ### Projects and files
 - **Native project lifecycle** (P1.1/P1.2): real Open/Save through the
@@ -103,13 +113,37 @@ landed with red-first regression tests:
 - Live "Send to Origin" (COM) remains Windows-only and untested in CI;
   cross-platform export is Origin-ASCII + `.ogs`.
 
-## Recovery instructions (pointer)
-Crash recovery, lock takeover, relink, and package-import failure paths are
-documented in-app where they occur; the behavioral source of truth is
-`plans/LIBRARY_WORKBOOK_UX_PLAN.md` (items 9/9b/13) and
-`PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.2/§P1.7. Summarize into user-facing
-prose here before tagging.
+## Recovery instructions
+
+- **The app or machine crashed with unsaved work.** Reopen the project:
+  Quantized detects the autosave newer than your last named save and asks
+  before restoring it — nothing is applied silently, and declining keeps
+  the last saved state. Autosaves are bounded, so a corrupt one never
+  wedges opening.
+- **"This project is open in another Quantized" on open.** Another running
+  instance holds the write lock. Choose **read-only** to look without
+  touching it, **Open as Copy** to branch your own editable copy, or
+  **Take Over** if the other instance is dead (a stale lock is detected
+  automatically; taking over a live one is guarded). If you were the
+  displaced side, your next save is refused rather than silently
+  overwriting — Save As to keep your version.
+- **A data file moved, renamed, or its drive is unplugged.** Reimport and
+  plots report the source as missing or offline (they are distinguished)
+  and open **Relink**: point rows at the new location. Rows whose content
+  can be verified against the recorded checksum commit normally; rows that
+  cannot be verified are marked "needs verification" and are excluded from
+  bulk commit unless you confirm them individually. A changed file can be
+  imported as a new version instead — one Undo reverts the whole
+  operation.
+- **A transfer package won't import.** Incompatible or expired packages
+  are refused with the reason; nothing partial is applied.
+- The behavioral source of truth for these paths is
+  `plans/LIBRARY_WORKBOOK_UX_PLAN.md` (items 9/9b/13) and
+  `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.2/§P1.7.
 
 ## Rollback
-Keep v0.22.0 installers available; the updater manifest must continue to
-serve v0.22.0 until the RC is promoted.
+v0.22.0 installers remain on their Release. Because v0.23.0-rc1 is a
+GitHub **prerelease** (enforced in `release.yml` for `-rc` tags),
+`releases/latest` — and therefore in-app auto-update — continues to serve
+v0.22.0 until the RC is promoted with a plain `v0.23.0` tag. PyPI does not
+receive `-rc` builds at all (guarded in `pypi.yml`).
