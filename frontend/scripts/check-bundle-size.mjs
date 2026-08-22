@@ -111,8 +111,22 @@ import { fileURLToPath } from "node:url";
  *  real win, and is not a sizing convention for a raise): 910,848 + 1,024 =
  *  911,872, ~1 kB of rounding room, nothing banked for future growth. NEVER
  *  raise this again without the same measure-first discipline — split a
- *  panel out or defer a module instead. */
-const EAGER_JS_BUDGET = 911_872;
+ *  panel out or defer a module instead.
+ *
+ *  2026-08-22 (same day, wave-2 integration) — 919,795 after Lane B's
+ *  store/plotRecipes.ts (CRUD + apply orchestration, composed eagerly into
+ *  useApp like every other slice) landed on top of the entry above.
+ *  Lazy-chunked first, per protocol: only `lib/plotRecipeMatch.ts`
+ *  (resolveRecipe) stays behind a dynamic import — `lib/plotRecipe.ts` is
+ *  unavoidably eager via the entry above's parseWorkspace wiring, and
+ *  converting the slice's dual eager+lazy import of it to a plain static
+ *  import at integration measured 0.4 kB SMALLER (the dual shape made
+ *  Rollup carve shared deps into their own always-preloaded chunks). The
+ *  remaining delta is the slice itself — synchronous store logic of the
+ *  same class the 2026-08-21 entry declined to degrade to dodge this
+ *  tripwire. Measured 918,771 B; budget = measured + 1,024. Same rule
+ *  stands: never raise without measuring, defer panels/modules first. */
+const EAGER_JS_BUDGET = 919_795;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

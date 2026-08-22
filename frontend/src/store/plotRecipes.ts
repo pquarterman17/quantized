@@ -94,7 +94,7 @@
 
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
-import type { PlotRecipe } from "../lib/plotRecipe";
+import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import type {
   RecipeResolution,
   ResolvedRecipeApplication,
@@ -115,17 +115,26 @@ let _recipeSeq = 0;
 const nextPlotRecipeId = (): string => `pr-${Date.now().toString(36)}-${++_recipeSeq}`;
 
 interface RecipeLibs {
-  captureRecipe: typeof import("../lib/plotRecipe").captureRecipe;
+  captureRecipe: typeof captureRecipe;
   resolveRecipe: typeof import("../lib/plotRecipeMatch").resolveRecipe;
 }
 let _recipeLibs: Promise<RecipeLibs> | null = null;
-/** Load (once, then cache) the two pure wave-1 libraries this slice needs.
- *  See the module doc's LAZY-LOADED note. */
+/** Load (once, then cache) the one still-lazy wave-1 library this slice
+ *  needs. Only `lib/plotRecipeMatch.ts` (`resolveRecipe`) stays behind a
+ *  dynamic import: `lib/plotRecipe.ts` became unavoidably EAGER when Lane C
+ *  wired `sanitizeRecipes` (lib/plotRecipeIO.ts, which value-imports it)
+ *  into `lib/workspace.ts`'s synchronous `parseWorkspace` — so a dynamic
+ *  import of it here would add chunk-glue without deferring a single byte
+ *  (the dual eager+lazy import shape also makes Rollup carve shared deps
+ *  into their own always-preloaded chunks, which measured WORSE). The
+ *  async method signatures are kept as-is — they were public API shape
+ *  from this slice's first commit and resolveRecipe still loads lazily. */
 function recipeLibs(): Promise<RecipeLibs> {
   if (!_recipeLibs) {
-    _recipeLibs = Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")]).then(
-      ([a, b]) => ({ captureRecipe: a.captureRecipe, resolveRecipe: b.resolveRecipe }),
-    );
+    _recipeLibs = import("../lib/plotRecipeMatch").then((m) => ({
+      captureRecipe,
+      resolveRecipe: m.resolveRecipe,
+    }));
   }
   return _recipeLibs;
 }
