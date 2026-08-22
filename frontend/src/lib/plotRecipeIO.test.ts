@@ -115,6 +115,35 @@ describe("sanitizeRecipes", () => {
     expect(out.visual.mark).toBe("line"); // bad value -> default
   });
 
+  it("drops a recipe whose mapping references a signature id that doesn't exist (finding 2a)", () => {
+    const good = goodRecipe();
+    const corrupt: PlotRecipe = { ...good, id: "r7", mapping: { ...good.mapping, xId: "nonexistent-id" } };
+    expect(sanitizeRecipes([corrupt, good])).toEqual([good]);
+  });
+
+  it("drops a recipe whose mapping.errors channel/target references a signature id that doesn't exist (finding 2a)", () => {
+    const good = goodRecipe();
+    const corrupt: PlotRecipe = {
+      ...good,
+      id: "r8",
+      mapping: { ...good.mapping, errors: [{ channel: "nonexistent-id", target: good.mapping.yIds[0], axis: "y", side: "both" }] },
+    };
+    expect(sanitizeRecipes([corrupt, good])).toEqual([good]);
+  });
+
+  it("drops a recipe whose signature has duplicate entry ids (finding 2a)", () => {
+    const good = goodRecipe();
+    const duplicated = good.signature.map((e, i) => (i === 1 ? { ...e, id: good.signature[0].id } : e));
+    const corrupt: PlotRecipe = { ...good, id: "r9", signature: duplicated };
+    expect(sanitizeRecipes([corrupt, good])).toEqual([good]);
+  });
+
+  it("drops an entry whose name is whitespace-only, matching parseRecipe's trim rule (finding 4)", () => {
+    const good = goodRecipe();
+    const corrupt: PlotRecipe = { ...good, id: "r10", name: "   " };
+    expect(sanitizeRecipes([corrupt, good])).toEqual([good]);
+  });
+
   it("tolerates and drops unknown extra keys per entry", () => {
     const good = goodRecipe();
     const withExtra = { ...good, extraField: "from a future app version" };

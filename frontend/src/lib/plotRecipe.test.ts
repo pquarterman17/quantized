@@ -173,6 +173,17 @@ describe("captureRecipe", () => {
     expect(r.visual.decorations.annotations[0].text).toBe("peak");
   });
 
+  it("captures seriesStyles as independent copies, not shared object references (finding 3)", () => {
+    const style = { color: "#ff0000" };
+    const styled = view({ xKey: 0, yKeys: [1], seriesStyles: { 1: style } });
+    const r = captureRecipe(ds, styled, null, { id: "r10b", name: "n", appVersion: "0" });
+    // Mutating the SOURCE style object after capture must not reach back
+    // into the captured recipe -- the same isolation "captures decorations
+    // verbatim" already pins for annotations, extended to seriesStyles.
+    style.color = "mutated";
+    expect(r.visual.seriesStyles.y0).toEqual({ color: "#ff0000" });
+  });
+
   it("falls back to view.errKeys' legacy symmetric-Y projection when opts.errors is omitted", () => {
     const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1], errKeys: { 1: 2 } }), null, {
       id: "r11",
@@ -195,7 +206,12 @@ describe("captureRecipe", () => {
       },
     );
     expect(r.mapping.errors).toEqual([{ channel: "error0", target: null, axis: "x", side: "+" }]);
-    expect(r.signature.find((e) => e.id === "error0")).toMatchObject({ errorRole: "error-x+" });
+    // Finding 1: `errorRole` classifies "Ierr" from the DATASET's own
+    // label-based inference ("error-y", bound to the preceding "Intensity"
+    // column) -- NOT from `opts.errors`' x-error-side-"+" claim about how
+    // the view is currently pairing it. The two are independent: mapping
+    // usage (asserted above) can freely disagree with dataset classification.
+    expect(r.signature.find((e) => e.id === "error0")).toMatchObject({ errorRole: "error-y" });
   });
 
   it("captures which composition kind was active, or null for a plain plot", () => {
@@ -208,6 +224,46 @@ describe("captureRecipe", () => {
       { id: "r14", name: "n", appVersion: "0" },
     );
     expect(spatial.visual.compositionKind).toBe("spatial");
+  });
+});
+
+describe("captureRecipe — errorRole reflects the DATASET's classification, not the view's usage (finding 1)", () => {
+  it("an error-named column plotted as a plain Y series is still classified by the DATASET's inference", () => {
+    // "Ierr" (ch 2) reads as an error column by label alone, but the view
+    // plots it as an ordinary second Y series -- no errKeys pairing at all.
+    const r = captureRecipe(xrdDataset(), view({ xKey: 0, yKeys: [1, 2] }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    const ierr = r.signature.find((e) => e.label === "Ierr");
+    expect(ierr).toBeDefined();
+    // Mapping role reflects the VIEW's usage (plotted as data)...
+    expect(ierr?.role).toBe("y");
+    // ...but errorRole reflects the DATASET's own classification, which
+    // disagrees -- the two are independent axes (see RecipeSignatureEntry's
+    // doc). Getting this backwards (classifying from the view instead) is
+    // exactly what broke the capture-then-resolve round trip in finding 1.
+    expect(ierr?.errorRole).toBe("error-y");
+  });
+
+  it("a non-error-shaped column manually paired via errKeys is still classified as \"value\" by the dataset", () => {
+    const ds = xrdDataset({
+      data: { ...xrdDataset().data, labels: ["2theta", "Intensity", "Extra"] }, // "Extra" reads as plain data
+    });
+    // The view manually pairs "Extra" (ch 2) as Intensity's (ch 1) error bar.
+    const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1], errKeys: { 1: 2 } }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    const extra = r.signature.find((e) => e.label === "Extra");
+    expect(extra).toBeDefined();
+    expect(extra?.role).toBe("error"); // mapping usage: bound as an error channel
+    expect(extra?.errorRole).toBe("value"); // dataset classification: doesn't read as one
+    // The view's actual pairing still round-trips through mapping.errors,
+    // untouched by this fix.
+    expect(r.mapping.errors).toEqual([{ channel: extra?.id, target: expect.any(String), axis: "y", side: "both" }]);
   });
 });
 

@@ -39,13 +39,21 @@
 // agnostic means import/export/duplicate can move a recipe between scopes
 // without touching a single field on it.
 
-import type { ErrorBinding, ErrorSide } from "./errorRoles";
+import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
+import { legacyErrorBindings } from "./figureDocument";
 import { isAxisScale, type LegendPos, type PlotView } from "./plotview";
 import type { PlotMark } from "./plotspec";
+import { errorRoleFor as classifyErrorRole, normalizeLabel } from "./quickPlotTemplates";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
 import { techniqueOf } from "./techniqueDefaults";
 import type { Annotation, AxisFormat, AxisScale, Dataset, RegionShade, Shape, SeriesStyle, Technique } from "./types";
 import type { Composition, CompositionKind } from "./composition";
+
+// classifyErrorRole/normalizeLabel are `lib/quickPlotTemplates.ts`'s ORIGINALS
+// (code-review cleanup 5) -- re-exported here under this module's own naming
+// so `plotRecipeMatch.ts` and every test keep importing them from
+// `./plotRecipe` unchanged; only ONE implementation exists anywhere.
+export { classifyErrorRole, normalizeLabel };
 
 export const PLOT_RECIPE_SCHEMA_VERSION = 1 as const;
 
@@ -60,11 +68,25 @@ export type RecipeChannelRole = "x" | "y" | "y2" | "group" | "facet" | "error";
  *  field that needs to name a channel points at an entry's `id`, never a raw
  *  dataset index. `label` is the RAW captured label (not case-folded) so it
  *  reads naturally in an unmatched-field report; matching itself folds case
- *  and whitespace (see `normalizeLabel` below) on both `label` and every
- *  `aliases` entry. `errorRole` is the `SignatureErrorRole` classification
- *  (`lib/quickPlotTemplates.ts`) this channel had at capture time -- the
- *  guard `resolveRecipe` uses to refuse rebinding a value column as an error
- *  column (or vice versa) when the SAME label now classifies differently. */
+ *  and whitespace (`normalizeLabel`, re-exported above) on both `label` and
+ *  every `aliases` entry.
+ *
+ *  `errorRole` is the `SignatureErrorRole` classification of THIS COLUMN IN
+ *  THE SOURCE DATASET (`dataset.errorRoles ?? inferErrorBindings(dataset.
+ *  data)`, the exact same source `resolveRecipe` re-derives against the
+ *  target dataset) -- NOT how the view happened to be using the column at
+ *  capture time. (P1.3 code-review finding 1: classifying from the view's
+ *  own error bindings instead broke round-trip identity -- an error-named
+ *  column plotted as a plain Y series captured as "value", then refused on
+ *  resolve against the IDENTICAL dataset because `resolveRecipe`'s
+ *  dataset-derived classification said "error-y".) How the view actually
+ *  USES a channel (plotted as data vs. paired as an error bar) is entirely
+ *  `RecipeMapping`'s concern (`role` above, and `RecipeMapping.errors`) --
+ *  `errorRole` and `role` are independent axes and may disagree (a column
+ *  the dataset would call an error column can still be mapped with
+ *  `role: "y"` if the view plots it as data). The guard `resolveRecipe`
+ *  applies is a "same kind of column" check, not a "same intended use"
+ *  check. */
 export interface RecipeSignatureEntry {
   id: string;
   role: RecipeChannelRole;
@@ -186,47 +208,9 @@ export interface PlotRecipe {
   visual: RecipeVisual;
 }
 
-/** Fold case + whitespace for label/alias comparison -- the exact convention
- *  `lib/quickPlotTemplates.ts`'s private `normalizeLabel` uses for its own
- *  schema fingerprint. Exported so `plotRecipeMatch.ts` folds through the
- *  identical rule rather than a second, possibly-drifting copy. */
-export function normalizeLabel(label: string): string {
-  return label.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-const ERROR_SIDE_SUFFIX: Record<ErrorSide, string> = { both: "", "+": "+", "-": "-" };
-
-/** The `SignatureErrorRole` classification for `channel` given `bindings` --
- *  mirrors `lib/quickPlotTemplates.ts`'s private `errorRoleFor` (that helper
- *  isn't exported, and this module intentionally stays independent of it
- *  rather than reaching into another feature's private surface). Exported so
- *  `plotRecipeMatch.ts` classifies a dataset's CURRENT channels through the
- *  same rule capture used. */
-export function classifyErrorRole(bindings: readonly ErrorBinding[], channel: number): SignatureErrorRole {
-  const binding = bindings.find((b) => b.channel === channel);
-  if (!binding) return "value";
-  return `error-${binding.axis}${ERROR_SIDE_SUFFIX[binding.side]}` as SignatureErrorRole;
-}
-
 function rangeFrom(lim: [number, number] | null, step: number | null): RecipeAxisRange {
   if (lim === null) return { mode: "auto" };
   return step === null ? { mode: "fixed", lim } : { mode: "fixed", lim, step };
-}
-
-/** Reconstruct `ErrorBinding[]` from `PlotView.errKeys` (target -> error
- *  channel), the same back-compat projection `lib/figureDocument.ts`'s
- *  private `legacyErrorBindings` performs for the identical legacy shape --
- *  duplicated here (that helper isn't exported either) rather than widening
- *  either module's public surface for a five-line adapter. */
-function legacyErrorBindingsFromErrKeys(errKeys: Readonly<Record<number, number>>): ErrorBinding[] {
-  const out: ErrorBinding[] = [];
-  for (const [target, channel] of Object.entries(errKeys)) {
-    const targetKey = Number(target);
-    if (Number.isInteger(targetKey) && Number.isInteger(channel)) {
-      out.push({ channel, target: targetKey, axis: "y", side: "both" });
-    }
-  }
-  return out;
 }
 
 export interface CaptureRecipeOptions {
@@ -275,7 +259,16 @@ export function captureRecipe(
 ): PlotRecipe {
   const labels = dataset.data.labels;
   const units = dataset.data.units;
-  const errorBindings = opts.errors ?? legacyErrorBindingsFromErrKeys(view.errKeys);
+  // The VIEW's actual error usage -- feeds RecipeMapping.errors (and the
+  // "error" role assignment below) only. Deliberately NOT the source for
+  // `errorRole` classification -- see `entryFor`'s comment (finding 1).
+  const errorBindings = opts.errors ?? legacyErrorBindings(view.errKeys);
+  // The DATASET's own error-column classification, independent of how the
+  // view is currently using any given channel -- `resolveRecipe` re-derives
+  // this exact same way against the target dataset, so classifying from it
+  // here (not from `errorBindings`) is what makes capture-then-resolve on
+  // the IDENTICAL dataset a true identity (P1.3 code-review finding 1).
+  const datasetErrorRoles = dataset.errorRoles ?? inferErrorBindings(dataset.data);
 
   const entries: RecipeSignatureEntry[] = [];
   const channelToId = new Map<number, string>();
@@ -292,7 +285,7 @@ export function captureRecipe(
       role,
       label: labels[channel] ?? "",
       unit: units[channel] ?? "",
-      errorRole: classifyErrorRole(errorBindings, channel),
+      errorRole: classifyErrorRole(datasetErrorRoles, channel),
       aliases: [],
     });
     channelToId.set(channel, id);
@@ -312,11 +305,17 @@ export function captureRecipe(
     side: b.side,
   }));
 
+  // Deep-copies every value (P1.3 code-review finding 3): `seriesStyles`
+  // values are `SeriesStyle` objects owned by the LIVE view -- without a
+  // clone, the captured recipe would share those object references, so an
+  // in-Stage style edit made AFTER capture would silently mutate the
+  // already-saved recipe too. (`seriesLabels` values are plain strings, so
+  // the clone is a no-op there -- one helper for both, not two.)
   const pickRecord = <T>(rec: Readonly<Record<number, T>>): Record<string, T> => {
     const out: Record<string, T> = {};
     for (const [k, val] of Object.entries(rec)) {
       const id = channelToId.get(Number(k));
-      if (id !== undefined) out[id] = val;
+      if (id !== undefined) out[id] = structuredClone(val);
     }
     return out;
   };

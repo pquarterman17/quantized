@@ -124,6 +124,41 @@ function nullableStringField(v: unknown): string | null | undefined {
   return undefined;
 }
 
+/** True when `signature` carries two entries with the same `id` (finding 2a:
+ *  a duplicate id makes every mapping/visual reference to it ambiguous --
+ *  which entry did "y0" mean? -- so the whole recipe is structurally
+ *  corrupt, not a per-field default case). */
+function hasDuplicateSignatureIds(signature: readonly RecipeSignatureEntry[]): boolean {
+  const seen = new Set<string>();
+  for (const e of signature) {
+    if (seen.has(e.id)) return true;
+    seen.add(e.id);
+  }
+  return false;
+}
+
+/** True when `mapping` names a signature id that ISN'T in `ids` (finding
+ *  2a): a dangling mapping reference. Left unchecked, `resolveRecipe` would
+ *  silently null/drop that binding without ever adding it to `unmatched`,
+ *  bypassing the "non-empty unmatched -> preview+confirm" contract with a
+ *  silent partial apply -- so this is a load-bearing structural check, not
+ *  a nicety. Scoped to MAPPING ids only (not `visual`'s seriesStyles/
+ *  seriesOrder/hiddenChannels keys) -- a dangling VISUAL id already degrades
+ *  safely by design (see `ResolvedRecipeVisual`'s doc in plotRecipeMatch.ts:
+ *  "there is nothing sane to key a style override to"), so it carries none
+ *  of the silent-channel-binding risk this check exists to close. */
+function mappingReferencesUnknownId(mapping: RecipeMapping, ids: ReadonlySet<string>): boolean {
+  const refs: (string | null)[] = [
+    mapping.xId,
+    mapping.groupId,
+    mapping.facetId,
+    ...mapping.yIds,
+    ...mapping.y2Ids,
+    ...mapping.errors.flatMap((e) => [e.channel, e.target]),
+  ];
+  return refs.some((id) => id !== null && !ids.has(id));
+}
+
 function sanitizeMapping(v: unknown): RecipeMapping | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -269,11 +304,19 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
   const o = v as Record<string, unknown>;
   if (o.schemaVersion !== PLOT_RECIPE_SCHEMA_VERSION) return null;
   if (typeof o.id !== "string" || !o.id) return null;
-  if (typeof o.name !== "string" || !o.name) return null;
+  // finding 4: unified on the trim check `parseRecipe` already used, so the
+  // strict and tolerant paths never again disagree on a whitespace-only name.
+  if (typeof o.name !== "string" || !o.name.trim()) return null;
   if (typeof o.technique !== "string" || !isValidTechnique(o.technique)) return null;
   const signature = sanitizeSignatureEntries(o.signature);
   const mapping = sanitizeMapping(o.mapping);
   if (!signature || !mapping) return null;
+  // finding 2a: referential integrity across signature <-> mapping. Must run
+  // AFTER both individually validate (so `ids` below is only ever built from
+  // a well-formed signature list).
+  if (hasDuplicateSignatureIds(signature)) return null;
+  const signatureIds = new Set(signature.map((e) => e.id));
+  if (mappingReferencesUnknownId(mapping, signatureIds)) return null;
   const prov = typeof o.provenance === "object" && o.provenance !== null
     ? (o.provenance as Record<string, unknown>)
     : {};

@@ -248,37 +248,72 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
     }
   }
 
-  const resolveOne = (id: string | null): number | null => (id === null ? null : resolvedByEntry.get(id) ?? null);
+  // Belt-and-braces referential-integrity guard (P1.3 code-review finding
+  // 2b): `sanitizeRecipes`/`parseRecipe` (lib/plotRecipeIO.ts) already
+  // refuse to construct a `PlotRecipe` whose mapping names a signature id
+  // that doesn't exist -- but a recipe can also reach this function without
+  // passing through that boundary (constructed in-memory, or a future bug
+  // upstream), so this function does not simply TRUST every mapping id.
+  // `resolveId`/`resolveIdList` below are for MAPPING fields only: an id
+  // entirely ABSENT from the signature (not merely unresolved against the
+  // dataset -- that case already pushed its own `fieldName`-based message
+  // above) is structurally different from an ordinary resolution failure
+  // and gets its own synthetic message so it is never silently dropped
+  // into a null/missing binding the way the old code did.
+  const signatureIds = new Set(recipe.signature.map((e) => e.id));
+  function resolveId(id: string | null, role: RecipeChannelRole): number | null {
+    if (id === null) return null;
+    if (!signatureIds.has(id)) {
+      unmatched.push(`${ROLE_LABEL[role]} (unknown saved channel)`);
+      return null;
+    }
+    return resolvedByEntry.get(id) ?? null;
+  }
+  function resolveIdList(ids: readonly string[], role: RecipeChannelRole): number[] {
+    return ids.flatMap((id) => {
+      const ch = resolveId(id, role);
+      return ch !== null ? [ch] : [];
+    });
+  }
+
+  const xKey = resolveId(recipe.mapping.xId, "x");
+  const yKeys = resolveIdList(recipe.mapping.yIds, "y");
+  const y2Keys = resolveIdList(recipe.mapping.y2Ids, "y2");
+  const groupKey = resolveId(recipe.mapping.groupId, "group");
+  const facetKey = resolveId(recipe.mapping.facetId, "facet");
+
+  const errors: ErrorBinding[] = [];
+  for (const e of recipe.mapping.errors) {
+    const channel = resolveId(e.channel, "error");
+    if (channel === null) continue;
+    const target = e.target === null ? -1 : resolveId(e.target, e.axis === "x" ? "x" : "y");
+    if (target === null) continue;
+    errors.push({ channel, target, axis: e.axis, side: e.side });
+  }
+
+  // Plain, silent-drop resolution for VISUAL overrides (unchanged from
+  // before findings 2/3): a `seriesStyles`/`seriesOrder`/`hiddenChannels`
+  // entry keyed to a channel that didn't resolve (or doesn't exist) has no
+  // sane style/order/visibility to fall back to, so it is simply omitted --
+  // it is not a channel BINDING, so it never earns an `unmatched` entry of
+  // its own (see `ResolvedRecipeVisual`'s doc).
   const resolveList = (ids: readonly string[]): number[] =>
     ids.flatMap((id) => {
       const ch = resolvedByEntry.get(id);
       return ch !== undefined ? [ch] : [];
     });
-
-  const xKey = resolveOne(recipe.mapping.xId);
-  const yKeys = resolveList(recipe.mapping.yIds);
-  const y2Keys = resolveList(recipe.mapping.y2Ids);
-  const groupKey = resolveOne(recipe.mapping.groupId);
-  const facetKey = resolveOne(recipe.mapping.facetId);
-
-  const errors: ErrorBinding[] = [];
-  for (const e of recipe.mapping.errors) {
-    const channel = resolvedByEntry.get(e.channel);
-    if (channel === undefined) continue; // already named in `unmatched` above
-    const target = e.target === null ? -1 : resolvedByEntry.get(e.target);
-    if (target === undefined) continue;
-    errors.push({ channel, target, axis: e.axis, side: e.side });
-  }
-
+  // Deep-copies every value (P1.3 code-review finding 3): without this,
+  // `seriesStyles` values would be the SAME `SeriesStyle` objects `recipe`
+  // itself owns, so a later in-Stage style edit on the applied view would
+  // silently mutate the saved recipe too.
   const pickRecord = <T>(rec: Readonly<Record<string, T>>): Record<number, T> => {
     const out: Record<number, T> = {};
     for (const [id, val] of Object.entries(rec)) {
       const ch = resolvedByEntry.get(id);
-      if (ch !== undefined) out[ch] = val;
+      if (ch !== undefined) out[ch] = structuredClone(val);
     }
     return out;
   };
-  const pickNumList = (ids: readonly string[]): number[] => resolveList(ids);
 
   const resolved: ResolvedRecipeApplication = {
     mapping: { xKey, yKeys, y2Keys, groupKey, facetKey, errors },
@@ -304,9 +339,12 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
       plotTemplate: recipe.visual.plotTemplate,
       seriesStyles: pickRecord(recipe.visual.seriesStyles),
       seriesLabels: pickRecord(recipe.visual.seriesLabels),
-      seriesOrder: recipe.visual.seriesOrder ? pickNumList(recipe.visual.seriesOrder) : null,
-      hiddenChannels: pickNumList(recipe.visual.hiddenChannels),
-      decorations: recipe.visual.decorations,
+      seriesOrder: recipe.visual.seriesOrder ? resolveList(recipe.visual.seriesOrder) : null,
+      hiddenChannels: resolveList(recipe.visual.hiddenChannels),
+      // Deep-copied (finding 3): `decorations` arrays hold objects owned by
+      // `recipe` -- without this, mutating an applied annotation/shape would
+      // silently mutate the saved recipe too.
+      decorations: structuredClone(recipe.visual.decorations),
       compositionKind: recipe.visual.compositionKind,
     },
   };

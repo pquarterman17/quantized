@@ -51,6 +51,47 @@ describe("resolveRecipe — capture round-trip", () => {
   });
 });
 
+describe("resolveRecipe — errorRole round-trip identity regardless of view usage (finding 1)", () => {
+  it("an error-named column plotted as a plain Y series: capture then resolve on the SAME dataset is refusal-free", () => {
+    // The exact code-review probe: "Ierr" reads as an error column by label,
+    // but the view plots it as an ordinary second Y series (no errKeys
+    // pairing at all). Before finding 1's fix, capture classified it
+    // "value" (from the empty view error-bindings list) while resolve
+    // re-derived "error-y" straight from the dataset -- a hard refusal
+    // against the recipe's OWN source data.
+    const ds = xrdDataset();
+    const recipe = captureRecipe(ds, view({ xKey: 0, yKeys: [1, 2] }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    const res = resolveRecipe(recipe, ds);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual([]);
+    expect(res.resolved.mapping.yKeys).toEqual([1, 2]);
+  });
+
+  it("a non-error-shaped column manually paired as an error bar: capture then resolve on the SAME dataset is refusal-free", () => {
+    // The reverse probe: "Extra" doesn't read as an error column by label,
+    // but the view manually pairs it as Intensity's error bar via errKeys.
+    // Before the fix, capture classified it "error-y" (from the view's
+    // manual pairing) while resolve re-derived "value" from the dataset's
+    // label-only inference -- the same refusal, in the opposite direction.
+    const ds = xrdDataset({
+      data: { ...xrdDataset().data, labels: ["2theta", "Intensity", "Extra"] },
+    });
+    const recipe = captureRecipe(ds, view({ xKey: 0, yKeys: [1], errKeys: { 1: 2 } }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    const res = resolveRecipe(recipe, ds);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual([]);
+    expect(res.resolved.mapping.errors).toEqual([{ channel: 2, target: 1, axis: "y", side: "both" }]);
+  });
+});
+
 describe("resolveRecipe — reordered columns (P1.3 acceptance case)", () => {
   it("reordered equivalent XRD columns map correctly by label, not position", () => {
     const recipe = xrdRecipe();
@@ -307,6 +348,42 @@ describe("resolveRecipe — cross-entry collision", () => {
   });
 });
 
+describe("resolveRecipe — dangling mapping id defense-in-depth (finding 2b)", () => {
+  it("a mapping id absent from the signature entirely pushes a synthetic unmatched entry, never a silent null", () => {
+    // sanitizeRecipes/parseRecipe already refuse to CONSTRUCT a recipe like
+    // this (finding 2a) -- this test exercises resolveRecipe's own defense
+    // for a recipe that reaches it some other way (built in-memory, or a
+    // future upstream bug), so a dangling mapping id is never silently
+    // dropped into a null binding without ANY unmatched entry naming it.
+    const recipe = xrdRecipe();
+    const corrupted: PlotRecipe = {
+      ...recipe,
+      mapping: { ...recipe.mapping, xId: "does-not-exist-in-signature" },
+    };
+    const res = resolveRecipe(corrupted, xrdDataset());
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toContain("X axis (unknown saved channel)");
+    expect(res.resolved.mapping.xKey).toBeNull();
+    // The rest of the (well-formed) mapping still resolves normally.
+    expect(res.resolved.mapping.yKeys).toEqual([1]);
+  });
+
+  it("a dangling id inside mapping.errors is caught the same way", () => {
+    const recipe = xrdRecipe();
+    const corrupted: PlotRecipe = {
+      ...recipe,
+      mapping: {
+        ...recipe.mapping,
+        errors: [{ channel: "does-not-exist", target: recipe.mapping.yIds[0], axis: "y", side: "both" }],
+      },
+    };
+    const res = resolveRecipe(corrupted, xrdDataset());
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toContain("Error channel (unknown saved channel)");
+    expect(res.resolved.mapping.errors).toEqual([]);
+  });
+});
+
 describe("resolveRecipe — seriesStyles/seriesOrder/hiddenChannels re-key", () => {
   it("re-keys visual overrides from signature ids back to real channel indices", () => {
     const ds = xrdDataset();
@@ -332,5 +409,26 @@ describe("resolveRecipe — seriesStyles/seriesOrder/hiddenChannels re-key", () 
     expect(res.resolved.visual.seriesStyles).toEqual({ 0: { color: "#ff0000" } });
     expect(res.resolved.visual.seriesOrder).toEqual([0]);
     expect(res.resolved.visual.hiddenChannels).toEqual([0]);
+  });
+
+  it("returns decorations and seriesStyles as independent copies -- mutating the resolved result leaves the recipe unchanged (finding 3)", () => {
+    const ds = xrdDataset();
+    const styled = view({
+      xKey: 0,
+      yKeys: [1],
+      seriesStyles: { 1: { color: "#ff0000" } },
+      annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }],
+    });
+    const recipe = captureRecipe(ds, styled, null, { id: "r", name: "n", appVersion: "0" });
+    const res = resolveRecipe(recipe, ds);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+
+    // Mutate the RESOLVED output, as a store would after applying it into a
+    // live view -- the recipe object itself must be untouched.
+    res.resolved.visual.decorations.annotations[0].text = "mutated";
+    res.resolved.visual.seriesStyles[1].color = "mutated";
+
+    expect(recipe.visual.decorations.annotations[0].text).toBe("peak");
+    expect(recipe.visual.seriesStyles.y0).toEqual({ color: "#ff0000" });
   });
 });

@@ -112,7 +112,11 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBinding[] {
+// Exported (P1.3 code-review cleanup 5): `lib/plotRecipe.ts` imports this
+// directly for its `view.errKeys` fallback rather than keeping a byte-
+// duplicated private copy, so the legacy symmetric-Y projection rule never
+// drifts onto two definitions.
+export function legacyErrorBindings(errKeys: Readonly<Record<number, number>>): ErrorBinding[] {
   return Object.entries(errKeys).flatMap(([target, channel]) => {
     const targetKey = Number(target);
     // Field order matches the ErrorBinding interface (channel, target, axis,
