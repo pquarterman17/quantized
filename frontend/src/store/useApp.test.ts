@@ -2786,6 +2786,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     book: string,
     frame: Frame | null,
     yRange: [number, number],
+    axisExtra?: { x_log?: boolean; y_log?: boolean; x_step?: number | null; y_step?: number | null },
   ) => ({
     id,
     stem: "Fixed Lambdas SI",
@@ -2796,10 +2797,12 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
       layer,
       x_from: 0,
       x_to: 10,
-      x_log: false,
+      x_log: axisExtra?.x_log ?? false,
       y_from: yRange[0],
       y_to: yRange[1],
-      y_log: false,
+      y_log: axisExtra?.y_log ?? false,
+      x_step: axisExtra?.x_step ?? null,
+      y_step: axisExtra?.y_step ?? null,
       n_curves: 1,
       annotations: [] as string[],
       curves: [{ book, x: "A", y: "B" }],
@@ -2853,6 +2856,48 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     ]);
     // The clicked layer's OWN dataset activates, even though it isn't first.
     expect(s.activeId).toBe("p2");
+  });
+
+  // Visual-harness regression (tools/visual/origin_figures.mjs structural
+  // report, 2026-08-21): a RockingCurve.opju Graph3-shaped family (3 layers,
+  // no decoded frame geometry -> ordinal stack, one layer log-scale) proves
+  // BOTH halves of the fix. The store's real apply path (this test) writes
+  // every layer's decoded range/log/step onto its OWN panel inside
+  // `composition` -- never onto the top-level singleton `xLim`/`yLim`/
+  // `xScale`/`yScale`/`xStep`/`yStep` fields, and there is no raw
+  // `spatialPanels` array on state at all (it was collapsed into
+  // `composition` by commit 5cdc7303, 2026-07-19). The harness read
+  // `s.spatialPanels` directly and compared the (unrelated, untouched)
+  // top-level singleton fields against the clicked layer's own figure --
+  // silently misclassifying every spatial multi-panel apply as "single" and
+  // failing its range/step/log checks by construction. The fix reads through
+  // the same `spatialPanelsOf(composition)` accessor this test uses.
+  it("a log-scale ordinal multi-panel family carries its decoded range/log/step per PANEL, not on the top-level singleton axis fields or a raw spatialPanels array", () => {
+    const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [1, 100], { y_log: true, x_step: 2, y_step: 1 });
+    const l2 = mkEntry("fig-1", 2, "p2", "Book2", null, [0, 50], { x_step: 5, y_step: 10 });
+    const l3 = mkEntry("fig-2", 3, "p3", "Book3", null, [0, 30]);
+    useApp.setState({ originFigures: [l1, l2, l3] });
+
+    useApp.getState().applyOriginFigure("fig-0"); // clicking layer 1 (the log-scale layer)
+    const s = useApp.getState();
+
+    // The regression's core assumption, proven false: the pre-#54-refactor
+    // field name the harness kept reading does not exist on state.
+    expect((s as unknown as Record<string, unknown>).spatialPanels).toBeUndefined();
+
+    // The real per-panel decoded state -- what a correct reader must use.
+    const panels = spatialPanelsOf(s.composition);
+    expect(panels).toEqual([
+      expect.objectContaining({ datasetId: "p1", xLim: [0, 10], yLim: [1, 100], xLog: false, yLog: true, xStep: 2, yStep: 1 }),
+      expect.objectContaining({ datasetId: "p2", xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: false, xStep: 5, yStep: 10 }),
+      expect.objectContaining({ datasetId: "p3", xLim: [0, 10], yLim: [0, 30], xLog: false, yLog: false, xStep: null, yStep: null }),
+    ]);
+
+    // The top-level singleton axis fields a "single-layer" comparison would
+    // wrongly read stay at whatever they were before this apply (untouched
+    // by the spatial branch) -- they carry none of layer 1's decoded state,
+    // which is exactly why comparing against them misfires.
+    expect(s.yScale).not.toBe("log"); // layer 1 IS y_log:true; the singleton never learns that
   });
 
   it("opens trusted overlapping/inset layers in page mode instead of flattening them", () => {

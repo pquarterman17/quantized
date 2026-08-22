@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
+import { spatialPanelsOf } from "./lib/composition";
 import { installErrLog } from "./lib/errlog";
 import { connectLifecycle } from "./lib/lifecycle";
 import { defaultPlotView } from "./lib/plotview";
@@ -97,9 +98,17 @@ if (new URLSearchParams(window.location.search).has("harness")) {
         useApp: typeof useApp;
         harnessResetWindows: typeof harnessResetWindows;
         harnessApplyWindows: typeof harnessApplyWindows;
+        // Real store accessor (`lib/composition.ts`), exposed so the visual
+        // harness reads the ONE discriminated-union `composition` field the
+        // app itself renders from, instead of re-deriving its shape (the
+        // pre-`composition` store had a raw `spatialPanels` array; the
+        // harness kept reading that stale field name after the #54 refactor
+        // collapsed it into `composition`, silently misclassifying every
+        // spatial-multi-panel apply as "single" in the structural report).
+        spatialPanelsOf: typeof spatialPanelsOf;
       };
     }
-  ).__qz = { useApp, harnessResetWindows, harnessApplyWindows };
+  ).__qz = { useApp, harnessResetWindows, harnessApplyWindows, spatialPanelsOf };
 }
 
 // ── ?view=calc — standalone DiraCulator launcher (MAIN_PLAN #22) ───────────
