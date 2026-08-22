@@ -319,7 +319,16 @@ const MODULE_PINS: Record<string, number> = {
   // hook-in exactly. No extractable cohesive block funds this minimal
   // 8-line addition (comments trimmed to one line per site); written
   // justification per CLAUDE.md's "raise only with written justification".
-  "/lib/workspace.ts": 600,
+  // 600 -> 421 (2026-08-22, P1.3 headroom funding): the per-dataset .dwk
+  // parse/validate block (`isNumberArray`/`isDataStruct`/`parsePending` plus
+  // the whole `o.datasets.map(...)` callback body — pure, only ever touched
+  // `dd`/`i`, no closure over parseWorkspace's other locals) moved verbatim
+  // to the new lib/workspaceDatasetParse.ts as `parseWorkspaceDataset`,
+  // funding the still-unwired `plotRecipes` (P1.3) and `savedRecodeMappings`
+  // (see store/recode.ts's SAVED MAPPINGS note, which names this exact
+  // extraction as the intended funding move) additive-list hook-ins — an
+  // extraction, not a bump, per the ratchet's own rule above.
+  "/lib/workspace.ts": 421,
   "/lib/plotview.ts": 978,
 };
 
@@ -538,6 +547,10 @@ describe("row-state model guard (#50 universal linking)", () => {
     const allow = [
       "/lib/rowstate.ts",
       "/lib/workspace.ts",
+      // The per-dataset .dwk parse/validate body that used to live inline in
+      // workspace.ts's parseWorkspace (2026-08-22 extraction) — same .dwk
+      // (de)serialize role as workspace.ts itself, just relocated.
+      "/lib/workspaceDatasetParse.ts",
       "/store/useApp.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",

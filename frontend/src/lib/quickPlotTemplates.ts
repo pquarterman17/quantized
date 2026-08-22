@@ -93,11 +93,15 @@ export interface QuickPlotTemplate {
   labels: Record<number, string>;
 }
 
-function normalizeLabel(label: string): string {
+// Exported (P1.3 code-review cleanup 5): `lib/plotRecipe.ts`/
+// `lib/plotRecipeMatch.ts` import these two directly rather than keeping a
+// byte-duplicated private copy, so the label-fold and error-role
+// classification rules never drift onto two definitions.
+export function normalizeLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function errorRoleFor(bindings: readonly ErrorBinding[], channel: number): SignatureErrorRole {
+export function errorRoleFor(bindings: readonly ErrorBinding[], channel: number): SignatureErrorRole {
   const binding = bindings.find((b) => b.channel === channel);
   if (!binding) return "value";
   const suffix: Record<ErrorSide, string> = { both: "", "+": "+", "-": "-" };
