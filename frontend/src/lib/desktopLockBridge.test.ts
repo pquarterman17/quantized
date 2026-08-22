@@ -83,6 +83,18 @@ describe("acquireProjectLock", () => {
     setShell({ project_lock_acquire: async () => "garbage" as unknown as Record<string, unknown> });
     expect(await acquireProjectLock("/p/w.dwk")).toBeNull();
   });
+
+  // F2 (code review follow-up, R4): `typeof [] === "object"` — an ARRAY
+  // response is a distinct malformed shape from "not an object at all" and
+  // was NOT rejected before this fix, despite this module's own header
+  // already (incorrectly) claiming it was. An accepted array coerces into
+  // `{ok:false, unverifiable:false}` — a DEFINITE (non-unverifiable)
+  // refusal — which is exactly the original R4 bug (openProject reporting
+  // "unlocked"/writable) via a different vector, at the OPEN call path.
+  it("an ARRAY response is treated as no bridge (open call path), never coerced into a definite refusal", async () => {
+    setShell({ project_lock_acquire: async () => [] as unknown as Record<string, unknown> });
+    expect(await acquireProjectLock("/p/w.dwk")).toBeNull();
+  });
 });
 
 describe("readProjectLock", () => {
@@ -120,6 +132,17 @@ describe("refreshProjectLock", () => {
     const out = await refreshProjectLock("/p/w.dwk", "tok-1");
     expect(out?.ok).toBe(false);
     expect(out?.record).toEqual(other);
+  });
+
+  // F2 (code review follow-up, R4): the SAME array-coercion gap, but at
+  // the HEARTBEAT call path — an accepted `[]` here would bypass
+  // `store/projectLock.ts`'s `heartbeat()` unverifiable-streak logic
+  // entirely (it would read as a DEFINITE loss, demoting immediately
+  // instead of tolerating a transient miss) rather than merely
+  // misclassifying `openProject`.
+  it("an ARRAY response is treated as no bridge (heartbeat call path), never coerced into a definite loss", async () => {
+    setShell({ project_lock_refresh: async () => [] as unknown as Record<string, unknown> });
+    expect(await refreshProjectLock("/p/w.dwk", "tok-1")).toBeNull();
   });
 });
 

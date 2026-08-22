@@ -36,7 +36,7 @@ import { saveBlob } from "../lib/download";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
-import { useProjectLock, type LockProvider } from "./projectLock";
+import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
@@ -131,14 +131,16 @@ async function acquireDestinationLock(
         ? await provider.takeOver(destination, current?.token ?? "")
         : await provider.tryAcquire(destination);
     if (!result.acquired || result.record === null) {
-      // R4: `result.unverifiable` must be checked FIRST — a CAS refusal
-      // whose provider could not verify anything (no bridge / a thrown
-      // call / a malformed response) still reports `record: null`, and
-      // `classifyLock(null, ...)` alone would misreport that as
-      // `"unlocked"`. Both branches already refuse the save either way
-      // (see the caller's `!acquired.ok` check), but only this reports the
-      // TRUE reason rather than a guessed one.
-      return { ok: false, status: result.unverifiable ? "held-by-other-live" : classifyLock(result.record, instanceId, Date.now()) };
+      // R4/F4: reuse `store/projectLock.ts`'s own `statusFromRefusal`
+      // rather than re-deriving this inline — a CAS refusal whose provider
+      // could not verify anything (no bridge / a thrown call / a malformed
+      // response / a `contended` OS-lock busy signal) still reports
+      // `record: null`, and `classifyLock(null, ...)` alone would
+      // misreport that as `"unlocked"`. An inline re-derivation had
+      // drifted to check only `unverifiable` and silently ignore
+      // `contended` (F4, code review follow-up); a single shared function
+      // is what keeps every CAS-refusal call site honest going forward.
+      return { ok: false, status: statusFromRefusal(result, instanceId, Date.now()) };
     }
     return { ok: true, record: result.record };
   } catch {

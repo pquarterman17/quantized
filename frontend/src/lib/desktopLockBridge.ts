@@ -68,9 +68,16 @@ export interface LockWireOutcome {
  *  is rejected outright. Every call site below treats a failed check here
  *  the SAME as "no usable bridge" (return `null`), which
  *  `lib/desktopLockProvider.ts`'s `toCasResult` already turns into an
- *  explicit `unverifiable: true` refusal. */
+ *  explicit `unverifiable: true` refusal.
+ *
+ *  F2 (code review follow-up): `typeof [] === "object"` in JS, so an ARRAY
+ *  response — e.g. a stub bridge that resolves `[]` — passed this guard
+ *  before the explicit `!Array.isArray` check below, coercing into the
+ *  exact same coherent-looking-but-wrong `{ok:false, unverifiable:false}`
+ *  this function exists to reject; the header above already (incorrectly)
+ *  claimed arrays were covered. */
 function isPlausibleOutcome(out: unknown): out is Record<string, unknown> {
-  return typeof out === "object" && out !== null;
+  return typeof out === "object" && out !== null && !Array.isArray(out);
 }
 
 function parseLockRecord(v: unknown): LockWireRecord | null {

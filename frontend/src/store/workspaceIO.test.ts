@@ -519,4 +519,34 @@ describe("Save As destination lock — R4 unverifiable CAS refusal", () => {
     // fallen through to the generic "currently locked" wording instead).
     expect(useApp.getState().status).toMatch(/open for editing in another instance/i);
   });
+
+  // R1's landed backend contract (main@fc85560): `contended` rides a
+  // SUCCESS, never a refusal — `acquireDestinationLock` must treat a soft
+  // success (`acquired: true, contended: true`) as an ORDINARY successful
+  // destination-lock acquisition, letting the save proceed. (An earlier
+  // version of this suite tested a `{acquired: false, contended: true}`
+  // shape based on a since-superseded pre-landing guess — that
+  // combination cannot occur against the real backend.)
+  it("a soft-success (contended) destination-lock acquisition proceeds with the save normally", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/dest.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/proj/dest.dwk" }), write_project_file: write });
+    useProjectLock.setState({
+      provider: {
+        read: async () => null,
+        tryAcquire: async () => ({
+          acquired: true,
+          contended: true,
+          record: { instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now(), token: "soft-tok" },
+        }),
+        refresh: async () => ({ acquired: true, record: null }),
+        takeOver: async () => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().currentProject).toEqual({ name: "dest.dwk", path: "/proj/dest.dwk" });
+  });
 });

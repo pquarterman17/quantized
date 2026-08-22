@@ -60,18 +60,22 @@ function toLockRecord(wire: LockWireRecord | null): LockRecord | null {
  *  shape), and the parameter's mere existence is what let the `out ===
  *  null` branch quietly skip setting the flag in the first place.
  *
- *  `out.contended` (coordination note, concurrent R1/R4 lanes): passed
- *  through as-is when the backend sets it — a TRANSIENT "another process's
- *  own CAS held the OS lock for this instant" signal, deliberately NOT
- *  folded into `unverifiable` (the record isn't untrustworthy, it was just
- *  momentarily unreachable) and NOT a `record`-bearing definite refusal
- *  either. `store/projectLock.ts`'s `heartbeat()` is what actually treats
- *  this as benign/retry-next-tick rather than demotion evidence. */
+ *  `out.contended` — R1's now-landed backend contract (main@fc85560):
+ *  `contended` rides a SUCCESS (`ok`/`acquired: true`, a "soft success"
+ *  after the backend internally retried past momentary OS-lock
+ *  contention) — purely informational, never a refusal on its own. A
+ *  BOUNDED refusal (contention exhausted its retry budget) arrives as an
+ *  ordinary `unverifiable: true` refusal, already handled above. This
+ *  function therefore does NOT special-case `contended` at all — it is
+ *  passed straight through on whatever `out.ok` actually says, exactly
+ *  like every other informational field. (An earlier version of this
+ *  function forced `contended: true` into a fake `acquired: false`
+ *  refusal, based on a since-superseded pre-landing guess at the wire
+ *  shape — that would have silently dropped every real soft-success.) */
 function toCasResult(out: LockWireOutcome | null): LockCasResult {
   if (out === null) return { acquired: false, record: null, unverifiable: true };
-  if (out.contended) return { acquired: false, record: toLockRecord(out.record), contended: true };
   if (out.unverifiable) return { acquired: false, record: null, unverifiable: true };
-  return { acquired: out.ok, record: toLockRecord(out.record) };
+  return { acquired: out.ok, record: toLockRecord(out.record), contended: out.contended };
 }
 
 export function createDesktopLockProvider(): LockProvider {

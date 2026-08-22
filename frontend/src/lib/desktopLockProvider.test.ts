@@ -120,7 +120,7 @@ describe("createDesktopLockProvider — tryAcquire", () => {
     setShell({ project_lock_acquire: async () => ({ acquired: true, record: wireRecord }) });
     const provider = createDesktopLockProvider();
     const out = await provider.tryAcquire("/p/w.dwk");
-    expect(out).toEqual({ acquired: true, record: expectedLockRecord });
+    expect(out).toEqual({ acquired: true, record: expectedLockRecord, contended: false });
   });
 
   it("a refusal reports the CURRENT (other) record, not a guess", async () => {
@@ -146,15 +146,17 @@ describe("createDesktopLockProvider — tryAcquire", () => {
     expect(out.unverifiable).toBe(true);
   });
 
-  // R4/R1 coordination: a concurrent lane is adding a backend "contended"
-  // outcome (OS lock momentarily busy with someone else's own CAS) distinct
-  // from `unverifiable`. Forward-compatible even before that backend lands —
-  // `bool(out.contended)` on an absent field is just `false`.
-  it("passes through a CONTENDED wire outcome distinctly from unverifiable — never claims acquired, never discards the record", async () => {
-    setShell({ project_lock_acquire: async () => ({ acquired: false, record: wireRecord, contended: true }) });
+  // R1's landed backend contract (main@fc85560): `contended` rides a
+  // SUCCESS (`acquired: true`) — a "soft success" after the backend
+  // internally retried past momentary OS-lock contention. An EARLIER
+  // version of `toCasResult` forced ANY `contended: true` into a fake
+  // `acquired: false` refusal (a pre-landing guess at the wire shape) —
+  // that would have silently dropped every real soft-success success.
+  it("a soft-success (acquired: true, contended: true) is passed through as an ORDINARY success — never forced into a fake refusal", async () => {
+    setShell({ project_lock_acquire: async () => ({ acquired: true, record: wireRecord, contended: true }) });
     const provider = createDesktopLockProvider();
     const out = await provider.tryAcquire("/p/w.dwk");
-    expect(out.acquired).toBe(false);
+    expect(out.acquired).toBe(true);
     expect(out.contended).toBe(true);
     expect(out.unverifiable).toBeFalsy();
     expect(out.record).toEqual(expectedLockRecord);
