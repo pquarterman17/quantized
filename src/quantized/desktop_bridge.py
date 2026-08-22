@@ -79,6 +79,59 @@ full native lifecycle; the browser/multi-tab cross-TAB lock provider
 (``store/projectLock.ts``'s own header covers that gap — a filesystem lock
 protects separate OS PROCESSES, not two tabs sharing one server, which
 needs an entirely different mechanism).
+
+**``project_lock_refresh``'s CONTENDED "soft success" (R1 follow-up,
+hardened in round 3).** ``desktop_project_lock.refresh`` can report
+``Contended`` — the lock is merely BUSY right now (another mutation/save
+holds the exclusive OS lock this instant), never actually lost. Reporting
+that honestly as ``refreshed: False`` would make
+``frontend/src/store/projectLock.ts``'s ``heartbeat()`` demote a perfectly
+healthy session (it does not retry a single failed refresh) over a single
+busy tick. This module instead reports a CONTENDED refresh as
+``refreshed: True`` with the LAST lock record this SAME ``DesktopApi``
+genuinely observed for this path (``self._last_known_lock_record``).
+
+**Round-3 hardening — a single-writer violation the round-2 version had.**
+Two conditions are BOTH required before this soft-success fires, not just
+"a cached record exists":
+
+1. ``cached.token == token`` — the CALLER's own presented token must
+   match the cached record. Without this check, a DISPLACED instance A
+   whose earlier plain read (or a refused acquire) had cached instance
+   B's LIVE record could have its own now-stale heartbeat soft-succeed
+   with B's record echoed back — the frontend would then adopt B's live
+   token as "its own", and A's NEXT save would present B's token and WIN,
+   a genuine two-writer violation. ``_remember`` (below) already prevents
+   the cache from ever holding another instance's record, but this check
+   is the second, independent gate — belt AND braces, not either/or.
+2. Fewer than ``_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES`` (2) consecutive
+   soft successes have already been granted for this path
+   (``self._contended_streak``). A THIRD consecutive contended tick
+   returns the honest refusal instead (the frontend demotes) — matching
+   the TTL rationale that justified this design in the first place
+   (``STALE_AFTER_MS`` = 3 heartbeat ticks absorbs ONE missed/contended
+   refresh; this bridge must not silently absorb unbounded ones on a
+   pathologically or permanently contended path). The streak resets to 0
+   on any non-soft-success outcome — see ``project_lock_refresh``.
+
+This keeps the frontend's ``record.token`` intact for its next save
+attempt across a SHORT contention window, which
+``write_project_file``/``write_holding_token`` re-verifies for REAL at
+write time regardless — this mapping is a bounded bookkeeping softening
+for the recurring heartbeat only, never a substitute for that real check.
+The frontend needs no change for this: it already treats "refreshed: true"
+as "still holds it" and does not otherwise inspect the record's heartbeat
+for freshness itself.
+
+**``_remember``'s cache is instance-scoped success-only (round-3 fix).**
+``self._last_known_lock_record`` may ONLY ever hold a record this SAME
+``DesktopApi`` instance itself just won — an ``ok: True`` acquire,
+refresh, or takeover. It is NEVER populated from a refusal (whose record
+belongs to WHOEVER currently holds the lock — possibly a different
+instance entirely) or from a plain ``project_lock_read`` (ditto, and it
+has no "mine vs. theirs" concept at all). Caching from either would let
+the CONTENDED soft-success above echo back a record this instance does
+not actually hold — the exact defect described above.
 """
 
 from __future__ import annotations
@@ -90,6 +143,7 @@ import uuid
 from typing import Any
 
 from quantized import desktop_project_lock as lockmod
+from quantized import desktop_project_lock_write as lockwrite
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
 from quantized.desktop_consent import consented_write_path
 from quantized.desktop_project_file import (
@@ -99,6 +153,17 @@ from quantized.desktop_project_file import (
 )
 
 __all__ = ["DesktopApi"]
+
+# See this module's "round-3 hardening" doc section: caps how many
+# CONSECUTIVE contended heartbeat ticks in a row get the non-demoting
+# soft-success treatment before `project_lock_refresh` falls back to an
+# honest refusal. Matches the TTL design's own rationale — `refresh`'s doc
+# and `DEFAULT_TTL_SECONDS`'s 3-tick staleness window already assume ONE
+# missed/contended tick is safely absorbed; this is that same assumption
+# enforced explicitly rather than left to chance on a path that could stay
+# contended indefinitely (a stuck/pathological holder, not just a normal
+# brief save).
+_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES = 2
 
 
 class DesktopApi(DesktopDialogBridge):
@@ -115,6 +180,15 @@ class DesktopApi(DesktopDialogBridge):
         # One id per running process, minted ONCE — see this module's "PR I2"
         # section for why the frontend can never supply or override this.
         self._instance_id = str(uuid.uuid4())
+        # Last LockRecord THIS instance itself genuinely WON, per granted
+        # path — see this module's "round-3 hardening" doc section. Never
+        # fabricated, and NEVER populated from a refusal or a plain read
+        # (both could carry a DIFFERENT instance's record) — only from an
+        # ok:True acquire/refresh/takeover response, via `_remember`.
+        self._last_known_lock_record: dict[str, lockmod.LockRecord] = {}
+        # Consecutive CONTENDED soft-successes granted per path — see
+        # `_MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES`'s doc.
+        self._contended_streak: dict[str, int] = {}
 
     def attach(self, window: Any) -> None:
         """Called by the launcher once the window exists — the dialog methods
@@ -148,20 +222,26 @@ class DesktopApi(DesktopDialogBridge):
         path. ``content`` must pass ``validate_workspace_payload`` or the
         write is refused before a temp file is even opened.
 
-        **I2 lock-token binding (P1-1):** when `lock_token` is non-empty, it
-        is verified via `desktop_project_lock.token_still_valid` —
-        IMMEDIATELY before the write, under the SAME exclusive-OS-lock CAS
-        every other lock mutation uses (never a plain, separately-timed
-        read) — this is what closes the save TOCTOU the read/classify/
-        unconditional-write shape left open (a session that lost the lock
-        between its last heartbeat and this save must never land its
-        write). A mismatch (including an unverifiable lock file) refuses
-        with a DISTINCT error string (`"error": "lock lost"`) the frontend
-        recognizes and surfaces as exactly that, rather than a generic
-        write failure. An EMPTY token, OR no lock file existing at all for
-        `path`, skips the check entirely — the pre-I2, no lock-provider-
-        wired behavior — so a caller that never acquired a lock (or the
-        browser/in-memory-only path) writes exactly as before.
+        **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
+        non-empty, the token is verified AND the temp-write-plus-`os.replace`
+        below runs while STILL HOLDING the SAME exclusive OS lock every
+        other lock mutation uses — see
+        `quantized.desktop_project_lock_write.write_holding_token`. This
+        closes the save TOCTOU a verify-then-release shape left open: a
+        session that lost the lock between its last heartbeat and this save
+        can no longer land its write in the gap, because there is no gap —
+        another process's takeover/refresh/release on the same lock file
+        blocks until this save has completed and released it. A verification
+        failure (a token mismatch, an ABSENT lock file, or an unverifiable
+        one) refuses with a DISTINCT error string (`"error": "lock lost"`)
+        the frontend recognizes and surfaces as exactly that, rather than a
+        generic write failure — an absent lock is refused here, not treated
+        as "nothing to check, proceed" (that was the prior defect: a lock
+        that had been released or replaced by someone else must never read
+        as "still yours"). An EMPTY token skips verification and the lock
+        entirely — the pre-I2, no lock-provider-wired legacy behavior — so a
+        caller that never acquired a lock (or the browser/in-memory-only
+        path) writes exactly as before, unlocked.
         """
         try:
             resolved = os.path.realpath(path)
@@ -170,15 +250,23 @@ class DesktopApi(DesktopDialogBridge):
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        if lock_token and not lockmod.token_still_valid(granted, lock_token):
-            return {"ok": False, "error": "lock lost"}
         invalid = validate_workspace_payload(content)
         if invalid is not None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
         directory = os.path.dirname(granted) or "."
-        cleanup_stray_write_temps(directory)
-        tmp_path: str | None = None
-        try:
+
+        def _replace() -> None:
+            # R1 round-3 fix (F3): moved INSIDE `_replace` (was a bare call
+            # right here) so that, when `lock_token` is supplied, this runs
+            # WHILE `write_holding_token` holds the exclusive OS lock — a
+            # second concurrent LOCKED save's own `_replace` cannot start
+            # until this one has fully finished (including its own
+            # `os.replace`), so it can never sweep up THIS save's still-open
+            # temp file. `cleanup_stray_write_temps`'s own age floor is the
+            # belt-and-braces protection for the unlocked, no-token legacy
+            # path directly below, which has no such serialization at all.
+            cleanup_stray_write_temps(directory)
+            tmp_path: str | None
             fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -191,6 +279,14 @@ class DesktopApi(DesktopDialogBridge):
                         os.remove(tmp_path)
                     except OSError:
                         pass
+
+        try:
+            if lock_token:
+                result = lockwrite.write_holding_token(granted, lock_token, _replace)
+                if isinstance(result, lockwrite.LockLost):
+                    return {"ok": False, "error": "lock lost"}
+            else:
+                _replace()
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "path": granted}
@@ -207,12 +303,17 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"acquired": False, "error": "path not consented for writing"}
         ok, record = lockmod.acquire(granted, self._instance_id, now=time.time())
+        self._remember(granted, ok, record)  # cache ONLY on an ok:True win — see `_remember`
         return _lock_result(record, outcome_key="acquired", outcome_value=ok)
 
     def project_lock_read(self, path: str) -> dict[str, Any]:
         """Read the current lock record for `path` with no side effect —
         for a caller that wants to classify a lock (fresh/stale/none)
-        without attempting to acquire it."""
+        without attempting to acquire it. Deliberately NEVER feeds
+        `_remember`'s cache (round-3 fix): a plain read reports WHATEVER is
+        on disk, which may belong to a completely different instance —
+        caching it would let `project_lock_refresh`'s soft-success echo
+        back someone else's record later."""
         granted = self._consented_write_or_none(path)
         if granted is None:
             return {"record": None, "error": "path not consented for writing"}
@@ -222,11 +323,38 @@ class DesktopApi(DesktopDialogBridge):
         """Heartbeat bump for a lock this instance believes it holds. A
         token mismatch (including "no lock file" / "unverifiable") reports
         `refreshed: False` — the caller must drop to read-only, never keep
-        assuming it still writes."""
+        assuming it still writes.
+
+        A `Contended` result (the lock is merely BUSY right now — see
+        `desktop_project_lock.refresh`'s doc) is mapped to a "soft success"
+        instead, ONLY when the cached record actually belongs to `token`
+        AND the per-path consecutive-soft-success streak has budget left —
+        see this module's "round-3 hardening" doc section for the full
+        rationale; both are genuine single-writer safety gates, not just
+        defensive style. `write_project_file`'s own re-verification at
+        actual write time is what stays authoritative regardless."""
         granted = self._consented_write_or_none(path)
         if granted is None:
             return {"refreshed": False, "error": "path not consented for writing"}
         ok, record = lockmod.refresh(granted, token, now=time.time())
+        if isinstance(record, lockmod.Contended):
+            cached = self._last_known_lock_record.get(granted)
+            streak = self._contended_streak.get(granted, 0)
+            if (
+                cached is not None
+                and cached.token == token  # F1/F4: never echo a DIFFERENT token's record
+                and streak < _MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES
+            ):
+                self._contended_streak[granted] = streak + 1
+                result = _lock_result(cached, outcome_key="refreshed", outcome_value=True)
+                result["contended"] = True  # additive diagnostic only — safe to ignore
+                return result
+            # No matching cached record, or the streak budget is spent —
+            # fall through to the honest refusal (the frontend demotes).
+            self._contended_streak.pop(granted, None)
+            return _lock_result(record, outcome_key="refreshed", outcome_value=False)
+        self._contended_streak.pop(granted, None)  # any non-contended outcome resets the streak
+        self._remember(granted, ok, record)
         return _lock_result(record, outcome_key="refreshed", outcome_value=ok)
 
     def project_lock_takeover(self, path: str, expected_token: str) -> dict[str, Any]:
@@ -238,6 +366,7 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"acquired": False, "error": "path not consented for writing"}
         ok, record = lockmod.take_over(granted, expected_token, self._instance_id, now=time.time())
+        self._remember(granted, ok, record)
         return _lock_result(record, outcome_key="acquired", outcome_value=ok)
 
     def project_lock_release(self, path: str, token: str) -> dict[str, Any]:
@@ -248,6 +377,9 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"released": False, "error": "path not consented for writing"}
         released, reason = lockmod.release(granted, token)
+        if released:
+            self._last_known_lock_record.pop(granted, None)
+            self._contended_streak.pop(granted, None)
         out: dict[str, Any] = {"released": released}
         if reason is not None:
             out["error"] = reason
@@ -260,17 +392,34 @@ class DesktopApi(DesktopDialogBridge):
             return None
         return consented_write_path(resolved)
 
+    def _remember(self, granted: str, ok: bool, record: object) -> None:
+        """Cache `record` for `granted` ONLY when `ok` is `True` — i.e.
+        ONLY when THIS call was a genuine SUCCESS FOR THIS INSTANCE
+        (acquired/refreshed/took-over its OWN lock). Round-3 fix: the
+        prior version cached on ANY `LockRecord`, including a REFUSAL's
+        record (which belongs to whoever currently holds the lock — not
+        necessarily this instance) — see this module's "round-3
+        hardening" doc section for the token-laundering path that opened.
+        A no-op for a refusal, `UnverifiableLock`, or `Contended`."""
+        if ok and isinstance(record, lockmod.LockRecord):
+            self._last_known_lock_record[granted] = record
+
 
 def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None) -> dict[str, Any]:
     """Shared JSON shape for every lock bridge method above: the outcome
     under `outcome_key` (`None` for `project_lock_read`, which has no
     success/failure of its own — it only reports what's on disk), plus
     whatever record/reason is known. A `LockRecord` serializes to its
-    fields; an `UnverifiableLock` serializes to `{"unverifiable": True,
-    "error": ...}` (never raised, never silently treated as "no lock" — the
-    frontend must treat this as cannot-verify -> read-only, same as the pure
-    module's own doc requires); anything else serializes to `"record":
-    None`."""
+    fields; an `UnverifiableLock` OR a `Contended` (the OS lock is busy
+    RIGHT NOW — see that class's doc) both serialize to
+    `{"unverifiable": True, "error": ...}` — the SAME wire flag, since the
+    frontend already treats it identically and conservatively either way
+    ("cannot verify right now — read-only, never assume free"); the two
+    are kept as DISTINCT Python types purely so this module and
+    `desktop_project_lock.py` can reason about them precisely (e.g.
+    `project_lock_refresh`'s bespoke "soft success" mapping for
+    `Contended`, which intercepts it BEFORE it ever reaches this shared
+    helper). Anything else serializes to `"record": None`."""
     out: dict[str, Any] = {outcome_key: outcome_value}
     if isinstance(record, lockmod.LockRecord):
         out["record"] = {
@@ -282,7 +431,7 @@ def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None
             "acquiredAt": record.acquired_at,
             "heartbeatAt": record.heartbeat_at,
         }
-    elif isinstance(record, lockmod.UnverifiableLock):
+    elif isinstance(record, (lockmod.UnverifiableLock, lockmod.Contended)):
         out["record"] = None
         out["unverifiable"] = True
         out["error"] = record.reason

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 __all__ = [
     "WORKSPACE_FORMAT",
@@ -108,15 +109,38 @@ def validate_workspace_payload(content: str) -> str | None:
 WRITE_TEMP_PREFIX = ".qz-write-"
 
 
-def cleanup_stray_write_temps(directory: str) -> None:
-    """Remove any leftover ``.qz-write-*`` file in ``directory`` — the
-    anonymous temp file a crash between a PRIOR write's ``os.fdopen`` success
-    and its ``os.replace`` can strand forever, since nothing else ever looks
-    for one. Safe by construction: the prefix is exclusively ours (chosen for
-    `tempfile.mkstemp` in ``desktop_bridge.py``), and `directory` is always
-    one this process itself holds WRITE consent for (the caller resolves it
-    from `granted`, never from unvalidated input) — so this can only ever
-    delete a file this same bridge created.
+# R1 round-3 fix (F3): a save holding the project lock ALREADY runs this
+# under that exclusive OS lock (see `desktop_bridge.py::write_project_file`
+# — `cleanup_stray_write_temps` moved INSIDE `_replace`, so it now shares
+# `write_holding_token`'s serialization), which is what actually prevents a
+# second concurrent LOCKED save from ever running this concurrently with a
+# first save's still-open temp file. The LEGACY no-token path calls this
+# completely unlocked, though, so this age floor is belt-and-braces there:
+# a temp file younger than this might be a DIFFERENT unlocked save's own
+# in-flight file, not a genuine crash leftover, and must never be swept.
+_MIN_STRAY_AGE_SECONDS = 600.0  # 10 minutes
+
+
+def cleanup_stray_write_temps(
+    directory: str, *, min_age_seconds: float = _MIN_STRAY_AGE_SECONDS
+) -> None:
+    """Remove any leftover ``.qz-write-*`` file in ``directory`` older than
+    `min_age_seconds` — the anonymous temp file a crash between a PRIOR
+    write's ``os.fdopen`` success and its ``os.replace`` can strand
+    forever, since nothing else ever looks for one. Safe by construction:
+    the prefix is exclusively ours (chosen for `tempfile.mkstemp` in
+    ``desktop_bridge.py``), and `directory` is always one this process
+    itself holds WRITE consent for (the caller resolves it from `granted`,
+    never from unvalidated input) — so this can only ever delete a file
+    this same bridge created.
+
+    The age floor exists so this can never delete a DIFFERENT, still
+    in-flight save's own temp file — see the module-level comment above
+    `_MIN_STRAY_AGE_SECONDS` for why that risk is real for the unlocked
+    legacy call site specifically. A file whose mtime cannot even be
+    stat'd (already gone, a stat race) falls through to the removal
+    attempt below rather than being skipped — nothing is lost either way,
+    since the removal itself is already best-effort.
 
     Best-effort and silent: called right before a NEW temp file is opened, so
     a failure here (permissions, a race with another process, the directory
@@ -128,10 +152,18 @@ def cleanup_stray_write_temps(directory: str) -> None:
         entries = os.listdir(directory)
     except OSError:
         return
+    now = time.time()
     for name in entries:
         if not name.startswith(WRITE_TEMP_PREFIX):
             continue
+        full_path = os.path.join(directory, name)
         try:
-            os.remove(os.path.join(directory, name))
+            age = now - os.path.getmtime(full_path)
+        except OSError:
+            age = None
+        if age is not None and age < min_age_seconds:
+            continue  # too young — plausibly a concurrent in-flight save
+        try:
+            os.remove(full_path)
         except OSError:
             pass  # best-effort — see docstring

@@ -11,6 +11,7 @@ corrupts — proving the race is real, not a strawman, and that `_cas_write`
 
 from __future__ import annotations
 
+import builtins
 import json
 import multiprocessing
 import multiprocessing.synchronize
@@ -22,6 +23,7 @@ import pytest
 
 import quantized.desktop_project_lock as lockmod
 from quantized.desktop_project_lock import (
+    Contended,
     LockRecord,
     UnverifiableLock,
     acquire,
@@ -29,7 +31,6 @@ from quantized.desktop_project_lock import (
     refresh,
     release,
     take_over,
-    token_still_valid,
 )
 
 
@@ -193,33 +194,13 @@ def test_release_then_acquire_gets_a_clean_lock(tmp_path: Path) -> None:
     assert rec2.token != rec.token
 
 
-# -- token_still_valid (the write_project_file save-TOCTOU primitive) -------
-
-
-def test_token_still_valid_true_when_no_lock_file_exists(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    assert token_still_valid(path, "any-token") is True
-
-
-def test_token_still_valid_true_for_the_current_holder(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
-    assert isinstance(rec, LockRecord)
-    assert token_still_valid(path, rec.token) is True
-
-
-def test_token_still_valid_false_for_a_stale_token_after_takeover(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    _, rec1 = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
-    assert isinstance(rec1, LockRecord)
-    take_over(path, rec1.token, "instance-b", now=1300.0)
-    assert token_still_valid(path, rec1.token) is False
-
-
-def test_token_still_valid_false_for_a_corrupt_lock_file(tmp_path: Path) -> None:
-    path = _project(tmp_path)
-    Path(path + ".lock").write_text("not json", encoding="utf-8")
-    assert token_still_valid(path, "any-token") is False
+# NOTE: `token_still_valid` (the pre-R1 "verify then release" primitive) has
+# been REMOVED — see `desktop_project_lock.py`'s module doc's "R1 fix"
+# section. It is fully superseded by
+# `desktop_project_lock_write.write_holding_token`, which verifies the token
+# and keeps the SAME exclusive OS lock held through the caller's own write
+# instead of releasing it first. That operation's tests live in
+# `tests/test_desktop_project_lock_write.py`.
 
 
 # -- corrupt / unverifiable — never an exception -----------------------------
@@ -267,6 +248,143 @@ def test_embedded_null_path_never_raises() -> None:
     assert ok is False
     ok2, _ = release(bad, "tok")
     assert ok2 is False or ok2 is True  # never raises either way
+
+
+# -- Contended vs. UnverifiableLock (R1 code-review follow-up) --------------
+#
+# Windows semantics simulated on Linux dev: `msvcrt` region locks are
+# MANDATORY, so a plain, unprotected read of a locked byte range fails
+# immediately with `PermissionError` — simulated here by monkeypatching
+# `builtins.open` to raise it for the lock file specifically, AND (since
+# the classification is now platform-gated — F2 of the round-3 review)
+# `sys.platform` to `"win32"`, the same pattern
+# `test_release_on_windows_tombstones_instead_of_deleting` already uses.
+# The real proof that this actually happens on Windows is the Windows CI
+# leg (this repo's 3-OS matrix); these tests prove `read`'s CLASSIFICATION
+# logic is correct given that a `PermissionError` occurs on that platform.
+
+
+def _lock_file_path(path: str) -> str:
+    return path + ".lock"
+
+
+def test_read_retries_a_permission_error_then_classifies_contended_on_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _always_denied(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file:
+            calls["n"] += 1
+            raise PermissionError("simulated Windows mandatory-lock violation")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _always_denied)
+    monkeypatch.setattr(lockmod.sys, "platform", "win32")
+    result = read(path)
+    assert isinstance(result, Contended)
+    # Actually retried (not a single immediate failure) — the SMALL bounded
+    # budget `read`'s own doc promises, exhausted here on purpose.
+    assert calls["n"] == lockmod._READ_RETRY_ATTEMPTS
+
+
+def test_read_succeeds_once_a_transient_permission_error_clears_on_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proves the retry is not merely cosmetic: a `PermissionError` that
+    clears part-way through the bounded budget still yields the REAL
+    record, not `Contended`."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _denied_twice(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file and calls["n"] < 2:
+            calls["n"] += 1
+            raise PermissionError("simulated Windows mandatory-lock violation")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _denied_twice)
+    monkeypatch.setattr(lockmod.sys, "platform", "win32")
+    result = read(path)
+    assert isinstance(result, LockRecord)
+    assert result.token == rec.token
+    assert calls["n"] == 2
+
+
+def test_read_never_retries_or_softens_a_posix_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F2 (R1 round-3 review): on POSIX, `fcntl.flock` is advisory, so
+    contention can NEVER make a plain `open()`/`read()` raise
+    `PermissionError` — one there is a REAL, persistent permissions
+    problem (wrong file mode/ownership) and must surface honestly as
+    `UnverifiableLock`, on the FIRST attempt, never retried and never
+    softened to `Contended` (which would mask it behind soft-success
+    forever at the bridge layer)."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _always_denied(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file:
+            calls["n"] += 1
+            raise PermissionError("simulated real POSIX permissions failure")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _always_denied)
+    monkeypatch.setattr(lockmod.sys, "platform", "linux")
+    result = read(path)
+    assert isinstance(result, UnverifiableLock)
+    assert calls["n"] == 1  # no retry at all — this is not "busy", it's broken
+
+
+def test_acquire_propagates_contended_from_read_rather_than_guessing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`acquire`'s existing-file classification path funnels through the
+    SAME `read` — this proves that caller (named explicitly by the R1
+    follow-up ruling) inherits the fix with no separate code path to
+    forget."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    monkeypatch.setattr(lockmod, "read", lambda _path: Contended("simulated"))
+    ok, result = acquire(path, "instance-b", now=1001.0, ttl_seconds=90.0)
+    assert ok is False
+    assert isinstance(result, Contended)
+
+
+def test_refresh_never_pre_reads_unprotected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R1 follow-up mechanism check: `refresh` must not call the plain,
+    unprotected `read` at all any more — everything happens under the one
+    locked `_cas_update` section. Proven by making `read` explode if
+    called; `refresh` must still work normally."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+
+    def _explode(_path: str) -> None:
+        raise AssertionError("refresh must not call the unprotected read() any more")
+
+    monkeypatch.setattr(lockmod, "read", _explode)
+    ok, updated = refresh(path, rec.token, now=1030.0)
+    assert ok is True
+    assert isinstance(updated, LockRecord)
+    assert updated.heartbeat_at == 1030.0
 
 
 # -- the read/classify/unconditional-write race this module fixes -----------
