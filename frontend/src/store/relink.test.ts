@@ -172,8 +172,18 @@ describe("commit (box 3: atomic, one undo entry)", () => {
   it("relinks every resolved+unchanged row in ONE history entry", async () => {
     useApp.setState({
       datasets: [
-        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv" } }),
-        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv" } }),
+        // R3: commit() now recomputes the verdict from the LIVE dataset's
+        // RECORDED provenance vs a fresh probe, so these need a recorded
+        // checksum/mtime/size that genuinely matches the probe below for
+        // the row to recompute as "unchanged".
+        baseDataset({
+          id: "a",
+          source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:a", mtime: 1, size: 1 },
+        }),
+        baseDataset({
+          id: "b",
+          source: { kind: "path", path: "/old/data/b.csv", checksum: "sha256:b", mtime: 2, size: 2 },
+        }),
       ],
     });
     useRelink.setState({
@@ -233,7 +243,15 @@ describe("commit (box 3: atomic, one undo entry)", () => {
   // stale preview row with no re-probe at all).
   it("re-probes at commit time and drops a row whose content changed again since Preview", async () => {
     useApp.setState({
-      datasets: [baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv" } })],
+      datasets: [
+        // R3: recorded checksum matches what Preview itself saw ("unchanged"
+        // at Preview time) — the fresh commit-time probe below diverges from
+        // BOTH the recorded checksum and the Preview snapshot.
+        baseDataset({
+          id: "a",
+          source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:preview-time" },
+        }),
+      ],
     });
     useRelink.setState({
       preview: [
@@ -347,7 +365,12 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     useApp.setState({
       datasets: [
         baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:old" } }),
-        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv" } }),
+        // R3: recorded checksum matches the fresh commit-time probe below —
+        // recomputes as genuinely "unchanged" so it stays committable.
+        baseDataset({
+          id: "b",
+          source: { kind: "path", path: "/old/data/b.csv", checksum: "sha256:b", mtime: 2, size: 2 },
+        }),
       ],
     });
     useRelink.setState({
@@ -455,6 +478,245 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       path: "/old/data/b.csv",
       checksum: "sha256:old-b",
     }); // NOT escalated: still excluded
+  });
+
+  // R3 (POST_SPRINT_INDEPENDENT_REVIEW.md, class #196 — RED-FIRST against
+  // the pre-fix commit()): recorded checksum A, Preview's own probe failed
+  // to compute a checksum ("unknown" verdict, null preview checksum), the
+  // row is individually escalated, and the commit-time re-probe now DOES
+  // return a checksum — but a DIFFERENT one, B. The pre-fix commit() only
+  // ever compared the fresh probe against `row.candidateChecksum` (null
+  // here), so the comparison short-circuited to "nothing to compare, trust
+  // it" and silently overwrote recorded checksum A with B. The fix must
+  // recompute against the LIVE dataset's recorded checksum A and refuse.
+  it("refuses at commit when a fresh probe reveals a DIFFERENT checksum than what's recorded, even though Preview saw 'unknown' and the row was escalated", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:A" } }),
+        // A second, ordinary "unchanged" row so the batch isn't empty —
+        // proves the refusal is per-row (status named in the summary), not
+        // just "nothing committed at all".
+        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv", checksum: "sha256:b" } }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          // Preview's own probe couldn't confirm a checksum this session —
+          // defect-1's "unknown" shape (recorded checksum, null probe).
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 5,
+          candidateSize: 5,
+        },
+        {
+          datasetId: "b",
+          datasetName: "b.csv",
+          oldPath: "/old/data/b.csv",
+          candidatePath: "/new/place/b.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:b",
+          candidateMtime: 2,
+          candidateSize: 2,
+        },
+      ],
+    });
+    // The commit-time re-probe for "a" now succeeds fully and returns
+    // checksum B — genuinely DIFFERENT content than what was recorded as A.
+    // "b" re-probes clean.
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) => {
+      if (path === "/new/place/a.csv") {
+        return { state: "ok", path, size: 999, mtime: 999, checksum: "sha256:B" };
+      }
+      return { state: "ok", path, size: 2, mtime: 2, checksum: "sha256:b" };
+    });
+
+    useRelink.getState().escalateUnknownRow("a");
+
+    await useRelink.getState().commit();
+
+    // "a" refused: recorded provenance A must survive untouched, path included.
+    const datasets = useApp.getState().datasets;
+    expect(datasets.find((d) => d.id === "a")!.source).toEqual({
+      kind: "path",
+      path: "/old/data/a.csv",
+      checksum: "sha256:A",
+    });
+    // "b" — an ordinary unrelated row — still commits normally.
+    expect(datasets.find((d) => d.id === "b")!.source?.path).toBe("/new/place/b.csv");
+    expect(useApp.getState().history).toHaveLength(1); // one entry for "b" alone
+    const calls = vi.mocked(toast).mock.calls;
+    const [msg] = calls[calls.length - 1];
+    expect(msg).toMatch(/changed at commit/i);
+    expect(msg).toContain("1");
+  });
+
+  // R3 #3 (the "still-unknown escalated commit" ruling): the fresh probe at
+  // commit time STILL cannot produce a checksum (e.g. read consent lapsed
+  // again this session) — the row stays committable because it was
+  // escalated (that is what escalation means), but the written provenance
+  // must be the dataset's ORIGINAL recorded fields, never a checksum/mtime/
+  // size fabricated from the (incomplete) fresh probe.
+  it("commits an escalated row whose fresh probe is STILL unknown, writing back the ORIGINAL recorded provenance rather than fabricating one", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({
+          id: "a",
+          source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:A", mtime: 10, size: 10 },
+        }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 5,
+          candidateSize: 5,
+        },
+      ],
+    });
+    // Fresh probe at commit succeeds (the path is reachable) but STILL
+    // cannot compute a checksum — size/mtime differ from what's recorded
+    // too (e.g. a filesystem copy), which must NOT get written either.
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/a.csv",
+      size: 777,
+      mtime: 777,
+      checksum: null,
+    });
+
+    useRelink.getState().escalateUnknownRow("a");
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source).toEqual({
+      kind: "path",
+      path: "/new/place/a.csv", // path DOES move
+      checksum: "sha256:A", // ORIGINAL recorded checksum, unchanged
+      mtime: 10, // ORIGINAL recorded mtime, NOT the fresh probe's 777
+      size: 10, // ORIGINAL recorded size, NOT the fresh probe's 777
+    });
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  // R3 #4: the dataset a row named was removed between Preview and commit
+  // (e.g. the user deleted it from the project mid-panel) — fail closed for
+  // that row, zero mutation, no crash.
+  it("fails closed with zero mutation when a dataset is removed between Preview and commit", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:a" } }),
+        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/b.csv", checksum: "sha256:b" } }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:a",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+        {
+          datasetId: "removed",
+          datasetName: "gone.csv",
+          oldPath: "/old/data/gone.csv",
+          candidatePath: "/new/place/gone.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:gone",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/a.csv",
+      size: 1,
+      mtime: 1,
+      checksum: "sha256:a",
+    });
+
+    await useRelink.getState().commit();
+
+    // "a" (still present) commits; "removed" (gone from the store by the
+    // time commit ran) is refused with zero mutation — there is nothing to
+    // even assert on for it, other than that the batch didn't crash and "a"
+    // was not blocked by it.
+    const datasets = useApp.getState().datasets;
+    expect(datasets.find((d) => d.id === "a")!.source?.path).toBe("/new/place/a.csv");
+    expect(datasets.find((d) => d.id === "b")!.source?.path).toBe("/old/data/b.csv"); // untouched, unrelated
+    const calls = vi.mocked(toast).mock.calls;
+    const [msg] = calls[calls.length - 1];
+    expect(msg).toMatch(/removed.?reimported/i);
+  });
+
+  // R3 #4: the dataset's RECORDED source path itself changed between
+  // Preview and commit (an independent relink/reimport landed in the gap) —
+  // its identity no longer matches what Preview computed a candidate for.
+  // Fail closed: never blindly overwrite whatever it points to NOW.
+  it("fails closed with zero mutation when a dataset's recorded source changes (reimported/relinked) between Preview and commit", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:a" } }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:a",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    // Between Preview and the Relink click, something else already moved
+    // this dataset's recorded source out from under it (a concurrent
+    // relink, or a reimport that swapped the source path).
+    useApp.setState((state) => ({
+      datasets: state.datasets.map((d) =>
+        d.id === "a" ? { ...d, source: { kind: "path" as const, path: "/elsewhere/a.csv", checksum: "sha256:elsewhere" } } : d,
+      ),
+    }));
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source).toEqual({
+      kind: "path",
+      path: "/elsewhere/a.csv",
+      checksum: "sha256:elsewhere",
+    });
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(desktopBridge.probeSource).not.toHaveBeenCalled(); // never even probed a candidate for a stale identity
+    expect(toast).toHaveBeenCalledWith(
+      "nothing to relink — every candidate changed or became unreachable since Preview",
+      "danger",
+    );
   });
 
   it("reports nothing-to-relink instead of committing an empty batch", async () => {

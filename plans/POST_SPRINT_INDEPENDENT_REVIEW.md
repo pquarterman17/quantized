@@ -109,18 +109,23 @@ The commit also replaces the stored provenance with B.
 
 **Required work:**
 
-- [ ] At commit, look up the live dataset and recompute the verdict using its
+- [x] At commit, look up the live dataset and recompute the verdict using its
   recorded checksum/mtime/size and the fresh probe.
-- [ ] Reject fresh `changed` results even when the preview was `unknown` and
+- [x] Reject fresh `changed` results even when the preview was `unknown` and
   individually escalated.
-- [ ] Define whether an escalated `unknown` remains acceptable when the fresh
-  probe is still unknown; never silently upgrade it to unchanged.
-- [ ] Add the recorded-A / preview-null / commit-B regression.
-- [ ] Add tests for a dataset removed or reimported between preview and commit.
+- [x] Define whether an escalated `unknown` remains acceptable when the fresh
+  probe is still unknown; never silently upgrade it to unchanged. (Ruling:
+  stays committable — that is what escalation means — but the write keeps the
+  dataset's ORIGINAL recorded checksum/mtime/size unchanged, moving only the
+  path; nothing is fabricated from the incomplete fresh probe.)
+- [x] Add the recorded-A / preview-null / commit-B regression.
+- [x] Add tests for a dataset removed or reimported between preview and commit.
 
 **Suggested owner:** Claude Sonnet; Claude Opus review for provenance semantics.  
 **Acceptance:** No relink can overwrite original provenance for content that a
 fresh comparison identifies as changed.
+**Status (2026-08-22):** Implemented on `claude/r3-relink-commit-verdict`
+(not yet pushed/merged); independent review still open — see closure log.
 
 ### [ ] R4. Fail closed when the desktop lock bridge is unavailable
 
@@ -270,4 +275,5 @@ agent can distinguish implementation from verification:
 | Date | Item | PR/commit | Implementer | Independent reviewer | Evidence and residual risk |
 |---|---|---|---|---|---|
 | 2026-08-22 | Audit created | — | ChatGPT-Sol | — | Read-only review; no application fixes made |
+| 2026-08-22 | R3 | branch `claude/r3-relink-commit-verdict` | Claude Sonnet | — | Claim confirmed exactly against `store/relink.ts`'s pre-fix `commit()`: the TOCTOU re-probe compared the fresh checksum against the PREVIEW row's own `candidateChecksum` snapshot, never against the dataset's recorded provenance — a null preview checksum (recorded A, Preview probe failed → "unknown") short-circuited the comparison, so an escalated row's fresh commit-time probe (checksum B) sailed through and overwrote recorded A with B. Fix: `commit()` now looks up the LIVE dataset per row and recomputes `sourceChangeVerdict` from ITS recorded checksum/mtime/size against a fresh probe taken at commit time, never trusting the preview snapshot alone. A fresh "changed" verdict refuses the row unconditionally, even a Preview-time "unknown" that was individually escalated (escalation approves "unverifiable", never "verified-different"). An escalated row whose fresh probe is still "unknown" stays committable but writes back the dataset's ORIGINAL recorded provenance fields unchanged (only the path moves) rather than fabricating one. A dataset removed, or whose recorded `source.path` no longer matches what Preview saw (reimported/independently relinked in the gap), fails closed for that row with zero mutation. 6 new red-first regressions added (recorded-A/preview-null/commit-B; still-unknown escalated commit provenance; removed-between; reimported-between; plus the mixed-batch variant naming the "changed at commit" exclusion count) alongside 3 existing tests updated to carry real recorded provenance so their scenarios still model what they claim under the new recompute. Gates (frontend/, all foreground): `npx tsc --noEmit` clean; `npx eslint --max-warnings=0` on both touched files clean; full `npx vitest run` 543 files / 8096 tests passed (was 8090 before this lane); `npm run build` — bundle-size ratchet passed at exactly 898.2 kB eager against the 898.2 kB budget (0.0 kB headroom; budget threshold itself untouched, per the lane's constraint) after trimming toast-string/dedup overhead to fit the correctness fix inside the pre-existing headroom. Independent review: open. |
 
