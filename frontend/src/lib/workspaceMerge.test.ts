@@ -63,6 +63,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       expandedWorkbookIds: [],
       collections: [],
       visibleDetailsColumns: [],
+      plotRecipes: [],
     };
   }
 
@@ -493,6 +494,7 @@ describe("mergeWorkspace never imports the LIBRARY_WORKBOOK_UX_PLAN PR E2 sessio
       expandedWorkbookIds: ["poison"],
       collections: [],
       visibleDetailsColumns: [],
+      plotRecipes: [],
     };
     const genId2 = () => "unused";
     const genWorkbookId2 = () => "unused-wb";

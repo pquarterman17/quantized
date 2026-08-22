@@ -328,7 +328,18 @@ const MODULE_PINS: Record<string, number> = {
   // (see store/recode.ts's SAVED MAPPINGS note, which names this exact
   // extraction as the intended funding move) additive-list hook-ins — an
   // extraction, not a bump, per the ratchet's own rule above.
-  "/lib/workspace.ts": 421,
+  // 421 -> 430 (2026-08-22, P1.3 wave 2 Lane C): the `plotRecipes` project-
+  // scope field wiring the note directly above pre-funded ("funding the
+  // still-unwired `plotRecipes` (P1.3) ... additive-list hook-ins") — the
+  // four-site additive .dwk field pattern (WorkspaceState optional field +
+  // doc comment, LoadedWorkspace required field, WorkspaceDoc field,
+  // serializer default + parseWorkspace sanitizeRecipes call + return field)
+  // plus two new top-level imports (`PlotRecipe` type, `sanitizeRecipes`),
+  // mirroring `quickPlotTemplates`'s own hook-in exactly. No extractable
+  // cohesive block funds this 9-line addition; written justification per
+  // CLAUDE.md's "raise only with written justification" — the pin's own
+  // history comment named this exact addition as the intended spend.
+  "/lib/workspace.ts": 430,
   "/lib/plotview.ts": 978,
 };
 
@@ -812,6 +823,13 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   // split slice: dialog state
   splitDialogTargetId: "target dataset for split operation; UI dialog state, ephemeral",
+
+  // plotRecipes slice (P1.3 wave 2 Lane B): the staged unmatched-fields
+  // preview+confirm result. Transient gesture state discarded on confirm/
+  // cancel -- never an edit itself (confirmPendingRecipeApplication's actual
+  // figure creation is the undoable gesture, via editableFigures/plotWindows
+  // already in HistorySnapshot), same class as separatePreview above.
+  pendingRecipeApplication: "staged plot-recipe apply preview (unmatched fields); transient gesture state, discarded on confirm/cancel, not an undoable edit",
 
   // workbookSeparate slice (LIBRARY_WORKBOOK_UX_PLAN PR J, L0.51): the
   // affected-item preview plan. Transient dialog state discarded on

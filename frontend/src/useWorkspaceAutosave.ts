@@ -75,6 +75,13 @@ export type AutosaveState = Pick<
   // (lib/workspace.ts), mutate independently (store/libraryDetailsColumns.ts),
   // same completeness-sweep class as collections/quickPlotTemplates above.
   | "visibleDetailsColumns"
+  // P1.3 wave 2 integration fix (finding 2): saved Plot Recipes — persist
+  // (lib/workspace.ts), mutate independently (store/plotRecipes.ts's
+  // save/rename/delete/duplicate CRUD), same completeness-sweep class as
+  // collections/quickPlotTemplates above. Was already serialized by the
+  // whole-state-spread save path with no trigger here — a recipe CRUD edit
+  // left the title bar showing clean right up to a crash.
+  | "plotRecipes"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -104,7 +111,8 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.workbooks === prev.workbooks &&
     state.savedRois === prev.savedRois &&
     state.collections === prev.collections &&
-    state.visibleDetailsColumns === prev.visibleDetailsColumns
+    state.visibleDetailsColumns === prev.visibleDetailsColumns &&
+    state.plotRecipes === prev.plotRecipes
   );
 }
 

@@ -106,6 +106,12 @@ export interface HistorySnapshot {
   // slice (store/quickPlotTemplates.ts) per this file's own savedRois-
   // incident gate, not as an afterthought.
   quickPlotTemplates: AppState["quickPlotTemplates"];
+  // P1.3 wave 2 Lane B — named plot recipes (store/plotRecipes.ts). Persistent
+  // user edits (save/rename/delete/duplicate; apply creates a figure, already
+  // covered via `editableFigures`/`plotWindows` below), same class as
+  // `quickPlotTemplates` right above — wired here in the SAME commit as the
+  // store slice per this file's own savedRois-incident gate.
+  plotRecipes: AppState["plotRecipes"];
   // LIBRARY_WORKBOOK_UX_PLAN PR L (L0.48/L0.49/L0.56) — Collection save/
   // rename/re-query/delete is an undoable project edit, same class as
   // `quickPlotTemplates`/`smartFolders` right above.
@@ -151,6 +157,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     activePlotSpecId: s.activePlotSpecId,
     savedRois: s.savedRois,
     quickPlotTemplates: s.quickPlotTemplates,
+    plotRecipes: s.plotRecipes,
     collections: s.collections,
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,

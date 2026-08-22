@@ -15,6 +15,8 @@ import {
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
+import type { PlotRecipe } from "./plotRecipe";
+import { sanitizeRecipes } from "./plotRecipeIO";
 import { pruneDanglingWorkbookScopeTemplates, sanitizeQuickPlotTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
@@ -106,6 +108,8 @@ export interface WorkspaceState {
   /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
   collections?: Collection[];
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
+  /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
+  plotRecipes?: PlotRecipe[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -143,6 +147,7 @@ export interface LoadedWorkspace {
   expandedWorkbookIds: string[];
   collections: Collection[]; // PR L — always populated
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
+  plotRecipes: PlotRecipe[]; // P1.3 — always populated
 }
 
 interface WorkspaceDoc {
@@ -176,6 +181,7 @@ interface WorkspaceDoc {
   expandedWorkbookIds: string[];
   collections: Collection[];
   visibleDetailsColumns: LibraryDetailsColumnKey[];
+  plotRecipes: PlotRecipe[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -221,6 +227,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
     collections: ws.collections ?? [],
     visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
+    plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -380,6 +387,7 @@ export function parseWorkspace(
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   const collections = sanitizeCollections(o.collections);
+  const plotRecipes = sanitizeRecipes(o.plotRecipes); // P1.3 — drop-malformed-never-throw, same as sanitizeQuickPlotTemplates
   return {
     datasets,
     folders: migration.folders,
@@ -409,6 +417,7 @@ export function parseWorkspace(
     expandedWorkbookIds,
     collections,
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
+    plotRecipes,
   };
 }
 
