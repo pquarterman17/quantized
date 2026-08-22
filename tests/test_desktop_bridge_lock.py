@@ -7,13 +7,16 @@ js_api adapters over :mod:`quantized.desktop_project_lock`, plus
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import quantized.desktop_project_lock as lockmod
 from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import clear_consent
+from quantized.desktop_project_lock_write import LockVerified, write_holding_token
 
 
 class FakeWindow:
@@ -267,3 +270,112 @@ def test_write_project_file_with_an_empty_token_still_writes_when_no_lock_file_e
     out = api.write_project_file(path, _workspace_json("x"))
     assert out["ok"] is True
     assert Path(path).read_text(encoding="utf-8") == _workspace_json("x")
+
+
+# -- CONTENDED soft success (R1 code-review follow-up) -----------------------
+
+
+def _hold_the_lock_in_a_thread(
+    path: str, token: str, started: threading.Event, release: threading.Event
+) -> threading.Thread:
+    def _slow_write() -> None:
+        started.set()
+        release.wait(timeout=10.0)
+
+    def _run() -> None:
+        result = write_holding_token(path, token, _slow_write)
+        assert isinstance(result, LockVerified)
+
+    t = threading.Thread(target=_run)
+    t.start()
+    assert started.wait(timeout=2.0), "writer thread never acquired the lock"
+    return t
+
+
+def test_project_lock_refresh_maps_contended_to_a_non_demoting_soft_success(
+    tmp_path: Path,
+) -> None:
+    """RED-FIRST, end-to-end: a REAL second thread holds the exclusive OS
+    lock (via `write_holding_token`, the actual save path) for the whole
+    duration of `project_lock_refresh`'s own bounded acquire retry. The
+    bridge must report `refreshed: True` (never a demotion-worthy
+    `False`) carrying the LAST record this same `DesktopApi` genuinely
+    observed (from its own prior `project_lock_acquire`) — proving the
+    frontend's `record.token` for its NEXT save is never nulled out by a
+    merely-busy heartbeat tick (see `desktop_bridge.py`'s "CONTENDED soft
+    success" doc section for why a null record there would silently
+    defeat the R1 lock-held write for the very next save)."""
+    api, path = _write_consented(tmp_path)
+    acquired = api.project_lock_acquire(path)
+    assert acquired["acquired"] is True
+    token = acquired["record"]["token"]
+
+    started = threading.Event()
+    release = threading.Event()
+    writer = _hold_the_lock_in_a_thread(path, token, started, release)
+    try:
+        out = api.project_lock_refresh(path, token)
+    finally:
+        release.set()
+        writer.join(timeout=10.0)
+
+    assert out["refreshed"] is True
+    assert out.get("contended") is True
+    assert "unverifiable" not in out
+    assert out["record"] is not None
+    assert out["record"]["token"] == token  # echoed from the cache, never null/fabricated
+
+
+def test_project_lock_refresh_with_no_cached_record_falls_back_to_honest_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Guardrail on the soft-success mapping: without a previously
+    observed record to echo, the bridge must NOT fabricate a success —
+    it falls through to the same conservative `unverifiable: true`
+    refusal every other `Contended` case gets."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "refresh", _contended)
+    out = api.project_lock_refresh(path, "some-token")
+    assert out["refreshed"] is False
+    assert out.get("unverifiable") is True
+    assert out["record"] is None
+
+
+def test_project_lock_read_maps_contended_to_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`project_lock_read` is one of the "every other unprotected read
+    caller" sites the R1 follow-up ruling names — a busy lock is reported
+    the same conservative way an unverifiable one already is (the
+    frontend already treats that as "cannot verify — read-only")."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(_path: str) -> lockmod.Contended:
+        return lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "read", _contended)
+    out = api.project_lock_read(path)
+    assert out["record"] is None
+    assert out.get("unverifiable") is True
+
+
+def test_project_lock_acquire_maps_contended_to_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A one-shot acquire attempt that finds the lock merely busy reports
+    the same conservative `unverifiable: true` refusal — unlike `refresh`,
+    a one-shot user action has no recurring-heartbeat demotion hazard to
+    soften, so an honest "busy, try again" is correct here."""
+    api, path = _write_consented(tmp_path)
+
+    def _contended(*_a: object, **_kw: object) -> tuple[bool, lockmod.Contended]:
+        return False, lockmod.Contended("simulated")
+
+    monkeypatch.setattr(lockmod, "acquire", _contended)
+    out = api.project_lock_acquire(path)
+    assert out["acquired"] is False
+    assert out.get("unverifiable") is True

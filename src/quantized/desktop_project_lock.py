@@ -15,14 +15,14 @@ read/classify/unconditional-write — two processes racing a takeover could
 both read the same stale record, both decide they win, and both write,
 leaving whichever wrote last as the "winner" with the other believing it
 also holds the lock. The fix is a real CAS primitive: every mutation past
-the initial creation opens the lock file, takes an EXCLUSIVE **OS-level**
-file lock on it (``fcntl.flock`` on POSIX, ``msvcrt.locking`` on Windows —
-a platform branch, each exercised by this repo's own OS in the 3-OS CI
-matrix), reads the CURRENT on-disk content under that lock, compares the
-caller's expected token, and only on a match overwrites in place. The OS
-lock is what makes "read current, compare, write" atomic across processes;
-a plain Python-level lock (``threading.Lock``, an in-process mutex) would
-not reach a second OS process at all.
+the initial creation opens the lock file and takes an EXCLUSIVE **OS-level**
+file lock on it (``desktop_project_lock_oslock.py`` — ``fcntl.flock`` on
+POSIX, ``msvcrt.locking`` on Windows, each exercised by this repo's own OS
+in the 3-OS CI matrix), reads the CURRENT on-disk content under that lock,
+compares the caller's expected token, and only on a match overwrites in
+place. The OS lock is what makes "read current, compare, write" atomic
+across processes; a plain Python-level lock (``threading.Lock``, an
+in-process mutex) would not reach a second OS process at all.
 
 **Token, not "who holds it".** Every acquisition mints a fresh random
 token (``secrets.token_urlsafe``) — never reused across acquire/take_over
@@ -57,22 +57,37 @@ read/write path consent).
 
 **R1 fix (see ``plans/POST_SPRINT_INDEPENDENT_REVIEW.md``'s R1 section).**
 This module used to expose ``token_still_valid`` — a CAS-protected check
-that verified a token and then RELEASED the OS lock, leaving the
-caller's actual project-file write to happen outside any lock. That left
-two defects: (a) a takeover/release/reacquire from another process could
-land in the gap between verification and ``os.replace``, and (b) an
-ABSENT lock file returned ``True`` for any supplied token, so a caller
-whose lock had been released or replaced by someone else was told to
-proceed rather than refused. ``token_still_valid`` has been removed
-entirely — it is fully superseded by
+that verified a token and then RELEASED the OS lock, leaving the caller's
+actual project-file write to happen outside any lock (a takeover could
+land in that gap), and one that returned ``True`` for ANY token when the
+lock file was ABSENT. Removed entirely, fully superseded by
 :func:`quantized.desktop_project_lock_write.write_holding_token`, which
-verifies the token and then keeps the SAME exclusive OS lock held through
-the caller's own write, closing exactly the gap this module's own CAS
-mutations (:func:`refresh`, :func:`take_over`) never had. That function
-lives in the sibling ``desktop_project_lock_write`` module (not here) so
-it can import this module's private OS-lock primitives (``_open_locked``,
-``_unlock``) without a circular import, and to keep this module under the
-repo's 500-line ceiling.
+verifies the token and keeps the SAME exclusive OS lock held through the
+caller's own write.
+
+**R1 follow-up: Contended vs. UnverifiableLock.** On Windows, ``msvcrt``
+region locks are MANDATORY — while one handle holds this package's
+exclusive lock, ANY other handle's plain, unprotected read of that byte
+range fails immediately with ``PermissionError``, not a graceful timeout.
+The first R1 cut still had an unprotected pre-read in :func:`refresh`
+that hit exactly that error while a save was in progress, misclassified
+it as :class:`UnverifiableLock`, and demoted a perfectly healthy holder's
+own heartbeat. :class:`Contended` is the fix: a distinct outcome for
+"someone else genuinely holds this right now" (that mandatory-lock error,
+or the exclusive OS-lock ACQUIRE loop timing out on either platform) as
+opposed to :class:`UnverifiableLock`'s "content IS accessible but cannot
+be trusted". :func:`refresh` no longer pre-reads at all — see its own doc
+and :class:`Contended`'s (``desktop_project_lock_record.py``) and
+``desktop_bridge.py::project_lock_refresh``'s "soft success" mapping.
+
+**Split across three modules**, purely to stay under the repo's 500-line
+ceiling as this design grew: ``desktop_project_lock_record.py`` (pure
+data — ``LockRecord``/``UnverifiableLock``/``Contended``/serialization),
+``desktop_project_lock_oslock.py`` (the exclusive-OS-lock mechanism,
+``_open_locked``/``_unlock``), and this module (the CAS policy —
+``read``/``refresh``/``take_over``/``acquire``/``release``). All three are
+plain, ordinary one-directional imports; none reaches into another's
+private names, and none of the three imports either of the others back.
 """
 
 from __future__ import annotations
@@ -81,12 +96,14 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import replace
-from typing import IO
 
+from quantized.desktop_project_lock_oslock import _open_locked, _unlock
 from quantized.desktop_project_lock_record import (
     LOCK_VERSION,
     CasResult,
+    Contended,
     LockRecord,
     UnverifiableLock,
     _lock_path,
@@ -97,6 +114,7 @@ from quantized.desktop_project_lock_record import (
 
 __all__ = [
     "CasResult",
+    "Contended",
     "DEFAULT_TTL_SECONDS",
     "LOCK_VERSION",
     "LockRecord",
@@ -115,161 +133,84 @@ __all__ = [
 # TypeScript boundary to share them.
 DEFAULT_TTL_SECONDS = 90.0
 
-# Bounded retry budget for the exclusive OS-level lock below. Plain
-# heartbeat/takeover contention between two processes resolves in a few
-# milliseconds, but R1's `write_holding_token` (desktop_project_lock_write.py)
-# now holds this SAME lock for the duration of a real project-file write —
-# a large `.dwk` payload's temp-write + `os.replace` can plausibly run into
-# the low hundreds of milliseconds to a couple of seconds on a slow disk or a
-# loaded CI runner. The prior ~1s budget (100 * 10ms) could make a concurrent
-# heartbeat's `refresh` time out and report the lock lost while a save was
-# merely still in flight — a spurious demotion, not a real loss (the frontend
-# heartbeat in `useProjectLockHeartbeat.ts` does not retry a single failed
-# refresh; see `test_desktop_project_lock_write.py`'s contention test for the
-# forced race this budget is sized against). 5s (500 * 10ms) stays bounded —
-# nowhere near the 90s `DEFAULT_TTL_SECONDS` staleness window a genuinely
-# dead holder would need to trigger a takeover — while giving a legitimate
-# in-flight write enough headroom that a healthy heartbeat never loses the
-# race against its own holder's save.
-_LOCK_RETRY_ATTEMPTS = 500
-_LOCK_RETRY_DELAY_S = 0.01
-_LOCK_REGION_BYTES = 1  # Windows locks a byte RANGE, not the whole file.
-
-
-# -- the exclusive OS-level lock (the CAS primitive's other half) -----------
-# A platform branch: mypy skips the branch that doesn't match its configured
-# `sys.platform` (the running OS, since pyproject.toml sets none explicitly),
-# so each half is only ever type-checked — and unit-tested — on its own OS;
-# the 3-OS CI matrix is what exercises both in practice.
-
-if sys.platform == "win32":
-    import msvcrt
-
-    def _try_lock(fh: IO[bytes]) -> bool:
-        try:
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, _LOCK_REGION_BYTES)
-            return True
-        except OSError:
-            return False
-
-    def _unlock(fh: IO[bytes]) -> None:
-        try:
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, _LOCK_REGION_BYTES)
-        except OSError:
-            pass  # best-effort — the fh is about to be closed regardless
-
-else:
-    import fcntl
-
-    def _try_lock(fh: IO[bytes]) -> bool:
-        try:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
-        except OSError:
-            return False
-
-    def _unlock(fh: IO[bytes]) -> None:
-        try:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-        except OSError:
-            pass  # best-effort — the fh is about to be closed regardless
-
-
-def _acquire_os_lock(fh: IO[bytes]) -> bool:
-    for attempt in range(_LOCK_RETRY_ATTEMPTS):
-        if _try_lock(fh):
-            return True
-        if attempt < _LOCK_RETRY_ATTEMPTS - 1:
-            time.sleep(_LOCK_RETRY_DELAY_S)
-    return False
-
-
-def _open_locked(
-    lock_path: str, mode: str = "r+b"
-) -> tuple[str, IO[bytes] | None, str | None]:
-    """Open `lock_path` and take the exclusive OS lock, verifying AFTER the
-    lock is held that the handle still refers to the file the path names
-    (`fstat` vs `stat`, device+inode). Locking an ORPHANED inode is the
-    race the two-process test caught red-handed: a POSIX release unlinks
-    the file, a waiter that had already opened the old path locks the
-    orphan, "wins" a CAS against content nobody else can see, and a third
-    process O_EXCL-creates a brand-new lock file — two holders at once.
-    On identity mismatch: unlock, reopen, retry (bounded).
-
-    Returns `("ok", fh, None)` with the lock HELD (caller must `_unlock`
-    then `close`), `("absent", None, None)` when the path stops existing,
-    or `("error", None, reason)` (nothing held, nothing open)."""
-    for _ in range(_LOCK_RETRY_ATTEMPTS):
-        try:
-            fh = open(lock_path, mode)
-        except FileNotFoundError:
-            return "absent", None, None
-        except (OSError, ValueError) as exc:
-            return "error", None, str(exc)
-        try:
-            locked = _acquire_os_lock(fh)
-        except (OSError, ValueError) as exc:
-            fh.close()
-            return "error", None, str(exc)
-        if not locked:
-            fh.close()
-            return "error", None, "timed out waiting for the exclusive lock"
-        stale = False
-        try:
-            fst = os.fstat(fh.fileno())
-            try:
-                pst = os.stat(lock_path)
-            except FileNotFoundError:
-                stale = True
-            else:
-                stale = (fst.st_dev, fst.st_ino) != (pst.st_dev, pst.st_ino)
-        except (OSError, ValueError) as exc:
-            _unlock(fh)
-            fh.close()
-            return "error", None, str(exc)
-        if not stale:
-            return "ok", fh, None
-        _unlock(fh)
-        fh.close()
-        time.sleep(_LOCK_RETRY_DELAY_S)
-    return "error", None, "lock file kept changing identity under the open/lock race"
+# A plain read (below) is not protected by the exclusive OS lock at all —
+# see `read`'s doc for why — so it gets its OWN small, modest retry budget
+# for the one failure mode that can hit it anyway: a Windows mandatory-lock
+# `PermissionError` while another handle holds the exclusive lock. The
+# exclusive-lock ACQUIRE budget itself, and the unrelated orphan-inode
+# identity-retry budget, live with `_open_locked`
+# (`desktop_project_lock_oslock.py`) — kept as two SEPARATE constants there
+# after a code-review finding that one shared constant on the first R1 cut
+# governed both, so enlarging one for save-contention silently enlarged
+# the unrelated other too.
+_READ_RETRY_ATTEMPTS = 20  # ~0.2s: a plain read's Windows-mandatory-lock retry.
+_READ_RETRY_DELAY_S = 0.01
 
 
 # -- reads --------------------------------------------------------------
 
 
-def read(path: str) -> LockRecord | UnverifiableLock | None:
+def read(path: str) -> LockRecord | UnverifiableLock | Contended | None:
     """Parse the lock file beside `path`. `None` = no lock file at all
-    (never held, or cleanly released). Never raises."""
-    try:
-        with open(_lock_path(path), "rb") as f:
-            raw = f.read()
-    except FileNotFoundError:
-        return None
-    except (OSError, ValueError) as exc:
-        return UnverifiableLock(str(exc))
-    try:
-        text = raw.decode("utf-8")
-    except (UnicodeDecodeError, ValueError) as exc:
-        return UnverifiableLock(str(exc))
-    return _parse_record(text)
+    (never held, or cleanly released). Never raises.
+
+    This is a PLAIN, unprotected read — it never takes the exclusive OS
+    lock itself (that would make every mere "peek" contend with real
+    mutations for no reason). On POSIX that's fine: `fcntl.flock` is
+    advisory, so a plain read always succeeds regardless of who holds the
+    lock. On WINDOWS, `msvcrt` region locks are MANDATORY — while another
+    handle holds this package's exclusive lock, this read can fail
+    immediately with `PermissionError`. That is retried a SMALL bounded
+    number of times (`_READ_RETRY_ATTEMPTS` — a "is a save merely still in
+    progress" window, not a "wait out a whole save" one) and, if it never
+    clears, reported as `Contended` — NOT `UnverifiableLock`, which is
+    reserved for content that IS readable but cannot be trusted (corrupt/
+    unparseable). Callers besides `refresh` (which has its own bespoke,
+    non-demoting handling — see its doc) should treat `Contended` the same
+    conservative way as `UnverifiableLock`: cannot verify right now, never
+    "assume free"."""
+    lock_path = _lock_path(path)
+    for attempt in range(_READ_RETRY_ATTEMPTS):
+        try:
+            with open(lock_path, "rb") as f:
+                raw = f.read()
+        except FileNotFoundError:
+            return None
+        except PermissionError as exc:
+            if attempt == _READ_RETRY_ATTEMPTS - 1:
+                return Contended(str(exc))
+            time.sleep(_READ_RETRY_DELAY_S)
+            continue
+        except (OSError, ValueError) as exc:
+            return UnverifiableLock(str(exc))
+        try:
+            text = raw.decode("utf-8")
+        except (UnicodeDecodeError, ValueError) as exc:
+            return UnverifiableLock(str(exc))
+        return _parse_record(text)
+    raise AssertionError("unreachable: the loop above always returns")
 
 
 # -- the CAS primitive ----------------------------------------------------
 
 
-def _cas_write(path: str, expected_token: str, new_record: LockRecord) -> CasResult:
-    """Open the lock file, take the exclusive OS lock, and overwrite its
-    content with `new_record` ONLY IF the token on disk right now still
-    equals `expected_token`. This is the one place a lock record is ever
-    mutated after creation — `refresh` and `take_over` are both thin
-    callers of this."""
+def _cas_update(
+    path: str, expected_token: str, build_new_record: Callable[[LockRecord], LockRecord]
+) -> CasResult:
+    """The actual CAS primitive: open the lock file, take the exclusive OS
+    lock, read the CURRENT record UNDER that lock, and — only if its token
+    still equals `expected_token` — write whatever `build_new_record`
+    computes from that current record, all before releasing. `_cas_write`
+    and `refresh` are both thin callers of this; `refresh` is the reason
+    it takes a builder rather than a precomputed record — see its doc for
+    why the "read current" step MUST happen inside the same locked section
+    as the compare-and-write, not before it."""
     state, fh, err = _open_locked(_lock_path(path))
     if state == "absent":
         return False, None
     if fh is None:
+        if state == "contended":
+            return False, Contended(err or "lock is currently held by another process/handle")
         return False, UnverifiableLock(err or "could not lock the lock file")
     try:
         try:
@@ -279,6 +220,7 @@ def _cas_write(path: str, expected_token: str, new_record: LockRecord) -> CasRes
                 return False, current
             if current is None or current.token != expected_token:
                 return False, current
+            new_record = build_new_record(current)
             payload = json.dumps(_record_to_dict(new_record)).encode("utf-8")
             fh.seek(0)
             fh.write(payload)
@@ -294,15 +236,40 @@ def _cas_write(path: str, expected_token: str, new_record: LockRecord) -> CasRes
         fh.close()
 
 
+def _cas_write(path: str, expected_token: str, new_record: LockRecord) -> CasResult:
+    """Open the lock file, take the exclusive OS lock, and overwrite its
+    content with `new_record` ONLY IF the token on disk right now still
+    equals `expected_token`. `take_over` is the caller — its replacement
+    record never depends on the current one's OTHER fields (it is a
+    brand-new identity), so a precomputed record is fine here; `refresh`
+    uses `_cas_update` directly instead, since it does need the current
+    record's other fields (see that function's doc)."""
+    return _cas_update(path, expected_token, lambda _current: new_record)
+
+
 def refresh(path: str, token: str, *, now: float) -> CasResult:
-    """CAS heartbeat bump for the holder of `token`. A token mismatch —
-    including "no lock file at all" or "unverifiable" — returns `(False,
+    """CAS heartbeat bump for the holder of `token`. Reads the CURRENT
+    record and computes the refreshed one WHILE STILL HOLDING the same
+    exclusive OS lock the write uses (`_cas_update`) — deliberately NO
+    separate, unprotected pre-read. An earlier cut of this function did
+    `current = read(path)` first, classified it, and only then called the
+    CAS primitive; on Windows that unprotected pre-read could hit a
+    mandatory-lock `PermissionError` while a save was merely in progress,
+    which got misclassified as "lost the lock" (see this module's "R1
+    follow-up" doc section and `Contended`'s own doc). Folding the read
+    into the CAS's own locked section makes that read fail (or succeed)
+    the exact same way every OTHER mutation here already does.
+
+    A token mismatch — including "no lock file at all" — returns `(False,
     current)`: the caller LOST the lock (or never verifiably had it) and
-    must drop to read-only, never keep believing it still writes."""
-    current = read(path)
-    if not isinstance(current, LockRecord) or current.token != token:
-        return False, current
-    return _cas_write(path, token, replace(current, heartbeat_at=now))
+    must drop to read-only. A `Contended` result means the lock is merely
+    BUSY right now (another mutation holds the exclusive OS lock this
+    instant) — `desktop_bridge.py::project_lock_refresh` maps this to a
+    non-demoting "soft success" rather than treating it as loss, since the
+    frontend's heartbeat does not otherwise retry a single failed refresh
+    and `DEFAULT_TTL_SECONDS`'s 3-tick staleness window is exactly what
+    absorbs one contended tick safely."""
+    return _cas_update(path, token, lambda current: replace(current, heartbeat_at=now))
 
 
 def take_over(
@@ -362,6 +329,8 @@ def _replace_tombstone(lock_path: str, fresh: LockRecord) -> CasResult:
             return True, created
         return False, created if isinstance(created, UnverifiableLock) else None
     if fh is None:
+        if state == "contended":
+            return False, Contended(err or "lock is currently held by another process/handle")
         return False, UnverifiableLock(err or "could not lock the lock file")
     try:
         try:
@@ -398,8 +367,13 @@ def acquire(
     contention: a FRESH other holder refuses outright (`False, record`); a
     STALE one is taken over via the CAS primitive (so this itself is safe
     against a third process racing the same takeover — only one of them
-    wins the CAS). An unverifiable lock file refuses rather than guessing
-    either way."""
+    wins the CAS). An unverifiable lock file, or one currently `Contended`
+    (a mandatory-lock `PermissionError` on Windows, or an OS-lock acquire
+    timeout — see `read`'s and `Contended`'s own docs), refuses rather
+    than guessing either way — this is a one-shot user action (unlike
+    `refresh`'s recurring heartbeat), so an honest "busy, try again" is the
+    correct and sufficient answer here, not the bespoke soft-success
+    treatment `refresh` gets."""
     lock_path = _lock_path(path)
     fresh = _make_record(instance_id, now, hostname, pid)
     created = _create_new(lock_path, fresh)
@@ -420,7 +394,7 @@ def acquire(
         if isinstance(created, UnverifiableLock):
             return False, created
         return _replace_tombstone(lock_path, fresh)
-    if isinstance(current, UnverifiableLock):
+    if isinstance(current, (UnverifiableLock, Contended)):
         return False, current
     if now - current.heartbeat_at <= ttl_seconds:
         return False, current  # fresh — genuinely held, no takeover attempt
@@ -446,6 +420,8 @@ def release(path: str, token: str) -> tuple[bool, str | None]:
     if state == "absent":
         return True, None
     if fh is None:
+        if state == "contended":
+            return False, err or "lock is currently held by another process/handle"
         return False, err or "could not lock the lock file"
     try:
         try:

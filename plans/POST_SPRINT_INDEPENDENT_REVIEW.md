@@ -39,25 +39,53 @@ currently exercise.
 ### [ ] R1. Hold project ownership through the actual project-file replacement
 
 **Implementation status (2026-08-22, implementer=this lane, on branch
-`claude/r1-lock-held-write`) — still open pending independent review:**
-New operation `desktop_project_lock_write.write_holding_token(path, token,
-write_fn)` takes the same exclusive OS lock `refresh`/`take_over` use,
-verifies `token` against the parsed on-disk record, and — only on a match
-— invokes `write_fn()` (the real temp-write + `os.replace`) while still
-holding that lock, releasing only after `write_fn` returns or raises. An
-absent lock file (or a release tombstone, which parses identically) with a
-non-empty token now returns `LockLost` — refused — rather than the old
-`token_still_valid`'s "nothing to check against, proceed"; that function
-has been removed, fully superseded. `desktop_bridge.py::write_project_file`
-routes a non-empty `lock_token` through this operation and an empty one
-through the unchanged legacy no-lock path. The module's shared OS-lock
-retry budget was raised from ~1s to ~5s (`_LOCK_RETRY_ATTEMPTS`/
-`_LOCK_RETRY_DELAY_S` in `desktop_project_lock.py`) so a concurrent
-heartbeat's `refresh` does not spuriously report the lock lost while a
-large in-flight save is still holding it — forced and verified by a
-dedicated contention test, not sampled. See the closure log below (reviewer
-row left blank for the orchestrator to assign) — this item stays open
-until an independent reviewer signs off.
+`claude/r1-lock-held-write`) — still open pending independent review, TWO
+rounds so far:**
+
+*Round 1.* New operation `desktop_project_lock_write.write_holding_token(
+path, token, write_fn)` takes the same exclusive OS lock `refresh`/
+`take_over` use, verifies `token` against the parsed on-disk record, and —
+only on a match — invokes `write_fn()` (the real temp-write +
+`os.replace`) while still holding that lock, releasing only after
+`write_fn` returns or raises. An absent lock file (or a release tombstone,
+which parses identically) with a non-empty token now returns `LockLost` —
+refused — rather than the old `token_still_valid`'s "nothing to check
+against, proceed"; that function has been removed, fully superseded.
+`desktop_bridge.py::write_project_file` routes a non-empty `lock_token`
+through this operation and an empty one through the unchanged legacy
+no-lock path.
+
+*Round 2 (code review of round 1 — 4 real findings + 1 cleanup, all
+fixed).* **Blocking finding:** on Windows, `msvcrt` region locks are
+MANDATORY, so `refresh`'s then-unprotected pre-read (needed to build the
+refreshed record's other fields) would hit a `PermissionError` immediately
+while a save was in progress and misclassify it as `UnverifiableLock` —
+demoting a perfectly healthy holder, and never even reaching round 1's
+enlarged retry budget. Fixed by introducing a distinct `Contended` outcome
+(`desktop_project_lock_record.py`) for "someone else genuinely holds this
+right now" — separate from `UnverifiableLock`'s "content is readable but
+untrustworthy" — and by folding `refresh`'s read into the SAME locked CAS
+section as the write (`_cas_update`, `desktop_project_lock.py`), so there
+is no separate unprotected pre-read left to fail. `read`'s other callers
+(`acquire`'s existing-file path, `project_lock_read`) get the identical
+Windows-mandatory-lock retry-then-`Contended` treatment. The bridge maps a
+`Contended` refresh to a non-demoting "soft success" carrying the last
+genuinely-observed record (never fabricated, never null) so the
+frontend's `record.token` for its next save stays intact — verified
+`store/projectLock.ts` needs no change (its `heartbeat()`/`toCasResult`
+handling already treats this correctly). The retry-budget constant that
+round 1 quintupled was split into two independent, MODEST constants
+(`desktop_project_lock_oslock.py`'s `_LOCK_ACQUIRE_RETRY_ATTEMPTS` /
+`_IDENTITY_RETRY_ATTEMPTS`) — a shared constant had silently coupled the
+OS-lock acquire budget to an unrelated orphan-inode identity-retry loop.
+The exclusive-OS-lock mechanism (`_open_locked`/`_unlock`) was also
+pulled into its own `desktop_project_lock_oslock.py` module so
+`desktop_project_lock.py` and `desktop_project_lock_write.py` both import
+it the ordinary way instead of one reaching into the other's private
+names — a proportionate response to `desktop_project_lock.py` exceeding
+the 500-line ceiling once `Contended`'s documentation landed. See the
+closure log below (reviewer row left blank for the orchestrator to
+assign) — this item stays open until an independent reviewer signs off.
 
 **Problem:** `desktop_bridge.py::write_project_file` calls
 `desktop_project_lock.token_still_valid`, releases that function's OS-level lock,
@@ -305,5 +333,6 @@ agent can distinguish implementation from verification:
 | Date | Item | PR/commit | Implementer | Independent reviewer | Evidence and residual risk |
 |---|---|---|---|---|---|
 | 2026-08-22 | Audit created | — | ChatGPT-Sol | — | Read-only review; no application fixes made |
-| 2026-08-22 | R1 fix | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | `write_holding_token` holds the exclusive OS lock across verify + temp-write + `os.replace`; absent lock + non-empty token now refuses (`token_still_valid` removed). Red-first: `tests/test_desktop_project_lock_write.py` (9 tests: basic contract, absent/mismatched/corrupt/tombstoned-token refusal, a real 2-process takeover-during-write race via `multiprocessing` spawn, and 2 forced contention-budget tests proving the old ~1s OS-lock retry budget could spuriously fail a concurrent `refresh` mid-save and the new ~5s budget does not) plus updated `tests/test_desktop_bridge_lock.py`/`test_desktop_project_lock.py`. Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests, full `pytest -q` (see PR/report for exact counts). Residual risk: not yet independently reviewed; real packaged Windows/macOS orphaned-inode behavior still only covered by the pre-existing shared `_open_locked` primitive and its 3-OS CI matrix, not a dedicated new adversarial test against `write_holding_token` specifically. |
+| 2026-08-22 | R1 fix (round 1) | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | `write_holding_token` holds the exclusive OS lock across verify + temp-write + `os.replace`; absent lock + non-empty token now refuses (`token_still_valid` removed). Red-first: `tests/test_desktop_project_lock_write.py` (9 tests: basic contract, absent/mismatched/corrupt/tombstoned-token refusal, a real 2-process takeover-during-write race via `multiprocessing` spawn, and 2 forced contention-budget tests proving the old ~1s OS-lock retry budget could spuriously fail a concurrent `refresh` mid-save and the new ~5s budget does not) plus updated `tests/test_desktop_bridge_lock.py`/`test_desktop_project_lock.py`. Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests, full `pytest -q`. Residual risk flagged at the time: not yet independently reviewed; a code-review pass (see the round-2 row) found the retry-budget fix incomplete. |
+| 2026-08-22 | R1 fix (round 2 — code review of round 1) | branch `claude/r1-lock-held-write` (not yet merged/PR'd) | Claude (this lane) | _(blank — orchestrator to assign)_ | Fixed 4 real findings + 1 cleanup from a code-review pass on round 1. BLOCKING finding: Windows `msvcrt` locks are mandatory, so `refresh`'s unprotected pre-read hit `PermissionError` immediately during a concurrent save and misclassified it as `UnverifiableLock` (demotion), bypassing round 1's enlarged budget entirely. Fixed with a new `Contended` outcome (`desktop_project_lock_record.py`), folding `refresh`'s read into its own locked CAS section (`_cas_update`), the same retry-then-classify treatment for `read`'s other callers (`acquire`, `project_lock_read`), and a bridge-side non-demoting "soft success" mapping for a `Contended` refresh that echoes the last genuinely-observed record (never null/fabricated) — verified `frontend/src/store/projectLock.ts` needs no change. Split the overloaded retry constant into two modest, independent ones and pulled the OS-lock mechanism into its own `desktop_project_lock_oslock.py` module (kept every touched module under the 500-line ceiling). Cleaned up a dead `tmp_path` pre-assignment in `desktop_bridge.py`. Red-first: real forced-contention tests (`threading`, not sampled) in `tests/test_desktop_project_lock_write.py` (`Contended` from both `refresh` and `write_holding_token` while a real writer holds the lock), `tests/test_desktop_project_lock.py` (Windows-PermissionError simulated via `builtins.open` monkeypatching — the real proof is the Windows CI leg — plus a structural "refresh must not pre-read" guard), and `tests/test_desktop_bridge_lock.py` (the end-to-end soft-success mapping under real contention, its no-cached-record fallback, and the generic `Contended`→`unverifiable` mapping for `read`/`acquire`). Full gates green: `ruff check src tests`, `mypy src`, targeted lock/bridge tests (110 passed), full `pytest -q`. Residual risk: still not independently reviewed; real Windows CI leg is the only genuine proof of the mandatory-lock behavior these tests simulate. |
 

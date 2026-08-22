@@ -79,6 +79,27 @@ full native lifecycle; the browser/multi-tab cross-TAB lock provider
 (``store/projectLock.ts``'s own header covers that gap — a filesystem lock
 protects separate OS PROCESSES, not two tabs sharing one server, which
 needs an entirely different mechanism).
+
+**``project_lock_refresh``'s CONTENDED "soft success" (R1 follow-up).**
+``desktop_project_lock.refresh`` can report ``Contended`` — the lock is
+merely BUSY right now (another mutation/save holds the exclusive OS lock
+this instant), never actually lost. Reporting that honestly as
+``refreshed: False`` would make ``frontend/src/store/projectLock.ts``'s
+``heartbeat()`` demote a perfectly healthy session (it does not retry a
+single failed refresh), AND — worse — its ``set({record: result.record})``
+on a refused result would leave ``record`` however that path sets it;
+since a refusal there is meant to reflect a REAL loss, this module instead
+reports a CONTENDED refresh as ``refreshed: True`` with the LAST lock
+record this same ``DesktopApi`` actually observed for this path
+(``self._last_known_lock_record`` — populated by every OTHER successful
+lock call, never fabricated). This keeps the frontend's ``record.token``
+intact for its next save attempt, which
+``write_project_file``/``write_holding_token`` re-verifies for REAL at
+write time regardless — this mapping is a bookkeeping softening for the
+recurring heartbeat only, never a substitute for that real check. The
+frontend needs no change for this: it already treats "refreshed: true"
+as "still holds it" and does not otherwise inspect the record's
+heartbeat for freshness itself.
 """
 
 from __future__ import annotations
@@ -116,6 +137,11 @@ class DesktopApi(DesktopDialogBridge):
         # One id per running process, minted ONCE — see this module's "PR I2"
         # section for why the frontend can never supply or override this.
         self._instance_id = str(uuid.uuid4())
+        # Last LockRecord this instance actually observed, per granted path —
+        # see this module's "CONTENDED soft success" doc section. Never
+        # fabricated: only ever populated from a genuine successful
+        # acquire/read/refresh/takeover response.
+        self._last_known_lock_record: dict[str, lockmod.LockRecord] = {}
 
     def attach(self, window: Any) -> None:
         """Called by the launcher once the window exists — the dialog methods
@@ -184,7 +210,7 @@ class DesktopApi(DesktopDialogBridge):
         cleanup_stray_write_temps(directory)
 
         def _replace() -> None:
-            tmp_path: str | None = None
+            tmp_path: str | None
             fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -221,6 +247,7 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"acquired": False, "error": "path not consented for writing"}
         ok, record = lockmod.acquire(granted, self._instance_id, now=time.time())
+        self._remember(granted, record)
         return _lock_result(record, outcome_key="acquired", outcome_value=ok)
 
     def project_lock_read(self, path: str) -> dict[str, Any]:
@@ -230,17 +257,38 @@ class DesktopApi(DesktopDialogBridge):
         granted = self._consented_write_or_none(path)
         if granted is None:
             return {"record": None, "error": "path not consented for writing"}
-        return _lock_result(lockmod.read(granted), outcome_key="acquired", outcome_value=None)
+        record = lockmod.read(granted)
+        self._remember(granted, record)
+        return _lock_result(record, outcome_key="acquired", outcome_value=None)
 
     def project_lock_refresh(self, path: str, token: str) -> dict[str, Any]:
         """Heartbeat bump for a lock this instance believes it holds. A
         token mismatch (including "no lock file" / "unverifiable") reports
         `refreshed: False` — the caller must drop to read-only, never keep
-        assuming it still writes."""
+        assuming it still writes.
+
+        A `Contended` result (the lock is merely BUSY right now — see
+        `desktop_project_lock.refresh`'s doc) is mapped to a "soft success"
+        instead — see this module's "CONTENDED soft success" doc section
+        for the full rationale. `write_project_file`'s own re-verification
+        at actual write time is what stays authoritative regardless."""
         granted = self._consented_write_or_none(path)
         if granted is None:
             return {"refreshed": False, "error": "path not consented for writing"}
         ok, record = lockmod.refresh(granted, token, now=time.time())
+        if isinstance(record, lockmod.Contended):
+            cached = self._last_known_lock_record.get(granted)
+            if cached is not None:
+                # The soft success: never fabricate — only ever echo a
+                # record THIS instance genuinely observed before. Without
+                # one cached (a very early heartbeat, or a fresh reconnect
+                # that never itself saw a successful acquire/read), fall
+                # through to the honest `Contended` refusal below rather
+                # than report success with no record to back it up.
+                result = _lock_result(cached, outcome_key="refreshed", outcome_value=True)
+                result["contended"] = True  # additive diagnostic only — safe to ignore
+                return result
+        self._remember(granted, record)
         return _lock_result(record, outcome_key="refreshed", outcome_value=ok)
 
     def project_lock_takeover(self, path: str, expected_token: str) -> dict[str, Any]:
@@ -252,6 +300,7 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"acquired": False, "error": "path not consented for writing"}
         ok, record = lockmod.take_over(granted, expected_token, self._instance_id, now=time.time())
+        self._remember(granted, record)
         return _lock_result(record, outcome_key="acquired", outcome_value=ok)
 
     def project_lock_release(self, path: str, token: str) -> dict[str, Any]:
@@ -262,6 +311,8 @@ class DesktopApi(DesktopDialogBridge):
         if granted is None:
             return {"released": False, "error": "path not consented for writing"}
         released, reason = lockmod.release(granted, token)
+        if released:
+            self._last_known_lock_record.pop(granted, None)
         out: dict[str, Any] = {"released": released}
         if reason is not None:
             out["error"] = reason
@@ -274,17 +325,30 @@ class DesktopApi(DesktopDialogBridge):
             return None
         return consented_write_path(resolved)
 
+    def _remember(self, granted: str, record: object) -> None:
+        """Cache a genuinely-observed `LockRecord` for `granted` — see
+        `project_lock_refresh`'s CONTENDED soft-success mapping. A no-op
+        for anything else (no record, `UnverifiableLock`, `Contended`):
+        those never overwrite a previously good cached value."""
+        if isinstance(record, lockmod.LockRecord):
+            self._last_known_lock_record[granted] = record
+
 
 def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None) -> dict[str, Any]:
     """Shared JSON shape for every lock bridge method above: the outcome
     under `outcome_key` (`None` for `project_lock_read`, which has no
     success/failure of its own — it only reports what's on disk), plus
     whatever record/reason is known. A `LockRecord` serializes to its
-    fields; an `UnverifiableLock` serializes to `{"unverifiable": True,
-    "error": ...}` (never raised, never silently treated as "no lock" — the
-    frontend must treat this as cannot-verify -> read-only, same as the pure
-    module's own doc requires); anything else serializes to `"record":
-    None`."""
+    fields; an `UnverifiableLock` OR a `Contended` (the OS lock is busy
+    RIGHT NOW — see that class's doc) both serialize to
+    `{"unverifiable": True, "error": ...}` — the SAME wire flag, since the
+    frontend already treats it identically and conservatively either way
+    ("cannot verify right now — read-only, never assume free"); the two
+    are kept as DISTINCT Python types purely so this module and
+    `desktop_project_lock.py` can reason about them precisely (e.g.
+    `project_lock_refresh`'s bespoke "soft success" mapping for
+    `Contended`, which intercepts it BEFORE it ever reaches this shared
+    helper). Anything else serializes to `"record": None`."""
     out: dict[str, Any] = {outcome_key: outcome_value}
     if isinstance(record, lockmod.LockRecord):
         out["record"] = {
@@ -296,7 +360,7 @@ def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None
             "acquiredAt": record.acquired_at,
             "heartbeatAt": record.heartbeat_at,
         }
-    elif isinstance(record, lockmod.UnverifiableLock):
+    elif isinstance(record, (lockmod.UnverifiableLock, lockmod.Contended)):
         out["record"] = None
         out["unverifiable"] = True
         out["error"] = record.reason

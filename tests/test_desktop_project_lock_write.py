@@ -12,14 +12,19 @@ RED-FIRST EVIDENCE, two kinds:
    shape did NOT have. It also proves the old, now-stale token is refused
    for a follow-up write afterward: the "displaced writer never lands"
    half of the acceptance criterion.
-2. `test_refresh_spuriously_loses_a_healthy_lock_under_too_small_a_retry_
-   budget` and `test_refresh_waits_out_a_slow_write_under_the_real_budget`
-   force the SAME contention scenario (a real second thread genuinely
-   holding the OS lock, synchronized via an `Event`, not a raw sleep) once
-   against an artificially small retry budget (reproducing the bug a too-
-   small budget causes) and once against the module's actual, current
-   budget (proving it is large enough) — the item-3 contention-budget
-   evidence.
+2. `test_refresh_reports_contended_not_lost_while_a_save_holds_the_lock`
+   forces a real second thread to hold the exclusive OS lock (via
+   `write_holding_token`, synchronized on an `Event`, not a raw sleep) for
+   LONGER than the modest OS-lock-acquire budget, and shows a concurrent
+   `refresh` correctly classifies this as `Contended` — busy right now,
+   never lost — rather than `UnverifiableLock` (the code-review finding:
+   the first R1 cut's separate, unprotected pre-read inside `refresh`
+   would hit a Windows mandatory-lock `PermissionError` in exactly this
+   window and misclassify it). `test_project_lock_refresh_maps_contended_
+   to_a_non_demoting_soft_success` (in `test_desktop_bridge_lock.py`) is
+   the other half: proving the BRIDGE turns that `Contended` into a
+   non-demoting response carrying the last genuinely-observed record, not
+   a fabricated or null one.
 """
 
 from __future__ import annotations
@@ -31,10 +36,7 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
-
-import quantized.desktop_project_lock as lockmod
-from quantized.desktop_project_lock import LockRecord, UnverifiableLock, acquire, refresh
+from quantized.desktop_project_lock import Contended, LockRecord, UnverifiableLock, acquire, refresh
 from quantized.desktop_project_lock_write import LockLost, LockVerified, write_holding_token
 
 
@@ -282,40 +284,41 @@ def _hold_the_lock_in_a_thread(
     return t, outcome
 
 
-def test_refresh_spuriously_loses_a_healthy_lock_under_too_small_a_retry_budget(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """RED: reproduces the item-3 bug directly — with a retry budget too
-    small to outlast an in-flight write, a perfectly healthy holder's own
-    heartbeat reports the lock lost while its OWN save is still running."""
+def test_refresh_reports_contended_not_lost_while_a_save_holds_the_lock(tmp_path: Path) -> None:
+    """RED-FIRST evidence for the reclassification (code-review finding on
+    the first R1 cut): forces a real second thread to hold the exclusive
+    OS lock — via `write_holding_token`, the actual production save path,
+    not a bare lock-grab — for the DURATION of `refresh`'s entire acquire
+    retry budget (the writer only releases once THIS test tells it to, in
+    `finally`, so `refresh`'s own bounded retry loop is guaranteed to run
+    to completion before returning). The result must be `Contended` — busy
+    right now — never `UnverifiableLock` (a real heartbeat lost this
+    distinction on the first cut because it pre-read the lock file
+    UNPROTECTED before ever reaching the CAS primitive; see `refresh`'s
+    and `Contended`'s own docs)."""
     path = _project(tmp_path)
     _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
     assert isinstance(rec, LockRecord)
 
     started = threading.Event()
     release = threading.Event()
-    monkeypatch.setattr(lockmod, "_LOCK_RETRY_ATTEMPTS", 5)
-    monkeypatch.setattr(lockmod, "_LOCK_RETRY_DELAY_S", 0.01)
     writer_thread, outcome = _hold_the_lock_in_a_thread(path, rec.token, started, release)
     try:
-        # The writer is holding the lock (confirmed via `started`) and will
-        # not release for a long time — this refresh call is FORCED to hit
-        # the (tiny) retry budget's ceiling before the writer ever lets go.
         ok, current = refresh(path, rec.token, now=1030.0)
-        assert ok is False
-        assert isinstance(current, UnverifiableLock)
     finally:
         release.set()
-        writer_thread.join(timeout=5.0)
-    assert isinstance(outcome["result"], LockVerified)  # the write itself was fine
+        writer_thread.join(timeout=10.0)
+    assert ok is False
+    assert isinstance(current, Contended), f"expected Contended, got {current!r}"
+    assert isinstance(outcome["result"], LockVerified)  # the write itself completed fine
 
 
-def test_refresh_waits_out_a_slow_write_under_the_real_budget(tmp_path: Path) -> None:
-    """FIX: forces the identical contention (a real thread genuinely
-    holding the OS lock, synchronized via an `Event`) against the module's
-    ACTUAL, current retry budget rather than a hardcoded number, and shows
-    a concurrent refresh now waits it out and succeeds instead of
-    spuriously reporting the lock lost."""
+def test_write_holding_token_also_reports_contended_not_unverifiable(tmp_path: Path) -> None:
+    """The same reclassification applies to `write_holding_token` itself
+    (not just `refresh`): a second, concurrent save attempt that cannot
+    even acquire the exclusive OS lock — because a FIRST save already
+    holds it — must be told the lock is busy, not that its content is
+    corrupt."""
     path = _project(tmp_path)
     _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
     assert isinstance(rec, LockRecord)
@@ -323,25 +326,15 @@ def test_refresh_waits_out_a_slow_write_under_the_real_budget(tmp_path: Path) ->
     started = threading.Event()
     release = threading.Event()
     writer_thread, outcome = _hold_the_lock_in_a_thread(path, rec.token, started, release)
-    # Release the lock partway through — DELIBERATELY past the OLD ~1s
-    # budget this module used to have (100 attempts * 10ms), so this test
-    # would fail against that prior budget and only passes because the
-    # budget was actually enlarged (read from the module rather than
-    # hardcoded here, so this stays honest about testing the real value).
-    old_budget_s = 100 * 0.01  # the pre-R1 `_LOCK_RETRY_ATTEMPTS * _LOCK_RETRY_DELAY_S`
-    hold_s = 1.5
-    assert hold_s > old_budget_s, "must exceed the OLD budget to prove this isn't vacuous"
-    assert hold_s < lockmod._LOCK_RETRY_ATTEMPTS * lockmod._LOCK_RETRY_DELAY_S, (
-        "must stay under the module's CURRENT budget or this test would (correctly) fail"
-    )
-    timer = threading.Timer(hold_s, release.set)
-    timer.start()
+
+    def _never_runs() -> None:
+        raise AssertionError("write_fn must never run when the lock could not be acquired")
+
     try:
-        ok, current = refresh(path, rec.token, now=1030.0)
+        second_result = write_holding_token(path, rec.token, _never_runs)
     finally:
+        release.set()
         writer_thread.join(timeout=10.0)
-        timer.join(timeout=1.0)
-    assert ok is True, current
-    assert isinstance(current, LockRecord)
-    assert current.heartbeat_at == 1030.0
+    assert isinstance(second_result, LockLost)
+    assert isinstance(second_result.record, Contended), f"expected Contended, got {second_result!r}"
     assert isinstance(outcome["result"], LockVerified)

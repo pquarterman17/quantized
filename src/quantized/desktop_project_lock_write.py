@@ -30,12 +30,11 @@ still hold it.
 **Split from ``desktop_project_lock.py`` purely to keep that module under
 the repo's 500-line ceiling** (the same reason
 ``desktop_project_lock_record.py`` was split out — see that module's own
-doc). This module reaches into ``desktop_project_lock``'s private
-platform-specific OS-lock primitives (``_open_locked``, ``_unlock``)
-rather than re-implementing them, because this operation and the CAS
-mutations there MUST use identical lock semantics — importing in this
-direction only (this module depends on ``desktop_project_lock``, never the
-reverse) avoids a circular import between the two.
+doc). This module imports the exclusive-OS-lock mechanism
+(``_open_locked``, ``_unlock``) from ``desktop_project_lock_oslock.py`` —
+an ordinary import, not a reach into a sibling's private names — because
+this operation and ``desktop_project_lock.py``'s own CAS mutations MUST
+use identical lock semantics.
 
 **Legacy no-lock path is NOT this module's concern.** Per the frozen
 ``write_project_file`` contract, an EMPTY token skips verification
@@ -55,8 +54,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from quantized.desktop_project_lock import _open_locked, _unlock
+from quantized.desktop_project_lock_oslock import _open_locked, _unlock
 from quantized.desktop_project_lock_record import (
+    Contended,
     LockRecord,
     UnverifiableLock,
     _lock_path,
@@ -83,12 +83,19 @@ class LockLost:
     reports on loss: `None` for "no lock file" (including a release
     tombstone, which parses as `None` — see
     `desktop_project_lock_record._parse_record`'s doc) or a stale-token
-    mismatch's current holder, or an `UnverifiableLock` for corrupt/
-    unreadable lock content. `desktop_bridge.py` maps every `LockLost`
-    outcome to the SAME `"lock lost"` error string regardless of which of
-    these it was — the frontend does not need to distinguish them."""
+    mismatch's current holder, an `UnverifiableLock` for corrupt/unreadable
+    lock content, or a `Contended` when the exclusive OS lock itself could
+    not even be acquired (someone else's CAS mutation is running right
+    this instant — see `Contended`'s own doc). `desktop_bridge.py` maps
+    every `LockLost` outcome to the SAME `"lock lost"` error string
+    regardless of which of these it was — a save is a one-shot,
+    user-triggered action, not a recurring heartbeat, so there is no
+    `refresh`-style "soft success" case to special-case here: a save that
+    could not verify or could not even get the lock right now is safely
+    reported as refused, and the caller (or the user, via a retry) simply
+    tries again."""
 
-    record: LockRecord | UnverifiableLock | None
+    record: LockRecord | UnverifiableLock | Contended | None
 
 
 def write_holding_token(
@@ -115,9 +122,12 @@ def write_holding_token(
       - the lock file exists but its token does not match `token` —
         someone else (a takeover) already moved.
       - the lock file cannot be trusted (corrupt JSON, a torn read, an
-        I/O error) or the exclusive OS lock itself could not be acquired
-        within the module's retry budget — both `UnverifiableLock`, never
-        raised, matching every other reader in the sibling module.
+        I/O error) — `UnverifiableLock`, never raised.
+      - the exclusive OS lock itself could not be acquired within the
+        module's retry budget, or (Windows only) a mandatory-lock
+        `PermissionError` was hit acquiring it — `Contended`: someone
+        else's CAS mutation is running right now, distinct from
+        corrupted content.
 
     Returns `LockVerified(result)` — wrapping whatever `write_fn()`
     returned — when the token matched and `write_fn` ran to completion.
@@ -136,6 +146,8 @@ def write_holding_token(
     if state == "absent":
         return LockLost(None)
     if fh is None:
+        if state == "contended":
+            return LockLost(Contended(err or "lock is currently held by another process/handle"))
         return LockLost(UnverifiableLock(err or "could not lock the lock file"))
     try:
         try:

@@ -11,6 +11,7 @@ corrupts — proving the race is real, not a strawman, and that `_cas_write`
 
 from __future__ import annotations
 
+import builtins
 import json
 import multiprocessing
 import multiprocessing.synchronize
@@ -22,6 +23,7 @@ import pytest
 
 import quantized.desktop_project_lock as lockmod
 from quantized.desktop_project_lock import (
+    Contended,
     LockRecord,
     UnverifiableLock,
     acquire,
@@ -246,6 +248,108 @@ def test_embedded_null_path_never_raises() -> None:
     assert ok is False
     ok2, _ = release(bad, "tok")
     assert ok2 is False or ok2 is True  # never raises either way
+
+
+# -- Contended vs. UnverifiableLock (R1 code-review follow-up) --------------
+#
+# Windows semantics simulated on Linux dev: `msvcrt` region locks are
+# MANDATORY, so a plain, unprotected read of a locked byte range fails
+# immediately with `PermissionError` — simulated here by monkeypatching
+# `builtins.open` to raise it for the lock file specifically. The real
+# proof that this actually happens on Windows is the Windows CI leg (this
+# repo's 3-OS matrix); these tests prove `read`'s CLASSIFICATION logic is
+# correct given that a `PermissionError` occurs, independent of platform.
+
+
+def _lock_file_path(path: str) -> str:
+    return path + ".lock"
+
+
+def test_read_retries_a_permission_error_then_classifies_contended(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _always_denied(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file:
+            calls["n"] += 1
+            raise PermissionError("simulated Windows mandatory-lock violation")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _always_denied)
+    result = read(path)
+    assert isinstance(result, Contended)
+    # Actually retried (not a single immediate failure) — the SMALL bounded
+    # budget `read`'s own doc promises, exhausted here on purpose.
+    assert calls["n"] == lockmod._READ_RETRY_ATTEMPTS
+
+
+def test_read_succeeds_once_a_transient_permission_error_clears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proves the retry is not merely cosmetic: a `PermissionError` that
+    clears part-way through the bounded budget still yields the REAL
+    record, not `Contended`."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    real_open = builtins.open
+    calls = {"n": 0}
+    lock_file = _lock_file_path(path)
+
+    def _denied_twice(file: object, *args: object, **kwargs: object) -> object:
+        if file == lock_file and calls["n"] < 2:
+            calls["n"] += 1
+            raise PermissionError("simulated Windows mandatory-lock violation")
+        return real_open(file, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "open", _denied_twice)
+    result = read(path)
+    assert isinstance(result, LockRecord)
+    assert result.token == rec.token
+    assert calls["n"] == 2
+
+
+def test_acquire_propagates_contended_from_read_rather_than_guessing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`acquire`'s existing-file classification path funnels through the
+    SAME `read` — this proves that caller (named explicitly by the R1
+    follow-up ruling) inherits the fix with no separate code path to
+    forget."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+    monkeypatch.setattr(lockmod, "read", lambda _path: Contended("simulated"))
+    ok, result = acquire(path, "instance-b", now=1001.0, ttl_seconds=90.0)
+    assert ok is False
+    assert isinstance(result, Contended)
+
+
+def test_refresh_never_pre_reads_unprotected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R1 follow-up mechanism check: `refresh` must not call the plain,
+    unprotected `read` at all any more — everything happens under the one
+    locked `_cas_update` section. Proven by making `read` explode if
+    called; `refresh` must still work normally."""
+    path = _project(tmp_path)
+    _, rec = acquire(path, "instance-a", now=1000.0, ttl_seconds=90.0)
+    assert isinstance(rec, LockRecord)
+
+    def _explode(_path: str) -> None:
+        raise AssertionError("refresh must not call the unprotected read() any more")
+
+    monkeypatch.setattr(lockmod, "read", _explode)
+    ok, updated = refresh(path, rec.token, now=1030.0)
+    assert ok is True
+    assert isinstance(updated, LockRecord)
+    assert updated.heartbeat_at == 1030.0
 
 
 # -- the read/classify/unconditional-write race this module fixes -----------
