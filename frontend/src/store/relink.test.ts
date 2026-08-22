@@ -166,6 +166,36 @@ describe("runPreview — changed-source detection (box 4/5)", () => {
 
     expect(useRelink.getState().preview[0].changeVerdict).toBe("unchanged");
   });
+
+  // F2 (code-review, investigated architectural finding — see this module's
+  // "KNOWN LIMITATION" doc and POST_SPRINT_INDEPENDENT_REVIEW.md's R3
+  // closure log): a relink CANDIDATE path is never read-consented in the
+  // real desktop app (only paths in the project's server-tracked declared-
+  // source set are — a candidate, by definition, isn't one yet), so
+  // `probe_source` never computes a checksum for one — a checksum-bearing
+  // dataset's fresh probe carries `checksum: null` even though the file is
+  // perfectly reachable (state "ok", real size/mtime). This locks in the
+  // HONEST degradation that limitation produces: never a false "unchanged"
+  // (which would require a checksum match that can never happen), always
+  // "unknown" for a dataset that recorded one.
+  it("degrades honestly to 'unknown' (never a false 'unchanged') for a checksum-recorded dataset, matching a consent-accurate probe mock (checksum null, real size/mtime — the real desktop app's un-consented-candidate shape)", async () => {
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/run1.csv",
+      size: 10,
+      mtime: 100,
+      checksum: null, // consent-accurate: candidate paths are never granted today
+    });
+    useApp.setState({
+      datasets: [baseDataset({ source: { kind: "path", path: "/old/data/run1.csv", checksum: "sha256:old" } })],
+    });
+    useRelink.setState({ oldRoot: "/old/data", newRoot: "/new/place" });
+
+    await useRelink.getState().runPreview();
+
+    expect(useRelink.getState().preview[0].changeVerdict).toBe("unknown");
+    expect(useRelink.getState().preview[0].status).toBe("resolved"); // reachable — just unverifiable
+  });
 });
 
 describe("commit (box 3: atomic, one undo entry)", () => {
@@ -284,10 +314,10 @@ describe("commit (box 3: atomic, one undo entry)", () => {
 
     expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv"); // untouched
     expect(useApp.getState().history).toHaveLength(0);
-    // F1 (code-review, restored consent guard): the fresh probe no longer
-    // matches what Preview itself showed — named honestly as "changed since
-    // Preview" (F4), not lumped into a generic catch-all.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 changed since Preview", "danger");
+    // R3 recompute: the fresh checksum conflicts with the RECORDED one — a
+    // distinct bucket (F4) from a Preview-only mismatch, since the recorded
+    // checksum is what's actually being violated here.
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 diff", "danger");
   });
 
   it("re-probes at commit time and drops a row that vanished since Preview", async () => {
@@ -326,7 +356,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // F4 (code-review, honest wording): "unreachable" is its own bucket now,
     // distinct from "changed" (content differs) — this row never even got a
     // fresh probe to compare content with.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 unreachable", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 gone", "danger");
   });
 
   it("excludes a 'changed' row from commit — never silently rewritten (box 2/5)", async () => {
@@ -557,7 +587,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(useApp.getState().history).toHaveLength(1); // one entry for "b" alone
     const calls = vi.mocked(toast).mock.calls;
     const [msg] = calls[calls.length - 1];
-    expect(msg).toMatch(/changed since Preview/i);
+    expect(msg).toMatch(/diff/i);
     expect(msg).toContain("1");
   });
 
@@ -592,13 +622,14 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       ],
     });
     // Fresh probe at commit succeeds (the path is reachable) but STILL
-    // cannot compute a checksum — size/mtime differ from what's recorded
-    // too (e.g. a filesystem copy), which must NOT get written either.
+    // cannot compute a checksum — size/mtime match EXACTLY what Preview
+    // itself showed (5/5), so F1's Preview-consent guard has nothing to
+    // object to; only the RECORDED checksum ("A") remains unconfirmable.
     vi.mocked(desktopBridge.probeSource).mockResolvedValue({
       state: "ok",
       path: "/new/place/a.csv",
-      size: 777,
-      mtime: 777,
+      size: 5,
+      mtime: 5,
       checksum: null,
     });
 
@@ -610,8 +641,8 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       kind: "path",
       path: "/new/place/a.csv", // path DOES move
       checksum: "sha256:A", // ORIGINAL recorded checksum, unchanged
-      mtime: 10, // ORIGINAL recorded mtime, NOT the fresh probe's 777
-      size: 10, // ORIGINAL recorded size, NOT the fresh probe's 777
+      mtime: 10, // ORIGINAL recorded mtime, NOT the fresh probe's 5
+      size: 10, // ORIGINAL recorded size, NOT the fresh probe's 5
     });
     expect(useApp.getState().history).toHaveLength(1);
   });
@@ -773,7 +804,64 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       checksum: "sha256:elsewhere",
     });
     expect(useApp.getState().history).toHaveLength(0);
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 removed/reimported", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
+  });
+
+  // F3 (code-review, RED-FIRST — the referential-identity strengthening):
+  // a SAME-PATH swap — a project reload or an undo landing in the exact
+  // probe-in-flight window, reconstructing a `source` object that is
+  // value-equal (same path, same checksum) but NOT the same object — must
+  // still fail closed. A path-string re-check (the pre-fix shape) would see
+  // an identical string and wave this straight through; only a referential
+  // (`===`) check against the EXACT object the write was computed against
+  // catches it.
+  it("fails closed with zero mutation when a dataset's source is replaced by a VALUE-EQUAL but different object (same path) mid-probe", async () => {
+    useApp.setState({
+      datasets: [baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:a" } })],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:a",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    let releaseProbe: () => void = () => {};
+    const probeGate = new Promise<void>((resolve) => {
+      releaseProbe = resolve;
+    });
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) => {
+      await probeGate;
+      return { state: "ok", path, size: 1, mtime: 1, checksum: "sha256:a" };
+    });
+
+    const commitPromise = useRelink.getState().commit();
+    // Replace the dataset's `source` with a BRAND NEW object carrying the
+    // EXACT SAME path and checksum — value-equal, not reference-equal (a
+    // project reload re-parsing the same `.dwk`, or an undo restoring a
+    // snapshot, both reconstruct fresh objects this way).
+    useApp.setState((state) => ({
+      datasets: state.datasets.map((d) =>
+        d.id === "a" ? { ...d, source: { kind: "path" as const, path: "/old/data/a.csv", checksum: "sha256:a" } } : d,
+      ),
+    }));
+    releaseProbe();
+    await commitPromise;
+
+    // Fails closed: never overwrites a `source` that isn't LITERALLY the
+    // one the write was computed against, even though its path/checksum
+    // read identically to what was there before.
+    expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv");
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
   });
 
   // R3 #4: the dataset a row named was removed between Preview and commit
@@ -831,7 +919,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(datasets.find((d) => d.id === "b")!.source?.path).toBe("/old/data/b.csv"); // untouched, unrelated
     const calls = vi.mocked(toast).mock.calls;
     const [msg] = calls[calls.length - 1];
-    expect(msg).toMatch(/removed.?reimported/i);
+    expect(msg).toMatch(/moved/i);
   });
 
   // R3 #4: the dataset's RECORDED source path itself changed between
@@ -880,7 +968,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // F4 (code-review, honest wording): this is neither "changed" content
     // nor "unreachable" — the dataset's recorded identity itself moved on,
     // named as its own bucket.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 removed/reimported", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
   });
 
   it("reports nothing-to-relink instead of committing an empty batch", async () => {

@@ -124,3 +124,79 @@ export function sourceChangeVerdict(
   if (haveMtime && recorded.mtime !== probed.mtime) return "changed";
   return "unchanged";
 }
+
+// ── commit-time verdict (POST_SPRINT_INDEPENDENT_REVIEW.md R3 + its
+// code-review round) ────────────────────────────────────────────────────
+
+/** What Preview ITSELF showed the user for a row (F1's consent guard) —
+ *  the exact 3 fields `RelinkPreviewRow` (store/relink.ts) already carries,
+ *  so a preview row can be passed straight through with no remapping.
+ *  `candidateChecksum` is often `null` (a checksum-recorded dataset's
+ *  Preview-time probe simply couldn't confirm one), but
+ *  `candidateMtime`/`candidateSize` are always real stats — no read consent
+ *  needed for those — so a checksum-less preview still gets stat-level
+ *  verification. */
+export interface PreviewSnapshot {
+  candidateChecksum: string | null;
+  candidateMtime: number | null;
+  candidateSize: number | null;
+}
+
+/** A refusal names WHY (`store/relink.ts` tallies each into its own toast
+ *  bucket); anything else IS the provenance object to write — the caller
+ *  distinguishes the two with a plain `typeof outcome === "string"` (no
+ *  wrapper object needed for either case).
+ *  - `"conflict"`: the fresh probe conflicts with the RECORDED
+ *    checksum/mtime/size — the R3 defect fix's flagship refusal.
+ *    Unconditional: escalation approves "unverifiable", never
+ *    "verified-different".
+ *  - `"mismatch"`: independent of what is/isn't recorded, the fresh
+ *    probe no longer matches what PREVIEW ITSELF showed the user (F1) — the
+ *    one guard a dataset with NO recorded provenance at all still has.
+ *  - `"gap"`: recorded-vs-fresh is genuinely "unknown" (unverified) and this
+ *    row was never escalated — excluded from a bulk commit exactly like any
+ *    other unescalated "unknown" row.
+ *  - a provenance object: every guard cleared, narrowed to only the fields
+ *    actually confirmed (F2: backfilled from the fresh probe for
+ *    "unchanged" or a legacy dataset with nothing recorded; preserved
+ *    verbatim from `recorded` otherwise — R3 #3). */
+export type CommitRowOutcome =
+  | "conflict"
+  | "mismatch"
+  | "gap"
+  | { checksum?: string; mtime?: number; size?: number };
+
+/** The pure per-row decision `store/relink.ts`'s `commit()` applies to
+ *  every committing candidate, once its fresh probe succeeds — kept here,
+ *  not inline in the store, so it's unit-testable without a store/mock
+ *  bridge (this module's own header doc: "pure and unit-tested on their
+ *  own"). The store stays the thin async orchestrator: gather the inputs
+ *  (a fresh probe, the live dataset), call this, apply the result.
+ *  Positional, not an options object — `preview` takes a `RelinkPreviewRow`
+ *  (or anything shaped like one) directly, no call-site remapping. */
+export function evaluateCommitProbe(
+  recorded: RecordedProvenance,
+  probe: ProbedProvenance,
+  preview: PreviewSnapshot,
+  escalated: boolean | undefined,
+): CommitRowOutcome {
+  const freshVerdict = sourceChangeVerdict(recorded, probe);
+  if (freshVerdict === "changed") return "conflict";
+  const previewVerdict = sourceChangeVerdict(
+    {
+      checksum: preview.candidateChecksum ?? undefined,
+      mtime: preview.candidateMtime ?? undefined,
+      size: preview.candidateSize ?? undefined,
+    },
+    probe,
+  );
+  if (previewVerdict === "changed") return "mismatch";
+  if (freshVerdict === "unknown" && !escalated) return "gap";
+  const nothingRecorded = recorded.checksum == null && recorded.mtime == null && recorded.size == null;
+  const prov = freshVerdict === "unchanged" || nothingRecorded ? probe : recorded;
+  return {
+    ...(prov.checksum != null ? { checksum: prov.checksum } : {}),
+    ...(prov.mtime != null ? { mtime: prov.mtime } : {}),
+    ...(prov.size != null ? { size: prov.size } : {}),
+  };
+}
