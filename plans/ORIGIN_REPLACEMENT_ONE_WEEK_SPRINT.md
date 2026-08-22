@@ -31,6 +31,118 @@ The week is successful if:
 - All active plan documents are reconciled; no stale “pending” claims remain.
 - The final build is labeled a release candidate, not a production promise.
 
+## Owner-observed field issues (2026-08-17; do not start without dispatch)
+
+These findings came from actual use and outrank speculative polish. They are
+recorded here for sprint triage; no implementation was started when recorded.
+
+### UX-R1 — MDI dragging feels clunky
+
+**Observation:** dragging plot/worksheet subwindows does not feel direct or
+smooth enough for routine arrangement.
+**Goal:** pointer movement should track the window predictably without jumps,
+lost capture, accidental focus changes, or noticeable lag.
+**Acceptance:** test title-bar drag at 100/125/200% scaling, fast and slow
+movement, crossing other windows, and release outside the canvas; preserve the
+final bounded geometry and make the active drag target visually obvious.
+**Owner:** ChatGPT-Sol interaction review; Claude Sonnet implementation and
+state/pointer-capture tests. **Sprint priority:** release blocker if readily
+reproducible.
+
+### UX-R2 — Background subwindows sometimes go blank
+
+**Observation:** some subwindows lose their visible content while another
+window is focused or after arrangement.
+**Goal:** every visible window retains an honest live preview or an explicit
+recoverable loading/error state; blank unexplained content is never acceptable.
+**Acceptance:** reproduce across focus changes, drag, resize, minimize/restore,
+Tile/Cascade, dataset rebind and project restore; test lazy hydration, error
+boundaries and rich-error figures in focused/background renderers.
+**Owner:** Claude Sonnet, escalate to Opus only if canonical window/document
+state is implicated. **Sprint priority:** P1 release blocker.
+
+### UX-R3 — Origin project imports are difficult to parse
+
+**Observation:** import succeeds, but the left browser presents too many
+similarly weighted objects and does not clearly communicate whether an item is
+a folder, workbook, worksheet, plot, note or imported artifact.
+**Goal:** imported projects should reveal their hierarchy progressively and use
+plain, visually distinct object types with useful summaries; the common path
+must not require understanding Origin internals.
+**Acceptance:** test a realistic multi-book `.opju`; default to collapsed
+Folder → Workbook groups, use distinct icons/type labels, provide counts and
+breadcrumbs, suppress or tuck low-value technical artifacts behind disclosure,
+and preserve Tree/Tiles/Details switching and search. Do not discard imported
+content merely to simplify the view.
+**Owner:** ChatGPT-Sol information architecture and visual acceptance; Claude
+Sonnet implementation; cheaper models for fixtures/tests. **Sprint priority:**
+daily-driver critical and part of the owner switch-trigger trial.
+
+### UX-R4 — Making a plot and worksheet share the workspace is undiscoverable
+
+**Observation/question:** the owner could not tell how to keep a plot and
+spreadsheet from each taking the full working area. Existing commands include
+**Window → Open Worksheet in Window**, **Tile Windows**, and **Cascade Windows**,
+but their discoverability and first-use behavior are inadequate.
+**Goal:** arranging a plot beside its worksheet should be obvious without
+knowing command names or the MDI model.
+**Acceptance:** validate a visible entry point from the worksheet/plot/Library,
+clear maximize/restore affordances, and a one-action side-by-side arrangement;
+retain manual free positioning after automatic arrangement. Add a concise
+first-use tooltip or empty-state hint rather than a persistent tutorial.
+**Owner:** ChatGPT-Sol UX decision; Claude Sonnet implementation. **Sprint
+priority:** daily-driver critical usability.
+
+### UX-R5 — Window resizing feels clunky
+
+**Observation:** resize acquisition, tracking and feedback are not comfortable
+enough for repeated figure/worksheet layout.
+**Goal:** generous discoverable edge/corner hit areas, correct cursor feedback,
+smooth pointer capture, useful minimum sizes, and stable content during resize.
+**Acceptance:** test every edge/corner at 100/125/200%, rapid diagonal resize,
+minimum-size clamping, resize across neighboring windows, plot reflow and
+worksheet virtualization; no blanking, jump, or lost final geometry.
+**Owner:** ChatGPT-Sol interaction acceptance; Claude Sonnet implementation and
+Playwright coverage. **Sprint priority:** pair with UX-R1/R2 in one bounded MDI
+hardening campaign after reproduction.
+
+### UX-R6 — Plot annotation must be easy and scientific-workflow aware
+
+**Observation/request:** the owner needs a fast, discoverable way to annotate
+plots—for example, label XRD peaks and add arbitrary text—without returning to
+code or hunting through publication-only tooling. General annotation, shape,
+drag and property infrastructure already exists in the active figure plans;
+this item records the missing daily-workflow acceptance rather than creating a
+second annotation model.
+
+**Goal:** add text or a callout in seconds, edit it directly, position it by
+mouse, and optionally anchor it to plot data so it behaves predictably during
+zoom/rescale. XRD peak results should offer a bounded **Label peaks** workflow
+that creates ordinary editable annotations, not a separate permanent overlay.
+
+**Acceptance:** verify an obvious toolbar/menu/context entry; click-to-place;
+double-click text editing; drag with optional snap and free positioning;
+right-click Properties; multiline copy/paste/cut; font, color, rotation,
+alignment, frame and arrow/callout controls; Greek letters plus degree,
+angstrom and common scientific symbols; session Undo; save/close/reopen and
+export/Office persistence. For XRD, support selected/all fitted peaks, a label
+template such as phase or `(hkl)` plus position, collision-aware initial
+placement, and conversion to independently editable standard annotations.
+Raw data and fitted peak results must never be rewritten by annotation edits.
+
+**Owner:** ChatGPT-Sol interaction/wording and visual acceptance; Claude Sonnet
+implementation/reliability; cheaper agents for fixtures and browser coverage.
+**Sprint priority:** daily-driver important, scheduled after G5 persistence and
+the MDI blank-window release blocker; manual text is release-relevant, bulk XRD
+label generation may be a beta follow-up if it threatens stabilization.
+
+**Routing:** UX-R1/R2/R4/R5 form one MDI usability/reliability campaign but must
+remain separately testable. UX-R3 belongs to the Library/Origin-import lane.
+UX-R6 strengthens the existing canonical annotation/peak workflows and must not
+fork a new figure-decoration state model.
+Do not bury these findings in archived MDI or Origin decoder plans; completion
+must be logged here and cross-referenced from the active Library/Primary plans.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow
