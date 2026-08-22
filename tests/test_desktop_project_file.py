@@ -53,6 +53,19 @@ def test_validate_workspace_payload_rejects_missing_datasets_array() -> None:
     assert validate_workspace_payload(payload) is not None
 
 
+def test_validate_workspace_payload_tolerates_the_new_plot_recipes_field() -> None:
+    """P1.3 wave 2 (Lane C) added a top-level `plotRecipes` array to the v4
+    workspace doc (frontend/src/lib/workspace.ts). This gate is intentionally
+    narrow — format/version/datasets only, per the module's own doc ("no
+    further") — so a v4 payload carrying the new field must still validate
+    with no backend change needed; this test is the proof, not an assumption."""
+    payload = (
+        '{"format": "quantized-workspace", "version": 4, "datasets": [], '
+        '"plotRecipes": [{"id": "r1", "name": "XRD standard"}]}'
+    )
+    assert validate_workspace_payload(payload) is None
+
+
 # --- cross-language pin (P3-b, adversarial review) --------------------------
 #
 # `WORKSPACE_FORMAT`/`WORKSPACE_VERSIONS` here are hand-copied from

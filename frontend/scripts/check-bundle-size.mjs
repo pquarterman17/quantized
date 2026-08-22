@@ -131,8 +131,39 @@ import { fileURLToPath } from "node:url";
  *  workshop panels out of `AppOverlays.tsx`. Measured 932,219 B eager
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
- *  before first paint. */
-const EAGER_JS_BUDGET = 907_264;
+ *  before first paint.
+ *
+ *  2026-08-22 — 911,872 (890.5 kB) after P1.3 wave 2 Lane C wired
+ *  `plotRecipes` into `lib/workspace.ts`'s `parseWorkspace` (the mandated
+ *  "run `sanitizeRecipes` on load, drop-malformed-never-throw" contract —
+ *  the same validator `plotRecipeMatch.ts`/import-recipe already rely on,
+ *  not a second lighter one). `workspace.ts` is a core, synchronous entry
+ *  point (both the autosave-restore-on-startup path and the explicit
+ *  File > Open path need the full parsed doc before either can proceed), so
+ *  the validator it now calls — `lib/plotRecipeIO.ts`'s `sanitizeRecipes`,
+ *  ~250 lines of genuinely new per-field structural checks (signature/
+ *  mapping/visual), previously reachable only from tests and the
+ *  not-yet-wired `plotRecipeMatch.ts` — has no lazy path available within
+ *  this lane's scope (deferring `parseWorkspace` itself behind a dynamic
+ *  import would mean restructuring every store/App.tsx call site that
+ *  awaits it today, which is exactly the store<->workspace integration
+ *  slice this lane deliberately does NOT own). Measured 910,848 B eager
+ *  (was 907,264 B/886.0 kB the prior pin, itself only 1.9 kB of headroom —
+ *  wave 1's new files added zero eager cost since nothing imported them
+ *  yet; wiring them in, as this wave was explicitly asked to do, is what
+ *  spends it), 3,584 B (3.5 kB) over. `plotRecipeIO.ts`'s OTHER imports
+ *  (plotview's `sanitizeAnnotations`/`sanitizeShapes`/`sanitizeRegionShades`/
+ *  `isAxisScale`/`LEGEND_POS`/`legendXYOrNull`) cost nothing extra — they're
+ *  already eager via `lib/figuredoc.ts`/`lib/techniqueViewMemory.ts`, both
+ *  existing `workspace.ts` imports; the delta is genuinely new validation
+ *  logic, not duplicated already-shipped code. Raised by the MINIMAL honest
+ *  margin, per the 2026-08-21 entry's precedent above (not the 40 kB `SLACK`
+ *  constant — that guards the LOWER bound only, forcing a pin-down after a
+ *  real win, and is not a sizing convention for a raise): 910,848 + 1,024 =
+ *  911,872, ~1 kB of rounding room, nothing banked for future growth. NEVER
+ *  raise this again without the same measure-first discipline — split a
+ *  panel out or defer a module instead. */
+const EAGER_JS_BUDGET = 911_872;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

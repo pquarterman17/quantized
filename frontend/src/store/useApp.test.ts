@@ -3505,6 +3505,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       expandedWorkbookIds: [],
       collections: [],
       visibleDetailsColumns: [],
+      plotRecipes: [],
     };
   }
 

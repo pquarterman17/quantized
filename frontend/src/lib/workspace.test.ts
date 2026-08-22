@@ -6,6 +6,7 @@ import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { createPageDocument } from "./pageDocument";
+import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
@@ -1931,5 +1932,65 @@ describe("workspace session restoration (LIBRARY_WORKBOOK_UX_PLAN PR E2)", () =>
     };
     const loaded = parseWorkspace(serializeWorkspace({ datasets: [d] }));
     expect(loaded.datasets[0].pending).toEqual(d.pending);
+  });
+});
+
+describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)", () => {
+  function recipeDataset(): Dataset {
+    return {
+      id: "a",
+      name: "xrd-scan.xy",
+      data: {
+        time: [0, 1, 2],
+        values: [[10, 100, 1], [20, 200, 2], [30, 300, 3]],
+        labels: ["2theta", "Intensity", "Ierr"],
+        units: ["deg", "cps", "cps"],
+        metadata: { technique: "xrd.powder" },
+      },
+    };
+  }
+
+  function recipe(id: string, name: string): PlotRecipe {
+    return captureRecipe(
+      recipeDataset(),
+      { ...defaultPlotView(), xKey: 0, yKeys: [1], errKeys: { 1: 2 } },
+      null,
+      { id, name, appVersion: "0", now: () => "2026-08-22T00:00:00.000Z" },
+    );
+  }
+
+  it("round-trips a well-formed recipe list unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const recipes = [recipe("r1", "XRD standard"), recipe("r2", "XRD zoomed")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotRecipes: recipes }));
+    expect(loaded.plotRecipes).toEqual(recipes);
+  });
+
+  it("defaults to an empty list for a legacy/absent plotRecipes field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.plotRecipes).toEqual([]);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotRecipes: [recipe("r1", "XRD standard")] }),
+    ) as Record<string, unknown>;
+    doc.plotRecipes = [
+      (doc.plotRecipes as unknown[])[0],
+      { id: "bad" }, // missing name/technique/signature/mapping/visual
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.plotRecipes).toHaveLength(1);
+    expect(loaded.plotRecipes[0].id).toBe("r1");
+  });
+
+  it("never throws on a hand-edited non-array plotRecipes", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")] }),
+    ) as Record<string, unknown>;
+    doc.plotRecipes = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).plotRecipes).toEqual([]);
   });
 });

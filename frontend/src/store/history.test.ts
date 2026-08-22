@@ -297,6 +297,7 @@ describe("per-action-class undo/redo coverage", () => {
       expandedWorkbookIds: [],
       collections: [],
       visibleDetailsColumns: [],
+      plotRecipes: [],
     };
 
     useApp.getState().appendWorkspace(incoming);

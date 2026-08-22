@@ -299,6 +299,16 @@ const AUTOSAVE_EXCLUDED: Record<string, string> = {
     "change is structurally impossible today, so tracking it separately " +
     "would never change autosave behavior. Re-check this exclusion if a " +
     "future edit gives techniqueViewMemory an independent mutation site.",
+  // P1.3 wave 2, Lane C (2026-08-22): `plotRecipes` is wired into
+  // lib/workspace.ts's project-scope (de)serialize path, but AppState (store/
+  // useApp.ts) has no `plotRecipes` field yet — the store<->workspace hookup
+  // is a deliberately separate integration slice this Lane does not own, so
+  // there is no mutation site to track. Remove this exclusion (and add
+  // `plotRecipes` to AutosaveState's Pick<AppState,...> + shouldAutosave's
+  // equality chain) the moment that integration slice lands.
+  plotRecipes:
+    "not yet wired into AppState — the store<->workspace integration slice " +
+    "(a separate P1.3 wave) adds the live list this hook would track.",
 };
 
 describe("AutosaveState completeness sweep (P2-1)", () => {
