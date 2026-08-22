@@ -86,33 +86,38 @@
 // always-loaded bundle, ~7.7 kB over budget on its own. Per the budget
 // script's own rule ("anything only needed after a user action can be a
 // dynamic import()"), `recipeLibs()` below loads both modules on first use
-// and caches the promise -- the four methods that actually need
-// `captureRecipe`/`resolveRecipe` (save/apply/matching; `confirm` reuses an
-// already-resolved result, see its own doc) are `async` for exactly that
+// and caches the promise -- every method that needs `captureRecipe`/
+// `resolveRecipe` (save/apply/matching/the manager-panel + suggestion-toast
+// seams below; `confirm`/`confirmPartial` reuse an already-resolved result
+// only to RE-resolve, see their own docs) is `async` for exactly that
 // reason. Every OTHER action here (delete/rename/duplicate/set/cancel) is
 // plain array CRUD needing neither library and stays fully synchronous.
 // Only VALUE imports cost bytes -- the `import type` lines below (the
 // `PlotRecipe`/`RecipeResolution`/... shapes) are erased at compile time and
 // contribute nothing to this concern.
+//
+// APPLY-PATH EXTRACTION (P1.3 wave 3, Lane D headroom): `viewFromResolved`/
+// `applyResolvedRecipe`/`resolveApplyOrStage` moved to the sibling
+// `store/plotRecipeApply.ts` verbatim (see its own module doc) to fund this
+// wave's additions under the 500-line general .ts ceiling. `resolveApplyOrStage`
+// is the ONE seam `applyPlotRecipe` (below, recipe found by id in
+// `state.plotRecipes`) and `applyPlotRecipeObject` (below, takes a `PlotRecipe`
+// object directly -- the Recipe Manager panel's apply-a-GLOBAL-scope-recipe
+// gesture needs this, since a global recipe is never a member of
+// `state.plotRecipes`) both share.
 
-import { errKeysFromBindings } from "../lib/errorRoles";
-import { createFigureDocument } from "../lib/figureDocument";
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
-import type {
-  RecipeResolution,
-  ResolvedRecipeApplication,
-  ResolvedRecipeMapping,
-  ResolvedRecipeVisual,
-} from "../lib/plotRecipeMatch";
-import { dedupeWindowTitle, defaultPlotView, snapshotView, type PlotView } from "../lib/plotview";
+import type { RecipeResolution, ResolvedRecipeApplication } from "../lib/plotRecipeMatch";
+import { dedupeWindowTitle, snapshotView } from "../lib/plotview";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
-import type { AppState } from "./useApp";
-import { nextFigureId } from "./figureLifecycle";
-import { plotWindowDatasetId, withPlotWindowDocument } from "./windowDocuments";
-
-type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
-type SliceGet = () => AppState;
+import { plotWindowDatasetId } from "./windowDocuments";
+import {
+  applyResolvedRecipe,
+  resolveApplyOrStage,
+  type SliceGet,
+  type SliceSet,
+} from "./plotRecipeApply";
 
 let _recipeSeq = 0;
 const nextPlotRecipeId = (): string => `pr-${Date.now().toString(36)}-${++_recipeSeq}`;
@@ -164,99 +169,6 @@ export interface PendingPlotRecipeApplication {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- deliberate forward-compat placeholder, see above
 export interface ApplyPlotRecipeOptions {}
 
-/** Re-key a resolved recipe's mapping+visual into a fresh `PlotView` seed --
- *  the same "start from `defaultPlotView()`, overlay only what the source
- *  actually specifies" shape `lib/quickFigureCommit.ts`'s `quickFigureCommit`
- *  uses. `errKeys` is the legacy symmetric-Y projection (the rich `errors`
- *  travel separately into the document via `createFigureDocument`'s own
- *  `errors` input, same split `createFigureDocument` itself makes). */
-function viewFromResolved(mapping: ResolvedRecipeMapping, visual: ResolvedRecipeVisual): PlotView {
-  return {
-    ...defaultPlotView(),
-    xKey: mapping.xKey,
-    yKeys: mapping.yKeys,
-    y2Keys: mapping.y2Keys,
-    groupKey: mapping.groupKey,
-    errKeys: errKeysFromBindings(mapping.errors),
-    xScale: visual.xScale,
-    yScale: visual.yScale,
-    y2Scale: visual.y2Scale,
-    xLim: visual.xRange.mode === "fixed" ? visual.xRange.lim : null,
-    xStep: visual.xRange.mode === "fixed" ? (visual.xRange.step ?? null) : null,
-    yLim: visual.yRange.mode === "fixed" ? visual.yRange.lim : null,
-    yStep: visual.yRange.mode === "fixed" ? (visual.yRange.step ?? null) : null,
-    y2Lim: visual.y2Range.mode === "fixed" ? visual.y2Range.lim : null,
-    y2Step: visual.y2Range.mode === "fixed" ? (visual.y2Range.step ?? null) : null,
-    xFmt: visual.xFmt,
-    yFmt: visual.yFmt,
-    y2Fmt: visual.y2Fmt,
-    showLegend: visual.showLegend,
-    legendPos: visual.legendPos,
-    legendXY: visual.legendXY,
-    legendTitle: visual.legendTitle,
-    legendStatic: visual.legendStatic,
-    stackMode: visual.stackMode,
-    waterfall: visual.waterfall,
-    plotTemplate: visual.plotTemplate,
-    seriesStyles: visual.seriesStyles,
-    seriesLabels: visual.seriesLabels,
-    seriesOrder: visual.seriesOrder,
-    hiddenChannels: visual.hiddenChannels,
-    annotations: visual.decorations.annotations,
-    shapes: visual.decorations.shapes,
-    regionShades: visual.decorations.regionShades,
-  };
-}
-
-/** The apply gesture's entire body, shared by the clean-match path and
- *  `confirmPendingRecipeApplication` -- ONE `recordHistory` call (inside
- *  `createWindow`), everything else rides the same undo unit. Fails closed
- *  (false, a status message, no history entry, no new window/figure) if the
- *  dataset vanished between resolve and apply -- and, since finding 4's
- *  confirm re-resolve fix, `resolved` here is always freshly computed
- *  against the CURRENT dataset (never a stale stage-time one), so a column
- *  removed/reordered/recoded mid-gesture can't sneak a stale index in. */
-function applyResolvedRecipe(
-  set: SliceSet,
-  get: SliceGet,
-  recipe: PlotRecipe,
-  datasetId: string,
-  resolved: ResolvedRecipeApplication,
-): boolean {
-  const state = get();
-  const dataset = state.datasets.find((d) => d.id === datasetId);
-  if (!dataset) {
-    set({ status: `Plot Recipe "${recipe.name}" unavailable: dataset not found` });
-    return false;
-  }
-  const seedView = viewFromResolved(resolved.mapping, resolved.visual);
-  // Item 10's dedupe convention, against the Library's figure names (the
-  // same set `createQuickFigureFromMapping` dedupes its own title against).
-  const name = dedupeWindowTitle(recipe.name, state.editableFigures.map((f) => f.name));
-  const windowId = state.createWindow(dataset.id, seedView, name); // the gesture's ONE recordHistory
-  const id = nextFigureId();
-  const document = createFigureDocument({
-    id,
-    name,
-    datasetId: dataset.id,
-    view: seedView,
-    mark: resolved.visual.mark,
-    groupKey: resolved.mapping.groupKey,
-    facetKey: resolved.mapping.facetKey,
-    errors: resolved.mapping.errors,
-    axisBreaks: resolved.visual.axisBreaks,
-  });
-  set((current) => ({
-    editableFigures: [...current.editableFigures, document],
-    // The declared FigureDocument write chokepoint -- never a raw
-    // `{ ...w, document }` here (architecture.test.ts's F1 guard).
-    plotWindows: current.plotWindows.map((w) => (w.id === windowId ? withPlotWindowDocument(w, document) : w)),
-    status: `applied plot recipe "${recipe.name}"`,
-  }));
-  get().focusWindow(windowId);
-  return true;
-}
-
 export interface PlotRecipesSlice {
   /** Every named saved plot recipe (F4). In-memory only this lane -- see the
    *  module doc's PERSISTENCE note. */
@@ -303,6 +215,15 @@ export interface PlotRecipesSlice {
    *  pending apply returns false, same as a refusal. Async: lazy-loads
    *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
   applyPlotRecipe: (recipeId: string, datasetId: string, opts?: ApplyPlotRecipeOptions) => Promise<boolean>;
+  /** Same resolve/apply/stage/refuse contract as `applyPlotRecipe`, but takes
+   *  the `PlotRecipe` OBJECT directly instead of an id looked up in
+   *  `state.plotRecipes` -- the seam a GLOBAL-scope recipe (never a member of
+   *  that project-scoped list; see `lib/plotRecipeStorage.ts`'s header on
+   *  `PlotRecipe` being location-agnostic) needs to apply through the SAME
+   *  canonical path a project-scope recipe uses, rather than the Recipe
+   *  Manager panel re-deriving its own apply logic. Async: lazy-loads
+   *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
+  applyPlotRecipeObject: (recipe: PlotRecipe, datasetId: string, opts?: ApplyPlotRecipeOptions) => Promise<boolean>;
   /** Confirm a staged apply. Never trusts the staged resolution -- RE-RESOLVES
    *  against `pending.datasetId`'s CURRENT dataset first (see the module
    *  doc's APPLY PATH note): dataset gone or refused -> status, pending
@@ -312,6 +233,19 @@ export interface PlotRecipesSlice {
    *  dataset changed. False, pending left cleared, when nothing was pending.
    *  Async: lazy-loads `resolveRecipe` to re-resolve. */
   confirmPendingRecipeApplication: () => Promise<boolean>;
+  /** The explicit "apply anyway, drop unmatched" opt-in (booked in PR #204).
+   *  Re-resolves against the CURRENT dataset exactly like
+   *  `confirmPendingRecipeApplication` (the SAME staleness guard: a dataset
+   *  edited between stage and confirm gets a fresh resolution, never the
+   *  stale staged one) -- the one place the two diverge is what happens when
+   *  the fresh resolution STILL has unmatched fields: `confirm` re-stages and
+   *  refuses to apply; this action applies the fresh resolution's resolved
+   *  subset regardless, with a status naming how many fields were dropped.
+   *  Refused (technique mismatch / errorRole guard) or dataset-vanished still
+   *  fail closed exactly like `confirm` -- "apply anyway" only ever waives
+   *  UNMATCHED fields, never a refusal. False, pending left cleared, when
+   *  nothing was pending. Async: lazy-loads `resolveRecipe` to re-resolve. */
+  confirmPendingRecipeApplicationPartial: () => Promise<boolean>;
   /** Discard the pending resolution without applying anything. */
   cancelPendingRecipeApplication: () => void;
   /** Every recipe scoped to `dataset`'s technique that `resolveRecipe`
@@ -322,6 +256,16 @@ export interface PlotRecipesSlice {
    *  never mutates state or applies anything. Async: lazy-loads
    *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
   matchingPlotRecipes: (dataset: Dataset) => Promise<PlotRecipe[]>;
+  /** The narrower read the post-import suggestion toast (deliverable 5)
+   *  needs: `matchingPlotRecipes`'s own technique-gated candidate list, but
+   *  returning only its recipe when the resolution is a CLEAN (zero
+   *  `unmatched`) match -- offering a PARTIAL match behind a toast button
+   *  would put a "review the mapping" gesture where "Apply recipe ‘X’?"
+   *  promises a one-click apply, which is not the same offer. Null when
+   *  there's no clean match (even if a partial one exists further down
+   *  `matchingPlotRecipes`'s own list). Pure; never mutates state. Async:
+   *  lazy-loads `resolveRecipe` (see the module doc's LAZY-LOADED note). */
+  cleanMatchingPlotRecipe: (dataset: Dataset) => Promise<PlotRecipe | null>;
 }
 
 export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipesSlice {
@@ -405,27 +349,17 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
 
     applyPlotRecipe: async (recipeId, datasetId) => {
       const { resolveRecipe } = await recipeLibs();
-      const state = get();
-      const recipe = state.plotRecipes.find((r) => r.id === recipeId);
+      const recipe = get().plotRecipes.find((r) => r.id === recipeId);
       if (!recipe) {
         set({ status: "Plot Recipe unavailable: recipe not found" });
         return false;
       }
-      const dataset = state.datasets.find((d) => d.id === datasetId);
-      if (!dataset) {
-        set({ status: `Plot Recipe "${recipe.name}" unavailable: dataset not found` });
-        return false;
-      }
-      const resolution = resolveRecipe(recipe, dataset);
-      if ("refused" in resolution) {
-        set({ status: `Plot Recipe "${recipe.name}" unavailable: ${resolution.refused}` });
-        return false;
-      }
-      if (resolution.unmatched.length > 0) {
-        set({ pendingRecipeApplication: { recipe, datasetId, resolution } });
-        return false;
-      }
-      return applyResolvedRecipe(set, get, recipe, datasetId, resolution.resolved);
+      return resolveApplyOrStage(set, get, recipe, datasetId, resolveRecipe);
+    },
+
+    applyPlotRecipeObject: async (recipe, datasetId) => {
+      const { resolveRecipe } = await recipeLibs();
+      return resolveApplyOrStage(set, get, recipe, datasetId, resolveRecipe);
     },
 
     confirmPendingRecipeApplication: async () => {
@@ -470,6 +404,45 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       return applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
     },
 
+    confirmPendingRecipeApplicationPartial: async () => {
+      const pending = get().pendingRecipeApplication;
+      if (!pending) {
+        set({ status: "No pending Plot Recipe application to confirm" });
+        return false;
+      }
+      // Same staleness guard as confirmPendingRecipeApplication: never trust
+      // `pending.resolution` as-is, re-resolve against the CURRENT dataset.
+      const dataset = get().datasets.find((d) => d.id === pending.datasetId);
+      if (!dataset) {
+        set({
+          pendingRecipeApplication: null,
+          status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found`,
+        });
+        return false;
+      }
+      const { resolveRecipe } = await recipeLibs();
+      const resolution = resolveRecipe(pending.recipe, dataset);
+      if ("refused" in resolution) {
+        set({
+          pendingRecipeApplication: null,
+          status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}`,
+        });
+        return false;
+      }
+      // The one divergence from confirm: a still-non-empty `unmatched` here
+      // does NOT re-stage -- this action's whole point is applying the fresh
+      // resolution's resolved subset anyway, dropping whatever didn't match.
+      const dropped = resolution.unmatched.length;
+      set({ pendingRecipeApplication: null });
+      const applied = applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
+      if (applied && dropped > 0) {
+        set({
+          status: `applied plot recipe "${pending.recipe.name}" — dropped ${dropped} unmatched field${dropped === 1 ? "" : "s"}`,
+        });
+      }
+      return applied;
+    },
+
     cancelPendingRecipeApplication: () => set({ pendingRecipeApplication: null }),
 
     matchingPlotRecipes: async (dataset) => {
@@ -485,6 +458,19 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         (resolution.unmatched.length === 0 ? clean : partial).push(recipe);
       }
       return [...clean, ...partial];
+    },
+
+    cleanMatchingPlotRecipe: async (dataset) => {
+      // Reuses matchingPlotRecipes's own technique-gated, clean-first list
+      // rather than re-deriving it -- only its FIRST entry needs re-checking
+      // (the array itself doesn't carry resolution detail, so "clean" can't
+      // be read off it directly): clean if resolveRecipe agrees, else null
+      // even when a partial candidate exists further down the list.
+      const matches = await get().matchingPlotRecipes(dataset);
+      if (matches.length === 0) return null;
+      const { resolveRecipe } = await recipeLibs();
+      const resolution = resolveRecipe(matches[0], dataset);
+      return "resolved" in resolution && resolution.unmatched.length === 0 ? matches[0] : null;
     },
   };
 }

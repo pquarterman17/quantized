@@ -381,6 +381,150 @@ describe("applyPlotRecipe", () => {
   });
 });
 
+// P1.3 wave 3, Lane D: the explicit "apply anyway, drop unmatched" opt-in
+// (booked in PR #204). Same re-resolve staleness guard as
+// confirmPendingRecipeApplication -- the tests below deliberately mirror
+// that describe block's setup so the ONE divergence (apply-anyway vs.
+// re-stage) is the only thing under test.
+describe("confirmPendingRecipeApplicationPartial", () => {
+  async function stagedWithUnmatched(): Promise<string> {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({
+      datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    return id;
+  }
+
+  it("nothing pending is a no-op with a status message", async () => {
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(await useApp.getState().confirmPendingRecipeApplicationPartial()).toBe(false);
+    expect(useApp.getState().status).toContain("No pending");
+  });
+
+  it("applies the FRESH resolution's resolved subset even though unmatched is still non-empty, naming the dropped count", async () => {
+    await stagedWithUnmatched();
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1); // ONE undo entry
+    expect(useApp.getState().status).toContain("dropped 1 unmatched field");
+  });
+
+  it("re-resolves at confirm time -- a dataset fixed since staging applies cleanly with no 'dropped' wording", async () => {
+    await stagedWithUnmatched();
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+    // Fix the mismatch: reintroduce the recipe's expected "Intensity" label.
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Intensity", "Ierr"])] });
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().status).not.toContain("dropped");
+    expect(useApp.getState().status).toContain("applied plot recipe");
+  });
+
+  it("dataset vanished: pending cleared, zero mutation, status names it", async () => {
+    await stagedWithUnmatched();
+    useApp.setState({ datasets: [] });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().status).toContain("unavailable");
+  });
+
+  it("a fresh refusal (technique mismatch) still fails closed -- 'apply anyway' waives unmatched, never a refusal", async () => {
+    await stagedWithUnmatched();
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({ datasets: [dataset("d1", "magnetometry.mvsh")], plotRecipes: savedRecipes });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().status).toContain("unavailable");
+  });
+});
+
+describe("applyPlotRecipeObject", () => {
+  it("applies a recipe object that is NOT a member of state.plotRecipes (the global-scope seam)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    // Remove it from the project list -- applyPlotRecipeObject must not
+    // depend on the recipe being findable there.
+    useApp.setState({ plotRecipes: [] });
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipeObject(recipe, "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().plotRecipes).toHaveLength(0); // never re-added to the project list
+  });
+
+  it("stages a pending application for an unmatched object recipe, same as applyPlotRecipe", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])], plotRecipes: [] });
+
+    const ok = await useApp.getState().applyPlotRecipeObject(recipe, "d1");
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication?.recipe.id).toBe(id);
+  });
+});
+
+describe("cleanMatchingPlotRecipe", () => {
+  it("returns the clean match when one exists", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const cleanId = (await useApp.getState().saveAsPlotRecipe("Clean", "d1"))!;
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found?.id).toBe(cleanId);
+  });
+
+  it("returns null when only a partial match exists (never offers a partial one)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("Partial-source", "d1");
+    // Break the Y match after capture -- only a partial match remains.
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])], plotRecipes: useApp.getState().plotRecipes });
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found).toBeNull();
+  });
+
+  it("returns null for a generic-technique dataset", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1");
+    const genericDs = dataset("d2", null);
+
+    expect(await useApp.getState().cleanMatchingPlotRecipe(genericDs)).toBeNull();
+  });
+});
+
 describe("matchingPlotRecipes", () => {
   it("orders a clean (zero-unmatched) match before a partial match", async () => {
     focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
