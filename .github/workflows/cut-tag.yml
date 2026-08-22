@@ -1,0 +1,44 @@
+name: cut-tag
+
+# Create a tag ref from the Actions runner. Exists because the remote-agent
+# git proxy used for orchestration silently no-ops tag pushes (branch pushes
+# work; `git push` of a tag reports "Everything up-to-date" while the ref
+# never lands — observed cutting v0.23.0-rc1). The runner's GITHUB_TOKEN has
+# contents:write and is not subject to that proxy.
+#
+# NOTE: a tag created with GITHUB_TOKEN does NOT trigger tag-push workflows
+# (GitHub's recursive-trigger guard), so after this completes, dispatch
+# release.yml manually WITH THE TAG AS THE REF — its tag-gated steps key on
+# github.ref, which workflow_dispatch sets to the chosen ref:
+#   Actions -> release -> Run workflow -> ref: the new tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name to create (e.g. v0.23.0-rc1)"
+        required: true
+        type: string
+      sha:
+        description: "Full commit SHA the tag points at"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the tag ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in v*) ;; *) echo "tag must start with v"; exit 1;; esac
+          gh api "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA"
+          echo "created refs/tags/$TAG -> $SHA"
