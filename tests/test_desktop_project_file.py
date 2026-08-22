@@ -184,9 +184,17 @@ def test_cleanup_stray_write_temps_removes_a_genuinely_old_file(tmp_path: Path) 
 def test_cleanup_stray_write_temps_min_age_seconds_is_overridable(tmp_path: Path) -> None:
     """The default is a sensible belt-and-braces floor for the unlocked
     legacy call site, but is a plain keyword argument, not a hardcoded
-    constant, in case a caller ever needs a different budget."""
+    constant, in case a caller ever needs a different budget.
+
+    The stray's mtime is backdated EXPLICITLY (1 s) rather than relying on
+    "just written" being older than the cleanup's own clock sample: on the
+    Windows CI leg the fresh file's mtime landed marginally AFTER
+    `time.time()` (filesystem timestamp granularity), the computed age went
+    negative, and the — correctly conservative — filter kept the file."""
     stray = tmp_path / f"{WRITE_TEMP_PREFIX}barely_young"
     stray.write_text("x", encoding="utf-8")
+    backdated = time.time() - 1.0
+    os.utime(stray, (backdated, backdated))
     cleanup_stray_write_temps(str(tmp_path), min_age_seconds=0.0)
     assert not stray.exists()
 
