@@ -48,7 +48,7 @@ describe("acquireProjectLock", () => {
   it("parses a successful acquisition", async () => {
     setShell({ project_lock_acquire: async () => ({ acquired: true, record: wireRecord }) });
     const out = await acquireProjectLock("/p/w.dwk");
-    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false });
+    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false, contended: false });
   });
 
   it("reports a refusal with the CURRENT (other) record", async () => {
@@ -71,6 +71,16 @@ describe("acquireProjectLock", () => {
         throw new Error("boom");
       },
     });
+    expect(await acquireProjectLock("/p/w.dwk")).toBeNull();
+  });
+
+  // R4 (post-sprint independent review): a MALFORMED response resolves
+  // (no throw) but is not even a plausible outcome shape — `isPlausibleOutcome`'s
+  // guard is what catches this; without it, `bool(out.acquired)` etc. would
+  // silently coerce a garbage response into a coherent-looking
+  // `{ok:false, record:null, unverifiable:false}`.
+  it("a malformed (non-object) response is reported as no bridge, not coerced into a false answer", async () => {
+    setShell({ project_lock_acquire: async () => "garbage" as unknown as Record<string, unknown> });
     expect(await acquireProjectLock("/p/w.dwk")).toBeNull();
   });
 });
@@ -101,7 +111,7 @@ describe("refreshProjectLock", () => {
   it("reports a successful heartbeat", async () => {
     setShell({ project_lock_refresh: async () => ({ refreshed: true, record: wireRecord }) });
     const out = await refreshProjectLock("/p/w.dwk", "tok-1");
-    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false });
+    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false, contended: false });
   });
 
   it("reports a token-mismatch refusal", async () => {
@@ -121,7 +131,7 @@ describe("takeOverProjectLock", () => {
   it("reports a successful takeover with a fresh record", async () => {
     setShell({ project_lock_takeover: async () => ({ acquired: true, record: wireRecord }) });
     const out = await takeOverProjectLock("/p/w.dwk", "expected");
-    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false });
+    expect(out).toEqual({ ok: true, record: wireRecord, unverifiable: false, contended: false });
   });
 
   it("reports a refusal when the expected token no longer matches", async () => {

@@ -19,6 +19,7 @@ beforeEach(() => {
     record: null,
     path: null,
     openedAsCopy: false,
+    unverifiableHeartbeats: 0,
     provider: {
       read: async () => null,
       tryAcquire: async () => ({ acquired: true, record: null }),
@@ -57,6 +58,32 @@ describe("useProjectLockHeartbeat", () => {
     useProjectLock.setState({ status: "held-by-me", path: "/p/x.dwk", heartbeat });
     const { unmount } = renderHook(() => useProjectLockHeartbeat());
     unmount();
+    vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS * 3);
+    expect(heartbeat).not.toHaveBeenCalled();
+  });
+
+  // R4 (post-sprint independent review): a status demoted away from
+  // "held-by-me" by an unverifiable bridge (see store/projectLock.ts's
+  // `heartbeat()`) must NOT stop this interval — otherwise a bridge that
+  // later comes back could never be discovered, and the session would be
+  // stuck read-only until the user manually reopens the project.
+  it("keeps calling heartbeat() on the SAME interval after a demotion caused by unverifiableHeartbeats > 0", () => {
+    const heartbeat = vi.fn();
+    useProjectLock.setState({
+      status: "held-by-other-live", // already demoted by a prior unverifiable streak
+      path: "/p/x.dwk",
+      unverifiableHeartbeats: 3,
+      heartbeat,
+    });
+    renderHook(() => useProjectLockHeartbeat());
+    vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS * 2);
+    expect(heartbeat).toHaveBeenCalledTimes(2);
+  });
+
+  it("does nothing for an ordinary (non-unverifiable) read-only status with no streak — e.g. a live OTHER holder", () => {
+    const heartbeat = vi.fn();
+    useProjectLock.setState({ status: "held-by-other-live", unverifiableHeartbeats: 0, heartbeat });
+    renderHook(() => useProjectLockHeartbeat());
     vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS * 3);
     expect(heartbeat).not.toHaveBeenCalled();
   });

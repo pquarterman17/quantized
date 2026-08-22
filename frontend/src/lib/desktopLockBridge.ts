@@ -32,11 +32,45 @@ export interface LockWireRecord {
  *  mirrors `desktop_project_lock.py`'s `UnverifiableLock` — true only when
  *  the backend could not trust the lock file's content at all (corrupt,
  *  unparseable); callers MUST treat that the same as "cannot verify —
- *  read-only", never as `record: null`'s ordinary "nothing is there". */
+ *  read-only", never as `record: null`'s ordinary "nothing is there".
+ *
+ *  `contended` (coordination note, R1/R4 concurrent-lane contract, backend
+ *  side landing separately): true when the backend could not get the
+ *  OS-level file lock for THIS attempt because another process's own CAS
+ *  was mid-flight on it right now — transient, benign, "ask again next
+ *  tick", and explicitly NOT the same as `unverifiable` (the content isn't
+ *  untrustworthy, it was simply unreachable for an instant) or a genuine
+ *  CAS mismatch (nothing has been positively observed to belong to anyone
+ *  else). Optional so a backend that hasn't landed this yet is unaffected —
+ *  every parse below defaults it to `false`. */
 export interface LockWireOutcome {
   ok: boolean;
   record: LockWireRecord | null;
   unverifiable: boolean;
+  contended?: boolean;
+}
+
+/** R4 (post-sprint independent review): guards against a MALFORMED
+ *  response — an `out` that resolved (no thrown exception) but is not
+ *  even a plain object (a bridge stub or version-skewed backend that
+ *  resolves a bare string/number/boolean/array/`null`, say). Without this
+ *  check, such a response would silently pass straight through `str`/
+ *  `bool`/`num`'s own safe-but-SILENT per-field defaults — none of them
+ *  throw on a primitive (`("x").acquired` is just `undefined`, not a
+ *  `TypeError`) — into a coherent-looking
+ *  `{ok:false, record:null, unverifiable:false}`, indistinguishable from
+ *  a genuine "nothing holds this lock" answer and exactly the "assume we
+ *  know" guess this whole module exists to prevent. This deliberately does
+ *  NOT require every individual field to be present — an object missing
+ *  one optional field is still coerced field-by-field the same as always
+ *  (that's `str`/`bool`/`num`'s own job, and every existing fixture in
+ *  this module's tests already relies on it) — only a non-object response
+ *  is rejected outright. Every call site below treats a failed check here
+ *  the SAME as "no usable bridge" (return `null`), which
+ *  `lib/desktopLockProvider.ts`'s `toCasResult` already turns into an
+ *  explicit `unverifiable: true` refusal. */
+function isPlausibleOutcome(out: unknown): out is Record<string, unknown> {
+  return typeof out === "object" && out !== null;
 }
 
 function parseLockRecord(v: unknown): LockWireRecord | null {
@@ -63,7 +97,13 @@ export async function acquireProjectLock(path: string): Promise<LockWireOutcome 
   if (!bridge?.project_lock_acquire) return null;
   try {
     const out = await bridge.project_lock_acquire(path);
-    return { ok: bool(out.acquired), record: parseLockRecord(out.record), unverifiable: bool(out.unverifiable) };
+    if (!isPlausibleOutcome(out)) return null;
+    return {
+      ok: bool(out.acquired),
+      record: parseLockRecord(out.record),
+      unverifiable: bool(out.unverifiable),
+      contended: bool(out.contended),
+    };
   } catch {
     return null;
   }
@@ -77,6 +117,7 @@ export async function readProjectLock(path: string): Promise<LockWireOutcome | n
   if (!bridge?.project_lock_read) return null;
   try {
     const out = await bridge.project_lock_read(path);
+    if (!isPlausibleOutcome(out)) return null;
     return { ok: false, record: parseLockRecord(out.record), unverifiable: bool(out.unverifiable) };
   } catch {
     return null;
@@ -91,7 +132,13 @@ export async function refreshProjectLock(path: string, token: string): Promise<L
   if (!bridge?.project_lock_refresh) return null;
   try {
     const out = await bridge.project_lock_refresh(path, token);
-    return { ok: bool(out.refreshed), record: parseLockRecord(out.record), unverifiable: bool(out.unverifiable) };
+    if (!isPlausibleOutcome(out)) return null;
+    return {
+      ok: bool(out.refreshed),
+      record: parseLockRecord(out.record),
+      unverifiable: bool(out.unverifiable),
+      contended: bool(out.contended),
+    };
   } catch {
     return null;
   }
@@ -104,7 +151,13 @@ export async function takeOverProjectLock(path: string, expectedToken: string): 
   if (!bridge?.project_lock_takeover) return null;
   try {
     const out = await bridge.project_lock_takeover(path, expectedToken);
-    return { ok: bool(out.acquired), record: parseLockRecord(out.record), unverifiable: bool(out.unverifiable) };
+    if (!isPlausibleOutcome(out)) return null;
+    return {
+      ok: bool(out.acquired),
+      record: parseLockRecord(out.record),
+      unverifiable: bool(out.unverifiable),
+      contended: bool(out.contended),
+    };
   } catch {
     return null;
   }

@@ -12,7 +12,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { STALE_AFTER_MS, type LockRecord } from "../lib/lockState";
+import { createDesktopLockProvider } from "../lib/desktopLockProvider";
+import { STALE_AFTER_MS, UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import {
   createInMemoryLockProvider,
@@ -79,10 +80,20 @@ beforeEach(() => {
     record: null,
     path: null,
     openedAsCopy: false,
+    unverifiableHeartbeats: 0,
     provider: fakeProvider(),
   });
   useApp.setState({ currentProject: null, projectDirty: false });
 });
+
+/** Swap out just `refresh` on a provider, keeping every other verb — used
+ *  below to simulate a bridge that has gone unverifiable specifically on
+ *  heartbeat's CAS call, without disturbing how the project was opened. */
+function withRefresh(base: LockProvider, refresh: LockProvider["refresh"]): LockProvider {
+  return { read: base.read, tryAcquire: base.tryAcquire, refresh, takeOver: base.takeOver, release: base.release };
+}
+
+const UNVERIFIABLE_RESULT: LockCasResult = { acquired: false, record: null, unverifiable: true };
 
 describe("openProject", () => {
   it("acquires directly on an unlocked project", async () => {
@@ -208,6 +219,169 @@ describe("heartbeat — the false-positive safety net in the store", () => {
     expect(ok).toBe(false);
     expect(useProjectLock.getState().canWriteNow()).toBe(false);
     expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    // A DEFINITE loss (a real CAS observation) demotes IMMEDIATELY — it
+    // never waits for UNVERIFIABLE_DEMOTE_AFTER, which only governs the
+    // separate "couldn't verify at all" case below.
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(0);
+  });
+});
+
+describe("heartbeat — R4 fail-closed demotion when the bridge is UNVERIFIABLE (not a definite loss)", () => {
+  it("does NOT demote on a single unverifiable heartbeat — avoids UI flicker on one transient blip", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => UNVERIFIABLE_RESULT) });
+
+    const ok = await useProjectLock.getState().heartbeat();
+
+    expect(ok).toBe(false);
+    expect(useProjectLock.getState().status).toBe("held-by-me"); // unchanged
+    expect(useProjectLock.getState().canWriteNow()).toBe(true); // still writable
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(1);
+  });
+
+  it("demotes after UNVERIFIABLE_DEMOTE_AFTER consecutive unverifiable heartbeats — never persists held-by-me indefinitely", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => UNVERIFIABLE_RESULT) });
+
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER - 1; i++) {
+      await useProjectLock.getState().heartbeat();
+      expect(useProjectLock.getState().canWriteNow()).toBe(true); // still below threshold
+    }
+    await useProjectLock.getState().heartbeat(); // the Nth consecutive miss
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(UNVERIFIABLE_DEMOTE_AFTER);
+  });
+
+  it("a THROWN heartbeat call counts toward the SAME demotion streak as an explicit unverifiable result", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({
+      provider: withRefresh(goodProvider, () => {
+        throw new Error("IPC channel closed");
+      }),
+    });
+
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER; i++) await useProjectLock.getState().heartbeat();
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+
+  it("recovers to held-by-me the instant the bridge verifies again — re-verifies rather than assuming its prior state", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    const tokenBefore = useProjectLock.getState().record?.token;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => UNVERIFIABLE_RESULT) });
+
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER; i++) await useProjectLock.getState().heartbeat();
+    expect(useProjectLock.getState().canWriteNow()).toBe(false); // demoted
+
+    // The bridge becomes available again — restore the real provider and
+    // heartbeat once more, exactly like the next scheduled tick would.
+    useProjectLock.setState({ provider: goodProvider });
+    const ok = await useProjectLock.getState().heartbeat();
+
+    expect(ok).toBe(true);
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(0);
+    // Recovery reuses the SAME token/record this instance already held —
+    // it is a re-verification, not a fresh acquire.
+    expect(useProjectLock.getState().record?.token).toBe(tokenBefore);
+  });
+
+  it("keeps `record` intact while demoted so a later recovery has something to re-verify against", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    const recordBefore = useProjectLock.getState().record;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => UNVERIFIABLE_RESULT) });
+
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER; i++) await useProjectLock.getState().heartbeat();
+
+    expect(useProjectLock.getState().record).toEqual(recordBefore);
+  });
+});
+
+// R4/R1 coordination: a concurrent lane is redesigning the BACKEND refresh
+// to return a "contended" (OS-lock momentarily busy with someone else's own
+// CAS — retry next tick, non-demoting) outcome distinct from `unverifiable`.
+// This is the frontend half of that contract: a contended tick must be
+// completely inert — never counted as a miss, never counted as a success,
+// never touching status/record — so it can never itself cause (or delay
+// correcting) a demotion.
+describe("heartbeat — R4/R1 CONTENDED is strictly benign (distinct from unverifiable)", () => {
+  const CONTENDED_RESULT: LockCasResult = { acquired: false, record: null, contended: true };
+
+  it("does not advance the unverifiable streak at all — neither increments nor resets it", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => CONTENDED_RESULT), unverifiableHeartbeats: 1 });
+
+    const ok = await useProjectLock.getState().heartbeat();
+
+    expect(ok).toBe(false);
+    expect(useProjectLock.getState().status).toBe("held-by-me"); // untouched
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+    expect(useProjectLock.getState().unverifiableHeartbeats).toBe(1); // unchanged either way
+  });
+
+  it("never demotes no matter how many consecutive contended ticks occur", async () => {
+    await useProjectLock.getState().openProject(PATH);
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({ provider: withRefresh(goodProvider, async () => CONTENDED_RESULT) });
+
+    // Far more than UNVERIFIABLE_DEMOTE_AFTER — a genuinely unverifiable
+    // bridge would have demoted by now; contention never should.
+    for (let i = 0; i < UNVERIFIABLE_DEMOTE_AFTER * 5; i++) await useProjectLock.getState().heartbeat();
+
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+
+  it("openProject/takeOverEditing (one-shot callers) still fold a contended CAS refusal into the same fail-closed placeholder as unverifiable", async () => {
+    useProjectLock.setState({
+      provider: {
+        read: async () => null,
+        tryAcquire: async (): Promise<LockCasResult> => ({ acquired: false, record: null, contended: true }),
+        refresh: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        takeOver: async (): Promise<LockCasResult> => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    const result = await useProjectLock.getState().openProject(PATH);
+
+    expect(result.status).toBe("held-by-other-live");
+    expect(result.readOnly).toBe(true);
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+});
+
+// R4 (post-sprint independent review) — the ORIGINAL repro, turned
+// red-then-green: `desktopLockProvider.toCasResult(null, false)` used to
+// return a refusal with `record: null` and NO `unverifiable` flag, which
+// `statusFromRefusal` then classified as plain `"unlocked"` — so opening a
+// project through the REAL desktop provider with no bridge present (every
+// jsdom test environment, and every plain browser tab per that provider's
+// own header) could report `readOnly: false` even though acquisition never
+// verifiably succeeded. This exercises the REAL `createDesktopLockProvider()`
+// end to end, not a hand-written fake, specifically to prove the wire-layer
+// fix (lib/desktopLockProvider.ts + lib/desktopLockBridge.ts) actually closes
+// the gap the store-level fakes above can't see.
+describe("R4 regression — the desktop lock bridge being unavailable never reports writable", () => {
+  it("openProject with the real desktop provider and no bridge present is read-only, never held-by-me or unlocked", async () => {
+    useProjectLock.setState({ provider: createDesktopLockProvider() });
+
+    const result = await useProjectLock.getState().openProject(PATH);
+
+    expect(result.status).not.toBe("unlocked");
+    expect(result.status).not.toBe("held-by-me");
+    expect(result.readOnly).toBe(true);
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
   });
 });
 

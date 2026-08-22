@@ -94,6 +94,7 @@ import {
   canTakeOver,
   classifyLock,
   isReadOnly,
+  UNVERIFIABLE_DEMOTE_AFTER,
   type LockRecord,
   type LockStatus,
 } from "../lib/lockState";
@@ -120,6 +121,15 @@ export interface LockCasResult {
    *  "read-only, never assume free"). Optional so the in-memory provider,
    *  which has no unverifiable state to report, never needs to set it. */
   unverifiable?: boolean;
+  /** R4/R1 coordination: true when the OS-level lock was momentarily busy
+   *  with another process's OWN CAS — transient, benign, "ask again next
+   *  tick", distinct from `unverifiable` (content isn't untrustworthy) and
+   *  from a definite refusal (nothing was positively observed). Only
+   *  `heartbeat()` treats this as strictly benign (see its doc); one-shot
+   *  callers fold it into `unverifiable`'s placeholder via
+   *  `statusFromRefusal`. Optional — unset for any provider that hasn't
+   *  landed contention detection. */
+  contended?: boolean;
 }
 
 /** The I2 fix's actual seam (P0-3/P1-1): every mutation is ONE atomic call —
@@ -248,6 +258,12 @@ interface ProjectLockState {
   /** True after an explicit "Open as Copy" — the session is writable, but
    *  deliberately holds NO lock on the original path (see `openAsCopy`). */
   openedAsCopy: boolean;
+  /** R4: consecutive `heartbeat()` ticks in a row that came back
+   *  UNVERIFIABLE (never a definite CAS loss, which demotes immediately —
+   *  see `heartbeat()`'s doc). Reset to 0 by any successful verification;
+   *  read by `useProjectLockHeartbeat.ts` to keep polling PAST a demotion
+   *  so a returning bridge can still be discovered. */
+  unverifiableHeartbeats: number;
   /** See `INSTANCE_ID`'s doc above — adopted from the provider on a
    *  successful acquisition, not permanently fixed at store creation. */
   instanceId: string;
@@ -276,10 +292,17 @@ interface ProjectLockState {
    *  holder is completely unaffected. */
   openAsCopy: () => void;
   /** Refresh this instance's own heartbeat — the false-positive safety net
-   *  in practice: a fresh read runs FIRST, and if the record no longer
-   *  names this instance (a stale-takeover raced ahead of this tick), the
-   *  session demotes to read-only and this resolves `false` instead of
-   *  silently claiming the refresh succeeded. */
+   *  in practice. Three outcomes, in order of how much they trust the
+   *  result (see the implementation's own comments for the full reasoning):
+   *  a DEFINITE loss (a real CAS mismatch) demotes to read-only IMMEDIATELY;
+   *  an UNVERIFIABLE tick (R4: no bridge / thrown / malformed) proves
+   *  nothing, so it only demotes after `UNVERIFIABLE_DEMOTE_AFTER`
+   *  consecutive misses, and recovers straight back to `held-by-me` (same
+   *  token, not a fresh acquire) the moment a later tick verifies again; a
+   *  CONTENDED tick (R4/R1 coordination — the OS lock was momentarily busy
+   *  with someone else's own CAS) is strictly benign and touches nothing at
+   *  all. `useProjectLockHeartbeat.ts` keeps polling past an unverifiable
+   *  demotion (so recovery can happen) but not past a definite loss. */
   heartbeat: () => Promise<boolean>;
   /** Release this instance's own lock (e.g. on project close). No-op when
    *  this instance isn't the current holder. */
@@ -299,7 +322,13 @@ interface ProjectLockState {
  *  `record: null` and report `"unlocked"` — precisely the "assume free"
  *  guess an unverifiable lock file must never produce. */
 function statusFromRefusal(result: LockCasResult, instanceId: string, now: number): LockStatus {
-  if (result.unverifiable) return "held-by-other-live";
+  // `contended` folds into the SAME placeholder as `unverifiable` here —
+  // a one-shot caller (openProject/takeOverEditing) has no "retry next
+  // tick" to fall back to, so a transient OS-lock contention is reported
+  // exactly like "couldn't verify" (read-only, safe to retry the whole
+  // action). Only `heartbeat()`'s own ongoing-tick nature makes `contended`
+  // worth treating as strictly benign — see that function's doc.
+  if (result.unverifiable || result.contended) return "held-by-other-live";
   return classifyLock(result.record, instanceId, now);
 }
 
@@ -308,6 +337,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   record: null,
   path: null,
   openedAsCopy: false,
+  unverifiableHeartbeats: 0,
   instanceId: INSTANCE_ID,
   provider: createInMemoryLockProvider(INSTANCE_ID),
 
@@ -316,38 +346,39 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   openProject: async (path) => {
     const { provider, instanceId } = get();
     const now = Date.now();
+    // Shared by every non-acquiring outcome below (a thrown read, a live/
+    // stale other holder, a thrown acquire, or a lost race) — always resets
+    // `unverifiableHeartbeats` (a leftover streak from a PRIOR path/session
+    // must never keep the heartbeat interval alive against a record/token
+    // that no longer belongs to this attempt) and never assumes success.
+    const failClosed = (status: LockStatus, record: LockRecord | null): OpenResult => {
+      set({ status, record, path, openedAsCopy: false, unverifiableHeartbeats: 0 });
+      return { status, readOnly: isReadOnly(status) };
+    };
     let current: LockRecord | null;
     try {
       current = await provider.read(path);
     } catch {
-      // A read failure is NOT "unlocked" — conservatively treat it as
-      // unknowable-but-unwritable rather than guessing this instance is
-      // free to acquire (see this module's doc: never assume success).
-      set({ status: "held-by-other-live", record: null, path, openedAsCopy: false });
-      return { status: "held-by-other-live", readOnly: true };
+      return failClosed("held-by-other-live", null);
     }
     const status = classifyLock(current, instanceId, now);
     if (status !== "unlocked" && status !== "held-by-me") {
       // Read-only (live OR stale) — never auto-acquire; a stale lock is
       // only ever taken over via the EXPLICIT `takeOverEditing()` below,
       // L0.47's hard gate.
-      set({ status, record: current, path, openedAsCopy: false });
-      return { status, readOnly: isReadOnly(status) };
+      return failClosed(status, current);
     }
     let result: LockCasResult;
     try {
       result = await provider.tryAcquire(path);
     } catch {
-      set({ status: "held-by-other-live", record: current, path, openedAsCopy: false });
-      return { status: "held-by-other-live", readOnly: true };
+      return failClosed("held-by-other-live", current);
     }
     if (!result.acquired) {
       // Lost a race between the read above and the provider's own atomic
       // acquire (another process/tab won it in between) — report the
       // TRUTH the CAS just observed, never pretend we still won.
-      const lost = statusFromRefusal(result, instanceId, Date.now());
-      set({ status: lost, record: result.record, path, openedAsCopy: false });
-      return { status: lost, readOnly: isReadOnly(lost) };
+      return failClosed(statusFromRefusal(result, instanceId, Date.now()), result.record);
     }
     set({
       status: "held-by-me",
@@ -372,14 +403,10 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
       // No longer stale by the time the CAS actually ran (the original
       // holder heartbeat, or a third instance already took over) — report
       // the CURRENT truth, never pretend the takeover happened.
-      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record });
+      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record, unverifiableHeartbeats: 0 });
       return false;
     }
-    set({
-      status: "held-by-me",
-      record: result.record,
-      instanceId: result.record?.instanceId ?? instanceId,
-    });
+    set({ status: "held-by-me", record: result.record, instanceId: result.record?.instanceId ?? instanceId });
     return true;
   },
 
@@ -394,23 +421,53 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   },
 
   heartbeat: async () => {
-    const { provider, instanceId, path, record } = get();
+    const { provider, instanceId, path, record, unverifiableHeartbeats } = get();
     if (path === null || record === null) return false;
+    // A thrown call is the SAME "unverifiable" shape a provider that
+    // catches its own exceptions already reports (R4) — one failure mode.
     let result: LockCasResult;
     try {
       result = await provider.refresh(path, record.token ?? "");
     } catch {
+      result = { acquired: false, record: null, unverifiable: true };
+    }
+    if (result.contended) {
+      // R4/R1: CONTENDED is strictly benign (another process's own CAS
+      // held the OS lock for this one instant) — touch NOTHING, not even
+      // the unverifiable streak; the next scheduled tick just retries.
+      return false;
+    }
+    if (result.unverifiable) {
+      // R4: proves nothing either way — never demote on the first miss (a
+      // single transient glitch must not flicker read-only). Count
+      // consecutive misses instead, leaving `record`/`status` untouched
+      // below the threshold so a later successful refresh has the same
+      // token to re-verify against (see `UNVERIFIABLE_DEMOTE_AFTER`'s doc).
+      const streak = unverifiableHeartbeats + 1;
+      if (streak >= UNVERIFIABLE_DEMOTE_AFTER) {
+        // Threshold reached — demote rather than leave a stale "held-by-me"
+        // banner up indefinitely. `record` is intentionally KEPT (not
+        // nulled): this is a demotion pending RECOVERY, not a loss — the
+        // success branch below promotes straight back using the SAME
+        // token the moment a later tick verifies again.
+        set({ status: "held-by-other-live", unverifiableHeartbeats: streak });
+      } else {
+        set({ unverifiableHeartbeats: streak });
+      }
       return false;
     }
     if (!result.acquired) {
-      // Lost the lock underneath us — demote honestly rather than keep
-      // believing the last-known "held-by-me" status. This IS the
-      // false-positive safety net (lib/lockState.ts's module doc): a
-      // resumed-from-suspension instance's own next heartbeat refuses.
-      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record });
+      // A DEFINITE loss — the CAS positively confirmed someone/something
+      // else (or nothing) is on record now, real information rather than a
+      // guess. Demote immediately (the false-positive safety net,
+      // lib/lockState.ts's module doc) and reset the unverifiable streak.
+      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record, unverifiableHeartbeats: 0 });
       return false;
     }
-    set({ record: result.record });
+    // Success — RECOVERY included: unconditionally restores
+    // `status: "held-by-me"` so a session demoted by the branch above
+    // promotes back, rather than assuming its pre-demotion state.
+    set({ record: result.record, status: "held-by-me", unverifiableHeartbeats: 0 });
     return true;
   },
 
@@ -418,7 +475,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     const { provider, path, record, instanceId } = get();
     if (path === null || record === null || record.instanceId !== instanceId) return;
     await provider.release(path, record.token ?? "").catch(() => false);
-    set({ status: "unlocked", record: null });
+    set({ status: "unlocked", record: null, unverifiableHeartbeats: 0 });
   },
 
   canWriteNow: () => {
