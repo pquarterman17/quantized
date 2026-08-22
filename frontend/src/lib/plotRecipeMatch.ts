@@ -104,23 +104,50 @@ function fieldName(entry: RecipeSignatureEntry): string {
   return `${ROLE_LABEL[entry.role]} ("${entry.label}")`;
 }
 
-/** Find a current channel matching `entry` by label, then by alias -- never
- *  by index or position (the P1.3 "reordered equivalent XRD columns map
- *  correctly" case). Both the primary label and every alias fold case and
- *  whitespace via `normalizeLabel` (the same fold `lib/quickPlotTemplates.ts`
- *  uses for its schema fingerprint) -- a rename that only changes case/
- *  spacing should not by itself break a recipe the way it would break
- *  `quickPlotTemplates`' EXACT-string re-key, since here the signature entry
- *  IS the primary matching key (not a side fingerprint next to an exact-
- *  label snapshot). */
-function findChannel(labels: readonly string[], entry: RecipeSignatureEntry): number | null {
+/** Human-readable candidate list for an ambiguity/collision warning --
+ *  1-based "column N" numbering (the `lib/importwizard.ts` human-facing
+ *  convention), each with its raw label so a case-duplicate ("pass" vs.
+ *  "PASS") reads clearly rather than looking like the same entry twice. */
+function candidateList(labels: readonly string[], indices: readonly number[]): string {
+  const parts = indices.map((i) => `${i + 1} ("${labels[i]}")`);
+  if (parts.length <= 2) return parts.join(" and ");
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+
+type ChannelMatch =
+  | { kind: "found"; index: number }
+  | { kind: "ambiguous"; candidates: number[] }
+  | { kind: "none" };
+
+/** Find every current channel matching `entry` at ONE tier, in priority
+ *  order: (a) EXACT raw-string label match, (b) folded (case/whitespace-
+ *  insensitive) label match, (c) folded alias match -- stopping at the
+ *  FIRST tier that produces any candidate at all, never falling through
+ *  past it. A tier producing exactly one candidate resolves; a tier
+ *  producing MORE than one is genuinely ambiguous and must not silently
+ *  pick whichever sorts first -- case-duplicate labels are reachable in
+ *  this repo (backend `_encode_categorical` is case-sensitive with no
+ *  dedup; in-app rename/find-replace can create "pass"/"PASS" siblings),
+ *  so an exact unique match is required to beat a same-folded duplicate
+ *  ("B" saved, dataset has both "B" and "b" -> resolves to "B", not
+ *  ambiguous) while a genuine fold-only duplicate with no exact hit
+ *  refuses to guess. Never matches by index or position (the P1.3
+ *  "reordered equivalent XRD columns map correctly" case) -- every tier is
+ *  string-based. */
+function findChannel(labels: readonly string[], entry: RecipeSignatureEntry): ChannelMatch {
+  const byExact = (l: string) => l === entry.label;
   const target = normalizeLabel(entry.label);
+  const byFoldedLabel = (l: string) => normalizeLabel(l) === target;
   const aliases = new Set(entry.aliases.map(normalizeLabel));
-  for (let i = 0; i < labels.length; i++) {
-    const norm = normalizeLabel(labels[i]);
-    if (norm === target || aliases.has(norm)) return i;
+  const byFoldedAlias = (l: string) => aliases.has(normalizeLabel(l));
+
+  for (const predicate of [byExact, byFoldedLabel, byFoldedAlias]) {
+    const candidates: number[] = [];
+    for (let i = 0; i < labels.length; i++) if (predicate(labels[i])) candidates.push(i);
+    if (candidates.length === 1) return { kind: "found", index: candidates[0] };
+    if (candidates.length > 1) return { kind: "ambiguous", candidates };
   }
-  return null;
+  return { kind: "none" };
 }
 
 /** Resolve `recipe` against `dataset`. Pure -- never mutates either
@@ -149,11 +176,20 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
   const resolvedByEntry = new Map<string, number>();
 
   for (const entry of recipe.signature) {
-    const idx = findChannel(labels, entry);
-    if (idx === null) {
+    const match = findChannel(labels, entry);
+    if (match.kind === "none") {
       unmatched.push(fieldName(entry));
       continue;
     }
+    if (match.kind === "ambiguous") {
+      // A genuine fold-only (or alias-only) duplicate at this tier -- no
+      // exact match won outright, so there is no defensible single answer.
+      // Never guess: drop the field and report every candidate by name.
+      unmatched.push(fieldName(entry));
+      warnings.push(`${fieldName(entry)}: ambiguous -- matches columns ${candidateList(labels, match.candidates)}`);
+      continue;
+    }
+    const idx = match.index;
     // The unit trap (a column named "B" in Oe at save time, "B" in Tesla
     // now): only checked when the recipe actually recorded a unit -- an
     // entry saved with no unit has nothing to compare against and always
@@ -184,6 +220,32 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
       };
     }
     resolvedByEntry.set(entry.id, idx);
+  }
+
+  // Cross-entry collision check: TWO DIFFERENT signature entries can each
+  // individually resolve unambiguously (per findChannel's own per-entry
+  // tiers above) yet still land on the SAME channel index -- one via its
+  // own label, another via an alias that happens to equal that label (or
+  // any other combination). Picking a winner here would be the identical
+  // silent guess findChannel's ambiguity handling above refuses to make, so
+  // BOTH (all) colliding entries are demoted to unmatched together, with one
+  // warning naming every colliding entry and the shared column.
+  const entriesByChannel = new Map<number, RecipeSignatureEntry[]>();
+  for (const entry of recipe.signature) {
+    const ch = resolvedByEntry.get(entry.id);
+    if (ch === undefined) continue;
+    const list = entriesByChannel.get(ch) ?? [];
+    list.push(entry);
+    entriesByChannel.set(ch, list);
+  }
+  for (const [ch, entries] of entriesByChannel) {
+    if (entries.length < 2) continue;
+    const names = entries.map(fieldName).join(" and ");
+    warnings.push(`${names}: collide on column ${ch + 1} ("${labels[ch]}") -- neither applied`);
+    for (const entry of entries) {
+      unmatched.push(fieldName(entry));
+      resolvedByEntry.delete(entry.id);
+    }
   }
 
   const resolveOne = (id: string | null): number | null => (id === null ? null : resolvedByEntry.get(id) ?? null);

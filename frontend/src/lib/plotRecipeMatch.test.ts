@@ -187,6 +187,126 @@ describe("resolveRecipe — technique scope", () => {
   });
 });
 
+describe("resolveRecipe — ambiguous label matching (case-duplicate columns)", () => {
+  it("a folded-label duplicate with no exact match is ambiguous: unmatched + a warning naming every candidate", () => {
+    // Captured from a dataset where the Y series was labeled "Pass" exactly.
+    const captureDs = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1]],
+        labels: ["X", "Pass"],
+        units: ["", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const recipe = captureRecipe(captureDs, view({ xKey: 0, yKeys: [1] }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    // Resolve against a dataset with NEITHER column spelled "Pass" exactly --
+    // "pass" and "PASS" both fold to the same normalized label, and #186's
+    // review-round precedent (case-sensitive, non-deduped backend encoding +
+    // in-app rename/find-replace) means this shape is reachable in practice.
+    const dup = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1], [0, 1]],
+        labels: ["X", "pass", "PASS"],
+        units: ["", "", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const res = resolveRecipe(recipe, dup);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual(['Y series ("Pass")']);
+    expect(res.warnings).toHaveLength(1);
+    expect(res.warnings[0]).toMatch(/ambiguous/i);
+    expect(res.warnings[0]).toContain("pass");
+    expect(res.warnings[0]).toContain("PASS");
+    // Neither candidate is silently picked -- the field is dropped entirely.
+    expect(res.resolved.mapping.yKeys).toEqual([]);
+  });
+
+  it("an EXACT unique raw-string match beats a folded duplicate elsewhere in the dataset", () => {
+    const captureDs = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1]],
+        labels: ["X", "B"],
+        units: ["", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const recipe = captureRecipe(captureDs, view({ xKey: 0, yKeys: [1] }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    // "B" is exact and unique even though "b" also appears -- the exact tier
+    // must win outright, never fall through to the ambiguous folded tier.
+    const withDup = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1], [0, 1]],
+        labels: ["X", "B", "b"],
+        units: ["", "", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const res = resolveRecipe(recipe, withDup);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual([]);
+    expect(res.warnings).toEqual([]);
+    expect(res.resolved.mapping.xKey).toBe(0);
+    expect(res.resolved.mapping.yKeys).toEqual([1]);
+  });
+});
+
+describe("resolveRecipe — cross-entry collision", () => {
+  it("two entries independently resolving to the SAME channel (alias vs. label) both drop, with one collision warning", () => {
+    const captureDs = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1]],
+        labels: ["Field", "H"],
+        units: ["", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const recipe = captureRecipe(captureDs, view({ xKey: 0, yKeys: [], groupKey: 1 }), null, {
+      id: "r",
+      name: "n",
+      appVersion: "0",
+    });
+    // Give the group entry ("H") an alias of "Field" -- the SAME string the
+    // x entry's own label already is. On a dataset with exactly one column
+    // named "Field", both entries individually resolve unambiguously (x0 by
+    // exact label, group0 by exact-folded alias) -- but to the SAME index.
+    const aliased: PlotRecipe = {
+      ...recipe,
+      signature: recipe.signature.map((e) => (e.role === "group" ? { ...e, aliases: ["Field"] } : e)),
+    };
+    const resolveDs = xrdDataset({
+      data: {
+        time: [0, 1],
+        values: [[0, 1], [0, 1], [0, 1]],
+        labels: ["Something", "Other", "Field"],
+        units: ["", "", ""],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    const res = resolveRecipe(aliased, resolveDs);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+    expect(res.unmatched).toEqual(expect.arrayContaining(['X axis ("Field")', 'Group ("H")']));
+    expect(res.unmatched).toHaveLength(2);
+    expect(res.warnings.some((w) => w.includes("Field") && w.includes("H"))).toBe(true);
+    // Neither entry wins the shared column -- both drop out of the mapping.
+    expect(res.resolved.mapping.xKey).toBeNull();
+    expect(res.resolved.mapping.groupKey).toBeNull();
+  });
+});
+
 describe("resolveRecipe — seriesStyles/seriesOrder/hiddenChannels re-key", () => {
   it("re-keys visual overrides from signature ids back to real channel indices", () => {
     const ds = xrdDataset();
