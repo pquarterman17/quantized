@@ -11,7 +11,9 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView, type PlotView } from "../lib/plotview";
+import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -256,7 +258,7 @@ describe("applyPlotRecipe", () => {
     expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
   });
 
-  it("unmatched fields stage a pending application (zero mutation) -- confirm applies the resolved subset with ONE undo entry", async () => {
+  it("unmatched fields stage a pending application (zero mutation)", async () => {
     const id = await saved();
     const savedRecipes = useApp.getState().plotRecipes;
     // Rename the Y column the recipe bound -- X still resolves, Y does not:
@@ -279,14 +281,78 @@ describe("applyPlotRecipe", () => {
     expect(pending).not.toBeNull();
     expect(pending!.recipe.id).toBe(id);
     expect(pending!.resolution.unmatched.some((m) => m.includes("Intensity"))).toBe(true);
+  });
 
-    const confirmed = useApp.getState().confirmPendingRecipeApplication();
+  // Finding 4: confirm must not trust the staged resolution as-is -- it
+  // RE-RESOLVES against the CURRENT dataset. Since nothing changes the
+  // dataset further here, the fresh resolve reproduces the SAME unmatched
+  // field, so confirm re-stages rather than silently applying with the
+  // field dropped (zero mutation either way).
+  it("confirming with the SAME unmatched field still present re-resolves and RE-STAGES, zero mutation", async () => {
+    const id = await saved();
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({
+      datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    const stagedPending = useApp.getState().pendingRecipeApplication;
+    expect(stagedPending).not.toBeNull();
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+
+    const confirmed = await useApp.getState().confirmPendingRecipeApplication();
+
+    expect(confirmed).toBe(false);
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore); // zero mutation
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+    const restaged = useApp.getState().pendingRecipeApplication;
+    expect(restaged).not.toBeNull(); // re-staged, not cleared
+    expect(restaged!.resolution.unmatched.some((m) => m.includes("Intensity"))).toBe(true);
+    expect(useApp.getState().status).toContain("dataset changed");
+  });
+
+  // Finding 4's core bug: a STALE staged resolution's column indices go
+  // wrong when the dataset is edited between stage and confirm. Fixed by
+  // re-resolving at confirm time and applying only the FRESH mapping.
+  it("confirming after a REAL store action fixes the match re-resolves cleanly and applies the FRESH (not stale) mapping", async () => {
+    const id = await saved(); // recipe captures Y = "Intensity" at index 1
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({
+      datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1"); // stages: Y unmatched
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+
+    // Two REAL store actions mutate the dataset's columns AGAIN between
+    // stage and confirm -- reintroducing an "Intensity"-labeled column with
+    // the recipe's originally-captured unit ("cps"), but at a NEW index (3,
+    // not the recipe's originally-captured 1). Each pushes its own history
+    // entry, so the "ONE undo entry" count below is taken from AFTER these,
+    // isolating just the confirm gesture's own entry.
+    const ok = useApp.getState().addFormula("d1", "Intensity", "A * 2");
+    expect(ok).toBe(true);
+    useApp.getState().updateFormula("d1", 0, { unit: "cps" });
+
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+
+    const confirmed = await useApp.getState().confirmPendingRecipeApplication();
 
     expect(confirmed).toBe(true);
     expect(useApp.getState().pendingRecipeApplication).toBeNull();
     expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
     expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
-    expect(useApp.getState().history).toHaveLength(historyBefore + 1); // ONE undo entry total
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1); // ONE undo entry (the confirm gesture itself)
+    // The applied figure binds the FRESH index (3, the new formula column),
+    // never the stale index (1, "Signal" -- the wrong data) captured at
+    // stage time.
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.data.labels[3]).toBe("Intensity");
+    expect(useApp.getState().yKeys).toEqual([3]);
   });
 
   it("cancelling a pending application clears it without any mutation", async () => {
@@ -308,9 +374,10 @@ describe("applyPlotRecipe", () => {
     expect(useApp.getState().history).toHaveLength(historyBefore);
   });
 
-  it("confirming with nothing pending is a no-op", () => {
+  it("confirming with nothing pending is a no-op with a status message", async () => {
     expect(useApp.getState().pendingRecipeApplication).toBeNull();
-    expect(useApp.getState().confirmPendingRecipeApplication()).toBe(false);
+    expect(await useApp.getState().confirmPendingRecipeApplication()).toBe(false);
+    expect(useApp.getState().status).toContain("No pending");
   });
 });
 
@@ -345,5 +412,91 @@ describe("matchingPlotRecipes", () => {
     const otherDs = dataset("d2", "magnetometry.mvsh", ["Field", "Moment"]);
 
     expect(await useApp.getState().matchingPlotRecipes(otherDs)).toEqual([]);
+  });
+});
+
+// P1.3 wave-2 integration (finding 1): `plotRecipes` was ALREADY serialized
+// by the whole-state-spread save path (workspaceIO.ts / useWorkspaceAutosave.ts
+// both do `serializeWorkspace({ ...s, ... })`) but `loadWorkspace` never
+// restored it -- a load silently dropped every saved recipe, and worse, left
+// the PREVIOUS project's live list in place (a cross-project leak). Exercises
+// the REAL `serializeWorkspace`/`parseWorkspace` pair, not a hand-built
+// WorkspaceState object, so a future .dwk-shape change can't silently stop
+// covering this.
+describe("loadWorkspace restores plotRecipes (finding 1)", () => {
+  it("round-trips a saved recipe through the real serialize path", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1");
+    const s = useApp.getState();
+    const text = serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+
+    // A different project's live list must not survive the load.
+    resetStore([dataset("other")]);
+    useApp.setState({ plotRecipes: [{ id: "stale-from-other-project" } as unknown as PlotRecipe] });
+
+    const loaded = parseWorkspace(text);
+    useApp.getState().loadWorkspace(loaded);
+
+    const restored = useApp.getState().plotRecipes;
+    expect(restored).toHaveLength(1);
+    expect(restored[0].name).toBe("XRD Recipe");
+    expect(restored.map((r) => r.id)).not.toContain("stale-from-other-project");
+  });
+
+  it("loading a doc WITHOUT the field clears any live list to [] (no cross-project leak)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("Leftover", "d1");
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
+
+    // A legacy/pre-P1.3 doc has no `plotRecipes` field at all.
+    useApp.getState().loadWorkspace({ datasets: [] });
+
+    expect(useApp.getState().plotRecipes).toEqual([]);
+  });
+
+  it("load-then-serialize round-trips the recipes (erase-on-resave guard)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1");
+    const s1 = useApp.getState();
+    const text = serializeWorkspace({ ...s1, plotWindows: s1.windowsForSave() });
+    const loaded = parseWorkspace(text);
+
+    useApp.getState().loadWorkspace(loaded);
+
+    // Re-serializing the just-loaded state must NOT erase the recipe --
+    // this is the exact "half-wired: saves persist it, load never restores
+    // it, so a resave wipes it" destructive path the finding calls out.
+    const s2 = useApp.getState();
+    const resavedText = serializeWorkspace({ ...s2, plotWindows: s2.windowsForSave() });
+    const reparsed = parseWorkspace(resavedText);
+    expect(reparsed.plotRecipes).toHaveLength(1);
+    expect(reparsed.plotRecipes[0].name).toBe("XRD Recipe");
+  });
+});
+
+// Finding 3: `pendingRecipeApplication` is transient UI state (like
+// `separatePreview`/`quickFigureBuilderDatasetId`) -- a fresh load must never
+// resume mid-gesture, especially into a DIFFERENT project where the staged
+// dataset id could coincidentally collide with an unrelated dataset.
+describe("loadWorkspace clears pendingRecipeApplication (finding 3)", () => {
+  it("clears a staged pending application on load; confirming afterward is a no-op with a status message", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const savedRecipes = useApp.getState().plotRecipes;
+    // Break the Y match so applyPlotRecipe stages a pending application.
+    useApp.setState({
+      datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+
+    useApp.getState().loadWorkspace({ datasets: [dataset("d9")] });
+
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const confirmed = await useApp.getState().confirmPendingRecipeApplication();
+    expect(confirmed).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore); // zero mutation
   });
 });

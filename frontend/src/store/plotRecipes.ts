@@ -28,10 +28,13 @@
 //   - `{ refused }` -> a status message, zero mutation.
 //   - `unmatched.length > 0` -> zero mutation; the resolution is stashed as
 //     `pendingRecipeApplication` for a preview+confirm UI (a later lane) to
-//     render. `confirmPendingRecipeApplication` applies the RESOLVED SUBSET
-//     exactly as a clean match would; `cancelPendingRecipeApplication` just
-//     clears the pending state.
+//     render. `cancelPendingRecipeApplication` just clears the pending state.
 //   - a clean match (zero unmatched) applies immediately.
+//
+// `confirmPendingRecipeApplication` (finding 4, P1.3 wave-2 integration)
+// never trusts the staged resolution as-is -- the dataset can change between
+// stage and confirm, staling its column indices -- so it RE-RESOLVES fresh
+// at confirm time and only ever applies THAT result (see its own doc).
 //
 // "Applying" always CREATES A NEW FIGURE (never edits a live window in
 // place) -- the same one-gesture, one-undo shape `quickFigureCreate.ts`'s
@@ -209,8 +212,10 @@ function viewFromResolved(mapping: ResolvedRecipeMapping, visual: ResolvedRecipe
  *  `confirmPendingRecipeApplication` -- ONE `recordHistory` call (inside
  *  `createWindow`), everything else rides the same undo unit. Fails closed
  *  (false, a status message, no history entry, no new window/figure) if the
- *  dataset vanished between resolve and apply (a stale pending confirm, or a
- *  removal mid-gesture). */
+ *  dataset vanished between resolve and apply -- and, since finding 4's
+ *  confirm re-resolve fix, `resolved` here is always freshly computed
+ *  against the CURRENT dataset (never a stale stage-time one), so a column
+ *  removed/reordered/recoded mid-gesture can't sneak a stale index in. */
 function applyResolvedRecipe(
   set: SliceSet,
   get: SliceGet,
@@ -298,14 +303,15 @@ export interface PlotRecipesSlice {
    *  pending apply returns false, same as a refusal. Async: lazy-loads
    *  `resolveRecipe` (see the module doc's LAZY-LOADED note). */
   applyPlotRecipe: (recipeId: string, datasetId: string, opts?: ApplyPlotRecipeOptions) => Promise<boolean>;
-  /** Apply the pending resolution's RESOLVED SUBSET (unmatched fields stay
-   *  dropped, exactly as a clean match would have applied them) and clear
-   *  `pendingRecipeApplication`. False, zero mutation, pending left cleared
-   *  when nothing is pending, or the dataset vanished since resolve.
-   *  Synchronous -- `pendingRecipeApplication` already carries a resolved
-   *  `ResolvedRecipeApplication` from a PRIOR `resolveRecipe` call, so this
-   *  needs neither library. */
-  confirmPendingRecipeApplication: () => boolean;
+  /** Confirm a staged apply. Never trusts the staged resolution -- RE-RESOLVES
+   *  against `pending.datasetId`'s CURRENT dataset first (see the module
+   *  doc's APPLY PATH note): dataset gone or refused -> status, pending
+   *  cleared, zero mutation; clean fresh match -> applies THAT (never the
+   *  stale one); still unmatched -> `pendingRecipeApplication` is REPLACED
+   *  with the fresh resolution (never applied) plus a status noting the
+   *  dataset changed. False, pending left cleared, when nothing was pending.
+   *  Async: lazy-loads `resolveRecipe` to re-resolve. */
+  confirmPendingRecipeApplication: () => Promise<boolean>;
   /** Discard the pending resolution without applying anything. */
   cancelPendingRecipeApplication: () => void;
   /** Every recipe scoped to `dataset`'s technique that `resolveRecipe`
@@ -422,11 +428,46 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       return applyResolvedRecipe(set, get, recipe, datasetId, resolution.resolved);
     },
 
-    confirmPendingRecipeApplication: () => {
+    confirmPendingRecipeApplication: async () => {
       const pending = get().pendingRecipeApplication;
-      if (!pending) return false;
+      if (!pending) {
+        set({ status: "No pending Plot Recipe application to confirm" });
+        return false;
+      }
+      // Finding 4: never trust `pending.resolution` as-is -- it was computed
+      // at STAGE time and the dataset may have been edited since (a column
+      // removed/reordered/recoded). Re-resolve against the CURRENT dataset
+      // before applying anything.
+      const dataset = get().datasets.find((d) => d.id === pending.datasetId);
+      if (!dataset) {
+        set({
+          pendingRecipeApplication: null,
+          status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found`,
+        });
+        return false;
+      }
+      const { resolveRecipe } = await recipeLibs();
+      const resolution = resolveRecipe(pending.recipe, dataset);
+      if ("refused" in resolution) {
+        set({
+          pendingRecipeApplication: null,
+          status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}`,
+        });
+        return false;
+      }
+      if (resolution.unmatched.length > 0) {
+        // Still not a clean match against the CURRENT dataset -- re-stage
+        // the fresh resolution (never apply a stale one) and tell the user
+        // why, so a second confirm always re-verifies rather than silently
+        // compounding staleness.
+        set({
+          pendingRecipeApplication: { recipe: pending.recipe, datasetId: pending.datasetId, resolution },
+          status: `Plot Recipe "${pending.recipe.name}": the dataset changed since the preview -- review the updated mapping`,
+        });
+        return false;
+      }
       set({ pendingRecipeApplication: null });
-      return applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, pending.resolution.resolved);
+      return applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
     },
 
     cancelPendingRecipeApplication: () => set({ pendingRecipeApplication: null }),

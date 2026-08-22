@@ -80,6 +80,57 @@ import { fileURLToPath } from "node:url";
  *  still requires this same written-justification treatment: lazy-chunk
  *  FIRST, raise only for measured, irreducible eager logic.
  *
+ *  2026-08-16 — pinned at 874,461 after the E-c1 extraction pass, booked by
+ *  the owner's E-c split ("address the eager bundle budget first" — the
+ *  0.2 kB of remaining headroom was one feature away from red). Three
+ *  runtime-conditional subtrees left the eager graph, each following the
+ *  2026-08-02 MapStage/DocumentWindow precedent: (1) `Inspector` (App.tsx)
+ *  — ~45 kB of cards behind a same-class `<aside>` fallback so the grid
+ *  column never shifts; (2) `StatStage` + `MultiPanelStage` (PlotStage.tsx)
+ *  — alternate stage modes, never the default-plot first paint; (3)
+ *  `BackgroundPlotWindow` (WindowCanvas.tsx) — a fresh session has exactly
+ *  one focused window, and this renderer drags in the whole
+ *  BackgroundAltModes/useStatStage/statRender cluster. Measured 834,461 B
+ *  eager, down from 924,777 B — recovers ~88 kB and re-opens the full
+ *  40 kB slack band for E-c2 (tile previews) and E-c3 (virtualization).
+ *  NEVER raise this — split a panel out or defer a module instead.
+ *
+ *  2026-08-02 — pinned at 924,977 after moving the Stage cell's Map/
+ *  Worksheet tabs and the MDI `MapWindow`/`WorksheetWindow` document-window
+ *  content (`components/windows/DocumentWindow.tsx`) to dynamic imports, plus
+ *  flag-gating `WhatIsThis` the same way MAIN #29 already gated the workshop
+ *  panels. `Stage.tsx` and `DocumentWindow.tsx` each held their own static
+ *  `import MapStage ...` / `import WorksheetPane ...`, so both were in the
+ *  eager graph even though `stageTab` defaults to `"plot"` and most
+ *  workspaces have zero map/worksheet document windows — `MapStage` alone
+ *  pulls in `d3-contour` (mapRender.ts -> lib/contour.ts), a real external
+ *  dependency with no business loading before first paint. Both call sites
+ *  now lazy-import the identical specifiers, so Vite serves them from ONE
+ *  shared chunk regardless of which path (tab or document window) is hit
+ *  first. `AnnotationTextDialog` and `InteractionHints` were evaluated for
+ *  the same treatment and stay eager — see AppOverlays.tsx's header comment
+ *  for why. Measured 884,977 B eager (543,714 entry + 244,592 shared store
+ *  chunk + ~96,671 B across smaller shared/preload chunks: primitives,
+ *  uplotOpts, the split-out `help` store chunk, ParamDialog, ToolWindow,
+ *  etc.), down from 917,401 B before this pass — recovers ~53 kB of
+ *  headroom for future feature slices. Slack is 40 kB. NEVER raise this —
+ *  split a panel out or defer a module instead.
+ *
+ *  2026-07-26 — pinned at 941,260 after P4.1 made `CalcOnlyApp` (the
+ *  `?view=calc` standalone DiraCulator launcher) a dynamic import in
+ *  `main.tsx`. It was the last static importer of `CalculatorsContent`'s
+ *  whole tab tree (SuperconductorTab, SldTab, VacuumTab, …) outside the
+ *  already-lazy in-app `CalculatorsPanel`, so that ~69 kB chunk was riding
+ *  the eager entry for every default-view user despite never rendering
+ *  there. Measured 901,260 B eager (659,048 entry + 242,212 shared store
+ *  chunk), down from 948,378 B (948.4 kB) before the split. Slack is 40 kB
+ *  so routine feature work does not churn the pin. NEVER raise this — split
+ *  a panel out or defer a module instead.
+ *
+ *  2026-07-25 — was 972,000 after MAIN #29 split the 25 flag-gated
+ *  workshop panels out of `AppOverlays.tsx`. Measured 932,219 B eager
+ *  (702,285 entry + 229,934 shared store chunk), down from a single
+ *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
  *  before first paint.
  *
  *  2026-08-22 — 911,872 (890.5 kB) after P1.3 wave 2 Lane C wired

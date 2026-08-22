@@ -1524,10 +1524,22 @@ export const useApp = create<AppState>((set, get) => ({
         quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
         savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
         collections: ws.collections ?? [], // saved-search Collections (PR L, L0.48/L0.49) — .dwk v4 additive
+        // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
+        // serialized by the whole-state-spread save path (workspaceIO.ts /
+        // useWorkspaceAutosave.ts) but never restored here — a load silently
+        // dropped every saved recipe AND, worse, left the PREVIOUS project's
+        // live list in place (the same cross-project-leak class `workbooks`
+        // above calls out). MUST be explicit, same reasoning.
+        plotRecipes: ws.plotRecipes ?? [],
         visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
         separatePreview: null, // PR J transient dialog state — never resumes on a fresh load
+        // P1.3 wave 2: transient preview/confirm state for a staged recipe
+        // apply — never resumes on a fresh load, same as separatePreview/
+        // quickFigureBuilderDatasetId above (a stale pending would confirm
+        // against whatever dataset happens to share its id in the NEW project).
+        pendingRecipeApplication: null,
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,

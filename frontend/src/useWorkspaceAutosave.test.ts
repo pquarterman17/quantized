@@ -48,6 +48,7 @@ const base: AutosaveState = {
   savedRois: [],
   collections: [],
   visibleDetailsColumns: [],
+  plotRecipes: [],
 };
 
 describe("shouldAutosave", () => {
@@ -96,6 +97,7 @@ describe("shouldAutosave", () => {
       "workbooks",
       "savedRois",
       "collections",
+      "plotRecipes",
     ] as const,
   )("saves when %s changes", (field) => {
     expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
@@ -181,6 +183,35 @@ describe("dirty tracking (P1.2 box 1)", () => {
       // minimal stand-in cast is enough, same as the `it.each` probes above.
       useApp.setState({ quickPlotTemplates: [{ id: "t1" }] as unknown as AppState["quickPlotTemplates"] });
     });
+    expect(useApp.getState().projectDirty).toBe(true);
+  });
+
+  // Finding 2 (P1.3 wave 2 integration): a Plot Recipe CRUD gesture is a
+  // real, persisted edit (round-trips through .dwk via lib/workspace.ts)
+  // with no other tracked field changing alongside it — before the Pick-
+  // list/equality-chain fix, deletePlotRecipe/renamePlotRecipe/
+  // duplicatePlotRecipe/saveAsPlotRecipe left `projectDirty` false, same
+  // misleading-clean-title-bar bug class as collections/quickPlotTemplates
+  // above. Exercised through the REAL store action (not a raw setState) so
+  // this also proves the action's own set() call is actually reference-
+  // distinct, not just the field's presence in the Pick list.
+  it("marks the project dirty on a Plot Recipe delete (real CRUD action, not a raw setState)", () => {
+    renderHook(() => useWorkspaceAutosave());
+    act(() => {
+      useApp.setState({
+        plotRecipes: [{ id: "r1" } as unknown as AppState["plotRecipes"][number]],
+      });
+    });
+    // The seed above is fixture setup — `plotRecipes` starts as a genuine
+    // Pick-list field, so it must NOT be the reason projectDirty ends up
+    // true below; reset it before the real action under test runs.
+    useApp.setState({ projectDirty: false });
+
+    act(() => {
+      useApp.getState().deletePlotRecipe("r1");
+    });
+
+    expect(useApp.getState().plotRecipes).toHaveLength(0);
     expect(useApp.getState().projectDirty).toBe(true);
   });
 });
@@ -299,16 +330,6 @@ const AUTOSAVE_EXCLUDED: Record<string, string> = {
     "change is structurally impossible today, so tracking it separately " +
     "would never change autosave behavior. Re-check this exclusion if a " +
     "future edit gives techniqueViewMemory an independent mutation site.",
-  // P1.3 wave 2, Lane C (2026-08-22): `plotRecipes` is wired into
-  // lib/workspace.ts's project-scope (de)serialize path, but AppState (store/
-  // useApp.ts) has no `plotRecipes` field yet — the store<->workspace hookup
-  // is a deliberately separate integration slice this Lane does not own, so
-  // there is no mutation site to track. Remove this exclusion (and add
-  // `plotRecipes` to AutosaveState's Pick<AppState,...> + shouldAutosave's
-  // equality chain) the moment that integration slice lands.
-  plotRecipes:
-    "not yet wired into AppState — the store<->workspace integration slice " +
-    "(a separate P1.3 wave) adds the live list this hook would track.",
 };
 
 describe("AutosaveState completeness sweep (P2-1)", () => {
