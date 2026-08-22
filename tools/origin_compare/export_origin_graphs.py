@@ -214,7 +214,22 @@ def png_dims(path: Path) -> tuple[int, int] | None:
 def load_manifest(path: Path, project: Path) -> dict[str, Any]:
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("project") == str(project):
+        recorded = data.get("project")
+        # Identity is the project FILE NAME, not the absolute path -- the
+        # output dir is already keyed by project stem (_exports/<stem>/), so
+        # a manifest sitting there with a matching name IS this project's
+        # checkpoint. Absolute-path identity breaks on every corpus/repo
+        # relocation (e.g. the 2026-07-25 test-data move off OneDrive), which
+        # would otherwise silently discard every checkpoint and re-export
+        # everything from scratch.
+        if recorded is not None and Path(recorded).name == project.name:
+            if recorded != str(project):
+                print(
+                    f"[manifest] project path changed ({recorded} -> "
+                    f"{project}) -- resuming",
+                    flush=True,
+                )
+                data["project"] = str(project)  # self-heal the recorded path
             data.setdefault("graphs", {})
             return data
         print(

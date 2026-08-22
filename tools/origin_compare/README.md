@@ -75,6 +75,16 @@ At startup the script also checks for (and kills) any orphaned
 `Origin*.exe` left behind by a previous watchdog-killed run, and reports
 if it had to.
 
+`manifest.json` identifies "is this checkpoint for the current project?" by
+the project **file name**, not its absolute path — the output dir is
+already keyed by project stem (`_exports/<stem>/`), so a manifest sitting
+there with a matching name IS this project's checkpoint. If the recorded
+path differs (e.g. after a corpus relocation, such as the 2026-07-25
+`test-data` move off OneDrive — see trap 5 below), the script self-heals
+the recorded path and prints `[manifest] project path changed (... ->
+...) -- resuming` instead of discarding the checkpoint and re-exporting
+everything.
+
 ## COM traps found live while building this (2026-07-09)
 
 These cost real time to isolate — recorded here (and in the module
