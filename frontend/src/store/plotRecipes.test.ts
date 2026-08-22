@@ -11,10 +11,11 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { PlotRecipe } from "../lib/plotRecipe";
+import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
+import { useGlobalPlotRecipes } from "./globalPlotRecipes";
 import { useApp } from "./useApp";
 
 // `technique: null` (never `undefined` -- a default parameter would silently
@@ -50,6 +51,10 @@ function resetStore(datasets: Dataset[] = [dataset("d1")]) {
     future: [],
     status: "",
   });
+  // Finding 4: matchingPlotRecipes/cleanMatchingPlotRecipe now read the
+  // GLOBAL store too -- reset it alongside the project one so no test leaks
+  // state into another via localStorage/module-level state.
+  useGlobalPlotRecipes.setState({ recipes: [], hydrated: true });
 }
 
 beforeEach(() => resetStore());
@@ -193,6 +198,74 @@ describe("renamePlotRecipe / deletePlotRecipe / duplicatePlotRecipe (+ undo)", (
   });
 });
 
+// ORCHESTRATOR RULING B (code-review findings 2+3): the project-scope half
+// of the copy-with-a-fresh-id cross-scope transfer primitive (the
+// store/globalPlotRecipes.ts `copyIn` sibling). Undo of a copy-to-project
+// must remove ONLY the tracked copy -- never touch whatever it came from
+// (an external recipe object, e.g. from the global scope, that this action
+// never mutates).
+describe("copyPlotRecipeIn", () => {
+  it("adds the external recipe under a FRESH id with ONE undoable history entry", async () => {
+    const external: PlotRecipe = {
+      ...(await (async () => {
+        focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+        const id = (await useApp.getState().saveAsPlotRecipe("External", "d1"))!;
+        const r = useApp.getState().plotRecipes.find((x) => x.id === id)!;
+        useApp.setState({ plotRecipes: [] }); // it was never really in the project list
+        return r;
+      })()),
+      id: "external-fixed-id",
+    };
+    const before = useApp.getState().history.length;
+
+    const newId = useApp.getState().copyPlotRecipeIn(external);
+
+    expect(newId).not.toBe("external-fixed-id"); // fresh id, never the source's own
+    expect(useApp.getState().plotRecipes.map((r) => r.name)).toEqual(["External"]);
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("dedupes the name against the project list", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("Taken", "d1");
+    const external: PlotRecipe = { ...useApp.getState().plotRecipes[0], id: "other-id", name: "Taken" };
+
+    useApp.getState().copyPlotRecipeIn(external);
+
+    expect(useApp.getState().plotRecipes.map((r) => r.name)).toEqual(["Taken", "Taken (2)"]);
+  });
+
+  // Finding 2's exact bug, now closed by construction: undoing the
+  // project-side add must NEVER remove/affect the source the copy came
+  // from (here simulated as a recipe that lives ONLY in this test's local
+  // variable, standing in for "the global original") -- there is nothing
+  // else for undo to touch.
+  it("undo after a copy-to-project removes ONLY the tracked copy, leaving nothing else behind", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const globalOriginal: PlotRecipe = {
+      ...(await (async () => {
+        const id = (await useApp.getState().saveAsPlotRecipe("From Global", "d1"))!;
+        const r = useApp.getState().plotRecipes.find((x) => x.id === id)!;
+        useApp.setState({ plotRecipes: [] });
+        return r;
+      })()),
+      id: "global-original-id",
+    };
+    const countBefore = useApp.getState().plotRecipes.length;
+
+    useApp.getState().copyPlotRecipeIn(globalOriginal);
+    expect(useApp.getState().plotRecipes).toHaveLength(countBefore + 1);
+
+    useApp.getState().undo();
+
+    expect(useApp.getState().plotRecipes).toHaveLength(countBefore);
+    // The "source" object itself is untouched -- copyPlotRecipeIn never
+    // mutates its argument.
+    expect(globalOriginal.id).toBe("global-original-id");
+    expect(globalOriginal.name).toBe("From Global");
+  });
+});
+
 describe("applyPlotRecipe", () => {
   async function saved(): Promise<string> {
     focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
@@ -258,6 +331,27 @@ describe("applyPlotRecipe", () => {
     expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
   });
 
+  // FINDING 4 (final code-review round): matchingPlotRecipes/
+  // cleanMatchingPlotRecipe already span BOTH scopes -- applyPlotRecipe(id)
+  // looking ONLY at the project list means the advertised pair ("here's a
+  // matching recipe" / "apply it by id") doesn't compose for a global result.
+  it("applies a GLOBAL-only recipe by id -- the project-list miss falls back to the hydrated global list", async () => {
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const globalOnly = captureRecipe(dataset("d1"), view, null, {
+      id: "global-only-id",
+      name: "Global Recipe",
+      appVersion: "0",
+    });
+    useGlobalPlotRecipes.setState({ recipes: [globalOnly], hydrated: true });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipe("global-only-id", "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().plotRecipes).toHaveLength(0); // never copied into the project list
+  });
+
   it("unmatched fields stage a pending application (zero mutation)", async () => {
     const id = await saved();
     const savedRecipes = useApp.getState().plotRecipes;
@@ -283,12 +377,18 @@ describe("applyPlotRecipe", () => {
     expect(pending!.resolution.unmatched.some((m) => m.includes("Intensity"))).toBe(true);
   });
 
-  // Finding 4: confirm must not trust the staged resolution as-is -- it
-  // RE-RESOLVES against the CURRENT dataset. Since nothing changes the
-  // dataset further here, the fresh resolve reproduces the SAME unmatched
-  // field, so confirm re-stages rather than silently applying with the
-  // field dropped (zero mutation either way).
-  it("confirming with the SAME unmatched field still present re-resolves and RE-STAGES, zero mutation", async () => {
+  // ORCHESTRATOR RULING A (code-review finding 1): confirm must not trust
+  // the staged resolution as-is -- it RE-RESOLVES against the CURRENT
+  // dataset. Since nothing changes the dataset further here, the fresh
+  // resolve reproduces the IDENTICAL unmatched set, so confirm re-stages
+  // rather than silently applying with the field dropped (zero mutation
+  // either way) -- but the status must NOT falsely claim "the dataset
+  // changed" when it demonstrably didn't (the old wording's bug: this exact
+  // scenario is the dialog's own normal case, since the dialog only opens
+  // with unmatched > 0 and blocks dataset edits while up, so EVERY re-resolve
+  // from there reproduces the identical set). It should say the fields are
+  // still unmatched instead.
+  it("confirming with the IDENTICAL unmatched set re-resolves and RE-STAGES, zero mutation, without claiming the dataset changed", async () => {
     const id = await saved();
     const savedRecipes = useApp.getState().plotRecipes;
     useApp.setState({
@@ -311,6 +411,52 @@ describe("applyPlotRecipe", () => {
     const restaged = useApp.getState().pendingRecipeApplication;
     expect(restaged).not.toBeNull(); // re-staged, not cleared
     expect(restaged!.resolution.unmatched.some((m) => m.includes("Intensity"))).toBe(true);
+    expect(useApp.getState().status).not.toContain("dataset changed");
+    expect(useApp.getState().status).toContain("still unmatched");
+  });
+
+  // The other half of the same fix: when the fresh unmatched set DOES differ
+  // from the staged one (a real edit landed between stage and confirm, even
+  // though it didn't fully resolve the match), the "dataset changed" wording
+  // is correct and stays.
+  it("confirming with a DIFFERENT (still non-empty) unmatched set keeps the 'dataset changed' wording", async () => {
+    // A bespoke 4-column fixture (two Y series, each its own signature
+    // entry) rather than the shared 3-column `dataset()` helper -- this test
+    // needs a SECOND independently-breakable field.
+    const fourCol = (labels: string[]): Dataset => ({
+      id: "d1",
+      name: "d1.xy",
+      data: {
+        time: [0, 1, 2],
+        values: [[10, 100, 5, 1], [20, 200, 6, 2], [30, 300, 7, 3]],
+        labels,
+        units: ["deg", "cps", "cps", "cps"],
+        metadata: { technique: "xrd.powder" },
+      },
+    });
+    useApp.setState({ datasets: [fourCol(["2theta", "Intensity", "Extra", "Ierr"])] });
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1, 2] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const savedRecipes = useApp.getState().plotRecipes;
+    // Stage: only Y ("Intensity") unmatched -- "Extra" is still present and
+    // correctly named, so it resolves fine.
+    useApp.setState({
+      datasets: [fourCol(["2theta", "Signal", "Extra", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    const staged = useApp.getState().pendingRecipeApplication!;
+    expect(staged.resolution.unmatched).toHaveLength(1);
+
+    // Between stage and confirm, "Extra" ALSO goes missing -- the FRESH
+    // unmatched set now has TWO entries, not the staged ONE.
+    useApp.setState({ datasets: [fourCol(["2theta", "Signal", "Other", "Ierr"])] });
+
+    const confirmed = await useApp.getState().confirmPendingRecipeApplication();
+
+    expect(confirmed).toBe(false);
+    const restaged = useApp.getState().pendingRecipeApplication!;
+    expect(restaged.resolution.unmatched.length).toBeGreaterThan(1);
     expect(useApp.getState().status).toContain("dataset changed");
   });
 
@@ -381,7 +527,198 @@ describe("applyPlotRecipe", () => {
   });
 });
 
+// P1.3 wave 3, Lane D: the explicit "apply anyway, drop unmatched" opt-in
+// (booked in PR #204). Same re-resolve staleness guard as
+// confirmPendingRecipeApplication -- the tests below deliberately mirror
+// that describe block's setup so the ONE divergence (apply-anyway vs.
+// re-stage) is the only thing under test.
+describe("confirmPendingRecipeApplicationPartial", () => {
+  async function stagedWithUnmatched(): Promise<string> {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({
+      datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])],
+      plotRecipes: savedRecipes,
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    return id;
+  }
+
+  it("nothing pending is a no-op with a status message", async () => {
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(await useApp.getState().confirmPendingRecipeApplicationPartial()).toBe(false);
+    expect(useApp.getState().status).toContain("No pending");
+  });
+
+  it("applies the FRESH resolution's resolved subset even though unmatched is still non-empty, naming the dropped count", async () => {
+    await stagedWithUnmatched();
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1); // ONE undo entry
+    expect(useApp.getState().status).toContain("dropped 1 unmatched field");
+  });
+
+  it("re-resolves at confirm time -- a dataset fixed since staging applies cleanly with no 'dropped' wording", async () => {
+    await stagedWithUnmatched();
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+    // Fix the mismatch: reintroduce the recipe's expected "Intensity" label.
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Intensity", "Ierr"])] });
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().status).not.toContain("dropped");
+    expect(useApp.getState().status).toContain("applied plot recipe");
+  });
+
+  it("dataset vanished: pending cleared, zero mutation, status names it", async () => {
+    await stagedWithUnmatched();
+    useApp.setState({ datasets: [] });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().status).toContain("unavailable");
+  });
+
+  it("a fresh refusal (technique mismatch) still fails closed -- 'apply anyway' waives unmatched, never a refusal", async () => {
+    await stagedWithUnmatched();
+    const savedRecipes = useApp.getState().plotRecipes;
+    useApp.setState({ datasets: [dataset("d1", "magnetometry.mvsh")], plotRecipes: savedRecipes });
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().confirmPendingRecipeApplicationPartial();
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().status).toContain("unavailable");
+  });
+});
+
+describe("applyPlotRecipeObject", () => {
+  it("applies a recipe object that is NOT a member of state.plotRecipes (the global-scope seam)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    // Remove it from the project list -- applyPlotRecipeObject must not
+    // depend on the recipe being findable there.
+    useApp.setState({ plotRecipes: [] });
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipeObject(recipe, "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().plotRecipes).toHaveLength(0); // never re-added to the project list
+  });
+
+  it("stages a pending application for an unmatched object recipe, same as applyPlotRecipe", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])], plotRecipes: [] });
+
+    const ok = await useApp.getState().applyPlotRecipeObject(recipe, "d1");
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication?.recipe.id).toBe(id);
+  });
+});
+
+describe("cleanMatchingPlotRecipe", () => {
+  it("returns the clean match when one exists", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const cleanId = (await useApp.getState().saveAsPlotRecipe("Clean", "d1"))!;
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found?.id).toBe(cleanId);
+  });
+
+  it("returns null when only a partial match exists (never offers a partial one)", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("Partial-source", "d1");
+    // Break the Y match after capture -- only a partial match remains.
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])], plotRecipes: useApp.getState().plotRecipes });
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found).toBeNull();
+  });
+
+  it("returns null for a generic-technique dataset", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1");
+    const genericDs = dataset("d2", null);
+
+    expect(await useApp.getState().cleanMatchingPlotRecipe(genericDs)).toBeNull();
+  });
+
+  // FINDING 4 (code-review): matches must include GLOBAL-scope recipes too,
+  // not just the project list -- a global-only recipe should fire the same
+  // suggestion just as a project one would.
+  it("returns a GLOBAL-scope recipe when it cleanly matches and the project has none", async () => {
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const globalOnly = captureRecipe(dataset("seed"), view, null, { id: "g1", name: "Global Recipe", appVersion: "0" });
+    useGlobalPlotRecipes.getState().setAll([globalOnly]);
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found?.id).toBe("g1");
+  });
+
+  // FINDING 4's collision rule: legacy data could (in principle) leave the
+  // same id in both scopes -- project wins.
+  it("prefers the PROJECT entry when both scopes hold an entry under the SAME id", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const id = (await useApp.getState().saveAsPlotRecipe("Project Version", "d1"))!;
+    const projectRecipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    useGlobalPlotRecipes.getState().setAll([{ ...projectRecipe, name: "Global Version" }]); // SAME id
+
+    const found = await useApp.getState().cleanMatchingPlotRecipe(useApp.getState().datasets[0]);
+
+    expect(found?.name).toBe("Project Version");
+  });
+});
+
 describe("matchingPlotRecipes", () => {
+  // FINDING 4 (code-review): global-scope candidates are merged in,
+  // clean-first across BOTH scopes together (not scope-by-scope).
+  it("includes GLOBAL-scope recipes alongside project ones, clean matches first across both scopes", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const partialId = (await useApp.getState().saveAsPlotRecipe("Partial-source", "d1"))!;
+    useApp.setState({ datasets: [dataset("d1", "xrd.powder", ["2theta", "Signal", "Ierr"])] });
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const globalClean = captureRecipe(useApp.getState().datasets[0], view, null, {
+      id: "g1",
+      name: "Global Clean",
+      appVersion: "0",
+    });
+    useGlobalPlotRecipes.getState().setAll([globalClean]);
+
+    const matches = await useApp.getState().matchingPlotRecipes(useApp.getState().datasets[0]);
+
+    expect(matches.map((r) => r.id)).toEqual(["g1", partialId]);
+  });
+});
+
+describe("matchingPlotRecipes — technique gating", () => {
   it("orders a clean (zero-unmatched) match before a partial match", async () => {
     focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
     const partialId = (await useApp.getState().saveAsPlotRecipe("Partial-source", "d1"))!;

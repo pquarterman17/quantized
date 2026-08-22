@@ -555,7 +555,7 @@ weigh chunked/binary arrays for large members with that number in hand.
 - [ ] Kill-process/interrupted-write and old-version round trips pass.
 - [ ] Raw source files are never rewritten.
 
-### P1.3 — Complete reusable plot-recipe templates
+### P1.3 — Complete reusable plot-recipe templates [~]
 
 > **Interface contract from the archived PLOT_WORKFLOW plan** (was
 > PLOT_WORKFLOW #6, folded up 2026-08-01 when that plan completed):
@@ -580,28 +580,57 @@ overrides. FigureDoc is complete but tied to a data/live-source context;
 templates are localStorage-oriented rather than portable project/library
 objects.
 
+**Waves 1-3 shipped (PRs #203, #204, wave 3 pending):** `lib/plotRecipe.ts`'s
+schema + `captureRecipe` (wave 1, #203), `store/plotRecipes.ts`'s CRUD/apply/
+preview-confirm pipeline + `.dwk` project-scope persistence (wave 2, #204),
+and wave 3's global scope (`store/globalPlotRecipes.ts`), Recipe Manager
+panel (rename/duplicate/delete/move-scope/import/export/apply-to-dataset),
+preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
+(`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
+point on the focused plot window, and a subtle (never-auto-apply) post-import
+suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
+itemized still-open gaps (live grouping/faceting composition parity,
+version migration beyond the v1 schema parse-gate, waterfall settings beyond
+the scalar offset, preview thumbnails).
+
 Recipes should include:
 
-- [ ] plot type and line/scatter/error mode;
-- [ ] semantic X/Y/error matching by role, label, unit, and alias—not index;
-- [ ] grouping, faceting, ordering, and legend-source metadata;
-- [ ] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
-  tick formats, and outlier policy;
-- [ ] style cycle, visibility/order, annotations/shapes, maps/panels;
-- [ ] waterfall settings;
-- [ ] technique scope such as XRD, XRR, SIMS, or magnetometry;
-- [ ] provenance, schema version, description, and preview.
+- [x] plot type and line/scatter/error mode;
+- [x] semantic X/Y/error matching by role, label, unit, and alias—not index;
+- [~] grouping, faceting, ordering, and legend-source metadata (ordering +
+  legend fields captured/applied; the group/facet BINDINGS are captured and
+  re-key correctly, but rebuilding the actual live composition/panels on
+  apply is a documented gap — F4.4);
+- [~] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
+  tick formats, and outlier policy (everything but outlier policy, which
+  isn't captured);
+- [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
+  cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
+  are not);
+- [~] waterfall settings (only the scalar offset; no richer settings exist to
+  capture);
+- [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
+- [~] provenance, schema version, description, and preview (provenance +
+  schema version + description are captured; preview thumbnails do not
+  exist).
 
 Behavior:
 
-- [ ] Explicit save with global, project, and exportable scopes.
-- [ ] Opt-in apply; suggestions stay subtle.
-- [ ] Never overwrite a customized plot without explicit warning.
-- [ ] Ambiguous matches show mapping/preview and report unmatched fields.
-- [ ] Import/export/duplicate/rename/version migration work.
-- [ ] Reordered equivalent XRD columns map correctly, but the recipe is not
+- [x] Explicit save with global, project, and exportable scopes.
+- [x] Opt-in apply; suggestions stay subtle.
+- [x] Never overwrite a customized plot without explicit warning (applying a
+  recipe always creates a NEW figure; it never edits a live window in place).
+- [x] Ambiguous matches show mapping/preview and report unmatched fields.
+- [~] Import/export/duplicate/rename/version migration work (import, export,
+  duplicate, and rename all work in both scopes via the Recipe Manager
+  panel; schema version migration beyond the v1 parse-gate does not exist).
+- [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
-- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent.
+- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent (a
+  recipe-applied figure is built from the SAME `createWindow`/
+  `createFigureDocument` primitives every other figure uses, so this is
+  architecturally implied, but not independently verified by an owner
+  acceptance journey or an equivalence test).
 
 ### P1.4 — First-class categorical and metadata channels [~]
 

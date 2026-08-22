@@ -177,6 +177,18 @@ export function useWindowCommands(): void {
         keywords: "figure document save as copy plot window editable",
         run: saveFocusedFigureAs,
       },
+      {
+        id: "figure-save-recipe",
+        group: "File",
+        label: "Save as Plot Recipe…",
+        description: "Save the focused plot window's mapping + visual style as a reusable Plot Recipe.",
+        keywords: "plot recipe save template reuse reapply",
+        // Dynamic import (bundle-size budget, MAIN_PLAN #29): this command
+        // only ever runs after an explicit user gesture, so its
+        // implementation (saveFigureAsRecipe.ts) stays out of the always-
+        // eager bundle -- see that module's own header.
+        run: () => void import("./saveFigureAsRecipe").then((m) => m.saveFocusedFigureAsRecipe()),
+      },
       { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
       {
         id: "window-duplicate",

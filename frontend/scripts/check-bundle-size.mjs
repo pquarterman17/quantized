@@ -238,8 +238,80 @@ import { fileURLToPath } from "node:url";
  *  920,202 + 1,024 = 921,226. Still comfortably inside `SLACK` of the
  *  prior pin, so no forced ratchet-down applies here either direction.
  *  NEVER raise this again without the same measure-first discipline —
- *  split a panel out or defer a module instead. */
-const EAGER_JS_BUDGET = 921_226;
+ *  split a panel out or defer a module instead.
+ *  2026-08-22 (same day, wave-3 Lane D integration) — 924,338 after the
+ *  recipe UI (Recipe Manager panel, apply preview+confirm dialog, the
+ *  "apply anyway, drop unmatched" opt-in, a global recipe scope, and a
+ *  post-import suggestion toast) landed on top of the entry above.
+ *  Lazy-chunked first, per protocol, with FOUR variants actually measured
+ *  (not assumed) rather than two: (1) KEPT — the global-scope store's boot
+ *  hydration (store/globalPlotRecipes.ts) as a dynamic `import()` in
+ *  App.tsx measured smaller than a plain static import; (2) KEPT — the
+ *  "Save as Plot Recipe…" command's implementation
+ *  (components/windows/saveFigureAsRecipe.ts) as a dynamic `import()` from
+ *  useWindowCommands.ts measured smaller than inlining it in the
+ *  already-eager figureLifecycleUi.ts; (3) REVERTED — routing the Recipe
+ *  Manager panel's import/export through new eager wrapper functions (so
+ *  the lazy panel itself never touched `lib/plotRecipeIO.ts`/
+ *  `lib/plotRecipe.ts` directly) measured 902.5 kB, WORSE than leaving the
+ *  panel's lazy module import them directly (901.7 kB) — the wrapper
+ *  functions' own home module inherited the same dual-reachability tax one
+ *  hop removed; (4) REVERTED — splitting the post-import recipe-suggestion
+ *  toast branch into its own dynamically-imported module measured
+ *  902.1 kB, WORSE than inlining it in the already-eager
+ *  store/importBatchOffers.ts — a small, already-store-only branch does
+ *  not clear the fixed per-dynamic-import chunk-boundary cost. Root cause
+ *  of the remaining delta, confirmed by diffing exact per-chunk bytes
+ *  against the pre-wave build: the Recipe Manager's import/export feature
+ *  is the FIRST lazy consumer of `lib/plotRecipeIO.ts`'s `parseRecipe`/
+ *  `sanitizeRecipes`, already eager via `lib/workspace.ts`'s synchronous
+ *  `parseWorkspace` (2026-08-21 entry) — that new divergent (eager +
+ *  lazy) reachability makes Rollup carve `plotRecipeIO.ts` into its own
+ *  extra always-preloaded chunk instead of leaving it inlined where it
+ *  already lived: `useApp`'s chunk dropped ~4.0 kB while a new
+ *  `plotRecipeIO` chunk of ~5.9 kB appeared, a ~1.9 kB net extraction tax
+ *  that no further lazy-splitting recovered (see (3)/(4) above). The other
+ *  ~1.7 kB is genuinely new, irreducible eager wiring: the "Plot Recipe
+ *  Manager…" palette command, the two new `lazyPanel()` entries + their
+ *  open-flag store reads in AppOverlays.tsx, and the three new
+ *  store/plotRecipes.ts actions (`confirmPendingRecipeApplicationPartial`,
+ *  `applyPlotRecipeObject`, `cleanMatchingPlotRecipe`) — synchronous store
+ *  logic of the same class the 2026-08-21/22 entries above also declined
+ *  to degrade to dodge this tripwire. Measured 923,314 B; budget =
+ *  measured + 1,024 = 924,338, ~1 kB of rounding room, nothing banked for
+ *  future growth. Same rule stands: never raise without measuring, defer
+ *  panels/modules first.
+ *
+ *  2026-08-22 (same day, wave-3 Lane D code-review round) — 925,527 after
+ *  fixing 8 code-review findings on top of the entry above (two orchestrator
+ *  rulings replacing the apply-dialog Confirm action and cross-scope Move
+ *  with Copy-with-fresh-id; global-scope candidates folded into
+ *  matching/suggestion; a hydrate-before-mutate guard on every global-store
+ *  mutation; an empty-both-scopes early return before the recipe-suggestion
+ *  toast; a broadened toast string; a rejected-file-read `.catch`). Findings
+ *  4+6 (global-scope candidates + a single-resolve-per-candidate pass) added
+ *  real logic to store/plotRecipes.ts, pushing it back over the 500-line
+ *  ceiling — `recipeLibs`/`resolvedCandidates` moved into the ALREADY
+ *  eager `store/plotRecipeApply.ts` sibling rather than a new file, and
+ *  BOTH placements were actually measured (not assumed): a brand-new sibling
+ *  module and merging into the existing one produced the IDENTICAL total,
+ *  924,503 B — ruling out a Rollup chunk-boundary "extraction tax" (the
+ *  2026-08-22 wave-3 entry's cause) as this round's driver. The +165 B over
+ *  the prior 924,338 pin is genuinely new, irreducible eager logic across
+ *  the 8 fixes (the global-store merge/hydrate-guard/copy-in additions,
+ *  mainly) — no further lazy-split measured smaller; see this file's own
+ *  git history for the two variants actually tried. Measured 924,503 B;
+ *  budget = measured + 1,024 = 925,527, ~1 kB of rounding room, nothing
+ *  banked for future growth. Same rule stands: never raise without
+ *  measuring, defer panels/modules first.
+ *
+ *  2026-08-22 (merge of #208 R4 + the wave-3 recipe-UI branch) — the two
+ *  branches above each moved this constant independently (R4: 921,226;
+ *  wave 3: 925,527). Both raises were individually measured, approved,
+ *  and documented in their entries above; this entry records the single
+ *  INTEGRATED re-measurement of the merged tree: 925,435 B eager, so
+ *  925,435 + 1,024 = 926,459 per the same minimal-raise convention. */
+const EAGER_JS_BUDGET = 926_459;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

@@ -472,9 +472,15 @@ figures.
 **Recommended models:** GPT-5.6 Terra high / Claude Sonnet 5. This coordinates
 with parent items P1.3 and P1.5.
 
-- [ ] **F4.1 Keep PlotSpec recipe semantics explicit.** A recipe creates or
+- [x] **F4.1 Keep PlotSpec recipe semantics explicit.** A recipe creates or
       deliberately remaps a figure; it is not itself a saved figure.
-- [ ] **F4.2 Add complete technique-scoped recipes.** Store plot type, roles,
+      (P1.3 waves 1-3, PRs #203/#204/wave-3-pending: `store/plotRecipes.ts`'s
+      apply path always CREATES A NEW FIGURE via the same `createWindow`/
+      `createFigureDocument` primitives every other figure-creation path
+      uses — it never edits a live window's document in place, so a
+      `PlotRecipe` can never be confused with, or silently become, a saved
+      figure.)
+- [~] **F4.2 Add complete technique-scoped recipes.** Store plot type, roles,
       errors, groups/facets, transformations, axes, and style-template choice.
   - [x] **F4.2a Plot-type + error designations (Claude, 2026-08-02).** The
         recipe now stores a step mark (pre/post/mid), a Line+Symbol markers
@@ -485,10 +491,41 @@ with parent items P1.3 and P1.5.
         handoff, and export. Transformations/style-template choice remain
         open. A direct "Plot in new window" action (Library + palette)
         closed the one-plot-per-dataset misconception.
-- [ ] **F4.3 Apply templates explicitly.** Never overwrite an already
-      customized figure without a preview and confirmation.
+  - [~] **F4.2b Plot Recipe schema + resolve/apply pipeline (P1.3 waves 1-3,
+        PRs #203/#204, wave 3 2026-08-22).** `lib/plotRecipe.ts`'s schema
+        captures roles, errors, group/facet BINDINGS (by signature id, never
+        index), axis scales/ranges/breaks/tick formats, legend, stacking, a
+        scalar waterfall offset, per-series style/label/order, hidden
+        channels, decorations, and technique scope; `plotRecipeMatch.ts`'s
+        `resolveRecipe` re-keys by label + user alias with an ambiguous-match
+        preview + unmatched-field report
+        (`PlotRecipeApplyDialog.tsx`/`pendingRecipeApplication`). Wave 3
+        added the global scope (`store/globalPlotRecipes.ts`), a Recipe
+        Manager panel (rename/duplicate/delete/move-between-scopes/import/
+        export/apply-to-a-chosen-dataset), an explicit "apply anyway, drop
+        unmatched" opt-in, a "Save as Plot Recipe…" entry point on the
+        focused plot window, and a subtle (never-auto-apply) post-import
+        suggestion toast. Still open: transformations and style-template
+        choice (this item's own text), live grouping/faceting COMPOSITION
+        parity (F4.4 below — the bindings are captured and re-key correctly,
+        but rebuilding the actual panels on apply is a documented gap), a
+        maps/panels payload, schema version migration beyond the v1 parse-
+        gate, waterfall settings beyond the scalar offset, and preview
+        thumbnails.
+- [x] **F4.3 Apply templates explicitly.** Never overwrite an already
+      customized figure without a preview and confirmation. (P1.3 waves 1-3:
+      `applyPlotRecipe`/`applyPlotRecipeObject` are always an explicit, opt-in
+      gesture — never wired into `datasetViewDefaults`'s automatic tiers; an
+      ambiguous match stages a preview+confirm dialog naming the mapping and
+      unmatched fields rather than guessing; a clean or confirmed apply always
+      creates a new figure, so an already-customized one is never touched.)
 - [ ] **F4.4 Complete live grouping/faceting parity.** Grouped/faceted results
-      must remain editable on Stage and survive save/reopen/export.
+      must remain editable on Stage and survive save/reopen/export. (Not
+      recipe-specific work — this item covers the Graph Builder/Stage
+      grouping-composition parity generally; P1.3's own group/facet BINDING
+      capture+re-key is done, per F4.2b above, but reconstructing a live
+      composition from an applied recipe is out of scope until this item
+      lands, per `plotRecipes.ts`'s own documented GAP note.)
 
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
