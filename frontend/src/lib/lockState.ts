@@ -87,6 +87,27 @@ export const HEARTBEAT_INTERVAL_MS = 30_000;
 /** Three missed heartbeats — see this module's header for the reasoning. */
 export const STALE_AFTER_MS = 3 * HEARTBEAT_INTERVAL_MS;
 
+/** R4 (post-sprint independent review): how many CONSECUTIVE heartbeats a
+ *  previously-writable ("held-by-me") session tolerates failing to VERIFY
+ *  ownership at all — no bridge, a thrown bridge call, a malformed
+ *  response, or a corrupt lock file, collectively "unverifiable" — before
+ *  demoting itself to read-only. Deliberately mirrors `STALE_AFTER_MS`'s
+ *  own "three missed heartbeats" reasoning (this module's header) for the
+ *  SYMMETRIC failure mode: `STALE_AFTER_MS` is how long ANOTHER instance
+ *  gets before this one gives up waiting for ITS proof of life; this
+ *  constant is how long THIS instance gets before it gives up trying to
+ *  prove its OWN lock is still real. Three consecutive misses is the same
+ *  ~`STALE_AFTER_MS` (`3 * HEARTBEAT_INTERVAL_MS`, ~90s) of wall-clock
+ *  time either way — long enough that a single transient hiccup (a slow
+ *  tick, a momentary IPC glitch) never flickers the UI read-only, short
+ *  enough that a genuinely broken bridge is caught and a stale "editable"
+ *  banner corrected within about the same window a truly-dead PEER's own
+ *  lock would be recognized as stale. Not itself a duration — it counts
+ *  heartbeat ATTEMPTS (`HEARTBEAT_INTERVAL_MS` apart), so an app that is
+ *  merely suspended (no ticks fire at all) never burns down the counter
+ *  the way wall-clock staleness would. */
+export const UNVERIFIABLE_DEMOTE_AFTER = 3;
+
 /** Classify a lock record read from the provider. `record: null` means no
  *  one currently holds it (never written, or a clean release). */
 export function classifyLock(record: LockRecord | null, myInstanceId: string, now: number): LockStatus {

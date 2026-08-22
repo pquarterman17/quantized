@@ -1,9 +1,9 @@
 """Golden parity vs MATLAB ``+calc/+superconductor`` (DiraCulator
 ``buildSuperconductorTab``).
 
-Staged by the DIRACULATOR_AUDIT P1 campaign: freeze cases live in
-``tools/matlab/freeze_diraculator_values.m``, so every test here SKIPS until the owner runs
-MATLAB and commits ``tests/golden/calc_dira_superconductor_*.json``.
+Frozen by the DIRACULATOR_AUDIT P1 campaign on 2026-08-21 using
+``tools/matlab/freeze_diraculator_values.m`` against
+``quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e``.
 
 ``calc.superconductor`` output keys already match the MATLAB struct field
 names verbatim (``lambda``, ``Hc1``, ``JdMA``, ...), so no key remapping is

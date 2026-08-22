@@ -90,14 +90,24 @@
 import { create } from "zustand";
 
 import {
-  acquire,
+  canRelease,
   canTakeOver,
   classifyLock,
   isReadOnly,
+  UNVERIFIABLE_DEMOTE_AFTER,
   type LockRecord,
   type LockStatus,
 } from "../lib/lockState";
 import { useApp } from "./useApp";
+
+// `createInMemoryLockProvider` lives in its own sibling module
+// (store/inMemoryLockProvider.ts) — extracted under the 500-line
+// god-module ceiling (F1's post-await re-validation pushed this file
+// over); imported (for the default provider below) AND re-exported so
+// every existing `from "./projectLock"` import site is unaffected — see
+// that file's header for why the type-only edge back creates no cycle.
+import { createInMemoryLockProvider } from "./inMemoryLockProvider";
+export { createInMemoryLockProvider };
 
 /** What every mutating verb below resolves to: did THIS call's own
  *  compare-and-swap land, and what does the provider now believe is on
@@ -120,6 +130,15 @@ export interface LockCasResult {
    *  "read-only, never assume free"). Optional so the in-memory provider,
    *  which has no unverifiable state to report, never needs to set it. */
   unverifiable?: boolean;
+  /** R1's landed backend contract (main@fc85560): true on a SOFT SUCCESS —
+   *  `acquired` is ALSO true here, the backend internally retried past a
+   *  momentary OS-lock contention and still won. Purely informational;
+   *  no caller needs to treat it specially — the normal `acquired: true`
+   *  success path already does the right thing. (A BOUNDED refusal, where
+   *  contention exhausted its retry budget, arrives as an ordinary
+   *  `unverifiable: true` refusal instead — it is not a separate outcome.)
+   *  Optional — unset for any provider/backend that predates this field. */
+  contended?: boolean;
 }
 
 /** The I2 fix's actual seam (P0-3/P1-1): every mutation is ONE atomic call —
@@ -156,67 +175,6 @@ export interface LockProvider {
   release: (projectPath: string, token: string) => Promise<boolean>;
 }
 
-/** The default, process-local provider. Genuinely atomic (same-turn, no
- *  `await` between its own read and write), but still honestly scoped to
- *  ONE process/tab — see this module's header. `App.tsx` swaps this out
- *  for `createDesktopLockProvider()` (lib/desktopLockProvider.ts) the
- *  moment a desktop shell is detected. */
-export function createInMemoryLockProvider(instanceId: string): LockProvider {
-  const store = new Map<string, LockRecord>();
-  let tokenSeq = 0;
-  const mintRecord = (pid?: string): LockRecord => ({
-    ...acquire(instanceId, Date.now(), pid),
-    token: `mem-${instanceId}-${++tokenSeq}`,
-  });
-
-  return {
-    read: async (path) => store.get(path) ?? null,
-
-    tryAcquire: async (path) => {
-      const now = Date.now();
-      const current = store.get(path) ?? null;
-      const status = classifyLock(current, instanceId, now);
-      if (status !== "unlocked" && status !== "held-by-me") {
-        return { acquired: false, record: current };
-      }
-      const record = mintRecord();
-      store.set(path, record);
-      return { acquired: true, record };
-    },
-
-    refresh: async (path, token) => {
-      const current = store.get(path) ?? null;
-      if (current === null || current.token !== token) {
-        return { acquired: false, record: current };
-      }
-      const updated: LockRecord = { ...current, heartbeatAt: Date.now() };
-      store.set(path, updated);
-      return { acquired: true, record: updated };
-    },
-
-    takeOver: async (path, expectedToken) => {
-      const now = Date.now();
-      const current = store.get(path) ?? null;
-      if (current === null || current.token !== expectedToken) {
-        return { acquired: false, record: current };
-      }
-      if (!canTakeOver(classifyLock(current, instanceId, now))) {
-        return { acquired: false, record: current }; // no longer stale — refuse, don't clobber
-      }
-      const record = mintRecord();
-      store.set(path, record);
-      return { acquired: true, record };
-    },
-
-    release: async (path, token) => {
-      const current = store.get(path) ?? null;
-      if (current === null || current.token !== token) return false;
-      store.delete(path);
-      return true;
-    },
-  };
-}
-
 let _instanceSeq = 0;
 /** One id per running process/tab, minted once at module load — every
  *  `LockRecord` the IN-MEMORY provider writes carries the SAME id, so a
@@ -248,6 +206,12 @@ interface ProjectLockState {
   /** True after an explicit "Open as Copy" — the session is writable, but
    *  deliberately holds NO lock on the original path (see `openAsCopy`). */
   openedAsCopy: boolean;
+  /** R4: consecutive `heartbeat()` ticks in a row that came back
+   *  UNVERIFIABLE (never a definite CAS loss, which demotes immediately —
+   *  see `heartbeat()`'s doc). Reset to 0 by any successful verification;
+   *  read by `useProjectLockHeartbeat.ts` to keep polling PAST a demotion
+   *  so a returning bridge can still be discovered. */
+  unverifiableHeartbeats: number;
   /** See `INSTANCE_ID`'s doc above — adopted from the provider on a
    *  successful acquisition, not permanently fixed at store creation. */
   instanceId: string;
@@ -272,14 +236,29 @@ interface ProjectLockState {
   /** The user explicitly chose to keep working without the original lock —
    *  a writable session bound to no durable path (the browser-download
    *  precedent store/project.ts's own header already documents: no path,
-   *  no identity). Never touches the lock record itself, so the original
-   *  holder is completely unaffected. */
+   *  no identity). Never touches ANOTHER party's lock record (`canRelease`
+   *  gates the best-effort release attempt below). F5 (code review
+   *  follow-up): when `record` still names THIS instance — the
+   *  unverifiable-demotion recovery path, `heartbeat()`'s own doc — this
+   *  DOES clear the local claim (path/record/streak) and best-effort
+   *  releases the real lock, so a later successful heartbeat can never
+   *  silently re-promote the session onto a path the user just explicitly
+   *  relinquished. */
   openAsCopy: () => void;
   /** Refresh this instance's own heartbeat — the false-positive safety net
-   *  in practice: a fresh read runs FIRST, and if the record no longer
-   *  names this instance (a stale-takeover raced ahead of this tick), the
-   *  session demotes to read-only and this resolves `false` instead of
-   *  silently claiming the refresh succeeded. */
+   *  in practice. Two outcomes, in order of how much they trust the result
+   *  (see the implementation's own comments for the full reasoning): a
+   *  DEFINITE loss (a real CAS mismatch) demotes to read-only IMMEDIATELY;
+   *  an UNVERIFIABLE tick (R4: no bridge / thrown / malformed / a bounded
+   *  contention refusal — R1's landed contract folds that into this SAME
+   *  outcome) proves nothing, so it only demotes after
+   *  `UNVERIFIABLE_DEMOTE_AFTER` consecutive misses, and recovers straight
+   *  back to `held-by-me` (same token, not a fresh acquire) the moment a
+   *  later tick verifies again. A SOFT SUCCESS (`acquired: true` with
+   *  `contended: true` — R1's contract) is just an ordinary success; it
+   *  needs no special handling and flows through the same success path.
+   *  `useProjectLockHeartbeat.ts` keeps polling past an unverifiable
+   *  demotion (so recovery can happen) but not past a definite loss. */
   heartbeat: () => Promise<boolean>;
   /** Release this instance's own lock (e.g. on project close). No-op when
    *  this instance isn't the current holder. */
@@ -297,10 +276,31 @@ interface ProjectLockState {
  *  its own conservative-by-default gap. Without this check, deriving
  *  status straight from `classifyLock(result.record, ...)` would see
  *  `record: null` and report `"unlocked"` — precisely the "assume free"
- *  guess an unverifiable lock file must never produce. */
-function statusFromRefusal(result: LockCasResult, instanceId: string, now: number): LockStatus {
+ *  guess an unverifiable refusal must never produce. (`contended` never
+ *  reaches here — R1's landed contract only sets it alongside `acquired:
+ *  true`, a success this function is never called for.) Exported (F4,
+ *  code review follow-up) so every CAS-refusal call site derives status
+ *  the SAME way — `store/workspaceIO.ts`'s `acquireDestinationLock` used
+ *  to re-derive this inline; a second copy is exactly how that kind of
+ *  drift happens. */
+export function statusFromRefusal(result: LockCasResult, instanceId: string, now: number): LockStatus {
   if (result.unverifiable) return "held-by-other-live";
   return classifyLock(result.record, instanceId, now);
+}
+
+/** F1 (round 3, BLOCKING): `acquired: true` with `record: null` (a wire
+ *  record that failed to parse — version skew) is NOT a success —
+ *  trusting it stores `held-by-me`/`record: null`, which poisons
+ *  `heartbeat()` (early-returns on `record === null` forever, never
+ *  demoting) and `runSaveWorkspace` (empty token skips its own backend
+ *  check — ungated write). Normalize into `unverifiable` so every
+ *  existing handler (the demotion streak, `statusFromRefusal`) covers it —
+ *  mirrors `acquireDestinationLock`'s pre-existing ad hoc guard. */
+function normalizeCasResult(result: LockCasResult): LockCasResult {
+  if (result.acquired && result.record === null) {
+    return { acquired: false, record: null, unverifiable: true };
+  }
+  return result;
 }
 
 export const useProjectLock = create<ProjectLockState>((set, get) => ({
@@ -308,6 +308,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   record: null,
   path: null,
   openedAsCopy: false,
+  unverifiableHeartbeats: 0,
   instanceId: INSTANCE_ID,
   provider: createInMemoryLockProvider(INSTANCE_ID),
 
@@ -316,44 +317,49 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   openProject: async (path) => {
     const { provider, instanceId } = get();
     const now = Date.now();
+    // Shared by every non-acquiring outcome below (a thrown read, a live/
+    // stale other holder, a thrown acquire, or a lost race) — always resets
+    // `unverifiableHeartbeats` (a leftover streak from a PRIOR path/session
+    // must never keep the heartbeat interval alive against a record/token
+    // that no longer belongs to this attempt) and never assumes success.
+    const failClosed = (status: LockStatus, record: LockRecord | null): OpenResult => {
+      set({ status, record, path, openedAsCopy: false, unverifiableHeartbeats: 0 });
+      return { status, readOnly: isReadOnly(status) };
+    };
     let current: LockRecord | null;
     try {
       current = await provider.read(path);
     } catch {
-      // A read failure is NOT "unlocked" — conservatively treat it as
-      // unknowable-but-unwritable rather than guessing this instance is
-      // free to acquire (see this module's doc: never assume success).
-      set({ status: "held-by-other-live", record: null, path, openedAsCopy: false });
-      return { status: "held-by-other-live", readOnly: true };
+      return failClosed("held-by-other-live", null);
     }
     const status = classifyLock(current, instanceId, now);
     if (status !== "unlocked" && status !== "held-by-me") {
       // Read-only (live OR stale) — never auto-acquire; a stale lock is
       // only ever taken over via the EXPLICIT `takeOverEditing()` below,
       // L0.47's hard gate.
-      set({ status, record: current, path, openedAsCopy: false });
-      return { status, readOnly: isReadOnly(status) };
+      return failClosed(status, current);
     }
     let result: LockCasResult;
     try {
-      result = await provider.tryAcquire(path);
+      result = normalizeCasResult(await provider.tryAcquire(path)); // F1
     } catch {
-      set({ status: "held-by-other-live", record: current, path, openedAsCopy: false });
-      return { status: "held-by-other-live", readOnly: true };
+      return failClosed("held-by-other-live", current);
     }
     if (!result.acquired) {
       // Lost a race between the read above and the provider's own atomic
       // acquire (another process/tab won it in between) — report the
       // TRUTH the CAS just observed, never pretend we still won.
-      const lost = statusFromRefusal(result, instanceId, Date.now());
-      set({ status: lost, record: result.record, path, openedAsCopy: false });
-      return { status: lost, readOnly: isReadOnly(lost) };
+      return failClosed(statusFromRefusal(result, instanceId, Date.now()), result.record);
     }
     set({
       status: "held-by-me",
       record: result.record,
       path,
       openedAsCopy: false,
+      // F3 (code review follow-up): a FRESH acquire always starts a clean
+      // slate — a streak carried over from a PRIOR path/session must never
+      // demote this brand-new one after only one more blip.
+      unverifiableHeartbeats: 0,
       instanceId: result.record?.instanceId ?? instanceId, // identity adoption — see INSTANCE_ID's doc
     });
     return { status: "held-by-me", readOnly: false };
@@ -364,7 +370,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     if (path === null || record === null || !canTakeOver(get().status)) return false;
     let result: LockCasResult;
     try {
-      result = await provider.takeOver(path, record.token ?? "");
+      result = normalizeCasResult(await provider.takeOver(path, record.token ?? "")); // F1
     } catch {
       return false;
     }
@@ -372,45 +378,110 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
       // No longer stale by the time the CAS actually ran (the original
       // holder heartbeat, or a third instance already took over) — report
       // the CURRENT truth, never pretend the takeover happened.
-      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record });
+      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record, unverifiableHeartbeats: 0 });
       return false;
     }
+    // F3: same reset as openProject's success branch — a won takeover is
+    // also a fresh session, never demoted by a streak from before it won.
     set({
       status: "held-by-me",
       record: result.record,
+      unverifiableHeartbeats: 0,
       instanceId: result.record?.instanceId ?? instanceId,
     });
     return true;
   },
 
   openAsCopy: () => {
-    // Deliberately does NOT touch the lock record — the original holder
-    // (live or stale) is completely unaffected; this session simply stops
-    // treating the original path as its own project identity, mirroring
-    // store/project.ts's "no durable path, no identity" rule for a browser
-    // download.
+    // `canRelease` refuses unless `record` actually names THIS instance,
+    // so an ordinary "someone else holds it" case is unaffected. When it
+    // DOES name us (the unverifiable-demotion recovery path — `heartbeat()`
+    // deliberately keeps record/token through a demotion so a returning
+    // bridge can re-verify), Open as Copy is the user EXPLICITLY declining
+    // that claim: clear path/record/streak/status (F5 round 2+3 — leaving
+    // ANY of them would let a later successful heartbeat silently
+    // re-promote this session, or leave `status` a PHANTOM lock the
+    // status-gated Take Over command would still act on) and best-effort
+    // release the real lock so a genuinely-still-held token is freed
+    // rather than left to expire only via staleness.
+    const { provider, path, record, instanceId } = get();
+    if (path !== null && record !== null && canRelease(record, instanceId)) {
+      void provider.release(path, record.token ?? "").catch(() => false);
+    }
     useApp.getState().setCurrentProject(null);
-    set({ openedAsCopy: true });
+    set({ openedAsCopy: true, status: "unlocked", path: null, record: null, unverifiableHeartbeats: 0 });
   },
 
   heartbeat: async () => {
-    const { provider, instanceId, path, record } = get();
+    const { provider, path, record, instanceId } = get();
     if (path === null || record === null) return false;
+    // F4 (round 3): bail BEFORE calling provider.refresh at all when the
+    // snapshot record no longer names THIS instance — a real CAS validates
+    // by token match, not caller identity, so sending a foreign token can
+    // legitimately succeed, bumping the INTRUDER's heartbeatAt on disk and
+    // delaying its legitimate stale-takeover. The post-await re-validation
+    // below only ever protected this session's own LOCAL state, never
+    // that remote side-effect of the call itself.
+    if (record.instanceId !== instanceId) return false;
+    const token = record.token ?? "";
+    // A thrown call is the SAME "unverifiable" shape a provider that
+    // catches its own exceptions already reports (R4) — one failure mode.
     let result: LockCasResult;
     try {
-      result = await provider.refresh(path, record.token ?? "");
+      result = await provider.refresh(path, token);
     } catch {
+      result = { acquired: false, record: null, unverifiable: true };
+    }
+    result = normalizeCasResult(result); // F1 (round 3): a null-record "success" is not a success
+    // F1 (round 2): re-validate against the LIVE store before any set()
+    // below — a straggler tick resolving after the session switched
+    // projects, or CAS-succeeding on ANOTHER holder's own currently-valid
+    // token (a real backend accepts by token match, not caller identity),
+    // must never write. Token AND instanceId both still matching the LIVE
+    // record (mirrors releaseLock's guard) is exactly "still the SAME
+    // identity this call started with" — a definite-loss/other-holder
+    // record never satisfies it, since only OUR OWN acquire/takeover ever
+    // adopts `instanceId` to match a record.
+    const live = get();
+    if (live.path !== path || live.record === null || live.record.token !== token || live.record.instanceId !== live.instanceId) {
+      return false; // stale tick — drop the write entirely, touch nothing
+    }
+    // R1's landed contract: a `contended` SUCCESS (`result.acquired` true)
+    // needs no special handling — it falls straight through to the
+    // ordinary success branch below like any other. Only a bounded
+    // contention refusal (`unverifiable: true`) reaches the branch here.
+    if (result.unverifiable) {
+      // R4: proves nothing either way — never demote on the first miss (a
+      // single transient glitch must not flicker read-only). Count
+      // consecutive misses instead (read LIVE — an overlapping tick may
+      // already have bumped it), leaving `record`/`status` untouched below
+      // the threshold so a later successful refresh has the same token to
+      // re-verify against (see `UNVERIFIABLE_DEMOTE_AFTER`'s doc).
+      const streak = live.unverifiableHeartbeats + 1;
+      if (streak >= UNVERIFIABLE_DEMOTE_AFTER) {
+        // Threshold reached — demote rather than leave a stale "held-by-me"
+        // banner up indefinitely. `record` is intentionally KEPT (not
+        // nulled): this is a demotion pending RECOVERY, not a loss — the
+        // success branch below promotes straight back using the SAME
+        // token the moment a later tick verifies again.
+        set({ status: "held-by-other-live", unverifiableHeartbeats: streak });
+      } else {
+        set({ unverifiableHeartbeats: streak });
+      }
       return false;
     }
     if (!result.acquired) {
-      // Lost the lock underneath us — demote honestly rather than keep
-      // believing the last-known "held-by-me" status. This IS the
-      // false-positive safety net (lib/lockState.ts's module doc): a
-      // resumed-from-suspension instance's own next heartbeat refuses.
-      set({ status: statusFromRefusal(result, instanceId, Date.now()), record: result.record });
+      // A DEFINITE loss — the CAS positively confirmed someone/something
+      // else (or nothing) is on record now, real information rather than a
+      // guess. Demote immediately (the false-positive safety net,
+      // lib/lockState.ts's module doc) and reset the unverifiable streak.
+      set({ status: statusFromRefusal(result, live.instanceId, Date.now()), record: result.record, unverifiableHeartbeats: 0 });
       return false;
     }
-    set({ record: result.record });
+    // Success — RECOVERY included: unconditionally restores
+    // `status: "held-by-me"` so a session demoted by the branch above
+    // promotes back, rather than assuming its pre-demotion state.
+    set({ record: result.record, status: "held-by-me", unverifiableHeartbeats: 0 });
     return true;
   },
 
@@ -418,7 +489,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     const { provider, path, record, instanceId } = get();
     if (path === null || record === null || record.instanceId !== instanceId) return;
     await provider.release(path, record.token ?? "").catch(() => false);
-    set({ status: "unlocked", record: null });
+    set({ status: "unlocked", record: null, unverifiableHeartbeats: 0 });
   },
 
   canWriteNow: () => {

@@ -1,8 +1,8 @@
 """Golden parity vs MATLAB ``+calc/+vacuum`` (DiraCulator ``buildVacuumTab``).
 
-Staged by the DIRACULATOR_AUDIT P1 campaign: freeze cases live in
-``tools/matlab/freeze_diraculator_values.m``, so every test here SKIPS until the owner runs
-MATLAB and commits ``tests/golden/calc_dira_vacuum_*.json``.
+Frozen by the DIRACULATOR_AUDIT P1 campaign on 2026-08-21 using
+``tools/matlab/freeze_diraculator_values.m`` against
+``quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e``.
 
 ``calc.vacuum`` output keys already match the MATLAB struct field names
 verbatim (``mfp``, ``tMono``, ``Kn``, ...), so no key remapping is needed

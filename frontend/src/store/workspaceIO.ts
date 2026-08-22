@@ -36,7 +36,7 @@ import { saveBlob } from "../lib/download";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
-import { useProjectLock, type LockProvider } from "./projectLock";
+import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
@@ -131,7 +131,16 @@ async function acquireDestinationLock(
         ? await provider.takeOver(destination, current?.token ?? "")
         : await provider.tryAcquire(destination);
     if (!result.acquired || result.record === null) {
-      return { ok: false, status: classifyLock(result.record, instanceId, Date.now()) };
+      // R4/F4: reuse `store/projectLock.ts`'s own `statusFromRefusal`
+      // rather than re-deriving this inline — a CAS refusal whose provider
+      // could not verify anything (no bridge / a thrown call / a malformed
+      // response / a `contended` OS-lock busy signal) still reports
+      // `record: null`, and `classifyLock(null, ...)` alone would
+      // misreport that as `"unlocked"`. An inline re-derivation had
+      // drifted to check only `unverifiable` and silently ignore
+      // `contended` (F4, code review follow-up); a single shared function
+      // is what keeps every CAS-refusal call site honest going forward.
+      return { ok: false, status: statusFromRefusal(result, instanceId, Date.now()) };
     }
     return { ok: true, record: result.record };
   } catch {
@@ -188,6 +197,11 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
         record: acquired.record,
         path: destination,
         openedAsCopy: false,
+        // F2 (code review round 3): the THIRD fresh-acquisition site (with
+        // openProject/takeOverEditing in store/projectLock.ts) that must
+        // reset the streak — a carried-over count from the OLD project
+        // must never demote this brand-new lock after one more blip.
+        unverifiableHeartbeats: 0,
         instanceId: acquired.record.instanceId,
       });
     } else {
@@ -291,8 +305,21 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     // holds it now) and STOP — no retry loop, and specifically no fallback
     // to a browser download, which would silently create a second,
     // divergent copy of the user's edits instead of surfacing the loss.
+    //
+    // R4: LOCK_LOST already proves — via the write's own rejection, not
+    // this read — that this instance no longer owns the lock. A `null`
+    // from the read below can mean EITHER "verified: nothing holds it now"
+    // OR "the provider itself couldn't be asked", and `read()`'s bare
+    // `LockRecord | null` contract can't tell those apart. Never re-derive
+    // `classifyLock(null, ...)`'s `"unlocked"` from that ambiguity — it
+    // would read as "free to reacquire", the exact misleading-editable
+    // impression this fix exists to prevent. Fail closed to the same
+    // read-only placeholder every other refusal in this module uses
+    // instead; a populated record (someone else's) still classifies
+    // normally, since that IS verified information.
     const current = await lock.provider.read(project.path).catch(() => null);
-    useProjectLock.setState({ status: classifyLock(current, lock.instanceId, Date.now()), record: current });
+    const status = current === null ? "held-by-other-live" : classifyLock(current, lock.instanceId, Date.now());
+    useProjectLock.setState({ status, record: current, unverifiableHeartbeats: 0 });
     const msg = "save refused — the project lock was lost (another instance may hold it now)";
     get().setStatus(msg);
     toast(msg, "danger");
