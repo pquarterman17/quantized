@@ -27,6 +27,26 @@
 // imported, same "offer, never force" contract `batchOverlayOffer`'s own doc
 // states. Technique-gated by `cleanMatchingPlotRecipe` itself (generic
 // datasets and mismatched techniques never produce a candidate).
+//
+// FINDING 7 (code-review): every OTHER candidate toast in this cascade
+// states the import itself succeeded ("N files imported — overlay…?", "N
+// files imported — create folder…?"), and the plain fallback is "imported N
+// files" — this recipe-suggestion toast is not a fourth, silent exception:
+// its text also leads with "imported N file(s)" before the recipe question,
+// so a user who only reads the toast's opening words still learns their
+// import landed, regardless of which of the four candidates fired.
+//
+// FINDING 6 (code-review, perf): this branch's `dataset ? await
+// get().cleanMatchingPlotRecipe(dataset) : null` used to run unconditionally
+// for every single-dataset import, including one with ZERO saved recipes in
+// EITHER scope — needlessly triggering `cleanMatchingPlotRecipe`'s own
+// dynamic `lib/plotRecipeMatch.ts` load (see store/plotRecipes.ts's
+// LAZY-LOADED doc) on every plain import. The cheap project-list length
+// check runs first (already in memory, no import needed); the global list is
+// hydrated (a synchronous localStorage read, `hydratedGlobalRecipes()` —
+// itself dynamically imported here to keep THIS already-eager module from
+// dragging the otherwise-lazy global store into the main bundle) only when
+// the project list alone didn't already prove there's a candidate.
 
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { techniqueOf } from "../lib/techniqueDefaults";
@@ -105,11 +125,22 @@ export async function presentBatchOutcome(
   // folder gates for a REASON (mixed techniques, or an already-existing
   // folder) — matching a recipe against just one of several imported
   // datasets would be an arbitrary pick, not a suggestion.
+  //
+  // FINDING 6: skip `cleanMatchingPlotRecipe` (and its dynamic
+  // `lib/plotRecipeMatch.ts` load) entirely when NEITHER scope has a single
+  // saved recipe — there is no candidate it could possibly find. The project
+  // list is already in memory, so it's checked first; the global list is
+  // only hydrated (dynamically imported) when that alone didn't settle it.
   if (createdIds.length === 1) {
-    const dataset = get().datasets.find((d) => d.id === createdIds[0]);
+    const hasProjectRecipes = get().plotRecipes.length > 0;
+    const hasAnyRecipes =
+      hasProjectRecipes || (await import("./globalPlotRecipes")).hydratedGlobalRecipes().length > 0;
+    const dataset = hasAnyRecipes ? get().datasets.find((d) => d.id === createdIds[0]) : undefined;
     const recipe = dataset ? await get().cleanMatchingPlotRecipe(dataset) : null;
     if (recipe && dataset) {
-      toast(`Apply recipe "${recipe.name}"?`, "ok", {
+      // FINDING 7: lead with "imported N file(s)" like every other candidate
+      // toast in this cascade, not a silent exception.
+      toast(`imported ${added} file${added === 1 ? "" : "s"} — apply recipe "${recipe.name}"?`, "ok", {
         action: { label: "Apply", onClick: () => void get().applyPlotRecipeObject(recipe, dataset.id) },
         ttlMs: TOAST_ACTION_TTL,
       });

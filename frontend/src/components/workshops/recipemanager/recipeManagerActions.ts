@@ -7,16 +7,17 @@
 // store/plotRecipes.ts's OWN focused-window gesture.
 //
 // `PlotRecipe` is location-agnostic (lib/plotRecipeStorage.ts's header) --
-// `moveRecipeScope` below is the one place that actually moves the OBJECT
-// between the two lists; every other action here operates on whichever
-// single list `scope` names.
+// `copyRecipeToOtherScope` below is the one place that actually copies the
+// OBJECT between the two lists (ORCHESTRATOR RULING B, code-review findings
+// 2+3 -- see store/globalPlotRecipes.ts's module doc for the full "why copy,
+// not move" rationale); every other action here operates on whichever single
+// list `scope` names.
 
-import { dedupeWindowTitle } from "../../../lib/plotview";
 import { exportRecipeFile, importRecipeFile } from "../../../lib/plotRecipeStorage";
 import type { PlotRecipe } from "../../../lib/plotRecipe";
 import { saveBlob } from "../../../lib/download";
+import { hydratedGlobalRecipes, useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useApp } from "../../../store/useApp";
-import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 
 export type RecipeScope = "project" | "global";
 
@@ -50,36 +51,31 @@ export function deleteRecipe(scope: RecipeScope, id: string): void {
   else useGlobalPlotRecipes.getState().remove(id);
 }
 
-/** Move a recipe from `scope` to the OTHER scope, deduping its name against
- *  the destination list (never colliding two rows onto one label there,
- *  same L0.31 rule every other recipe rename/duplicate/save already
- *  follows). No-op for an unknown id. The PROJECT side of the move records
- *  ONE undo entry via the ordinary `recordHistory` + `setPlotRecipes` seam
- *  (`setPlotRecipes` itself is documented as a raw, non-recording replace --
- *  the `recordHistory` call here is what makes THIS particular replace
- *  undoable); the GLOBAL side is not undo-tracked at all, matching every
- *  other action on that store (global scope carries no undo history, by
- *  design -- see store/globalPlotRecipes.ts's header). */
-export function moveRecipeScope(scope: RecipeScope, id: string): void {
+/** ORCHESTRATOR RULING B (code-review findings 2+3): copy `id` (found in
+ *  `scope`) into the OTHER scope under a FRESH id (never the source's own --
+ *  closes finding 3's dual-id cause) with its name deduped against the
+ *  destination list (never colliding two rows onto one label there, same
+ *  L0.31 rule every other recipe rename/duplicate/save already follows).
+ *  The SOURCE is NEVER touched -- no removal, no source-side mutation of any
+ *  kind -- which is what closes finding 2's undo-data-loss bug: there is no
+ *  source-side write for an undo to ever lose track of. Copy-to-project
+ *  records ONE undoable history entry (`copyPlotRecipeIn`); undoing it
+ *  removes ONLY the tracked copy. Copy-to-global is not undo-tracked, same
+ *  as every other action on that store (global scope carries no undo
+ *  history, by design -- see store/globalPlotRecipes.ts's header) -- and
+ *  needs none, since nothing was ever removed anywhere. A user who wants
+ *  MOVE semantics deletes the source afterward (the Recipe Manager panel's
+ *  copy button says so in its own title text). No-op (null) for an unknown
+ *  id. Returns the new copy's id. */
+export function copyRecipeToOtherScope(scope: RecipeScope, id: string): string | null {
   if (scope === "project") {
-    const state = useApp.getState();
-    const recipe = state.plotRecipes.find((r) => r.id === id);
-    if (!recipe) return;
-    const globalList = useGlobalPlotRecipes.getState().recipes;
-    const deduped = dedupeWindowTitle(recipe.name, globalList.map((r) => r.name));
-    state.recordHistory("Move Plot Recipe to Global");
-    state.setPlotRecipes(state.plotRecipes.filter((r) => r.id !== id));
-    useGlobalPlotRecipes.getState().setAll([...globalList, { ...recipe, name: deduped }]);
-  } else {
-    const globalList = useGlobalPlotRecipes.getState().recipes;
-    const recipe = globalList.find((r) => r.id === id);
-    if (!recipe) return;
-    const state = useApp.getState();
-    const deduped = dedupeWindowTitle(recipe.name, state.plotRecipes.map((r) => r.name));
-    useGlobalPlotRecipes.getState().setAll(globalList.filter((r) => r.id !== id));
-    state.recordHistory("Move Plot Recipe to Project");
-    state.setPlotRecipes([...state.plotRecipes, { ...recipe, name: deduped }]);
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id);
+    if (!recipe) return null;
+    return useGlobalPlotRecipes.getState().copyIn(recipe);
   }
+  const recipe = hydratedGlobalRecipes().find((r) => r.id === id);
+  if (!recipe) return null;
+  return useApp.getState().copyPlotRecipeIn(recipe);
 }
 
 /** Apply a recipe (either scope) to `datasetId` -- routes through the ONE
@@ -97,21 +93,19 @@ export function exportRecipe(recipe: PlotRecipe): void {
   );
 }
 
-/** Parse+import `text` (a picked file's contents) into `scope`, deduping its
- *  name against that scope's existing list. Throws `importRecipeFile`'s own
- *  message verbatim on malformed input -- the caller surfaces it, this
- *  function does not swallow it (there is no sane default for a file the
- *  user explicitly chose, same contract `importRecipeFile` itself states). */
+/** Parse+import `text` (a picked file's contents) into `scope`. Throws
+ *  `importRecipeFile`'s own message verbatim on malformed input -- the
+ *  caller surfaces it, this function does not swallow it (there is no sane
+ *  default for a file the user explicitly chose, same contract
+ *  `importRecipeFile` itself states). Delegates the actual insertion to each
+ *  scope's own copy-in action (`copyPlotRecipeIn`/`copyIn`) -- the SAME
+ *  fresh-id + deduped-name + (for global) hydrate-first guard (finding 5)
+ *  `copyRecipeToOtherScope` uses, rather than a third hand-rolled insertion
+ *  with its own chance to drift. `importRecipeFile` already mints its own
+ *  fresh id; minting a SECOND one here is harmless (still unique) and keeps
+ *  this a plain, un-special-cased call into the shared seam. */
 export function importRecipeToScope(scope: RecipeScope, text: string): void {
-  const recipe = importRecipeFile(text);
-  if (scope === "project") {
-    const state = useApp.getState();
-    const deduped = dedupeWindowTitle(recipe.name, state.plotRecipes.map((r) => r.name));
-    state.recordHistory("Import Plot Recipe");
-    state.setPlotRecipes([...state.plotRecipes, { ...recipe, name: deduped }]);
-  } else {
-    const list = useGlobalPlotRecipes.getState().recipes;
-    const deduped = dedupeWindowTitle(recipe.name, list.map((r) => r.name));
-    useGlobalPlotRecipes.getState().setAll([...list, { ...recipe, name: deduped }]);
-  }
+  const recipe = importRecipeFile(text); // throws on malformed
+  if (scope === "project") useApp.getState().copyPlotRecipeIn(recipe);
+  else useGlobalPlotRecipes.getState().copyIn(recipe);
 }

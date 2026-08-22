@@ -22,7 +22,35 @@
 // application" body too -- see plotRecipes.ts's own module doc's APPLY PATH
 // section for the full contract (one recordHistory call inside createWindow,
 // fails closed if the dataset vanished, never trusts a stale resolution).
+//
+// MATCHING EXTRACTION (P1.3 wave 3, Lane D code-review round): `recipeLibs`/
+// `resolvedCandidates` (bottom of this file) also moved here, out of
+// plotRecipes.ts, for the SAME reason -- code-review findings 4+6 pushed
+// that file back over the 500-line ceiling. Landing them in this ALREADY
+// eagerly-shared sibling (rather than a brand new file) avoids adding
+// another module-boundary's worth of import/export glue on top of an
+// already razor-thin eager budget (MAIN_PLAN #29) -- `recipeLibs()` is the
+// ONE place `lib/plotRecipe.ts`'s `captureRecipe` / `lib/plotRecipeMatch.ts`'s
+// `resolveRecipe` get loaded from, so plotRecipes.ts's many call sites
+// (save/apply/confirm/confirmPartial) and `resolvedCandidates` below share
+// the exact same cache, never two competing dynamic-import promises.
+//
+// `resolvedCandidates` is the shared single-resolve-per-candidate pass
+// FINDING 6 (code-review, perf) introduced: `matchingPlotRecipes` and
+// `cleanMatchingPlotRecipe` (both still in plotRecipes.ts) derive their
+// answers from this ONE function instead of `cleanMatchingPlotRecipe`
+// calling `matchingPlotRecipes` (which already resolves every candidate)
+// and then resolving its first result AGAIN itself -- the old bug's double
+// `resolveRecipe` call per candidate that mattered. FINDING 4 (code-review):
+// project-scope (`get().plotRecipes`) AND global-scope
+// (`globalPlotRecipes.ts`'s `hydratedGlobalRecipes()`) recipes are both
+// candidates -- project checked first, so a legacy entry sharing an id
+// across both scopes resolves to the PROJECT copy. `globalPlotRecipes.ts`
+// is dynamically imported (never a static top-level import) to keep this
+// already-eager module from dragging the otherwise boot-lazy global store
+// into the always-loaded graph -- see that module's own doc.
 
+import { captureRecipe } from "../lib/plotRecipe";
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import type { PlotRecipe } from "../lib/plotRecipe";
@@ -33,6 +61,7 @@ import type {
   ResolvedRecipeVisual,
 } from "../lib/plotRecipeMatch";
 import { dedupeWindowTitle, defaultPlotView, type PlotView } from "../lib/plotview";
+import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { nextFigureId } from "./figureLifecycle";
@@ -165,4 +194,61 @@ export function resolveApplyOrStage(
     return false;
   }
   return applyResolvedRecipe(set, get, recipe, datasetId, resolution.resolved);
+}
+
+interface RecipeLibs {
+  captureRecipe: typeof captureRecipe;
+  resolveRecipe: typeof import("../lib/plotRecipeMatch").resolveRecipe;
+}
+let _recipeLibs: Promise<RecipeLibs> | null = null;
+/** Load (once, then cache) the one still-lazy wave-1 library this slice
+ *  needs. Only `lib/plotRecipeMatch.ts` (`resolveRecipe`) stays behind a
+ *  dynamic import: `lib/plotRecipe.ts` became unavoidably EAGER when Lane C
+ *  wired `sanitizeRecipes` (lib/plotRecipeIO.ts, which value-imports it)
+ *  into `lib/workspace.ts`'s synchronous `parseWorkspace` — so a dynamic
+ *  import of it here would add chunk-glue without deferring a single byte
+ *  (the dual eager+lazy import shape also makes Rollup carve shared deps
+ *  into their own always-preloaded chunks, which measured WORSE). The
+ *  async method signatures are kept as-is — they were public API shape
+ *  from this slice's first commit and resolveRecipe still loads lazily. */
+export function recipeLibs(): Promise<RecipeLibs> {
+  if (!_recipeLibs) {
+    _recipeLibs = import("../lib/plotRecipeMatch").then((m) => ({
+      captureRecipe,
+      resolveRecipe: m.resolveRecipe,
+    }));
+  }
+  return _recipeLibs;
+}
+
+interface RecipeCandidate {
+  recipe: PlotRecipe;
+  resolution: Extract<RecipeResolution, { resolved: ResolvedRecipeApplication }>;
+}
+
+/** Every recipe scoped to `dataset`'s technique, from BOTH scopes, resolved
+ *  EXACTLY ONCE each -- see the module doc's FINDING 4/6 note. `"generic"`
+ *  never matches anything (the recipe module's own stronger-than-memory
+ *  rule) -- always `[]`. Refused candidates (technique mismatch / errorRole
+ *  guard) are dropped, never counted. */
+export async function resolvedCandidates(get: SliceGet, dataset: Dataset): Promise<RecipeCandidate[]> {
+  const technique = techniqueOf(dataset);
+  if (technique === "generic") return [];
+  const { hydratedGlobalRecipes } = await import("./globalPlotRecipes");
+  const seen = new Set<string>();
+  const pool: PlotRecipe[] = [];
+  for (const recipe of [...get().plotRecipes, ...hydratedGlobalRecipes()]) {
+    if (recipe.technique !== technique || seen.has(recipe.id)) continue;
+    seen.add(recipe.id);
+    pool.push(recipe);
+  }
+  if (pool.length === 0) return [];
+  const { resolveRecipe } = await recipeLibs();
+  const out: RecipeCandidate[] = [];
+  for (const recipe of pool) {
+    const resolution = resolveRecipe(recipe, dataset);
+    if ("refused" in resolution) continue;
+    out.push({ recipe, resolution });
+  }
+  return out;
 }

@@ -1,10 +1,20 @@
 // P1.3 wave 3, Lane D: the recipe apply preview+confirm dialog.
+//
+// ORCHESTRATOR RULING A (code-review finding 1): the dialog only ever opens
+// when `unmatched.length > 0` (a clean match applies immediately, never
+// stages), and the modal blocks dataset edits while it's up -- so a plain
+// "Confirm" button that re-resolves would ALWAYS reproduce the identical
+// unmatched set and, under the old wording, falsely claim "the dataset
+// changed". Confirm is removed from the dialog entirely; the two remaining
+// actions are Cancel and the (now primary) "Apply mapped fields" partial
+// apply. `confirmPendingRecipeApplication` stays in the store as API for a
+// future non-modal caller (see plotRecipes.test.ts for its own coverage,
+// including the identical-re-resolution wording fix).
 
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { captureRecipe } from "../../lib/plotRecipe";
-import { resolveRecipe } from "../../lib/plotRecipeMatch";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -65,7 +75,7 @@ describe("PlotRecipeApplyDialog — visibility", () => {
 });
 
 describe("PlotRecipeApplyDialog — preview + actions", () => {
-  it("shows the mapping preview, the unmatched field, and both apply actions", async () => {
+  it("shows the mapping preview and the unmatched field", async () => {
     await stagePending();
     render(<PlotRecipeApplyDialog />);
 
@@ -73,8 +83,20 @@ describe("PlotRecipeApplyDialog — preview + actions", () => {
     expect(screen.getByText("X axis")).toBeInTheDocument();
     expect(screen.getByText("2theta")).toBeInTheDocument();
     expect(screen.getByText(/Unmatched fields \(1\)/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Apply anyway \(drop 1 unmatched\)/ })).toBeInTheDocument();
+  });
+
+  // RULING A, red-first requirement 1: exactly two actions, ever -- no
+  // "Confirm" button that can never succeed while the dialog is up.
+  it("renders EXACTLY two actions: Cancel and Apply mapped fields", async () => {
+    await stagePending();
+    render(<PlotRecipeApplyDialog />);
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "Cancel",
+      "Apply mapped fields (drops 1 unmatched)",
+    ]);
+    expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull();
   });
 
   it("Cancel clears the pending application with zero mutation", async () => {
@@ -87,51 +109,16 @@ describe("PlotRecipeApplyDialog — preview + actions", () => {
     expect(useApp.getState().editableFigures).toHaveLength(0);
   });
 
-  it("Confirm re-resolves and, still unmatched, RE-STAGES and shows the 'dataset changed' status", async () => {
+  it("'Apply mapped fields' applies the resolved subset, dropping the unmatched field", async () => {
     await stagePending();
     render(<PlotRecipeApplyDialog />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
-    expect(useApp.getState().editableFigures).toHaveLength(0);
-  });
-
-  it("'Apply anyway' applies the resolved subset, dropping the unmatched field", async () => {
-    await stagePending();
-    render(<PlotRecipeApplyDialog />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Apply anyway/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Apply mapped fields/ }));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(useApp.getState().pendingRecipeApplication).toBeNull();
     expect(useApp.getState().editableFigures).toHaveLength(1);
     expect(useApp.getState().status).toContain("dropped 1 unmatched field");
-  });
-
-  it("hides the 'Apply anyway' action once nothing is unmatched", async () => {
-    reset();
-    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
-    const recipe = captureRecipe(useApp.getState().datasets[0], view, null, {
-      id: "r1",
-      name: "Clean Recipe",
-      appVersion: "0",
-    });
-    // Force a "clean but staged" pending state directly (a clean match would
-    // normally apply immediately rather than stage) purely to check the
-    // dialog's own rendering branch. `resolveRecipe` builds a real, fully-
-    // shaped resolution rather than a hand-rolled stand-in.
-    const resolution = resolveRecipe(recipe, useApp.getState().datasets[0]);
-    if (!("resolved" in resolution)) throw new Error("expected a resolved result");
-    useApp.setState({
-      pendingRecipeApplication: { recipe, datasetId: "d1", resolution },
-    });
-
-    render(<PlotRecipeApplyDialog />);
-
-    expect(screen.queryByRole("button", { name: /Apply anyway/ })).toBeNull();
   });
 });

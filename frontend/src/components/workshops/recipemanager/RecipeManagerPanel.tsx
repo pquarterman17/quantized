@@ -1,11 +1,21 @@
 // Recipe Manager panel (P1.3 wave 3, Lane D deliverable 3): lists every Plot
 // Recipe across BOTH scopes (project + global, store/plotRecipes.ts /
 // store/globalPlotRecipes.ts), with per-row rename/duplicate/delete,
-// move-between-scopes, export-to-file, apply-to-a-chosen-dataset, plus
+// copy-to-other-scope, export-to-file, apply-to-a-chosen-dataset, plus
 // import-from-file into either scope. Mirrors QuickPlotWithDialog's row
 // layout (inline rename, size="sm" action buttons) rather than inventing a
 // new one; all cross-store orchestration lives in recipeManagerActions.ts,
 // this file is the thin view.
+//
+// ORCHESTRATOR RULING B (code-review findings 2+3): the cross-scope button
+// COPIES (never moves) -- its title text says so, and points at Delete as
+// the explicit way to finish a "move" (delete the source afterward).
+//
+// FINDING 3 (code-review), belt-and-braces: `renamingKey`/`commitRename`
+// below are keyed by `${scope}:${id}` -- the SAME composite the `<li>` key
+// uses -- not by id alone, so two rows that happen to share an id across
+// scopes (legacy data, or any future edge case) can never cross-wire their
+// rename inputs.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -17,14 +27,17 @@ import { Button, Select } from "../../primitives";
 import {
   applyRecipeToDataset,
   combinedRecipeRows,
+  copyRecipeToOtherScope,
   deleteRecipe,
   duplicateRecipe,
   exportRecipe,
   importRecipeToScope,
-  moveRecipeScope,
   renameRecipe,
   type RecipeScope,
 } from "./recipeManagerActions";
+
+/** `${scope}:${id}` -- the same composite the row `<li>` key uses (finding 3). */
+const rowKey = (scope: RecipeScope, id: string): string => `${scope}:${id}`;
 
 const SCOPE_LABEL: Record<RecipeScope, string> = { project: "Project", global: "Global" };
 
@@ -37,7 +50,9 @@ export default function RecipeManagerPanel() {
   const activeId = useApp((s) => s.activeId);
 
   const [datasetId, setDatasetId] = useState(activeId ?? datasets[0]?.id ?? "");
-  const [renamingId, setRenamingId] = useState<string | null>(null);
+  // Finding 3, belt-and-braces: keyed by `${scope}:${id}` (rowKey), not id
+  // alone -- see the module doc.
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const projectImportRef = useRef<HTMLInputElement>(null);
@@ -54,21 +69,25 @@ export default function RecipeManagerPanel() {
 
   const rows = combinedRecipeRows(projectRecipes, globalRecipes);
 
-  const commitRename = (id: string): void => {
-    const row = rows.find((r) => r.recipe.id === id);
-    if (row) renameRecipe(row.scope, id, renameValue);
-    setRenamingId(null);
+  const commitRename = (scope: RecipeScope, id: string): void => {
+    renameRecipe(scope, id, renameValue);
+    setRenamingKey(null);
   };
 
+  // FINDING 8 (code-review): `file.text()` itself can reject (a read error),
+  // not just resolve with malformed content -- the `.catch` here routes that
+  // into the SAME inline error surface `importRecipeToScope`'s own throw
+  // already uses, instead of becoming an unhandled promise rejection.
   const runImport = (scope: RecipeScope, file: File): void => {
-    void file.text().then((text) => {
-      try {
+    void file
+      .text()
+      .then((text) => {
         importRecipeToScope(scope, text);
         setError(null);
-      } catch (e) {
+      })
+      .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : "import failed");
-      }
-    });
+      });
   };
 
   const applyRow = (row: (typeof rows)[number]): void => {
@@ -130,58 +149,62 @@ export default function RecipeManagerPanel() {
         </div>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
-          {rows.map((row) => (
-            <li key={`${row.scope}:${row.recipe.id}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
-              {renamingId === row.recipe.id ? (
-                <input
-                  autoFocus
-                  value={renameValue}
-                  aria-label={`Rename ${row.recipe.name}`}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename(row.recipe.id);
-                    if (e.key === "Escape") setRenamingId(null);
-                    e.stopPropagation();
+          {rows.map((row) => {
+            const key = rowKey(row.scope, row.recipe.id);
+            const otherScope: RecipeScope = row.scope === "project" ? "global" : "project";
+            return (
+              <li key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
+                {renamingKey === key ? (
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    aria-label={`Rename ${row.recipe.name}`}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename(row.scope, row.recipe.id);
+                      if (e.key === "Escape") setRenamingKey(null);
+                      e.stopPropagation();
+                    }}
+                    onBlur={() => commitRename(row.scope, row.recipe.id)}
+                    style={{ flex: 1 }}
+                  />
+                ) : (
+                  <span className="qzk-menu-trunc" style={{ flex: 1 }} title={row.recipe.name}>
+                    {row.recipe.name}
+                  </span>
+                )}
+                <Button size="sm" disabled={!datasetId} onClick={() => applyRow(row)}>
+                  Apply
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setRenamingKey(key);
+                    setRenameValue(row.recipe.name);
                   }}
-                  onBlur={() => commitRename(row.recipe.id)}
-                  style={{ flex: 1 }}
-                />
-              ) : (
-                <span className="qzk-menu-trunc" style={{ flex: 1 }} title={row.recipe.name}>
-                  {row.recipe.name}
-                </span>
-              )}
-              <Button size="sm" disabled={!datasetId} onClick={() => applyRow(row)}>
-                Apply
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setRenamingId(row.recipe.id);
-                  setRenameValue(row.recipe.name);
-                }}
-              >
-                Rename
-              </Button>
-              <Button size="sm" onClick={() => duplicateRecipe(row.scope, row.recipe.id)}>
-                Duplicate
-              </Button>
-              <Button
-                size="sm"
-                title={row.scope === "project" ? "Move to Global" : "Move to Project"}
-                onClick={() => moveRecipeScope(row.scope, row.recipe.id)}
-              >
-                {row.scope === "project" ? "→ Global" : "→ Project"}
-              </Button>
-              <Button size="sm" onClick={() => exportRecipe(row.recipe)}>
-                Export
-              </Button>
-              <Button size="sm" variant="danger" onClick={() => deleteRecipe(row.scope, row.recipe.id)}>
-                Delete
-              </Button>
-            </li>
-          ))}
+                >
+                  Rename
+                </Button>
+                <Button size="sm" onClick={() => duplicateRecipe(row.scope, row.recipe.id)}>
+                  Duplicate
+                </Button>
+                <Button
+                  size="sm"
+                  title={`Copy to ${SCOPE_LABEL[otherScope]} scope (the ${SCOPE_LABEL[row.scope]} original stays here -- delete it afterward to fully move it)`}
+                  onClick={() => copyRecipeToOtherScope(row.scope, row.recipe.id)}
+                >
+                  Copy to {SCOPE_LABEL[otherScope]}
+                </Button>
+                <Button size="sm" onClick={() => exportRecipe(row.recipe)}>
+                  Export
+                </Button>
+                <Button size="sm" variant="danger" onClick={() => deleteRecipe(row.scope, row.recipe.id)}>
+                  Delete
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {error && (

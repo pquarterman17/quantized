@@ -116,3 +116,82 @@ describe("remove", () => {
     expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(1);
   });
 });
+
+// ORCHESTRATOR RULING B (code-review findings 2+3): copy-with-a-fresh-id is
+// the cross-scope transfer primitive (replacing "move", which both lost data
+// on undo and could leave two scopes holding the SAME id). `copyIn` accepts
+// an EXTERNAL recipe (e.g. from the project scope) and adds it here under a
+// fresh id + a name deduped against this scope's OWN list -- the source is
+// never touched by this store.
+describe("copyIn", () => {
+  it("adds the recipe under a FRESH id, deduped name, and persists", () => {
+    const external = recipe("external-id", "Original");
+    useGlobalPlotRecipes.getState().setAll([recipe("g1", "Original")]); // force a name collision
+
+    const newId = useGlobalPlotRecipes.getState().copyIn(external);
+
+    expect(newId).not.toBe("external-id"); // fresh id, never the source's own
+    const names = useGlobalPlotRecipes.getState().recipes.map((r) => r.name);
+    expect(names).toEqual(["Original", "Original (2)"]);
+    const ids = useGlobalPlotRecipes.getState().recipes.map((r) => r.id);
+    expect(new Set(ids).size).toBe(2); // never two rows sharing one id
+    expect(JSON.parse(localStorage.getItem("qz.plotRecipes")!)).toHaveLength(2);
+  });
+});
+
+// FINDING 5 (code-review): every mutating action must hydrate from
+// localStorage FIRST, before computing the list it persists -- otherwise a
+// mutation that runs before App.tsx's boot hydrate() lands (or before any
+// caller has ever hydrated this session) reads the in-memory `[]` default,
+// and persisting a list built from THAT clobbers whatever was already on
+// disk down to just the one new entry.
+describe("finding 5 — hydrate-before-mutate guard", () => {
+  it("copyIn before any hydrate() call does not clobber previously-persisted entries", () => {
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "Existing")]));
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false }); // a fresh, never-hydrated store
+
+    useGlobalPlotRecipes.getState().copyIn(recipe("r2", "New"));
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toContain("r1"); // survived
+    expect(persisted).toHaveLength(2);
+  });
+
+  it("rename before any hydrate() call does not clobber previously-persisted entries", () => {
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "Existing"), recipe("r2", "Other")]),
+    );
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false });
+
+    useGlobalPlotRecipes.getState().rename("r1", "Renamed");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted).toHaveLength(2);
+    expect(persisted.find((r) => r.id === "r1")?.name).toBe("Renamed");
+  });
+
+  it("remove before any hydrate() call does not clobber previously-persisted entries", () => {
+    localStorage.setItem(
+      "qz.plotRecipes",
+      JSON.stringify([recipe("r1", "Existing"), recipe("r2", "Other")]),
+    );
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false });
+
+    useGlobalPlotRecipes.getState().remove("r2");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("duplicate before any hydrate() call does not clobber previously-persisted entries", () => {
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "Existing")]));
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false });
+
+    useGlobalPlotRecipes.getState().duplicate("r1");
+
+    const persisted = JSON.parse(localStorage.getItem("qz.plotRecipes")!) as PlotRecipe[];
+    expect(persisted.map((r) => r.id)).toContain("r1");
+    expect(persisted).toHaveLength(2);
+  });
+});

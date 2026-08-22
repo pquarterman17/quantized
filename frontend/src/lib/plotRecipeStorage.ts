@@ -10,8 +10,16 @@
 // `storageScope` is deliberately not a field on `PlotRecipe` itself (see
 // `plotRecipe.ts`'s module doc): the object is location-agnostic, so this
 // module and `workspace.ts`'s project-scope fields both hold the exact same
-// `PlotRecipe` shape — moving a recipe between scopes is moving the object
-// from one list to the other, never a field flip.
+// `PlotRecipe` shape. ORCHESTRATOR RULING B (code-review findings 2+3): the
+// cross-scope TRANSFER primitive is COPY-with-a-fresh-id, not move -- an
+// earlier move (remove from one list, add to the other) could lose the
+// recipe entirely if the destination-side add was later undone after the
+// source-side removal had already landed (finding 2), and preserved the
+// SAME id across both lists, so two scopes could end up holding entries
+// that share an id (finding 3). `store/globalPlotRecipes.ts`'s `copyIn` /
+// `store/plotRecipes.ts`'s `copyPlotRecipeIn` mint a fresh id and never
+// touch the source; a user who wants move semantics deletes the source
+// explicitly afterward.
 //
 // `sanitizeRecipes` (not a bespoke type guard) backs both `loadGlobalPlotRecipes`
 // and the project-scope `parseWorkspace` — one drop-malformed-never-throw

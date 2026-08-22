@@ -105,16 +105,23 @@
 // object directly -- the Recipe Manager panel's apply-a-GLOBAL-scope-recipe
 // gesture needs this, since a global recipe is never a member of
 // `state.plotRecipes`) both share.
+//
+// MATCHING EXTRACTION (P1.3 wave 3, Lane D code-review round): `recipeLibs`/
+// `resolvedCandidates` also moved to the `plotRecipeApply.ts` sibling (its
+// own MATCHING EXTRACTION note) -- code-review findings 4+6 pushed this
+// file back over the 500-line ceiling; the existing eagerly-shared sibling
+// avoids paying for a second module boundary against the eager-JS budget.
 
-import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
+import type { PlotRecipe } from "../lib/plotRecipe";
 import type { RecipeResolution, ResolvedRecipeApplication } from "../lib/plotRecipeMatch";
 import { dedupeWindowTitle, snapshotView } from "../lib/plotview";
-import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import { plotWindowDatasetId } from "./windowDocuments";
 import {
   applyResolvedRecipe,
+  recipeLibs,
   resolveApplyOrStage,
+  resolvedCandidates,
   type SliceGet,
   type SliceSet,
 } from "./plotRecipeApply";
@@ -122,29 +129,14 @@ import {
 let _recipeSeq = 0;
 const nextPlotRecipeId = (): string => `pr-${Date.now().toString(36)}-${++_recipeSeq}`;
 
-interface RecipeLibs {
-  captureRecipe: typeof captureRecipe;
-  resolveRecipe: typeof import("../lib/plotRecipeMatch").resolveRecipe;
-}
-let _recipeLibs: Promise<RecipeLibs> | null = null;
-/** Load (once, then cache) the one still-lazy wave-1 library this slice
- *  needs. Only `lib/plotRecipeMatch.ts` (`resolveRecipe`) stays behind a
- *  dynamic import: `lib/plotRecipe.ts` became unavoidably EAGER when Lane C
- *  wired `sanitizeRecipes` (lib/plotRecipeIO.ts, which value-imports it)
- *  into `lib/workspace.ts`'s synchronous `parseWorkspace` — so a dynamic
- *  import of it here would add chunk-glue without deferring a single byte
- *  (the dual eager+lazy import shape also makes Rollup carve shared deps
- *  into their own always-preloaded chunks, which measured WORSE). The
- *  async method signatures are kept as-is — they were public API shape
- *  from this slice's first commit and resolveRecipe still loads lazily. */
-function recipeLibs(): Promise<RecipeLibs> {
-  if (!_recipeLibs) {
-    _recipeLibs = import("../lib/plotRecipeMatch").then((m) => ({
-      captureRecipe,
-      resolveRecipe: m.resolveRecipe,
-    }));
-  }
-  return _recipeLibs;
+/** Set-equality for two `unmatched` field-name lists (order-independent --
+ *  `resolveRecipe` iterates `recipe.signature` in a stable order today, but
+ *  comparing as sets is the honest contract: "the same fields, however
+ *  listed" is what "nothing changed" means here, not "the same array"). */
+function sameUnmatchedSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const bSet = new Set(b);
+  return a.every((x) => bSet.has(x));
 }
 
 // No app-version constant is plumbed into the frontend bundle yet (no
@@ -200,6 +192,15 @@ export interface PlotRecipesSlice {
    *  existing recipe (never two recipes sharing a label). Undoable. Returns
    *  the new recipe's id. */
   duplicatePlotRecipe: (id: string) => string | null;
+  /** ORCHESTRATOR RULING B (code-review findings 2+3): add an EXTERNAL
+   *  recipe (e.g. from the global scope; see store/globalPlotRecipes.ts's
+   *  `copyIn` sibling) under a FRESH id -- never the source's own -- with
+   *  its name deduped against the project list. Never reads or mutates the
+   *  source; the caller (recipeManagerActions.ts's `copyRecipeToOtherScope`)
+   *  owns finding it and deciding whether to remove/keep it. ONE undoable
+   *  history entry -- undo removes ONLY the tracked copy, never touching
+   *  wherever the source came from. Returns the new copy's id. */
+  copyPlotRecipeIn: (recipe: PlotRecipe) => string;
   /** Replace the whole list verbatim -- the future `.dwk`/persistence
    *  hookup's seam. The caller is assumed to have already sanitized `list`
    *  (`lib/plotRecipeIO.ts`'s `sanitizeRecipes`); this action does not
@@ -229,9 +230,17 @@ export interface PlotRecipesSlice {
    *  doc's APPLY PATH note): dataset gone or refused -> status, pending
    *  cleared, zero mutation; clean fresh match -> applies THAT (never the
    *  stale one); still unmatched -> `pendingRecipeApplication` is REPLACED
-   *  with the fresh resolution (never applied) plus a status noting the
-   *  dataset changed. False, pending left cleared, when nothing was pending.
-   *  Async: lazy-loads `resolveRecipe` to re-resolve. */
+   *  with the fresh resolution (never applied) plus a status naming why --
+   *  "the dataset changed" ONLY when the fresh unmatched set genuinely
+   *  differs from the staged one, else "N fields still unmatched" (ORCHESTRATOR
+   *  RULING A, code-review finding 1: a modal, non-editable caller -- the
+   *  removed dialog Confirm button -- would always reproduce the IDENTICAL
+   *  set, so claiming "the dataset changed" there was false). False, pending
+   *  left cleared, when nothing was pending. NOT called by
+   *  PlotRecipeApplyDialog.tsx any more (see its own header) -- kept as
+   *  public API for a future NON-modal caller, where the dataset genuinely
+   *  can change between stage and confirm. Async: lazy-loads `resolveRecipe`
+   *  to re-resolve. */
   confirmPendingRecipeApplication: () => Promise<boolean>;
   /** The explicit "apply anyway, drop unmatched" opt-in (booked in PR #204).
    *  Re-resolves against the CURRENT dataset exactly like
@@ -345,6 +354,16 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       return copy.id;
     },
 
+    copyPlotRecipeIn: (recipe) => {
+      const state = get();
+      const dedupedName = dedupeWindowTitle(recipe.name, state.plotRecipes.map((r) => r.name));
+      const now = new Date().toISOString();
+      const copy: PlotRecipe = { ...structuredClone(recipe), id: nextPlotRecipeId(), name: dedupedName, createdAt: now, modifiedAt: now };
+      get().recordHistory("Copy Plot Recipe to Project");
+      set((s) => ({ plotRecipes: [...s.plotRecipes, copy] }));
+      return copy.id;
+    },
+
     setPlotRecipes: (list) => set({ plotRecipes: list }),
 
     applyPlotRecipe: async (recipeId, datasetId) => {
@@ -394,9 +413,21 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         // the fresh resolution (never apply a stale one) and tell the user
         // why, so a second confirm always re-verifies rather than silently
         // compounding staleness.
+        //
+        // ORCHESTRATOR RULING A (code-review finding 1): "the dataset
+        // changed since the preview" is only TRUE wording when the fresh
+        // unmatched set actually differs from the staged one. The dialog
+        // that used to call this action is modal (blocks dataset edits
+        // while it's up) and only ever opens with unmatched > 0, so its own
+        // "Confirm" click always reproduced the IDENTICAL set -- the wording
+        // below distinguishes the two cases so a future non-modal caller
+        // (this action's remaining reason to exist) doesn't inherit that
+        // same false claim.
         set({
           pendingRecipeApplication: { recipe: pending.recipe, datasetId: pending.datasetId, resolution },
-          status: `Plot Recipe "${pending.recipe.name}": the dataset changed since the preview -- review the updated mapping`,
+          status: sameUnmatchedSet(resolution.unmatched, pending.resolution.unmatched)
+            ? `Plot Recipe "${pending.recipe.name}": ${resolution.unmatched.length} field${resolution.unmatched.length === 1 ? "" : "s"} still unmatched`
+            : `Plot Recipe "${pending.recipe.name}": the dataset changed since the preview -- review the updated mapping`,
         });
         return false;
       }
@@ -446,31 +477,23 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
     cancelPendingRecipeApplication: () => set({ pendingRecipeApplication: null }),
 
     matchingPlotRecipes: async (dataset) => {
-      const technique = techniqueOf(dataset);
-      if (technique === "generic") return [];
-      const { resolveRecipe } = await recipeLibs();
+      const candidates = await resolvedCandidates(get, dataset);
       const clean: PlotRecipe[] = [];
       const partial: PlotRecipe[] = [];
-      for (const recipe of get().plotRecipes) {
-        if (recipe.technique !== technique) continue;
-        const resolution = resolveRecipe(recipe, dataset);
-        if ("refused" in resolution) continue;
+      for (const { recipe, resolution } of candidates) {
         (resolution.unmatched.length === 0 ? clean : partial).push(recipe);
       }
       return [...clean, ...partial];
     },
 
     cleanMatchingPlotRecipe: async (dataset) => {
-      // Reuses matchingPlotRecipes's own technique-gated, clean-first list
-      // rather than re-deriving it -- only its FIRST entry needs re-checking
-      // (the array itself doesn't carry resolution detail, so "clean" can't
-      // be read off it directly): clean if resolveRecipe agrees, else null
-      // even when a partial candidate exists further down the list.
-      const matches = await get().matchingPlotRecipes(dataset);
-      if (matches.length === 0) return null;
-      const { resolveRecipe } = await recipeLibs();
-      const resolution = resolveRecipe(matches[0], dataset);
-      return "resolved" in resolution && resolution.unmatched.length === 0 ? matches[0] : null;
+      // FINDING 6 (code-review, perf): shares `resolvedCandidates`'s ONE
+      // resolve-per-candidate pass with `matchingPlotRecipes` above rather
+      // than calling it and then re-resolving its first result AGAIN (the
+      // old bug -- two `resolveRecipe` calls per candidate that mattered).
+      const candidates = await resolvedCandidates(get, dataset);
+      const clean = candidates.find((c) => c.resolution.unmatched.length === 0);
+      return clean ? clean.recipe : null;
     },
   };
 }

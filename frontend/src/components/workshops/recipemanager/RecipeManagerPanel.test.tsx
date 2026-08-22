@@ -96,14 +96,36 @@ describe("RecipeManagerPanel — actions", () => {
     expect(useApp.getState().plotRecipes).toHaveLength(0);
   });
 
-  it("moves a project recipe to global scope", () => {
+  // ORCHESTRATOR RULING B (code-review findings 2+3): Move is replaced by
+  // Copy -- the source row stays exactly where it was.
+  it("copies a project recipe to global scope, leaving the project original untouched", () => {
     useApp.setState({ plotRecipes: [recipe("p1", "Original")] });
     render(<RecipeManagerPanel />);
 
-    fireEvent.click(screen.getByRole("button", { name: "→ Global" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy to Global" }));
 
-    expect(useApp.getState().plotRecipes).toHaveLength(0);
+    expect(useApp.getState().plotRecipes.map((r) => r.name)).toEqual(["Original"]); // untouched
     expect(useGlobalPlotRecipes.getState().recipes.map((r) => r.name)).toEqual(["Original"]);
+  });
+
+  // FINDING 3 (code-review), belt-and-braces: rename state is keyed by
+  // scope+id like the `<li>` key, so two rows that happen to share an id
+  // across scopes (legacy data, or any future edge case) never cross-wire
+  // their rename inputs.
+  it("renames project and global rows independently even when they share the SAME id and name", () => {
+    useApp.setState({ plotRecipes: [recipe("dup-id", "Same Name")] });
+    useGlobalPlotRecipes.getState().setAll([recipe("dup-id", "Same Name")]);
+    render(<RecipeManagerPanel />);
+
+    const renameButtons = screen.getAllByRole("button", { name: "Rename" });
+    expect(renameButtons).toHaveLength(2);
+    fireEvent.click(renameButtons[0]); // the PROJECT row (rendered first)
+    const input = screen.getByLabelText("Rename Same Name");
+    fireEvent.change(input, { target: { value: "Renamed Project" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(useApp.getState().plotRecipes[0].name).toBe("Renamed Project");
+    expect(useGlobalPlotRecipes.getState().recipes[0].name).toBe("Same Name"); // untouched
   });
 
   it("applies a recipe to the pre-selected active dataset and closes on a clean apply", async () => {
@@ -131,5 +153,20 @@ describe("RecipeManagerPanel — actions", () => {
     await Promise.resolve();
 
     expect(await screen.findByText(/plot recipe file/i)).toBeInTheDocument();
+  });
+
+  // FINDING 8 (code-review): `file.text()` itself can reject (e.g. a read
+  // error), not just resolve with malformed content -- the promise chain
+  // needs a `.catch` routing into the same inline error, or this becomes an
+  // unhandled rejection instead of a surfaced message.
+  it("surfaces an error when the picked file's own read rejects", async () => {
+    render(<RecipeManagerPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Import to Project…" }));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const rejecting = { text: () => Promise.reject(new Error("disk read failed")) } as unknown as File;
+    Object.defineProperty(fileInput, "files", { value: [rejecting] });
+    fireEvent.change(fileInput);
+
+    expect(await screen.findByText(/disk read failed/i)).toBeInTheDocument();
   });
 });

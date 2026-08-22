@@ -219,8 +219,31 @@ import { fileURLToPath } from "node:url";
  *  to degrade to dodge this tripwire. Measured 923,314 B; budget =
  *  measured + 1,024 = 924,338, ~1 kB of rounding room, nothing banked for
  *  future growth. Same rule stands: never raise without measuring, defer
- *  panels/modules first. */
-const EAGER_JS_BUDGET = 924_338;
+ *  panels/modules first.
+ *
+ *  2026-08-22 (same day, wave-3 Lane D code-review round) — 925,527 after
+ *  fixing 8 code-review findings on top of the entry above (two orchestrator
+ *  rulings replacing the apply-dialog Confirm action and cross-scope Move
+ *  with Copy-with-fresh-id; global-scope candidates folded into
+ *  matching/suggestion; a hydrate-before-mutate guard on every global-store
+ *  mutation; an empty-both-scopes early return before the recipe-suggestion
+ *  toast; a broadened toast string; a rejected-file-read `.catch`). Findings
+ *  4+6 (global-scope candidates + a single-resolve-per-candidate pass) added
+ *  real logic to store/plotRecipes.ts, pushing it back over the 500-line
+ *  ceiling — `recipeLibs`/`resolvedCandidates` moved into the ALREADY
+ *  eager `store/plotRecipeApply.ts` sibling rather than a new file, and
+ *  BOTH placements were actually measured (not assumed): a brand-new sibling
+ *  module and merging into the existing one produced the IDENTICAL total,
+ *  924,503 B — ruling out a Rollup chunk-boundary "extraction tax" (the
+ *  2026-08-22 wave-3 entry's cause) as this round's driver. The +165 B over
+ *  the prior 924,338 pin is genuinely new, irreducible eager logic across
+ *  the 8 fixes (the global-store merge/hydrate-guard/copy-in additions,
+ *  mainly) — no further lazy-split measured smaller; see this file's own
+ *  git history for the two variants actually tried. Measured 924,503 B;
+ *  budget = measured + 1,024 = 925,527, ~1 kB of rounding room, nothing
+ *  banked for future growth. Same rule stands: never raise without
+ *  measuring, defer panels/modules first. */
+const EAGER_JS_BUDGET = 925_527;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

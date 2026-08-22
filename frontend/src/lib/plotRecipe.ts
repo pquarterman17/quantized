@@ -36,8 +36,15 @@
 // `storageScope` ("project" | "global") is deliberately NOT part of this
 // schema: where a recipe LIVES is a property of the store/list that holds
 // it, not of the recipe object itself -- keeping the object location-
-// agnostic means import/export/duplicate can move a recipe between scopes
-// without touching a single field on it.
+// agnostic means import/export/duplicate/copy can move a recipe between
+// scopes without touching a single field on it. The cross-scope TRANSFER
+// primitive is copy-with-a-fresh-id (store/globalPlotRecipes.ts's `copyIn`,
+// store/plotRecipes.ts's `copyPlotRecipeIn`) -- ORCHESTRATOR RULING B
+// (code-review findings 2+3) replaced an earlier remove-from-one-add-to-
+// other "move" after it turned out to both lose the recipe entirely on a
+// mistimed undo and let two scopes end up holding entries under the SAME
+// id. A copy never touches its source; a user wanting move semantics
+// deletes the source afterward.
 
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";

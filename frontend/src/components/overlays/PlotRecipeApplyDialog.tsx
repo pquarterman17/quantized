@@ -3,16 +3,27 @@
 // preview (which recipe field resolved to which CURRENT column), the
 // unmatched-field list, and any warnings verbatim (they already name
 // candidates/collisions, see plotRecipeMatch.ts's `candidateList`) -- with
-// three actions:
-//   - Confirm: `confirmPendingRecipeApplication` (re-resolves, applies only
-//     on a clean fresh match, else RE-STAGES with a "dataset changed" status
-//     -- this dialog just re-renders off the fresh `pendingRecipeApplication`
-//     + `status` the store set, no special-casing needed here).
-//   - Apply anyway (drop unmatched): the wave-3 booked action,
-//     `confirmPendingRecipeApplicationPartial` -- deliberately the SECONDARY
-//     (ghost-variant) button with explicit wording, since it is a data-losing
-//     opt-in, never the default choice.
+// TWO actions:
 //   - Cancel: `cancelPendingRecipeApplication`.
+//   - Apply mapped fields (the primary action): `confirmPendingRecipeApplicationPartial`,
+//     applying the fresh resolution's resolved subset and dropping whatever
+//     didn't match.
+//
+// ORCHESTRATOR RULING A (code-review finding 1, this wave): a plain "Confirm"
+// button (`confirmPendingRecipeApplication`) used to sit here too, but it can
+// NEVER succeed from this dialog -- `pendingRecipeApplication` only ever
+// exists when `unmatched.length > 0` (a clean match applies immediately,
+// never stages), and this dialog is MODAL (blocks dataset edits while it's
+// up), so a plain re-resolve from here always reproduces the IDENTICAL
+// unmatched set. Under the old wording that re-stage falsely claimed "the
+// dataset changed" even though nothing did. Removed entirely rather than
+// patched: `confirmPendingRecipeApplication` remains in the store as public
+// API (a future NON-modal caller -- one that can't guarantee the dataset
+// held still -- is exactly where its re-resolve/re-stage semantics are
+// correct), and its message is fixed at the store layer (plotRecipes.ts) to
+// say "still unmatched" rather than "the dataset changed" when the fresh
+// resolution's unmatched set is identical to the staged one -- see
+// plotRecipes.test.ts for that coverage. This dialog just never calls it.
 //
 // Modal-backdrop convention borrowed from QuickPlotWithDialog/SplitDatasetDialog.
 
@@ -39,9 +50,7 @@ function mappingRows(
 
 export default function PlotRecipeApplyDialog() {
   const pending = useApp((s) => s.pendingRecipeApplication);
-  const status = useApp((s) => s.status);
   const dataset = useApp((s) => (pending ? s.datasets.find((d) => d.id === pending.datasetId) : undefined));
-  const confirm = useApp((s) => s.confirmPendingRecipeApplication);
   const confirmPartial = useApp((s) => s.confirmPendingRecipeApplicationPartial);
   const cancel = useApp((s) => s.cancelPendingRecipeApplication);
 
@@ -65,11 +74,6 @@ export default function PlotRecipeApplyDialog() {
         }}
       >
         <h2>Apply Plot Recipe “{pending.recipe.name}”</h2>
-        {status.includes("dataset changed") && (
-          <p className="qzk-ds-meta" style={{ color: "var(--warning, var(--danger))" }}>
-            {status}
-          </p>
-        )}
         {rows.length > 0 && (
           <table className="qzk-recipe-mapping" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
             <tbody>
@@ -101,17 +105,12 @@ export default function PlotRecipeApplyDialog() {
         )}
         <div className="qz-btn-row" style={{ marginTop: 12 }}>
           <Button onClick={cancel}>Cancel</Button>
-          {unmatched.length > 0 && (
-            <Button
-              variant="ghost"
-              title="Applies the recipe using only the fields that matched, dropping the rest -- data loss, use with care"
-              onClick={() => void confirmPartial()}
-            >
-              Apply anyway (drop {unmatched.length} unmatched)
-            </Button>
-          )}
-          <Button variant="primary" onClick={() => void confirm()}>
-            Confirm
+          <Button
+            variant="primary"
+            title="Applies the recipe using only the fields that matched, dropping the rest -- data loss, use with care"
+            onClick={() => void confirmPartial()}
+          >
+            Apply mapped fields (drops {unmatched.length} unmatched)
           </Button>
         </div>
       </div>

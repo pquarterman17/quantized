@@ -13,10 +13,10 @@ import { useApp } from "../../../store/useApp";
 import {
   applyRecipeToDataset,
   combinedRecipeRows,
+  copyRecipeToOtherScope,
   deleteRecipe,
   duplicateRecipe,
   importRecipeToScope,
-  moveRecipeScope,
   renameRecipe,
 } from "./recipeManagerActions";
 
@@ -93,38 +93,83 @@ describe("renameRecipe / duplicateRecipe / deleteRecipe", () => {
   });
 });
 
-describe("moveRecipeScope", () => {
-  it("moves project -> global, dedupes against the destination, and records ONE undo entry", () => {
+// ORCHESTRATOR RULING B (code-review findings 2+3): Move-between-scopes is
+// replaced by Copy-to-<other-scope> -- a fresh id (never the source's own,
+// closing finding 3's dual-id cause) and a collision-deduped name; the
+// SOURCE list is always left untouched (closing finding 2's undo data-loss
+// bug -- there is no source-side removal for undo to ever lose track of).
+describe("copyRecipeToOtherScope", () => {
+  it("copies project -> global (i.e. copy-TO-global): fresh id, deduped name, source untouched, NOT undo-tracked", () => {
     useApp.setState({ plotRecipes: [recipe("p1", "Taken")] });
     useGlobalPlotRecipes.getState().setAll([recipe("g1", "Taken")]);
     const historyBefore = useApp.getState().history.length;
 
-    moveRecipeScope("project", "p1");
+    const newId = copyRecipeToOtherScope("project", "p1");
 
-    expect(useApp.getState().plotRecipes).toHaveLength(0);
-    expect(useApp.getState().history).toHaveLength(historyBefore + 1);
+    expect(newId).not.toBeNull();
+    expect(newId).not.toBe("p1"); // fresh id
+    // The source is COMPLETELY untouched -- still there, unchanged.
+    expect(useApp.getState().plotRecipes.map((r) => r.id)).toEqual(["p1"]);
+    expect(useApp.getState().plotRecipes[0].name).toBe("Taken");
     const globalNames = useGlobalPlotRecipes.getState().recipes.map((r) => r.name);
     expect(globalNames).toEqual(["Taken", "Taken (2)"]);
+    // Copy-TO-global isn't undo-tracked (global scope carries no undo
+    // history by design) -- and the project SOURCE was never mutated
+    // either, so there is nothing anywhere for undo to need to reach.
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
 
-    useApp.getState().undo();
+  it("copies global -> project (i.e. copy-TO-project): fresh id, deduped name, source untouched, ONE undo entry", () => {
+    useGlobalPlotRecipes.getState().setAll([recipe("g1", "Taken")]);
+    useApp.setState({ plotRecipes: [recipe("p1", "Taken")] });
+    const historyBefore = useApp.getState().history.length;
+
+    const newId = copyRecipeToOtherScope("global", "g1");
+
+    expect(newId).not.toBeNull();
+    expect(newId).not.toBe("g1");
+    // The global source is COMPLETELY untouched.
+    expect(useGlobalPlotRecipes.getState().recipes.map((r) => r.id)).toEqual(["g1"]);
+    expect(useGlobalPlotRecipes.getState().recipes[0].name).toBe("Taken");
+    const projectNames = useApp.getState().plotRecipes.map((r) => r.name);
+    expect(projectNames).toEqual(["Taken", "Taken (2)"]);
+    // Copy-TO-project DOES record one undo entry (`copyPlotRecipeIn`) --
+    // undo removes just the tracked copy (see the dedicated undo test below).
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1);
+  });
+
+  it("is a no-op (null) for an unknown id, in either direction", () => {
+    expect(copyRecipeToOtherScope("project", "nope")).toBeNull();
+    expect(copyRecipeToOtherScope("global", "nope")).toBeNull();
+    expect(useApp.getState().plotRecipes).toHaveLength(0);
+    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(0);
+  });
+
+  // Finding 2's exact scenario, now closed by construction: undo after a
+  // copy-to-project must never touch the global original.
+  it("undo after copying project -> global leaves the copy behind (global has no undo) but never loses the source", () => {
+    useApp.setState({ plotRecipes: [recipe("p1", "Original")] });
+
+    copyRecipeToOtherScope("project", "p1");
+    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(1);
+
+    // There's nothing to undo on the PROJECT side here (copying OUT of
+    // project records no history -- the project list was never mutated).
+    // The important guarantee: the project source is untouched regardless.
     expect(useApp.getState().plotRecipes.map((r) => r.id)).toEqual(["p1"]);
   });
 
-  it("moves global -> project, dedupes against the destination", () => {
-    useGlobalPlotRecipes.getState().setAll([recipe("g1", "Taken")]);
-    useApp.setState({ plotRecipes: [recipe("p1", "Taken")] });
+  it("undo after copying global -> project removes ONLY the tracked project copy, global original untouched", () => {
+    useGlobalPlotRecipes.getState().setAll([recipe("g1", "Original")]);
 
-    moveRecipeScope("global", "g1");
+    copyRecipeToOtherScope("global", "g1");
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
 
-    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(0);
-    const projectNames = useApp.getState().plotRecipes.map((r) => r.name);
-    expect(projectNames).toEqual(["Taken", "Taken (2)"]);
-  });
+    useApp.getState().undo();
 
-  it("is a no-op for an unknown id", () => {
-    moveRecipeScope("project", "nope");
     expect(useApp.getState().plotRecipes).toHaveLength(0);
-    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(0);
+    expect(useGlobalPlotRecipes.getState().recipes.map((r) => r.id)).toEqual(["g1"]);
+    expect(useGlobalPlotRecipes.getState().recipes[0].name).toBe("Original");
   });
 });
 
