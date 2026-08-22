@@ -22,7 +22,17 @@ function freeze_diraculator_values()
     here     = fileparts(mfilename('fullpath'));
     repoRoot = fullfile(here, '..', '..');
     qm       = fullfile(repoRoot, '..', 'quantized_matlab');
-    assert(isfolder(qm), 'quantized_matlab not found at %s', qm);
+    if ~isfolder(qm)
+        % Worktree checkouts live an extra directory deep (<repo>/.claude/
+        % worktrees/<name>/), so the direct sibling path resolves to a
+        % nonexistent location. Fall back to an explicit override rather
+        % than assuming a fixed checkout layout.
+        override = getenv('QZ_MATLAB_REF');
+        if ~isempty(override) && isfolder(override)
+            qm = override;
+        end
+    end
+    assert(isfolder(qm), 'quantized_matlab not found at %s (set QZ_MATLAB_REF to override)', qm);
     addpath(qm);
     goldenDir = fullfile(repoRoot, 'tests', 'golden');
     if ~isfolder(goldenDir), mkdir(goldenDir); end
@@ -359,9 +369,45 @@ function freeze_diraculator_values()
     % critical_fields(Material='Nb', T=4.2 K) — same fn, Material-driven path
     % that DOES exercise the Type-II Hc1/Hc2 branch (per the MATLAB worked
     % example in criticalFields.m's header).
-    r = calc.superconductor.criticalFields(Material='Nb', T=4.2);
+    %
+    % *** MATLAB SOURCE BUG (surfaced here, NOT silently fixed) ***
+    % calc.superconductor.criticalFields(Material=..., T=...) is UNCALLABLE
+    % as documented in the current quantized_matlab checkout. When Material
+    % is given and lambda/xi are not, it internally calls
+    %   calc.superconductor.londonDepth(Material=opts.Material, T=T)
+    %   calc.superconductor.coherenceLength(Material=opts.Material, T=T)
+    % and BOTH declare their primary argument with a validator that rejects
+    % their own "unset" sentinel default:
+    %   opts.lambda0 (1,1) double {mustBePositive} = NaN   (londonDepth.m:42)
+    %   opts.xi0     (1,1) double {mustBePositive} = NaN   (coherenceLength.m:46)
+    % MATLAB's `arguments` block validates DEFAULT values too, so any call
+    % that omits lambda0/xi0 -- which is the entire point of the Material=
+    % convenience path -- throws "Invalid default value for argument
+    % 'lambda0'/'xi0'. Value must be positive." before the function body
+    % ever runs. Verified directly: a bare
+    % `calc.superconductor.londonDepth(Material='Nb', T=4.2)` (the exact
+    % call from that function's own docstring example) throws the identical
+    % error. This makes criticalFields.m's own documented worked example
+    % (its header, ~line 68) non-functional as shipped. Not fixed here --
+    % quantized_matlab is only ever fixed deliberately, never silently, per
+    % CLAUDE.md; report filed separately. Freezing the INTENDED output
+    % instead: lambda(T)/xi(T) computed via the exact formulas londonDepth.m
+    % (line 54) and coherenceLength.m (line 60) implement -- applied to the
+    % Nb preset directly -- then fed to criticalFields as explicit
+    % lambda/xi, which exercises its (unaffected) Hc1/Hc2 formulas exactly
+    % as the Material path would have. The Python port's critical_fields
+    % has no equivalent bug (its _resolve() has no premature validator), so
+    % this is what quantized.calc.superconductor.critical_fields(material=
+    % "Nb", t=4.2) actually computes -- confirmed a legitimate golden target.
+    nbPresetCf = calc.superconductor.materialPresets(Material='Nb');
+    Tcf = 4.2;
+    tCf = Tcf / nbPresetCf.Tc;
+    lambdaIntendedCf = nbPresetCf.lambda0 / sqrt(1 - tCf^4);   % londonDepth.m:54
+    xiIntendedCf     = nbPresetCf.xi0     / sqrt(1 - tCf^2);   % coherenceLength.m:60
+    r = calc.superconductor.criticalFields(Material='Nb', T=Tcf, ...
+        lambda=lambdaIntendedCf, xi=xiIntendedCf);
     r = rmfield(r, 'latex');
-    writeJson(struct('input', struct('Material', 'Nb', 'T', 4.2), 'output', r), ...
+    writeJson(struct('input', struct('Material', 'Nb', 'T', Tcf), 'output', r), ...
         fullfile(goldenDir, 'calc_dira_superconductor_critical_fields_material.json'));
 
     % depairing_current(Hc0=1980 Oe, lambda0=39 nm, Tc=9.25 K, T=4.2 K) —

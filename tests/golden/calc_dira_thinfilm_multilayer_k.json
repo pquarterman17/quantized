@@ -1,0 +1,1 @@
+{"input":{"thicknesses":[10,20,10],"kappas":[150,10,150]},"output":{"kSeries":18.749999999999996,"kParallel":80,"totalThickness":40,"nLayers":3}}
