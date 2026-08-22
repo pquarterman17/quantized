@@ -29,7 +29,7 @@ Reference values (closed form / MATLAB docstrings):
   - ``bohr_magneton_convert(9.2740100783e-21, 'emu') -> mu_b = 1.0``
   - ``magnetization(2.5e-3, 5e-5) -> M_si = 50000`` A/m
   - ``demag_factor('sphere') -> Nz = 1/3``;  ``'thin_film' -> Nz = 1``
-  - ``curie_weiss_moment(4.375, -50) -> mu_eff ≈ 5.91`` µ_B (≈ 2.828·√C)
+  - ``curie_weiss_moment(4.375, -50) -> mu_eff ≈ 5.92`` µ_B (≈ 2.828·√C)
   - ``domain_wall(2e-6, 4.8e6) -> delta ≈ 20.3`` nm
 
 MATLAB source bugs found and corrected here (see module-level notes):
@@ -71,6 +71,21 @@ _MUB_SI = constants()["muB"]  # J/T = A*m^2
 _MUB_CGS = _MUB_SI * 1e3  # emu (9.2740100783e-21)
 _KB_CGS = constants()["kB"] * 1e7  # erg/K (1.380649e-16)
 _NA = constants()["NA"]  # 1/mol
+
+# GUI-embedded-formula literals: DiraCulator.doCurieWeiss / doLangevin hardcode
+# these 4-sig-fig constants inline rather than calling calc.constants() (see
+# DiraCulator.m ~3885-3907, ~3937-3958). Scoped to curie_weiss_moment/langevin
+# only, which port those two GUI callbacks verbatim (class (b): "replicate the
+# GUI's inline arithmetic exactly", tools/matlab/freeze_diraculator_values.m) --
+# curie_weiss_fit's mu_eff goes through the +calc/+magnetic/curieWeiss.m
+# package function (a different MATLAB code path that itself uses the precise
+# calc.constants() SI values) and correctly keeps using _KB_CGS/_MUB_CGS/_NA
+# above. Confirmed against the frozen MATLAB golden values: with the precise
+# constants, curie_weiss_moment(4.375, -50)/langevin(1e-16, 1e4, 300) differ
+# from MATLAB by ~1e-5 relative; with these GUI literals they match exactly.
+_KB_CGS_GUI = 1.381e-16  # erg/K -- DiraCulator.m doCurieWeiss/doLangevin literal
+_MUB_CGS_GUI = 9.274e-21  # emu -- DiraCulator.m doCurieWeiss/doLangevin literal
+_NA_GUI = 6.022e23  # 1/mol -- DiraCulator.m doCurieWeiss literal
 
 # Input-unit -> emu scale factor (DiraCulator moment dropdown ItemsData).
 _MOMENT_UNIT_SCALE: dict[str, float] = {
@@ -297,13 +312,18 @@ def curie_weiss_moment(c: float, theta: float) -> dict[str, Any]:
     the effective moment (µ_B) and the magnetic-order type from sign(θ).
 
     >>> round(curie_weiss_moment(4.375, -50)["mu_eff"], 2)
-    5.91
+    5.92
     >>> curie_weiss_moment(4.375, -50)["mag_type"]
     'antiferromagnetic'
     """
     if c < 0:
         raise ValueError("Curie constant C must be non-negative")
-    return {"mu_eff": _mu_eff_from_C(c), "C": c, "theta": theta, "mag_type": _mag_type(theta)}
+    # DiraCulator.doCurieWeiss recomputes mu_eff directly with its own GUI
+    # literals (not via calc.constants()) -- replicate that exactly rather
+    # than the precise-constant _mu_eff_from_C helper (see the _GUI literals
+    # note above).
+    mu_eff = math.sqrt(max(3.0 * _KB_CGS_GUI * c / (_NA_GUI * _MUB_CGS_GUI**2), 0.0))
+    return {"mu_eff": mu_eff, "C": c, "theta": theta, "mag_type": _mag_type(theta)}
 
 
 def curie_weiss_fit(
@@ -385,9 +405,11 @@ def langevin(mu: float, field_oe: float, temperature: float) -> dict[str, Any]:
         raise ValueError("moment mu must be non-negative")
     if temperature <= 0:
         raise ValueError("temperature must be > 0 K")
-    x = mu * field_oe / (_KB_CGS * temperature)
+    # DiraCulator.doLangevin uses its own GUI literals for kB/muB (see the
+    # _GUI literals note above), not calc.constants() -- replicate verbatim.
+    x = mu * field_oe / (_KB_CGS_GUI * temperature)
     lval = 0.0 if abs(x) < 1e-10 else 1.0 / math.tanh(x) - 1.0 / x
-    return {"L": lval, "x": x, "n_mu_b": mu / _MUB_CGS}
+    return {"L": lval, "x": x, "n_mu_b": mu / _MUB_CGS_GUI}
 
 
 # ── Domain wall & anisotropy ────────────────────────────────────────────────

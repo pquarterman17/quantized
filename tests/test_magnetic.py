@@ -189,13 +189,18 @@ def test_curie_weiss_fit_requires_three_points() -> None:
 
 
 def test_langevin_reference() -> None:
-    # x = mu*H/(kB*T); L = coth(x) - 1/x.
-    kb_cgs = constants()["kB"] * 1e7
-    x_expected = 1e-16 * 10000.0 / (kb_cgs * 300.0)
+    # x = mu*H/(kB*T); L = coth(x) - 1/x. DiraCulator.doLangevin hardcodes its
+    # own 4-sig-fig kB/muB literals (1.381e-16, 9.274e-21) rather than calling
+    # calc.constants() -- langevin() replicates those exactly (golden-verified
+    # against MATLAB in tests/test_calc_magnetic_golden.py), so the reference
+    # here must use the same literals, not the precise CODATA-derived values.
+    kb_cgs_gui = 1.381e-16
+    mub_cgs_gui = 9.274e-21
+    x_expected = 1e-16 * 10000.0 / (kb_cgs_gui * 300.0)
     r = magnetic.langevin(1e-16, 10000.0, 300.0)
     assert r["x"] == pytest.approx(x_expected, rel=1e-12)
     assert r["L"] == pytest.approx(1.0 / math.tanh(x_expected) - 1.0 / x_expected, rel=1e-12)
-    assert r["n_mu_b"] == pytest.approx(1e-16 / _MUB_CGS, rel=1e-12)
+    assert r["n_mu_b"] == pytest.approx(1e-16 / mub_cgs_gui, rel=1e-12)
 
 
 def test_langevin_small_x_limit_is_zero() -> None:
