@@ -346,7 +346,11 @@ under one unchecked list. They are now tracked separately:
   #206 (calculator provenance), #203/#204/#209 (P1.3 plot-recipe arc), and
   #207/#208/#210/#211/#212/#213 (R1/R4/R3/R7/R6/R9 — see that document's
   closure log for independent-review evidence on each). R8 (bundle headroom)
-  is in flight on a parallel lane, not yet merged.
+  closed 2026-08-23: #216 + #218 (with #215's schema split) recover a
+  measured 20.3 kB of eager JS (926,154 → 905,870 B, budget ratcheted to
+  906,894); #217 additionally lands the relink native folder-grant consent
+  from the release handoff's contract. Acceptance (R2) therefore targets a
+  new `v0.23.0-rc2` cut from `main` after #218 — rc1 predates all of this.
 - **Stable promotion accepted — OPEN, owner.** Not started. Per the owner's
   own decision (recorded 2026-08-22), promotion is deliberately deferred
   past the tag: the packaged Windows/macOS install + workflow smoke pass,

@@ -139,11 +139,14 @@ top of it this sprint.
   pre-merge: a case-duplicate level picker that wrote the wrong code (levels
   `["pass","PASS","Fail"]`, picking `"PASS"` wrote `0`), and a "Save mapping"
   button whose result evaporated.
-- **P1.3 reusable plot recipes are unbuilt beyond H's Quick Plot templates.**
-  H (shipped) covers mapping + style + technique/schema matching, which is
-  most of the daily value; the full recipe vocabulary (axis limits, legend,
-  decorations, annotations, waterfall settings) is not saved/reused. Owner:
-  `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.3.
+- ~~**P1.3 reusable plot recipes are unbuilt beyond H's Quick Plot
+  templates.**~~ **CLOSED 2026-08-22/23 (#203/#204/#209, refined by
+  #215-#218).** The full recipe vocabulary now captures and reapplies —
+  semantic X/Y/error/group/facet mapping by signature id, axis
+  scales/limits-as-policy, legend, decorations, annotations, waterfall,
+  series styles — with project + global scopes, import/export, and
+  technique-equality matching. Golden of record:
+  `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.3's own closure entry.
 - **N (managed large-data sidecars) is deferred with evidence, not built.**
   See the verdict at `LIBRARY_WORKBOOK_UX_PLAN.md` item 14 for the full
   reasoning and numbers; summary: the measured 5.8 s reopen freeze on a
@@ -200,3 +203,13 @@ corrections that WERE made.
 list was compiled:** PR I + I2 (`claude/i-transfer-locking`), J slice 2 +
 L slice 2 UI (`claude/j2-l2-ui`), J2 recode + P1.6b worksheet categorical UI
 (`claude/j2-recode-worksheet`).
+
+**2026-08-23 note:** every branch in the paragraph above landed during the
+sprint; the paragraph is kept as a record of the compile-time snapshot.
+Post-sprint, the independent-review campaign
+(`POST_SPRINT_INDEPENDENT_REVIEW.md` R1-R10, PRs #206-#214) and the release
+handoff's C1/C2 (#215-#218: relink native folder-grant consent closing the
+inert-checksum limitation, and a measured 20.3 kB eager-bundle recovery)
+are also on `main`. The only open gates in this document remain the
+OWNER-ONLY VERIFICATION section — now to be run against `v0.23.0-rc2`
+(rc1 at `069616d1` predates all of the above).
