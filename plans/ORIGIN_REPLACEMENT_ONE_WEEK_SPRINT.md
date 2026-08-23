@@ -36,6 +36,16 @@ The week is successful if:
 These findings came from actual use and outrank speculative polish. They are
 recorded here for sprint triage; no implementation was started when recorded.
 
+**Status note (2026-08-23, merged post-sprint):** this section is the dated
+2026-08-17 record; the sprint has since closed and `v0.23.0-rc2` is cut, so
+the per-item "release blocker" priorities below describe that sprint's
+triage, not current gating. Current routing: UX-R1/R2/R4/R5 form the MDI
+hardening campaign scheduled AFTER the owner's rc2 installed-acceptance run
+(C5/R2 — the run that produces the reproduction evidence these items'
+own acceptance sections call for); UX-R3 routes to the Library/Origin-import
+information-architecture lane; UX-R6 to the annotation workflow items in the
+active figure plans.
+
 ### UX-R1 — MDI dragging feels clunky
 
 **Observation:** dragging plot/worksheet subwindows does not feel direct or
