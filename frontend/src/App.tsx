@@ -62,6 +62,23 @@ export default function App() {
       .catch(() => setStatus("offline — demo mode"));
   }, [setStatus]);
 
+  // P1.3 wave 3, Lane D: load the GLOBAL-scope Plot Recipe cache once at
+  // boot (store/globalPlotRecipes.ts) -- a separate, non-project store, so
+  // this is its own tiny effect rather than folded into
+  // useWorkspaceAutosave's project-workspace restore above. Dynamic import
+  // (the `hasDesktopShell()` lock-provider effect above is the SAME shape in
+  // this file), MEASURED against a plain static import (bundle-size budget,
+  // MAIN_PLAN #29): the dynamic form came out smaller despite
+  // `lib/plotRecipeStorage.ts` reaching already-eager code
+  // (`lib/plotRecipe.ts`/`lib/plotRecipeIO.ts`, via `lib/workspace.ts`'s
+  // synchronous `parseWorkspace`) -- an inversion of `store/plotRecipes.ts`'s
+  // own `recipeLibs()` finding for that same dependency (a dual eager+lazy
+  // shape there measured WORSE). Every variant tried this wave was measured
+  // rather than assumed; this is the smallest found.
+  useEffect(() => {
+    void import("./store/globalPlotRecipes").then((m) => m.useGlobalPlotRecipes.getState().hydrate());
+  }, []);
+
   // Restore the autosaved library on startup + debounce-save workspace changes
   // (extracted — component-ceiling ratchet).
   useWorkspaceAutosave();

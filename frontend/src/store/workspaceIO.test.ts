@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveBlob } from "../lib/download";
 import type { DataStruct } from "../lib/types";
-import type { LockRecord } from "../lib/lockState";
+import { UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
@@ -260,6 +260,41 @@ describe("saveWorkspaceToFile — desktop shell", () => {
       expect(useProjectLock.getState().status).toBe("held-by-me");
     });
 
+    // F2 (code review round 3): this is the THIRD fresh-acquisition site
+    // (alongside openProject/takeOverEditing) that must reset
+    // `unverifiableHeartbeats` on success — a streak carried over from the
+    // OLD project must never demote the brand-new lock on the NEW path
+    // after just one more blip.
+    it("resets a carried-over unverifiableHeartbeats streak on a successful Save As acquisition", async () => {
+      setShell({
+        save_file_dialog: async () => ({ path: "/proj/new.dwk" }),
+        write_project_file: async () => ({ ok: true, path: "/proj/new.dwk" }),
+      });
+      await useProjectLock.getState().openProject("/proj/old.dwk");
+      useProjectLock.setState({ unverifiableHeartbeats: UNVERIFIABLE_DEMOTE_AFTER - 1 }); // leftover from the OLD project
+
+      await useApp.getState().saveWorkspaceToFile();
+
+      expect(useProjectLock.getState().path).toBe("/proj/new.dwk");
+      expect(useProjectLock.getState().unverifiableHeartbeats).toBe(0);
+
+      const goodProvider = useProjectLock.getState().provider;
+      useProjectLock.setState({
+        provider: {
+          read: goodProvider.read,
+          tryAcquire: goodProvider.tryAcquire,
+          refresh: async () => ({ acquired: false, record: null, unverifiable: true }),
+          takeOver: goodProvider.takeOver,
+          release: goodProvider.release,
+        },
+      });
+      const ok = await useProjectLock.getState().heartbeat(); // ONE miss on the NEW lock
+
+      expect(ok).toBe(false);
+      expect(useProjectLock.getState().status).toBe("held-by-me"); // NOT demoted after one miss
+      expect(useProjectLock.getState().canWriteNow()).toBe(true);
+    });
+
     it("on a write FAILURE, releases the JUST-acquired new lock and leaves the OLD lock untouched", async () => {
       setShell({
         save_file_dialog: async () => ({ path: "/proj/new.dwk" }),
@@ -442,5 +477,111 @@ describe("saveWorkspace — refuses when this instance does not hold the write l
     // The store must drop to read-only after the refusal, not keep
     // believing it still holds the lock.
     expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+
+  // R4 (post-sprint independent review): the informational re-read that
+  // follows a LOCK_LOST refusal is best-effort — if the PROVIDER itself
+  // can't answer (not just "nobody holds it"), this must not re-derive
+  // `classifyLock(null, ...)`'s `"unlocked"`, which reads as "free to
+  // reacquire" and is exactly the misleading-editable impression R4 exists
+  // to prevent. LOCK_LOST already proves (via the write's own rejection)
+  // that this instance lost the lock, independent of whether this
+  // follow-up read succeeds.
+  it("a LOCK_LOST refusal whose follow-up read ALSO fails still reports read-only, never unlocked", async () => {
+    setShell({
+      save_file_dialog: vi.fn(),
+      write_project_file: vi.fn(async () => ({ ok: false, error: "lock lost" })),
+    });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    useApp.getState().markProjectDirty();
+    await useProjectLock.getState().openProject("/proj/workspace.dwk"); // genuinely held-by-me
+
+    // The provider's `read` itself now fails too (e.g. the same bridge
+    // outage that plausibly caused the write to be refused in the first
+    // place) — swap in a provider whose `read` throws, keeping every other
+    // verb intact.
+    const goodProvider = useProjectLock.getState().provider;
+    useProjectLock.setState({
+      provider: {
+        read: async () => {
+          throw new Error("disk error");
+        },
+        tryAcquire: goodProvider.tryAcquire,
+        refresh: goodProvider.refresh,
+        takeOver: goodProvider.takeOver,
+        release: goodProvider.release,
+      },
+    });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(useProjectLock.getState().status).not.toBe("unlocked");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+});
+
+// R4 (post-sprint independent review): "Save As" destination-lock
+// acquisition (`acquireDestinationLock` in store/workspaceIO.ts) must also
+// treat an UNVERIFIABLE CAS refusal as fail-closed, not silently derive
+// `"unlocked"` from the refusal's `record: null` the way `classifyLock`
+// alone would.
+describe("Save As destination lock — R4 unverifiable CAS refusal", () => {
+  it("refuses the save and reports the fail-closed placeholder, never a plain 'unlocked' guess", async () => {
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/dest.dwk" }),
+      write_project_file: vi.fn(async () => ({ ok: true, path: "/proj/dest.dwk" })),
+    });
+    useProjectLock.setState({
+      provider: {
+        read: async () => null, // looked unlocked...
+        tryAcquire: async () => ({ acquired: false, record: null, unverifiable: true }), // ...but the CAS itself couldn't verify
+        refresh: async () => ({ acquired: true, record: null }),
+        takeOver: async () => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    // Never proceeded to a native write despite `write_project_file`
+    // itself being wired to succeed — the destination-lock acquisition
+    // refused first.
+    expect(useApp.getState().currentProject).toBeNull();
+    // The specific wording chosen distinguishes "someone has it open" from
+    // a generic refusal — proving `result.unverifiable` was actually
+    // checked (before this fix, `classifyLock(null, ...)` would report
+    // "unlocked", which is neither branch of this message and would have
+    // fallen through to the generic "currently locked" wording instead).
+    expect(useApp.getState().status).toMatch(/open for editing in another instance/i);
+  });
+
+  // R1's landed backend contract (main@fc85560): `contended` rides a
+  // SUCCESS, never a refusal — `acquireDestinationLock` must treat a soft
+  // success (`acquired: true, contended: true`) as an ORDINARY successful
+  // destination-lock acquisition, letting the save proceed. (An earlier
+  // version of this suite tested a `{acquired: false, contended: true}`
+  // shape based on a since-superseded pre-landing guess — that
+  // combination cannot occur against the real backend.)
+  it("a soft-success (contended) destination-lock acquisition proceeds with the save normally", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/dest.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/proj/dest.dwk" }), write_project_file: write });
+    useProjectLock.setState({
+      provider: {
+        read: async () => null,
+        tryAcquire: async () => ({
+          acquired: true,
+          contended: true,
+          record: { instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now(), token: "soft-tok" },
+        }),
+        refresh: async () => ({ acquired: true, record: null }),
+        takeOver: async () => ({ acquired: true, record: null }),
+        release: async () => true,
+      },
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().currentProject).toEqual({ name: "dest.dwk", path: "/proj/dest.dwk" });
   });
 });

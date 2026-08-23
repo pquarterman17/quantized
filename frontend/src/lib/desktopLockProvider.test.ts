@@ -61,20 +61,66 @@ describe("createDesktopLockProvider — read", () => {
     const provider = createDesktopLockProvider();
     expect(await provider.read("/p/w.dwk")).toBeNull();
   });
+
+  it("a thrown read call is null, same as no bridge", async () => {
+    setShell({
+      project_lock_read: () => {
+        throw new Error("IPC channel closed");
+      },
+    });
+    const provider = createDesktopLockProvider();
+    expect(await provider.read("/p/w.dwk")).toBeNull();
+  });
+
+  it("a malformed (non-object) read response is null, same as no bridge", async () => {
+    setShell({ project_lock_read: async () => "not an outcome object" as unknown as Record<string, unknown> });
+    const provider = createDesktopLockProvider();
+    expect(await provider.read("/p/w.dwk")).toBeNull();
+  });
 });
 
 describe("createDesktopLockProvider — tryAcquire", () => {
-  it("no bridge -> acquired: false (never guesses success)", async () => {
+  // R4 (post-sprint independent review): this used to assert
+  // `{ acquired: false, record: null }` with NO `unverifiable` flag — the
+  // exact defect the review found. `store/projectLock.ts`'s
+  // `statusFromRefusal` classifies a flag-less `record: null` refusal as
+  // plain `"unlocked"`, so `openProject` could report `readOnly: false`
+  // after this call never actually reached a bridge at all.
+  it("no bridge -> acquired: false AND flags unverifiable (never guesses success, never guesses unlocked)", async () => {
     const provider = createDesktopLockProvider();
     const out = await provider.tryAcquire("/p/w.dwk");
-    expect(out).toEqual({ acquired: false, record: null });
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
+
+  it("a THROWN bridge call is treated identically to no bridge — flags unverifiable, never guesses", async () => {
+    setShell({
+      project_lock_acquire: () => {
+        throw new Error("IPC channel closed");
+      },
+    });
+    const provider = createDesktopLockProvider();
+    const out = await provider.tryAcquire("/p/w.dwk");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
+
+  it("a MALFORMED (non-object) response is treated the same as no bridge — flags unverifiable", async () => {
+    // A version-skewed backend or a broken bridge stub resolving something
+    // that isn't even a plain object — `"acquired"`/`"record"`/
+    // `"unverifiable"` all read as `undefined` off a boxed primitive
+    // without ever THROWING, so this can't be caught by a bare try/catch
+    // alone; `lib/desktopLockBridge.ts`'s `isPlausibleOutcome` guard is
+    // what catches it.
+    setShell({ project_lock_acquire: async () => "not an outcome object" as unknown as Record<string, unknown> });
+    const provider = createDesktopLockProvider();
+    const out = await provider.tryAcquire("/p/w.dwk");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
   });
 
   it("a successful acquisition translates the record", async () => {
     setShell({ project_lock_acquire: async () => ({ acquired: true, record: wireRecord }) });
     const provider = createDesktopLockProvider();
     const out = await provider.tryAcquire("/p/w.dwk");
-    expect(out).toEqual({ acquired: true, record: expectedLockRecord });
+    expect(out).toEqual({ acquired: true, record: expectedLockRecord, contended: false });
   });
 
   it("a refusal reports the CURRENT (other) record, not a guess", async () => {
@@ -99,6 +145,22 @@ describe("createDesktopLockProvider — tryAcquire", () => {
     // store/projectLock.ts's `statusFromRefusal`).
     expect(out.unverifiable).toBe(true);
   });
+
+  // R1's landed backend contract (main@fc85560): `contended` rides a
+  // SUCCESS (`acquired: true`) — a "soft success" after the backend
+  // internally retried past momentary OS-lock contention. An EARLIER
+  // version of `toCasResult` forced ANY `contended: true` into a fake
+  // `acquired: false` refusal (a pre-landing guess at the wire shape) —
+  // that would have silently dropped every real soft-success success.
+  it("a soft-success (acquired: true, contended: true) is passed through as an ORDINARY success — never forced into a fake refusal", async () => {
+    setShell({ project_lock_acquire: async () => ({ acquired: true, record: wireRecord, contended: true }) });
+    const provider = createDesktopLockProvider();
+    const out = await provider.tryAcquire("/p/w.dwk");
+    expect(out.acquired).toBe(true);
+    expect(out.contended).toBe(true);
+    expect(out.unverifiable).toBeFalsy();
+    expect(out.record).toEqual(expectedLockRecord);
+  });
 });
 
 describe("createDesktopLockProvider — refresh", () => {
@@ -118,6 +180,35 @@ describe("createDesktopLockProvider — refresh", () => {
     expect(out.acquired).toBe(true);
     expect(out.record?.heartbeatAt).toBe(2000);
   });
+
+  // R4: refresh is what `store/projectLock.ts`'s periodic heartbeat calls
+  // — a thrown/malformed refresh must flag unverifiable, not just report
+  // `acquired: false`, so the store's consecutive-miss demotion logic (see
+  // `UNVERIFIABLE_DEMOTE_AFTER`) can tell "definitely lost" apart from
+  // "couldn't check".
+  it("no bridge -> flags unverifiable (never a bare acquired:false with no reason)", async () => {
+    const provider = createDesktopLockProvider();
+    const out = await provider.refresh("/p/w.dwk", "tok-1");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
+
+  it("a thrown refresh call flags unverifiable", async () => {
+    setShell({
+      project_lock_refresh: () => {
+        throw new Error("pipe broke");
+      },
+    });
+    const provider = createDesktopLockProvider();
+    const out = await provider.refresh("/p/w.dwk", "tok-1");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
+
+  it("a malformed (non-object) refresh response flags unverifiable", async () => {
+    setShell({ project_lock_refresh: async () => 12345 as unknown as Record<string, unknown> });
+    const provider = createDesktopLockProvider();
+    const out = await provider.refresh("/p/w.dwk", "tok-1");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
 });
 
 describe("createDesktopLockProvider — takeOver", () => {
@@ -135,6 +226,23 @@ describe("createDesktopLockProvider — takeOver", () => {
     const provider = createDesktopLockProvider();
     const out = await provider.takeOver("/p/w.dwk", "stale-expectation");
     expect(out.acquired).toBe(false);
+  });
+
+  it("no bridge -> flags unverifiable, never claims a takeover happened", async () => {
+    const provider = createDesktopLockProvider();
+    const out = await provider.takeOver("/p/w.dwk", "expected-token");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
+  });
+
+  it("a thrown takeover call flags unverifiable", async () => {
+    setShell({
+      project_lock_takeover: () => {
+        throw new Error("IPC channel closed");
+      },
+    });
+    const provider = createDesktopLockProvider();
+    const out = await provider.takeOver("/p/w.dwk", "expected-token");
+    expect(out).toEqual({ acquired: false, record: null, unverifiable: true });
   });
 });
 

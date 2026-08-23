@@ -32,19 +32,17 @@ import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginImport } from "../lib/originFolders";
-import { plotSelectedTogether } from "../lib/plotSelectedTogether";
-import { techniqueOf } from "../lib/techniqueDefaults";
 import {
   isLazyBookEntry,
   isPrimaryBookMarker,
   type DataStruct,
   type Dataset,
-  type Technique,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
-import { batchFolderOffer, createFolderForBatch, resolveImportTargetFolderId } from "./importTargetFolder";
+import { presentBatchOutcome } from "./importBatchOffers";
+import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
-import { TOAST_ACTION_TTL, toast } from "./toasts";
+import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
@@ -280,35 +278,6 @@ function addFromPayload(
   return newIds;
 }
 
-/** PLOT_WORKFLOW_PLAN item 4: when a batch import's successfully-created
- *  datasets all resolve to the SAME non-generic technique, offer ONE overlay
- *  plot instead of leaving N separate ones — offer, never force (declining
- *  or letting the toast time out is exactly today's per-file behavior, the
- *  batch datasets stay in the Library regardless). Two files that both
- *  happen to be "generic" are not knowably similar (the plan's mixed-batch
- *  rule), so `generic` never qualifies even when it's the only tag present.
- *
- *  Counts by DATASET id rather than by file, but that's equivalent for
- *  every batch that can actually pass this gate: the only import that turns
- *  one file into several datasets is an Origin multi-book project, and item
- *  1 stamps Origin imports `generic` unconditionally — so a book-expansion
- *  batch always fails the non-generic check before the file/dataset count
- *  distinction would matter. */
-function batchOverlayOffer(
-  get: SliceGet,
-  createdIds: readonly string[],
-): { technique: Technique; ids: string[] } | null {
-  if (createdIds.length < 2) return null;
-  const idSet = new Set(createdIds);
-  const datasets = get().datasets.filter((d) => idSet.has(d.id));
-  if (datasets.length < 2) return null;
-  const techniques = new Set(datasets.map((d) => techniqueOf(d)));
-  if (techniques.size !== 1) return null;
-  const [technique] = techniques;
-  if (technique === "generic") return null;
-  return { technique, ids: datasets.map((d) => d.id) };
-}
-
 /** Shared per-batch loop + status/toast summary.
  *
  *  P3.4 slice 1: registers ONE pendingOps entry for the whole batch (label
@@ -408,41 +377,12 @@ async function runImport<T>(
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
     : `imported ${added} file${added === 1 ? "" : "s"}`;
   get().setStatus(summary);
-  if (added > 0) {
-    const offer = batchOverlayOffer(get, createdIds);
-    // P2 review fix: `added` (files actually imported), not createdIds.length
-    // (datasets created) — a multi-book Origin file inflates the latter.
-    const folderOffer = offer ? null : batchFolderOffer(get, createdIds, added);
-    if (offer) {
-      // The offer toast states "imported" itself, so it replaces (not
-      // supplements) the plain success toast below — two toasts saying the
-      // same thing back to back is noise, not confirmation. If BOTH the
-      // overlay and folder offers would qualify, the overlay wins (L0.46 —
-      // never stack two action toasts for one batch).
-      toast(
-        `${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`,
-        "ok",
-        {
-          action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
-          ttlMs: TOAST_ACTION_TTL,
-        },
-      );
-    } else if (folderOffer) {
-      toast(
-        `${folderOffer.ids.length} files imported — create folder "${folderOffer.prefix}"?`,
-        "ok",
-        {
-          action: {
-            label: `Create folder "${folderOffer.prefix}"`,
-            onClick: () => createFolderForBatch(get, folderOffer.prefix, folderOffer.ids, targetFolderId),
-          },
-          ttlMs: TOAST_ACTION_TTL,
-        },
-      );
-    } else {
-      toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
-    }
-  }
+  // P2 review fix: `added` (files actually imported), not createdIds.length
+  // (datasets created) — a multi-book Origin file inflates the latter. The
+  // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /
+  // plain fallback, ranked per L0.46) lives in importBatchOffers.ts — see
+  // that module's header for the full precedence rationale.
+  if (added > 0) await presentBatchOutcome(get, added, createdIds, targetFolderId);
   if (lastError) toast(`${lastError}${hint}`, "danger");
 }
 

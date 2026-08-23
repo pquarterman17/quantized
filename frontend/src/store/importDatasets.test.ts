@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
 import { probeSource } from "../lib/desktopBridge";
+import type { PlotRecipe } from "../lib/plotRecipe";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Technique } from "../lib/types";
 import { usePendingOps } from "./pendingOps";
@@ -511,6 +512,35 @@ describe("batch-import overlay offer (PLOT_WORKFLOW_PLAN #4)", () => {
 
     expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
     expect(plotSelectedTogether).not.toHaveBeenCalled();
+  });
+});
+
+// FINDING 3 (final code-review round): `runImport` awaits
+// `presentBatchOutcome` unguarded (importDatasets.ts) -- if the
+// recipe-suggestion branch inside it rejects (e.g. a dynamic chunk-load
+// failure), the exception used to propagate out of `presentBatchOutcome`
+// itself, skipping the `if (lastError) toast(...)` line that comes right
+// after it and leaking an unhandled rejection out of `runImport`. The fix is
+// a try/catch INSIDE `presentBatchOutcome`'s recipe branch (degrading to the
+// plain "imported N" toast), so the function never rejects and the caller's
+// own post-await danger toast for a failed file always still runs.
+describe("finding 3 — a failed recipe-suggestion lookup never swallows the failed-file danger toast", () => {
+  it("still shows the danger toast for a failed file when the recipe-suggestion branch rejects", async () => {
+    // One recipe in the project scope so the finding-6 empty-scope
+    // short-circuit doesn't skip the recipe branch before it can reject --
+    // its shape doesn't matter, `cleanMatchingPlotRecipe` is stubbed below
+    // and never actually reads it.
+    useApp.setState({ plotRecipes: [{ id: "r1" } as unknown as PlotRecipe] });
+    useApp.setState({
+      cleanMatchingPlotRecipe: vi.fn().mockRejectedValue(new Error("chunk load failed")),
+    });
+    vi.mocked(importFile)
+      .mockRejectedValueOnce(new Error("file not found"))
+      .mockResolvedValueOnce(payload());
+
+    await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
+
+    expect(toastMsgs().some((m) => m.includes("file not found"))).toBe(true);
   });
 });
 

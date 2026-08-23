@@ -66,6 +66,7 @@ import { useVariabilityStore } from "./store/variability";
 import { useRelink } from "./store/relink";
 import { useRecode } from "./store/recode";
 import { useCombineDialog } from "./store/combineDialog";
+import { useRecipeManager } from "./store/recipeManager";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -137,6 +138,13 @@ const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDa
 const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"));
 const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"));
 const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
+// P1.3 wave 3, Lane D: the plot-recipe apply preview+confirm dialog -- same
+// "on-demand dialog with no startup responsibility" class as QuickPlotWithDialog.
+const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/PlotRecipeApplyDialog"));
+// The Recipe Manager panel -- rare-ish, on-demand (opened from the command
+// palette / a menu), so it stays out of the eager bundle like every other
+// workshop panel above.
+const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"));
 const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
@@ -198,6 +206,8 @@ export default function AppOverlays() {
   const combineDialogOpen = useCombineDialog((s) => s.seed !== null);
   const separateDialogOpen = useApp((s) => s.separatePreview !== null);
   const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
+  const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
+  const recipeManagerOpen = useRecipeManager((s) => s.open);
   const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
@@ -222,6 +232,8 @@ export default function AppOverlays() {
       {combineDialogMounted && <CombineWorkbooksDialog />}
       {separateDialogMounted && <SeparateWorksheetsDialog />}
       {quickPlotWithMounted && <QuickPlotWithDialog />}
+      {pendingRecipeOpen && <PlotRecipeApplyDialog />}
+      {recipeManagerOpen && <RecipeManagerPanel />}
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />
