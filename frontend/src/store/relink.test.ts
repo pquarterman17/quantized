@@ -317,7 +317,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // R3 recompute: the fresh checksum conflicts with the RECORDED one — a
     // distinct bucket (F4) from a Preview-only mismatch, since the recorded
     // checksum is what's actually being violated here.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 diff", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 conflicts with recorded provenance", "danger");
   });
 
   it("re-probes at commit time and drops a row that vanished since Preview", async () => {
@@ -356,7 +356,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // F4 (code-review, honest wording): "unreachable" is its own bucket now,
     // distinct from "changed" (content differs) — this row never even got a
     // fresh probe to compare content with.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 gone", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 unreachable", "danger");
   });
 
   it("excludes a 'changed' row from commit — never silently rewritten (box 2/5)", async () => {
@@ -587,7 +587,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(useApp.getState().history).toHaveLength(1); // one entry for "b" alone
     const calls = vi.mocked(toast).mock.calls;
     const [msg] = calls[calls.length - 1];
-    expect(msg).toMatch(/diff/i);
+    expect(msg).toMatch(/conflicts with recorded provenance/i);
     expect(msg).toContain("1");
   });
 
@@ -616,15 +616,70 @@ describe("commit (box 3: atomic, one undo entry)", () => {
           status: "resolved",
           changeVerdict: "unknown",
           candidateChecksum: null,
-          candidateMtime: 5,
-          candidateSize: 5,
+          candidateMtime: 10,
+          candidateSize: 10,
         },
       ],
     });
     // Fresh probe at commit succeeds (the path is reachable) but STILL
-    // cannot compute a checksum — size/mtime match EXACTLY what Preview
-    // itself showed (5/5), so F1's Preview-consent guard has nothing to
-    // object to; only the RECORDED checksum ("A") remains unconfirmable.
+    // cannot compute a checksum — size/mtime match EXACTLY what's RECORDED
+    // and what Preview itself showed (10/10 everywhere), so neither the
+    // recorded-provenance guard nor the Preview-consent guard has anything
+    // to object to (final review pass F1+F2: a stat MATCH here is not
+    // "verified", it only fails to contradict) — only the RECORDED checksum
+    // ("A") remains genuinely unconfirmable.
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/a.csv",
+      size: 10,
+      mtime: 10,
+      checksum: null,
+    });
+
+    useRelink.getState().escalateUnknownRow("a");
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source).toEqual({
+      kind: "path",
+      path: "/new/place/a.csv", // path DOES move
+      checksum: "sha256:A", // ORIGINAL recorded checksum, unchanged
+      mtime: 10, // ORIGINAL recorded mtime — the fresh probe agreed, never fabricated regardless
+      size: 10, // ORIGINAL recorded size — same
+    });
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  // Final review pass (F1a code-review, RED-FIRST): recorded {checksum,
+  // mtime 10, size 10} vs a fresh probe of {no checksum, mtime 5, size 5} —
+  // the pre-fix guard reused sourceChangeVerdict's checksum-priority rule
+  // and verified NOTHING (checksum unconfirmable -> "unknown"), so an
+  // escalated row committed size-10 provenance for an observably size-5
+  // file. Must refuse (recorded-conflict), zero mutation.
+  it("refuses an escalated row when the fresh probe's size/mtime CONTRADICT what's recorded, even though the checksum itself is unconfirmable on both sides", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({
+          id: "a",
+          source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:A", mtime: 10, size: 10 },
+        }),
+      ],
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: null,
+          candidateMtime: 10,
+          candidateSize: 10,
+        },
+      ],
+    });
     vi.mocked(desktopBridge.probeSource).mockResolvedValue({
       state: "ok",
       path: "/new/place/a.csv",
@@ -639,12 +694,53 @@ describe("commit (box 3: atomic, one undo entry)", () => {
 
     expect(useApp.getState().datasets[0].source).toEqual({
       kind: "path",
-      path: "/new/place/a.csv", // path DOES move
-      checksum: "sha256:A", // ORIGINAL recorded checksum, unchanged
-      mtime: 10, // ORIGINAL recorded mtime, NOT the fresh probe's 5
-      size: 10, // ORIGINAL recorded size, NOT the fresh probe's 5
+      path: "/old/data/a.csv",
+      checksum: "sha256:A",
+      mtime: 10,
+      size: 10,
     });
-    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 conflicts with recorded provenance", "danger");
+  });
+
+  // Final review pass (F1b code-review, RED-FIRST): a Preview snapshot of
+  // {checksum X, mtime 1, size 1} vs a fresh {no checksum, mtime 999, size
+  // 999} — the pre-fix consent guard also reused checksum-priority and
+  // passed a swapped file straight through. Must refuse (preview-mismatch).
+  it("refuses an escalated legacy row when the fresh probe's size/mtime CONTRADICT what Preview showed, even though the checksum itself is unconfirmable on both sides", async () => {
+    useApp.setState({
+      datasets: [baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv" } })], // nothing recorded
+    });
+    useRelink.setState({
+      preview: [
+        {
+          datasetId: "a",
+          datasetName: "a.csv",
+          oldPath: "/old/data/a.csv",
+          candidatePath: "/new/place/a.csv",
+          status: "resolved",
+          changeVerdict: "unknown",
+          candidateChecksum: "sha256:X",
+          candidateMtime: 1,
+          candidateSize: 1,
+        },
+      ],
+    });
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/a.csv",
+      size: 999,
+      mtime: 999,
+      checksum: null,
+    });
+
+    useRelink.getState().escalateUnknownRow("a");
+
+    await useRelink.getState().commit();
+
+    expect(useApp.getState().datasets[0].source).toEqual({ kind: "path", path: "/old/data/a.csv" });
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 changed since Preview", "danger");
   });
 
   // F1 (code-review regression, RED-FIRST): a LEGACY dataset with EMPTY
@@ -804,7 +900,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
       checksum: "sha256:elsewhere",
     });
     expect(useApp.getState().history).toHaveLength(0);
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved/reimported", "danger");
   });
 
   // F3 (code-review, RED-FIRST — the referential-identity strengthening):
@@ -861,7 +957,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // read identically to what was there before.
     expect(useApp.getState().datasets[0].source?.path).toBe("/old/data/a.csv");
     expect(useApp.getState().history).toHaveLength(0);
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved/reimported", "danger");
   });
 
   // R3 #4: the dataset a row named was removed between Preview and commit
@@ -968,7 +1064,7 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     // F4 (code-review, honest wording): this is neither "changed" content
     // nor "unreachable" — the dataset's recorded identity itself moved on,
     // named as its own bucket.
-    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved", "danger");
+    expect(toast).toHaveBeenCalledWith("nothing to relink — 1 moved/reimported", "danger");
   });
 
   it("reports nothing-to-relink instead of committing an empty batch", async () => {

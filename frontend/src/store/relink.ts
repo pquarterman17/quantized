@@ -24,54 +24,59 @@
 // R3 (POST_SPRINT_INDEPENDENT_REVIEW.md, class #196): `commit()` NEVER
 // trusts a preview row's own remembered fields (`candidateChecksum` etc.) AS
 // THE VERDICT OF RECORD. It looks up the LIVE dataset by id and recomputes
-// `sourceChangeVerdict` from ITS recorded checksum/mtime/size against a
-// fresh probe taken right there at commit time. A fresh "changed" verdict
-// (against what's RECORDED) refuses the row unconditionally — even a
-// Preview-time "unknown" that was individually escalated — because
-// escalation approves "unverifiable", never "verified-different". A SECOND,
-// independent guard compares the fresh probe against what PREVIEW ITSELF
-// showed the user (full `sourceChangeVerdict`, not a raw checksum compare —
-// a checksum-less preview still gets stat-level verification via
-// mtime/size, which never need consent): a dataset with NO recorded
-// provenance at all has nothing else anchoring trust, since the
-// recorded-vs-fresh recompute has no baseline to catch drift with. Both
-// guards are named as SEPARATE reasons in the completion toast ("conflicts
-// with recorded provenance" vs "changed since Preview") — they fire for
-// different underlying reasons and one lumping them together as "changed
-// since Preview" would misname a row Preview never had an opinion about. A
-// dataset removed, or whose `source` OBJECT no longer matches what the row
-// was computed against (not just a path-string match — a same-path project
-// reload or undo swaps the object too) fails closed with zero mutation,
-// re-checked BOTH before the probe and again, synchronously, immediately
-// before the write, since the probe's own await is itself a gap something
-// else can race. Only once a row clears every guard does provenance get
-// written, and which fields depends on why it's writing: a confirmed
-// "unchanged" row, or a legacy dataset with nothing recorded yet (which just
-// cleared the preview-consent guard above), backfills from the fresh probe;
-// an escalated row that DOES have something recorded on file (a checksum
-// this session's probe simply couldn't reconfirm) keeps that ORIGINAL
-// recorded provenance verbatim — only the path moves — rather than
-// fabricating a replacement for the one signal that couldn't be confirmed.
+// against ITS recorded checksum/mtime/size, against a fresh probe taken
+// right there at commit time, through TWO guards (`lib/relink.ts`'s
+// `guardVerdict` — see its own doc for exactly why it exists instead of
+// reusing `sourceChangeVerdict` directly inside a guard): one against what's
+// RECORDED, one against what PREVIEW ITSELF showed the user. A guard
+// "changed" verdict refuses the row unconditionally — even a Preview-time
+// "unknown" that was individually escalated — because escalation approves
+// "unverifiable", never "verified-different". The Preview guard is the one
+// thing anchoring trust for a dataset with NO recorded provenance at all,
+// since the recorded-provenance guard has no baseline to catch drift with.
+// Both guards are named as SEPARATE reasons in the completion toast
+// ("conflicts with recorded provenance" vs "changed since Preview") — they
+// fire for different underlying reasons and lumping them together would
+// misname a row Preview never had an opinion about. A dataset removed, or
+// whose `source` OBJECT no longer matches what the row was computed against
+// (not just a path-string match — a same-path project reload or undo swaps
+// the object too) fails closed with zero mutation, re-checked BOTH before
+// the probe and again, synchronously, immediately before the write, since
+// the probe's own await is itself a gap something else can race. Only once
+// a row clears every guard does provenance get written, and which fields
+// depends on why it's writing (this part uses the STRICT, un-fallen-back
+// `sourceChangeVerdict`, never `guardVerdict` — a stat MATCH when the
+// checksum is unconfirmable only fails to contradict, it never CONFIRMS,
+// so it must never be treated as license to backfill something never
+// actually verified): a confirmed "unchanged" row, or a legacy dataset with
+// nothing recorded yet (which just cleared the Preview guard above),
+// backfills from the fresh probe; an escalated row that DOES have something
+// recorded on file (a checksum this session's probe simply couldn't
+// reconfirm) keeps that ORIGINAL recorded provenance verbatim — only the
+// path moves — rather than fabricating a replacement for the one signal
+// that couldn't be confirmed.
 //
 // KNOWN LIMITATION (code-review F2, investigated — not fixed, see
 // POST_SPRINT_INDEPENDENT_REVIEW.md's R3 closure log for the full
-// investigation): every guard above that depends on `checksum` is currently
-// INERT in the real desktop app. `desktop_bridge_dialogs.py`'s
-// `probe_source` computes a checksum ONLY for a read-consented path
-// (`is_consented`), and a relink CANDIDATE path is never consented —
-// `grantSourceReadPaths`/`grant_source_paths` only ever extends consent to
-// paths already in the project's server-tracked DECLARED-source set (a
-// snapshot taken once, at project-open time), which a not-yet-linked
-// candidate path can never be a member of BY DEFINITION. So every probe of
-// a candidate path — at Preview and at commit — carries `checksum: null`
-// today, for every dataset, always: a checksum-bearing dataset's relink
-// verdict is therefore always "unknown" in real desktop use, never
-// "unchanged" or "changed" via checksum. The mtime/size fallback path (used
-// when nothing was ever recorded, or exercised by the Preview-consent guard
-// above) DOES work today — stat-ing a path needs no consent at all. Fixing
-// the checksum side for real would need a genuine new consent gesture for
-// candidate paths (the existing native-file-dialog-pick auto-grant
-// precedent, `pick_files` -> `grant_paths`, does not extend to a
+// investigation): `desktop_bridge_dialogs.py`'s `probe_source` computes a
+// CHECKSUM only for a read-consented path (`is_consented`), and a relink
+// CANDIDATE path is never consented — `grantSourceReadPaths`/
+// `grant_source_paths` only ever extends consent to paths already in the
+// project's server-tracked DECLARED-source set (a snapshot taken once, at
+// project-open time), which a not-yet-linked candidate path can never be a
+// member of BY DEFINITION. So every probe of a candidate path — at Preview
+// and at commit — carries `checksum: null` today, for every dataset,
+// always: the CHECKSUM comparison itself is inert in real desktop use — a
+// checksum-bearing dataset's Preview-panel verdict is therefore always
+// "unknown", never "unchanged" or "changed" via checksum. The guards
+// commit() itself runs (`guardVerdict`, above) are NOT equally inert,
+// though (final review pass, F1+F2): when the checksum leg is
+// unconfirmable they fall back to comparing mtime/size, which never need
+// consent — so a size/mtime contradiction still refuses today even though
+// a checksum MATCH never gets confirmed. Fixing the checksum comparison
+// itself for real would need a genuine new consent gesture for candidate
+// paths (the existing native-file-dialog-pick auto-grant precedent,
+// `pick_files` -> `grant_paths`, does not extend to a
 // programmatically-derived candidate path with no such dialog behind it,
 // and the relink panel's old/new root fields are plain text inputs today,
 // not a dialog pick) — out of this file's scope; tracked as an open
@@ -393,22 +398,27 @@ export const useRelink = create<RelinkState>((set, get) => ({
       if (r.changeVerdict === "changed") skippedChanged++;
       else if (r.status === "resolved" && r.changeVerdict === "unknown" && !r.escalated) escalatable++;
     }
-    // F4 (code-review, honest wording): each bucket names the SPECIFIC thing
-    // that happened to it — "unreachable" (probe failed) is not "changed"
-    // (content differs), and neither of those is "conflicts with recorded
-    // provenance" (the RECORDED checksum/mtime/size itself) or
-    // "moved" (the dataset was removed or reimported — identity itself
-    // moved on). Built once and
-    // reused for BOTH the empty-commit and partial-commit toasts.
+    // F4 (code-review, honest wording) + F3 (final review pass, doc-promise
+    // audit): each bucket names the SPECIFIC thing that happened to it, in
+    // words a reader (not just the source) can follow — "unreachable"
+    // (probe failed) is not "changed" (content differs), and neither of
+    // those is "conflicts with recorded provenance" (the RECORDED
+    // checksum/mtime/size itself, `conflictAtCommit`) or "changed since
+    // Preview" (what PREVIEW showed, `mismatchAtCommit`) or "moved/
+    // reimported" (identity itself moved on, `identityChangedAtCommit`).
+    // These EXACT strings are the ones this module's header doc and the
+    // POST_SPRINT_INDEPENDENT_REVIEW.md closure log quote — keep them in
+    // sync if either changes. Built once and reused for BOTH the
+    // empty-commit and partial-commit toasts.
     const notes = (
       [
-        [skippedChanged, "changed"],
-        [escalatable, "unknown"],
-        [unverifiedAtCommit, "stale"],
-        [conflictAtCommit, "diff"],
+        [skippedChanged, "changed (import as a new version instead)"],
+        [escalatable, "needs verification — use \"use anyway\" to include"],
+        [unverifiedAtCommit, "could not be re-verified"],
+        [conflictAtCommit, "conflicts with recorded provenance"],
         [mismatchAtCommit, "changed since Preview"],
-        [identityChangedAtCommit, "moved"],
-        [unreachableAtCommit, "gone"],
+        [identityChangedAtCommit, "moved/reimported"],
+        [unreachableAtCommit, "unreachable"],
       ] as const
     ).flatMap(([n, label]) => (n > 0 ? [`${n} ${label}`] : []));
     const joined = notes.length > 0 ? ` — ${notes.join("; ")}` : "";

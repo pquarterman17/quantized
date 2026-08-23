@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateCommitProbe,
+  guardVerdict,
   joinUnderRoot,
   relinkedCandidate,
   sourceChangeVerdict,
@@ -239,11 +240,16 @@ describe("evaluateCommitProbe", () => {
     expect(outcome).toEqual({ checksum: "sha256:X", mtime: 1, size: 1 });
   });
 
-  it("write (R3 #3, preserve original): escalated + still unknown — keeps the RECORDED fields, never the fresh probe's", () => {
+  // R3 #3 ruling, genuinely unknown case: stats MATCH what was recorded AND
+  // what Preview showed — nothing contradicts the unconfirmable checksum,
+  // so escalation is what it's for: commits, preserving the RECORDED
+  // fields verbatim (never fabricating a checksum from the incomplete
+  // fresh probe).
+  it("write (R3 #3, preserve original): escalated + still unknown, stats agree everywhere — keeps the RECORDED fields, never the fresh probe's", () => {
     const outcome = evaluateCommitProbe(
       { checksum: "sha256:A", mtime: 10, size: 10 },
-      { checksum: null, mtime: 5, size: 5 },
-      { candidateChecksum: null, candidateMtime: 5, candidateSize: 5 },
+      { checksum: null, mtime: 10, size: 10 },
+      { candidateChecksum: null, candidateMtime: 10, candidateSize: 10 },
       true,
     );
     expect(outcome).toEqual({ checksum: "sha256:A", mtime: 10, size: 10 });
@@ -254,5 +260,67 @@ describe("evaluateCommitProbe", () => {
     // on a fresh, never-escalated row must behave exactly like `false`.
     const outcome = evaluateCommitProbe({ checksum: "sha256:A" }, { checksum: null }, noPreview, undefined);
     expect(outcome).toBe("gap");
+  });
+
+  // ── final review pass (F1+F2), RED-FIRST: the pre-fix guards reused
+  // `sourceChangeVerdict`'s "never demote a recorded checksum" rule, which
+  // is correct for the verdict SHOWN in Preview but let a stat-level
+  // contradiction sail straight through a commit-time guard whenever the
+  // checksum comparison itself was unconfirmable (a fresh probe checksum
+  // of `null`) — per this module's own "KNOWN LIMITATION" doc, THE
+  // DOMINANT case in the real desktop app. ────────────────────────────
+
+  it("conflict (F1a): recorded {checksum, size 10} vs a fresh probe of {no checksum, size 5} refuses — never commits size-10 provenance for an observably size-5 file", () => {
+    const outcome = evaluateCommitProbe(
+      { checksum: "sha256:A", mtime: 10, size: 10 },
+      { checksum: null, mtime: 5, size: 5 },
+      { candidateChecksum: null, candidateMtime: 10, candidateSize: 10 },
+      true, // escalated — must refuse regardless
+    );
+    expect(outcome).toBe("conflict");
+  });
+
+  it("mismatch (F1b): a Preview snapshot of {checksum X, size 1} vs a fresh {no checksum, size 999} refuses — the consent guard must not pass a swapped file just because neither side's checksum is confirmable", () => {
+    const outcome = evaluateCommitProbe(
+      {},
+      { checksum: null, mtime: 999, size: 999 },
+      { candidateChecksum: "sha256:X", candidateMtime: 1, candidateSize: 1 },
+      true,
+    );
+    expect(outcome).toBe("mismatch");
+  });
+
+  it("still commits when escalated and the checksum is unconfirmable but stats are ABSENT on the recorded side (genuinely nothing to contradict) — preserves ONLY what was recorded, never fabricates the missing mtime/size", () => {
+    const outcome = evaluateCommitProbe(
+      { checksum: "sha256:A" }, // no recorded mtime/size at all
+      { checksum: null, mtime: 5, size: 5 },
+      { candidateChecksum: null, candidateMtime: 5, candidateSize: 5 },
+      true,
+    );
+    expect(outcome).toEqual({ checksum: "sha256:A" });
+  });
+});
+
+describe("guardVerdict", () => {
+  it("compares checksums directly when both sides have one (same as sourceChangeVerdict)", () => {
+    expect(guardVerdict({ checksum: "sha256:aa" }, { checksum: "sha256:aa" })).toBe("unchanged");
+    expect(guardVerdict({ checksum: "sha256:aa" }, { checksum: "sha256:bb" })).toBe("changed");
+  });
+
+  it("falls back to stat comparison when the checksum comparison is unconfirmable — unlike sourceChangeVerdict", () => {
+    // recorded HAS a checksum, but the probe doesn't (null) — sourceChangeVerdict
+    // reports "unknown" here (the correct DISPLAY answer); guardVerdict instead
+    // falls back to the stat comparison, since this is a REFUSAL guard.
+    expect(guardVerdict({ checksum: "sha256:aa", size: 10, mtime: 100 }, { checksum: null, size: 10, mtime: 100 })).toBe(
+      "unchanged",
+    );
+    expect(guardVerdict({ checksum: "sha256:aa", size: 10, mtime: 100 }, { checksum: null, size: 5, mtime: 100 })).toBe(
+      "changed",
+    );
+  });
+
+  it("is unknown only when NEITHER checksum nor any stat is comparable", () => {
+    expect(guardVerdict({ checksum: "sha256:aa" }, { checksum: null })).toBe("unknown");
+    expect(guardVerdict({}, {})).toBe("unknown");
   });
 });

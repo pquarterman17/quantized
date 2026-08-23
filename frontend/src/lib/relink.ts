@@ -91,6 +91,20 @@ export interface ProbedProvenance {
 
 export type SourceChangeVerdict = "unchanged" | "changed" | "unknown";
 
+/** Shared by `sourceChangeVerdict` and `guardVerdict` (below) — the
+ *  size/mtime-only comparison both fall back to once checksum comparison is
+ *  off the table, for whatever reason each function has for putting it
+ *  there. Never called directly: callers decide WHEN this fallback applies,
+ *  which is exactly the one thing that differs between the two. */
+function statVerdict(recorded: RecordedProvenance, probed: ProbedProvenance): SourceChangeVerdict {
+  const haveSize = recorded.size !== undefined && probed.size != null;
+  const haveMtime = recorded.mtime !== undefined && probed.mtime != null;
+  if (!haveSize && !haveMtime) return "unknown";
+  if (haveSize && recorded.size !== probed.size) return "changed";
+  if (haveMtime && recorded.mtime !== probed.mtime) return "changed";
+  return "unchanged";
+}
+
 /** Did the SOURCE FILE's content change since it was imported or last
  *  relinked? Checksum is authoritative whenever a checksum was RECORDED —
  *  content identity, not a proxy for it. Falls back to comparing size and
@@ -105,7 +119,9 @@ export type SourceChangeVerdict = "unchanged" | "changed" | "unknown";
  *  session, desktopBridge.ts's `SourceProbe.checksum` doc — must never
  *  silently fall through to size/mtime: that would answer with a WEAKER
  *  signal than the one actually on record, which is worse than admitting
- *  the question can't be answered right now. */
+ *  the question can't be answered right now. (This is the DISPLAY verdict —
+ *  `runPreview` calls this directly. A commit-time REFUSAL guard has a
+ *  different job and calls `guardVerdict` instead — see its own doc.) */
 export function sourceChangeVerdict(
   recorded: RecordedProvenance,
   probed: ProbedProvenance,
@@ -117,12 +133,42 @@ export function sourceChangeVerdict(
     if (!probed.checksum) return "unknown";
     return recorded.checksum === probed.checksum ? "unchanged" : "changed";
   }
-  const haveSize = recorded.size !== undefined && probed.size != null;
-  const haveMtime = recorded.mtime !== undefined && probed.mtime != null;
-  if (!haveSize && !haveMtime) return "unknown";
-  if (haveSize && recorded.size !== probed.size) return "changed";
-  if (haveMtime && recorded.mtime !== probed.mtime) return "changed";
-  return "unchanged";
+  return statVerdict(recorded, probed);
+}
+
+/** The guard-only counterpart to `sourceChangeVerdict` (POST_SPRINT_
+ *  INDEPENDENT_REVIEW.md R3's final review pass, F1+F2): `sourceChangeVerdict`
+ *  deliberately never demotes a RECORDED checksum to size/mtime just because
+ *  a fresh probe couldn't compute one — correct for the verdict SHOWN in the
+ *  Preview panel, where "unknown" must stay honestly "unknown" rather than
+ *  borrow a weaker signal's confidence. But a commit-time REFUSAL guard has
+ *  a different job: it only ever needs to answer "is there a decisive reason
+ *  to refuse?", and size/mtime disagreeing IS one, even when the checksum
+ *  comparison itself is unconfirmable. Reusing `sourceChangeVerdict` inside
+ *  the guards let two real corruptions through: (a) recorded {checksum:A,
+ *  mtime:10, size:10} vs a fresh probe of {checksum:null, mtime:5, size:5}
+ *  verified NOTHING (checksum priority swallowed the checksum-less probe
+ *  into "unknown") and an escalated row committed size-10 provenance for a
+ *  file observably 5 bytes; (b) a Preview snapshot of {checksum:X, mtime:1,
+ *  size:1} against a fresh {checksum:null, mtime:999, size:999} passed the
+ *  consent guard for the same reason — a swapped file with no checksum
+ *  confirmation on either side.
+ *
+ *  `guardVerdict` computes checksum-vs-checksum ONLY when BOTH sides
+ *  actually have one; otherwise it falls back to the stat comparison
+ *  (identical to `sourceChangeVerdict`'s own fallback branch) rather than
+ *  reporting "unknown" — a stat-level "changed" here is still a genuine,
+ *  actionable contradiction. It reports "unknown" only when NEITHER level
+ *  is comparable (no checksum on both sides, no size, no mtime) — the
+ *  guards then correctly let the row through as escalatable-but-unverified
+ *  (`sourceChangeVerdict`, unchanged by this, still owns THAT distinction).
+ *  Never used for anything DISPLAYED — `runPreview` keeps calling
+ *  `sourceChangeVerdict` directly. */
+export function guardVerdict(recorded: RecordedProvenance, probed: ProbedProvenance): SourceChangeVerdict {
+  if (recorded.checksum && probed.checksum) {
+    return recorded.checksum === probed.checksum ? "unchanged" : "changed";
+  }
+  return statVerdict(recorded, probed);
 }
 
 // ── commit-time verdict (POST_SPRINT_INDEPENDENT_REVIEW.md R3 + its
@@ -180,17 +226,27 @@ export function evaluateCommitProbe(
   preview: PreviewSnapshot,
   escalated: boolean | undefined,
 ): CommitRowOutcome {
+  // Final review pass (F1+F2): both guards below use `guardVerdict`, not
+  // `sourceChangeVerdict` directly — see that function's own doc for why.
+  // `guardVerdict(recorded, probe) === "changed"` is a strict SUPERSET of
+  // `sourceChangeVerdict(recorded, probe) === "changed"` (identical whenever
+  // both sides have a checksum; a decisive stat-level answer, never a
+  // silent "unchanged", whenever they don't) — so this one call is the
+  // complete recorded-provenance refusal check.
+  if (guardVerdict(recorded, probe) === "changed") return "conflict";
+  const previewGuard = {
+    checksum: preview.candidateChecksum ?? undefined,
+    mtime: preview.candidateMtime ?? undefined,
+    size: preview.candidateSize ?? undefined,
+  };
+  if (guardVerdict(previewGuard, probe) === "changed") return "mismatch";
+  // From here on, classification and backfill fall back to the STRICT
+  // `sourceChangeVerdict` (never `guardVerdict`) on purpose: a stat MATCH
+  // when the checksum is unconfirmable is not proof of anything — it only
+  // failed to CONTRADICT — so it must never be treated as "confirmed
+  // unchanged" for what gets recorded, only used above to catch an outright
+  // disagreement.
   const freshVerdict = sourceChangeVerdict(recorded, probe);
-  if (freshVerdict === "changed") return "conflict";
-  const previewVerdict = sourceChangeVerdict(
-    {
-      checksum: preview.candidateChecksum ?? undefined,
-      mtime: preview.candidateMtime ?? undefined,
-      size: preview.candidateSize ?? undefined,
-    },
-    probe,
-  );
-  if (previewVerdict === "changed") return "mismatch";
   if (freshVerdict === "unknown" && !escalated) return "gap";
   const nothingRecorded = recorded.checksum == null && recorded.mtime == null && recorded.size == null;
   const prov = freshVerdict === "unchanged" || nothingRecorded ? probe : recorded;
