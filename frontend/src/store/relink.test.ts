@@ -8,7 +8,7 @@ import * as desktopBridge from "../lib/desktopBridge";
 import type { Dataset } from "../lib/types";
 import { useRelink } from "./relink";
 import { toast } from "./toasts";
-import { useApp } from "./useApp";
+import { useApp, type AppState } from "./useApp";
 
 vi.mock("../lib/api", () => ({
   importFile: vi.fn(),
@@ -1241,5 +1241,105 @@ describe("R6: an unrelated edit during an in-flight import-as-new-version batch"
     live = useApp.getState().datasets;
     expect(live.some((d) => d.versionOf === "orig")).toBe(true);
     expect(live.find((d) => d.id === "other")!.name).toBe("renamed while pending");
+  });
+});
+
+// R6 code-review round, F1 (POST_SPRINT_INDEPENDENT_REVIEW.md): `runImport`
+// used to `await presentBatchOutcome(...)` INSIDE `withHistoryBatch`'s window,
+// AFTER the batch's only fold — and `presentBatchOutcome`'s own recipe-
+// suggestion branch makes REAL awaits (a dynamic `./globalPlotRecipes`
+// import, `cleanMatchingPlotRecipe`'s own async match) on exactly the path
+// this call takes (one created dataset + a saved recipe present). That
+// reopened the batch-token fix's own hole: a foreign edit landing in that
+// window still got its own entry, but the batch's fold-time-frozen snapshot
+// would still revert it on undo — corrupting the stack exactly like the
+// original defect, just moved to a later window. Fixed by having
+// `importPaths({ presentOutcome: false })` skip the cascade entirely for
+// this caller. Proven here with a `cleanMatchingPlotRecipe` stand-in that
+// NEVER resolves: if the cascade were still reached, `importChangedAsNewVersion`
+// would hang waiting on it — the test's own short timeout turns that into a
+// fast, unambiguous red instead of the suite's full default timeout.
+describe("R6 F1: import-as-new-version must not await the post-import outcome cascade", () => {
+  it(
+    "never consults the recipe-suggestion cascade even when a saved recipe exists",
+    async () => {
+      useApp.setState({
+        datasets: [baseDataset({ id: "orig", source: { kind: "path", path: "/old/data/run1.csv" } })],
+        // A real candidate for presentBatchOutcome's recipe branch to have
+        // found, had it run — the cheap `plotRecipes.length > 0` check alone
+        // is enough to route it to `cleanMatchingPlotRecipe` below.
+        plotRecipes: [{}] as unknown as AppState["plotRecipes"],
+        history: [],
+      });
+      vi.mocked(importFile).mockResolvedValue({
+        time: [0],
+        values: [[9]],
+        labels: ["m"],
+        units: ["emu"],
+        metadata: {},
+      });
+      const recipeSpy = vi.fn(() => new Promise<never>(() => {}));
+      useApp.setState({ cleanMatchingPlotRecipe: recipeSpy as unknown as AppState["cleanMatchingPlotRecipe"] });
+
+      await useRelink.getState().importChangedAsNewVersion("orig");
+
+      expect(recipeSpy).not.toHaveBeenCalled();
+      // Clean, single entry — exactly what an operation with zero real
+      // awaits after its last fold produces (no corruption, nothing stuck).
+      expect(useApp.getState().history.map((h) => h.label)).toEqual([
+        'import "run1.csv" as a new version',
+      ]);
+      expect(useApp.getState().datasets.some((d) => d.versionOf === "orig")).toBe(true);
+    },
+    2000,
+  );
+});
+
+// R6 code-review round, F2: the before/after dataset-id SET-DIFF this
+// function used to compute (`before` snapshotted, then re-diffed against the
+// live store after `importPaths` resolved) mislabeled ANY dataset a
+// concurrent, unblocked action created during the same window as `versionOf`
+// — paste, demo-data, and merge are all still fully clickable while this
+// batch is in flight (same audit as R6's own reachability verdict). Fixed by
+// reading `importPaths`'s own returned ids directly instead of diffing.
+describe("R6 F2: importChangedAsNewVersion must not versionOf-tag a concurrently added dataset", () => {
+  it("tags only the dataset importPaths itself reports creating, never one added by an unrelated concurrent action", async () => {
+    useApp.setState({
+      datasets: [baseDataset({ id: "orig", source: { kind: "path", path: "/old/data/run1.csv" } })],
+      history: [],
+    });
+
+    let resolveImport!: (data: {
+      time: number[];
+      values: number[][];
+      labels: string[];
+      units: string[];
+      metadata: Record<string, never>;
+    }) => void;
+    vi.mocked(importFile).mockReturnValue(
+      new Promise((resolve) => {
+        resolveImport = resolve;
+      }),
+    );
+
+    const importPromise = useRelink.getState().importChangedAsNewVersion("orig");
+
+    // An unrelated, concurrent dataset add — e.g. a paste or demo-data
+    // gesture — landing in the SAME window the old before/after diff would
+    // have scanned.
+    useApp.getState().addDataset({
+      id: "concurrent",
+      name: "pasted",
+      data: { time: [0], values: [[5]], labels: ["m"], units: ["emu"], metadata: {} },
+    });
+
+    resolveImport({ time: [0], values: [[9]], labels: ["m"], units: ["emu"], metadata: {} });
+    await importPromise;
+
+    const datasets = useApp.getState().datasets;
+    const tagged = datasets.filter((d) => d.versionOf === "orig");
+    expect(tagged).toHaveLength(1);
+    expect(tagged[0].id).not.toBe("concurrent"); // the concurrent add is NEVER mistaken for the import's own dataset
+    expect(datasets.find((d) => d.id === "concurrent")!.versionOf).toBeUndefined();
   });
 });

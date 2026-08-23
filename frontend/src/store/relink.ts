@@ -471,6 +471,11 @@ export const useRelink = create<RelinkState>((set, get) => ({
   // entry, live-state and all, never absorbed into this batch. See
   // `HistoryBatchToken`'s doc (store/history.ts) for why identity, not a
   // boolean, is what makes that true.
+  //
+  // R6 code-review F1/F2: `presentOutcome: false` keeps the recipe-suggestion
+  // cascade's own real awaits OUT of this batch (see `ImportPathsOptions`'s
+  // doc); `createdIds` is `importPaths`'s OWN return, never a before/after
+  // id-diff (which mislabeled a concurrent paste/demo/merge's dataset too).
   importChangedAsNewVersion: async (datasetId) => {
     const s = useApp.getState();
     const ds = s.datasets.find((d) => d.id === datasetId);
@@ -478,12 +483,9 @@ export const useRelink = create<RelinkState>((set, get) => ({
     const sourcePath = ds.source.path;
     let created = false;
     await useApp.getState().withHistoryBatch(`import "${ds.name}" as a new version`, async (token) => {
-      const before = new Set(useApp.getState().datasets.map((d) => d.id));
-      await useApp.getState().importPaths([sourcePath], token);
-      const createdIds = useApp
+      const createdIds = await useApp
         .getState()
-        .datasets.filter((d) => !before.has(d.id))
-        .map((d) => d.id);
+        .importPaths([sourcePath], { historyToken: token, presentOutcome: false });
       if (createdIds.length === 0) return;
       created = true;
       const createdSet = new Set(createdIds);

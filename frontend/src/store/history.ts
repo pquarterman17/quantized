@@ -337,16 +337,24 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
   // already includes anything that happened up to that point, foreign or
   // not — undoing the batch then only ever unwinds ITS OWN mutations.
   //
-  // KNOWN LIMITATION (honest, not fixed — out of R6's actual reachable
-  // scope): this only covers a gap BEFORE the operation's first fold. If a
-  // future multi-step batch folds more than one call with a real `await`
-  // BETWEEN them (today's one caller, `importPaths` invoked with a single
-  // path, makes all of its folded `addDataset` calls synchronously back to
-  // back after its one `await`, so this never arises for it), an unrelated
-  // edit landing in THAT LATER gap would still be reverted by undoing the
-  // batch's single entry, because the snapshot model here restores an
-  // absolute prior state rather than an inverse patch of the operation's
-  // own diff. Revisit if a caller ever needs multiple awaited folds.
+  // KNOWN LIMITATION (honest, corrected by the R6 code-review round — the
+  // ORIGINAL wording here was false, not merely hypothetical): this only
+  // covers a gap BEFORE the operation's first fold. ANY real `await` that
+  // still runs AFTER the last fold — not just one squeezed BETWEEN two
+  // folds — reopens the same hole, because this is a snapshot-restore
+  // design (an absolute prior state), never an inverse patch of the
+  // operation's own diff: an unrelated edit landing in that later gap gets
+  // its own entry (correct), but undoing the batch's single entry still
+  // reverts it too (wrong). Today's one caller (`importChangedAsNewVersion`)
+  // is safe from this NOT because it only ever makes one fold, but because
+  // `importPaths({ presentOutcome: false })` guarantees NOTHING async runs
+  // after that fold — `presentBatchOutcome`'s own real awaits (a dynamic
+  // import, an async recipe match) are skipped entirely for a batched
+  // caller instead of trusted to finish before the batch's `fn` returns
+  // (F1, POST_SPRINT_INDEPENDENT_REVIEW.md's R6 code-review round; see
+  // `ImportPathsOptions`'s doc, store/importDatasets.ts). Any FUTURE caller
+  // of `withHistoryBatch` must keep this same invariant — zero real awaits
+  // after its last fold — or this limitation is live again for it.
   let batchPreSnapshot: HistorySnapshot | null = null;
 
   return {
@@ -357,7 +365,17 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
     historySuppressed: false,
     recordHistory: (label, batchToken) => {
       if (get().historySuppressed && batchToken !== undefined && batchToken === activeBatchToken) {
-        if (batchPreSnapshot === null) batchPreSnapshot = snapshotOf(get());
+        if (batchPreSnapshot === null) {
+          batchPreSnapshot = snapshotOf(get());
+          // F3 (R6 code-review): clear redo the moment the batch commits to
+          // actually mutating something — the same "any new action
+          // invalidates redo" rule every other `recordHistory` call enforces
+          // immediately, not deferred until the batch's own entry lands in
+          // `withHistoryBatch`'s `finally` (which can be further awaits
+          // away). Without this, a Redo pressed mid-batch replayed a stale
+          // pre-batch `future` snapshot over already-half-mutated state.
+          set({ future: [] });
+        }
         batchHadRecord = true;
         return;
       }
