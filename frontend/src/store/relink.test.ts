@@ -1161,3 +1161,85 @@ describe("importChangedAsNewVersion (box 5)", () => {
     expect(datasetsUndone.some((d) => d.versionOf === "orig")).toBe(false); // no stranded versionOf tag
   });
 });
+
+// R6 (POST_SPRINT_INDEPENDENT_REVIEW.md): `withHistoryBatch` suppresses
+// `historySuppressed` for the entire duration of `importChangedAsNewVersion`'s
+// await (a real network round trip via `importFile`). Before the fix, ANY
+// unrelated `recordHistory` call landing in that window — nothing in the UI
+// blocks one — was silently absorbed into the import's single undo entry:
+// its own mutation happened, but no entry of its own was pushed, so undoing
+// the import also reverted (and stranded, on redo) the unrelated edit with
+// no way to undo/redo it independently. Red-first: a controllably-delayed
+// import, with a second edit (`renameDataset`) attempted before it resolves.
+describe("R6: an unrelated edit during an in-flight import-as-new-version batch", () => {
+  it("gets its own independent undo/redo entry, never absorbed into the import's batch", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "orig", source: { kind: "path", path: "/old/data/run1.csv" } }),
+        {
+          id: "other",
+          name: "other",
+          data: { time: [0], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} },
+        },
+      ],
+      history: [],
+    });
+
+    // A controllable, never-resolves-until-we-say-so import — stands in for
+    // the real network round trip `importFile` makes.
+    let resolveImport!: (data: {
+      time: number[];
+      values: number[][];
+      labels: string[];
+      units: string[];
+      metadata: Record<string, never>;
+    }) => void;
+    vi.mocked(importFile).mockReturnValue(
+      new Promise((resolve) => {
+        resolveImport = resolve;
+      }),
+    );
+
+    const importPromise = useRelink.getState().importChangedAsNewVersion("orig");
+
+    // Sanity: this test is actually exercising the batch's in-flight window,
+    // not racing past it — the import genuinely has not settled yet, and the
+    // store is genuinely mid-batch.
+    expect(useApp.getState().historySuppressed).toBe(true);
+    expect(useApp.getState().datasets).toHaveLength(2); // nothing created yet
+
+    // The second, unrelated edit — attempted WHILE the import is pending.
+    useApp.getState().renameDataset("other", "renamed while pending");
+    expect(useApp.getState().datasets.find((d) => d.id === "other")!.name).toBe("renamed while pending");
+
+    resolveImport({ time: [0], values: [[9]], labels: ["m"], units: ["emu"], metadata: {} });
+    await importPromise;
+
+    // Two SEPARATE entries — the rename was never folded into the import's
+    // one undo step.
+    const { history } = useApp.getState();
+    expect(history.map((h) => h.label)).toEqual([
+      "rename dataset",
+      'import "run1.csv" as a new version',
+    ]);
+
+    // Undo unwinds the import first (LIFO) — the rename is untouched.
+    useApp.getState().undo();
+    let live = useApp.getState().datasets;
+    expect(live.find((d) => d.id === "other")!.name).toBe("renamed while pending"); // rename survives
+    expect(live.some((d) => d.versionOf === "orig")).toBe(false); // import undone
+
+    // Undo again reverts the rename, independently.
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.find((d) => d.id === "other")!.name).toBe("other");
+    expect(useApp.getState().history).toHaveLength(0);
+
+    // Redo replays each step independently, in order.
+    useApp.getState().redo();
+    expect(useApp.getState().datasets.find((d) => d.id === "other")!.name).toBe("renamed while pending");
+    useApp.getState().redo();
+    live = useApp.getState().datasets;
+    expect(live.some((d) => d.versionOf === "orig")).toBe(true);
+    expect(live.find((d) => d.id === "other")!.name).toBe("renamed while pending");
+  });
+});

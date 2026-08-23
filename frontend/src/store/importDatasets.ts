@@ -28,6 +28,7 @@
 import { create } from "zustand";
 
 import { importFile, uploadFile } from "../lib/api";
+import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
@@ -129,8 +130,15 @@ function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesAction
 export interface ImportSlice extends ErrorRolesActions {
   importFiles: (files: File[]) => Promise<void>;
   /** Import real filesystem paths (native desktop dialog, MAIN_PLAN #31). Each
-   *  dataset carries `source.path`, so re-import needs no second picker. */
-  importPaths: (paths: string[]) => Promise<void>;
+   *  dataset carries `source.path`, so re-import needs no second picker.
+   *
+   *  `historyToken`: forward an enclosing `withHistoryBatch`'s token (R6,
+   *  store/relink.ts's `importChangedAsNewVersion`) so every dataset this
+   *  call creates folds into that batch's ONE undo entry instead of each
+   *  recording its own. Omitted by every ordinary caller (⌘O, drag-drop,
+   *  the command palette, Recent files, …), which keep today's per-dataset
+   *  `recordHistory("add dataset")` behavior unchanged. */
+  importPaths: (paths: string[], historyToken?: HistoryBatchToken) => Promise<void>;
 }
 
 
@@ -152,6 +160,7 @@ function addFromPayload(
   data: DataStruct,
   origin: ImportOrigin,
   targetFolderId: string | undefined,
+  historyToken: HistoryBatchToken | undefined,
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
@@ -191,7 +200,7 @@ function addFromPayload(
             metadata: book.metadata,
           },
           ...src,
-        });
+        }, historyToken);
       } else if (isLazyBookEntry(book)) {
         get().addDataset({
           id,
@@ -207,9 +216,9 @@ function addFromPayload(
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
-        });
+        }, historyToken);
       } else {
-        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src });
+        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src }, historyToken);
       }
       newIds.push(id);
     }
@@ -244,7 +253,7 @@ function addFromPayload(
       id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
-    get().addDataset(dsInput);
+    get().addDataset(dsInput, historyToken);
     newIds.push(id);
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
@@ -301,6 +310,7 @@ async function runImport<T>(
   items: T[],
   describe: (item: T) => string,
   load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
+  historyToken?: HistoryBatchToken,
 ): Promise<void> {
   // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
   // are called directly (no length guard) by several `openFilePicker` sites
@@ -343,7 +353,7 @@ async function runImport<T>(
       get().setStatus(`importing ${describe(item)}…`);
       try {
         const { data, origin } = await load(item, controller.signal);
-        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId));
+        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId, historyToken));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -398,7 +408,7 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
         origin: { name: file.name, size: file.size },
       })),
 
-    importPaths: (paths) =>
+    importPaths: (paths, historyToken) =>
       runImport(set, get, paths, pathBasename, async (path, signal) => {
         const data = await importFile(path, signal);
         // P1.7 / L0.32 provenance: "record source path, import time,
@@ -422,7 +432,7 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
             : { kind: "path", path };
         // The path is what makes this import re-importable without a picker.
         return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
-      }),
+      }, historyToken),
   };
 }
 
