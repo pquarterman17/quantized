@@ -482,6 +482,15 @@ implementation/reliability review.
 **Acceptance:** Production build passes with useful measured headroom and no new
 loading flash or delayed core interaction.
 
+**2026-08-22 ChatGPT-Sol partial result — remains open:** Plot Recipe's
+persistence schema now lives in a runtime-light module and capture/matching
+load together on the first recipe action. The integrated build moved from
+approximately 904.4 kB to 902.5 kB eager against the unchanged 904.7 kB
+budget (about 1.9 kB recovered; about 2.3 kB headroom). That is real but not
+a practical working band, so the checkbox and acceptance criterion remain
+open. `CHATGPT_SOL_TO_CLAUDE_RELEASE_HANDOFF.md` carries the remaining target:
+at least 15 kB, preferably 20 kB, without raising the budget.
+
 ### [x] R9. Resolve existing React-hook warnings
 
 **Closed 2026-08-23 (R10 reconciliation, docs-only — not re-verified in this

@@ -34,7 +34,7 @@ import {
   type RecipeMapping,
   type RecipeSignatureEntry,
   type RecipeVisual,
-} from "./plotRecipe";
+} from "./plotRecipeSchema";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
 
