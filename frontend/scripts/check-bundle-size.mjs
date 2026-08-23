@@ -448,7 +448,7 @@ import { fileURLToPath } from "node:url";
  *  and the Recipe Manager panel all confirmed as separate, small, genuinely
  *  LAZY chunks (1.5-4.6 kB each, none modulepreloaded) — no further gain
  *  there. The real remaining lever, found by the same reachability method
- *  that caught the `lib/api.ts`/primitives-barrel pattern before: five more
+ *  that caught the `lib/api.ts`/primitives-barrel pattern before: six more
  *  files where ONE small eager-reachable export (directly required by
  *  `lib/workspace.ts`'s synchronous `parseWorkspace`, or called INTERNALLY
  *  by another eager function in the same file — checked explicitly, since a

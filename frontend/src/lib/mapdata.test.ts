@@ -1,3 +1,5 @@
+// Covers BOTH halves of the C2 eager/lazy split: `mapdata.ts` (eager
+// detection half) and `mapdataFetch.ts` (lazy fetch/grid half).
 import { describe, expect, it, vi } from "vitest";
 
 import { is2DMap } from "./mapdata";

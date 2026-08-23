@@ -1,3 +1,5 @@
+// Covers BOTH halves of the C2 eager/lazy split: `pageDocument.ts`
+// (eager schema/parse half) and `pageDocumentActions.ts` (lazy actions).
 // Pure PageDocument tests (FIGURE_AUTHORING_WORKFLOW_PLAN F3.1) — schema,
 // sanitization/migration, serialization round-trip, and the fail-closed
 // missing-reference contract (F3.2).
