@@ -1,20 +1,13 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  convertUnits,
-  crystalCell,
-  crystalDSpacing,
-  getConstants,
-  xrayCalc,
-} from "../../../lib/api";
+import { convertUnits, getConstants } from "../../../lib/api/reference";
+import { crystalCell, crystalDSpacing, xrayCalc } from "../../../lib/api";
 import { getUnitCategories } from "../../../lib/api/reference";
 import { useCalcHistory } from "../../../store/calcHistory";
 import { assembleCell, type CrystalForm, useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
-  convertUnits: vi.fn(),
-  getConstants: vi.fn(),
   xrayCalc: vi.fn(),
   crystalDSpacing: vi.fn(),
   crystalCell: vi.fn(),
@@ -22,6 +15,8 @@ vi.mock("../../../lib/api", () => ({
 
 vi.mock("../../../lib/api/reference", () => ({
   getUnitCategories: vi.fn(),
+  convertUnits: vi.fn(),
+  getConstants: vi.fn(),
 }));
 
 const MAGNETIC_FIELD_UNITS = [

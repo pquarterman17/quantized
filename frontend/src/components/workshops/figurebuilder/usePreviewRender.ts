@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 
-import { renderFigureHitmap, type FigureSpec } from "../../../lib/api";
+import { renderFigureHitmap, type FigureSpec } from "../../../lib/api/figures";
 import type { FigureHitmap } from "../../../lib/previewmap";
 
 /** Screen-resolution preview; the export uses the document's chosen DPI. */

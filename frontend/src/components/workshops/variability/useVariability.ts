@@ -14,15 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  reportEmit,
-  statsNestedAnova,
-  statsVarianceComponents,
-  statsVariabilitySummary,
-  type NestedAnovaResponse,
-  type VarianceComponentsResponse,
-  type VariabilitySummaryResponse,
-} from "../../../lib/api";
+import { reportEmit, statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";

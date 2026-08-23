@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 
-import { reflectivityFft } from "../../../lib/api";
+import { reflectivityFft } from "../../../lib/api/reductions";
 import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";

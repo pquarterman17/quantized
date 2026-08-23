@@ -8,7 +8,10 @@
 import { useEffect, useState } from "react";
 
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
-import { Button, SegmentedControl, Select, SliderRow, Switch } from "../primitives";
+import { SegmentedControl } from "../primitives/SegmentedControl";
+import { SliderRow } from "../primitives/SliderRow";
+import { Switch } from "../primitives/Switch";
+import { Button, Select } from "../primitives";
 import {
   ACCENT_SWATCHES as ACCENTS,
   loadInteractionPrefs,

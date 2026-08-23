@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 
-import { williamsonHall } from "../../../lib/api";
+import { williamsonHall } from "../../../lib/api/reductions";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
 
 export interface WHPeakRow {

@@ -26,7 +26,9 @@ import {
   TICK_MODE_OPTIONS,
 } from "../../../lib/tickFormat";
 import type { AxisFormat, TickMode } from "../../../lib/types";
-import { Checkbox, NumberField, SegmentedControl } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
 
 function AxisRow({
   axis,

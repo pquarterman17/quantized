@@ -20,7 +20,8 @@ import {
   tooManyGroups,
   SPLIT_GROUP_CAP,
 } from "../../lib/datasetsplit";
-import { Button, NumberField, Select } from "../primitives";
+import { NumberField } from "../primitives/NumberField";
+import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";
 
 export default function SplitDatasetDialog() {

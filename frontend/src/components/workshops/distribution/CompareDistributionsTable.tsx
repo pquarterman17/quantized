@@ -6,7 +6,8 @@
 
 import type { DistFamily } from "../../../lib/distpdf";
 import { fmtNum } from "../../../lib/format";
-import { Badge, DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { Badge } from "../../primitives";
 import type { FitPick, RankedFit, RankingMetric } from "./useDistribution";
 
 // Friendly parameter keys per family (mirrors calc/stats_dist.py's aliases).

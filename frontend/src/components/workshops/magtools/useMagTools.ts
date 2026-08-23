@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 
-import { convertMagUnits, subtractMagBackground } from "../../../lib/api";
+import { convertMagUnits, subtractMagBackground } from "../../../lib/api/magnetometry";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselection";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";

@@ -10,14 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
-import {
-  importGuess,
-  importParse,
-  importPreview,
-  listImportFilters,
-  saveImportFilter,
-  deleteImportFilter,
-} from "../../../lib/api";
+import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
 import {
   confirmedErrorBindings,
   resolveImportFilter,

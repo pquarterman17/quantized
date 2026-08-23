@@ -25,7 +25,10 @@ import { useRef, useState } from "react";
 import { deriveRefLineRows } from "./canonicalRefLines";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { RefLine } from "../../../lib/types";
-import { Button, IconButton, NumberField, SegmentedControl } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
 
 export default function RefLinePropertiesPanel({

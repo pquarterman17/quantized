@@ -23,7 +23,8 @@ import { useRef, useState } from "react";
 
 import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
-import { Button, IconButton, Select } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { Button, Select } from "../../primitives";
 
 const SIDES: { value: ErrorSide; label: string }[] = [
   { value: "both", label: "± symmetric" },

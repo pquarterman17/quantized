@@ -1,25 +1,17 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  magneticCurieWeiss,
-  magneticDemag,
-  magneticDomainWall,
-  magneticMomentConvert,
-} from "../../../lib/api";
-import { magneticCurieWeissFit } from "../../../lib/api/magnetic";
+import { magneticCurieWeiss, magneticDemag, magneticDomainWall, magneticMomentConvert, magneticCurieWeissFit } from "../../../lib/api/magnetic";
 import MagneticTab from "./MagneticTab";
 
-vi.mock("../../../lib/api", () => ({
+
+vi.mock("../../../lib/api/magnetic", () => ({
+  magneticCurieWeissFit: vi.fn(),
   magneticMomentConvert: vi.fn(),
   magneticDemag: vi.fn(),
   magneticCurieWeiss: vi.fn(),
   magneticLangevin: vi.fn(),
   magneticDomainWall: vi.fn(),
-}));
-
-vi.mock("../../../lib/api/magnetic", () => ({
-  magneticCurieWeissFit: vi.fn(),
 }));
 
 beforeEach(() => {

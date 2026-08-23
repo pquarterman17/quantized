@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigure } from "../../../lib/api";
+import { exportFigure } from "../../../lib/api/figures";
 import { facetPanelsOf, spatialPanelsOf } from "../../../lib/composition";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -9,8 +9,10 @@ import { useToasts } from "../../../store/toasts";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { useGraphBuilder } from "./useGraphBuilder";
 
-vi.mock("../../../lib/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../lib/api")>();
+// exportFigure moved to lib/api/figures.ts (R8 bundle-diet pass) — mock it
+// at its real import path.
+vi.mock("../../../lib/api/figures", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/api/figures")>();
   return { ...actual, exportFigure: vi.fn().mockResolvedValue(undefined) };
 });
 

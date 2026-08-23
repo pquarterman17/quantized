@@ -1,17 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  opticsBrewsterAngle,
-  opticsCriticalAngle,
-  opticsDielectricToRefractive,
-  opticsFresnel,
-  opticsRefractiveToDielectric,
-  opticsSkinDepth,
-} from "../../../lib/api";
+import { opticsBrewsterAngle, opticsCriticalAngle, opticsDielectricToRefractive, opticsFresnel, opticsRefractiveToDielectric, opticsSkinDepth } from "../../../lib/api/optics";
 import OpticsTab from "./OpticsTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/optics", () => ({
   opticsFresnel: vi.fn(),
   opticsCriticalAngle: vi.fn(),
   opticsBrewsterAngle: vi.fn(),

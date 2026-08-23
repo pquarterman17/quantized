@@ -7,7 +7,7 @@
 import { useState } from "react";
 
 import { fmtNum as fmt } from "../../../lib/format";
-import { DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
 import type { CurveFitLevelResult } from "./useCurveFitByLevel";
 
 export default function CurveFitByLevelSection({

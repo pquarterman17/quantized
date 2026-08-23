@@ -11,7 +11,9 @@ import { copyText } from "../../../lib/clipboard";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
 import { toast } from "../../../store/toasts";
-import { Button, IconButton, NumberField } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 
 /** A result string plus the exact value copy-to-clipboard should write —
  *  usually the raw JS number's full-precision `String(...)`, not the

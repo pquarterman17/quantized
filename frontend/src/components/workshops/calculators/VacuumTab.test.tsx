@@ -1,14 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  vacuumKnudsen,
-  vacuumMeanFreePath,
-  vacuumSputterYield,
-} from "../../../lib/api";
+import { vacuumKnudsen, vacuumMeanFreePath, vacuumSputterYield } from "../../../lib/api/vacuum";
 import VacuumTab from "./VacuumTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/vacuum", () => ({
   vacuumMeanFreePath: vi.fn(),
   vacuumMonolayerTime: vi.fn(),
   vacuumSputterYield: vi.fn(),

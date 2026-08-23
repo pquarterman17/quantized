@@ -3,7 +3,9 @@
 // the last row the substrate (both have no meaningful thickness). Thin + stateless:
 // all edits route back through the hook's callbacks.
 
-import { IconButton, NumberField, Select } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { NumberField } from "../../primitives/NumberField";
+import { Select } from "../../primitives";
 import type { SldPreset } from "../../../lib/types";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 

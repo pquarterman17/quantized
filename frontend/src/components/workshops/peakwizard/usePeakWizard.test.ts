@@ -16,10 +16,18 @@ import { usePeakWizard } from "./usePeakWizard";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
-  findPeaks: vi.fn(),
-  fitMultiPeak: vi.fn(),
   peaksIntegrate: vi.fn(),
   reportEmit: vi.fn(),
+}));
+// findPeaks/fitMultiPeak and baselineALS moved to their own siblings (R8
+// bundle-diet pass) — mock them at their real import paths.
+vi.mock("../../../lib/api/peaks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/peaks")>()),
+  findPeaks: vi.fn(),
+  fitMultiPeak: vi.fn(),
+}));
+vi.mock("../../../lib/api/baseline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/baseline")>()),
   baselineALS: vi.fn(),
 }));
 
@@ -177,7 +185,7 @@ describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
 // be — findPeaks is only called by runFind(), never by addPeakAt/removePeak).
 describe("usePeakWizard — click-on-plot editing never triggers a find/fit call", () => {
   it("addPeakAt/removePeak do not call findPeaks", async () => {
-    const { findPeaks } = await import("../../../lib/api");
+    const { findPeaks } = await import("../../../lib/api/peaks");
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.setStep(1));
     act(() => result.current.addPeakAt(1));
@@ -188,7 +196,7 @@ describe("usePeakWizard — click-on-plot editing never triggers a find/fit call
 
 describe("usePeakWizard — plotted-channel selection (audit P1 #1)", () => {
   it("runs its working segment on the plotted X/primary-Y, not time/values[0]", async () => {
-    const { findPeaks } = await import("../../../lib/api");
+    const { findPeaks } = await import("../../../lib/api/peaks");
     vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
     const multi: DataStruct = {
       time: [0, 1, 2, 3],

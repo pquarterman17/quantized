@@ -6,20 +6,29 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fitModel, listFitModels } from "../../../lib/api";
+import { listFitModels } from "../../../lib/api/curvefit";
+import { fitModel } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
-  autoGuess: vi.fn(),
   fitModel: vi.fn(),
-  listFitModels: vi.fn(),
-  bootstrapFit: vi.fn(),
-  exportCornerFigure: vi.fn(),
   fetchBookData: vi.fn(),
   reportEmit: vi.fn(),
+}));
+// autoGuess/listFitModels/bootstrapFit and exportCornerFigure moved to their
+// own siblings (R8 bundle-diet pass) — mock them at their real import paths.
+vi.mock("../../../lib/api/curvefit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/curvefit")>()),
+  autoGuess: vi.fn(),
+  listFitModels: vi.fn(),
+  bootstrapFit: vi.fn(),
+}));
+vi.mock("../../../lib/api/figures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/figures")>()),
+  exportCornerFigure: vi.fn(),
 }));
 
 // Same fixture as useCurveFit.test.ts's By-grouping block: col0 "grp"

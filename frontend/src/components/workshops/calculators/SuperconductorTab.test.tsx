@@ -1,17 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  scBcsGap,
-  scCoherenceLength,
-  scCriticalFields,
-  scDepairingCurrent,
-  scGlParameter,
-  scLondonDepth,
-} from "../../../lib/api";
+import { scBcsGap, scCoherenceLength, scCriticalFields, scDepairingCurrent, scGlParameter, scLondonDepth } from "../../../lib/api/superconductor";
 import SuperconductorTab from "./SuperconductorTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/superconductor", () => ({
   scBcsGap: vi.fn(),
   scLondonDepth: vi.fn(),
   scCoherenceLength: vi.fn(),

@@ -8,7 +8,9 @@ import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { RangeSlider } from "../../primitives/RangeSlider";
 import { useApp } from "../../../store/useApp";
 import { type FilterColumn, useDataFilter } from "./useDataFilter";

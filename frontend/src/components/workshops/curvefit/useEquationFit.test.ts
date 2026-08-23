@@ -7,16 +7,18 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fitEquation, validateEquation } from "../../../lib/api";
+import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
 import { loadCustomModels, saveCustomModel, type CustomFitModel } from "../../../lib/fitmodels";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useEquationFit } from "./useEquationFit";
 
 vi.mock("../../../lib/api", () => ({
+  fetchBookData: vi.fn(),
+}));
+vi.mock("../../../lib/api/curvefit", () => ({
   validateEquation: vi.fn(),
   fitEquation: vi.fn(),
-  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {

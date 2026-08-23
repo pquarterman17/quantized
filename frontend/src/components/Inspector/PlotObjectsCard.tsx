@@ -15,7 +15,8 @@ import {
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Annotation, Shape } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { Button, IconButton } from "../primitives";
+import { IconButton } from "../primitives/IconButton";
+import { Button } from "../primitives";
 import Card from "../primitives/Card";
 
 function openSeriesProperties(channel: number): void {

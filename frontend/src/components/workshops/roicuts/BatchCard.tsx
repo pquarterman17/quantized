@@ -19,7 +19,8 @@
 // empty, so it never renders) purely to satisfy the component's "pick at
 // least one stat" gate.
 
-import { Button, Checkbox } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { Button } from "../../primitives";
 import Card from "../../primitives/Card";
 import { fmtNum } from "../../../lib/format";
 import type { StatKey, TabRow } from "../../../lib/tabulate";

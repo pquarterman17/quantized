@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  applyCorrections as applyCorrectionsApi,
-  fetchBookData,
-  guessImportSettings,
-  parseImportText,
-  uploadFile,
-} from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, fetchBookData, guessImportSettings, parseImportText, uploadFile } from "../lib/api";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import {
   breakPanelsOf,

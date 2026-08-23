@@ -5,7 +5,8 @@
 // auto-excludes — see useOutlierScreening's module doc.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { useOutlierScreeningStore } from "../../../store/outlierScreening";
 import { OUTLIER_METHODS, useOutlierScreening } from "./useOutlierScreening";
 

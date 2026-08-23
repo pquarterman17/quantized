@@ -1,14 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  statsNestedAnova,
-  statsVarianceComponents,
-  statsVariabilitySummary,
-  type NestedAnovaResponse,
-  type VarianceComponentsResponse,
-  type VariabilitySummaryResponse,
-} from "../../../lib/api";
+import { statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import VariabilityChartPanel from "./VariabilityChartPanel";

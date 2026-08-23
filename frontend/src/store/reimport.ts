@@ -35,12 +35,7 @@
 // so the whole re-import is ONE `recordHistory` entry, not two: undo must
 // restore the pre-reimport dataset in a single step.
 
-import {
-  applyCorrections as applyCorrectionsApi,
-  importFile,
-  uploadFile,
-  type CorrectionsRequest,
-} from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";

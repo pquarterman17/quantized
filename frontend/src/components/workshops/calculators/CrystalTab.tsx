@@ -6,7 +6,9 @@
 
 import { useState } from "react";
 
-import { Button, NumberField, SegmentedControl, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import { Card, CopyButton, ROW, resultLine, useCard, withTouch } from "./shared";

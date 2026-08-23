@@ -3,7 +3,10 @@
 // add/remove-row layout mirrors the reflectivity workshop's LayerTable. Thin —
 // logic lives in useWilliamsonHall.
 
-import { Button, DataTable, IconButton, NumberField } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { IconButton } from "../../primitives/IconButton";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useWilliamsonHall } from "./useWilliamsonHall";
 

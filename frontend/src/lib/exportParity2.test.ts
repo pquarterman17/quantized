@@ -52,13 +52,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigure } from "./api";
+import { exportFigure } from "./api/figures";
 import { facetPanelsOf } from "./composition";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { useApp } from "../store/useApp";
 import type { Annotation, DataStruct, Dataset, Shape } from "./types";
 
-vi.mock("./api", () => ({
+vi.mock("./api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
 }));
 

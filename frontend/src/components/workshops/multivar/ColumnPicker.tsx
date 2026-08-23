@@ -5,7 +5,8 @@
 // launch dialog is a plain checklist, and this platform can want many more
 // than the 1-2 columns Graph Builder's wells assume.
 
-import { Button, Checkbox } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { Button } from "../../primitives";
 import type { MultivarState } from "./useMultivar";
 
 export default function ColumnPicker({ m }: { m: MultivarState }) {

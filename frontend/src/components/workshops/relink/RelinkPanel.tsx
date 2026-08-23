@@ -7,7 +7,8 @@
 // dry-run/commit/undo/consent mechanics; this file is the view only.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { Button } from "../../primitives";
 import { useRelink, relinkableDatasets, type RelinkRowStatus } from "../../../store/relink";
 
 const STATUS_LABEL: Record<RelinkRowStatus, string> = {

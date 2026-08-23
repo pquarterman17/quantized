@@ -12,7 +12,9 @@ import { useMemo, useState } from "react";
 
 import { exportPcaFigure, exportPcaScreeFigure } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
-import { Button, SegmentedControl, Select, Switch } from "../../primitives";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Switch } from "../../primitives/Switch";
+import { Button, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import type { PcaDrawData } from "./pcaScoresRender";
 import PcaScoresCanvas from "./PcaScoresCanvas";

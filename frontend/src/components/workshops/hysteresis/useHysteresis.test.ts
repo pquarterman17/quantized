@@ -1,12 +1,14 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { hysteresisAnalysis } from "../../../lib/api";
+import { hysteresisAnalysis } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useHysteresis } from "./useHysteresis";
 
-vi.mock("../../../lib/api", () => ({ hysteresisAnalysis: vi.fn() }));
+vi.mock("../../../lib/api/magnetometry", () => ({
+  hysteresisAnalysis: vi.fn(),
+}));
 
 const DATA: DataStruct = {
   time: [-2, -1, 0, 1, 2], // H

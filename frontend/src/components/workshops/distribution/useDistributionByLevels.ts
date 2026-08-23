@@ -20,7 +20,8 @@
 
 import { useEffect, useState } from "react";
 
-import { statsDescriptive, statsHistogram, statsShapiro } from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
+import { statsHistogram, statsShapiro } from "../../../lib/api";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 

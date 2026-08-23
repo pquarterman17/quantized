@@ -15,10 +15,18 @@ const { findMock, fitMock, integrateMock, emitMock, alsMock } = vi.hoisted(() =>
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
-  findPeaks: findMock,
-  fitMultiPeak: fitMock,
   peaksIntegrate: integrateMock,
   reportEmit: emitMock,
+}));
+// findPeaks/fitMultiPeak and baselineALS moved to their own siblings (R8
+// bundle-diet pass) — mock them at their real import paths.
+vi.mock("../../../lib/api/peaks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/peaks")>()),
+  findPeaks: findMock,
+  fitMultiPeak: fitMock,
+}));
+vi.mock("../../../lib/api/baseline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/baseline")>()),
   baselineALS: alsMock,
 }));
 

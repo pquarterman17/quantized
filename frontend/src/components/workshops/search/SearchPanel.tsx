@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
 
 const KIND_CHIP: Record<SearchHit["kind"], string> = {
   dataset: "data",

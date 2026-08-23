@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askParams } from "../components/overlays/ParamDialog";
-import { exportFigure } from "./api";
+import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureSpec";
@@ -15,7 +15,7 @@ import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
-vi.mock("./api", () => ({
+vi.mock("./api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
 }));
 

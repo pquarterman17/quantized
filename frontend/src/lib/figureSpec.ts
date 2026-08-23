@@ -25,7 +25,8 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import type { ErrorPair, FigureSpec } from "./api";
+import type { ErrorPair } from "./api";
+import type { FigureSpec } from "./api/figures";
 import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";

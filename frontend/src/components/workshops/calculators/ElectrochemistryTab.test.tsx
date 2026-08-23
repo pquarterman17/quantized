@@ -1,14 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  electrochemDoubleLayer,
-  electrochemNernst,
-  electrochemOhmicDrop,
-} from "../../../lib/api";
+import { electrochemDoubleLayer, electrochemNernst, electrochemOhmicDrop } from "../../../lib/api/electrochemistry";
 import ElectrochemistryTab from "./ElectrochemistryTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/electrochemistry", () => ({
   electrochemNernst: vi.fn(),
   electrochemButlerVolmer: vi.fn(),
   electrochemTafel: vi.fn(),

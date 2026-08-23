@@ -8,7 +8,9 @@
 // back to free-text from/to inputs if the category table hasn't loaded
 // (offline / first paint), matching the tab's pre-category behavior.
 
-import { Button, NumberField, Pill, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Pill } from "../../primitives/Pill";
+import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import PhotonEnergyPanel from "./PhotonEnergyPanel";
 import { CopyButton } from "./shared";

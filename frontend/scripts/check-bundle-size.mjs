@@ -15,6 +15,29 @@
 // if you find yourself raising the pin to go green, that is the ratchet working.
 //
 // Runs as part of `npm run build`, so CI enforces it with no extra wiring.
+//
+// THE ALLOWED REVIEW PROCESS FOR CHANGING THE PIN (both directions), made
+// explicit here per R8's own review comment — every history entry below
+// already follows it, this just states the rule the entries demonstrate:
+//   1. MEASURE first. Run `npm run build` and read this script's own
+//      per-chunk printout before touching the pin — never guess a delta.
+//   2. A pin RAISE is the last resort, only for measured, irreducible eager
+//      logic (new store/session-lifecycle code with no lazy-able panel or
+//      module behind it), and is capped at the MINIMAL honest margin:
+//      `measured + 1,024` (roughly a kB of rounding room), never the 40 kB
+//      `SLACK` constant below — that constant guards the LOWER bound only.
+//      Write the justification inline in the history entry (what grew, why
+//      it can't be deferred) before raising.
+//   3. A pin LOWER happens two ways: this script's own `total <
+//      EAGER_JS_BUDGET - SLACK` check FAILS the build once a real reduction
+//      opens more than 40 kB of headroom (forcing the lock-in), or a
+//      deliberate diet pass lowers it directly to `measured + 1,024` right
+//      after landing the reduction, so the gain is never left sitting as
+//      spendable slack for the next unrelated feature.
+//   4. Either direction: leave a dated entry below naming what moved (or
+//      was added) and the exact measured before/after byte counts — never
+//      a bare number change with no comment, and never a raise "to make CI
+//      green" without having tried a lazy split first.
 
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -310,8 +333,110 @@ import { fileURLToPath } from "node:url";
  *  wave 3: 925,527). Both raises were individually measured, approved,
  *  and documented in their entries above; this entry records the single
  *  INTEGRATED re-measurement of the merged tree: 925,435 B eager, so
- *  925,435 + 1,024 = 926,459 per the same minimal-raise convention. */
-const EAGER_JS_BUDGET = 926_459;
+ *  925,435 + 1,024 = 926,459 per the same minimal-raise convention.
+ *
+ *  2026-08-23 (R8, POST_SPRINT_INDEPENDENT_REVIEW) — restored real headroom
+ *  by measured reduction, not a raise: the pin had drifted to 0.3 kB of
+ *  slack (897.9 kB measured against the 898.2 kB pin per R8's problem
+ *  statement; re-measured at session start as 926,154 B against this same
+ *  926,459 pin — 305 B). Root cause, found by tracing which chunk actually
+ *  carried each moved symbol rather than assuming: `lib/api.ts` (the typed
+ *  fetch client) had ONE static eager edge — useApp.ts's `fftSpectral`/
+ *  `fitModel`/`peaksIntegrate`/`uploadFile` imports — and Rollup ships a
+ *  module's code to whichever chunk needs ANY of its exports eagerly, so
+ *  ~1,400 lines of lazy-workshop-only calculator/stats/baseline/curvefit/
+ *  export-figure/magnetometry/peaks/reflectivity/import-filter/reductions
+ *  wrappers, all co-located in that ONE file, were riding along into the
+ *  eager `useApp` chunk purely by file co-location — the exact same
+ *  mechanism as the 2026-08-18 primitives-barrel finding, just via a
+ *  same-file eager/lazy split instead of a re-export barrel. Four
+ *  measured, independently-verified moves (each rebuilt and re-measured
+ *  before the next):
+ *  (1) `components/primitives/index.tsx` barrel: `IconButton`/`MetaRow`/
+ *  `SegmentedControl`/`SegOption`/`NumberField`/`Checkbox`/`Switch`/
+ *  `SliderRow`/`Pill`/`DataTable` had crept back into the eager barrel
+ *  since the 2026-08-18 pass — verified each had ZERO eager consumer (real
+ *  grep for an import, not a text match) before moving; each got its own
+ *  file, matching Card/RichLabelInput/SymbolPalette's existing convention.
+ *  `NumberField` turned out to have exactly one eager consumer
+ *  (SqliteQueryDialog.tsx, itself eager per AppOverlays.tsx's own
+ *  self-gating-window-event exception) — its own extraction still nets
+ *  positive despite a small Rollup chunk-boundary tax. 926,154 -> 924,675 B
+ *  (-1,479 B).
+ *  (2) Twelve calculator domains still defined directly in lib/api.ts
+ *  (reference/units, sld, electrical, optics, vacuum, thermal, diffusion,
+ *  electrochemistry, semiconductor, thin-film, superconductor, magnetic —
+ *  every DiraCulator Calculators tab) moved to their own `api/<domain>.ts`
+ *  siblings (merged into the existing electrical.ts/diffusion.ts/
+ *  thinFilm.ts/magnetic.ts where a later addition had already started one,
+ *  per that convention). Verified lazy-only per domain (every consumer is
+ *  a Calculators tab, itself behind AppOverlays.tsx's lazy
+ *  `CalculatorsPanel`) before moving. 924,675 -> 918,760 B (-5,915 B).
+ *  (3) `api/stats.ts`'s `statsDescriptive` — the ONE function useApp.ts
+ *  needs eagerly out of that file's ~23 — split to its own
+ *  `api/statsDescriptive.ts` sibling so the other ~22 (statschooser/
+ *  distribution/multivar/variability workshops) lose their eager
+ *  reachability; `statsRecommend`/`statsRunTest` (statschooser's "test
+ *  chooser", still directly in lib/api.ts) joined stats.ts in the same
+ *  move. 918,760 -> 916,811 B (-1,949 B).
+ *  (4) The remaining lazy-only lib/api.ts sections: baseline (8 fns),
+ *  curvefit (`autoGuess`/`listFitModels`/`bootstrapFit`/`validateEquation`/
+ *  `fitEquation`/`findXY`/`scanFitModels` — `fitModel` itself stays, it's
+ *  eager), figures (`FigureSpec` + six export/render wrappers —
+ *  `exportFigure` turned out to ALSO be eager via
+ *  lib/exportFigureCommand.ts's File-menu "Export Figure..." command, but
+ *  every function here is a one-line postJSON/postDownload/postBlob
+ *  wrapper so the whole file's Rollup chunk measures ~0.5 kB regardless —
+ *  negligible, and the other five stay lazy-only), datasetAlgebra,
+ *  magnetometry (4 fns), peaks (`findPeaks`/`fitPeak`/`fitMultiPeak` —
+ *  `peaksIntegrate` stays, it's eager), reflectivity (3 fns), import
+ *  filters (6 fns), and reductions (3 fns) — each verified lazy-only by
+ *  real-consumer grep first. `reportEmit`/`reportExport` were ALSO
+ *  evaluated and moved to `api/report.ts`, but stay re-exported (unlike
+ *  every other move here): `folderOps.ts` (eager, part of the always-
+ *  mounted Library) statically imports `pipeline/runTemplate.ts`, which
+ *  calls `reportEmit` for real, so that one file is genuinely eager — but
+ *  since it holds only those two tiny wrappers with nothing else to drag
+ *  along, re-exporting it costs nothing extra, unlike lib/api.ts's old
+ *  sprawl. 916,811 -> 915,000 B (-1,811 B).
+ *  `lib/api.ts` itself: 1,725 -> 299 lines (architecture.test.ts's
+ *  MODULE_PINS, JMP_GAP #14 ratchet, lowered to match).
+ *  Net: 926,154 -> 915,000 B, an 11,154 B (10.9 kB) real, measured
+ *  recovery — under the file's own 40 kB `SLACK` forced-lower threshold,
+ *  so this is a deliberate lock-in, not one the ratchet's under-slack
+ *  check would have demanded on its own. Full vitest suite, tsc, and
+ *  eslint all green post-move (every relocated symbol's consumers —
+ *  including `vi.mock` factories using the `importOriginal` spread
+ *  pattern, which silently stop covering a moved export if left pointed
+ *  at the old facade path — updated to import from the real new path).
+ *  915,000 + 1,024 = 916,024 per the same minimal-raise-margin convention,
+ *  applied here to a LOWER. Same rule stands going forward: any new
+ *  lib/api.ts wrapper for one of these now-split domains belongs in its
+ *  sibling file, never back in lib/api.ts itself — see that file's own
+ *  header comment.
+ *
+ *  2026-08-23 (integrated re-measure, #215 + R8) — R8 above (branch
+ *  `claude/r8-bundle-diet`) and #215 (`lib/plotRecipeSchema.ts`: split the
+ *  Plot Recipe schema types + version constant out of `lib/plotRecipe.ts`
+ *  so `lib/workspace.ts`'s synchronous `parseWorkspace` no longer pulls
+ *  the capture implementation eager, letting `store/plotRecipeApply.ts`'s
+ *  `recipeLibs()` lazy-load capture+matching together) were developed in
+ *  parallel on top of the same pre-#215 `main` and merged independently —
+ *  #215 landed first (926,459 budget UNCHANGED, ~1.9 kB recovered but left
+ *  under the existing pin rather than locked in, since its own R8 was
+ *  explicitly left open for this branch to finish). Rebasing R8 onto
+ *  post-#215 `main` was a clean auto-merge everywhere except this file's
+ *  own history block and `plans/POST_SPRINT_INDEPENDENT_REVIEW.md`'s
+ *  closure log (both additive) — R8's `lib/api.ts` split and #215's
+ *  `plotRecipe.ts` split touch disjoint files. Re-measured the INTEGRATED
+ *  tree per the same rule this file has followed all along (never reuse a
+ *  pre-merge number once the base moved): 913,023 B, a further 1,977 B
+ *  below R8's own pre-integration 915,000 B — matching #215's claimed
+ *  ~1.9 kB independently. 913,023 + 1,024 = 914,047. Full gates re-run
+ *  green on the integrated tree (tsc, eslint, full vitest, this build).
+ *  Same rule stands: never raise without measuring, defer panels/modules
+ *  first. */
+const EAGER_JS_BUDGET = 914_047;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

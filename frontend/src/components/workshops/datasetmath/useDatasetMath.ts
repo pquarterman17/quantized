@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 
-import { datasetAlgebra } from "../../../lib/api";
+import { datasetAlgebra } from "../../../lib/api/datasetAlgebra";
 import { useApp } from "../../../store/useApp";
 
 export const OPERATIONS: { value: string; label: string }[] = [

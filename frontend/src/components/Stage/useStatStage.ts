@@ -36,16 +36,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  exportCategoricalFigure,
-  exportStatplotFigure,
-  statsHistogram,
-  statsQQ,
-  type CategoricalFacetSpec,
-  type CategoricalFigureSpec,
-  type StatplotFacetSpec,
-  type StatplotFigureSpec,
-} from "../../lib/api";
+import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFacetSpec, type CategoricalFigureSpec, type StatplotFacetSpec, type StatplotFigureSpec } from "../../lib/api/figures";
+import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";

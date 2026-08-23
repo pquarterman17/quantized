@@ -18,7 +18,9 @@
 import type { StepMode } from "../../../lib/plotspec";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, SegmentedControl } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button } from "../../primitives";
 import GraphPreview from "./GraphPreview";
 import PlotSpecBar from "./PlotSpecBar";
 import { useGraphBuilder } from "./useGraphBuilder";

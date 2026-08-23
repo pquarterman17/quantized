@@ -4,7 +4,7 @@
 // selection state lives in useTabulate.
 
 import { STAT_KEYS, type StatKey } from "../../../lib/tabulate";
-import { Checkbox } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
 
 export default function TabulateStatPicker({
   selected,

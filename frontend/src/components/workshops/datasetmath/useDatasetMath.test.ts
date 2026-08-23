@@ -1,12 +1,14 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { datasetAlgebra } from "../../../lib/api";
+import { datasetAlgebra } from "../../../lib/api/datasetAlgebra";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useDatasetMath } from "./useDatasetMath";
 
-vi.mock("../../../lib/api", () => ({ datasetAlgebra: vi.fn() }));
+vi.mock("../../../lib/api/datasetAlgebra", () => ({
+  datasetAlgebra: vi.fn(),
+}));
 
 const a: DataStruct = { time: [1, 2, 3], values: [[10], [20], [30]], labels: ["A"], units: ["x"], metadata: {} };
 const b: DataStruct = { time: [1, 2, 3], values: [[1], [2], [3]], labels: ["B"], units: ["x"], metadata: {} };

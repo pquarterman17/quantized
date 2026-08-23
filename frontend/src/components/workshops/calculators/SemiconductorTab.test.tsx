@@ -1,17 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  semiconductorCarrierConc,
-  semiconductorDiffusionCoeff,
-  semiconductorDiffusionLength,
-  semiconductorHallCoefficient,
-  semiconductorIntrinsic,
-  semiconductorThermalVelocity,
-} from "../../../lib/api";
+import { semiconductorCarrierConc, semiconductorDiffusionCoeff, semiconductorDiffusionLength, semiconductorHallCoefficient, semiconductorIntrinsic, semiconductorThermalVelocity } from "../../../lib/api/semiconductor";
 import SemiconductorTab from "./SemiconductorTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/semiconductor", () => ({
   semiconductorIntrinsic: vi.fn(),
   semiconductorCarrierConc: vi.fn(),
   semiconductorDepletionWidth: vi.fn(),

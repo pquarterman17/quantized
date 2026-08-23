@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 
-import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api";
+import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";

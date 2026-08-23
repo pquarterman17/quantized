@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api";
+import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import type { DataStruct, SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 

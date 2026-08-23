@@ -14,12 +14,7 @@ import {
   runTemplateOnFolder,
   selectFolderContents,
 } from "./folderOps";
-import {
-  applyCorrections as applyCorrectionsApi,
-  exportConsolidated,
-  fitModel,
-  reportEmit,
-} from "../../lib/api";
+import { applyCorrections as applyCorrectionsApi, exportConsolidated, fitModel, reportEmit } from "../../lib/api";
 import type { Dataset, DataStruct, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";

@@ -6,7 +6,7 @@
 // no React/store import, unit-testable standalone, same shape as
 // canonicalOverrides.ts/canonicalSeries.ts.
 
-import type { FigureSpec } from "../../../lib/api";
+import type { FigureSpec } from "../../../lib/api/figures";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
 import type { DataStruct, Dataset } from "../../../lib/types";

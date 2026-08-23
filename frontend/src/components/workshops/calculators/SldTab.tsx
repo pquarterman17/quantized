@@ -5,9 +5,11 @@
 
 import type { ReactNode } from "react";
 
-import type { SldProbe } from "../../../lib/api";
+import type { SldProbe } from "../../../lib/api/sld";
 import { useApp } from "../../../store/useApp";
-import { Button, NumberField, Pill } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Pill } from "../../primitives/Pill";
+import { Button } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { isCalcOnlyView } from "../../../lib/viewMode";
 import { toast } from "../../../store/toasts";

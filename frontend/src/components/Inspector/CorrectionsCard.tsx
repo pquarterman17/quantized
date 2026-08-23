@@ -5,7 +5,9 @@
 
 import { useState } from "react";
 
-import { Button, Checkbox, NumberField, Select } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
+import { NumberField } from "../primitives/NumberField";
+import { Button, Select } from "../primitives";
 import Card from "../primitives/Card";
 import { fromMultiplier, toMultiplier, type ScaleOp } from "../../lib/rescale";
 import RescaleFields from "./RescaleFields";

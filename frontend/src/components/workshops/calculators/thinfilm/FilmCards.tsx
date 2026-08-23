@@ -6,14 +6,7 @@
 
 import { useState } from "react";
 
-import {
-  thinFilmKiessig,
-  thinFilmMultilayerThermal,
-  thinFilmProjectedRange,
-  thinFilmStoneyStress,
-  thinFilmThermalMismatch,
-} from "../../../../lib/api";
-import { thinFilmSauerbrey } from "../../../../lib/api/thinFilm";
+import { thinFilmKiessig, thinFilmMultilayerThermal, thinFilmProjectedRange, thinFilmStoneyStress, thinFilmThermalMismatch, thinFilmSauerbrey } from "../../../../lib/api/thinFilm";
 import {
   Button,
   Card,

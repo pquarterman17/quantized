@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { NumberField } from "./index";
+import { NumberField } from "./NumberField";
 
 /** A numeric field whose DOM value is a local text buffer, not the store
  *  number it edits. Fixes a class of wrong-result bug: binding `value`

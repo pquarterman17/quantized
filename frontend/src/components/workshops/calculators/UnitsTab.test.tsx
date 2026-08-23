@@ -7,21 +7,22 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertUnits, getConstants } from "../../../lib/api";
-import { getUnitCategories } from "../../../lib/api/reference";
+import { convertUnits, getConstants, getUnitCategories } from "../../../lib/api/reference";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
-  convertUnits: vi.fn(),
-  getConstants: vi.fn(),
   xrayCalc: vi.fn(),
   crystalDSpacing: vi.fn(),
   crystalCell: vi.fn(),
+}));
+vi.mock("../../../lib/api/sld", () => ({
   sldFromFormula: vi.fn(),
 }));
 
 vi.mock("../../../lib/api/reference", () => ({
   getUnitCategories: vi.fn(),
+  convertUnits: vi.fn(),
+  getConstants: vi.fn(),
 }));
 
 const CATEGORIES = [

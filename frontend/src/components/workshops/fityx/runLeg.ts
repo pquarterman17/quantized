@@ -6,16 +6,7 @@
 // columns, order) is passed in explicitly, so a caller can run it on any
 // DataStruct (the analysis view, or one By level's sliced subset).
 
-import {
-  statsAnova,
-  statsChiSquareIndependence,
-  statsFisherExact,
-  statsLevene,
-  statsRecommend,
-  statsRegression,
-  statsTukey,
-  type RegressionBand,
-} from "../../../lib/api";
+import { statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey, type RegressionBand } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
 import type { Recommendation } from "../../../lib/statschooser";
 import type { CalcResult, DataStruct } from "../../../lib/types";

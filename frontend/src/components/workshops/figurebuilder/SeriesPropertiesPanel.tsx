@@ -9,7 +9,8 @@
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
 import type { SeriesStyle, StepMode } from "../../../lib/types";
-import { IconButton, Select } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { Select } from "../../primitives";
 import {
   describeSeriesErrors,
   describeXAxisErrors,

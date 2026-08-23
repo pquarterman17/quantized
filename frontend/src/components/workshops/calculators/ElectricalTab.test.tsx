@@ -1,26 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  electricalConductivity,
-  electricalHall,
-  electricalResistivity,
-} from "../../../lib/api";
-import { electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
+import { electricalConductivity, electricalHall, electricalResistivity, electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
 import ElectricalTab from "./ElectricalTab";
 
-vi.mock("../../../lib/api", () => ({
+
+vi.mock("../../../lib/api/electrical", () => ({
+  electricalHallSweep: vi.fn(),
+  electricalVanDerPauw: vi.fn(),
   electricalResistivity: vi.fn(),
   electricalSheetResistance: vi.fn(),
   electricalConductivity: vi.fn(),
   electricalMobility: vi.fn(),
   electricalCurrentDensity: vi.fn(),
   electricalHall: vi.fn(),
-}));
-
-vi.mock("../../../lib/api/electrical", () => ({
-  electricalHallSweep: vi.fn(),
-  electricalVanDerPauw: vi.fn(),
 }));
 
 beforeEach(() => {

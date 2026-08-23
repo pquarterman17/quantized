@@ -1,9 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { Badge, Button, MetaRow, Pill, Switch } from "./index";
+import { Badge, Button } from "./index";
 import Card from "./Card";
+import { MetaRow } from "./MetaRow";
+import { Pill } from "./Pill";
 import { RangeSlider } from "./RangeSlider";
+import { Switch } from "./Switch";
 import { useHelp } from "../../store/help";
 
 describe("primitives", () => {

@@ -13,8 +13,10 @@ import { useApp } from "../../../store/useApp";
 import CalculatorsPanel from "./CalculatorsPanel";
 import { TAB_GROUPS } from "./CalculatorsContent";
 
-vi.mock("../../../lib/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../lib/api")>();
+// getConstants lives in lib/api/reference.ts (R8 bundle-diet pass), not the
+// lib/api.ts facade — mock it at its real import path.
+vi.mock("../../../lib/api/reference", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/api/reference")>();
   return {
     ...actual,
     // useCalculators fetches constants unconditionally on mount; stub it so

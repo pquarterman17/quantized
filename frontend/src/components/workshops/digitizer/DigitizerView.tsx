@@ -5,7 +5,8 @@
 
 import { useRef, useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import { type Mode, useDigitizer } from "./useDigitizer";
 

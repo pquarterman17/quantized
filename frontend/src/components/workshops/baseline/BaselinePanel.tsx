@@ -7,7 +7,8 @@
 // recalc DAG). Thin — logic lives in the hook.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import { useBaseline, type BaselineMethod, type BaselineParams } from "./useBaseline";
 

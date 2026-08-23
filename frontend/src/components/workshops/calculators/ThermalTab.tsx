@@ -5,11 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  thermalDebye,
-  thermalDiffusivity,
-  thermalWiedemannFranz,
-} from "../../../lib/api";
+import { thermalDebye, thermalDiffusivity, thermalWiedemannFranz } from "../../../lib/api/thermal";
 import {
   Button,
   Card,

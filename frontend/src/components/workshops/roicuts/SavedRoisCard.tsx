@@ -7,7 +7,8 @@
 // saved here — matches store/rois.ts's own `saveRoi` contract.
 
 import { useState } from "react";
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import Card from "../../primitives/Card";
 import type { RoiCutsState } from "./useRoiCuts";
 

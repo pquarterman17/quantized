@@ -11,7 +11,7 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { SegmentedControl } from "../../primitives";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { useMultivarStore } from "../../../store/multivar";
 import ColumnPicker from "./ColumnPicker";
 import CorrelationView from "./CorrelationView";

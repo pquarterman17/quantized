@@ -2,24 +2,20 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  type DistFitAllResponse,
-  reportEmit,
-  statsDescriptive,
-  statsFitDistributions,
-  statsHistogram,
-  statsShapiro,
-} from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
+import { type DistFitAllResponse, reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useDistribution } from "./useDistribution";
 
 vi.mock("../../../lib/api", () => ({
   statsHistogram: vi.fn(),
-  statsDescriptive: vi.fn(),
   statsShapiro: vi.fn(),
   statsFitDistributions: vi.fn(),
   reportEmit: vi.fn(),
+}));
+vi.mock("../../../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
 }));
 
 const DATA: DataStruct = {

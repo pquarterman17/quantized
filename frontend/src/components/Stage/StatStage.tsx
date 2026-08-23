@@ -17,7 +17,9 @@ import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { Button, Checkbox, SegmentedControl, Select } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
+import { SegmentedControl } from "../primitives/SegmentedControl";
+import { Button, Select } from "../primitives";
 import StatStageCanvas from "./StatStageCanvas";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
 

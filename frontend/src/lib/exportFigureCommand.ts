@@ -13,7 +13,7 @@
 // drift. This file now owns only the DIALOG and the download verb.
 
 import { askParams } from "../components/overlays/ParamDialog";
-import { exportFigure } from "./api";
+import { exportFigure } from "./api/figures";
 import { exportActive, type StoreGet } from "./exportActive";
 import { buildStageFigureSpec } from "./figureSpec";
 

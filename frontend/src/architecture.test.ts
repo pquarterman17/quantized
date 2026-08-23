@@ -279,7 +279,24 @@ const MODULE_PINS: Record<string, number> = {
   // belonged in the new domain module from their first use; moving them now
   // lowers the pin (55 function lines + 2 type imports = 57 lines removed).
   // New /api/rsm/* wrappers belong in lib/api/rsm.ts.
-  "/lib/api.ts": 1725,
+  // lib/api.ts GRADUATED 2026-08-23 (pin was 1725; R8 bundle-diet pass):
+  // the reference/units, sld, electrical, optics, vacuum, thermal,
+  // diffusion, electrochemistry, semiconductor, thin-film, superconductor,
+  // magnetic, baseline, curvefit (autoGuess/listFitModels/bootstrapFit/
+  // validateEquation/fitEquation/findXY/scanFitModels), figures
+  // (FigureSpec + export/render wrappers), datasetAlgebra, magnetometry,
+  // peaks (findPeaks/fitPeak/fitMultiPeak), reflectivity, import-filter,
+  // and reductions wrappers all moved to their own `api/<domain>.ts`
+  // siblings — not a line-count exercise this time, but an EAGER-BYTES one
+  // (see frontend/scripts/check-bundle-size.mjs's 2026-08-23 history
+  // entry): every one of these was lazy-workshop-only, but co-location in
+  // this file with useApp.ts's eager fftSpectral/fitModel/peaksIntegrate/
+  // uploadFile imports was dragging the whole lazy set into the eager
+  // bundle, since Rollup ships a module's code to wherever ANY of its
+  // importers' chunks land. Dropped 1725 -> 299 lines, under this test's
+  // own TSX_CEILING graduation bar, so the pin is deleted rather than
+  // lowered (the "pins stay honest" check below). New wrappers for any of
+  // those domains go in their sibling file, never back in lib/api.ts.
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is

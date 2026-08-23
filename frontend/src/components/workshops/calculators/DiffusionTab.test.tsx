@@ -1,22 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  diffusionArrhenius,
-  diffusionFickFlux,
-  diffusionLength,
-} from "../../../lib/api";
-import { diffusionCProfile } from "../../../lib/api/diffusion";
+import { diffusionArrhenius, diffusionFickFlux, diffusionLength, diffusionCProfile } from "../../../lib/api/diffusion";
 import DiffusionTab from "./DiffusionTab";
 
-vi.mock("../../../lib/api", () => ({
-  diffusionArrhenius: vi.fn(),
-  diffusionLength: vi.fn(),
-  diffusionFickFlux: vi.fn(),
-}));
 
 vi.mock("../../../lib/api/diffusion", () => ({
   diffusionCProfile: vi.fn(),
+  diffusionArrhenius: vi.fn(),
+  diffusionLength: vi.fn(),
+  diffusionFickFlux: vi.fn(),
 }));
 
 beforeEach(() => {

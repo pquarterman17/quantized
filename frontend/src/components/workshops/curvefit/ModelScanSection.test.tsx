@@ -6,7 +6,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ScanEntry } from "../../../lib/api";
+import type { ScanEntry } from "../../../lib/api/curvefit";
 import ModelScanSection from "./ModelScanSection";
 import type { ModelScanState } from "./useModelScan";
 
