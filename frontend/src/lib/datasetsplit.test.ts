@@ -8,13 +8,13 @@ import {
   formatGroupLabel,
   groupByExactValue,
   isCategoricalColumn,
-  pickDefaultSplitColumn,
   sliceDataStruct,
   SPLIT_GROUP_CAP,
   splitColumn,
   tooManyGroups,
   type SplitGroup,
 } from "./datasetsplit";
+import { pickDefaultSplitColumn } from "./datasetsplitDefault";
 import type { DataStruct } from "./types";
 
 /** Sum of every group's row count — a split must always account for every

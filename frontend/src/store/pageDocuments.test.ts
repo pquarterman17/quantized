@@ -8,7 +8,8 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createPageDocument, type PageDocument } from "../lib/pageDocument";
+import type { PageDocument } from "../lib/pageDocument";
+import { createPageDocument } from "../lib/pageDocumentActions";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 

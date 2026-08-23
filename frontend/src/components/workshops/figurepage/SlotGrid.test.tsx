@@ -5,7 +5,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepage";
+import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepageActions";
 import SlotGrid, { PANEL_SLOT_MIME, PANEL_SOURCE_MIME } from "./SlotGrid";
 
 const FIGURE_SLOT: PageSlot = { source: { kind: "figure", id: "f1", name: "Loop" }, label: null, title: null };

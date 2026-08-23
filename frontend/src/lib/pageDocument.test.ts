@@ -9,21 +9,23 @@ import { defaultPlotView } from "./plotview";
 import {
   PAGE_DOCUMENT_SCHEMA,
   PAGE_DOCUMENT_VERSION,
+  emptyPagePanels,
+  sanitizePageDocument,
+  sanitizePageDocuments,
+  type PageDocument,
+  type PageLayoutSettings,
+} from "./pageDocument";
+import {
   createPageDocument,
   deserializePageDocument,
-  emptyPagePanels,
   pageDocumentDirty,
   pageDocumentHasUnsavedEdits,
   pagePanelLabels,
   pagePanelLifecycle,
   pagesReferencingFigure,
   resolvePagePanel,
-  sanitizePageDocument,
-  sanitizePageDocuments,
   serializePageDocument,
-  type PageDocument,
-  type PageLayoutSettings,
-} from "./pageDocument";
+} from "./pageDocumentActions";
 
 const FIGURE = createFigureDocument({
   id: "figure-1",

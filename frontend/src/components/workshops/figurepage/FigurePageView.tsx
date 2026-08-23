@@ -36,11 +36,8 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
-import {
-  PAGE_LABEL_FORMATS,
-  PAGE_LABEL_POSITIONS,
-  type PanelSource,
-} from "../../../lib/figurepage";
+import { PAGE_LABEL_FORMATS, PAGE_LABEL_POSITIONS } from "../../../lib/figurepage";
+import type { PanelSource } from "../../../lib/figurepageActions";
 import { PAGE_RESIZE_MODES } from "../../../lib/pageDocument";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES } from "../figurebuilder/useFigureBuilder";

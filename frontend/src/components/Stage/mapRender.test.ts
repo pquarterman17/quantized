@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RsmPeak } from "../../lib/types";
 import { buildHeatmapImage, dataToPx, draw, fmt, hitTest, minPositive, peakMarkerXY, plotRect } from "./mapRender";
 

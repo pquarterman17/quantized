@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { is2DMap } from "./mapdata";
 import {
   buildMapColumns,
   fetchMap,
   hasQSpace,
-  is2DMap,
   regridNearest,
   rsmAxisKeys,
-} from "./mapdata";
+} from "./mapdataFetch";
 import type { DataStruct } from "./types";
 
 vi.mock("./api", () => ({

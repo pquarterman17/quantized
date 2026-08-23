@@ -39,7 +39,8 @@ import { useEffect, useState } from "react";
 
 import { rsmBoxCut, rsmBoxStats, rsmChiProfile, rsmSector, type BoxCutRequest, type BoxStats, type BoxStatsRequest } from "../../../lib/api/rsm";
 import type { CutSpace } from "../../../lib/mapcuts";
-import { hasQSpace, is2DMap } from "../../../lib/mapdata";
+import { is2DMap } from "../../../lib/mapdata";
+import { hasQSpace } from "../../../lib/mapdataFetch";
 import {
   defaultSectorBins,
   normalizeRect,

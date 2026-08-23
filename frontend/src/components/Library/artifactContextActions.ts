@@ -8,7 +8,7 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
-import { pagesReferencingFigure } from "../../lib/pageDocument";
+import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 
 export type ArtifactNode = Extract<
   LibraryNode,

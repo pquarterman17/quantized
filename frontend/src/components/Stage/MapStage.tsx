@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
-import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
+import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";

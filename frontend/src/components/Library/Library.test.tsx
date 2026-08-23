@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import Library from "./Library";
 import { createFigureDocument } from "../../lib/figureDocument";
 import type { OriginFigureEntry } from "../../lib/originFigures";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { LIBRARY_VIEW_PREFS_KEY } from "../../lib/libraryViewPrefs";
