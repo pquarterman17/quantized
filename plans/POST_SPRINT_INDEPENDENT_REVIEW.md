@@ -214,6 +214,19 @@ real desktop app today because candidate paths are never read-consented;
 closing it needs a genuine new consent gesture, a product decision, not an
 engineering default this lane should pick unilaterally).
 
+**Update (2026-08-23, C1 — see `CHATGPT_SOL_TO_CLAUDE_RELEASE_HANDOFF.md`'s
+Completion log for the full evidence):** the product decision named above
+was made explicitly by that handoff doc's own "Relink consent and
+interaction contract" (a native Browse... folder grant, never a typed-path
+grant), so C1 implemented it — `store/relink.ts`'s KNOWN LIMITATION is
+CLOSED for the Browse... path (a candidate under a Browse...-picked new
+root now gets a real checksum comparison); a TYPED new root still degrades
+to stat-only exactly as before, honestly labeled in the panel. This closes
+the engineering half of R2's carried-over note; the owner-acceptance
+smoke test of the real native picker on Windows/macOS (this item's own
+"exercise real native dialogs" bullet below) is unaffected and still
+outstanding.
+
 **Problem:** The RC was built successfully, but the sprint still records the
 installed Windows/macOS workflow, owner real-data session, Office paste,
 installer/icon/taskbar check, baseline Quick Figure smoke, and Sol usability

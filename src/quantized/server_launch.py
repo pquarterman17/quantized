@@ -230,6 +230,16 @@ def _run_desktop(
     except Exception as e:
         print(f"[qz] {_WEBVIEW_HINT}\n(error: {e})")
     finally:
+        # C1: app exit revokes every relink directory grant (desktop_consent's
+        # module doc's revocation list) — the window has just closed, so any
+        # "Browse..." folder grant from this session's relink panel must not
+        # persist past it (belt-and-braces: the grant is process-local memory
+        # that dies with this process anyway, but the module's own contract
+        # names app exit explicitly, so make it an actual call site rather
+        # than an implicit consequence of the process ending).
+        from quantized.desktop_consent import clear_dir_grants
+
+        clear_dir_grants()
         if server is not None:
             server.should_exit = True
         if t is not None:

@@ -26,8 +26,9 @@ route, and the desktop shell must stay importable without the web stack.
 ``window.pywebview.api`` (``DesktopApi``, below) is the pywebview half of the
 shell-agnostic frontend contract in ``frontend/src/lib/desktopBridge.ts``. The
 dialog / project-READ methods (``probe``, ``pick_files``, ``pick_directory``,
-``path_status``, ``save_file_dialog``, ``open_project_file``,
-``read_project_file``, ``probe_source``, ``grant_source_paths``) live on the
+``pick_relink_directory``, ``revoke_relink_dir``, ``path_status``,
+``save_file_dialog``, ``open_project_file``, ``read_project_file``,
+``probe_source``, ``grant_source_paths``) live on the
 :class:`~quantized.desktop_bridge_dialogs.DesktopDialogBridge` mixin this
 class inherits from (split out once this module neared the repo's 500-line
 god-module ceiling — see that module's doc for the split rationale). This

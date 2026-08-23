@@ -20,8 +20,10 @@ import pytest
 from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
+    dir_grant_count,
     is_consented,
     is_declared_source,
+    is_dir_consented,
     is_write_consented,
 )
 
@@ -178,6 +180,98 @@ def test_pick_directory_cancel_returns_none() -> None:
     assert api.pick_directory()["path"] is None
 
 
+# --- pick_relink_directory / revoke_relink_dir (C1) -------------------------
+#
+# Unlike `pick_directory` above, this dialog IS a consent gesture — the one
+# folder picker in the app that grants anything. RED-FIRST: `pick_relink_directory`
+# and `revoke_relink_dir` are NEW methods; before this slice `is_dir_consented`
+# did not exist at all, so every assertion below fails on `main`.
+
+
+def test_pick_relink_directory_grants_read_consent_for_the_chosen_folder(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "run1.csv").write_text("x", encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(tmp_path)]))
+    out = api.pick_relink_directory()
+    assert out["path"] == os.path.realpath(str(tmp_path))
+    assert is_dir_consented(str(sub / "run1.csv"))
+
+
+def test_pick_relink_directory_cancel_grants_nothing() -> None:
+    """Session cancellation: backing out of the dialog must not mint a
+    grant for whatever `directory` happened to be passed as a hint."""
+    api = DesktopApi()
+    api.attach(FakeWindow(None))
+    out = api.pick_relink_directory()
+    assert out["path"] is None
+    assert dir_grant_count() == 0
+
+
+def test_pick_relink_directory_without_a_window_reports_rather_than_raises() -> None:
+    assert DesktopApi().pick_relink_directory()["path"] is None
+
+
+def test_pick_relink_directory_reports_a_dialog_failure(tmp_path: Path) -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow(RuntimeError("dialog boom")))
+    out = api.pick_relink_directory()
+    assert out["path"] is None
+    assert "boom" in out["error"]
+    assert dir_grant_count() == 0
+
+
+def test_pick_relink_directory_refuses_a_result_that_is_not_a_directory(tmp_path: Path) -> None:
+    """A dialog implementation returning something bogus (not a real
+    directory) must not silently grant it."""
+    f = _csv(tmp_path)
+    api = DesktopApi()
+    api.attach(FakeWindow([str(f)]))
+    out = api.pick_relink_directory()
+    assert out["path"] is None
+    assert dir_grant_count() == 0
+
+
+def test_pick_relink_directory_never_widens_write_consent(tmp_path: Path) -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow([str(tmp_path)]))
+    api.pick_relink_directory()
+    resolved = os.path.realpath(str(tmp_path / "whatever.dwk"))
+    assert not is_write_consented(resolved)
+
+
+def test_revoke_relink_dir_clears_the_grant(tmp_path: Path) -> None:
+    api = DesktopApi()
+    api.attach(FakeWindow([str(tmp_path)]))
+    api.pick_relink_directory()
+    f = tmp_path / "run1.csv"
+    f.write_text("x", encoding="utf-8")
+    assert is_dir_consented(str(f))
+    out = api.revoke_relink_dir()
+    assert out == {"ok": True}
+    assert not is_dir_consented(str(f))
+    assert dir_grant_count() == 0
+
+
+def test_revoke_relink_dir_is_idempotent_with_nothing_granted() -> None:
+    assert DesktopApi().revoke_relink_dir() == {"ok": True}
+
+
+def test_typed_path_never_receives_a_directory_grant(tmp_path: Path) -> None:
+    """The hard rule: nothing short of a REAL dialog return can mint a
+    directory grant. There is no bridge method a typed path can reach that
+    grants one — this asserts the negative directly against the module the
+    grant would have to live in."""
+    sub = tmp_path / "typed_root"
+    sub.mkdir()
+    # No dialog was ever involved — just the plain filesystem fact that this
+    # directory exists. Nothing in this module's public surface can turn
+    # that fact into a grant on its own.
+    assert not is_dir_consented(str(sub))
+    assert not is_dir_consented(str(sub / "candidate.csv"))
+
+
 # --- path_status: the offline-vs-missing distinction -----------------------
 
 
@@ -261,6 +355,40 @@ def test_probe_source_computes_a_checksum_once_read_consented(tmp_path: Path) ->
     out = api.probe_source(resolved)
     assert out["state"] == "ok"
     assert out["checksum"].startswith("sha256:")
+
+
+def test_probe_source_computes_a_checksum_for_a_candidate_under_a_relink_dir_grant(
+    tmp_path: Path,
+) -> None:
+    """C1: the whole point of the directory grant kind. RED-FIRST — before
+    this slice, a relink CANDIDATE path (never individually picked, never a
+    declared source) could never get a checksum at all; `probe_source`
+    consulted only `is_consented`."""
+    sub = tmp_path / "new_location"
+    sub.mkdir()
+    candidate = sub / "run1.csv"
+    candidate.write_text("T,M\n1,10\n", encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(sub)]))
+    api.pick_relink_directory()  # the ONLY thing that can grant this
+    out = api.probe_source(str(candidate))
+    assert out["state"] == "ok"
+    assert out["checksum"].startswith("sha256:")
+
+
+def test_probe_source_still_no_checksum_for_a_typed_unconsented_candidate(
+    tmp_path: Path,
+) -> None:
+    """The negative half of the test above: a candidate path under a folder
+    that was only TYPED (no `pick_relink_directory` call at all) still gets
+    no checksum — the fix is scoped exactly to a real dialog grant."""
+    sub = tmp_path / "typed_new_location"
+    sub.mkdir()
+    candidate = sub / "run1.csv"
+    candidate.write_text("T,M\n1,10\n", encoding="utf-8")
+    out = DesktopApi().probe_source(str(candidate))
+    assert out["state"] == "ok"
+    assert "checksum" not in out
 
 
 def test_probe_source_missing_and_offline_states(tmp_path: Path) -> None:
@@ -418,6 +546,25 @@ def test_grant_source_paths_declared_set_replaces_wholesale_on_reopen(tmp_path: 
 
     assert out["paths"] == [os.path.realpath(str(b_source))]
     assert not is_consented(os.path.realpath(str(a_source)))
+
+
+def test_opening_a_project_revokes_a_prior_relink_directory_grant(tmp_path: Path) -> None:
+    """C1: project-change revocation. A relink "Browse..." grant from
+    project A's session must not silently keep covering project B's
+    candidate paths after A closes and B opens — the same "wholesale
+    replace, not accumulate" moment `set_declared_sources` already uses
+    for declared sources (`_read_granted`)."""
+    a_dir = tmp_path / "a_new_location"
+    a_dir.mkdir()
+    api = DesktopApi()
+    api.attach(FakeWindow([str(a_dir)]))
+    api.pick_relink_directory()
+    assert is_dir_consented(str(a_dir / "whatever.csv"))
+
+    _open_project_declaring(tmp_path)  # project B opens in a fresh api below,
+    # but the revocation is process-global (dir grants aren't per-DesktopApi
+    # instance), so opening through ANY api instance must revoke it.
+    assert not is_dir_consented(str(a_dir / "whatever.csv"))
 
 
 def test_declared_sources_only_recorded_on_a_successful_project_read(tmp_path: Path) -> None:
