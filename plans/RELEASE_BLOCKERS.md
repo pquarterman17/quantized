@@ -126,6 +126,100 @@ top of it this sprint.
   without ever verifying ownership). Both landed with adversarial
   code-review rounds fixing real pre-merge findings; independent-review
   status is recorded in that document's closure log.
+  **Browser multi-tab defer NARROWED, 2026-08-23 (`claude/browser-tab-lock`):**
+  `lib/browserLockProvider.ts` implements the SAME `LockProvider` contract
+  (no new verbs, no change to `lib/lockState.ts`'s classification/staleness
+  rules) against `localStorage` for the record, with the Web Locks API
+  (`navigator.locks.request`) — where available, in a secure context —
+  guarding every mutating verb's read-compare-write as a per-path mutex, so
+  two tabs' CAS attempts can never physically interleave; a browser lacking
+  Web Locks degrades to the same read-compare-write with no `await` between
+  read and write (single-threaded-JS atomicity within one tab), never
+  throwing and never failing open. `App.tsx` installs it (dynamic import) in
+  exactly the branch that used to keep the honest-but-unprotected in-memory
+  default — the non-desktop (`hasDesktopShell() === false`) case. **Same-
+  browser multi-tab is now covered; cross-browser, cross-machine, and
+  cross-profile on the web remain OUT of scope** — `localStorage` is not
+  shared across any of those, and closing that gap would need a server-side
+  lock leg `qz` (no `--desktop`) does not have today; that boundary stays
+  the desktop filesystem lock's domain. Red-first: a forced-race pair
+  (`browserLockProvider.test.ts`, a deferred-promise `yieldForTest` seam)
+  reproduces the no-mutex split-brain on every run and proves the Web Locks
+  mutex closes it, alongside mutual-exclusion/refresh-CAS/takeOver-CAS/
+  release-idempotence/stale-heartbeat/storage-exception/malformed-record
+  coverage (29 tests). tsc, eslint, and the full vitest suite green.
+  **CORRECTION, same day, coordinator review round (M1):** the entry above
+  overclaimed — `lib/browserLockProvider.ts` landed as a working
+  `LockProvider`, but nothing on any browser-tab CODE PATH ever called one
+  of its verbs (a browser-picker open carries no `native` identity, so
+  `registerWithLockStateMachine` never fires; quick-save falls straight to
+  a blob download before any lock check), so "same-browser multi-tab is now
+  covered" was false as shipped. Scouted the actual same-browser collision
+  surface (`useWorkspaceAutosave.ts`'s header): one shared IndexedDB/
+  localStorage autosave slot per origin, read on every startup and written
+  on every debounced save, with NO project path involved at all — the thing
+  two ordinary browser tabs actually silently clobber today. Fix: a
+  synthetic, stable `BROWSER_AUTOSAVE_LOCK_PATH` the EXISTING lock state
+  machine tracks like a real file (`App.tsx`'s install effect calls the
+  unchanged `openProject` against it right after installing the provider;
+  the debounced-save effect gates its write on the unchanged `canWriteNow()`
+  for that exact path) — no new verbs, no `lib/lockState.ts` changes. An
+  explicit browser file-picker open/save REMAINS ungated (named honestly in
+  `store/projectLock.ts`'s header) — out of this round's scope, since giving
+  a picked file a durable cross-tab identity is materially larger. Three
+  more hardening fixes in the same round: (M2) the tab-close release now
+  routes through the SAME Web Locks mutex the other verbs use, closing a
+  read-then-delete TOCTOU window against a concurrent takeover (forced-race
+  pair added); (M3) release is now tied to `pagehide`'s `persisted: false`
+  only — `beforeunload` no longer releases at all, since it can't tell a
+  real unload from a page merely frozen into the back/forward cache; a
+  `pageshow` handler re-validates via the existing `heartbeat()` entry point
+  on a bfcache restore; (M6) `subscribeUnload` returns an unsubscribe and
+  the provider exposes `dispose()`, so the installing effect's own cleanup
+  (StrictMode double-mount included) can't leak a permanent listener per
+  remount. Red-first: two-simulated-tabs coverage of engage/read-only/
+  Take-Over-Editing and the debounced-write gate in
+  `useWorkspaceAutosave.test.ts`, plus the M2/M3/M6 tests in
+  `browserLockProvider.test.ts` (35 tests there, up from 29; 5 new tests in
+  `useWorkspaceAutosave.test.ts`). tsc, eslint, and the full vitest suite
+  green.
+  **CORRECTION #2, same day, coordinator review round 3 (N1-N6):** M2's own
+  fix (round 2) was itself a regression, plus the new gate had recovery and
+  bypass holes. (N1, REGRESSION) M2 routed the `pagehide` release through
+  `navigator.locks.request`, whose callback is invoked ASYNCHRONOUSLY even
+  when the lock is immediately free — a dying document gives no guarantee
+  any pending microtask still runs, so on `localhost` (always a secure
+  context, Web Locks always present) the release silently never completed
+  on an ordinary tab close: every normal close stranded the record, and the
+  next tab landed read-only for a full `STALE_AFTER_MS`+ for no reason.
+  REVERTED to the original synchronous compare-and-`removeItem` (no
+  `withCas`, no `await`); the ordinary `release()` verb is unaffected (still
+  mutex-guarded, since a caller of `release()` can genuinely await it). The
+  narrow unload-vs-`takeOver` TOCTOU is now an accepted, documented residual.
+  (N2/N5) the App-start `engageBrowserAutosaveLock()` was one-shot — a tab
+  that engaged read-only (or later lost the lock) stayed autosave-dead
+  forever even once the slot freed.
+  `useWorkspaceAutosave.ts`'s `installBrowserAutosaveReengage()` adds three
+  EVENT-DRIVEN triggers (no polling): a definite-loss edge on the lock
+  store, a `pageshow` bfcache restore (a FULL re-`openProject`, replacing
+  the previous round's narrower `heartbeat()`-only revalidation, which
+  early-returns for a non-holder), and a `visibilitychange`-to-visible while
+  not the writer — all funneling through the SAME `engageBrowserAutosaveLock`
+  entry point, no new one added. (N3) `openAsCopy()` clears `lock.path`,
+  which would otherwise silently pass the write gate forever — but the
+  autosave backend has ONE slot per origin, no separate "copy destination".
+  Fixed at the command (`commands/projectLockCommands.ts` now refuses Open
+  as Copy outright for this path) with a belt in the write gate
+  (`openedAsCopy` checked directly, ahead of `path`). (N4) edits made while
+  gated sat in memory until some LATER unrelated change re-fired the
+  debounce — the SAME re-engage watcher now schedules an immediate
+  `flushAutosaveNow()` on the opposite edge (regaining write access) when
+  the project is dirty. (N6) a gate-refused write reported nothing — now
+  reports through the existing `reportAutosaveHealth` channel once per
+  TRANSITION (paused -> resumed), never once per debounce tick. Red-first
+  for all six, each verified by temporarily reverting the specific fix and
+  confirming the corresponding test failed before restoring. tsc, eslint,
+  and the full vitest suite green.
 - ~~**M's transactional multi-source "Reimport All" (L0.33)**~~ **BUILT
   2026-08-23 (`claude/m2-reimport-all`, not yet merged):** `store/reimportAll.ts`
   (two-phase stage/commit — see its module doc) + the workbook context

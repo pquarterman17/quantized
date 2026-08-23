@@ -1,13 +1,27 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { setAutosaveBackend } from "./lib/autosave";
+import { autosaveHealth, setAutosaveBackend } from "./lib/autosave";
 import { memoryBackend } from "./lib/autosaveBackend";
+import { createBrowserLockProvider } from "./lib/browserLockProvider";
+import { STALE_AFTER_MS } from "./lib/lockState";
 import { serializeWorkspace } from "./lib/workspace";
+import { useAutosaveStatus } from "./store/autosaveStatus";
+import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useApp, type AppState } from "./store/useApp";
-import { shouldAutosave, useWorkspaceAutosave, type AutosaveState } from "./useWorkspaceAutosave";
+import { useToasts } from "./store/toasts";
+import {
+  BROWSER_AUTOSAVE_LOCK_PATH,
+  engageBrowserAutosaveLock,
+  flushAutosaveNow,
+  installBrowserAutosaveReengage,
+  resetAutosavePausedReporting,
+  shouldAutosave,
+  useWorkspaceAutosave,
+  type AutosaveState,
+} from "./useWorkspaceAutosave";
 
 const ds = {
   id: "a",
@@ -354,5 +368,511 @@ describe("AutosaveState completeness sweep (P2-1)", () => {
 
   it("finds a non-trivial number of persisted fields (the scan still works)", () => {
     expect(workspaceDocFields().length).toBeGreaterThan(15);
+  });
+});
+
+// -- Browser autosave lock (coordinator review round, M1) ------------------
+//
+// M1's finding: the browser LockProvider (lib/browserLockProvider.ts) was
+// dead code — nothing on a browser-tab path ever called one of its verbs.
+// The autosave slot (this module's own restore/debounced-save loop) is the
+// actual same-browser collision surface, scouted in this module's own
+// header. "Two simulated tabs" below is the same technique
+// lib/browserLockProvider.test.ts and store/projectLock.test.ts already
+// use: a raw `createBrowserLockProvider` instance mutates the SHARED fake
+// storage directly (bypassing `useProjectLock` entirely) to stand in for
+// "the other tab", while `useProjectLock`'s own real provider/actions stand
+// in for "this tab".
+function fakeAutosaveStorage() {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      map.set(k, v);
+    },
+    removeItem: (k: string) => {
+      map.delete(k);
+    },
+  };
+}
+
+describe("browser autosave lock — engage/takeover (M1)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+  });
+
+  afterEach(() => {
+    useProjectLock.setState(original);
+  });
+
+  it("engageBrowserAutosaveLock acquires the synthetic lock when the slot is free", async () => {
+    const storage = fakeAutosaveStorage();
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} }),
+    });
+
+    await engageBrowserAutosaveLock();
+
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().path).toBe(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+
+  it("a second tab is read-only with the first tab's record, and Take Over Editing works once it's stale", async () => {
+    const storage = fakeAutosaveStorage();
+    // "Tab A" acquires directly, bypassing the store — a different tab's
+    // own action, never routed through THIS session's useProjectLock.
+    const otherTab = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    const acquired = await otherTab.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(acquired.acquired).toBe(true);
+
+    // "This tab" installs its own provider sharing the SAME storage and
+    // engages — must observe tab A's record and land read-only, the same
+    // read-only + Take Over Editing UX a real desktop project open gets.
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} }),
+    });
+    await engageBrowserAutosaveLock();
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    expect(useProjectLock.getState().record?.instanceId).toBe("tab-a");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+
+    // Force tab A stale (the deterministic stand-in for "real time passed"
+    // every other lock-provider test in this codebase uses) and re-open to
+    // pick up the fresh classification before Take Over Editing's own gate
+    // (`canTakeOver`) will act on it — mirrors L0.47's re-verify discipline.
+    const key = "qz-project-lock:v1:" + BROWSER_AUTOSAVE_LOCK_PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+    await useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().status).toBe("held-by-other-stale");
+
+    const tookOver = await useProjectLock.getState().takeOverEditing();
+    expect(tookOver).toBe(true);
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+});
+
+describe("browser autosave lock — the debounced write actually consults it (M1)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    setAutosaveBackend(memoryBackend());
+    useApp.setState({ datasets: [], plotWindows: [], focusedWindowId: null, projectDirty: false });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    useProjectLock.setState(original);
+    useApp.setState({ projectDirty: false });
+  });
+
+  async function editAndFlushDebounce(): Promise<void> {
+    act(() => {
+      useApp.setState({ datasets: [{ ...ds }] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+  }
+
+  it("skips the write when the lock reports read-only for the browser autosave path", async () => {
+    useProjectLock.setState({ path: BROWSER_AUTOSAVE_LOCK_PATH, status: "held-by-other-live", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).toBeNull();
+  });
+
+  it("performs the write when held-by-me for the browser autosave path", async () => {
+    useProjectLock.setState({ path: BROWSER_AUTOSAVE_LOCK_PATH, status: "held-by-me", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).not.toBeNull();
+  });
+
+  it("writes normally when the lock isn't tracking the browser autosave path at all (desktop, or not yet engaged)", async () => {
+    useProjectLock.setState({ path: null, status: "unlocked", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).not.toBeNull();
+  });
+
+  // N3 belt (coordinator review round 3): `openAsCopy()` clears `lock.path`
+  // to `null`, which would otherwise make the ordinary
+  // `path === BROWSER_AUTOSAVE_LOCK_PATH` check above silently no-op —
+  // there is no separate "copy destination" for the single shared autosave
+  // slot, so a post-copy write must still be refused. This is the belt;
+  // the primary fix is the command-level refusal
+  // (commands/projectLockCommands.test.ts's N3 test).
+  it("N3 belt: refuses when openedAsCopy is set, even though path is null", async () => {
+    useProjectLock.setState({ path: null, status: "unlocked", openedAsCopy: true, record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).toBeNull();
+  });
+});
+
+// -- N2: event-driven re-engage ---------------------------------------------
+
+describe("browser autosave lock — event-driven re-engage (N2)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+  });
+
+  afterEach(() => {
+    useProjectLock.setState(original);
+  });
+
+  async function flush(): Promise<void> {
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+  }
+
+  it("N2: a visibilitychange-to-visible re-engage recovers once the holder releases", async () => {
+    const storage = fakeAutosaveStorage();
+    const otherTab = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    const acquired = await otherTab.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} }),
+    });
+    const teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock();
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+
+    // The holder releases — tab B doesn't know yet (no message-passing).
+    await otherTab.release(BROWSER_AUTOSAVE_LOCK_PATH, acquired.record?.token ?? "");
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    teardown();
+  });
+
+  it("N2: a definite loss on the autosave path triggers an immediate re-engage attempt", async () => {
+    const storage = fakeAutosaveStorage();
+    const provider = createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} });
+    const readSpy = vi.spyOn(provider, "read");
+    useProjectLock.setState({ provider });
+    const teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock();
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    const callsAfterEngage = readSpy.mock.calls.length;
+
+    // Someone else takes over behind tab B's back — never through tab B's
+    // own actions, exactly like a real second tab would.
+    const otherTab = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    const key = "qz-project-lock:v1:" + BROWSER_AUTOSAVE_LOCK_PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+    const bToken = useProjectLock.getState().record?.token ?? "";
+    const tookOver = await otherTab.takeOver(BROWSER_AUTOSAVE_LOCK_PATH, bToken);
+    expect(tookOver.acquired).toBe(true);
+
+    // Tab B's own heartbeat now sees the CAS fail — a definite loss.
+    await useProjectLock.getState().heartbeat();
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+
+    await flush();
+
+    // The re-engage attempt performed its OWN `openProject` -> `provider.read`
+    // call, on top of the initial engage's — proves the watcher actually
+    // fired, not just that heartbeat's own demotion ran.
+    expect(readSpy.mock.calls.length).toBeGreaterThan(callsAfterEngage);
+    teardown();
+  });
+
+  it("N2: never re-engages while openedAsCopy is set", async () => {
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-other-live",
+      openedAsCopy: true,
+      record: null,
+    });
+    const teardown = installBrowserAutosaveReengage();
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+    // No provider was ever installed for this state, so any attempted
+    // `openProject` call would throw/reject — the absence of a thrown
+    // rejection (unhandled) plus the status staying exactly as set is the
+    // proof no re-engage was attempted.
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    teardown();
+  });
+});
+
+// -- N4: immediate flush after recovering the lock --------------------------
+
+describe("browser autosave lock — immediate post-recovery flush (N4)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    setAutosaveBackend(memoryBackend());
+    useApp.setState({ datasets: [], plotWindows: [], focusedWindowId: null, projectDirty: false });
+  });
+
+  afterEach(() => {
+    useProjectLock.setState(original);
+    useApp.setState({ projectDirty: false });
+  });
+
+  async function flush(): Promise<void> {
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+  }
+
+  it("N4: a successful takeover with dirty edits flushes immediately, without waiting for a later change", async () => {
+    const storage = fakeAutosaveStorage();
+    const otherTab = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    await otherTab.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} }),
+    });
+    const teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock();
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+
+    // Edits pile up in memory while gated — dirty, but never actually saved.
+    useApp.setState({ projectDirty: true, datasets: [{ ...ds }] });
+    expect(autosaveHealth().savedAt).toBeNull();
+
+    const key = "qz-project-lock:v1:" + BROWSER_AUTOSAVE_LOCK_PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+    await useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH); // pick up the stale classification
+    const tookOver = await useProjectLock.getState().takeOverEditing();
+    expect(tookOver).toBe(true);
+
+    await flush(); // let the subscribe-triggered flushAutosaveNow() settle
+
+    // Flushed as part of the takeover itself — no LATER, unrelated change
+    // was needed to re-fire the debounce.
+    expect(autosaveHealth().savedAt).not.toBeNull();
+    teardown();
+  });
+
+  it("N4: does NOT flush on recovery when nothing was dirty", async () => {
+    const storage = fakeAutosaveStorage();
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} }),
+    });
+    const teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock(); // unlocked -> held-by-me, but nothing dirty
+    await flush();
+    expect(autosaveHealth().savedAt).toBeNull();
+    teardown();
+  });
+});
+
+// -- N6: paused/resumed reporting is once-per-transition ---------------------
+
+describe("browser autosave lock — paused/resumed reporting (N6)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    setAutosaveBackend(memoryBackend());
+    useApp.setState({ datasets: [], plotWindows: [], focusedWindowId: null, projectDirty: false });
+    // Round 4: the paused-report latch is module-level — reset it here so
+    // these tests never depend on which OTHER test's flush happened to
+    // reset it (docs/testing.md's determinism discipline).
+    resetAutosavePausedReporting();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    useProjectLock.setState(original);
+    useApp.setState({ projectDirty: false });
+  });
+
+  it("N6: reports the paused notice exactly once across repeated refused ticks, then reports resumed once", async () => {
+    useProjectLock.setState({ path: BROWSER_AUTOSAVE_LOCK_PATH, status: "held-by-other-live", record: null });
+    const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth");
+    renderHook(() => useWorkspaceAutosave());
+
+    // Two separate edits, each re-firing the debounce while STILL paused.
+    act(() => {
+      useApp.setState({ datasets: [{ ...ds }] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+    act(() => {
+      useApp.setState({ datasets: [{ ...ds, name: "b.dat" }] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+
+    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].error?.includes("paused"));
+    expect(pausedCalls).toHaveLength(1); // once per TRANSITION, never once per tick
+    expect(autosaveHealth().savedAt).toBeNull();
+
+    // Resume, then edit again — the real save's own health report is what
+    // proves "resumed" (see flushAutosaveNow's own doc for why there is no
+    // separate, redundant "resumed" message to keep in sync with it).
+    useProjectLock.setState({ status: "held-by-me" });
+    act(() => {
+      useApp.setState({ datasets: [{ ...ds, name: "c.dat" }] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+
+    expect(autosaveHealth().error).toBeNull();
+    expect(autosaveHealth().savedAt).not.toBeNull();
+  });
+
+  // Round 4: an opened-as-copy pause is NOT "another tab holds this
+  // session" — no other tab need exist and the pause never self-resumes;
+  // the report must say so honestly.
+  it("round 4: the opened-as-copy pause reports its own cause-specific message", async () => {
+    // spyOn on an already-spied method returns the SAME spy with earlier
+    // tests' history — clear so counts are this test's own.
+    const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth").mockClear();
+    useProjectLock.setState({ path: null, status: "unlocked", record: null, openedAsCopy: true });
+    await flushAutosaveNow();
+    const reported = setHealthSpy.mock.calls.map((c) => c[0].error).filter(Boolean);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toContain("opened as a copy");
+    expect(reported[0]).not.toContain("another tab");
+  });
+});
+
+// -- Round 4: re-engage triggers are quiet + copy-guarded --------------------
+
+describe("browser autosave lock — round-4 trigger guards", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+  let teardown: (() => void) | null = null;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    resetAutosavePausedReporting();
+  });
+
+  afterEach(() => {
+    // Teardown in afterEach, never inline at the test tail — a failing
+    // expect would otherwise skip it and leak this test's watcher into
+    // every later test in the module (order-coupling).
+    teardown?.();
+    teardown = null;
+    useProjectLock.setState(original);
+  });
+
+  it("a visibilitychange re-engage back onto the same read-only state shows NO toast", async () => {
+    const storage = fakeAutosaveStorage();
+    // Another tab genuinely holds the slot.
+    const holder = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    await holder.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+    const provider = createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} });
+    useProjectLock.setState({ provider });
+    teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock(); // initial engage MAY toast — that one is fine
+    const toastsBefore = useToasts.getState().toasts.length;
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live"); // re-engage really ran its course
+    expect(useToasts.getState().toasts.length).toBe(toastsBefore); // and said nothing new
+  });
+
+  it("pageshow while openedAsCopy never re-engages (openProject would clear the flag)", async () => {
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-other-live",
+      openedAsCopy: true,
+      record: null,
+    });
+    teardown = installBrowserAutosaveReengage();
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    // openProject clears openedAsCopy on BOTH its branches — the flag
+    // surviving proves no engage ran.
+    expect(useProjectLock.getState().openedAsCopy).toBe(true);
+  });
+
+  it("an unverifiable-streak demotion does NOT trigger the loss re-engage (R4's poller owns recovery)", async () => {
+    const openProjectSpy = vi
+      .fn()
+      .mockResolvedValue({ readOnly: true, status: "held-by-other-live" });
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-me",
+      openedAsCopy: false,
+      unverifiableHeartbeats: 0,
+      openProject: openProjectSpy,
+    });
+    teardown = installBrowserAutosaveReengage();
+    // The R4 demotion shape: status drops but the streak is NON-zero (the
+    // kept record still names this instance) — must NOT re-engage.
+    useProjectLock.setState({ status: "held-by-other-live", unverifiableHeartbeats: 3 });
+    await Promise.resolve();
+    expect(openProjectSpy).not.toHaveBeenCalled();
+    // A DEFINITE loss (streak zero) from held-by-me DOES re-engage.
+    useProjectLock.setState({ status: "held-by-me", unverifiableHeartbeats: 0 });
+    useProjectLock.setState({ status: "held-by-other-live", unverifiableHeartbeats: 0 });
+    await Promise.resolve();
+    expect(openProjectSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // Round 4: the latch resets on the REGAIN EDGE (the watcher), not merely
+  // inside an unblocked flush — a takeover with nothing dirty runs no
+  // flush, and the SECOND pause after it must still report. openProject is
+  // an inert spy so the loss-edge re-engage can't mutate lock state
+  // underneath the sequence being tested.
+  it("round 4: a second pause after a no-flush takeover still reports", async () => {
+    setAutosaveBackend(memoryBackend());
+    const openProjectSpy = vi
+      .fn()
+      .mockResolvedValue({ readOnly: true, status: "held-by-other-live" });
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-other-live",
+      record: null,
+      openedAsCopy: false,
+      unverifiableHeartbeats: 0,
+      openProject: openProjectSpy,
+    });
+    teardown = installBrowserAutosaveReengage();
+    const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth").mockClear();
+
+    await flushAutosaveNow(); // pause 1: reports
+    useProjectLock.setState({ status: "held-by-me" }); // regain edge: latch resets, nothing dirty → no flush
+    useProjectLock.setState({ status: "held-by-other-live" }); // pause 2
+    await flushAutosaveNow(); // must report AGAIN
+
+    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].error?.includes("paused"));
+    expect(pausedCalls).toHaveLength(2); // one per TRANSITION, including the second
   });
 });

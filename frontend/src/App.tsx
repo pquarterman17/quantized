@@ -24,7 +24,11 @@ import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
-import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
+import {
+  engageBrowserAutosaveLock,
+  installBrowserAutosaveReengage,
+  useWorkspaceAutosave,
+} from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
 const QuickFigureBuilderWorkspace = lazy(() => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"));
@@ -87,19 +91,71 @@ export default function App() {
   // provider the moment a desktop shell is present — a plain synchronous
   // check, same convention `runSaveWorkspace`/every other desktop-detection
   // call site in this codebase already uses (`window.pywebview.api` is
-  // injected before this component's effects run). A browser tab (no
-  // `window.pywebview`) keeps the in-memory default — see
-  // store/projectLock.ts's header for why that split is correct, not a gap.
-  // Dynamic import keeps the lock wire+adapter out of the eager bundle —
-  // browser tabs never need it, and in desktop mode the module resolves in
-  // milliseconds at startup, long before any user gesture can reach an
-  // open/save path that consults the provider.
+  // injected before this component's effects run). Dynamic import keeps the
+  // lock wire+adapter out of the eager bundle — browser tabs never need it,
+  // and in desktop mode the module resolves in milliseconds at startup, long
+  // before any user gesture can reach an open/save path that consults the
+  // provider.
   useEffect(() => {
     if (hasDesktopShell()) {
       void import("./lib/desktopLockProvider").then((m) => {
         useProjectLock.getState().setProvider(m.createDesktopLockProvider());
       });
     }
+  }, []);
+
+  // Non-desktop branch (a plain `qz` browser tab, M4 update — this USED TO
+  // say "keeps the in-memory default... not a gap"; it no longer does):
+  // swap in the localStorage-backed cross-tab provider (dynamic import, same
+  // eager-bundle reasoning as the desktop branch above), then ENGAGE the
+  // lock state machine for the shared browser autosave slot the moment the
+  // real provider is live (M1 — see useWorkspaceAutosave.ts's header for why
+  // that slot, not an explicit project path, is the actual same-browser
+  // collision surface here). `engageBrowserAutosaveLock` must run strictly
+  // AFTER `setProvider` — both inside this SAME `.then()`, never split
+  // across two effects — or it would race the in-memory default still being
+  // live and lock nothing meaningful. Closes the "browser multi-tab" defer
+  // named in `plans/RELEASE_BLOCKERS.md`'s I2 entry for that ONE slot; see
+  // `lib/browserLockProvider.ts`'s header for the primitive-level honest
+  // scope (same browser/origin only) and `store/projectLock.ts`'s header for
+  // what is STILL uncovered (an explicit named-file browser open/save).
+  //
+  // N2/N5 (coordinator review round 3): `installBrowserAutosaveReengage()`
+  // registers the event-driven recovery triggers (a `pageshow` bfcache
+  // restore, a `visibilitychange`-to-visible, and a definite-loss store
+  // watcher) that keep a read-only/demoted tab from staying autosave-dead
+  // forever once the slot frees — see useWorkspaceAutosave.ts's own header
+  // for the full account (that module owns the actual trigger logic; this
+  // effect only registers/tears it down at the same install site M1 already
+  // uses). Registered BEFORE the dynamic import resolves (not gated on it)
+  // so an instant back-navigation before the module even loads still can't
+  // leave this tab without recourse.
+  //
+  // M6: cleanup — `cancelled` stops a stale `.then()` from installing after
+  // this effect was torn down (a React StrictMode double-mount, or a real
+  // unmount); `provider.dispose()` removes the `pagehide` listener
+  // `createBrowserLockProvider` registered, and `teardownReengage()` removes
+  // the N2 listeners/subscription — a remount can never leak a second
+  // permanent one of either (mirrors `lib/sessionMarker.ts`'s
+  // `installSessionMarker()` returning its own teardown).
+  useEffect(() => {
+    if (hasDesktopShell()) return;
+    let cancelled = false;
+    let dispose: (() => void) | null = null;
+    const teardownReengage = installBrowserAutosaveReengage();
+    void import("./lib/browserLockProvider").then((m) => {
+      if (cancelled) return;
+      const lock = useProjectLock.getState();
+      const provider = m.createBrowserLockProvider(lock.instanceId);
+      dispose = provider.dispose;
+      lock.setProvider(provider);
+      void engageBrowserAutosaveLock();
+    });
+    return () => {
+      cancelled = true;
+      teardownReengage();
+      dispose?.();
+    };
   }, []);
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──

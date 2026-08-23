@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCommands } from "../store/commands";
 import { toast } from "../store/toasts";
 import { useProjectLock } from "../store/projectLock";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "../useWorkspaceAutosave";
 import { useProjectLockCommands } from "./projectLockCommands";
 
 vi.mock("../store/toasts", () => ({ toast: vi.fn() }));
@@ -79,5 +80,17 @@ describe("useProjectLockCommands", () => {
     useProjectLock.setState({ status: "held-by-other-live", path: "/p/x.dwk", openAsCopy });
     action("open-as-copy").run();
     expect(openAsCopy).toHaveBeenCalled();
+  });
+
+  // N3 (coordinator review round 3): the shared browser autosave slot has no
+  // separate "copy destination" — Open as Copy must refuse outright, before
+  // ever reaching (or calling) the store action, regardless of status.
+  it("N3: Open as Copy refuses for the browser autosave slot even though it's read-only", () => {
+    renderHook(() => useProjectLockCommands());
+    const openAsCopy = vi.fn();
+    useProjectLock.setState({ status: "held-by-other-live", path: BROWSER_AUTOSAVE_LOCK_PATH, openAsCopy });
+    action("open-as-copy").run();
+    expect(openAsCopy).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "danger");
   });
 });

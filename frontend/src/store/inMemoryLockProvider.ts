@@ -21,11 +21,16 @@
 import { acquire, canTakeOver, classifyLock, type LockRecord } from "../lib/lockState";
 import type { LockProvider } from "./projectLock";
 
-/** The default, process-local provider. Genuinely atomic (same-turn, no
- *  `await` between its own read and write), but still honestly scoped to
+/** The default, process-local provider — live only for the brief window
+ *  before App.tsx's install effects resolve. Genuinely atomic (same-turn,
+ *  no `await` between its own read and write), but still honestly scoped to
  *  ONE process/tab — see store/projectLock.ts's module header. `App.tsx`
  *  swaps this out for `createDesktopLockProvider()`
- *  (lib/desktopLockProvider.ts) the moment a desktop shell is detected. */
+ *  (lib/desktopLockProvider.ts) on a desktop shell, or
+ *  `createBrowserLockProvider()` (lib/browserLockProvider.ts) on an
+ *  ordinary browser tab (M4, coordinator review) — the SAME dynamic-import
+ *  install shape either way, so this provider is never the one actually
+ *  relied on once startup finishes. */
 export function createInMemoryLockProvider(instanceId: string): LockProvider {
   const store = new Map<string, LockRecord>();
   let tokenSeq = 0;
