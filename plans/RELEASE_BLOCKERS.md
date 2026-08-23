@@ -126,12 +126,21 @@ top of it this sprint.
   without ever verifying ownership). Both landed with adversarial
   code-review rounds fixing real pre-merge findings; independent-review
   status is recorded in that document's closure log.
-- **M's transactional multi-source "Reimport All" (L0.33) and the full
-  Trash dependency-review UI (restore / delete-dependent / freeze-materialize
-  as distinct choices, L0.45) are unbuilt.** Single-dataset reimport and
-  delete both ship with an impact preview today (PR M slice 1, merged);
-  the multi-source and full-recovery-choice cases do not. Owner:
-  `LIBRARY_WORKBOOK_UX_PLAN.md` item 13 (PR M).
+- ~~**M's transactional multi-source "Reimport All" (L0.33)**~~ **BUILT
+  2026-08-23 (`claude/m2-reimport-all`, not yet merged):** `store/reimportAll.ts`
+  (two-phase stage/commit — see its module doc) + the workbook context
+  menu's new "Reimport All"/"Reimport Available Sources" commands
+  (`lib/workbookContextActions.ts`) + `components/overlays/ReimportAllDialog.tsx`
+  (the per-source problem report, lazy-loaded via `AppOverlays.tsx`).
+  Red-first, mutation-tested (the transactional refusal, the partial-commit
+  subset, the one-undo-entry, the mid-stage-edit race, the overlapping
+  invocation, the removed-dataset race, and the no-bridge browser degrade
+  are each forced and confirmed to fail without their respective guard —
+  see `store/reimportAll.test.ts`). **The full Trash dependency-review UI
+  (restore / delete-dependent / freeze-materialize as distinct choices,
+  L0.45) remains unbuilt** — single-dataset delete ships with an impact
+  preview today (PR M slice 1, merged); the full recovery-choice case does
+  not. Owner: `LIBRARY_WORKBOOK_UX_PLAN.md` item 13 (PR M).
 - ~~**J2 Recode workshop (merge/rename levels, find-replace) does not
   exist.**~~ **CLOSED 2026-08-19 (#186).** Landed as `store/recode.ts` and
   `components/workshops/recode/`, with P1.6b's worksheet C/O/N type badge and

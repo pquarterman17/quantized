@@ -855,6 +855,15 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // already in HistorySnapshot), same class as splitDialogTargetId above.
   separatePreview: "Separate-worksheet affected-item preview; transient dialog state, discarded on commit/cancel, not an undoable edit",
 
+  // reimportAll slice (LIBRARY_WORKBOOK_UX_PLAN PR M, L0.33): the
+  // transactional multi-source Reimport All / Reimport Available Sources
+  // staging report. Transient dialog state discarded on commit/cancel —
+  // never an edit itself (commitReimportAll's actual dataset mutation is
+  // the undoable gesture, via the ordinary `datasets` field already in
+  // HistorySnapshot), same class as separatePreview right above.
+  reimportAllRows: "Reimport All staging/problem report; transient dialog state, discarded on commit/cancel, not an undoable edit",
+  reimportAllBusy: "Reimport All staging-in-flight flag; UI state, transient",
+
   // libraryDetailsColumns slice (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2,
   // L0.56): the Details view's selected metadata columns. Persists in
   // `.dwk` (PR E2/E's own `expandedWorkbookIds`/`librarySelection` precedent

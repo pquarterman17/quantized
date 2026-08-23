@@ -72,6 +72,7 @@ import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./w
 import { runAppendWorkspace, runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
+import { createReimportAllSlice, type ReimportAllSlice } from "./reimportAll";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
@@ -286,7 +287,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -868,6 +869,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createHistorySlice(set, get),
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
+  ...createReimportAllSlice(set, get),
   ...createPanelsSlice(set),
   ...createPointerToolSlice(set, get),
   ...createSplitSlice(set, get),
@@ -1537,6 +1539,11 @@ export const useApp = create<AppState>((set, get) => ({
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
         separatePreview: null, // PR J transient dialog state — never resumes on a fresh load
+        // L0.33: transient staging/report state — never resumes on a fresh
+        // load, same class as separatePreview above (a stale row would name
+        // a dataset id from the PREVIOUS project).
+        reimportAllRows: null,
+        reimportAllBusy: false,
         // P1.3 wave 2: transient preview/confirm state for a staged recipe
         // apply — never resumes on a fresh load, same as separatePreview/
         // quickFigureBuilderDatasetId above (a stale pending would confirm

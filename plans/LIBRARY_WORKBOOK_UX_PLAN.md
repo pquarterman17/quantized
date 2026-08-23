@@ -1556,12 +1556,32 @@ build, and focused interaction coverage where appropriate.
     `pruneDanglingWorkbookScopeTemplates` in the SAME atomic update, so a
     workbook's own Quick Plot templates are pruned on actual deletion, not
     just at load time. **Still NOT built (narrowing the claim, not the
-    scope):** L0.33's transactional multi-source "Reimport All" (grepped
-    `frontend/src` for `reimportAll`/`ReimportAll` — no hits); the full Trash
-    dependency-review UI offering restore/delete-dependent/freeze-materialize
-    as distinct choices (today's UI is preview-then-confirm-then-Trash only);
-    one-session Undo spanning a multi-source reimport transaction. These stay
-    open under PR M. **Booked finding (G5 canonical-state review, 2026-08-17,
+    scope):** the full Trash dependency-review UI offering restore/delete-
+    dependent/freeze-materialize as distinct choices (today's UI is
+    preview-then-confirm-then-Trash only). These stay open under PR M.
+    **L0.33 BUILT 2026-08-23 (`claude/m2-reimport-all`, not yet merged) —
+    narrows the claim above:** `store/reimportAll.ts`'s two-phase
+    stage/commit (`stageReimportAll` probes+validates every selected
+    source with ZERO mutation via the SAME `computeReimportMerge` chokepoint
+    `store/reimport.ts`'s single reimport now exposes for exactly this
+    reuse; `commitReimportAll("all")` refuses outright — zero mutation, a
+    per-source problem report — the instant any row isn't cleanly staged,
+    while `commitReimportAll("available")` is the separate, explicitly-
+    invoked partial commit, never a fallback the "all" path degrades to).
+    Every committed row folds into ONE `withHistoryBatch` entry — the
+    "one-session Undo spanning a multi-source reimport transaction" gap
+    named above is closed too. Fail-closed at commit via a synchronous
+    object-identity re-check against the LIVE dataset (catches ANY
+    concurrent edit, removal, or a second overlapping `stageReimportAll`
+    call — the XrayTab.tsx `#143` monotonic-generation precedent). Surfaced
+    from the workbook context menu's new "Reimport All"/"Reimport Available
+    Sources" commands (`lib/workbookContextActions.ts`) and rendered by
+    `components/overlays/ReimportAllDialog.tsx`, a lazy-loaded panel
+    (`AppOverlays.tsx`) so the eager bundle budget is untouched. Multi-
+    select-bar wiring (selecting worksheets across workbooks, rather than
+    one workbook's own members) is deliberately deferred — booked here, not
+    silently dropped — as a follow-up UI surface over the same store
+    actions. **Booked finding (G5 canonical-state review, 2026-08-17,
     STILL OPEN):** a shape-changing reimport
     resets a FigureDocument's `bindings.xKey/yKeys/y2Keys/errors` (and every
     channel-indexed `plot.view` field) to the safe null/empty sentinel, but

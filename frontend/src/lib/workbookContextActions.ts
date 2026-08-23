@@ -13,8 +13,15 @@
 // contract today (Open/Rename/Move/Reveal Source/Delete) plus disabled
 // placeholders for the three features named by a later PR (Quick
 // Plot/Browse/Properties) so the command stays discoverable without
-// pretending it works. Reimport/Copy/Paste/Duplicate/Quick Plot With... have
+// pretending it works. Copy/Paste/Duplicate/Quick Plot With... have
 // no contract yet and are simply absent rather than disabled-guessed.
+//
+// L0.33 (PR M, store/reimportAll.ts): "Reimport" is now TWO commands, not
+// one — "Reimport All" (all-or-nothing across every member worksheet's
+// source) and "Reimport Available Sources" (an explicit, separately-labeled
+// partial update). Both stage every member through the SAME two-phase
+// pipeline; only the commit mode differs. Neither is a fallback the other
+// silently degrades to — see store/reimportAll.ts's module doc.
 
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
@@ -97,6 +104,39 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
       const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
       if (worksheet) openQuickPlotWith(worksheet.id);
       else openQuickPlotWithForWorkbook(t.node.entity.id);
+    },
+  },
+  // L0.33: stage every member's source, then commit only when EVERY one
+  // staged cleanly — refuses with zero mutation and a per-source problem
+  // report otherwise (store/reimportAll.ts's module doc).
+  {
+    id: "workbook.reimportAll",
+    label: "Reimport All",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets",
+    run: (t) => {
+      const ids = memberIds(t);
+      void (async () => {
+        await useApp.getState().stageReimportAll(ids);
+        await useApp.getState().commitReimportAll("all");
+      })();
+    },
+  },
+  // L0.33: the separate, explicitly-labeled partial-update action — stages
+  // the SAME way, but commits exactly the subset that staged cleanly rather
+  // than refusing outright. Never invoked automatically by "Reimport All"'s
+  // own refusal path; only ever this menu item's own click.
+  {
+    id: "workbook.reimportAvailable",
+    label: "Reimport Available Sources",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets",
+    run: (t) => {
+      const ids = memberIds(t);
+      void (async () => {
+        await useApp.getState().stageReimportAll(ids);
+        await useApp.getState().commitReimportAll("available");
+      })();
     },
   },
   {

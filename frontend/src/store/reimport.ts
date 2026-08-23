@@ -34,6 +34,16 @@
 // `applyCorrections` action calls — inlined here (not a call to that action)
 // so the whole re-import is ONE `recordHistory` entry, not two: undo must
 // restore the pre-reimport dataset in a single step.
+//
+// L0.33 (store/reimportAll.ts, transactional multi-source "Reimport All"):
+// the network-calling, no-mutation HALF of a re-import — `computeReimportMerge`
+// below — is exported so a multi-source batch can VALIDATE every selected
+// source (including re-running its corrections through this SAME chokepoint)
+// during its zero-mutation staging phase, then commit every staged result
+// through the SAME `applyReimportMerge` this file's own `commitReimport` now
+// delegates to. One codepath for "what does re-importing this dataset with
+// this fresh data actually do", never a second, divergent one for the batch
+// case.
 
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
@@ -45,7 +55,9 @@ import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
+import type { PlotView } from "../lib/plotview";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import type { HistoryBatchToken } from "./history";
 import { useRelink } from "./relink";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -55,26 +67,35 @@ import { plotWindowView, syncPlotWindow } from "./windowDocuments";
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
-export interface ReimportSlice {
-  /** Re-read `id`'s data from its `source.path` (a source-less dataset falls
-   *  back to the file picker instead). Preserves id/name/tags/group/notes/
-   *  folder; clears row/column-indexed state on a shape change (module doc);
-   *  re-applies stored corrections; records ONE undo step; touches the
-   *  recalc graph. No-op (with a toast) if `id` doesn't exist, the refreshed
-   *  file no longer has the dataset's book, or the read/parse fails — the
-   *  dataset is left completely untouched on any failure. */
-  reimportDataset: (id: string) => Promise<void>;
+/** The result of validating a re-import against `ds` — everything
+ *  `computeReimportMerge` can determine BEFORE any store mutation, for
+ *  `applyReimportMerge` to commit. `newData` is the corrections-applied
+ *  data (or `freshRaw` verbatim when `ds` has no corrections); `viewReset`
+ *  is `datasetViewDefaults`'s patch, precomputed only when `shapeChanged`
+ *  (mirrors the original inline `commitReimport` logic exactly). */
+export interface ReimportMerge {
+  /** The corrections-applied data to install as `Dataset.data` (verbatim
+   *  `freshRaw` when `ds` has no corrections). */
+  newData: DataStruct;
+  /** The raw re-read data BEFORE corrections — installed as `Dataset.raw`
+   *  only when `ds.corrections` is set (mirrors the original inline logic:
+   *  a dataset with no corrections has no `.raw` to refresh). */
+  freshRaw: DataStruct;
+  shapeChanged: boolean;
+  columnsChanged: boolean;
+  viewReset: Partial<PlotView> | null;
 }
 
-/** Merge the freshly re-read `freshRaw` into `ds`, re-applying stored
- *  corrections through the SAME API chokepoint `applyCorrections` uses, then
- *  commit ONE atomic store update + macro + touchDataset. */
-async function commitReimport(
-  set: SliceSet,
-  get: SliceGet,
-  ds: Dataset,
-  freshRaw: DataStruct,
-): Promise<void> {
+/** Validate + stage a re-import of `ds` with freshly-read `freshRaw`: re-runs
+ *  stored corrections through the SAME `applyCorrectionsApi` chokepoint
+ *  `applyCorrections` uses, and computes shape/column-change detection — but
+ *  makes NO STORE MUTATION of any kind. A rejected corrections call (a
+ *  removed background dataset, a backend validation error) throws and
+ *  propagates to the caller untouched, exactly like a rejected `fetchFresh`
+ *  above: the caller decides what "validation failed" means for it (a single
+ *  reimport's catch-all toast below, or one row of `store/reimportAll.ts`'s
+ *  per-source problem report). */
+export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw: DataStruct): Promise<ReimportMerge> {
   const shapeChanged = reimportShapeChanged(ds, freshRaw);
   let newData = freshRaw;
   if (ds.corrections) {
@@ -86,22 +107,27 @@ async function commitReimport(
     }
     newData = await applyCorrectionsApi(req);
   }
-  get().recordHistory("re-import dataset");
-  // A shape change makes the old channel-keyed VIEW state (keys/styles/labels/
-  // order/hidden/errKeys) stale — it indexes the PREVIOUS columns. Reset it to
-  // the new shape's smart defaults (the same derivation setActive/addDataset
-  // use, re-seeding errKeys/hiddenChannels from the fresh columns) for the live
-  // view (if this dataset is active) AND every window bound to it — mirroring
-  // the dataset-scoped clear below and removeFormula's window walk. An unchanged
-  // shape keeps the view state (the user's styles still apply to the new data).
-  const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
-  // A saved editable figure (store/figureLifecycle.ts's `editableFigures`) is
-  // neither the live view nor a bound plotWindows entry, so it needs its own
-  // reset — lib/figureDocumentReimport.ts mirrors the same field list. Gated
-  // on the COLUMN half only: row-only reshapes leave channel bindings
-  // provably valid, and a saved document is a durable artifact (see the
-  // helper's module doc for why in-range indices are not proof of freshness).
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
+  const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
+  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset };
+}
+
+/** Commit an already-staged `merge` (from `computeReimportMerge`) for `ds`:
+ *  ONE atomic store update + macro + touchDataset, purely synchronous (every
+ *  network round trip already happened in `computeReimportMerge`). `historyToken`
+ *  forwards an enclosing `withHistoryBatch`'s token (store/reimportAll.ts's
+ *  multi-source commit) so N datasets' worth of these calls fold into ONE
+ *  undo entry instead of pushing N; omitted (the single-reimport call site
+ *  below), it records its own entry as always. */
+export function applyReimportMerge(
+  set: SliceSet,
+  get: SliceGet,
+  ds: Dataset,
+  merge: ReimportMerge,
+  historyToken?: HistoryBatchToken,
+): void {
+  const { newData, shapeChanged, columnsChanged, viewReset } = merge;
+  get().recordHistory("re-import dataset", historyToken);
   // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
   // now clears a stale groupKey (see its module doc) — capture whether any
   // bound figure actually HAD one set, BEFORE the reset, so the toast below
@@ -116,7 +142,11 @@ async function commitReimport(
         ...d,
         data: newData,
         pending: undefined,
-        ...(ds.corrections ? { raw: freshRaw } : {}),
+        ...(ds.corrections ? { raw: merge.freshRaw } : {}),
+        // A shape change makes the old row/column-indexed fields
+        // (excludedRows/filter/channelRoles/channelTypes/formulas) stale —
+        // they index a shape that no longer exists. Clear them; an
+        // unchanged shape keeps them (module doc).
         ...(shapeChanged
           ? {
               excludedRows: undefined,
@@ -131,6 +161,11 @@ async function commitReimport(
         ? { ...merged, data: recomputeData(merged.data, merged.formulas) }
         : merged;
     }),
+    // A shape change makes the old channel-keyed VIEW state (keys/styles/
+    // labels/order/hidden/errKeys) stale — it indexes the PREVIOUS columns.
+    // Reset it to the new shape's smart defaults for the live view (if this
+    // dataset is active) AND every window bound to it — mirroring the
+    // dataset-scoped clear above and removeFormula's window walk.
     ...(viewReset && s.activeId === ds.id ? viewReset : {}),
     ...(viewReset
       ? {
@@ -141,6 +176,10 @@ async function commitReimport(
           ),
         }
       : {}),
+    // A saved editable figure (store/figureLifecycle.ts's `editableFigures`)
+    // is neither the live view nor a bound plotWindows entry, so it needs
+    // its own reset — lib/figureDocumentReimport.ts mirrors the same field
+    // list, gated on the COLUMN half only (module doc).
     ...(columnsChanged
       ? {
           editableFigures: s.editableFigures.map((document) =>
@@ -163,10 +202,27 @@ async function commitReimport(
   get().touchDataset(ds.id);
 }
 
+export interface ReimportSlice {
+  /** Re-read `id`'s data from its `source.path` (a source-less dataset falls
+   *  back to the file picker instead). Preserves id/name/tags/group/notes/
+   *  folder; clears row/column-indexed state on a shape change (module doc);
+   *  re-applies stored corrections; records ONE undo step; touches the
+   *  recalc graph. No-op (with a toast) if `id` doesn't exist, the refreshed
+   *  file no longer has the dataset's book, or the read/parse fails — the
+   *  dataset is left completely untouched on any failure. */
+  reimportDataset: (id: string) => Promise<void>;
+}
+
 /** Shared status/toast/error wrapper for both branches of `reimportDataset`
- *  — a rejected `fetchFresh`/`resolveFreshData` leaves `ds` completely
- *  untouched (the exception unwinds before `commitReimport` ever calls
- *  `recordHistory`/`set`). */
+ *  — a rejected `fetchFresh`/`resolveFreshData`/`computeReimportMerge` leaves
+ *  `ds` completely untouched (the exception unwinds before `applyReimportMerge`
+ *  ever calls `recordHistory`/`set`). Inlines `computeReimportMerge` +
+ *  `applyReimportMerge` directly (rather than a `commitReimport` middle-man)
+ *  — every extra function signature here ships in the always-eager bundle
+ *  (this file is part of `useApp`), so the single-dataset path stays as thin
+ *  as store/reimportAll.ts's own batch path, which calls the same two
+ *  functions separately (stage every source with the first, commit only the
+ *  staged ones with the second). */
 async function runReimport(
   set: SliceSet,
   get: SliceGet,
@@ -177,7 +233,8 @@ async function runReimport(
     get().setStatus(`re-importing ${ds.name}…`);
     const fresh = await fetchFresh();
     const freshRaw = await resolveFreshData(ds, fresh);
-    await commitReimport(set, get, ds, freshRaw);
+    const merge = await computeReimportMerge(get, ds, freshRaw);
+    applyReimportMerge(set, get, ds, merge);
     get().setStatus(`re-imported ${ds.name}`);
     toast(`re-imported "${ds.name}"`, "ok");
   } catch (e) {
