@@ -72,7 +72,7 @@ import {
 } from "./windows";
 import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
-import { createHistorySlice, type HistorySlice } from "./history";
+import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
 import { runAppendWorkspace, runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
@@ -528,7 +528,14 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   pipelineRunning: boolean;
   status: string;
 
-  addDataset: (ds: Dataset) => void;
+  /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
+   *  the caller (e.g. `importPaths`) so this add folds into that batch's
+   *  one undo entry instead of pushing its own — see `HistoryBatchToken`'s
+   *  doc (store/history.ts) for why a token, not a boolean, is what makes
+   *  that operation-scoped rather than a global suppress (R6). Omitted by
+   *  every other call site (paste/merge/demo/derived-worksheet/etc.), which
+   *  keep recording their own independent entry exactly as before. */
+  addDataset: (ds: Dataset, historyToken?: HistoryBatchToken) => void;
   // Import ≥2 files and concatenate them row-wise into ONE dataset (gap #47) —
   // the alternative to importFiles' N-separate-datasets result, for same-shape
   // multi-file series (e.g. a scan split across daily files). Falls back to
@@ -1044,11 +1051,11 @@ export const useApp = create<AppState>((set, get) => ({
   pipelineRunning: false,
   status: "starting…",
 
-  addDataset: (ds) => {
+  addDataset: (ds, historyToken) => {
     // MAIN_PLAN #9: the single entry point for import/paste/demo/merge — one
     // call site covers all of them (mergeSelected/importFilesAppended/
     // pasteDataFromClipboard all route through here).
-    get().recordHistory("add dataset");
+    get().recordHistory("add dataset", historyToken);
     // Item 14 pin opt-out: an import is a passive rebind, same as a Library
     // click — a pinned focused window never absorbs it (shared helper;
     // `ds.name` seeds the title when a fresh window must be created, since

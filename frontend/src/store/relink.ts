@@ -460,19 +460,32 @@ export const useRelink = create<RelinkState>((set, get) => ({
   // the whole thing — import of ALL created datasets + versionOf tagging —
   // into exactly ONE undo step, the same guarantee `commit()` above already
   // has (its own comment: "ONE recordHistory call for the whole batch").
+  //
+  // R6 (POST_SPRINT_INDEPENDENT_REVIEW.md): the `token` `withHistoryBatch`
+  // hands `fn` here is threaded explicitly into `importPaths` (which
+  // forwards it to every `addDataset` call it makes) so ONLY the datasets
+  // THIS operation creates fold into the one undo entry. Any unrelated edit
+  // a user makes while `importPaths`'s own `await`s are in flight (network
+  // round trips) calls `recordHistory` with no token at all — per that
+  // function's doc, an untokened call ALWAYS records its own independent
+  // entry, live-state and all, never absorbed into this batch. See
+  // `HistoryBatchToken`'s doc (store/history.ts) for why identity, not a
+  // boolean, is what makes that true.
+  //
+  // R6 code-review F1/F2: `presentOutcome: false` keeps the recipe-suggestion
+  // cascade's own real awaits OUT of this batch (see `ImportPathsOptions`'s
+  // doc); `createdIds` is `importPaths`'s OWN return, never a before/after
+  // id-diff (which mislabeled a concurrent paste/demo/merge's dataset too).
   importChangedAsNewVersion: async (datasetId) => {
     const s = useApp.getState();
     const ds = s.datasets.find((d) => d.id === datasetId);
     if (!ds?.source) return;
     const sourcePath = ds.source.path;
     let created = false;
-    await useApp.getState().withHistoryBatch(`import "${ds.name}" as a new version`, async () => {
-      const before = new Set(useApp.getState().datasets.map((d) => d.id));
-      await useApp.getState().importPaths([sourcePath]);
-      const createdIds = useApp
+    await useApp.getState().withHistoryBatch(`import "${ds.name}" as a new version`, async (token) => {
+      const createdIds = await useApp
         .getState()
-        .datasets.filter((d) => !before.has(d.id))
-        .map((d) => d.id);
+        .importPaths([sourcePath], { historyToken: token, presentOutcome: false });
       if (createdIds.length === 0) return;
       created = true;
       const createdSet = new Set(createdIds);

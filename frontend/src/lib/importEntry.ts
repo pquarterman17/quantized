@@ -22,8 +22,12 @@ import { IMPORT_ACCEPT, openFilePicker } from "./openFilePicker";
 import { useWorkingPaths } from "../store/workingPaths";
 
 export interface ImportEntryStore {
-  importFiles: (files: File[]) => Promise<void>;
-  importPaths: (paths: string[]) => Promise<void>;
+  // Promise<unknown> (not <void>): the real store actions now resolve with
+  // the created dataset ids (R6 F2, POST_SPRINT_INDEPENDENT_REVIEW.md) —
+  // this structural interface only ever awaits them, never reads the
+  // result, so it stays permissive rather than re-narrowing the real type.
+  importFiles: (files: File[]) => Promise<unknown>;
+  importPaths: (paths: string[]) => Promise<unknown>;
 }
 
 /** Open the best available file chooser and import what comes back.

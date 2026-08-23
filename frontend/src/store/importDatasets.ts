@@ -28,6 +28,7 @@
 import { create } from "zustand";
 
 import { importFile, uploadFile } from "../lib/api";
+import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
@@ -126,11 +127,43 @@ function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesAction
   };
 }
 
+/** R6 F1/F2 (POST_SPRINT_INDEPENDENT_REVIEW.md code-review round): options
+ *  for a batched, self-reporting caller — today only
+ *  `store/relink.ts`'s `importChangedAsNewVersion`. Every ordinary caller
+ *  (⌘O, drag-drop, the command palette, Recent files, …) omits this entirely
+ *  and gets today's unchanged behavior. */
+export interface ImportPathsOptions {
+  /** Forward an enclosing `withHistoryBatch`'s token so every dataset this
+   *  call creates folds into that batch's ONE undo entry instead of each
+   *  recording its own. */
+  historyToken?: HistoryBatchToken;
+  /** Skip `presentBatchOutcome` (the overlay/folder/recipe-suggestion/plain
+   *  "imported N" toast cascade) entirely. Default `true`. F1: that cascade's
+   *  recipe-suggestion branch makes REAL awaits (a dynamic import, an async
+   *  recipe match) — sitting inside an enclosing `withHistoryBatch` window
+   *  AFTER its last fold, that latency reopened exactly the gap the batch-
+   *  token fix was meant to close (a foreign edit landing there was still
+   *  corrupted by the batch's fold-time-frozen snapshot on undo, since this
+   *  is a snapshot-restore design — see `HistoryBatchToken`'s doc,
+   *  store/history.ts). `importChangedAsNewVersion` passes `false`: that
+   *  gesture already reports its own "imported ... as a new version"
+   *  outcome, so a second, generic offer toast on top would double up
+   *  anyway — this is correct L0.46 behavior, not only a history-safety
+   *  patch. */
+  presentOutcome?: boolean;
+}
+
 export interface ImportSlice extends ErrorRolesActions {
-  importFiles: (files: File[]) => Promise<void>;
+  /** Returns the created dataset ids (empty when nothing landed). */
+  importFiles: (files: File[]) => Promise<string[]>;
   /** Import real filesystem paths (native desktop dialog, MAIN_PLAN #31). Each
-   *  dataset carries `source.path`, so re-import needs no second picker. */
-  importPaths: (paths: string[]) => Promise<void>;
+   *  dataset carries `source.path`, so re-import needs no second picker.
+   *  Returns the created dataset ids (empty when nothing landed) — the
+   *  caller's own authoritative record of what THIS call created, never a
+   *  before/after set-diff against the live store (R6 F2: a diff mislabels
+   *  ANY dataset a concurrent, unblocked action — paste, demo, merge — adds
+   *  during the same window as this call's own). */
+  importPaths: (paths: string[], opts?: ImportPathsOptions) => Promise<string[]>;
 }
 
 
@@ -152,6 +185,7 @@ function addFromPayload(
   data: DataStruct,
   origin: ImportOrigin,
   targetFolderId: string | undefined,
+  historyToken: HistoryBatchToken | undefined,
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
@@ -191,7 +225,7 @@ function addFromPayload(
             metadata: book.metadata,
           },
           ...src,
-        });
+        }, historyToken);
       } else if (isLazyBookEntry(book)) {
         get().addDataset({
           id,
@@ -207,9 +241,9 @@ function addFromPayload(
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
-        });
+        }, historyToken);
       } else {
-        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src });
+        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src }, historyToken);
       }
       newIds.push(id);
     }
@@ -244,7 +278,7 @@ function addFromPayload(
       id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
-    get().addDataset(dsInput);
+    get().addDataset(dsInput, historyToken);
     newIds.push(id);
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
@@ -301,7 +335,9 @@ async function runImport<T>(
   items: T[],
   describe: (item: T) => string,
   load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
-): Promise<void> {
+  historyToken?: HistoryBatchToken,
+  presentOutcome = true,
+): Promise<string[]> {
   // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
   // are called directly (no length guard) by several `openFilePicker` sites
   // — lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts (x3) —
@@ -311,11 +347,11 @@ async function runImport<T>(
   // patching every one of those call sites) protects every current AND
   // future caller the same way; a silent no-op matches every other
   // openFilePicker cancel path in this codebase (no status/toast change).
-  if (items.length === 0) return;
+  if (items.length === 0) return [];
   if (useImportBatch.getState().running) {
     get().setStatus(ALREADY_RUNNING_MSG);
     toast(ALREADY_RUNNING_MSG, "danger");
-    return;
+    return [];
   }
 
   const controller = new AbortController();
@@ -343,7 +379,7 @@ async function runImport<T>(
       get().setStatus(`importing ${describe(item)}…`);
       try {
         const { data, origin } = await load(item, controller.signal);
-        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId));
+        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId, historyToken));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -366,7 +402,7 @@ async function runImport<T>(
     const summary = `import cancelled — ${added}/${items.length} completed`;
     get().setStatus(summary);
     toast(summary, "info");
-    return;
+    return createdIds; // files already fully imported STAY — see this function's own doc
   }
 
   // A parse failure is the wizard's second front door (#40): the auto-detect
@@ -382,8 +418,14 @@ async function runImport<T>(
   // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /
   // plain fallback, ranked per L0.46) lives in importBatchOffers.ts — see
   // that module's header for the full precedence rationale.
-  if (added > 0) await presentBatchOutcome(get, added, createdIds, targetFolderId);
+  // F1 (R6 code-review): `presentOutcome` gates the ENTIRE cascade, not just
+  // whether a toast fires — its recipe-suggestion branch's real awaits (a
+  // dynamic import, an async recipe match) must never run at all for a
+  // caller that has its own `withHistoryBatch` wrapped around this call, per
+  // `ImportPathsOptions.presentOutcome`'s own doc.
+  if (added > 0 && presentOutcome) await presentBatchOutcome(get, added, createdIds, targetFolderId);
   if (lastError) toast(`${lastError}${hint}`, "danger");
+  return createdIds;
 }
 
 export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
@@ -398,7 +440,7 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
         origin: { name: file.name, size: file.size },
       })),
 
-    importPaths: (paths) =>
+    importPaths: (paths, opts) =>
       runImport(set, get, paths, pathBasename, async (path, signal) => {
         const data = await importFile(path, signal);
         // P1.7 / L0.32 provenance: "record source path, import time,
@@ -422,7 +464,7 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
             : { kind: "path", path };
         // The path is what makes this import re-importable without a picker.
         return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
-      }),
+      }, opts?.historyToken, opts?.presentOutcome ?? true),
   };
 }
 
