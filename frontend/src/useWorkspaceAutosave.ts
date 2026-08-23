@@ -105,9 +105,9 @@ export const BROWSER_AUTOSAVE_LOCK_PATH = "qz://browser-autosave-session";
  *  a real native open. Exported for direct testing (see
  *  useWorkspaceAutosave.test.ts's "browser autosave lock" tests) — App.tsx
  *  itself has no dedicated test file. */
-export async function engageBrowserAutosaveLock(): Promise<void> {
+export async function engageBrowserAutosaveLock(opts?: { quiet?: boolean }): Promise<void> {
   const result = await useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
-  if (!result.readOnly) return;
+  if (!result.readOnly || opts?.quiet) return;
   const reason =
     result.status === "held-by-other-stale"
       ? "another tab (unresponsive) has this browser session open — Take Over Editing is available"
@@ -143,11 +143,28 @@ export function installBrowserAutosaveReengage(): () => void {
     // that ISN'T already a believed holder (`heartbeat()` bails when
     // `record === null` or the record doesn't name this instance) and so
     // could never recover a tab that engaged READ-ONLY before freezing.
-    if (e.persisted) void engageBrowserAutosaveLock();
+    // Round 4: gated the same way every other trigger is — NEVER while
+    // `openedAsCopy` (openProject unconditionally clears that flag, so an
+    // unguarded pageshow would silently reverse the user's explicit
+    // Open-as-Copy choice after a bfcache restore). Unlike
+    // `shouldReengageBrowserAutosaveLock`, a believed HOLDER still
+    // re-validates here — that is this trigger's whole purpose. Quiet:
+    // a bfcache restore landing back on the same read-only state is not
+    // news worth a repeat toast; the autosave health channel carries the
+    // ongoing state.
+    if (!e.persisted) return;
+    const lock = useProjectLock.getState();
+    if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH && !lock.openedAsCopy) {
+      void engageBrowserAutosaveLock({ quiet: true });
+    }
   };
   const onVisible = () => {
     if (document.visibilityState !== "visible") return;
-    if (shouldReengageBrowserAutosaveLock(useProjectLock.getState())) void engageBrowserAutosaveLock();
+    // Round 4: quiet — a user flipping back to a still-read-only tab must
+    // not collect one identical toast per focus return.
+    if (shouldReengageBrowserAutosaveLock(useProjectLock.getState())) {
+      void engageBrowserAutosaveLock({ quiet: true });
+    }
   };
   window.addEventListener("pageshow", onPageShow);
   document.addEventListener("visibilitychange", onVisible);
@@ -155,18 +172,32 @@ export function installBrowserAutosaveReengage(): () => void {
   const unsubscribe = useProjectLock.subscribe((state, prev) => {
     if (state.path !== BROWSER_AUTOSAVE_LOCK_PATH) return;
     if (prev.status === "held-by-me" && state.status !== "held-by-me") {
-      // N2: a definite loss (heartbeat's own demotion, or any other cause)
-      // for THIS path gets one immediate re-engage attempt. Edge-triggered,
-      // never level-triggered: a re-engage that lands back on the SAME
-      // read-only status just re-`set()`s that value, so the NEXT store
-      // update's `prev.status` is already read-only and this condition
-      // cannot match again — no retry loop against a genuinely still-held
-      // lock.
-      void engageBrowserAutosaveLock();
+      // N2: a DEFINITE loss for THIS path gets one immediate re-engage
+      // attempt. Edge-triggered, never level-triggered: a re-engage that
+      // lands back on the SAME read-only status just re-`set()`s that
+      // value, so the NEXT store update's `prev.status` is already
+      // read-only and this condition cannot match again — no retry loop
+      // against a genuinely still-held lock.
+      //
+      // Round 4 discriminator: `unverifiableHeartbeats === 0` is what
+      // separates a DEFINITE loss (a verified CAS refusal — the record is
+      // gone or names another tab; streak stays zero) from R4's
+      // UNVERIFIABLE-streak demotion (streak > 0, own record deliberately
+      // KEPT so `useProjectLockHeartbeat`'s poller can recover the moment
+      // a later tick verifies again). Re-engaging on an unverifiable
+      // demotion would call `openProject`, whose fail-closed branch wipes
+      // that kept record and zeroes the streak — permanently killing the
+      // recovery poller for a continuously-visible tab. So: unverifiable
+      // demotions are left ENTIRELY to the existing R4 machinery.
+      if (state.unverifiableHeartbeats === 0) void engageBrowserAutosaveLock();
     } else if (prev.status !== "held-by-me" && state.status === "held-by-me") {
       // N4: a successful (re-)acquisition of the autosave slot — flush any
       // edits that piled up in memory while the gate refused, rather than
       // waiting for some LATER, unrelated change to re-fire the debounce.
+      // Round 4: the paused-report latch resets HERE, on the actual
+      // transition edge — not merely inside an unblocked flush — so a
+      // second pause after a takeover-with-nothing-dirty still reports.
+      resetAutosavePausedReporting();
       if (useApp.getState().projectDirty) void flushAutosaveNow();
     }
   });
@@ -194,14 +225,37 @@ function autosaveGateBlocked(): boolean {
   return lock.path === BROWSER_AUTOSAVE_LOCK_PATH && !lock.canWriteNow();
 }
 
-/** N6: has the CURRENT "paused" state already been reported? Tracked module-
- *  wide (not per-hook-instance) so the report fires exactly once per actual
- *  TRANSITION (free -> paused), never once per debounce tick while still
- *  paused — resetting it happens silently the moment the gate stops
- *  blocking; the ordinary post-save `reportAutosaveHealth` call right below
- *  is what then reports the real "resumed" outcome, so there is no second,
- *  redundant "resumed" message to keep in sync with it. */
-let autosavePausedReported = false;
+/** N6 (reworked round 4): WHICH paused CAUSE has already been reported —
+ *  `null` when none. Cause-keyed (not a boolean) so (a) a change of cause
+ *  (another tab holds it vs. this session opened as a copy) reports again
+ *  with the RIGHT message, and (b) the latch resets on the real transition
+ *  edges — an unblocked flush below, AND the regain-held-by-me edge in
+ *  `installBrowserAutosaveReengage`'s watcher (a takeover with nothing
+ *  dirty runs no flush, so the edge reset is what keeps "once per actual
+ *  TRANSITION" true). Module-wide so it spans the debounce callback and
+ *  N4's immediate flush; `resetAutosavePausedReporting` is exported so
+ *  tests can decouple from execution order (docs/testing.md determinism
+ *  discipline). */
+let autosavePausedReportedCause: string | null = null;
+
+export function resetAutosavePausedReporting(): void {
+  autosavePausedReportedCause = null;
+}
+
+/** The two gate causes, with honest, cause-specific messages: an
+ *  opened-as-copy session is NOT waiting on another tab and never resumes
+ *  by itself — saying "another tab holds this session" there points the
+ *  user at a tab that need not exist. */
+function autosavePausedCause(): { key: string; message: string } {
+  if (useProjectLock.getState().openedAsCopy) {
+    return {
+      key: "opened-as-copy",
+      message:
+        "autosave is off — this session was opened as a copy and never writes the shared browser slot; export or Save to keep changes",
+    };
+  }
+  return { key: "other-tab", message: "autosave paused — another tab holds this session" };
+}
 
 /** The actual write: serialize + persist + report health. Shared by the
  *  debounced-save effect's timeout callback and N4's immediate post-
@@ -212,13 +266,14 @@ let autosavePausedReported = false;
  *  its own quick-save gate). Exported for direct testing. */
 export async function flushAutosaveNow(): Promise<void> {
   if (autosaveGateBlocked()) {
-    if (!autosavePausedReported) {
-      autosavePausedReported = true;
-      reportAutosaveHealth({ ...autosaveHealth(), error: "autosave paused — another tab holds this session" });
+    const cause = autosavePausedCause();
+    if (autosavePausedReportedCause !== cause.key) {
+      autosavePausedReportedCause = cause.key;
+      reportAutosaveHealth({ ...autosaveHealth(), error: cause.message });
     }
     return;
   }
-  autosavePausedReported = false; // silent reset — the save below reports the real "resumed" outcome
+  resetAutosavePausedReporting(); // silent — the save below reports the real "resumed" outcome
   const s = useApp.getState();
   // `windowsForSave()` freezes the FOCUSED window's live view into its
   // record first (the plan's "save is one of the three sanctioned snapshot

@@ -11,10 +11,13 @@ import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useApp, type AppState } from "./store/useApp";
+import { useToasts } from "./store/toasts";
 import {
   BROWSER_AUTOSAVE_LOCK_PATH,
   engageBrowserAutosaveLock,
+  flushAutosaveNow,
   installBrowserAutosaveReengage,
+  resetAutosavePausedReporting,
   shouldAutosave,
   useWorkspaceAutosave,
   type AutosaveState,
@@ -696,6 +699,10 @@ describe("browser autosave lock — paused/resumed reporting (N6)", () => {
     original = useProjectLock.getState();
     setAutosaveBackend(memoryBackend());
     useApp.setState({ datasets: [], plotWindows: [], focusedWindowId: null, projectDirty: false });
+    // Round 4: the paused-report latch is module-level — reset it here so
+    // these tests never depend on which OTHER test's flush happened to
+    // reset it (docs/testing.md's determinism discipline).
+    resetAutosavePausedReporting();
     vi.useFakeTimers();
   });
 
@@ -741,5 +748,131 @@ describe("browser autosave lock — paused/resumed reporting (N6)", () => {
 
     expect(autosaveHealth().error).toBeNull();
     expect(autosaveHealth().savedAt).not.toBeNull();
+  });
+
+  // Round 4: an opened-as-copy pause is NOT "another tab holds this
+  // session" — no other tab need exist and the pause never self-resumes;
+  // the report must say so honestly.
+  it("round 4: the opened-as-copy pause reports its own cause-specific message", async () => {
+    // spyOn on an already-spied method returns the SAME spy with earlier
+    // tests' history — clear so counts are this test's own.
+    const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth").mockClear();
+    useProjectLock.setState({ path: null, status: "unlocked", record: null, openedAsCopy: true });
+    await flushAutosaveNow();
+    const reported = setHealthSpy.mock.calls.map((c) => c[0].error).filter(Boolean);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toContain("opened as a copy");
+    expect(reported[0]).not.toContain("another tab");
+  });
+});
+
+// -- Round 4: re-engage triggers are quiet + copy-guarded --------------------
+
+describe("browser autosave lock — round-4 trigger guards", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+  let teardown: (() => void) | null = null;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    resetAutosavePausedReporting();
+  });
+
+  afterEach(() => {
+    // Teardown in afterEach, never inline at the test tail — a failing
+    // expect would otherwise skip it and leak this test's watcher into
+    // every later test in the module (order-coupling).
+    teardown?.();
+    teardown = null;
+    useProjectLock.setState(original);
+  });
+
+  it("a visibilitychange re-engage back onto the same read-only state shows NO toast", async () => {
+    const storage = fakeAutosaveStorage();
+    // Another tab genuinely holds the slot.
+    const holder = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    await holder.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+    const provider = createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} });
+    useProjectLock.setState({ provider });
+    teardown = installBrowserAutosaveReengage();
+    await engageBrowserAutosaveLock(); // initial engage MAY toast — that one is fine
+    const toastsBefore = useToasts.getState().toasts.length;
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live"); // re-engage really ran its course
+    expect(useToasts.getState().toasts.length).toBe(toastsBefore); // and said nothing new
+  });
+
+  it("pageshow while openedAsCopy never re-engages (openProject would clear the flag)", async () => {
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-other-live",
+      openedAsCopy: true,
+      record: null,
+    });
+    teardown = installBrowserAutosaveReengage();
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    // openProject clears openedAsCopy on BOTH its branches — the flag
+    // surviving proves no engage ran.
+    expect(useProjectLock.getState().openedAsCopy).toBe(true);
+  });
+
+  it("an unverifiable-streak demotion does NOT trigger the loss re-engage (R4's poller owns recovery)", async () => {
+    const openProjectSpy = vi
+      .fn()
+      .mockResolvedValue({ readOnly: true, status: "held-by-other-live" });
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-me",
+      openedAsCopy: false,
+      unverifiableHeartbeats: 0,
+      openProject: openProjectSpy,
+    });
+    teardown = installBrowserAutosaveReengage();
+    // The R4 demotion shape: status drops but the streak is NON-zero (the
+    // kept record still names this instance) — must NOT re-engage.
+    useProjectLock.setState({ status: "held-by-other-live", unverifiableHeartbeats: 3 });
+    await Promise.resolve();
+    expect(openProjectSpy).not.toHaveBeenCalled();
+    // A DEFINITE loss (streak zero) from held-by-me DOES re-engage.
+    useProjectLock.setState({ status: "held-by-me", unverifiableHeartbeats: 0 });
+    useProjectLock.setState({ status: "held-by-other-live", unverifiableHeartbeats: 0 });
+    await Promise.resolve();
+    expect(openProjectSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // Round 4: the latch resets on the REGAIN EDGE (the watcher), not merely
+  // inside an unblocked flush — a takeover with nothing dirty runs no
+  // flush, and the SECOND pause after it must still report. openProject is
+  // an inert spy so the loss-edge re-engage can't mutate lock state
+  // underneath the sequence being tested.
+  it("round 4: a second pause after a no-flush takeover still reports", async () => {
+    setAutosaveBackend(memoryBackend());
+    const openProjectSpy = vi
+      .fn()
+      .mockResolvedValue({ readOnly: true, status: "held-by-other-live" });
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH,
+      status: "held-by-other-live",
+      record: null,
+      openedAsCopy: false,
+      unverifiableHeartbeats: 0,
+      openProject: openProjectSpy,
+    });
+    teardown = installBrowserAutosaveReengage();
+    const setHealthSpy = vi.spyOn(useAutosaveStatus.getState(), "setHealth").mockClear();
+
+    await flushAutosaveNow(); // pause 1: reports
+    useProjectLock.setState({ status: "held-by-me" }); // regain edge: latch resets, nothing dirty → no flush
+    useProjectLock.setState({ status: "held-by-other-live" }); // pause 2
+    await flushAutosaveNow(); // must report AGAIN
+
+    const pausedCalls = setHealthSpy.mock.calls.filter((c) => c[0].error?.includes("paused"));
+    expect(pausedCalls).toHaveLength(2); // one per TRANSITION, including the second
   });
 });
