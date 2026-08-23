@@ -45,7 +45,15 @@
 // written to `reimportAllRows` — an earlier, still-in-flight call whose
 // promises resolve late (a second overlapping invocation) is silently
 // discarded rather than clobbering a newer stage (or a commit already in
-// progress against it).
+// progress against it). `stageReimportAll` RETURNS whether it survived
+// (coordinator review F1) — a caller MUST skip its own chained
+// `commitReimportAll` call when it comes back `false`, or it risks
+// committing against a completely unrelated, NEWER gesture's rows with its
+// OWN (possibly different) mode. `commitReimportAll` also carries its OWN
+// independent generation guard (defense in depth, same finding): it refuses
+// outright unless the rows currently in state were produced by the CURRENT
+// generation, so even a caller that ignores the returned boolean can never
+// commit a stale gesture's rows.
 //
 // EAGER BUNDLE SIZE: this file is composed into the always-loaded `useApp`
 // store, so every byte here ships on first paint. ALL of the real logic
@@ -74,7 +82,8 @@ export type ReimportAllOutcome =
   | "offline" // desktop-bridge-confirmed volume unreachable
   | "parse_error" // import/resolveFreshData/corrections rejected -- message carries why
   | "removed" // the dataset no longer exists (gone before staging, or between stage and commit)
-  | "changed"; // the dataset was edited by something else between stage and commit
+  | "changed" // the dataset was edited by something else between stage and commit
+  | "disk_changed"; // coordinator review F7: the SOURCE FILE itself changed on disk since staging
 
 export interface ReimportAllRow {
   datasetId: string;
@@ -91,6 +100,16 @@ export interface ReimportAllRow {
   /** The staged merge `applyReimportMerge` commits — present only while
    *  `outcome === "staged"`. */
   merge?: ReimportMerge;
+  /** Coordinator review F7: the source file's on-disk `size`/`mtime` at the
+   *  MOMENT staging read it (from `lib/desktopBridge.ts`'s `probeSource`,
+   *  desktop shell only — a browser session records nothing here, and its
+   *  row is never re-probed at commit: no bridge, no way to ask, same
+   *  "never guess a state without one" rule `pathState` itself documents).
+   *  `commitReimportAll` re-probes this exact path right before committing
+   *  and demotes to `"disk_changed"` on any mismatch — a staged `DataStruct`
+   *  is only ever as fresh as this snapshot, and a report left open for a
+   *  while must not silently commit a file that has since moved on. */
+  fingerprint?: { size: number | null; mtime: number | null };
 }
 
 export interface ReimportAllSlice {
@@ -105,16 +124,34 @@ export interface ReimportAllSlice {
   /** Phase 1: probe + fully parse/validate every id in `datasetIds` into
    *  `reimportAllRows`, making NO mutation of `datasets` or any other
    *  participating field. De-duplicates `datasetIds`. A superseded (stale)
-   *  invocation writes nothing (module doc's sequence guard). */
-  stageReimportAll: (datasetIds: readonly string[]) => Promise<void>;
+   *  invocation writes nothing (module doc's sequence guard) and RETURNS
+   *  `false` — coordinator review F1: a caller chaining a `commitReimportAll`
+   *  call after this MUST check the return value and skip that call on
+   *  `false`, or it risks committing against a completely unrelated, newer
+   *  gesture's rows (see `commitReimportAll`'s own doc for the independent
+   *  second guard). `[]`/all-duplicate `datasetIds` is also `false` (F6: a
+   *  no-op call claims no generation at all, so it can never strand a
+   *  genuinely in-flight stage's busy flag). */
+  stageReimportAll: (datasetIds: readonly string[]) => Promise<boolean>;
   /** Phase 2: re-validate every staged row's identity against the LIVE
    *  store (module doc), then commit. `"all"` commits only when EVERY row
    *  re-validates as `"staged"` — otherwise it makes NO mutation and just
    *  refreshes `reimportAllRows` with the re-validated problem list.
    *  `"available"` always commits the staged subset (zero staged rows is a
    *  no-op toast, not a mutation either). A successful commit closes the
-   *  report (`reimportAllRows: null`). No-op while `reimportAllBusy`, or
-   *  when no report is open. */
+   *  report (`reimportAllRows: null`) ONLY when nothing was skipped —
+   *  coordinator review F5: a partial commit that still leaves failures
+   *  keeps them visible instead of silently discarding the report. No-op
+   *  while `reimportAllBusy`, when no report is open, OR (coordinator
+   *  review F1's second guard) when the rows currently in state were NOT
+   *  produced by the current generation — a caller's own stale chained call
+   *  is refused here even if it ignored `stageReimportAll`'s return value.
+   *  Coordinator review F2: aggregates the L0.55 dependency impact across
+   *  what would actually commit and confirms ONCE, before ever touching
+   *  `datasets` — a decline makes zero mutation and leaves the report
+   *  exactly as it was. Coordinator review F7: re-probes each staged row's
+   *  on-disk fingerprint (desktop shell only) in that same pre-commit
+   *  window and demotes any mismatch to `"disk_changed"`. */
   commitReimportAll: (mode: "all" | "available") => Promise<void>;
 }
 
@@ -124,19 +161,23 @@ export function createReimportAllSlice(set: SliceSet, get: SliceGet): ReimportAl
   // cell itself stays in the always-loaded slice — a closure variable, same
   // idiom as store/history.ts's activeBatchToken: read/written only by this
   // one slice's own async handshake, never reactive state, so it needs no
-  // architecture.test.ts HISTORY_EXCLUDED entry.
-  const genRef = { current: 0 };
+  // architecture.test.ts HISTORY_EXCLUDED entry. `rowsGen` (coordinator
+  // review F1) records WHICH generation's staging most recently wrote
+  // `reimportAllRows` — `commitReimportAll` refuses unless it still matches
+  // `current`, independent of whatever the caller does with the boolean
+  // `stageReimportAll` returns.
+  const genRef = { current: 0, rowsGen: null as number | null };
 
   return {
     reimportAllRows: null,
     reimportAllBusy: false,
     stageReimportAll: async (datasetIds) => {
       const { runStage } = await import("./reimportAllRun");
-      await runStage(set, get, datasetIds, genRef);
+      return runStage(set, get, datasetIds, genRef);
     },
     commitReimportAll: async (mode) => {
       const { runCommit } = await import("./reimportAllRun");
-      await runCommit(set, get, mode);
+      await runCommit(set, get, mode, genRef);
     },
   };
 }

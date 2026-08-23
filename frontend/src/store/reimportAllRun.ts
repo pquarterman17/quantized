@@ -14,10 +14,12 @@
 // eager, and never move logic back into store/reimportAll.ts to "simplify"
 // — that is exactly the eager-bundle regression this split exists to avoid.
 
-import { hasDesktopShell, pathState } from "../lib/desktopBridge";
+import { hasDesktopShell, pathState, probeSource, type SourceProbe } from "../lib/desktopBridge";
 import { importFile } from "../lib/api";
 import { resolveFreshData } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { toast } from "./toasts";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { ReimportAllRow } from "./reimportAll";
@@ -25,14 +27,48 @@ import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
+/** The calling slice's monotonic-generation cell — shared with
+ *  store/reimportAll.ts's doc. `rowsGen` records which generation most
+ *  recently WROTE `reimportAllRows`; `current` is bumped by every genuine
+ *  `runStage` call. */
+type GenRef = { current: number; rowsGen: number | null };
+
+/** Coordinator review F7: capture `path`'s on-disk `size`/`mtime` at stage
+ *  time (desktop shell only — `probeSource` itself already degrades to
+ *  `null` with no bridge, so this is a no-op in a browser session, same as
+ *  every other bridge-gated call here). Memoized in `probeCache` — several
+ *  staged rows sharing one multi-book source path fingerprint it exactly
+ *  ONCE, the same F3 sharing `stageReimportAll`'s `importCache` gives the
+ *  parse itself. */
+async function captureFingerprint(
+  path: string,
+  probeCache: Map<string, Promise<SourceProbe | null>>,
+): Promise<{ size: number | null; mtime: number | null } | undefined> {
+  let probePromise = probeCache.get(path);
+  if (!probePromise) {
+    probePromise = probeSource(path);
+    probeCache.set(path, probePromise);
+  }
+  const probe = await probePromise;
+  return probe && probe.state === "ok" ? { size: probe.size, mtime: probe.mtime } : undefined;
+}
 
 /** Stage one dataset: no store mutation, only network calls + pure lib
  *  helpers — mirrors store/reimport.ts's `reimportDataset`'s `ds.source`
  *  branch exactly (including its browser-mode degrade: with no desktop
  *  bridge, `pathState` is never called at all — `hasDesktopShell()` gates
  *  it — and this falls straight through to `importFile`, matching
- *  `reimportDataset`'s own "every existing browser-mode behavior" comment). */
-async function stageOneSource(ds: Dataset, get: SliceGet): Promise<ReimportAllRow> {
+ *  `reimportDataset`'s own "every existing browser-mode behavior" comment).
+ *  Coordinator review F3: `importCache` memoizes the `importFile(path)`
+ *  promise per unique path for the WHOLE `runStage` invocation — N members
+ *  of one multi-book Origin file share ONE parse, not N. `probeCache` gives
+ *  the F7 fingerprint capture the same sharing. */
+async function stageOneSource(
+  ds: Dataset,
+  get: SliceGet,
+  importCache: Map<string, Promise<DataStruct>>,
+  probeCache: Map<string, Promise<SourceProbe | null>>,
+): Promise<ReimportAllRow> {
   const base = { datasetId: ds.id, datasetName: ds.name, sourcePath: ds.source?.path ?? null };
   if (!ds.source) {
     // A browser-uploaded dataset never carries a real path (lib/types.ts's
@@ -56,10 +92,20 @@ async function stageOneSource(ds: Dataset, get: SliceGet): Promise<ReimportAllRo
     }
   }
   try {
-    const fresh: DataStruct = await importFile(ds.source.path);
+    let fetchPromise = importCache.get(ds.source.path);
+    if (!fetchPromise) {
+      fetchPromise = importFile(ds.source.path);
+      importCache.set(ds.source.path, fetchPromise);
+    }
+    const fresh: DataStruct = await fetchPromise;
     const freshRaw = await resolveFreshData(ds, fresh);
     const merge = await computeReimportMerge(get, ds, freshRaw);
-    return { ...base, outcome: "staged", message: "ready", dsRef: ds, merge };
+    // Gated explicitly (not left to `probeSource`'s own no-bridge degrade)
+    // to match `pathState`'s existing convention right above, and so a
+    // browser session genuinely never calls out for a fingerprint it can
+    // never re-verify anyway.
+    const fingerprint = hasDesktopShell() ? await captureFingerprint(ds.source.path, probeCache) : undefined;
+    return { ...base, outcome: "staged", message: "ready", dsRef: ds, merge, fingerprint };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "parse error";
     return { ...base, outcome: "parse_error", message: msg };
@@ -69,8 +115,16 @@ async function stageOneSource(ds: Dataset, get: SliceGet): Promise<ReimportAllRo
 /** Re-validate one already-staged row against the LIVE store, right before
  *  commit (this module's fail-closed identity guard, doc below). Non-
  *  `"staged"` rows pass through unchanged — they already carry their own
- *  failure reason from staging. */
-function revalidateRow(row: ReimportAllRow, live: ReadonlyMap<string, Dataset>): ReimportAllRow {
+ *  failure reason from staging. `diskChanged` is F7's pre-computed set of
+ *  ids whose on-disk fingerprint no longer matches what staging recorded —
+ *  checked AFTER the in-app identity guard (an in-app edit is reported as
+ *  `"changed"` even if the file also happens to have moved on disk; the two
+ *  reasons are not mutually exclusive, this just picks one to show). */
+function revalidateRow(
+  row: ReimportAllRow,
+  live: ReadonlyMap<string, Dataset>,
+  diskChanged: ReadonlySet<string>,
+): ReimportAllRow {
   if (row.outcome !== "staged") return row;
   const nowDs = live.get(row.datasetId);
   if (!nowDs) {
@@ -91,6 +145,15 @@ function revalidateRow(row: ReimportAllRow, live: ReadonlyMap<string, Dataset>):
       message: "dataset changed before commit — re-run Reimport",
     };
   }
+  if (diskChanged.has(row.datasetId)) {
+    return {
+      datasetId: row.datasetId,
+      datasetName: row.datasetName,
+      sourcePath: row.sourcePath,
+      outcome: "disk_changed",
+      message: "file changed on disk since staging — re-run Reimport",
+    };
+  }
   return row;
 }
 
@@ -99,27 +162,39 @@ function revalidateRow(row: ReimportAllRow, live: ReadonlyMap<string, Dataset>):
  *  `reimportAllRows`, making NO mutation of `datasets` or any other
  *  participating field. De-duplicates `datasetIds`. `genRef` is the calling
  *  slice's own monotonic-generation cell (module doc's sequence guard) — a
- *  superseded (stale) invocation writes nothing. Named tersely (`runStage`,
- *  not `runStageReimportAll`) because these bindings, unlike ordinary local
- *  variables, survive minification verbatim — Rollup keeps a dynamic
- *  import()'s named exports stable across the chunk boundary — so every
- *  character here is a literal, permanent eager-bundle cost paid at the
- *  call site in store/reimportAll.ts. */
+ *  superseded (stale) invocation writes nothing and RETURNS `false`
+ *  (coordinator review F1 — see store/reimportAll.ts's doc for why a caller
+ *  MUST check this before chaining a commit). Coordinator review F6: the
+ *  empty/all-duplicate-`datasetIds` no-op check runs BEFORE `genRef.current`
+ *  is ever bumped — claiming a generation for a call that never actually
+ *  stages anything would silently strand a DIFFERENT, genuinely in-flight
+ *  call's own completion (its `genRef.current !== my` check would then see
+ *  a mismatch that has nothing to do with it, and never reset
+ *  `reimportAllBusy`). Named tersely (`runStage`, not `runStageReimportAll`)
+ *  because these bindings, unlike ordinary local variables, survive
+ *  minification verbatim — Rollup keeps a dynamic import()'s named exports
+ *  stable across the chunk boundary — so every character here is a literal,
+ *  permanent eager-bundle cost paid at the call site in
+ *  store/reimportAll.ts. */
 export async function runStage(
   set: SliceSet,
   get: SliceGet,
   datasetIds: readonly string[],
-  genRef: { current: number },
-): Promise<void> {
-  const my = ++genRef.current;
+  genRef: GenRef,
+): Promise<boolean> {
   const ids = [...new Set(datasetIds)];
-  if (ids.length === 0) return;
+  if (ids.length === 0) return false; // F6: no generation claimed for a no-op call
+  const my = ++genRef.current;
   set({ reimportAllBusy: true, reimportAllRows: null });
   // Snapshot the live dataset for each requested id ONCE, synchronously,
   // before any await -- this IS the `dsRef` identity a race lands against
   // (module doc). An id that's already gone by the time staging even
   // starts is reported the same way a mid-stage removal is.
   const live = new Map(get().datasets.map((d) => [d.id, d]));
+  // F3: shared per-path caches for the whole invocation -- N members of one
+  // multi-book source file parse/fingerprint exactly once between them.
+  const importCache = new Map<string, Promise<DataStruct>>();
+  const probeCache = new Map<string, Promise<SourceProbe | null>>();
   const rows = await Promise.all(
     ids.map((id): Promise<ReimportAllRow> => {
       const ds = live.get(id);
@@ -132,11 +207,13 @@ export async function runStage(
           message: "dataset no longer exists",
         });
       }
-      return stageOneSource(ds, get);
+      return stageOneSource(ds, get, importCache, probeCache);
     }),
   );
-  if (genRef.current !== my) return; // superseded by a later stageReimportAll call -- discard
+  if (genRef.current !== my) return false; // superseded by a later stageReimportAll call -- discard
+  genRef.rowsGen = my; // F1: record which generation these rows belong to
   set({ reimportAllRows: rows, reimportAllBusy: false });
+  return true;
 }
 
 /** Phase 2 (called from store/reimportAll.ts's thin `commitReimportAll`
@@ -145,16 +222,88 @@ export async function runStage(
  *  only when EVERY row re-validates as `"staged"` — otherwise it makes NO
  *  mutation and just refreshes `reimportAllRows` with the re-validated
  *  problem list. `"available"` always commits the staged subset. Every
- *  committed row folds into ONE `withHistoryBatch` entry. */
+ *  committed row folds into ONE `withHistoryBatch` entry.
+ *
+ *  Coordinator review F1 (second, independent guard): refuses outright when
+ *  the rows currently in state were not produced by the CURRENT generation
+ *  — a caller that ignores `stageReimportAll`'s returned boolean, or a
+ *  commit that itself takes long enough for a newer stage to land first
+ *  (the F2/F7 confirm/probe awaits below), can never write against rows
+ *  that belong to a different gesture.
+ *
+ *  Coordinator review F2/F7 ordering rule (both cite this exact sentence):
+ *  every ASYNC step — the F7 disk re-probe, the F2 dependency-impact
+ *  confirm — happens BEFORE the SYNCHRONOUS revalidate→apply block, never
+ *  between revalidation and the actual `applyReimportMerge` calls. That
+ *  block re-checks generation/rows-identity/dataset-identity and commits in
+ *  one uninterrupted stretch specifically so nothing async can land in the
+ *  gap between "verified clean" and "written". */
 export async function runCommit(
   set: SliceSet,
   get: SliceGet,
   mode: "all" | "available",
+  genRef: GenRef,
 ): Promise<void> {
   const rows = get().reimportAllRows;
   if (!rows || get().reimportAllBusy) return;
+  if (genRef.rowsGen !== genRef.current) return; // F1: these rows are not the latest generation's
+
+  const stagedRows = rows.filter((r) => r.outcome === "staged");
+
+  // F7: re-probe on-disk fingerprints (desktop shell only) BEFORE anything
+  // synchronous below. A row with no recorded fingerprint (browser mode at
+  // stage time) is never re-probed -- nothing to compare against.
+  const diskChanged = new Set<string>();
+  if (hasDesktopShell()) {
+    const probeCache = new Map<string, Promise<SourceProbe | null>>();
+    await Promise.all(
+      stagedRows
+        .filter((r) => r.fingerprint && r.sourcePath)
+        .map(async (r) => {
+          let probePromise = probeCache.get(r.sourcePath!);
+          if (!probePromise) {
+            probePromise = probeSource(r.sourcePath!);
+            probeCache.set(r.sourcePath!, probePromise);
+          }
+          const probe = await probePromise;
+          if (
+            !probe ||
+            probe.state !== "ok" ||
+            probe.size !== r.fingerprint!.size ||
+            probe.mtime !== r.fingerprint!.mtime
+          ) {
+            diskChanged.add(r.datasetId);
+          }
+        }),
+    );
+  }
+
+  // F2: aggregate the L0.55 dependency impact across whatever would
+  // actually commit (post fingerprint check) and confirm ONCE -- see this
+  // function's own doc for why this MUST happen before the sync block.
+  const wouldCommitIds = stagedRows.filter((r) => !diskChanged.has(r.datasetId)).map((r) => r.datasetId);
+  if (wouldCommitIds.length > 0) {
+    const impact = computeDependencyImpact(get().datasets, wouldCommitIds);
+    if (hasDependencyImpact(impact)) {
+      const n = wouldCommitIds.length;
+      const ok = await askConfirm(
+        `Re-import ${n} source${n === 1 ? "" : "s"}?`,
+        formatDependencyImpact(impact),
+        "Re-import",
+      );
+      if (!ok) return; // declined -- zero mutation, report left exactly as it was
+    }
+  }
+
+  // ---- SYNCHRONOUS BLOCK: no `await` from here to the final `set()` ----
+  // Re-check everything that could have gone stale during the awaits above:
+  // the generation, AND the exact `rows` array reference (a newer stage or
+  // an overlapping commit could have replaced the whole report while the
+  // probes or the confirm dialog were in flight).
+  if (genRef.rowsGen !== genRef.current) return;
+  if (get().reimportAllRows !== rows) return;
   const nowById = new Map(get().datasets.map((d) => [d.id, d]));
-  const revalidated = rows.map((r) => revalidateRow(r, nowById));
+  const revalidated = rows.map((r) => revalidateRow(r, nowById, diskChanged));
   const committable = revalidated.filter((r) => r.outcome === "staged");
   const failed = revalidated.filter((r) => r.outcome !== "staged");
 
@@ -185,5 +334,7 @@ export async function runCommit(
   });
   const skippedNote = failed.length > 0 ? ` — ${failed.length} skipped` : "";
   toast(`re-imported ${n} source${n === 1 ? "" : "s"}${skippedNote}`, "ok");
-  set({ reimportAllRows: null });
+  // F5: a partial commit keeps the revalidated failures visible instead of
+  // discarding the report -- null only when the commit was fully clean.
+  set({ reimportAllRows: failed.length > 0 ? failed : null });
 }

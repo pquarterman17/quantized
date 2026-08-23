@@ -6,7 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, importFile } from "../lib/api";
-import { hasDesktopShell, pathState } from "../lib/desktopBridge";
+import { hasDesktopShell, pathState, probeSource, type SourceProbe } from "../lib/desktopBridge";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -25,6 +26,7 @@ vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }))
 vi.mock("../lib/desktopBridge", () => ({
   hasDesktopShell: vi.fn(() => false),
   pathState: vi.fn(async () => "unknown"),
+  probeSource: vi.fn(async () => null),
 }));
 
 const raw: DataStruct = {
@@ -57,6 +59,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(hasDesktopShell).mockReturnValue(false);
   vi.mocked(pathState).mockResolvedValue("unknown");
+  // `clearAllMocks()` clears call history, NOT a `mockImplementation` a
+  // PRIOR test set (that needs `mockReset`/an explicit re-set) — reset
+  // these two explicitly every test so an F2/F7-focused test's override
+  // never leaks into the next one.
+  vi.mocked(probeSource).mockResolvedValue(null);
+  vi.mocked(askConfirm).mockResolvedValue(true);
   useApp.setState({
     datasets: [],
     activeId: null,
@@ -245,11 +253,108 @@ describe("overlapping invocation — forced (second call wins, first discarded)"
     // invocation's now-stale write would land last and wrongly win.
     resolvers["/b"](fresh);
     resolvers["/a"](fresh);
-    await Promise.all([first, second]);
+    const [firstSurvived, secondSurvived] = await Promise.all([first, second]);
 
     const rows = useApp.getState().reimportAllRows!;
     expect(rows).toHaveLength(1);
     expect(rows[0].datasetId).toBe("d2"); // only the LATEST invocation's result landed
+    // F1: the returned booleans say exactly this too -- a caller chaining a
+    // commit off `first` must be told not to.
+    expect(firstSurvived).toBe(false);
+    expect(secondSurvived).toBe(true);
+  });
+
+  // Coordinator review F1 (red-first), the finding's own scenario: gesture
+  // A ("available") starts staging but is slow; gesture B ("all") starts
+  // AND FINISHES first, with one of its two sources failing so B's own
+  // "all" commit legitimately refuses (zero mutation, its report stays
+  // open showing the skip). When A's slow stage finally resolves, its
+  // generation has already been superseded by B's. A caller that (per F1's
+  // ruling) skips its chained commit on a `false` return never lets A's
+  // "available" mode touch B's unrelated report at all.
+  it("F1: a slow \"available\" gesture superseded by a fast \"all\" gesture (one failure) commits nothing", async () => {
+    let resolveA!: (v: DataStruct) => void;
+    let calledA = false;
+    vi.mocked(importFile).mockImplementation((path: string) => {
+      if (path === "/a") {
+        calledA = true;
+        return new Promise((resolve) => { resolveA = resolve; });
+      }
+      if (path === "/b") return Promise.resolve(fresh);
+      if (path === "/c") return Promise.reject(new Error("boom"));
+      throw new Error(`unexpected path ${path}`);
+    });
+    const before = [ds("d1", "/a"), ds("d2", "/b"), ds("d3", "/c")];
+    useApp.setState({ datasets: before });
+
+    // Gesture A: stage "d1" for an eventual "available" commit -- starts,
+    // but its own network call never resolves until we say so below.
+    const stageA = useApp.getState().stageReimportAll(["d1"]);
+    await vi.waitFor(() => expect(calledA).toBe(true));
+
+    // Gesture B: a completely separate, unrelated selection -- starts AND
+    // fully finishes (stage, then a legitimate "all" refusal) while A is
+    // still waiting on its own import.
+    await useApp.getState().stageReimportAll(["d2", "d3"]);
+    await useApp.getState().commitReimportAll("all");
+    expect(useApp.getState().datasets).toBe(before); // B's own refusal: zero mutation (sanity)
+    expect(useApp.getState().reimportAllRows?.map((r) => r.datasetId)).toEqual(["d2", "d3"]); // B's report, still open
+
+    // A's slow import finally resolves -- but its generation has already
+    // been superseded by B's stage call in between.
+    resolveA(fresh);
+    const survivedA = await stageA;
+    expect(survivedA).toBe(false);
+
+    // The fixed chain (store/reimportAll.ts's own doc; lib/workbookContextActions.ts's
+    // runReimportAllChain) never calls commitReimportAll at all once
+    // `survived` comes back false -- so nothing further happens here. B's
+    // report is exactly what's left, and neither d1 nor d2 was touched by
+    // A's unrelated, stale gesture.
+    expect(useApp.getState().datasets).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  // Coordinator review F1 (red-first, runCommit's OWN independent guard):
+  // even a commit call that is ALREADY past its "am I current" check can
+  // still be superseded WHILE it waits on its own async work (here, the F2
+  // dependency-impact confirm) -- the sync block re-checks immediately
+  // before writing and must refuse rather than commit against data a
+  // completely separate, newer stage has since replaced.
+  it("F1 (runCommit's own guard): a commit stuck on its confirm dialog refuses once a newer stage replaces the rows meanwhile", async () => {
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a"), derived] });
+
+    // Stage d1 -- it has a downstream dependent (derived), so committing it
+    // will ask for confirmation.
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    let resolveConfirm!: (ok: boolean) => void;
+    vi.mocked(askConfirm).mockImplementation(
+      () => new Promise((resolve) => { resolveConfirm = resolve; }),
+    );
+    const commitPromise = useApp.getState().commitReimportAll("all");
+    await vi.waitFor(() => expect(resolveConfirm).toBeDefined());
+
+    // While this commit is stuck waiting on the (still-open) confirm
+    // dialog, a COMPLETELY SEPARATE, newer stage cycle runs to completion.
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    // NOW the original, now-stale confirm resolves.
+    resolveConfirm(true);
+    await commitPromise;
+
+    // The in-flight commit's rows belonged to the SUPERSEDED generation --
+    // it must refuse rather than write against data replaced while it
+    // waited, even though the user did eventually click through.
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });
 
@@ -340,5 +445,187 @@ describe("corrections re-validated during staging (zero mutation on a rejected c
 
     expect(useApp.getState().datasets).toBe(before);
     expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
+describe("F2: dependency-impact confirm (coordinator review)", () => {
+  it("skips the confirm entirely when nothing downstream depends on any committable source (frictionless default)", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets[0].data).toEqual(fresh);
+  });
+
+  it("asks ONCE, naming the affected dependent, before ever touching datasets", async () => {
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({ datasets: [ds("d1", "/a"), derived] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(askConfirm).toHaveBeenCalledWith(
+      expect.stringContaining("1 source"),
+      expect.stringContaining("derived.dat"),
+      "Re-import",
+    );
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.data).toEqual(fresh); // confirmed -> committed
+  });
+
+  it("a DECLINED confirm makes zero mutation and leaves the report exactly as it was", async () => {
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    const before = [ds("d1", "/a"), derived];
+    useApp.setState({ datasets: before });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    const rowsBefore = useApp.getState().reimportAllRows;
+    await useApp.getState().commitReimportAll("all");
+
+    expect(useApp.getState().datasets).toBe(before); // zero mutation
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().reimportAllRows).toBe(rowsBefore); // untouched, not even revalidated
+  });
+});
+
+describe("F3: one parse per unique source path (multi-book sharing)", () => {
+  it("N datasets sharing one source path call importFile exactly once", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({
+      datasets: [ds("d1", "/multi.dat"), ds("d2", "/multi.dat"), ds("d3", "/multi.dat")],
+    });
+
+    await useApp.getState().stageReimportAll(["d1", "d2", "d3"]);
+
+    expect(importFile).toHaveBeenCalledTimes(1);
+    expect(importFile).toHaveBeenCalledWith("/multi.dat");
+    const rows = useApp.getState().reimportAllRows!;
+    expect(rows.every((r) => r.outcome === "staged")).toBe(true); // all three still resolved individually
+  });
+});
+
+describe("F5: a partial commit keeps the skipped rows visible", () => {
+  it("\"available\" with a skip keeps ONLY the failed rows open, not the full report and not null", async () => {
+    vi.mocked(importFile)
+      .mockResolvedValueOnce(fresh)
+      .mockRejectedValueOnce(new Error("boom"));
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b")] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("available");
+
+    const rows = useApp.getState().reimportAllRows;
+    expect(rows).not.toBeNull(); // F5: kept open, not discarded
+    expect(rows!.map((r) => r.datasetId)).toEqual(["d2"]); // only the skip remains
+    expect(rows![0].outcome).toBe("parse_error");
+  });
+
+  it("a fully clean \"available\" commit still closes the report (null)", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    await useApp.getState().commitReimportAll("available");
+
+    expect(useApp.getState().reimportAllRows).toBeNull();
+  });
+});
+
+describe("F6: an empty stageReimportAll call never strands a real in-flight one", () => {
+  it("stageReimportAll([]) mid-flight leaves a genuinely in-flight stage free to finish and clear busy", async () => {
+    let resolveReal!: (v: DataStruct) => void;
+    let calledReal = false;
+    vi.mocked(importFile).mockImplementation(() => {
+      calledReal = true;
+      return new Promise((resolve) => { resolveReal = resolve; });
+    });
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    const realStage = useApp.getState().stageReimportAll(["d1"]);
+    await vi.waitFor(() => expect(calledReal).toBe(true));
+    expect(useApp.getState().reimportAllBusy).toBe(true);
+
+    // An empty/no-op call arrives while the real one is still in flight.
+    const noopSurvived = await useApp.getState().stageReimportAll([]);
+    expect(noopSurvived).toBe(false);
+    // F6: the no-op must NOT have claimed a generation -- the real stage
+    // is still exactly as in-flight as before.
+    expect(useApp.getState().reimportAllBusy).toBe(true);
+    expect(useApp.getState().reimportAllRows).toBeNull();
+
+    resolveReal(fresh);
+    const realSurvived = await realStage;
+
+    expect(realSurvived).toBe(true);
+    expect(useApp.getState().reimportAllBusy).toBe(false); // never stranded
+    expect(useApp.getState().reimportAllRows).toHaveLength(1);
+  });
+});
+
+describe("F7: on-disk fingerprint re-probed at commit (forced mismatch)", () => {
+  it("a source that changed on disk between stage and commit is demoted to disk_changed and excluded", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const stageProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    const commitProbe: SourceProbe = { state: "ok", path: "/a", size: 200, mtime: 2000, checksum: null };
+    vi.mocked(probeSource).mockResolvedValueOnce(stageProbe).mockResolvedValueOnce(commitProbe);
+    const before = [ds("d1", "/a")];
+    useApp.setState({ datasets: before });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    expect(useApp.getState().reimportAllRows![0].outcome).toBe("staged");
+
+    await useApp.getState().commitReimportAll("all");
+
+    expect(useApp.getState().datasets).toBe(before); // zero mutation -- "all" refuses
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().reimportAllRows![0].outcome).toBe("disk_changed");
+  });
+
+  it("an UNCHANGED fingerprint at commit commits normally", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const probe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    vi.mocked(probeSource).mockResolvedValue(probe); // same fingerprint both times
+
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(useApp.getState().datasets[0].data).toEqual(fresh);
+  });
+
+  it("browser mode (no desktop shell) never re-probes -- unchanged behavior", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(false);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+    expect(probeSource).not.toHaveBeenCalled();
+
+    await useApp.getState().commitReimportAll("all");
+
+    expect(probeSource).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets[0].data).toEqual(fresh);
   });
 });

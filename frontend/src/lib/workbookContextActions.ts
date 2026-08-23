@@ -55,6 +55,18 @@ const memberCount = (t: WorkbookActionTarget): number =>
 const memberIds = (t: WorkbookActionTarget): string[] =>
   t.node.children.filter((c) => c.kind === "worksheet").map((c) => c.entity.id);
 
+// Coordinator review F1: `stageReimportAll` reports whether it actually
+// survived (its own generation wasn't superseded by the time it resolved)
+// — a chained `commitReimportAll` MUST be skipped when it didn't, or a
+// stale gesture can commit against a completely unrelated, newer gesture's
+// staged rows (store/reimportAll.ts's own doc). Both menu commands below
+// share this one chain rather than each hand-rolling it.
+async function runReimportAllChain(ids: string[], mode: "all" | "available"): Promise<void> {
+  const survived = await useApp.getState().stageReimportAll(ids);
+  if (!survived) return;
+  await useApp.getState().commitReimportAll(mode);
+}
+
 export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   { id: "workbook.open", label: "Open", run: (t) => t.onOpen ? t.onOpen() : openLibraryNode(t.node) },
   {
@@ -114,13 +126,7 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     label: "Reimport All",
     enabled: (t) => memberCount(t) > 0,
     disabledReason: () => "this workbook has no worksheets",
-    run: (t) => {
-      const ids = memberIds(t);
-      void (async () => {
-        await useApp.getState().stageReimportAll(ids);
-        await useApp.getState().commitReimportAll("all");
-      })();
-    },
+    run: (t) => void runReimportAllChain(memberIds(t), "all"),
   },
   // L0.33: the separate, explicitly-labeled partial-update action — stages
   // the SAME way, but commits exactly the subset that staged cleanly rather
@@ -131,13 +137,7 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     label: "Reimport Available Sources",
     enabled: (t) => memberCount(t) > 0,
     disabledReason: () => "this workbook has no worksheets",
-    run: (t) => {
-      const ids = memberIds(t);
-      void (async () => {
-        await useApp.getState().stageReimportAll(ids);
-        await useApp.getState().commitReimportAll("available");
-      })();
-    },
+    run: (t) => void runReimportAllChain(memberIds(t), "available"),
   },
   {
     id: "workbook.browse",

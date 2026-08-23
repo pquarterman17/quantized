@@ -26,6 +26,7 @@ const OUTCOME_LABEL: Record<Exclude<ReimportAllOutcome, "staged">, string> = {
   parse_error: "Failed",
   removed: "Removed",
   changed: "Changed",
+  disk_changed: "Changed on disk",
 };
 
 function rowLabel(row: ReimportAllRow): string {
