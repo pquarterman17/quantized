@@ -35,10 +35,10 @@
 //     panel). Each panel's uPlot `title` shows its facet level. F4.4: the
 //     underlying `facetKey` binding is durable (bindings-owned like
 //     `groupKey`) even though `composition` itself is an ephemeral cache --
-//     this component rebuilds it on the fly (`lib/facet.
-//     facetCompositionFromBinding`) whenever `composition` is null but
-//     `facetKey` isn't, so a facet grid survives a focus switch, a
-//     workspace reopen, or a resolved recipe's rebuild.
+//     `useEffectiveComposition` (shared with `PlotStage.tsx`'s own mount
+//     gate — see that hook's doc) rebuilds it on the fly whenever
+//     `composition` is null but `facetKey` isn't, so a facet grid survives a
+//     focus switch, a workspace reopen, or a resolved recipe's rebuild.
 //  4) Paneled x-breaks (gap #21 LAST residual): `store.breakPanels`, set by
 //     the `breakAtGaps` action, splits ONE series at large x-gaps
 //     (`lib/facet.suggestBreaks` or an explicit override) into adjacent
@@ -58,16 +58,15 @@
 
 import "uplot/dist/uPlot.min.css";
 
-import { useMemo } from "react";
 import { createPortal } from "react-dom";
 
 import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
-import { facetCompositionFromBinding } from "../../lib/facet";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { useEffectiveComposition } from "./useEffectiveComposition";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import SpatialPanelLegend from "./SpatialPanelLegend";
 
@@ -75,21 +74,13 @@ export default function MultiPanelStage() {
   const setStackMode = useApp((s) => s.setStackMode);
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
-  const rawComposition = useApp((s) => s.composition);
-  const facetKey = useApp((s) => s.facetKey);
+  // F4.4 (review K1): the SAME durable-fallback-aware derivation
+  // `PlotStage.tsx`'s mount gate uses -- see that hook's own doc for why
+  // this must never be a second, independently-drifting computation.
+  const composition = useEffectiveComposition(active);
+  const spatialPanels = spatialPanelsOf(composition);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
-  // F4.4: `composition` is the immediate render cache `facetByColumn` fills
-  // in right away; once it's gone (a focus switch, a workspace reopen, a
-  // resolved recipe's freshly-focused window) the durable `facetKey`
-  // binding (bindings-owned like `groupKey` — see `lib/plotview.ts`) rebuilds
-  // the SAME facet grid on the fly. Spatial/break stay whatever `composition`
-  // already holds -- neither has a durable binding to rebuild from.
-  const composition = useMemo(
-    () => rawComposition ?? facetCompositionFromBinding(active, facetKey, xKey, yKeys),
-    [rawComposition, active, facetKey, xKey, yKeys],
-  );
-  const spatialPanels = spatialPanelsOf(composition);
   const yScale = useApp((s) => s.yScale);
   const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);

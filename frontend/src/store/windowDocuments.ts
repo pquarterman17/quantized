@@ -54,8 +54,26 @@ export function createPlotWindowDocument(
     datasetId,
     view,
     mark: previous?.plot.mark,
-    groupKey: previous?.bindings.groupKey,
-    facetKey: previous?.bindings.facetKey,
+    // F4.4 review K2/K3: sourced from `view`, NOT `previous?.bindings.*` --
+    // `view` is always a complete, caller-intended `PlotView` (bindings-
+    // owned fields included), so it already carries whatever the caller
+    // wants here: a genuine reset's freshly-computed null (a dataset
+    // rebind's `datasetViewDefaults`, or a shape-changed reimport's
+    // `viewReset` -- both already null this out), a duplicate's live
+    // snapshot (an uncommitted `facetByColumn` mid-focus, K3), or -- for a
+    // background window's `plotWindowView(w)` projection, which always
+    // mirrors `document.bindings.*` exactly (`figureDocumentToPlotView`'s
+    // own projection) -- the SAME value `previous?.bindings.*` would have
+    // given anyway. `previous?.bindings.*` silently ignored `view` here and
+    // re-inherited the OLD document's possibly-stale value instead: a
+    // shape-changed reimport's `syncPlotWindow` reset branch computed the
+    // correct `view.facetKey: null` and then threw it away, so the stale
+    // column index rode straight into the rebuilt document and out to
+    // `.dwk` (K2); `duplicateWindow`'s focused-source path passed the LIVE
+    // `view` but the not-yet-committed `previous.bindings.facetKey` was
+    // still null, so a freshly-faceted window duplicated as unfaceted (K3).
+    groupKey: view.groupKey,
+    facetKey: view.facetKey,
     errors: options.errors === null ? undefined : (options.errors ?? previous?.bindings.errors),
     data: previous?.data,
     axisBreaks: previous?.plot.axisBreaks,

@@ -309,7 +309,7 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         appVersion: PLOT_RECIPE_APP_VERSION,
         mark: focused.document?.plot.mark,
         errors: focused.document?.bindings.errors,
-        facetKey: state.facetKey, // F4.4: the LIVE singleton -- the document copy is stale-while-focused
+        // No facetKey opt (K4/K6): `view` above already carries the live one.
         axisBreaks: focused.document?.plot.axisBreaks,
       });
       get().recordHistory("Save Plot Recipe");

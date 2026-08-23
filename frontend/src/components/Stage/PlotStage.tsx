@@ -32,6 +32,7 @@ const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
 const StatStage = lazy(() => import("./StatStage"));
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
+import { useEffectiveComposition } from "./useEffectiveComposition";
 import { useGadgetChip } from "./useGadgetChip";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload } from "./usePlotPayload";
@@ -126,12 +127,11 @@ export default function PlotStage() {
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
-  // The panel arrangement (#54 pass A). A spatial or facet arrangement is its
-  // own explicit-intent gate: each spatial panel owns its own dataset, and a
-  // facet is a deliberate split, so the plain "≥2 plotted channels on the
-  // active dataset" gate below doesn't apply to either — both can show with
-  // 0/1 channels selected on whatever happens to be active.
-  const composition = useApp((s) => s.composition);
+  // The panel arrangement (#54 pass A): a spatial/facet arrangement is its own
+  // explicit-intent gate (both can show with 0/1 plotted channels), so the
+  // plain "≥2 channels" gate below doesn't apply to either. Durable-fallback-
+  // aware (F4.4 review K1) -- see useEffectiveComposition's own doc.
+  const composition = useEffectiveComposition(active);
   const spatialPanels = spatialPanelsOf(composition);
   const facetPanels = facetPanelsOf(composition);
   const insetMode = useApp((s) => s.insetMode);

@@ -223,6 +223,47 @@ describe("reimportDataset — row/column count change", () => {
     expect(win.view.seriesStyles).toEqual({});
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K2: `syncPlotWindow`'s
+  // reset branch computes the CORRECT reset view (`viewReset`'s `facetKey:
+  // null`, same as `groupKey`) but `createPlotWindowDocument` used to ignore
+  // it and re-inherit the OLD document's `bindings.facetKey` instead -- the
+  // stale column index then rode straight into the rebuilt document (and out
+  // to `.dwk`), so `MultiPanelStage.tsx`'s `facetCompositionFromBinding`
+  // fallback would facet the RESHAPED dataset on a column index that no
+  // longer means what it used to (or doesn't exist at all).
+  it("clears a bound window's document.bindings.facetKey on a column-count-changing reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      labels: ["m", "extra"],
+      units: ["emu", ""],
+      values: [[11, 0], [21, 0], [31, 0]],
+    });
+    const facetedDocument = createFigureDocument({
+      id: "fig-facet", name: "Faceted", datasetId: "d1", view: defaultPlotView(), facetKey: 0,
+    });
+    const facetedWindow: PlotWindow = {
+      id: "wFacet",
+      kind: "plot",
+      title: "",
+      datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 480, h: 360 },
+      z: 0,
+      winState: "normal",
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      view: defaultPlotView(),
+      document: facetedDocument,
+    };
+    useApp.setState({ datasets: [baseDataset()], plotWindows: [facetedWindow] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const win = useApp.getState().plotWindows.find((w) => w.id === "wFacet")!;
+    expect(win.document?.bindings.facetKey).toBeNull();
+    expect(win.view.facetKey).toBeNull();
+  });
+
   // commitReimport reset the live view AND every bound plotWindows entry on a
   // shape change, but store/figureLifecycle.ts's `editableFigures` (a SAVED,
   // possibly-closed FigureDocument) landed later (4bdd56c, after reimport.ts's

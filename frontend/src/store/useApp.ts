@@ -1403,6 +1403,16 @@ export const useApp = create<AppState>((set, get) => ({
       toast("that column has no finite levels to facet on", "danger");
       return;
     }
+    // F4.4 (review K5): `facetKey` durably commits onto the focused window's
+    // document (below) exactly like `setGroupKey` already does for
+    // `groupKey` -- it needs the SAME ONE `recordHistory` call `setGroupKey`
+    // makes, or Ctrl+Z after faceting silently reverts whatever edit came
+    // BEFORE it instead (facetByColumn itself pushed nothing). `setActive`
+    // pushes no history of its own (a plain "make this active" navigation),
+    // so this is the gesture's ONE undo entry, covering the activate + facet
+    // together -- same "one gesture, one undo" shape createWindow/
+    // duplicateWindow already follow.
+    get().recordHistory("facet by column");
     get().setActive(datasetId);
     // F4.4: `facetKey` is the DURABLE half of this gesture -- bindings-owned
     // like `groupKey`, it commits onto the focused window's document via the

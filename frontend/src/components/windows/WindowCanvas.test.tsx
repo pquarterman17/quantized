@@ -101,6 +101,13 @@ afterEach(() => {
     selectedIds: [],
     plotWindows: [win({ winState: "maximized" })],
     focusedWindowId: "w1",
+    // F4.4 review K1: stackMode/composition/facetKey aren't touched by any
+    // OTHER test in this file, but the K1 describe block below sets all
+    // three -- reset them here too, or they'd leak into whichever test runs
+    // next in this file.
+    stackMode: false,
+    composition: null,
+    facetKey: null,
   });
 });
 
@@ -571,5 +578,40 @@ describe("WindowCanvas — P3.4 slice 4 (staged workspace-restore hydration)", (
     stepFrame(); // nothing left scheduled — must be harmless, not a crash
     await waitFor(() => expect(created.length).toBe(2)); // w1 (active) + w3 — never a stray 3rd
     expect(container.querySelectorAll(".qzk-plotwin-placeholder")).toHaveLength(0);
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K1: PlotStage.tsx's own
+// MultiPanelStage mount gate used to read the EPHEMERAL `s.composition`
+// directly -- exactly the field a restore/focus-switch nulls out, leaving
+// only the durable `facetKey` binding behind. Every earlier F4.4 test
+// rendered `MultiPanelStage` directly, which never exercises PlotStage's OWN
+// gate at all -- this is the actual headline scenario: a restored 1-channel
+// facet must still mount the grid, not silently degrade to a plain single
+// plot. `WindowCanvas` (not `PlotStage` directly, which this suite's own
+// sibling file documents as too heavy to mount standalone) is the
+// established real-render harness that already exercises PlotStage's full
+// tree with the SAME uPlot-mock/ResizeObserver-stub setup this file's other
+// describes use.
+describe("WindowCanvas — restored facet with <2 plotted channels mounts the grid (F4.4 review K1)", () => {
+  it("PlotStage mounts MultiPanelStage's facet grid from facetKey ALONE — composition null, only 1 plotted channel", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "maximized" })],
+      focusedWindowId: "w1",
+      stackMode: true,
+      // Exactly what a workspace reopen / focus switch leaves behind: the
+      // immediate render cache is gone, only the durable binding remains.
+      composition: null,
+      facetKey: 0, // facet by DATASET's own (only) column, "a"
+      yKeys: null, // -> plotted.length === 1 (the OLD gate's failure mode)
+    });
+    const { container } = render(<WindowCanvas />);
+    // "a" has 4 distinct values (10/20/30/40) -> 4 facet panels -> 4 uPlot
+    // instances. The pre-fix gate rendered the plain single-plot path
+    // instead (1 uPlot instance, no facet grid at all).
+    await waitFor(() => expect(created.length).toBe(4));
+    // Still the single-maximized-window path (never PlotWindowFrame chrome).
+    expect(container.querySelector(".qzk-plotwin")).toBeNull();
+    expect(container.querySelector(".qzk-stage")).not.toBeNull();
   });
 });

@@ -2982,8 +2982,15 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
       activeId: null,
       stackMode: false,
       composition: null,
+      // F4.4 review K5: facetByColumn now also sets the durable `facetKey`
+      // singleton -- reset it here too, or a LATER test in this block
+      // inherits whatever a PRIOR test's facetByColumn call left behind.
+      facetKey: null,
       macroRecording: false,
       macroSteps: [],
+      history: [],
+      future: [],
+      plotTitle: "",
     });
   });
 
@@ -3105,6 +3112,26 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0].code).toBe('qz.facetByColumn("d1", 0)');
     expect(steps[0].label).toBe("Facet by grp");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K5: facetByColumn
+  // durably commits document-backed state (facetKey) but used to push NO
+  // undo entry of its own -- Ctrl+Z right after faceting silently reverted
+  // whatever edit came BEFORE it instead, skipping over the facet gesture
+  // entirely (there was nothing on the history stack for it to land on).
+  it("pushes its own undo entry — undo after facetByColumn reverts ONLY the facet, not an earlier edit (K5)", () => {
+    useApp.getState().setPlotTitle("before facet"); // an ordinary prior edit, its own undo entry
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+    expect(facetPanelsOf(useApp.getState().composition)).not.toBeNull();
+
+    useApp.getState().undo();
+
+    // The facet is gone...
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(facetPanelsOf(useApp.getState().composition)).toBeNull();
+    // ...but the EARLIER edit survives -- one undo, one gesture reverted.
+    expect(useApp.getState().plotTitle).toBe("before facet");
   });
 });
 
@@ -4656,6 +4683,29 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(dup?.document?.plot.view.plotTitle).toBe("live title");
     // Save on the duplicate must never overwrite the ORIGINAL saved figure.
     expect(dup?.document?.id).not.toBe("figure-w1");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K3: `facetByColumn`
+  // commits `facetKey` onto the LIVE singleton facade immediately, but the
+  // FOCUSED window's `.document` stays "stale while focused" until the next
+  // commit (a focus switch, `windowsForSave()`) -- so duplicating a window
+  // RIGHT AFTER faceting it (before ever leaving focus) used to read the
+  // stale, not-yet-committed `previous.bindings.facetKey` instead of the
+  // live snapshot `duplicateWindow` already correctly uses for `view`.
+  it("duplicateWindow carries over an UNCOMMITTED live facetKey (K3)", () => {
+    const source = win({ id: "w1", datasetId: "d1" });
+    const sourceDocument = createFigureDocument({
+      id: "figure-w1", name: "w1", datasetId: "d1", view: source.view, // facetKey: null (not yet committed)
+    });
+    useApp.setState({
+      plotWindows: [{ ...source, document: sourceDocument }],
+      focusedWindowId: "w1",
+      facetKey: 2, // facetByColumn just ran; never committed via a focus switch
+    });
+    const newId = useApp.getState().duplicateWindow("w1");
+    const dup = useApp.getState().plotWindows.find((w) => w.id === newId);
+    expect(dup?.document?.bindings.facetKey).toBe(2);
+    expect(dup?.view.facetKey).toBe(2);
   });
 
   it("duplicateWindow returns null for an unknown id", () => {

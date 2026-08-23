@@ -33,9 +33,14 @@
 // `group_col` entirely (no backend call, no crash), and the CALLER
 // (store/reimport.ts's commitReimport) surfaces a clear "grouping column no
 // longer exists" toast for exactly the figures this actually resets, so the
-// loss is never silent. facetKey is inert today (no renderer reads it yet)
-// but cleared alongside groupKey for the same reason and to avoid two
-// diverging rules for two structurally identical bindings.
+// loss is never silent. facetKey was inert at the time of this booked
+// finding (no renderer read it yet) but is cleared alongside groupKey for
+// the same reason and to avoid two diverging rules for two structurally
+// identical bindings — a call FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (2026-08-23)
+// vindicated: facetKey is now a live wire (`MultiPanelStage.tsx`'s
+// `facetCompositionFromBinding` fallback renders a facet grid straight off
+// it), so a stale index here would no longer be silent either — it would
+// facet the reshaped dataset on the WRONG column.
 //
 // The reset is unconditional WHEN CALLED; the gate lives at the call site
 // (lib/reimport.ts's `reimportColumnsChanged`). An in-range binding is not
