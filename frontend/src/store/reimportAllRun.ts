@@ -30,25 +30,37 @@ type SliceGet = () => AppState;
 /** The calling slice's monotonic-generation cell — shared with
  *  store/reimportAll.ts's doc. `rowsGen` records which generation most
  *  recently WROTE `reimportAllRows`; `current` is bumped by every genuine
- *  `runStage` call. */
-type GenRef = { current: number; rowsGen: number | null };
+ *  `runStage` call. `committing` (review H3) is `runCommit`'s own
+ *  reentrancy latch: `reimportAllBusy` covers STAGING only, so without it
+ *  a double-clicked commit's second invocation passes every guard, waits
+ *  out the F7 probes alongside the first, and then — after the first's
+ *  applies land — revalidates the same rows to an all-"changed" report
+ *  with the "left unchanged" banner, right after the workbook genuinely
+ *  changed. (The dsRef identity check already prevents double MUTATION;
+ *  this latch prevents the false-refusal REPORT.) */
+type GenRef = { current: number; rowsGen: number | null; committing: boolean };
 
 /** Coordinator review G7: the shared "probe this path once, cache the
  *  promise" idiom both stage's fingerprint capture and commit's re-probe
  *  need — extracted so the two sides can't quietly drift into two slightly
- *  different caching rules. `force` bypasses AND OVERWRITES any cached
- *  entry with a brand-new probe — G5's stage-time retry-once path, so a
- *  transient first-probe failure doesn't permanently poison the cache for
- *  every other row sharing this path. */
+ *  different caching rules. `force` requests G5's retry-once path — a
+ *  fresh probe that also replaces the failed cached entry so a transient
+ *  first-probe failure doesn't permanently poison the cache. Review H2:
+ *  the retry itself is cached under its own per-path key, so N sibling
+ *  rows sharing one source get ONE shared retry (coherent fingerprints,
+ *  one I/O), never N independent probes that could observe N different
+ *  on-disk states of the same file. */
 function probeCached(
   path: string,
   cache: Map<string, Promise<SourceProbe | null>>,
   force = false,
 ): Promise<SourceProbe | null> {
-  let probePromise = force ? undefined : cache.get(path);
+  const key = force ? `retry:${path}` : path;
+  let probePromise = cache.get(key);
   if (!probePromise) {
     probePromise = probeSource(path);
-    cache.set(path, probePromise);
+    cache.set(key, probePromise);
+    if (force) cache.set(path, probePromise); // un-poison the plain entry too
   }
   return probePromise;
 }
@@ -117,22 +129,16 @@ async function stageOneSource(
     // genuinely never calls out for a fingerprint it can never re-verify.
     let fingerprint = hasDesktopShell() ? await captureFingerprint(ds.source.path, probeCache) : undefined;
 
-    let fetchPromise = importCache.get(ds.source.path);
-    if (!fetchPromise) {
-      fetchPromise = importFile(ds.source.path);
-      importCache.set(ds.source.path, fetchPromise);
-    }
-    const fresh: DataStruct = await fetchPromise;
-    const freshRaw = await resolveFreshData(ds, fresh);
-    const merge = await computeReimportMerge(get, ds, freshRaw);
-
-    // Coordinator review G5: a desktop-shell probe failure must fail
-    // CLOSED, never stage silently with no fingerprint — that would
-    // permanently exempt this row from the F7 re-probe at commit (nothing
-    // to compare against, forever). Retry once (a fresh, uncached probe —
-    // the first attempt may simply have raced something transient); still
-    // nothing, refuse the row outright, matching commit-time's own
-    // "no probe = treat as changed" rule.
+    // Coordinator review G5+H1: a desktop-shell probe failure must fail
+    // CLOSED, never stage silently with no fingerprint (that would
+    // permanently exempt this row from the F7 re-probe at commit). Retry
+    // once — and the retry runs HERE, before the file is ever read: a
+    // post-read retry would record the post-change size/mtime of a file
+    // rewritten during the parse, exactly the stale baseline G3's
+    // capture-before-read ordering exists to prevent (review H1). Still
+    // nothing after the shared per-path retry (review H2): refuse the row
+    // outright, matching commit-time's own "no probe = treat as changed"
+    // rule — and skip the now-pointless parse entirely.
     if (hasDesktopShell() && !fingerprint) {
       fingerprint = await captureFingerprint(ds.source.path, probeCache, true);
       if (!fingerprint) {
@@ -143,6 +149,15 @@ async function stageOneSource(
         };
       }
     }
+
+    let fetchPromise = importCache.get(ds.source.path);
+    if (!fetchPromise) {
+      fetchPromise = importFile(ds.source.path);
+      importCache.set(ds.source.path, fetchPromise);
+    }
+    const fresh: DataStruct = await fetchPromise;
+    const freshRaw = await resolveFreshData(ds, fresh);
+    const merge = await computeReimportMerge(get, ds, freshRaw);
 
     return { ...base, outcome: "staged", message: "ready", dsRef: ds, merge, fingerprint };
   } catch (e) {
@@ -286,7 +301,22 @@ export async function runCommit(
   const rows = get().reimportAllRows;
   if (!rows || get().reimportAllBusy) return;
   if (genRef.rowsGen !== genRef.current) return; // F1: these rows are not the latest generation's
+  if (genRef.committing) return; // H3: a commit is already in flight -- a double-click is a no-op
+  genRef.committing = true;
+  try {
+    await runCommitInner(set, get, mode, genRef, rows);
+  } finally {
+    genRef.committing = false;
+  }
+}
 
+async function runCommitInner(
+  set: SliceSet,
+  get: SliceGet,
+  mode: "all" | "available",
+  genRef: GenRef,
+  rows: readonly ReimportAllRow[],
+): Promise<void> {
   const stagedRows = rows.filter((r) => r.outcome === "staged");
 
   // F7: re-probe on-disk fingerprints (desktop shell only) BEFORE anything

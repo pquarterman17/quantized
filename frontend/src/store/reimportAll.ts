@@ -202,7 +202,7 @@ export function createReimportAllSlice(set: SliceSet, get: SliceGet): ReimportAl
   // `reimportAllRows` — `commitReimportAll` refuses unless it still matches
   // `current`, independent of whatever the caller does with the boolean
   // `stageReimportAll` returns.
-  const genRef = { current: 0, rowsGen: null as number | null };
+  const genRef = { current: 0, rowsGen: null as number | null, committing: false };
 
   return {
     reimportAllRows: null,

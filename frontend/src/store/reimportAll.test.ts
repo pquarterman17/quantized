@@ -832,6 +832,77 @@ describe("G5: a stage-time probe failure fails closed (retry once, then refuse)"
     expect(useApp.getState().reimportAllRows![0].outcome).toBe("staged");
     expect(probeSource).toHaveBeenCalledTimes(2);
   });
+
+  // Review H1: the retry must ALSO run before the file is read — a
+  // post-read retry would record the post-change size/mtime of a file
+  // rewritten during the parse, reopening the exact stale-baseline hole
+  // G3's capture-before-read ordering closed.
+  it("the retry probe still happens BEFORE importFile (probe, probe, import)", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const order: string[] = [];
+    const goodProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    let probeCalls = 0;
+    vi.mocked(probeSource).mockImplementation(async () => {
+      order.push("probe");
+      return ++probeCalls === 1 ? null : goodProbe;
+    });
+    vi.mocked(importFile).mockImplementation(async () => {
+      order.push("import");
+      return fresh;
+    });
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    expect(order).toEqual(["probe", "probe", "import"]);
+    expect(useApp.getState().reimportAllRows![0].outcome).toBe("staged");
+  });
+
+  // Review H2: sibling rows sharing one source path share ONE retry — not
+  // N independent forced probes that could observe N different on-disk
+  // states of the same file (an incoherent split where one sibling commits
+  // data its refused sibling shares byte-for-byte).
+  it("N siblings of one path share a single retry: exactly 2 probes total, identical fingerprints", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const goodProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    vi.mocked(probeSource).mockResolvedValueOnce(null).mockResolvedValue(goodProbe);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/a"), ds("d3", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2", "d3"]);
+
+    const rows = useApp.getState().reimportAllRows!;
+    expect(rows.map((r) => r.outcome)).toEqual(["staged", "staged", "staged"]);
+    expect(probeSource).toHaveBeenCalledTimes(2); // one shared initial + one shared retry
+    const prints = rows.map((r) => r.fingerprint);
+    expect(prints[1]).toEqual(prints[0]);
+    expect(prints[2]).toEqual(prints[0]);
+  });
+});
+
+describe("H3: a commit in flight latches out a second, overlapping commit", () => {
+  it("a double-clicked commit runs once — no all-'changed' demotion, no false refusal toast", async () => {
+    // Desktop shell so runCommit's F7 re-probe await opens a REAL gap the
+    // second click can land in (the exact double-click scenario).
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const goodProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    vi.mocked(probeSource).mockResolvedValue(goodProbe);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+    await useApp.getState().stageReimportAll(["d1"]);
+    vi.mocked(toast).mockClear();
+
+    const first = useApp.getState().commitReimportAll("available");
+    const second = useApp.getState().commitReimportAll("available");
+    await Promise.all([first, second]);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining("re-imported 1 source"), "ok");
+    expect(useApp.getState().reimportAllRows).toBeNull(); // clean close, never a false-refusal report
+  });
 });
 
 describe("G8: a report set() after withHistoryBatch never clobbers a newer, already-superseding stage", () => {
