@@ -13,8 +13,15 @@
 // contract today (Open/Rename/Move/Reveal Source/Delete) plus disabled
 // placeholders for the three features named by a later PR (Quick
 // Plot/Browse/Properties) so the command stays discoverable without
-// pretending it works. Reimport/Copy/Paste/Duplicate/Quick Plot With... have
+// pretending it works. Copy/Paste/Duplicate/Quick Plot With... have
 // no contract yet and are simply absent rather than disabled-guessed.
+//
+// L0.33 (PR M, store/reimportAll.ts): "Reimport" is now TWO commands, not
+// one — "Reimport All" (all-or-nothing across every member worksheet's
+// source) and "Reimport Available Sources" (an explicit, separately-labeled
+// partial update). Both stage every member through the SAME two-phase
+// pipeline; only the commit mode differs. Neither is a fallback the other
+// silently degrades to — see store/reimportAll.ts's module doc.
 
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
@@ -47,6 +54,18 @@ const memberCount = (t: WorkbookActionTarget): number =>
 
 const memberIds = (t: WorkbookActionTarget): string[] =>
   t.node.children.filter((c) => c.kind === "worksheet").map((c) => c.entity.id);
+
+// Coordinator review F1: `stageReimportAll` reports whether it actually
+// survived (its own generation wasn't superseded by the time it resolved)
+// — a chained `commitReimportAll` MUST be skipped when it didn't, or a
+// stale gesture can commit against a completely unrelated, newer gesture's
+// staged rows (store/reimportAll.ts's own doc). Both menu commands below
+// share this one chain rather than each hand-rolling it.
+async function runReimportAllChain(ids: string[], mode: "all" | "available"): Promise<void> {
+  const survived = await useApp.getState().stageReimportAll(ids);
+  if (!survived) return;
+  await useApp.getState().commitReimportAll(mode);
+}
 
 export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   { id: "workbook.open", label: "Open", run: (t) => t.onOpen ? t.onOpen() : openLibraryNode(t.node) },
@@ -98,6 +117,27 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
       if (worksheet) openQuickPlotWith(worksheet.id);
       else openQuickPlotWithForWorkbook(t.node.entity.id);
     },
+  },
+  // L0.33: stage every member's source, then commit only when EVERY one
+  // staged cleanly — refuses with zero mutation and a per-source problem
+  // report otherwise (store/reimportAll.ts's module doc).
+  {
+    id: "workbook.reimportAll",
+    label: "Reimport All",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets",
+    run: (t) => void runReimportAllChain(memberIds(t), "all"),
+  },
+  // L0.33: the separate, explicitly-labeled partial-update action — stages
+  // the SAME way, but commits exactly the subset that staged cleanly rather
+  // than refusing outright. Never invoked automatically by "Reimport All"'s
+  // own refusal path; only ever this menu item's own click.
+  {
+    id: "workbook.reimportAvailable",
+    label: "Reimport Available Sources",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets",
+    run: (t) => void runReimportAllChain(memberIds(t), "available"),
   },
   {
     id: "workbook.browse",

@@ -382,6 +382,78 @@ describe("workbook.quickPlotWith (PR H, L0.37)", () => {
   });
 });
 
+describe("Reimport All / Reimport Available Sources (L0.33, PR M)", () => {
+  it("both are disabled with a reason for a memberless workbook", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const all = menuItemFor(find("workbook.reimportAll"), target(wb, []));
+    const available = menuItemFor(find("workbook.reimportAvailable"), target(wb, []));
+    expect(all.disabled).toBe(true);
+    expect(all.title).toBe("this workbook has no worksheets");
+    expect(available.disabled).toBe(true);
+    expect(available.title).toBe("this workbook has no worksheets");
+  });
+
+  it("Reimport All stages then commits in \"all\" mode against exactly the member ids", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const d2 = recognizedDataset("d2", "w1");
+    const stageReimportAll = vi.fn().mockResolvedValue(true);
+    const commitReimportAll = vi.fn().mockResolvedValue(undefined);
+    useApp.setState({ datasets: [d1, d2], stageReimportAll, commitReimportAll });
+    const item = menuItemFor(find("workbook.reimportAll"), target(wb, [d1, d2]));
+    expect(item.disabled).toBe(false);
+    item.run();
+    expect(stageReimportAll).toHaveBeenCalledWith(["d1", "d2"]);
+    // commitReimportAll("all") is awaited AFTER stageReimportAll's promise —
+    // not asserted synchronously here, see the store-level test file
+    // (store/reimportAll.test.ts) for the full stage->commit contract.
+  });
+
+  it("Reimport Available Sources stages then commits in \"available\" mode", () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const stageReimportAll = vi.fn().mockResolvedValue(true);
+    const commitReimportAll = vi.fn().mockResolvedValue(undefined);
+    useApp.setState({ datasets: [d1], stageReimportAll, commitReimportAll });
+    const item = menuItemFor(find("workbook.reimportAvailable"), target(wb, [d1]));
+    item.run();
+    expect(stageReimportAll).toHaveBeenCalledWith(["d1"]);
+  });
+
+  it("Reimport All never calls commitReimportAll with \"available\" — never a fallback", async () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const stageReimportAll = vi.fn().mockResolvedValue(true);
+    const commitReimportAll = vi.fn().mockResolvedValue(undefined);
+    useApp.setState({ datasets: [d1], stageReimportAll, commitReimportAll });
+    menuItemFor(find("workbook.reimportAll"), target(wb, [d1])).run();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(commitReimportAll).toHaveBeenCalledWith("all");
+    expect(commitReimportAll).not.toHaveBeenCalledWith("available");
+  });
+
+  // Coordinator review F1 (red-first): a superseded `stageReimportAll` call
+  // (a newer gesture landed first) reports `false` — the menu's chain must
+  // skip `commitReimportAll` entirely rather than committing against
+  // whatever rows a completely unrelated gesture left behind. The deeper
+  // store-level race (two overlapping REAL invocations) is forced in
+  // store/reimportAll.test.ts; this one pins the CALLER'S OWN obligation to
+  // respect the returned boolean, independent of the store's own guard.
+  it("F1: never calls commitReimportAll when stageReimportAll reports it did not survive", async () => {
+    const wb: WorkbookNode = { id: "w1", name: "W" };
+    const d1 = recognizedDataset("d1", "w1");
+    const stageReimportAll = vi.fn().mockResolvedValue(false);
+    const commitReimportAll = vi.fn().mockResolvedValue(undefined);
+    useApp.setState({ datasets: [d1], stageReimportAll, commitReimportAll });
+    menuItemFor(find("workbook.reimportAll"), target(wb, [d1])).run();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(stageReimportAll).toHaveBeenCalledWith(["d1"]);
+    expect(commitReimportAll).not.toHaveBeenCalled();
+  });
+});
+
 describe("workbook.combine (LIBRARY_WORKBOOK_UX_PLAN PR J slice 2, L0.32-L0.34)", () => {
   it("seeds the Combine dialog with this workbook's own id", () => {
     useCombineDialog.getState().close();

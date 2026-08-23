@@ -137,6 +137,10 @@ const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDa
 // dialog with no startup responsibility" class as SplitDatasetDialog above.
 const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"));
 const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"));
+// L0.33 (PR M): the transactional multi-source Reimport All / Reimport
+// Available Sources problem report — same "on-demand dialog with no
+// startup responsibility" class as SeparateWorksheetsDialog right above.
+const ReimportAllDialog = lazyPanel(() => import("./components/overlays/ReimportAllDialog"));
 const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
 // P1.3 wave 3, Lane D: the plot-recipe apply preview+confirm dialog -- same
 // "on-demand dialog with no startup responsibility" class as QuickPlotWithDialog.
@@ -205,6 +209,15 @@ export default function AppOverlays() {
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
   const combineDialogOpen = useCombineDialog((s) => s.seed !== null);
   const separateDialogOpen = useApp((s) => s.separatePreview !== null);
+  // Coordinator review F4: gated on `reimportAllRows !== null || reimportAllBusy`
+  // — an earlier bundle-size trim dropped the `busy` half, which meant
+  // nothing ever rendered while staging was in flight (the dialog's
+  // "staging…" branch was reachable only from its own isolated unit test).
+  // A real UI race deserves a real gate, not saved bytes. Restoring it did
+  // NOT require raising scripts/check-bundle-size.mjs's EAGER_JS_BUDGET —
+  // `npm run build` still measures under it (a thin margin; re-measure
+  // before adding more eager weight to this feature).
+  const reimportAllOpen = useApp((s) => s.reimportAllRows !== null || s.reimportAllBusy);
   const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
   const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
   const recipeManagerOpen = useRecipeManager((s) => s.open);
@@ -231,6 +244,7 @@ export default function AppOverlays() {
       {splitDialogMounted && <SplitDatasetDialog />}
       {combineDialogMounted && <CombineWorkbooksDialog />}
       {separateDialogMounted && <SeparateWorksheetsDialog />}
+      {reimportAllOpen && <ReimportAllDialog />}
       {quickPlotWithMounted && <QuickPlotWithDialog />}
       {pendingRecipeOpen && <PlotRecipeApplyDialog />}
       {recipeManagerOpen && <RecipeManagerPanel />}
