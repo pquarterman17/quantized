@@ -33,23 +33,37 @@ type SliceGet = () => AppState;
  *  `runStage` call. */
 type GenRef = { current: number; rowsGen: number | null };
 
-/** Coordinator review F7: capture `path`'s on-disk `size`/`mtime` at stage
- *  time (desktop shell only — `probeSource` itself already degrades to
- *  `null` with no bridge, so this is a no-op in a browser session, same as
- *  every other bridge-gated call here). Memoized in `probeCache` — several
- *  staged rows sharing one multi-book source path fingerprint it exactly
- *  ONCE, the same F3 sharing `stageReimportAll`'s `importCache` gives the
- *  parse itself. */
+/** Coordinator review G7: the shared "probe this path once, cache the
+ *  promise" idiom both stage's fingerprint capture and commit's re-probe
+ *  need — extracted so the two sides can't quietly drift into two slightly
+ *  different caching rules. `force` bypasses AND OVERWRITES any cached
+ *  entry with a brand-new probe — G5's stage-time retry-once path, so a
+ *  transient first-probe failure doesn't permanently poison the cache for
+ *  every other row sharing this path. */
+function probeCached(
+  path: string,
+  cache: Map<string, Promise<SourceProbe | null>>,
+  force = false,
+): Promise<SourceProbe | null> {
+  let probePromise = force ? undefined : cache.get(path);
+  if (!probePromise) {
+    probePromise = probeSource(path);
+    cache.set(path, probePromise);
+  }
+  return probePromise;
+}
+
+/** Coordinator review F7: capture `path`'s on-disk `size`/`mtime` (desktop
+ *  shell only — `probeSource` itself already degrades to `null` with no
+ *  bridge, so this is a no-op in a browser session, same as every other
+ *  bridge-gated call here), via the shared `probeCached` (G7). `force`
+ *  forwards to `probeCached` — G5's retry. */
 async function captureFingerprint(
   path: string,
   probeCache: Map<string, Promise<SourceProbe | null>>,
+  force = false,
 ): Promise<{ size: number | null; mtime: number | null } | undefined> {
-  let probePromise = probeCache.get(path);
-  if (!probePromise) {
-    probePromise = probeSource(path);
-    probeCache.set(path, probePromise);
-  }
-  const probe = await probePromise;
+  const probe = await probeCached(path, probeCache, force);
   return probe && probe.state === "ok" ? { size: probe.size, mtime: probe.mtime } : undefined;
 }
 
@@ -92,6 +106,17 @@ async function stageOneSource(
     }
   }
   try {
+    // Coordinator review G3: the fingerprint is captured BEFORE the file is
+    // read, not after. A file rewritten WHILE `importFile`/`resolveFreshData`
+    // are running would otherwise have its fingerprint taken from the
+    // POST-change state — matching whatever `commitReimportAll` re-probes
+    // later and silently passing the F7 guard despite the parsed data being
+    // stale relative to what was on disk when parsing actually started.
+    // Gated explicitly (not left to `probeSource`'s own no-bridge degrade)
+    // to match `pathState`'s convention above, so a browser session
+    // genuinely never calls out for a fingerprint it can never re-verify.
+    let fingerprint = hasDesktopShell() ? await captureFingerprint(ds.source.path, probeCache) : undefined;
+
     let fetchPromise = importCache.get(ds.source.path);
     if (!fetchPromise) {
       fetchPromise = importFile(ds.source.path);
@@ -100,11 +125,25 @@ async function stageOneSource(
     const fresh: DataStruct = await fetchPromise;
     const freshRaw = await resolveFreshData(ds, fresh);
     const merge = await computeReimportMerge(get, ds, freshRaw);
-    // Gated explicitly (not left to `probeSource`'s own no-bridge degrade)
-    // to match `pathState`'s existing convention right above, and so a
-    // browser session genuinely never calls out for a fingerprint it can
-    // never re-verify anyway.
-    const fingerprint = hasDesktopShell() ? await captureFingerprint(ds.source.path, probeCache) : undefined;
+
+    // Coordinator review G5: a desktop-shell probe failure must fail
+    // CLOSED, never stage silently with no fingerprint — that would
+    // permanently exempt this row from the F7 re-probe at commit (nothing
+    // to compare against, forever). Retry once (a fresh, uncached probe —
+    // the first attempt may simply have raced something transient); still
+    // nothing, refuse the row outright, matching commit-time's own
+    // "no probe = treat as changed" rule.
+    if (hasDesktopShell() && !fingerprint) {
+      fingerprint = await captureFingerprint(ds.source.path, probeCache, true);
+      if (!fingerprint) {
+        return {
+          ...base,
+          outcome: "disk_changed",
+          message: "could not verify the file on disk — retry Reimport",
+        };
+      }
+    }
+
     return { ...base, outcome: "staged", message: "ready", dsRef: ds, merge, fingerprint };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "parse error";
@@ -212,7 +251,7 @@ export async function runStage(
   );
   if (genRef.current !== my) return false; // superseded by a later stageReimportAll call -- discard
   genRef.rowsGen = my; // F1: record which generation these rows belong to
-  set({ reimportAllRows: rows, reimportAllBusy: false });
+  set({ reimportAllRows: rows, reimportAllBusy: false, reimportAllCommitted: null });
   return true;
 }
 
@@ -251,8 +290,9 @@ export async function runCommit(
   const stagedRows = rows.filter((r) => r.outcome === "staged");
 
   // F7: re-probe on-disk fingerprints (desktop shell only) BEFORE anything
-  // synchronous below. A row with no recorded fingerprint (browser mode at
-  // stage time) is never re-probed -- nothing to compare against.
+  // synchronous below, via the shared `probeCached` (G7). A row with no
+  // recorded fingerprint (browser mode at stage time) is never re-probed --
+  // nothing to compare against.
   const diskChanged = new Set<string>();
   if (hasDesktopShell()) {
     const probeCache = new Map<string, Promise<SourceProbe | null>>();
@@ -260,12 +300,7 @@ export async function runCommit(
       stagedRows
         .filter((r) => r.fingerprint && r.sourcePath)
         .map(async (r) => {
-          let probePromise = probeCache.get(r.sourcePath!);
-          if (!probePromise) {
-            probePromise = probeSource(r.sourcePath!);
-            probeCache.set(r.sourcePath!, probePromise);
-          }
-          const probe = await probePromise;
+          const probe = await probeCached(r.sourcePath!, probeCache);
           if (
             !probe ||
             probe.state !== "ok" ||
@@ -278,28 +313,46 @@ export async function runCommit(
     );
   }
 
+  // Coordinator review G4: under `"all"`, a pre-existing stage failure OR a
+  // freshly-detected on-disk change ALREADY guarantees the refusal branch
+  // below fires (ANY non-staged row is fatal to `"all"`) -- asking the user
+  // to confirm a commit that cannot happen wastes their time and implies a
+  // choice that was never actually on offer. Skip the confirm outright and
+  // fall straight through to the (already-certain) refusal in the sync
+  // block; `"available"` never skips it this way, since a partial commit
+  // genuinely CAN still go through.
+  const certainAllRefusal = mode === "all" && (stagedRows.length < rows.length || diskChanged.size > 0);
+
   // F2: aggregate the L0.55 dependency impact across whatever would
   // actually commit (post fingerprint check) and confirm ONCE -- see this
   // function's own doc for why this MUST happen before the sync block.
-  const wouldCommitIds = stagedRows.filter((r) => !diskChanged.has(r.datasetId)).map((r) => r.datasetId);
-  if (wouldCommitIds.length > 0) {
-    const impact = computeDependencyImpact(get().datasets, wouldCommitIds);
-    if (hasDependencyImpact(impact)) {
-      const n = wouldCommitIds.length;
-      const ok = await askConfirm(
-        `Re-import ${n} source${n === 1 ? "" : "s"}?`,
-        formatDependencyImpact(impact),
-        "Re-import",
-      );
-      if (!ok) return; // declined -- zero mutation, report left exactly as it was
+  if (!certainAllRefusal) {
+    const wouldCommitIds = stagedRows.filter((r) => !diskChanged.has(r.datasetId)).map((r) => r.datasetId);
+    if (wouldCommitIds.length > 0) {
+      const impact = computeDependencyImpact(get().datasets, wouldCommitIds);
+      if (hasDependencyImpact(impact)) {
+        const n = wouldCommitIds.length;
+        const ok = await askConfirm(
+          `Re-import ${n} source${n === 1 ? "" : "s"}?`,
+          formatDependencyImpact(impact),
+          "Re-import",
+        );
+        if (!ok) return; // declined -- zero mutation, report left exactly as it was
+      }
     }
   }
 
-  // ---- SYNCHRONOUS BLOCK: no `await` from here to the final `set()` ----
-  // Re-check everything that could have gone stale during the awaits above:
-  // the generation, AND the exact `rows` array reference (a newer stage or
-  // an overlapping commit could have replaced the whole report while the
-  // probes or the confirm dialog were in flight).
+  // ---- SYNCHRONOUS BLOCK ----
+  // Everything from here through the `applyReimportMerge` loop inside
+  // `withHistoryBatch` below runs with no REAL async work of its own in
+  // between: `revalidateRow`/the filters are plain synchronous code, and
+  // `withHistoryBatch(label, fn)` invokes `fn` (whose own body has no
+  // `await` — every `applyReimportMerge` call is synchronous) IMMEDIATELY,
+  // before its own `await` is ever reached — so the mutations happen in the
+  // same synchronous stretch as this re-check, even though the `await`
+  // keyword appears on that line. That is what makes the fail-closed
+  // guards below meaningful: nothing async can land in the gap between
+  // "verified clean" and "written".
   if (genRef.rowsGen !== genRef.current) return;
   if (get().reimportAllRows !== rows) return;
   const nowById = new Map(get().datasets.map((d) => [d.id, d]));
@@ -312,12 +365,12 @@ export async function runCommit(
     // COMPLETELY unchanged -- no `set()` on `datasets` at all, just
     // refreshing the report with whatever revalidation just found
     // (including a freshly-detected mid-stage race).
-    set({ reimportAllRows: revalidated });
+    set({ reimportAllRows: revalidated, reimportAllCommitted: null });
     toast(`reimport all: ${failed.length} problem${failed.length === 1 ? "" : "s"} — nothing changed`, "danger");
     return;
   }
   if (committable.length === 0) {
-    set({ reimportAllRows: revalidated });
+    set({ reimportAllRows: revalidated, reimportAllCommitted: null });
     toast("nothing to reimport — no source staged cleanly", "danger");
     return;
   }
@@ -334,7 +387,26 @@ export async function runCommit(
   });
   const skippedNote = failed.length > 0 ? ` — ${failed.length} skipped` : "";
   toast(`re-imported ${n} source${n === 1 ? "" : "s"}${skippedNote}`, "ok");
-  // F5: a partial commit keeps the revalidated failures visible instead of
-  // discarding the report -- null only when the commit was fully clean.
-  set({ reimportAllRows: failed.length > 0 ? failed : null });
+  // Coordinator review G8: `withHistoryBatch`'s own OUTER promise still
+  // resolves through at least one real microtask hop even though `fn`'s
+  // body already ran synchronously above -- so a report-closing `set()`
+  // here is NOT provably in the same uninterrupted stretch as the applies
+  // it follows. The commit ITSELF already happened for real (the data
+  // mutation above is not undone) and stays that way regardless; what
+  // could still go wrong is clobbering a NEWER stage/report that landed in
+  // that gap by blindly overwriting it with THIS (now-stale) call's own
+  // idea of what the report should say. Re-check one more time, and skip
+  // ONLY the report `set()` (F5's kept-open failures / the closing `null`)
+  // when superseded -- the toast above already correctly described what
+  // THIS call did, and that stands either way.
+  if (genRef.rowsGen === genRef.current && get().reimportAllRows === rows) {
+    set({
+      reimportAllRows: failed.length > 0 ? failed : null,
+      // G2: non-null ONLY for a genuine partial success (something
+      // committed AND something was skipped) -- see the field's own doc in
+      // store/reimportAll.ts for why the dialog needs this to tell that
+      // apart from an outright refusal.
+      reimportAllCommitted: failed.length > 0 ? n : null,
+    });
+  }
 }

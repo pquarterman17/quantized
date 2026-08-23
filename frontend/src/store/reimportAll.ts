@@ -55,6 +55,15 @@
 // generation, so even a caller that ignores the returned boolean can never
 // commit a stale gesture's rows.
 //
+// Coordinator review G1 (round 2): closing the report mid-stage (Escape,
+// backdrop click — reachable now that F4 restored the busy-gated mount)
+// MUST bump the generation too, or the in-flight `stageReimportAll` call
+// still resolves `true` once it lands, and a caller that dutifully checks
+// that boolean (F1's own fix) chains a commit the user already cancelled.
+// `cancelReimportAll` is the ONLY sanctioned way to close the report for
+// exactly this reason — never a raw `useApp.setState({ reimportAllRows:
+// null, ... })` from the view layer, which cannot touch `genRef` at all.
+//
 // EAGER BUNDLE SIZE: this file is composed into the always-loaded `useApp`
 // store, so every byte here ships on first paint. ALL of the real logic
 // (every branch of "what can go wrong", the identity re-validation, the
@@ -121,6 +130,18 @@ export interface ReimportAllSlice {
   reimportAllRows: ReimportAllRow[] | null;
   /** True while `stageReimportAll` has a network round trip in flight. */
   reimportAllBusy: boolean;
+  /** Coordinator review G2: non-null ONLY right after a commit that both
+   *  committed something AND still left failures visible (F5's kept-open
+   *  case) — the count of sources THAT commit actually re-imported. The
+   *  dialog uses this to tell "N of N could not be re-imported — nothing
+   *  changed" (an outright refusal, `null`) apart from "re-imported X;
+   *  N skipped" (a genuine partial success, non-null) — both render as
+   *  "the remaining rows are all failures", so without this field they were
+   *  textually indistinguishable even though one changed the workbook and
+   *  the other didn't. Reset to `null` by a fresh stage, a cancel, and every
+   *  commit outcome that isn't "partial success" (HISTORY_EXCLUDED, same
+   *  transient-dialog class as `reimportAllRows`). */
+  reimportAllCommitted: number | null;
   /** Phase 1: probe + fully parse/validate every id in `datasetIds` into
    *  `reimportAllRows`, making NO mutation of `datasets` or any other
    *  participating field. De-duplicates `datasetIds`. A superseded (stale)
@@ -129,9 +150,12 @@ export interface ReimportAllSlice {
    *  call after this MUST check the return value and skip that call on
    *  `false`, or it risks committing against a completely unrelated, newer
    *  gesture's rows (see `commitReimportAll`'s own doc for the independent
-   *  second guard). `[]`/all-duplicate `datasetIds` is also `false` (F6: a
-   *  no-op call claims no generation at all, so it can never strand a
-   *  genuinely in-flight stage's busy flag). */
+   *  second guard). An EMPTY `datasetIds` is also `false` (F6: a no-op call
+   *  claims no generation at all, so it can never strand a genuinely
+   *  in-flight stage's busy flag) — narrowed from an earlier, wrong claim
+   *  that "all-duplicate" input was `false` too: `["d1","d1"]` dedupes to
+   *  one real id and stages (and survives) completely normally (coordinator
+   *  review G6, doc-promise audit). */
   stageReimportAll: (datasetIds: readonly string[]) => Promise<boolean>;
   /** Phase 2: re-validate every staged row's identity against the LIVE
    *  store (module doc), then commit. `"all"` commits only when EVERY row
@@ -141,18 +165,30 @@ export interface ReimportAllSlice {
    *  no-op toast, not a mutation either). A successful commit closes the
    *  report (`reimportAllRows: null`) ONLY when nothing was skipped —
    *  coordinator review F5: a partial commit that still leaves failures
-   *  keeps them visible instead of silently discarding the report. No-op
-   *  while `reimportAllBusy`, when no report is open, OR (coordinator
-   *  review F1's second guard) when the rows currently in state were NOT
-   *  produced by the current generation — a caller's own stale chained call
-   *  is refused here even if it ignored `stageReimportAll`'s return value.
-   *  Coordinator review F2: aggregates the L0.55 dependency impact across
-   *  what would actually commit and confirms ONCE, before ever touching
-   *  `datasets` — a decline makes zero mutation and leaves the report
-   *  exactly as it was. Coordinator review F7: re-probes each staged row's
-   *  on-disk fingerprint (desktop shell only) in that same pre-commit
-   *  window and demotes any mismatch to `"disk_changed"`. */
+   *  keeps them visible instead of silently discarding the report (see
+   *  `reimportAllCommitted`, G2, for how the dialog tells that apart from an
+   *  outright refusal). No-op while `reimportAllBusy`, when no report is
+   *  open, OR (coordinator review F1's second guard) when the rows
+   *  currently in state were NOT produced by the current generation — a
+   *  caller's own stale chained call is refused here even if it ignored
+   *  `stageReimportAll`'s return value. Coordinator review F2: aggregates
+   *  the L0.55 dependency impact across what would actually commit and
+   *  confirms ONCE, before ever touching `datasets` — a decline makes zero
+   *  mutation and leaves the report exactly as it was; skipped entirely
+   *  under `"all"` when refusal is already certain (G4). Coordinator review
+   *  F7: re-probes each staged row's on-disk fingerprint (desktop shell
+   *  only) in that same pre-commit window and demotes any mismatch to
+   *  `"disk_changed"`. */
   commitReimportAll: (mode: "all" | "available") => Promise<void>;
+  /** Coordinator review G1: close the report WITHOUT committing, mid-stage
+   *  or otherwise — the ONLY sanctioned way to do so (never a raw
+   *  `useApp.setState` from the view layer, which cannot touch the
+   *  generation cell). Bumps the generation so a genuinely in-flight
+   *  `stageReimportAll` call, once it resolves, reports `false` (module
+   *  doc) instead of silently reopening a report the user already
+   *  dismissed and letting a chained commit re-apply it. No-op if nothing
+   *  is open or in flight, beyond the (harmless) generation bump. */
+  cancelReimportAll: () => void;
 }
 
 export function createReimportAllSlice(set: SliceSet, get: SliceGet): ReimportAllSlice {
@@ -171,6 +207,7 @@ export function createReimportAllSlice(set: SliceSet, get: SliceGet): ReimportAl
   return {
     reimportAllRows: null,
     reimportAllBusy: false,
+    reimportAllCommitted: null,
     stageReimportAll: async (datasetIds) => {
       const { runStage } = await import("./reimportAllRun");
       return runStage(set, get, datasetIds, genRef);
@@ -178,6 +215,10 @@ export function createReimportAllSlice(set: SliceSet, get: SliceGet): ReimportAl
     commitReimportAll: async (mode) => {
       const { runCommit } = await import("./reimportAllRun");
       await runCommit(set, get, mode, genRef);
+    },
+    cancelReimportAll: () => {
+      genRef.current++; // G1: any in-flight stageReimportAll now reports `false`
+      set({ reimportAllRows: null, reimportAllBusy: false, reimportAllCommitted: null });
     },
   };
 }

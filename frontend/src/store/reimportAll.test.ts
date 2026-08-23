@@ -629,3 +629,241 @@ describe("F7: on-disk fingerprint re-probed at commit (forced mismatch)", () => 
     expect(useApp.getState().datasets[0].data).toEqual(fresh);
   });
 });
+
+describe("G1: cancelling mid-stage prevents a survived reopen + chained commit", () => {
+  it("cancelReimportAll during staging makes the eventual stage report survived=false, never reopening or leaving anything to commit", async () => {
+    let resolveImport!: (v: DataStruct) => void;
+    let called = false;
+    vi.mocked(importFile).mockImplementation(() => {
+      called = true;
+      return new Promise((resolve) => { resolveImport = resolve; });
+    });
+    const before = [ds("d1", "/a")];
+    useApp.setState({ datasets: before });
+
+    const stagePromise = useApp.getState().stageReimportAll(["d1"]);
+    await vi.waitFor(() => expect(called).toBe(true));
+    expect(useApp.getState().reimportAllBusy).toBe(true);
+
+    // The user closes the report (Escape / backdrop / Close button all
+    // route through this ONE action, per the dialog's own doc) WHILE the
+    // network call is still pending.
+    useApp.getState().cancelReimportAll();
+    expect(useApp.getState().reimportAllBusy).toBe(false);
+    expect(useApp.getState().reimportAllRows).toBeNull();
+
+    // The cancelled call's own network request finally resolves anyway.
+    resolveImport(fresh);
+    const survived = await stagePromise;
+
+    expect(survived).toBe(false); // told not to chain a commit
+    expect(useApp.getState().reimportAllRows).toBeNull(); // never silently reopened
+    expect(useApp.getState().reimportAllBusy).toBe(false); // never re-armed either
+
+    // Even a caller that ignored the boolean has nothing to commit against.
+    await useApp.getState().commitReimportAll("available");
+    expect(useApp.getState().datasets).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
+describe("G2: reimportAllCommitted distinguishes a partial success from an outright refusal", () => {
+  it("a partial \"available\" commit records exactly how many sources it actually committed", async () => {
+    vi.mocked(importFile).mockResolvedValueOnce(fresh).mockRejectedValueOnce(new Error("boom"));
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b")] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("available");
+
+    expect(useApp.getState().reimportAllCommitted).toBe(1);
+  });
+
+  it("an \"all\" refusal (nothing committed) leaves reimportAllCommitted null", async () => {
+    vi.mocked(importFile).mockResolvedValueOnce(fresh).mockRejectedValueOnce(new Error("boom"));
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b")] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(useApp.getState().reimportAllCommitted).toBeNull();
+  });
+
+  it("a fresh stage clears any leftover reimportAllCommitted from a previous report", async () => {
+    vi.mocked(importFile).mockResolvedValueOnce(fresh).mockRejectedValueOnce(new Error("boom"));
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b")] });
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("available");
+    expect(useApp.getState().reimportAllCommitted).toBe(1);
+
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d3", "/c")] });
+    await useApp.getState().stageReimportAll(["d3"]);
+
+    expect(useApp.getState().reimportAllCommitted).toBeNull();
+  });
+});
+
+describe("G3: the on-disk fingerprint is captured BEFORE the file is read", () => {
+  it("calls probeSource before importFile for the same source, so a change during a slow parse is still caught at commit", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const order: string[] = [];
+    const stageProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    vi.mocked(probeSource).mockImplementation(async () => {
+      order.push("probe");
+      return stageProbe;
+    });
+    vi.mocked(importFile).mockImplementation(async () => {
+      order.push("import");
+      return fresh;
+    });
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    expect(order).toEqual(["probe", "import"]);
+    expect(useApp.getState().reimportAllRows![0].outcome).toBe("staged");
+  });
+});
+
+describe("G4: the dependency confirm is skipped when \"all\" refusal is already certain", () => {
+  it("a parse_error alongside a real downstream dependent never asks for confirmation", async () => {
+    const derived: Dataset = {
+      id: "d3",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    vi.mocked(importFile).mockImplementation((path: string) => {
+      if (path === "/a") return Promise.resolve(fresh);
+      if (path === "/b") return Promise.reject(new Error("boom"));
+      throw new Error(`unexpected path ${path}`);
+    });
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b"), derived] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.data).toEqual(raw); // still refused, zero mutation
+  });
+
+  it("a freshly-detected disk change on ONE source skips the confirm even though ANOTHER staged source still has real downstream impact", async () => {
+    // d1 (path /a) will be demoted to disk_changed at commit; d2 (path /b)
+    // stages and re-probes clean, and is what `derived` actually depends
+    // on -- so `wouldCommitIds` (d2 alone) is non-empty AND has real
+    // impact, meaning the OLD code (impact-gated only) would still have
+    // asked. The whole "all" commit is doomed anyway once d1 is
+    // disk_changed, so G4 must skip the confirm regardless.
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const stageProbeA: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    const commitProbeA: SourceProbe = { state: "ok", path: "/a", size: 200, mtime: 2000, checksum: null };
+    const probeB: SourceProbe = { state: "ok", path: "/b", size: 50, mtime: 500, checksum: null };
+    vi.mocked(probeSource)
+      .mockResolvedValueOnce(stageProbeA) // d1 stage-time probe
+      .mockResolvedValueOnce(probeB) // d2 stage-time probe
+      .mockResolvedValueOnce(commitProbeA) // d1 commit-time re-probe (mismatch)
+      .mockResolvedValueOnce(probeB); // d2 commit-time re-probe (unchanged)
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const derived: Dataset = {
+      id: "d3",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d2", pipeline: "x" },
+    };
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b"), derived] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("all");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets.find((d) => d.id === "d2")!.data).toEqual(raw); // still refused, zero mutation
+  });
+
+  it("\"available\" mode still asks for confirmation even when one source has already failed", async () => {
+    const derived: Dataset = {
+      id: "d3",
+      name: "derived.dat",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    vi.mocked(importFile).mockImplementation((path: string) => {
+      if (path === "/a") return Promise.resolve(fresh);
+      if (path === "/b") return Promise.reject(new Error("boom"));
+      throw new Error(`unexpected path ${path}`);
+    });
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b"), derived] });
+
+    await useApp.getState().stageReimportAll(["d1", "d2"]);
+    await useApp.getState().commitReimportAll("available");
+
+    expect(askConfirm).toHaveBeenCalledOnce(); // a partial commit genuinely CAN still go through
+  });
+});
+
+describe("G5: a stage-time probe failure fails closed (retry once, then refuse)", () => {
+  it("two failed probe attempts stage the row as disk_changed rather than silently with no fingerprint", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(probeSource).mockResolvedValue(null); // every attempt fails
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    const row = useApp.getState().reimportAllRows![0];
+    expect(row.outcome).toBe("disk_changed");
+    expect(row.message).toContain("could not verify");
+    expect(probeSource).toHaveBeenCalledTimes(2); // one attempt + one retry
+  });
+
+  it("a failed first attempt followed by a successful retry stages normally", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    const goodProbe: SourceProbe = { state: "ok", path: "/a", size: 100, mtime: 1000, checksum: null };
+    vi.mocked(probeSource).mockResolvedValueOnce(null).mockResolvedValueOnce(goodProbe);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    expect(useApp.getState().reimportAllRows![0].outcome).toBe("staged");
+    expect(probeSource).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("G8: a report set() after withHistoryBatch never clobbers a newer, already-superseding stage", () => {
+  it("a commit whose own applies already landed does not overwrite a NEWER report that appeared during withHistoryBatch's own await", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [ds("d1", "/a"), ds("d2", "/b")] });
+
+    // Stage + begin committing d1 for real (single row, will be a fully
+    // clean commit -> the report would normally close to null).
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    // Force the race deterministically: temporarily replace withHistoryBatch
+    // so that, immediately AFTER the real batch applies d1's merge (for
+    // real -- this is not undone), a completely separate, NEWER stage cycle
+    // for d2 runs to completion BEFORE control returns to runCommit's own
+    // `await`.
+    const realBatch = useApp.getState().withHistoryBatch;
+    const spy = vi
+      .spyOn(useApp.getState(), "withHistoryBatch")
+      .mockImplementationOnce(async (label, fn) => {
+        const result = await realBatch(label, fn); // d1 really commits here
+        await useApp.getState().stageReimportAll(["d2"]); // a newer, unrelated generation
+        return result;
+      });
+
+    await useApp.getState().commitReimportAll("all");
+    spy.mockRestore();
+
+    // d1's commit genuinely happened (never rolled back)...
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.data).toEqual(fresh);
+    // ...but the stale commit's own report-closing set() must not have
+    // clobbered d2's now-current, newer report.
+    expect(useApp.getState().reimportAllRows?.map((r) => r.datasetId)).toEqual(["d2"]);
+  });
+});

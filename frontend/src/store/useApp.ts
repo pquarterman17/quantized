@@ -1544,6 +1544,7 @@ export const useApp = create<AppState>((set, get) => ({
         // a dataset id from the PREVIOUS project).
         reimportAllRows: null,
         reimportAllBusy: false,
+        reimportAllCommitted: null,
         // P1.3 wave 2: transient preview/confirm state for a staged recipe
         // apply — never resumes on a fresh load, same as separatePreview/
         // quickFigureBuilderDatasetId above (a stale pending would confirm

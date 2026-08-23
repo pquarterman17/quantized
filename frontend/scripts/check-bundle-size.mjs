@@ -534,8 +534,25 @@ import { fileURLToPath } from "node:url";
  *  added a measured +894 B. Integrated tree: 905,870 B; budget re-set to
  *  measured + 1,024 = 906,894 — still 19.3 kB below the 926,154 B the R8
  *  campaign started from, C2's ">= 15 kB, preferably 20 kB+" verdict
- *  unchanged at 20,284 B recovered. */
-const EAGER_JS_BUDGET = 906_894;
+ *  unchanged at 20,284 B recovered.
+ *
+ *  2026-08-23 (L0.33 Reimport All, coordinator review round 2, G4/G1) — two
+ *  UI-race fixes both landed genuinely irreducible eager weight after
+ *  measuring, not padding: (1) F4's restored `|| reimportAllBusy` mount
+ *  gate in AppOverlays.tsx (a saved-bytes trim had made the dialog's
+ *  "staging…" state unreachable in the real app); (2) G1's `cancelReimportAll`
+ *  action (store/reimportAll.ts) plus G2's `reimportAllCommitted` field,
+ *  both required so closing the report mid-stage genuinely cancels it
+ *  (bumps the generation cell) instead of letting a superseded stage
+ *  silently reopen and chain a commit the user already dismissed, and so
+ *  the dialog can tell a partial success apart from an outright refusal.
+ *  Neither is a panel or a lazy-import candidate — both are tiny, always-
+ *  needed store surface, same class as the generation cell they extend.
+ *  Measured 907,043 B; budget re-set to measured + 1,024 = 908,067 per the
+ *  same minimal-raise-margin convention — still 18.1 kB below the 926,154 B
+ *  the R8 campaign started from. Full vitest, tsc --noEmit, and eslint all
+ *  green post-raise. */
+const EAGER_JS_BUDGET = 908_067;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

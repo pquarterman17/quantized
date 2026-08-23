@@ -21,7 +21,7 @@ const row = (over: Partial<ReimportAllRow>): ReimportAllRow => ({
 });
 
 beforeEach(() => {
-  useApp.setState({ reimportAllRows: null, reimportAllBusy: false });
+  useApp.setState({ reimportAllRows: null, reimportAllBusy: false, reimportAllCommitted: null });
 });
 
 describe("ReimportAllDialog — visibility", () => {
@@ -59,6 +59,20 @@ describe("ReimportAllDialog — problem report", () => {
     expect(useApp.getState().reimportAllRows).toBeNull();
   });
 
+  // Coordinator review G1: Close must route through the real
+  // `cancelReimportAll` action (which bumps the generation cell), never a
+  // raw `useApp.setState` the view layer could reach for instead — spying
+  // on the real action call pins that this component genuinely calls it,
+  // rather than merely producing the same visible `reimportAllRows: null`
+  // a raw setState would also happen to produce.
+  it("Close calls the real cancelReimportAll action, not a raw setState", () => {
+    const cancelReimportAll = vi.spyOn(useApp.getState(), "cancelReimportAll");
+    useApp.setState({ reimportAllRows: [row({ outcome: "missing", message: "gone" })] });
+    render(<ReimportAllDialog />);
+    fireEvent.click(screen.getByText("Close"));
+    expect(cancelReimportAll).toHaveBeenCalledOnce();
+  });
+
   it("offers \"Reimport Available Sources\" only when something staged cleanly, and it calls commitReimportAll(\"available\")", () => {
     const commitReimportAll = vi.fn().mockResolvedValue(undefined);
     useApp.setState({
@@ -89,5 +103,31 @@ describe("ReimportAllDialog — problem report", () => {
     useApp.setState({ reimportAllRows: [row({ outcome: "staged" })] });
     render(<ReimportAllDialog />);
     expect(screen.queryByText("Reimport Available Sources")).not.toBeInTheDocument();
+  });
+});
+
+describe("ReimportAllDialog — G2: partial success vs outright refusal banners", () => {
+  it("renders the outright-refusal banner when reimportAllCommitted is null", () => {
+    useApp.setState({
+      reimportAllCommitted: null,
+      reimportAllRows: [
+        row({ datasetId: "d1", outcome: "missing", message: "gone" }),
+        row({ datasetId: "d2", outcome: "parse_error", message: "boom" }),
+      ],
+    });
+    render(<ReimportAllDialog />);
+    expect(screen.getByText(/2 of 2 sources could not be re-imported — the workbook was left unchanged/)).toBeInTheDocument();
+    expect(screen.queryByText(/^re-imported/)).not.toBeInTheDocument(); // never the partial-success phrasing
+  });
+
+  it("renders the partial-success banner when reimportAllCommitted is non-null, never the outright-refusal wording", () => {
+    useApp.setState({
+      reimportAllCommitted: 3,
+      reimportAllRows: [row({ datasetId: "d2", outcome: "parse_error", message: "boom" })],
+    });
+    render(<ReimportAllDialog />);
+    expect(screen.getByText(/re-imported 3 sources; 1 skipped:/)).toBeInTheDocument();
+    expect(screen.queryByText(/could not be re-imported/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/left unchanged/)).not.toBeInTheDocument();
   });
 });

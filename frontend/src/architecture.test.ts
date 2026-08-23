@@ -863,6 +863,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // HistorySnapshot), same class as separatePreview right above.
   reimportAllRows: "Reimport All staging/problem report; transient dialog state, discarded on commit/cancel, not an undoable edit",
   reimportAllBusy: "Reimport All staging-in-flight flag; UI state, transient",
+  reimportAllCommitted: "Reimport All partial-success commit count (G2); transient dialog state, discarded on the next stage/cancel/commit, not an undoable edit",
 
   // libraryDetailsColumns slice (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2,
   // L0.56): the Details view's selected metadata columns. Persists in
