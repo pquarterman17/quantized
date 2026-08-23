@@ -181,7 +181,7 @@ export function useGraphBuilder(): GraphBuilderState {
       useApp.getState().setActivePlotSpecId(null);
     }
     // active-dataset change, by design (#8i); `spec`/`datasets` read fresh.
-  }, [active?.id]);
+  }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- `spec` deliberately excluded (R9): would refire the wipe-check on every edit, not just an active-dataset change (#8i tests below).
 
   // One-shot seed (MAIN_PLAN #4 — the worksheet's "Open in Graph Builder"):
   // consume + clear a store-handed spec, mirroring how useStatStage consumes

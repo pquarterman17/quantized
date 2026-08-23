@@ -38,6 +38,12 @@ export interface DataFilterState {
   clear: () => void;
 }
 
+// R9 code-review F3: a single stable empty-array identity for the common
+// "no filter yet" case, so `filter` below doesn't mint a brand-new `[]` on
+// every render (which would defeat the `columns` memo's `[active, filter]`
+// dep for every unfiltered dataset — the overwhelmingly common case).
+const NO_FILTER: DataFilter = [];
+
 const distinctLevels = (col: number[]): number[] =>
   [...new Set(col.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
 
@@ -58,7 +64,7 @@ export function useDataFilter(): DataFilterState {
   const setDatasetFilter = useApp((s) => s.setDatasetFilter);
   const clearDatasetFilter = useApp((s) => s.clearDatasetFilter);
 
-  const filter = active?.filter ?? [];
+  const filter = active?.filter ?? NO_FILTER;
   const currentOf = (col: number) => filter.find((f) => f.col === col);
 
   const columns = useMemo<FilterColumn[]>(() => {
@@ -91,7 +97,14 @@ export function useDataFilter(): DataFilterState {
       });
     }
     return cols;
-    // filter is captured via currentOf; recompute when the dataset or filter changes.
+    // `currentOf` deliberately excluded (R9): it's a plain closure over
+    // `filter` (already a dep) redefined fresh every render, so whenever
+    // this memo DOES recompute it always uses the CURRENT render's
+    // `currentOf` — never a stale one from a prior render. Listing it would
+    // only force a recompute on every render (a fresh closure identity each
+    // time), defeating the memo. Pinned by useDataFilter.test.ts's
+    // "currentOf freshness" test.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `currentOf` deliberately excluded, see comment above.
   }, [active, filter]);
 
   const { kept, total } = useMemo(() => {

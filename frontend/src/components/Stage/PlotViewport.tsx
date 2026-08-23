@@ -279,6 +279,22 @@ export default function PlotViewport(props: PlotViewportProps) {
     // stay as-is: a commit that nulls a previously-set tick step still
     // rebuilds once (acceptable and rare — steps only change alongside a
     // lim edit, which no longer forces this effect on its own).
+    //
+    // `args` itself is DELIBERATELY not a dep (R9): every field this effect
+    // actually reads must be flattened into the array below one-by-one —
+    // that's why `buildOpts`'s many optional knobs are individually spread
+    // out instead of just listing `args`. `args` is the rest-spread of
+    // `props` (line 89), so it's a BRAND NEW object identity every render
+    // regardless of whether any field changed; depending on it directly would
+    // tear down and rebuild the whole uPlot instance on every parent render
+    // (exactly the P0.4 regression this file's other comments describe
+    // fixing for xLim/yLim/y2Lim). Any `args.*` field this effect reads must
+    // either have its own line below, or be read only through
+    // `limsRef`/imperatively (see the surrounding comments) with its
+    // exclusion documented — code review (R9 F1) caught `y2Fmt` reaching
+    // `buildOpts`'s y2 tick formatter with NEITHER, a real stale-render bug
+    // (PlotViewport.test.tsx's "rebuilds when y2Fmt changes" pins it now).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `args` deliberately excluded, see comment above; every field it reads is individually listed below.
   }, [
     displayPayload,
     theme,
@@ -286,6 +302,8 @@ export default function PlotViewport(props: PlotViewportProps) {
     peakWizardEdit,
     anchorEdit,
     rebuildEpoch,
+    plotRef,
+    frameVars,
     args.yScale,
     args.xScale,
     args.xStep,
@@ -294,6 +312,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.y2Step,
     args.xFmt,
     args.yFmt,
+    args.y2Fmt,
     args.showGrid,
     args.axisBox,
     args.fontSize,

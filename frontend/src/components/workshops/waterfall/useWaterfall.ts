@@ -56,7 +56,16 @@ export function useWaterfall(): WaterfallState {
     return new Set();
   });
 
-  const included = datasets.filter((d) => !excluded.has(d.id));
+  // R9 code-review F2: memoized (not a bare `.filter()`) — `included` feeds
+  // the `channels`/`series` memos below (transitively, `traces`/`aligned`
+  // too), and a fresh array identity on every render was defeating that
+  // ENTIRE memo chain regardless of their own deps — exactly the failure
+  // mode the `opts`-exclusion comment on `traces` below assumes doesn't
+  // happen upstream.
+  const included = useMemo(
+    () => datasets.filter((d) => !excluded.has(d.id)),
+    [datasets, excluded],
+  );
 
   // The waterfall stack is a render path #38's original audit missed
   // (PlotStage/WindowCanvas/useMultiPanelStage/WorksheetPane were wired, this
@@ -90,8 +99,14 @@ export function useWaterfall(): WaterfallState {
   );
 
   const resolvedSpacing = autoSpace ? autoSpacing(series.map((s) => s.range)) : manualSpacing;
+  // `opts` is a fresh object literal every render, built from EXACTLY
+  // `resolvedSpacing`/`mode`/`reverse` (nothing else) — those three are
+  // already the memo's real deps below, so listing `opts` itself would only
+  // add a dependency that's referentially new every render (defeating the
+  // memo) without changing what it actually depends on (R9).
   const opts: WaterfallOptions = { spacing: resolvedSpacing, mode, reverse };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `opts` deliberately excluded, see comment above.
   const traces = useMemo(() => buildWaterfall(series, opts), [series, resolvedSpacing, mode, reverse]);
   const aligned = useMemo(() => alignToUnionX(traces), [traces]);
 
