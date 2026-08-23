@@ -525,8 +525,17 @@ import { fileURLToPath } from "node:url";
  *  for an internal same-file caller before trusting a "no eager importer"
  *  grep, the two false positives above (`isSelfOrDescendant`,
  *  `roleFilteredYKeys`/`incompleteErrorNotices`/`axisDisplayName`) would
- *  have cost a wasted move otherwise. */
-const EAGER_JS_BUDGET = 906_000;
+ *  have cost a wasted move otherwise.
+ *
+ *  2026-08-23 (integrated re-measure, C1 #217 + C2) — C2's branch measure
+ *  (904,976, budget 906,000) predated C1's relink-consent merge, whose
+ *  irreducible eager store/bridge wiring (store/relink.ts consent state,
+ *  desktopBridge picker calls, the replaceWorkspace panel-close hook)
+ *  added a measured +894 B. Integrated tree: 905,870 B; budget re-set to
+ *  measured + 1,024 = 906,894 — still 19.3 kB below the 926,154 B the R8
+ *  campaign started from, C2's ">= 15 kB, preferably 20 kB+" verdict
+ *  unchanged at 20,284 B recovered. */
+const EAGER_JS_BUDGET = 906_894;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
