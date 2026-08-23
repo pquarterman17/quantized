@@ -55,16 +55,10 @@
 
 import { create } from "zustand";
 
-import {
-  CANCELLED,
-  grantSourceReadPaths,
-  hasDesktopShell,
-  pickRelinkDirectory,
-  probeSource,
-  revokeRelinkDir,
-} from "../lib/desktopBridge";
+import { grantSourceReadPaths, hasDesktopShell, probeSource, revokeRelinkDir } from "../lib/desktopBridge";
 import { evaluateCommitProbe, relinkedCandidate, sourceChangeVerdict } from "../lib/relink";
 import type { Dataset } from "../lib/types";
+import { browseForNewRoot } from "./relinkBrowse";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -186,12 +180,9 @@ export const useRelink = create<RelinkState>((set, get) => ({
   // Typing always clears consent — only a fresh `browseNewRoot` pick grants.
   setNewRoot: (v) => set({ newRoot: v, preview: [], newRootConsented: false }),
 
-  browseNewRoot: async () => {
-    const picked = await pickRelinkDirectory();
-    if (picked === null) return toast("no desktop bridge — type the folder path instead", "info");
-    if (picked === CANCELLED) return; // session cancellation: no state change
-    set({ newRoot: picked, preview: [], newRootConsented: true });
-  },
+  // Extracted to store/relinkBrowse.ts (500-line ceiling) — see its doc for
+  // the F2/F3/F6 review rulings it carries.
+  browseNewRoot: () => browseForNewRoot(get, set),
 
   runPreview: async () => {
     const { oldRoot, newRoot } = get();

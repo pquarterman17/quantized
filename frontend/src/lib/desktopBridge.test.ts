@@ -278,13 +278,23 @@ describe("pickRelinkDirectory", () => {
     expect(await pickRelinkDirectory()).toBe(CANCELLED);
   });
 
-  it("returns null (not CANCELLED) when the bridge call itself throws", async () => {
+  // Review F2: a backend {path:null, error} is a REAL post-pick failure
+  // (folder vanished between pick and grant, dialog error) — the caller
+  // must be able to say so, never treat it as a silent cancel.
+  it("returns the error (not CANCELLED) on a backend {path:null, error} response", async () => {
+    setShell({
+      pick_relink_directory: async () => ({ path: null, error: "selected path is not a readable directory" }),
+    });
+    expect(await pickRelinkDirectory()).toEqual({ error: "selected path is not a readable directory" });
+  });
+
+  it("returns the error (not null) when the bridge call itself throws — a bridge exists, it failed", async () => {
     setShell({
       pick_relink_directory: async () => {
         throw new Error("boom");
       },
     });
-    expect(await pickRelinkDirectory()).toBeNull();
+    expect(await pickRelinkDirectory()).toEqual({ error: "Error: boom" });
   });
 });
 

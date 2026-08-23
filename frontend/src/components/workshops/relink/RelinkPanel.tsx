@@ -120,17 +120,21 @@ export default function RelinkPanel() {
             onChange={(e) => setNewRoot(e.target.value)}
             placeholder="/new/path/to/data"
           />
-          <Button size="sm" onClick={() => void browseNewRoot()} disabled={!bridgeAvailable}>
+          {/* Disabled while busy (not just bridge-less): a pick landing
+              mid-Preview would flip newRootConsented under rows still being
+              computed for the OLD root — stale stat-only rows would then
+              render with the unverified banner suppressed. */}
+          <Button size="sm" onClick={() => void browseNewRoot()} disabled={!bridgeAvailable || busy}>
             Browse…
           </Button>
         </div>
-        {!newRootConsented && newRoot.trim() !== "" && (
+        {bridgeAvailable && !newRootConsented && newRoot.trim() !== "" && (
           <button
             type="button"
             className="qzk-ds-meta"
             style={{ textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer" }}
             onClick={() => void browseNewRoot()}
-            disabled={!bridgeAvailable}
+            disabled={busy}
           >
             Choose folder to verify — a typed path can be previewed, but content changes can't be checked
             without it.

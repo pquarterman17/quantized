@@ -192,6 +192,25 @@ describe("RelinkPanel", () => {
       expect(screen.getByRole("button", { name: "Browse…" })).toBeDisabled();
     });
 
+    // Review F1: a pick landing mid-Preview would flip `newRootConsented`
+    // under rows still being computed for the OLD root — stale stat-only
+    // rows would render with the unverified banner suppressed. Browse…
+    // (and the prompt, which triggers the same action) must wait.
+    it("Browse… is disabled while a Preview/commit is busy", () => {
+      useRelink.setState({ bridgeAvailable: true, busy: true, newRoot: "/typed/path" });
+      render(<RelinkPanel />);
+      expect(screen.getByRole("button", { name: "Browse…" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Choose folder to verify/ })).toBeDisabled();
+    });
+
+    // Review F5: without a bridge the prompt would instruct an action the
+    // same panel's no-bridge note says is impossible — it must not render.
+    it("'Choose folder to verify' does not render without a desktop bridge", () => {
+      useRelink.setState({ bridgeAvailable: false, newRoot: "/typed/path" });
+      render(<RelinkPanel />);
+      expect(screen.queryByText(/Choose folder to verify/)).not.toBeInTheDocument();
+    });
+
     it("a typed (unconsented) New folder shows 'Choose folder to verify'", () => {
       render(<RelinkPanel />);
       fireEvent.change(screen.getByLabelText("New folder (where it moved)"), {

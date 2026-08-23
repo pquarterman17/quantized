@@ -59,6 +59,7 @@ beforeEach(() => {
 // `newRootConsented`, and it does so ONLY on a real dialog return.
 describe("browseNewRoot (C1 native folder grant)", () => {
   it("a real dialog return sets newRoot and marks it consented", async () => {
+    useRelink.getState().openPanel();
     vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue("/new/place");
 
     await useRelink.getState().browseNewRoot();
@@ -66,6 +67,65 @@ describe("browseNewRoot (C1 native folder grant)", () => {
     expect(useRelink.getState().newRoot).toBe("/new/place");
     expect(useRelink.getState().newRootConsented).toBe(true);
     expect(useRelink.getState().preview).toEqual([]); // a fresh root invalidates any stale preview
+  });
+
+  // Review F2: a real post-pick failure (backend {path:null, error} or a
+  // bridge throw) is NOT a cancel — the user acted and must hear why
+  // nothing happened; and it must mint no consent.
+  it("a picker error reports the failure and mints nothing", async () => {
+    useRelink.getState().openPanel();
+    useRelink.setState({ newRoot: "/already/typed" });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue({ error: "selected path is not a readable directory" });
+
+    await useRelink.getState().browseNewRoot();
+
+    expect(useRelink.getState().newRoot).toBe("/already/typed");
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(toast).toHaveBeenCalledWith(
+      "folder picker failed — selected path is not a readable directory",
+      "danger",
+    );
+  });
+
+  // Review F3: on a shell whose folder dialog is not modal, the pick can
+  // resolve AFTER the panel closed. The backend grant already exists by
+  // then (minted inside pick_relink_directory), and closePanel's revoke ran
+  // BEFORE it existed — so browseNewRoot itself must revoke it and change
+  // no state, or the grant outlives the relink session.
+  it("a pick resolving after the panel closed revokes the grant and changes nothing", async () => {
+    useRelink.getState().openPanel();
+    let resolvePick: (v: string) => void = () => {};
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockReturnValue(
+      new Promise((res) => {
+        resolvePick = res;
+      }),
+    );
+
+    const browsing = useRelink.getState().browseNewRoot();
+    useRelink.getState().closePanel();
+    vi.mocked(desktopBridge.revokeRelinkDir).mockClear(); // isolate the post-close revoke from closePanel's own
+    resolvePick("/picked/too/late");
+    await browsing;
+
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(useRelink.getState().newRoot).not.toBe("/picked/too/late");
+    expect(desktopBridge.revokeRelinkDir).toHaveBeenCalledTimes(1);
+  });
+
+  // Review F6: the picker opens where the user already is — the typed new
+  // root, falling back to the old root — never the backend's cwd.
+  it("forwards the typed new root (else old root) as the picker's start", async () => {
+    useRelink.getState().openPanel();
+    useRelink.setState({ oldRoot: "/old/root", newRoot: "/typed/new" });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue(desktopBridge.CANCELLED);
+
+    await useRelink.getState().browseNewRoot();
+    expect(desktopBridge.pickRelinkDirectory).toHaveBeenLastCalledWith("/typed/new");
+
+    useRelink.setState({ newRoot: "   " });
+    await useRelink.getState().browseNewRoot();
+    expect(desktopBridge.pickRelinkDirectory).toHaveBeenLastCalledWith("/old/root");
   });
 
   // RED-FIRST: session cancellation must change NOTHING — not newRoot, not
@@ -102,6 +162,7 @@ describe("browseNewRoot (C1 native folder grant)", () => {
   });
 
   it("typing after a Browse… pick clears the consent flag", async () => {
+    useRelink.getState().openPanel();
     vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue("/new/place");
     await useRelink.getState().browseNewRoot();
     expect(useRelink.getState().newRootConsented).toBe(true);
