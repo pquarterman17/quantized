@@ -1,6 +1,10 @@
 # Release-candidate notes draft — v0.23.0-rc1 (proposed)
 
-**Status:** FINAL for v0.23.0-rc1 — owner gave the explicit tag go on
+**Status:** FINAL for v0.23.0-rc1; extended 2026-08-23 with the
+"Changes since rc1 → v0.23.0-rc2" section at the end (the rc1 body above
+it is a frozen record — two Known-limitations bullets carry dated
+"superseded on main" annotations rather than edits). Original: FINAL for
+v0.23.0-rc1 — owner gave the explicit tag go on
 2026-08-22 after the audit wave (#194–#200) and her local verification
 campaign (corpus re-sweep 350 graphs / 0 renderer failures, DiraCulator
 golden freeze, live Origin COM oracles) landed. Published as a GitHub
@@ -126,10 +130,19 @@ landed with red-first regression tests:
   relink candidates (a product decision, not yet made — tracked against
   the owner's acceptance pass in `plans/POST_SPRINT_INDEPENDENT_REVIEW.md`
   R2/R3).
+  **Superseded on `main` 2026-08-23 (#217): true of rc1 as tagged, fixed
+  for rc2.** The consent gesture was specified in
+  `CHATGPT_SOL_TO_CLAUDE_RELEASE_HANDOFF.md`'s contract and implemented:
+  a native Browse… folder pick mints a read-only, session-scoped grant
+  and candidates under it get real checksum comparison; typed paths still
+  degrade to stat-only, labeled as such.
 - **Reimport All (multi-source)** and the full Trash dependency-review UI
   are not built; single-dataset reimport/delete with impact preview is.
 - **Plot recipes** beyond Quick Plot templates (axis limits, legend,
   decorations, annotations, waterfall) are not saved/reused yet (P1.3).
+  **Superseded on `main` 2026-08-22/23 (#203/#204/#209, #215): true of
+  rc1 as tagged, shipped for rc2** — the full P1.3 recipe vocabulary with
+  project + global scopes, import/export, and technique matching.
 - **Managed large-data sidecars** (N) deliberately deferred with evidence —
   multi-hundred-MB projects load, but reopen of a ~188 MB project measures
   ~5.8 s; if that is your normal case, say so and N gets rebuilt into scope.
@@ -199,3 +212,27 @@ were real stale-closure bugs; CI now enforces zero warnings). R8 (eager JS
 bundle headroom) is still in flight on a parallel lane as of this note.
 None of these change the RC's tag or artifacts — they are already on `main`
 and will ship in the promoted `v0.23.0` build.
+
+## Changes since rc1 → v0.23.0-rc2 (2026-08-23)
+
+rc1 (`069616d1`) predates the post-sprint fix waves, so installed
+acceptance (R2) runs against **rc2**, cut from `main` after the following
+landed (each merged on green CI after an adversarial review round; evidence
+in `POST_SPRINT_INDEPENDENT_REVIEW.md`'s closure log and
+`CHATGPT_SOL_TO_CLAUDE_RELEASE_HANDOFF.md`'s completion log):
+
+- **P1.3 plot recipes** (#203/#204/#209, schema split #215) — see the
+  superseded Known-limitations bullet above.
+- **Calculator provenance fixes** (#206) and the R1-R10 audit remediation
+  (#207/#208/#210-#214): lock write-path atomicity, fail-closed lock
+  bridge, commit-time relink provenance recompute, operation-scoped Undo
+  batches, perf-regression guard, zero hook warnings, macOS
+  Apple-silicon-only decision recorded.
+- **R8/C2 eager-bundle diet** (#216/#218): 926,154 → 905,870 B measured
+  (−20.3 kB), budget ratcheted to 906,894.
+- **Relink native folder-grant consent** (#217) — see the superseded
+  Known-limitations bullet above; the acceptance pass should exercise
+  Browse…, the per-row states, and Cancel-revokes on a real picker.
+
+rc2 publishes as a prerelease exactly like rc1 (auto-update and PyPI
+untouched); `v0.22.0` remains the rollback build.
