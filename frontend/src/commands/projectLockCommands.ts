@@ -6,9 +6,19 @@
 // gracefully (a toast naming why) when the action doesn't currently apply,
 // the same shape every context-action `run()` in this codebase already
 // uses for its own internal refusals.
+//
+// N3 (coordinator review round 3): "Open as Copy" makes no sense for the
+// shared browser autosave slot (`useWorkspaceAutosave.ts`'s
+// `BROWSER_AUTOSAVE_LOCK_PATH`) — that backend has ONE slot per origin, no
+// separate "copy destination" a post-copy write could land in, so it would
+// just keep clobbering the real holder's slot. Refused here, first, before
+// the ordinary read-only check — the belt (the autosave write gate ALSO
+// refuses when `openedAsCopy` is set in browser-autosave mode) lives in
+// `useWorkspaceAutosave.ts`'s `autosaveGateBlocked()`.
 
 import { useEffect } from "react";
 
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "../useWorkspaceAutosave";
 import { useCommands, type Action } from "../store/commands";
 import { useProjectLock } from "../store/projectLock";
 import { toast } from "../store/toasts";
@@ -49,6 +59,10 @@ export function useProjectLockCommands(): void {
         keywords: "copy read-only lock duplicate open as",
         run: () => {
           const lock = useProjectLock.getState();
+          if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH) {
+            toast("this browser session has a single autosave slot — take over editing instead", "danger");
+            return;
+          }
           if (lock.status !== "held-by-other-live" && lock.status !== "held-by-other-stale") {
             toast("nothing to copy — this project is not currently read-only", "danger");
             return;

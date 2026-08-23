@@ -570,8 +570,28 @@ import { fileURLToPath } from "node:url";
  *  panel. Measured 908,253 B (was 907,043 B); budget re-set to measured +
  *  1,024 = 909,277 per the same minimal-raise-margin convention — still
  *  17.1 kB below the 926,154 B the R8 campaign started from. Full vitest
- *  (554 files / 8,414 tests), tsc --noEmit, and eslint all green post-raise. */
-const EAGER_JS_BUDGET = 909_277;
+ *  (554 files / 8,414 tests), tsc --noEmit, and eslint all green post-raise.
+ *
+ *  2026-08-23 (browser multi-tab lock, coordinator review round 3, N1-N6,
+ *  `claude/browser-tab-lock`) — N2's event-driven re-engage
+ *  (`installBrowserAutosaveReengage()`, three triggers: a definite-loss
+ *  store watcher, `pageshow`, `visibilitychange`), N3's belt-and-braces
+ *  Open-as-Copy refusal, N4's immediate post-recovery flush, and N6's
+ *  once-per-transition health reporting all landed in the ALREADY-eager
+ *  `useWorkspaceAutosave.ts`/`App.tsx`/`commands/projectLockCommands.ts` —
+ *  none is a deferrable panel or user-action-gated module (the whole point
+ *  is that they fire on browser lifecycle events with no user gesture),
+ *  same irreducible session-lifecycle-store class the 2026-08-21/22/23
+ *  entries above already established. `lib/browserLockProvider.ts` itself
+ *  is UNCHANGED in reachability (still the same dynamic `import()` in
+ *  App.tsx's non-desktop branch; verified: no `browserLockProvider` chunk
+ *  in the build's entry script or modulepreload list). Measured 909,687 B
+ *  (was 908,253 B the prior integrated measurement); budget re-set to
+ *  measured + 1,024 = 910,711 per the same minimal-raise-margin convention
+ *  — still 15.4 kB below the 926,154 B the R8 campaign started from. Full
+ *  vitest (554 files / 8,434 tests), tsc --noEmit, and eslint all green
+ *  post-raise. */
+const EAGER_JS_BUDGET = 910_711;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

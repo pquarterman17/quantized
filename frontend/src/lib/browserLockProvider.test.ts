@@ -374,12 +374,11 @@ describe("createBrowserLockProvider — release on tab close", () => {
     await tab.tryAcquire(PATH);
     expect(await tab.read(PATH)).not.toBeNull();
 
-    fire();
-    await Promise.resolve(); // M2: the release now runs inside an async withCas body
+    fire(); // N1: synchronous — no await needed before the record is gone
     expect(await tab.read(PATH)).toBeNull();
   });
 
-  it("never clobbers a lock a DIFFERENT tab has since taken over (sequential — see the forced-race pair below for the concurrent case)", async () => {
+  it("never clobbers a lock a DIFFERENT tab has since taken over (sequential — see the N1 describe block below for the synchrony proof)", async () => {
     const storage = makeFakeStorage();
     const { deps, fire } = captureUnloadHandler();
     const tabA = createBrowserLockProvider("inst-a", { storage, ...deps });
@@ -394,7 +393,6 @@ describe("createBrowserLockProvider — release on tab close", () => {
     expect(b.acquired).toBe(true);
 
     fire(); // A's stale unload handler must not touch B's fresh lock
-    await Promise.resolve();
     const stillThere = await tabB.read(PATH);
     expect(stillThere?.instanceId).toBe("inst-b");
   });
@@ -465,93 +463,85 @@ describe("createBrowserLockProvider — release on tab close", () => {
   });
 });
 
-// ── M2: unload release vs a concurrent takeover (forced race) ──────────
+// ── N1: unload release is synchronous (regression revert) ──────────────
+//
+// M2 (round 2) routed the pagehide release through the Web Locks mutex to
+// close a TOCTOU window against a concurrent `takeOver`. That was a real
+// regression: `navigator.locks.request`'s callback is ALWAYS asynchronous,
+// even when the lock is immediately free, and a dying document gives no
+// guarantee any pending microtask still runs — on `localhost` (always a
+// secure context, Web Locks always present) this meant the release
+// silently never completed on an ordinary close. N1 reverts to a single
+// synchronous compare-and-delete; the tests below prove exactly that.
 
-describe("createBrowserLockProvider — unload release vs concurrent takeover", () => {
-  it("forces the no-mutex race: a delayed unload release can delete a fresh takeover's record", async () => {
+describe("createBrowserLockProvider — unload release is synchronous (N1)", () => {
+  function captureHandler(): { deps: Pick<BrowserLockDeps, "subscribeUnload">; fire: () => void } {
+    let handler: (() => void) | null = null;
+    return {
+      deps: { subscribeUnload: (fn) => ((handler = fn), () => (handler = null)) },
+      fire: () => handler?.(),
+    };
+  }
+
+  it("N1: completes the removal SYNCHRONOUSLY on pagehide — no pending promise needed (regression guard)", async () => {
     const storage = makeFakeStorage();
-    // A mutable indirection: setup (the initial acquire) must NOT be gated
-    // by the race's own `gate`, or it would deadlock waiting on a promise
-    // nothing resolves until AFTER setup is supposed to have finished.
-    // `yieldForTest` dereferences whatever `gateFn` points to AT CALL TIME,
-    // so it can be armed only once setup is done.
-    let gateFn: () => Promise<void> = () => Promise.resolve();
-    // A mutable BOX (not a bare `let`) for the captured handler — TS narrows
-    // a plain `let` reassigned only inside a callback passed to an
-    // intervening function call back to its initializer's type at the outer
-    // scope, which would make `box.handler` unusable below; a property on an
-    // object sidesteps that (same shape `captureUnloadHandler`'s `state`
-    // object already uses for `unsubscribeCalls`).
-    const box: { handler: (() => void) | null } = { handler: null };
-    const tabA = createBrowserLockProvider("inst-a", {
-      storage,
-      lockRequest: null,
-      yieldForTest: () => gateFn(),
-      subscribeUnload: (fn) => {
-        box.handler = fn;
-        return () => {};
-      },
-    });
-    const tabB = makeTab("inst-b", { storage, lockRequest: null, yieldForTest: () => gateFn() });
-
-    const a = await tabA.tryAcquire(PATH);
+    const { deps, fire } = captureHandler();
+    const tab = createBrowserLockProvider("inst-a", { storage, ...deps });
+    await tab.tryAcquire(PATH);
     const key = "qz-project-lock:v1:" + PATH;
-    const parsed = JSON.parse(storage.getItem(key) as string);
-    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
-    storage.setItem(key, JSON.stringify(parsed));
+    expect(storage.getItem(key)).not.toBeNull();
 
-    const gate = deferred<void>();
-    gateFn = () => gate.promise; // arm the race gate now that setup is done
+    fire();
 
-    // Order matters for forcing the BAD interleaving: B's takeOver attaches
-    // to `gate.promise` FIRST (so it resumes and WRITES first once the gate
-    // opens); A's fire-and-forget release attaches SECOND, so its captured
-    // (now-stale) "yes this is still my token" decision executes LAST —
-    // deleting whatever is in storage by then, which is B's brand-new record.
-    const takeoverPromise = tabB.takeOver(PATH, a.record?.token ?? "");
-    box.handler?.();
-    gate.resolve();
-    await takeoverPromise;
-    await new Promise((r) => setTimeout(r, 0)); // let A's queued microtasks finish
-
-    expect(await tabB.read(PATH)).toBeNull(); // the race this test forces into the open
+    // NO `await` of any kind between `fire()` and this assertion — proves
+    // the removal happened in the SAME synchronous tick as the pagehide
+    // callback, exactly what a real dying document requires. An `async`
+    // (Web-Locks-mutexed) release would still show the record present here,
+    // since `navigator.locks.request`'s callback needs at least one
+    // microtask turn to even start running.
+    expect(storage.getItem(key)).toBeNull();
   });
 
-  it("the Web Locks mutex closes that exact window: the takeover's record survives regardless of ordering", async () => {
+  it("N1: even when Web Locks IS configured, the unload path never uses it — synchronous either way", async () => {
     const storage = makeFakeStorage();
-    const lockRequest = makeFakeLockManager();
-    // Same mutable-indirection reason as the no-mutex test above: setup
-    // must not be gated by the race's own (not-yet-created) `gate`.
-    let gateFn: () => Promise<void> = () => Promise.resolve();
-    const box: { handler: (() => void) | null } = { handler: null };
-    const tabA = createBrowserLockProvider("inst-a", {
-      storage,
-      lockRequest,
-      yieldForTest: () => gateFn(),
-      subscribeUnload: (fn) => {
-        box.handler = fn;
-        return () => {};
-      },
-    });
-    const tabB = makeTab("inst-b", { storage, lockRequest, yieldForTest: () => gateFn() });
+    const { deps, fire } = captureHandler();
+    // A lockRequest that would prove itself used by resolving asynchronously
+    // (a real `navigator.locks.request` always does) — if the unload path
+    // routed through it, the removal could not possibly be synchronous.
+    const asyncLockRequest: LockRequester = async (_name, fn) => {
+      await Promise.resolve();
+      return fn();
+    };
+    const tab = createBrowserLockProvider("inst-a", { storage, lockRequest: asyncLockRequest, ...deps });
+    await tab.tryAcquire(PATH);
+    const key = "qz-project-lock:v1:" + PATH;
 
+    fire();
+
+    expect(storage.getItem(key)).toBeNull(); // still synchronous — the unload path ignores lockRequest entirely
+  });
+
+  it("N1: the accepted residual — a release racing a takeover with no forced interleave still completes without throwing", async () => {
+    // Not a forced race (there is nothing left to force: the release has no
+    // await point to interleave at anymore) — just confirms the reverted
+    // synchronous path is well-behaved sequentially, the shape a real
+    // concurrent takeover would actually take (see this describe block's
+    // header for why the TOCTOU itself is now an accepted, documented
+    // residual rather than something this module tries to close).
+    const storage = makeFakeStorage();
+    const { deps, fire } = captureHandler();
+    const tabA = createBrowserLockProvider("inst-a", { storage, ...deps });
+    const tabB = makeTab("inst-b", { storage });
     const a = await tabA.tryAcquire(PATH);
     const key = "qz-project-lock:v1:" + PATH;
     const parsed = JSON.parse(storage.getItem(key) as string);
     parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
     storage.setItem(key, JSON.stringify(parsed));
+    const b = await tabB.takeOver(PATH, a.record?.token ?? "");
+    expect(b.acquired).toBe(true);
 
-    const gate = deferred<void>();
-    gateFn = () => gate.promise;
-
-    const takeoverPromise = tabB.takeOver(PATH, a.record?.token ?? "");
-    box.handler?.();
-    gate.resolve();
-    await takeoverPromise;
-    await new Promise((r) => setTimeout(r, 0));
-
-    const stillThere = await tabB.read(PATH);
-    expect(stillThere?.instanceId).toBe("inst-b"); // safe either way: the release's own read now happens INSIDE the mutex
+    fire(); // A's release: current record is now B's — token mismatch, no-op
+    expect(await tabB.read(PATH)).not.toBeNull();
   });
 });
 

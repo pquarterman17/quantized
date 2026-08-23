@@ -33,10 +33,50 @@
 // way, and wiring that is a materially larger change (giving a browser-
 // picked file a durable identity) this task's scope did not ask for. See
 // `store/projectLock.ts`'s own header for the fuller, up-to-date account.
+//
+// RECOVERY + BYPASS HARDENING (coordinator review round 3, N2/N3/N4/N6):
+//  - N2/N5: the initial App-start `engageBrowserAutosaveLock()` call is
+//    one-shot — nothing re-ran `openProject` afterward, so a tab that
+//    engaged read-only (or later lost the lock) stayed autosave-dead
+//    forever even once the slot freed. `installBrowserAutosaveReengage()`
+//    adds three EVENT-DRIVEN triggers (no polling, no tight loop): a
+//    definite-loss transition on `useProjectLock` for this exact path, a
+//    `pageshow` bfcache restore (a FULL re-`openProject`, not the narrower
+//    `heartbeat()`-only revalidation the previous round used — `heartbeat()`
+//    early-returns for a session that ISN'T already a believed holder, so
+//    it could never recover a tab that engaged read-only before freezing),
+//    and a `visibilitychange`-to-visible while not currently the writer.
+//    Every trigger funnels through the SAME `engageBrowserAutosaveLock`,
+//    so no new state-machine entry point exists beyond the one M1 already
+//    added. Loop-safety: the definite-loss watcher is EDGE-triggered (fires
+//    only on the actual held-by-me -> read-only transition); a re-engage
+//    that lands back on the SAME read-only status just re-sets that same
+//    value, so `prev.status` on the NEXT store update is already read-only
+//    and the edge condition no longer matches.
+//  - N3: `openAsCopy()` clears `lock.path` to `null`, which would otherwise
+//    make the ordinary `lock.path === BROWSER_AUTOSAVE_LOCK_PATH` gate
+//    below silently pass every future write — but this backend has ONE
+//    autosave slot per origin, so there is no separate "copy destination"
+//    a post-copy write could safely land in; it would just keep clobbering
+//    the real holder's slot. `commands/projectLockCommands.ts`'s "Open as
+//    Copy" now refuses outright for this path (the primary fix); the write
+//    gate below ALSO checks `openedAsCopy` directly, ahead of the `path`
+//    check, as the belt.
+//  - N4: edits made while the gate refused sat only in memory until some
+//    LATER unrelated change re-fired the debounce. The SAME re-engage
+//    watcher schedules an immediate `flushAutosaveNow()` on the opposite
+//    edge (read-only/unlocked -> held-by-me for this path) when the
+//    project is dirty, so a successful Take Over Editing (or any other
+//    path back to being the writer) doesn't leave real edits stranded.
+//  - N6: a gate-refused write used to report nothing. `flushAutosaveNow`
+//    now reports through the EXISTING `reportAutosaveHealth` channel once
+//    per state TRANSITION (paused -> resumed), never once per tick — see
+//    `autosavePausedReported`'s own doc.
 
 import { useEffect } from "react";
 
 import { autosaveHealth, loadAutosaveGeneration, saveAutosave } from "./lib/autosave";
+import { hasDesktopShell } from "./lib/desktopBridge";
 import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
 import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
@@ -56,10 +96,11 @@ export const BROWSER_AUTOSAVE_LOCK_PATH = "qz://browser-autosave-session";
 /** Engage the lock state machine for the shared browser autosave slot —
  *  called once by App.tsx's install effect, right after the browser
  *  `LockProvider` is set (ordering matters: `openProject` must see the REAL
- *  provider, never the process-local in-memory default it replaces).
- *  `openProject` is the EXISTING entry point (`store/projectLock.ts`) — this
- *  function adds no new one; it only decides WHEN to call it and how to
- *  report a read-only result, mirroring
+ *  provider, never the process-local in-memory default it replaces) — and
+ *  again by `installBrowserAutosaveReengage()`'s three event-driven
+ *  triggers (N2/N5). `openProject` is the EXISTING entry point
+ *  (`store/projectLock.ts`) — this function adds no new one; it only
+ *  decides WHEN to call it and how to report a read-only result, mirroring
  *  `lib/openWorkspaceReplace.ts`'s `registerWithLockStateMachine` toast for
  *  a real native open. Exported for direct testing (see
  *  useWorkspaceAutosave.test.ts's "browser autosave lock" tests) — App.tsx
@@ -72,6 +113,126 @@ export async function engageBrowserAutosaveLock(): Promise<void> {
       ? "another tab (unresponsive) has this browser session open — Take Over Editing is available"
       : "another tab has this browser session open for editing — opened read-only";
   toast(reason, "info");
+}
+
+/** N2: should a re-engage attempt run right now? Only ever true for the
+ *  browser autosave path, never while `openedAsCopy` (the user explicitly
+ *  declined this slot's lock — never silently re-claim it behind their
+ *  back), and only when this session isn't ALREADY the confirmed writer. */
+export function shouldReengageBrowserAutosaveLock(state: {
+  path: string | null;
+  status: string;
+  openedAsCopy: boolean;
+}): boolean {
+  return state.path === BROWSER_AUTOSAVE_LOCK_PATH && !state.openedAsCopy && state.status !== "held-by-me";
+}
+
+/** N2/N4/N5: registers the event-driven recovery watchers for the browser
+ *  autosave slot — three re-engage triggers (a definite-loss edge on
+ *  `useProjectLock`, `pageshow` persisted restore, `visibilitychange`-to-
+ *  visible) plus the post-recovery immediate flush (N4) on the opposite
+ *  edge. Event-driven only, no polling: each trigger fires on a real
+ *  browser event or an actual store-state edge, never a timer re-checking
+ *  the same condition. Called once from App.tsx's install effect (the SAME
+ *  site M1 already engages the lock from); returns a teardown so that
+ *  effect's own cleanup stays symmetric with the provider's `dispose()`. */
+export function installBrowserAutosaveReengage(): () => void {
+  const onPageShow = (e: PageTransitionEvent) => {
+    // N2/N5: a FULL re-`openProject` — this REPLACES the previous round's
+    // `heartbeat()`-only revalidation, which early-returns for a session
+    // that ISN'T already a believed holder (`heartbeat()` bails when
+    // `record === null` or the record doesn't name this instance) and so
+    // could never recover a tab that engaged READ-ONLY before freezing.
+    if (e.persisted) void engageBrowserAutosaveLock();
+  };
+  const onVisible = () => {
+    if (document.visibilityState !== "visible") return;
+    if (shouldReengageBrowserAutosaveLock(useProjectLock.getState())) void engageBrowserAutosaveLock();
+  };
+  window.addEventListener("pageshow", onPageShow);
+  document.addEventListener("visibilitychange", onVisible);
+
+  const unsubscribe = useProjectLock.subscribe((state, prev) => {
+    if (state.path !== BROWSER_AUTOSAVE_LOCK_PATH) return;
+    if (prev.status === "held-by-me" && state.status !== "held-by-me") {
+      // N2: a definite loss (heartbeat's own demotion, or any other cause)
+      // for THIS path gets one immediate re-engage attempt. Edge-triggered,
+      // never level-triggered: a re-engage that lands back on the SAME
+      // read-only status just re-`set()`s that value, so the NEXT store
+      // update's `prev.status` is already read-only and this condition
+      // cannot match again — no retry loop against a genuinely still-held
+      // lock.
+      void engageBrowserAutosaveLock();
+    } else if (prev.status !== "held-by-me" && state.status === "held-by-me") {
+      // N4: a successful (re-)acquisition of the autosave slot — flush any
+      // edits that piled up in memory while the gate refused, rather than
+      // waiting for some LATER, unrelated change to re-fire the debounce.
+      if (useApp.getState().projectDirty) void flushAutosaveNow();
+    }
+  });
+
+  return () => {
+    window.removeEventListener("pageshow", onPageShow);
+    document.removeEventListener("visibilitychange", onVisible);
+    unsubscribe();
+  };
+}
+
+/** N3 belt: is a write from THIS session refused right now? Desktop
+ *  sessions are never gated here (a real per-file lock, or none yet, is
+ *  `store/workspaceIO.ts`'s domain) — only ever makes a browser-tab write
+ *  MORE cautious, never invents a refusal the lock state itself doesn't
+ *  support. `openedAsCopy` is checked BEFORE `path`, deliberately: N3's
+ *  bypass is exactly that `openAsCopy()` clears `path` to `null`, which
+ *  would otherwise make the `path === BROWSER_AUTOSAVE_LOCK_PATH` check
+ *  silently no-op — there is no separate "copy destination" for the single
+ *  shared autosave slot, so a post-copy write must still be refused. */
+function autosaveGateBlocked(): boolean {
+  if (hasDesktopShell()) return false;
+  const lock = useProjectLock.getState();
+  if (lock.openedAsCopy) return true;
+  return lock.path === BROWSER_AUTOSAVE_LOCK_PATH && !lock.canWriteNow();
+}
+
+/** N6: has the CURRENT "paused" state already been reported? Tracked module-
+ *  wide (not per-hook-instance) so the report fires exactly once per actual
+ *  TRANSITION (free -> paused), never once per debounce tick while still
+ *  paused — resetting it happens silently the moment the gate stops
+ *  blocking; the ordinary post-save `reportAutosaveHealth` call right below
+ *  is what then reports the real "resumed" outcome, so there is no second,
+ *  redundant "resumed" message to keep in sync with it. */
+let autosavePausedReported = false;
+
+/** The actual write: serialize + persist + report health. Shared by the
+ *  debounced-save effect's timeout callback and N4's immediate post-
+ *  recovery flush, so the two paths can never drift — both are gated by the
+ *  SAME `autosaveGateBlocked()` check, re-read FRESH right before writing
+ *  (the same "never trust a snapshot from before the debounce elapsed"
+ *  discipline `store/workspaceIO.ts`'s `runSaveWorkspace` already uses for
+ *  its own quick-save gate). Exported for direct testing. */
+export async function flushAutosaveNow(): Promise<void> {
+  if (autosaveGateBlocked()) {
+    if (!autosavePausedReported) {
+      autosavePausedReported = true;
+      reportAutosaveHealth({ ...autosaveHealth(), error: "autosave paused — another tab holds this session" });
+    }
+    return;
+  }
+  autosavePausedReported = false; // silent reset — the save below reports the real "resumed" outcome
+  const s = useApp.getState();
+  // `windowsForSave()` freezes the FOCUSED window's live view into its
+  // record first (the plan's "save is one of the three sanctioned snapshot
+  // points") — never persist `s.plotWindows` raw. Item 5's
+  // `captureTechniqueView` does the same freshening for the technique
+  // memory map (workspaceIO.ts's explicit Save uses the identical call).
+  const techniqueViewMemory = captureTechniqueView(s.datasets.find((d) => d.id === s.activeId), s, s.techniqueViewMemory);
+  const ok = await saveAutosave({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  // #32: report through the store so the warning PERSISTS until the next
+  // SUCCESS, instead of a status line that scrolls away.
+  reportAutosaveHealth(autosaveHealth());
+  if (!ok) {
+    useApp.getState().setStatus("autosave failed (storage full or unavailable)");
+  }
 }
 
 function lastKnownProject(): LastProjectRef | null {
@@ -248,38 +409,7 @@ export function useWorkspaceAutosave(): void {
       useApp.getState().markProjectDirty();
       clearTimeout(timer);
       timer = setTimeout(() => {
-        // M1 (coordinator review): re-check FRESH, right before the actual
-        // write — same discipline `store/workspaceIO.ts`'s `runSaveWorkspace`
-        // uses for its own quick-save gate. Only ever fires when the lock IS
-        // tracking the exact browser autosave path (a desktop session, or a
-        // browser tab whose install effect hasn't resolved yet, has
-        // `lock.path !== BROWSER_AUTOSAVE_LOCK_PATH` and is UNAFFECTED — this
-        // can only ever make a write MORE cautious, never invent a refusal
-        // the lock state itself doesn't support, mirroring
-        // `runSaveWorkspace`'s own comment on the identical shape).
-        const lock = useProjectLock.getState();
-        if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH && !lock.canWriteNow()) {
-          return;
-        }
-        const s = useApp.getState();
-        // `windowsForSave()` freezes the FOCUSED window's live view into its
-        // record first (the plan's "save is one of the three sanctioned
-        // snapshot points") — never persist `s.plotWindows` raw. Item 5's
-        // `captureTechniqueView` does the same freshening for the technique
-        // memory map (workspaceIO.ts's explicit Save uses the identical call).
-        const techniqueViewMemory = captureTechniqueView(
-          s.datasets.find((d) => d.id === s.activeId),
-          s,
-          s.techniqueViewMemory,
-        );
-        void saveAutosave({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory }).then((ok) => {
-          // #32: report through the store so the warning PERSISTS until the
-          // next successful save, instead of a status line that scrolls away.
-          reportAutosaveHealth(autosaveHealth());
-          if (!ok) {
-            useApp.getState().setStatus("autosave failed (storage full or unavailable)");
-          }
-        });
+        void flushAutosaveNow();
       }, 800);
     });
     return () => {

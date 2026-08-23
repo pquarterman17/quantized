@@ -183,6 +183,43 @@ top of it this sprint.
   `browserLockProvider.test.ts` (35 tests there, up from 29; 5 new tests in
   `useWorkspaceAutosave.test.ts`). tsc, eslint, and the full vitest suite
   green.
+  **CORRECTION #2, same day, coordinator review round 3 (N1-N6):** M2's own
+  fix (round 2) was itself a regression, plus the new gate had recovery and
+  bypass holes. (N1, REGRESSION) M2 routed the `pagehide` release through
+  `navigator.locks.request`, whose callback is invoked ASYNCHRONOUSLY even
+  when the lock is immediately free — a dying document gives no guarantee
+  any pending microtask still runs, so on `localhost` (always a secure
+  context, Web Locks always present) the release silently never completed
+  on an ordinary tab close: every normal close stranded the record, and the
+  next tab landed read-only for a full `STALE_AFTER_MS`+ for no reason.
+  REVERTED to the original synchronous compare-and-`removeItem` (no
+  `withCas`, no `await`); the ordinary `release()` verb is unaffected (still
+  mutex-guarded, since a caller of `release()` can genuinely await it). The
+  narrow unload-vs-`takeOver` TOCTOU is now an accepted, documented residual.
+  (N2/N5) the App-start `engageBrowserAutosaveLock()` was one-shot — a tab
+  that engaged read-only (or later lost the lock) stayed autosave-dead
+  forever even once the slot freed.
+  `useWorkspaceAutosave.ts`'s `installBrowserAutosaveReengage()` adds three
+  EVENT-DRIVEN triggers (no polling): a definite-loss edge on the lock
+  store, a `pageshow` bfcache restore (a FULL re-`openProject`, replacing
+  the previous round's narrower `heartbeat()`-only revalidation, which
+  early-returns for a non-holder), and a `visibilitychange`-to-visible while
+  not the writer — all funneling through the SAME `engageBrowserAutosaveLock`
+  entry point, no new one added. (N3) `openAsCopy()` clears `lock.path`,
+  which would otherwise silently pass the write gate forever — but the
+  autosave backend has ONE slot per origin, no separate "copy destination".
+  Fixed at the command (`commands/projectLockCommands.ts` now refuses Open
+  as Copy outright for this path) with a belt in the write gate
+  (`openedAsCopy` checked directly, ahead of `path`). (N4) edits made while
+  gated sat in memory until some LATER unrelated change re-fired the
+  debounce — the SAME re-engage watcher now schedules an immediate
+  `flushAutosaveNow()` on the opposite edge (regaining write access) when
+  the project is dirty. (N6) a gate-refused write reported nothing — now
+  reports through the existing `reportAutosaveHealth` channel once per
+  TRANSITION (paused -> resumed), never once per debounce tick. Red-first
+  for all six, each verified by temporarily reverting the specific fix and
+  confirming the corresponding test failed before restoring. tsc, eslint,
+  and the full vitest suite green.
 - ~~**M's transactional multi-source "Reimport All" (L0.33)**~~ **BUILT
   2026-08-23 (`claude/m2-reimport-all`, not yet merged):** `store/reimportAll.ts`
   (two-phase stage/commit — see its module doc) + the workbook context

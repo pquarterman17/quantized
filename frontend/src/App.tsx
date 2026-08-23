@@ -24,7 +24,11 @@ import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
-import { engageBrowserAutosaveLock, useWorkspaceAutosave } from "./useWorkspaceAutosave";
+import {
+  engageBrowserAutosaveLock,
+  installBrowserAutosaveReengage,
+  useWorkspaceAutosave,
+} from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
 const QuickFigureBuilderWorkspace = lazy(() => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"));
@@ -116,29 +120,29 @@ export default function App() {
   // scope (same browser/origin only) and `store/projectLock.ts`'s header for
   // what is STILL uncovered (an explicit named-file browser open/save).
   //
-  // M3: `pageshow` with `persisted: true` means bfcache restored this exact
-  // JS context (this tab's lock state survived untouched in memory) after
-  // real wall-clock time passed with no heartbeat ticking — re-verify via
-  // the EXISTING `heartbeat()` entry point (a CAS refresh; demotes on a
-  // genuine loss, no-ops otherwise) rather than trusting the frozen belief.
-  // Registered unconditionally in this branch (not gated on the import
-  // having resolved yet) so an instant back-navigation before the module
-  // even loads still can't leave this tab without recourse.
+  // N2/N5 (coordinator review round 3): `installBrowserAutosaveReengage()`
+  // registers the event-driven recovery triggers (a `pageshow` bfcache
+  // restore, a `visibilitychange`-to-visible, and a definite-loss store
+  // watcher) that keep a read-only/demoted tab from staying autosave-dead
+  // forever once the slot frees — see useWorkspaceAutosave.ts's own header
+  // for the full account (that module owns the actual trigger logic; this
+  // effect only registers/tears it down at the same install site M1 already
+  // uses). Registered BEFORE the dynamic import resolves (not gated on it)
+  // so an instant back-navigation before the module even loads still can't
+  // leave this tab without recourse.
   //
   // M6: cleanup — `cancelled` stops a stale `.then()` from installing after
   // this effect was torn down (a React StrictMode double-mount, or a real
-  // unmount), and `provider.dispose()` removes the `pagehide` listener
-  // `createBrowserLockProvider` registered, so a remount can never leak a
-  // second permanent one (mirrors `lib/sessionMarker.ts`'s
+  // unmount); `provider.dispose()` removes the `pagehide` listener
+  // `createBrowserLockProvider` registered, and `teardownReengage()` removes
+  // the N2 listeners/subscription — a remount can never leak a second
+  // permanent one of either (mirrors `lib/sessionMarker.ts`'s
   // `installSessionMarker()` returning its own teardown).
   useEffect(() => {
     if (hasDesktopShell()) return;
     let cancelled = false;
     let dispose: (() => void) | null = null;
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) void useProjectLock.getState().heartbeat();
-    };
-    window.addEventListener("pageshow", onPageShow);
+    const teardownReengage = installBrowserAutosaveReengage();
     void import("./lib/browserLockProvider").then((m) => {
       if (cancelled) return;
       const lock = useProjectLock.getState();
@@ -149,7 +153,7 @@ export default function App() {
     });
     return () => {
       cancelled = true;
-      window.removeEventListener("pageshow", onPageShow);
+      teardownReengage();
       dispose?.();
     };
   }, []);

@@ -63,28 +63,42 @@
 // unverifiable: true }` (or `read` -> `null`, `release` -> `false`) — never a
 // guessed success, never a thrown exception out of this module.
 //
-// RELEASE ON TAB CLOSE (coordinator review round, M2/M3): best-effort only —
-// a `pagehide` listener releases every path this INSTANCE still believes it
-// holds (tracked in `heldPaths` below), using the SAME token-CAS logic the
-// other verbs use so it can never clobber a path someone else has since
-// taken over. Two hardening fixes from the review:
-//  - M3: `beforeunload` is NOT wired to release at all — it fires for a page
-//    merely being frozen into the back/forward cache, not only a real
-//    unload, and it carries no way to tell the two apart. `pagehide`'s own
-//    `event.persisted` flag IS that signal: `false` is a genuine unload
+// RELEASE ON TAB CLOSE (coordinator review, M2/M3, then REVERTED by N1 —
+// round 3): best-effort only — a `pagehide` listener releases every path
+// this INSTANCE still believes it holds (tracked in `heldPaths` below),
+// using the SAME token-CAS logic the other verbs use so it can never
+// clobber a path someone else has since taken over.
+//  - M3 (kept): `beforeunload` is NOT wired to release at all — it fires for
+//    a page merely being frozen into the back/forward cache, not only a
+//    real unload, and it carries no way to tell the two apart. `pagehide`'s
+//    own `event.persisted` flag IS that signal: `false` is a genuine unload
 //    (release); `true` means bfcache is preserving this exact JS context
-//    (this tab's `heldPaths`/token survive untouched) — the installing side
-//    (App.tsx) re-validates via the EXISTING `heartbeat()` state-machine
-//    entry point on the matching `pageshow` restore, not this module.
-//  - M2: the read-decide-remove is now routed through the SAME `withCas`
-//    mutex the other four verbs use, closing the same read-then-act TOCTOU
-//    window a bare compare-and-delete would otherwise have against a
-//    concurrent `takeOver` (a delayed, unconditional `removeItem` deciding
-//    from a STALE captured read could otherwise delete a fresh winner's
-//    brand-new record). When Web Locks is unavailable, this degrades to
-//    the same single synchronous compare-and-delete block as before — a
-//    narrow residual, same class as every other verb's documented no-mutex
-//    fallback risk, not a new one.
+//    (this tab's `heldPaths`/token survive untouched) — App.tsx's
+//    `pageshow` restore handles recovery instead, not this module.
+//  - M2 (REVERTED, N1 — regression): M2 routed the read-decide-remove
+//    through the SAME `withCas` Web Locks mutex the other four verbs use, to
+//    close a read-then-act TOCTOU window against a concurrent `takeOver`.
+//    But `navigator.locks.request`'s callback is invoked ASYNCHRONOUSLY —
+//    even when the lock is immediately free, it never runs synchronously —
+//    and a dying document (a real tab close) gives no guarantee that ANY
+//    pending microtask still gets to run. On `localhost` (always a secure
+//    context — Web Locks is always present), this meant the release
+//    silently never completed on an ordinary tab close: every normal close
+//    stranded the record, and the next tab to open landed read-only for a
+//    full `STALE_AFTER_MS` (90 s+) for no reason. N1 reverts the unload path
+//    to a single, purely SYNCHRONOUS read-compare-`removeItem` — no
+//    `withCas`, no `await`, guaranteed to complete before this callback
+//    returns, regardless of how imminently the document is about to die.
+//    The narrow read-then-act TOCTOU window against a concurrent `takeOver`
+//    is an ACCEPTED, DOCUMENTED residual: its worst case is this release
+//    deleting a fresh winner's brand-new record, which N2's event-driven
+//    re-engage (`useWorkspaceAutosave.ts`) turns into a self-healing blip
+//    (the new holder's own next re-engage trigger — a `pageshow`, a
+//    `visibilitychange`, or its own next heartbeat — simply re-acquires
+//    against the now-empty slot) rather than a hard, permanent demotion.
+//    The ordinary `release()` verb below is UNCHANGED — it still runs under
+//    `withCas`'s mutex, since a caller of `release()` can genuinely await
+//    it (unlike a pagehide handler, which cannot usefully await anything).
 // A hard crash (no unload event at all) leaves the record in place until
 // `STALE_AFTER_MS` passes, exactly like a killed desktop process leaves its
 // OS lock file until the same staleness math takes over — the pure state
@@ -291,28 +305,23 @@ export function createBrowserLockProvider(instanceId: string, deps: BrowserLockD
 
   // Best-effort release on tab close — registered BEFORE the `return` below
   // so it actually runs (a statement after a function's `return` is dead
-  // code); see this module's header, "RELEASE ON TAB CLOSE" and M2/M3/M6.
-  // M2: routed through the SAME `withCas` mutex the other verbs use — when
-  // Web Locks is available, this closes the read-then-act TOCTOU window a
-  // bare, unguarded compare-and-delete would have against a concurrent
-  // `takeOver` (see browserLockProvider.test.ts's forced-race pair for the
-  // worked proof). `void`d — a pagehide handler cannot usefully await
-  // anything (the page may finish tearing down regardless), so this is
-  // fire-and-forget: it runs to completion when the engine gives it the
-  // chance, and simply doesn't when it doesn't (the documented no-mutex-
-  // style residual, M2's own "accept + document" clause). Without Web
-  // Locks, `withCas` runs `body` synchronously with no `await` before the
-  // compare-and-delete, same single-block guarantee as before.
+  // code); see this module's header, "RELEASE ON TAB CLOSE" and M2/M3/M6/N1.
+  // N1 (regression revert): deliberately NOT routed through `withCas` — a
+  // dying document gives no guarantee any pending microtask (including a
+  // Web Locks callback, which is ALWAYS asynchronous even when the lock is
+  // free) still gets to run. This whole block is ONE synchronous read-
+  // compare-`removeItem` sequence with no `await` anywhere in it, so it is
+  // guaranteed to finish before this callback returns, no matter how
+  // imminently the page is tearing down. The accepted residual (a narrow
+  // TOCTOU against a concurrent `takeOver`) is documented in this module's
+  // header; `useWorkspaceAutosave.ts`'s event-driven re-engage is what turns
+  // that residual's worst case into a self-healing blip.
   const unsubscribeUnload = subscribeUnload(() => {
     for (const [path, token] of heldPaths) {
-      void withCas(path, async () => {
-        const { record, unverifiable } = readEnvelope(path);
-        if (unverifiable) return;
-        if (yieldForTest) await yieldForTest();
-        if (record !== null && record.token === token) {
-          removeEnvelope(path);
-        }
-      });
+      const { record, unverifiable } = readEnvelope(path);
+      if (!unverifiable && record !== null && record.token === token) {
+        removeEnvelope(path);
+      }
     }
     heldPaths.clear();
   });
