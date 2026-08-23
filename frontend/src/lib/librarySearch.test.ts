@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildLibraryHierarchy, type LibraryNode } from "./libraryHierarchy";
 import { libraryNodeMatches } from "./librarySearch";
-import { createPageDocument } from "./pageDocument";
+import { createPageDocument } from "./pageDocumentActions";
 import { parseQuery } from "./smartfolders";
 
 const hierarchy = buildLibraryHierarchy({

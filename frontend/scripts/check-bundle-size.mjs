@@ -435,8 +435,107 @@ import { fileURLToPath } from "node:url";
  *  ~1.9 kB independently. 913,023 + 1,024 = 914,047. Full gates re-run
  *  green on the integrated tree (tsc, eslint, full vitest, this build).
  *  Same rule stands: never raise without measuring, defer panels/modules
- *  first. */
-const EAGER_JS_BUDGET = 914_047;
+ *  first.
+ *
+ *  2026-08-23 (C2, finishing R8's own re-opened headroom target) — profiled
+ *  the integrated eager graph with real sourcemaps (`vite build
+ *  --sourcemap`, per-chunk `sources`/`sourcesContent` cross-referenced
+ *  against a from-`main.tsx` static-import reachability BFS — never assumed
+ *  from file names) rather than guessing from chunk names. The known
+ *  flagged candidate (App.tsx's `globalPlotRecipes` dynamic-import comment)
+ *  turned out ALREADY RESOLVED by #215/R8: `lib/plotRecipeStorage.ts`,
+ *  `store/globalPlotRecipes.ts`, `lib/plotRecipe.ts`/`lib/plotRecipeMatch.ts`,
+ *  and the Recipe Manager panel all confirmed as separate, small, genuinely
+ *  LAZY chunks (1.5-4.6 kB each, none modulepreloaded) — no further gain
+ *  there. The real remaining lever, found by the same reachability method
+ *  that caught the `lib/api.ts`/primitives-barrel pattern before: six more
+ *  files where ONE small eager-reachable export (directly required by
+ *  `lib/workspace.ts`'s synchronous `parseWorkspace`, or called INTERNALLY
+ *  by another eager function in the same file — checked explicitly, since a
+ *  same-file internal call is invisible to a plain cross-file-importer grep
+ *  and produced two false positives ruled out before moving anything:
+ *  `lib/foldertree.ts`'s `isSelfOrDescendant`, called by its own eager
+ *  `moveFolder`; `lib/quickFigureMapping.ts`'s `roleFilteredYKeys`/
+ *  `incompleteErrorNotices`/`axisDisplayName`, called by its own eager
+ *  `canCreateQuickFigure`) was dragging a much larger sibling of
+ *  edit-only/session-only/fetch-only logic into the eager graph purely by
+ *  file co-location — the exact `lib/api.ts` mechanism, just five more
+ *  instances of it. Each pure module-boundary move (no behavior change,
+ *  verified zero eager consumer for what moved before touching it), each
+ *  rebuilt and re-measured before the next:
+ *  (1) `lib/pageDocument.ts`: `sanitizePageDocuments`/`sanitizePageDocument`
+ *  (needed by `parseWorkspace`) stay; `createPageDocument`/`resolvePagePanel`/
+ *  `pagePanelLabels`/`pagePanelLifecycle`/`pagesReferencingFigure`/
+ *  `pageDocumentDirty`/`pageDocumentHasUnsavedEdits`/`serializePageDocument`/
+ *  `deserializePageDocument` (Figure Page workshop + Library delete-guard
+ *  only) moved to new sibling `lib/pageDocumentActions.ts`.
+ *  913,023 -> 912,010 B (-1,013 B).
+ *  (2) `lib/figurepage.ts`: `PAGE_LABEL_FORMATS`/`PAGE_LABEL_POSITIONS`/
+ *  `PAGE_MAX_GRID` (needed by `pageDocument.ts`'s `sanitizeOutput`) stay;
+ *  the entire ephemeral editing-session slot model (`emptySlots` through
+ *  `resolvePanelSource`, ~190 lines, plus its own `lib/figuredoc.ts`
+ *  dependency) moved to new sibling `lib/figurepageActions.ts` — the
+ *  Figure Page workshop's only real consumer. 912,010 -> 910,071 B
+ *  (-1,939 B).
+ *  (3) `lib/mapdata.ts`: `is2DMap`/`canRenderMap` (needed eagerly by
+ *  `lib/quickPlot.ts`/`lib/plotSelectedTogether.ts`/`lib/stagetab.ts`/
+ *  `components/Stage/Stage.tsx` for import-time Map-tab routing/gating)
+ *  stay; the actual heatmap fetch/regrid + RSM axis-key helpers
+ *  (`fetchMap`/`buildMapColumns`/`regridNearest`/`hasQSpace`/`rsmAxisKeys`/
+ *  `MapPayload`, MapStage-only) moved to new sibling `lib/mapdataFetch.ts`.
+ *  910,071 -> 907,721 B (-2,350 B).
+ *  (4) `lib/quickFigureMapping.ts`: the `QuickFigureMapping` shape + the
+ *  create-gate predicates (`mappingReady`/`canCreateQuickFigure` and their
+ *  internally-called helpers) stay; the mapping-EDIT actions
+ *  (`initialQuickFigureMapping`/`assignmentFor`/`assignQuickFigureColumn`/
+ *  `useAcquisitionAxis`, Quick Figure Builder workshop only) moved to new
+ *  sibling `lib/quickFigureMappingActions.ts`. 907,721 -> 906,163 B
+ *  (-1,558 B).
+ *  (5) `lib/datasetsplit.ts`: `pickDefaultSplitColumn` (+ its private
+ *  `setpointScore`) — the ONE export here with no consumer in
+ *  `store/split.ts`'s eager `splitColumn`/`tooManyGroups`/`sliceDataStruct`
+ *  chain, only the lazy SplitDatasetDialog's initial-column suggestion —
+ *  moved to new sibling `lib/datasetsplitDefault.ts`. 906,163 -> 905,994 B
+ *  (-169 B, the smallest of the five: confirms even a tiny verified move is
+ *  never negative here, unlike a fresh dynamic-import boundary's fixed
+ *  chunk-overhead tax).
+ *  (6) `lib/fitselection.ts`: `FitSelection` + `selectedFitData`/
+ *  `fitStepParams`/`fitSpecFromStepParams`/`fitDataForSpec`/`stampRecompute`
+ *  (needed by `store/useApp.ts`/`store/recalcFits.ts`/
+ *  `components/workshops/pipeline/executeSteps.ts`; `selectedFitData` stays
+ *  because `fitDataForSpec` calls it internally) stay; the plotted-channel
+ *  helpers + fit-recipe builder (`fullPlottedX`/`plottedYKey`/`fitSpecFrom`/
+ *  `finiteRange`/`activeCorrectionNames`, interactive fit workshops only)
+ *  moved to new sibling `lib/fitselectionActions.ts`. 906,163 was already
+ *  spent by (5); this one measured 905,994 -> 904,976 B (-1,018 B).
+ *  Net this pass: 913,023 -> 904,976 B, an 8,047 B (7.9 kB) further real,
+ *  measured recovery on top of R8/#215's integrated 913,023 B — 21,178 B
+ *  (20.7 kB) below the 926,154 B figure the two parallel branches both
+ *  started from, clearing R8's own re-opened "at least 15 kB, ideally
+ *  20 kB+" target. `lib/workspace.ts`'s synchronous `parseWorkspace` and
+ *  every recipe/template behavior are UNCHANGED — every move above is a
+ *  pure module-boundary split with the same exports, same signatures, same
+ *  call sites (just a different import path); no new Suspense fallback
+ *  becomes visible on any hot path (initial plot, Library, workspace
+ *  restore all still resolve through the SAME already-eager entry points).
+ *  Full vitest (551 files / 8,261 tests), tsc --noEmit, and eslint all green
+ *  post-move. 904,976 + 1,024 = 906,000 per the same minimal-raise-margin
+ *  convention, applied here to a LOWER. Same rule stands going forward:
+ *  never raise without measuring, defer panels/modules first — and check
+ *  for an internal same-file caller before trusting a "no eager importer"
+ *  grep, the two false positives above (`isSelfOrDescendant`,
+ *  `roleFilteredYKeys`/`incompleteErrorNotices`/`axisDisplayName`) would
+ *  have cost a wasted move otherwise.
+ *
+ *  2026-08-23 (integrated re-measure, C1 #217 + C2) — C2's branch measure
+ *  (904,976, budget 906,000) predated C1's relink-consent merge, whose
+ *  irreducible eager store/bridge wiring (store/relink.ts consent state,
+ *  desktopBridge picker calls, the replaceWorkspace panel-close hook)
+ *  added a measured +894 B. Integrated tree: 905,870 B; budget re-set to
+ *  measured + 1,024 = 906,894 — still 19.3 kB below the 926,154 B the R8
+ *  campaign started from, C2's ">= 15 kB, preferably 20 kB+" verdict
+ *  unchanged at 20,284 B recovered. */
+const EAGER_JS_BUDGET = 906_894;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

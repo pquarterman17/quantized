@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import type { Dataset } from "../../lib/types";
 import { clearThumbnailCache } from "../../lib/thumbnailCache";
 import { useApp } from "../../store/useApp";

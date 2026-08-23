@@ -17,7 +17,8 @@ import { useShallow } from "zustand/react/shallow";
 
 import { exportFigurePage, renderFigurePageBlob, type FigurePageSpec, type PagePanelSpec } from "../../../lib/api";
 import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard";
-import { filledCount, type PageLabelFormat, type PageLabelPosition, type PageSlot } from "../../../lib/figurepage";
+import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage";
+import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";

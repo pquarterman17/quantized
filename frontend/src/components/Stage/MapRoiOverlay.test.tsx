@@ -10,7 +10,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RoiRect, RoiRuler } from "../../lib/roi";
 import MapRoiOverlay, { type MapRoiOverlayProps } from "./MapRoiOverlay";
 import type { UseMapRulerState } from "./useMapRuler";

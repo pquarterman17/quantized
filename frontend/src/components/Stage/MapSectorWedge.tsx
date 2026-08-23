@@ -18,7 +18,7 @@
 // button explains why.
 
 import { Button } from "../primitives";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RoiSector } from "../../lib/roi";
 import { sectorHandlePositions, type SectorField } from "../../lib/roiSector";
 import { dataToPx, fmt, plotRect } from "./mapRender";

@@ -22,7 +22,7 @@ vi.mock("../../lib/api", () => ({ exportFigurePage: vi.fn().mockResolvedValue(un
 import PagesSection from "./PagesSection";
 import { exportFigurePage } from "../../lib/api";
 import { createFigureDocument } from "../../lib/figureDocument";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";

@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
-import { createPageDocument } from "../../../lib/pageDocument";
+import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";

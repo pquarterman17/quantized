@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import {
   axisTitle,
   boxAxes,

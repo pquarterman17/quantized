@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 
 import {
-  assignQuickFigureColumn,
   axisDisplayName,
   canCreateQuickFigure,
   incompleteErrorNotices,
-  initialQuickFigureMapping,
   mappingReady,
   roleFilteredYKeys,
+} from "../../../lib/quickFigureMapping";
+import {
+  assignQuickFigureColumn,
+  initialQuickFigureMapping,
   useAcquisitionAxis,
   type QuickColumnAssignment,
-} from "../../../lib/quickFigureMapping";
+} from "../../../lib/quickFigureMappingActions";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import type { QuickPlotTemplateScope } from "../../../lib/quickPlotTemplates";
 import type { Dataset } from "../../../lib/types";

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepage";
+import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepageActions";
 import { buildPanelMenuItems, primaryPanelAction } from "./panelMenu";
 
 function actions() {

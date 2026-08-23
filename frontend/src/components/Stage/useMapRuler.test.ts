@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rsmBoxCut, rsmBoxStats } from "../../lib/api/rsm";
 import { cancelActiveGesture } from "../../lib/gestureCancel";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import * as roiMathModule from "../../lib/roiMath";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";

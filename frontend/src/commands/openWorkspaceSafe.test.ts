@@ -14,7 +14,7 @@ import { buildFileCommands } from "./fileCommands";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createFigureDocument } from "../lib/figureDocument";
 import { openFilePicker } from "../lib/openFilePicker";
-import { createPageDocument } from "../lib/pageDocument";
+import { createPageDocument } from "../lib/pageDocumentActions";
 import { defaultPlotView } from "../lib/plotview";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { useApp } from "../store/useApp";

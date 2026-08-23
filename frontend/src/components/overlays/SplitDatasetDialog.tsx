@@ -15,11 +15,11 @@ import {
   autoTolerance,
   columnValues,
   isCategoricalColumn,
-  pickDefaultSplitColumn,
   splitColumn,
   tooManyGroups,
   SPLIT_GROUP_CAP,
 } from "../../lib/datasetsplit";
+import { pickDefaultSplitColumn } from "../../lib/datasetsplitDefault";
 import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";

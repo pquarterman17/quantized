@@ -27,8 +27,8 @@ import { useMemo, useState } from "react";
 
 import { figureDocPublicationCompatibility, figureTransitionWarning } from "../../../lib/figureCompatibility";
 import { docRenderable } from "../../../lib/figuredoc";
+import { PAGE_MAX_GRID, type PageLabelFormat, type PageLabelPosition } from "../../../lib/figurepage";
 import {
-  PAGE_MAX_GRID,
   assignSlot,
   clearSlot,
   emptySlots,
@@ -36,13 +36,12 @@ import {
   patchSlot,
   resizeSlots,
   resolvePanelSource,
-  type PageLabelFormat,
-  type PageLabelPosition,
   type PageSlot,
   type PanelSource,
   type PanelSourceStatus,
-} from "../../../lib/figurepage";
-import { createPageDocument, type PageLayoutSettings } from "../../../lib/pageDocument";
+} from "../../../lib/figurepageActions";
+import type { PageLayoutSettings } from "../../../lib/pageDocument";
+import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { displayedWindowTitle } from "../../../lib/plotview";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";

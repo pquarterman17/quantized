@@ -5,7 +5,7 @@ import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
-import { createPageDocument } from "./pageDocument";
+import { createPageDocument } from "./pageDocumentActions";
 import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";

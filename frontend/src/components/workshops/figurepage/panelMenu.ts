@@ -22,7 +22,7 @@
 // unresolved-slot Save block from the panel itself, without hunting for the
 // window's own title-bar Save button.
 
-import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepage";
+import type { PageSlot, PanelSourceStatus } from "../../../lib/figurepageActions";
 import type { ContextMenuItem } from "../../overlays/ContextMenu";
 
 export interface PanelMenuActions {

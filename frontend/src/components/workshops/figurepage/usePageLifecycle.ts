@@ -10,13 +10,9 @@
 // of owning the grid state itself.
 import { useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
 
-import {
-  pageDocumentDirty,
-  pageDocumentHasUnsavedEdits,
-  type PageDocument,
-  type PagePanel,
-} from "../../../lib/pageDocument";
-import { slotLabels, type PageSlot } from "../../../lib/figurepage";
+import type { PageDocument, PagePanel } from "../../../lib/pageDocument";
+import { pageDocumentDirty, pageDocumentHasUnsavedEdits } from "../../../lib/pageDocumentActions";
+import { slotLabels, type PageSlot } from "../../../lib/figurepageActions";
 import { useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { toast } from "../../../store/toasts";

@@ -15,7 +15,7 @@ import {
   type LibraryNode,
   type LibraryNodeKey,
 } from "../../lib/libraryHierarchy";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";

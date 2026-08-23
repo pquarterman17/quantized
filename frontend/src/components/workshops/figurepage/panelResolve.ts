@@ -48,12 +48,9 @@ import type { FigureDocument } from "../../../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
-import type { PanelSource } from "../../../lib/figurepage";
-import {
-  pagePanelLabels,
-  resolvePagePanel,
-  type PageDocument,
-} from "../../../lib/pageDocument";
+import type { PanelSource } from "../../../lib/figurepageActions";
+import type { PageDocument } from "../../../lib/pageDocument";
+import { pagePanelLabels, resolvePagePanel } from "../../../lib/pageDocumentActions";
 import { type PlotWindow } from "../../../lib/plotview";
 import { useApp, type AppState } from "../../../store/useApp";
 

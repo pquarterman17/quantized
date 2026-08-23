@@ -8,7 +8,7 @@ import {
   type LibraryNodeKey,
 } from "./libraryHierarchy";
 import type { OriginFigureEntry } from "./originFigures";
-import { createPageDocument } from "./pageDocument";
+import { createPageDocument } from "./pageDocumentActions";
 import { defaultPlotView } from "./plotview";
 import type { Dataset, FolderNode, OriginFigure } from "./types";
 import type { WorkbookNode } from "./workbooks";

@@ -1,13 +1,15 @@
+// Covers BOTH halves of the C2 eager/lazy split: `quickFigureMapping.ts`
+// (eager readiness half) and `quickFigureMappingActions.ts` (lazy actions).
 import { describe, expect, it } from "vitest";
 
 import type { Dataset } from "./types";
+import { mappingReady } from "./quickFigureMapping";
 import {
   assignQuickFigureColumn,
   assignmentFor,
   initialQuickFigureMapping,
-  mappingReady,
   useAcquisitionAxis,
-} from "./quickFigureMapping";
+} from "./quickFigureMappingActions";
 
 const dataset: Dataset = {
   id: "d1",

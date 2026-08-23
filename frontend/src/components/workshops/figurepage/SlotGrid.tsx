@@ -41,7 +41,7 @@
 import { useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 
 import { isContextMenuKeyEvent } from "../../../lib/contextActions";
-import { gridNeighborIndex, type GridDirection, type PageSlot, type PanelSource, type PanelSourceStatus } from "../../../lib/figurepage";
+import { gridNeighborIndex, type GridDirection, type PageSlot, type PanelSource, type PanelSourceStatus } from "../../../lib/figurepageActions";
 import ContextMenu from "../../overlays/ContextMenu";
 import { buildPanelMenuItems, primaryPanelAction, type PanelMenuActions } from "./panelMenu";
 

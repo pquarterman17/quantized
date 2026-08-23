@@ -23,7 +23,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rsmBoxCut, rsmBoxStats, rsmChiProfile, rsmSector } from "../../lib/api/rsm";
 import { cancelActiveGesture } from "../../lib/gestureCancel";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useRoiCuts } from "../workshops/roicuts/useRoiCuts";

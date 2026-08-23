@@ -1,3 +1,5 @@
+// Covers BOTH halves of the C2 eager/lazy split: `datasetsplit.ts` and
+// `datasetsplitDefault.ts` (lazy default-column pick).
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,13 +10,13 @@ import {
   formatGroupLabel,
   groupByExactValue,
   isCategoricalColumn,
-  pickDefaultSplitColumn,
   sliceDataStruct,
   SPLIT_GROUP_CAP,
   splitColumn,
   tooManyGroups,
   type SplitGroup,
 } from "./datasetsplit";
+import { pickDefaultSplitColumn } from "./datasetsplitDefault";
 import type { DataStruct } from "./types";
 
 /** Sum of every group's row count — a split must always account for every

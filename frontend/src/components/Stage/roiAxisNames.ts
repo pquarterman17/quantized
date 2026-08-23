@@ -23,7 +23,7 @@
 // question ("what do we call this axis?") is separable from the JSX, and it is
 // the part worth unit-testing.
 
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 
 /** Longest name the toggle can show. The bar is a fixed 216 px (see
  *  `roiBarLayout.BAR_W` / `.qzk-roi-bar`), and its header row also carries the

@@ -8,7 +8,7 @@
 // MapStage.tsx's own if-block routing — see `routedTool` below.
 
 import type { CutMode } from "../../lib/mapcuts";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RoiMode, RulerMode, WedgeMode } from "./MapToolbar";
 
 interface ArmableRoi {

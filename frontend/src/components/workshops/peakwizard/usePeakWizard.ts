@@ -24,7 +24,8 @@ import {
   subtractBaseline,
   type PeakRecipe,
 } from "../../../lib/peakwizard";
-import { fullPlottedX, selectedFitData } from "../../../lib/fitselection";
+import { selectedFitData } from "../../../lib/fitselection";
+import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import type { Dataset, MultiFitResult, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";

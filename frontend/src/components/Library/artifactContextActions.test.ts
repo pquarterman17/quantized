@@ -4,7 +4,7 @@ import { buildArtifactMenu, deleteArtifactConfirmed, type ArtifactNode } from ".
 import { askConfirm } from "../overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));

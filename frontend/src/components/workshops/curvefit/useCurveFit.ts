@@ -10,12 +10,8 @@ import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import {
-  activeCorrectionNames,
-  fitSpecFrom,
-  fitStepParams,
-  selectedFitData,
-} from "../../../lib/fitselection";
+import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
+import { activeCorrectionNames, fitSpecFrom } from "../../../lib/fitselectionActions";
 import {
   boundsForWire,
   parseFitParams,

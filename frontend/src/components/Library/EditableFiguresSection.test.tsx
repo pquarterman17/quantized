@@ -14,7 +14,8 @@ vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 import EditableFiguresSection from "./EditableFiguresSection";
 import { createFigureDocument, type FigureDocument } from "../../lib/figureDocument";
-import { createPageDocument, type PageDocument } from "../../lib/pageDocument";
+import type { PageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import type { Dataset } from "../../lib/types";
 import { defaultPlotView } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
