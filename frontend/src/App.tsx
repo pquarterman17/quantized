@@ -94,6 +94,25 @@ export default function App() {
   // browser tabs never need it, and in desktop mode the module resolves in
   // milliseconds at startup, long before any user gesture can reach an
   // open/save path that consults the provider.
+  // Non-desktop branch (a plain `qz` browser tab): swap in the localStorage-
+  // backed cross-TAB provider so two tabs of the SAME browser against the
+  // same project get real mutual exclusion — closes the "browser multi-tab"
+  // defer named in `plans/RELEASE_BLOCKERS.md`'s I2 entry (see
+  // `lib/browserLockProvider.ts`'s header for the honest scope: same
+  // browser/origin only, not cross-browser or cross-machine). Same
+  // instanceId the in-memory default was seeded with, so a lock this SAME
+  // tab already holds still classifies as `held-by-me` after the swap.
+  // Dynamic import for the same reason as the desktop branch below: keeps
+  // the storage/Web-Locks wiring out of the eager bundle for every session
+  // that never actually needs it before a real open/save gesture.
+  useEffect(() => {
+    if (!hasDesktopShell()) {
+      void import("./lib/browserLockProvider").then((m) => {
+        useProjectLock.getState().setProvider(m.createBrowserLockProvider(useProjectLock.getState().instanceId));
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (hasDesktopShell()) {
       void import("./lib/desktopLockProvider").then((m) => {

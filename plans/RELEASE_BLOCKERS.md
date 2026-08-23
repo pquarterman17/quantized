@@ -126,6 +126,28 @@ top of it this sprint.
   without ever verifying ownership). Both landed with adversarial
   code-review rounds fixing real pre-merge findings; independent-review
   status is recorded in that document's closure log.
+  **Browser multi-tab defer NARROWED, 2026-08-23 (`claude/browser-tab-lock`):**
+  `lib/browserLockProvider.ts` implements the SAME `LockProvider` contract
+  (no new verbs, no change to `lib/lockState.ts`'s classification/staleness
+  rules) against `localStorage` for the record, with the Web Locks API
+  (`navigator.locks.request`) — where available, in a secure context —
+  guarding every mutating verb's read-compare-write as a per-path mutex, so
+  two tabs' CAS attempts can never physically interleave; a browser lacking
+  Web Locks degrades to the same read-compare-write with no `await` between
+  read and write (single-threaded-JS atomicity within one tab), never
+  throwing and never failing open. `App.tsx` installs it (dynamic import) in
+  exactly the branch that used to keep the honest-but-unprotected in-memory
+  default — the non-desktop (`hasDesktopShell() === false`) case. **Same-
+  browser multi-tab is now covered; cross-browser, cross-machine, and
+  cross-profile on the web remain OUT of scope** — `localStorage` is not
+  shared across any of those, and closing that gap would need a server-side
+  lock leg `qz` (no `--desktop`) does not have today; that boundary stays
+  the desktop filesystem lock's domain. Red-first: a forced-race pair
+  (`browserLockProvider.test.ts`, a deferred-promise `yieldForTest` seam)
+  reproduces the no-mutex split-brain on every run and proves the Web Locks
+  mutex closes it, alongside mutual-exclusion/refresh-CAS/takeOver-CAS/
+  release-idempotence/stale-heartbeat/storage-exception/malformed-record
+  coverage (29 tests). tsc, eslint, and the full vitest suite green.
 - ~~**M's transactional multi-source "Reimport All" (L0.33)**~~ **BUILT
   2026-08-23 (`claude/m2-reimport-all`, not yet merged):** `store/reimportAll.ts`
   (two-phase stage/commit — see its module doc) + the workbook context
