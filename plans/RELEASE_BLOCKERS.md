@@ -114,6 +114,18 @@ top of it this sprint.
   a Windows release failure (delete-while-locked — fixed with a released
   tombstone). **Browser multi-tab remains a labeled defer** (the in-memory
   provider is the browser fallback).
+  **Strengthened further, 2026-08-22-23 (post-sprint independent-review
+  wave, `plans/POST_SPRINT_INDEPENDENT_REVIEW.md` R1 + R4, PRs #207/#208):**
+  R1 closed the remaining verify-then-write gap — a save now holds the same
+  exclusive OS lock across token verification, temp-write, AND
+  `os.replace`, with an absent lock file now refusing a non-empty token
+  (previously it proceeded) — so `RC_RELEASE_NOTES_DRAFT.md`'s "one atomic
+  boundary" claim is now literally true, not aspirational. R4 made the frontend fail closed
+  when the desktop lock bridge itself is absent, throws, or returns a
+  malformed response (previously such cases could report `readOnly: false`
+  without ever verifying ownership). Both landed with adversarial
+  code-review rounds fixing real pre-merge findings; independent-review
+  status is recorded in that document's closure log.
 - **M's transactional multi-source "Reimport All" (L0.33) and the full
   Trash dependency-review UI (restore / delete-dependent / freeze-materialize
   as distinct choices, L0.45) are unbuilt.** Single-dataset reimport and
