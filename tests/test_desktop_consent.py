@@ -15,14 +15,18 @@ from fastapi.testclient import TestClient
 from quantized.app import app
 from quantized.desktop_consent import (
     clear_consent,
+    clear_dir_grants,
     consent_count,
     consented_path,
     consented_write_path,
     declared_source_count,
+    dir_grant_count,
     grant_paths,
+    grant_read_dir,
     grant_write_path,
     is_consented,
     is_declared_source,
+    is_dir_consented,
     is_write_consented,
     set_declared_sources,
     write_consent_count,
@@ -300,3 +304,152 @@ def test_consent_does_not_bypass_the_file_existence_check(
     monkeypatch.setattr("quantized.routes.parsers._allowed_roots", lambda: ())
     f.unlink()
     assert client.post("/api/parsers/import", json={"path": str(f)}).status_code == 404
+
+
+# --- directory grants (C1: relink "Browse..." folder picker) ---------------
+#
+# This is the THIRD grant kind (see the module doc): read-only, minted only
+# from `grant_read_dir` (which the bridge only ever calls with a native
+# folder-dialog return — see test_desktop_bridge_dialogs.py for that half),
+# permitting canonical descendants of the granted root. Security-boundary
+# tests, same discipline as the per-file suite above.
+
+
+def _tree(tmp_path: Path) -> Path:
+    root = tmp_path / "proj"
+    (root / "sub").mkdir(parents=True)
+    (root / "sub" / "run1.csv").write_text("T,M\n1,10\n", encoding="utf-8")
+    return root
+
+
+def test_grant_read_dir_returns_the_canonical_root(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    granted = grant_read_dir(str(root))
+    assert granted == os.path.realpath(str(root))
+    assert dir_grant_count() == 1
+
+
+def test_grant_read_dir_refuses_a_file(tmp_path: Path) -> None:
+    """Only a real directory grants — mirrors `grant_paths`' opposite rule
+    (a directory grants nothing there)."""
+    f = _csv(tmp_path)
+    assert grant_read_dir(str(f)) is None
+    assert dir_grant_count() == 0
+
+
+def test_grant_read_dir_refuses_a_missing_path(tmp_path: Path) -> None:
+    assert grant_read_dir(str(tmp_path / "does_not_exist")) is None
+    assert dir_grant_count() == 0
+
+
+def test_is_dir_consented_covers_the_root_itself_and_descendants(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    grant_read_dir(str(root))
+    assert is_dir_consented(str(root))
+    assert is_dir_consented(str(root / "sub"))
+    assert is_dir_consented(str(root / "sub" / "run1.csv"))
+    assert is_dir_consented(str(root / "sub" / "not_yet_created.csv"))  # containment, not existence
+
+
+def test_is_dir_consented_false_before_any_grant(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    assert not is_dir_consented(str(root / "sub" / "run1.csv"))
+
+
+def test_is_dir_consented_rejects_a_sibling_prefix_trick(tmp_path: Path) -> None:
+    """RED-FIRST for the sibling-prefix trap: a naive `str.startswith` on
+    `/data/proj` would also match `/data/proj2` — this must not."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    proj2 = tmp_path / "proj2"
+    proj2.mkdir()
+    (proj2 / "leak.csv").write_text("x", encoding="utf-8")
+    grant_read_dir(str(proj))
+    assert not is_dir_consented(str(proj2))
+    assert not is_dir_consented(str(proj2 / "leak.csv"))
+
+
+def test_is_dir_consented_rejects_traversal_outside_the_root(tmp_path: Path) -> None:
+    """RED-FIRST: a `..`-laden query string must resolve (via realpath)
+    before the containment check, so it cannot walk back out of the
+    granted tree undetected."""
+    root = _tree(tmp_path)
+    outside = tmp_path / "secret.csv"
+    outside.write_text("x", encoding="utf-8")
+    grant_read_dir(str(root))
+    traversal = str(root / ".." / "secret.csv")
+    assert os.path.realpath(traversal) == os.path.realpath(str(outside))
+    assert not is_dir_consented(traversal)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink semantics")
+def test_is_dir_consented_rejects_a_symlink_escape(tmp_path: Path) -> None:
+    """RED-FIRST: a symlink INSIDE the granted tree pointing OUTSIDE it must
+    not inherit the grant — `is_dir_consented` resolves the QUERIED path too,
+    so the symlink's real (outside) target is what gets checked."""
+    root = _tree(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.csv"
+    secret.write_text("x", encoding="utf-8")
+    link = root / "escape"
+    link.symlink_to(outside)
+    grant_read_dir(str(root))
+    assert not is_dir_consented(str(link / "secret.csv"))
+    assert not is_dir_consented(str(outside))
+
+
+def test_dir_grant_is_read_only_never_answers_a_write_consent_question(tmp_path: Path) -> None:
+    """A directory grant must never satisfy `is_write_consented` /
+    `consented_write_path` for anything under it — read and write stay
+    independent grant kinds, same rule as the per-file suite above."""
+    root = _tree(tmp_path)
+    grant_read_dir(str(root))
+    candidate = str(root / "sub" / "run1.csv")
+    resolved = os.path.realpath(candidate)
+    assert is_dir_consented(resolved)
+    assert not is_write_consented(resolved)
+    assert consented_write_path(resolved) is None
+
+
+def test_dir_grant_is_bounded(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_DIR_ENTRIES
+
+    for i in range(_MAX_DIR_ENTRIES + 5):
+        d = tmp_path / f"d{i}"
+        d.mkdir()
+        grant_read_dir(str(d))
+    assert dir_grant_count() == _MAX_DIR_ENTRIES
+
+
+def test_oldest_dir_grant_is_evicted_first(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_DIR_ENTRIES
+
+    first = tmp_path / "first"
+    first.mkdir()
+    grant_read_dir(str(first))
+    for i in range(_MAX_DIR_ENTRIES):
+        d = tmp_path / f"d{i}"
+        d.mkdir()
+        grant_read_dir(str(d))
+    assert not is_dir_consented(str(first))
+
+
+def test_clear_dir_grants_revokes_only_directory_grants(tmp_path: Path) -> None:
+    """The dialog-close-specific revoke must not clobber unrelated read/write
+    grants that happen to be live in the same process."""
+    root = _tree(tmp_path)
+    f = _csv(tmp_path, "other.csv")
+    grant_read_dir(str(root))
+    grant_paths([str(f)])
+    clear_dir_grants()
+    assert dir_grant_count() == 0
+    assert not is_dir_consented(str(root / "sub" / "run1.csv"))
+    assert is_consented(os.path.realpath(str(f)))  # untouched
+
+
+def test_clear_consent_also_revokes_directory_grants(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    grant_read_dir(str(root))
+    clear_consent()
+    assert dir_grant_count() == 0

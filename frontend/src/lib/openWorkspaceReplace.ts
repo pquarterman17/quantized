@@ -9,6 +9,7 @@ import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
+import { useRelink } from "../store/relink";
 import { toast } from "../store/toasts";
 import type { StoreGet } from "./exportActive";
 import type { LoadedWorkspace } from "./workspace";
@@ -129,6 +130,14 @@ function recordNativeOpen(native: ProjectIdentity | undefined): void {
  *  ordering matters. */
 export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace");
+  // C1 (review F4): an open relink panel refers to the OUTGOING project's
+  // datasets, and the backend independently revokes its directory grants at
+  // the native project-open moment (`_read_granted` -> `clear_dir_grants`)
+  // — close the panel here so `newRootConsented` can't survive as a stale
+  // "verified" label over a grant that no longer exists. This chokepoint
+  // (see recordNativeOpen's doc) is what every accepted replace passes
+  // through; closePanel is idempotent when the panel isn't open.
+  useRelink.getState().closePanel();
   s().loadWorkspace(ws);
   // P3: reserve the lock machine's `path` at the NEW identity BEFORE
   // `setCurrentProject` flips `useApp.currentProject` — see
@@ -147,6 +156,7 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
  *  else restores normally. */
 export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
   s().recordHistory("open workspace without layout");
+  useRelink.getState().closePanel(); // C1 review F4 — see replaceWorkspace's identical comment
   s().loadWorkspace(ws, { skipLayout: true });
   const priorLock = reserveLockForSwitch(native); // P3 — see replaceWorkspace's identical comment
   s().setCurrentProject(native ?? null);

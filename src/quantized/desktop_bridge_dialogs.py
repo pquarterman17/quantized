@@ -33,12 +33,15 @@ import os
 from typing import Any
 
 from quantized.desktop_consent import (
+    clear_dir_grants,
     consented_path,
     consented_write_path,
     grant_paths,
+    grant_read_dir,
     grant_write_path,
     is_consented,
     is_declared_source,
+    is_dir_consented,
     set_declared_sources,
 )
 from quantized.desktop_project_file import extract_declared_source_paths
@@ -129,7 +132,11 @@ class DesktopDialogBridge:
 
         A directory grants NO read consent by itself (consent is per file, see
         desktop_consent), so this only supplies a starting point for later file
-        dialogs and a label for the working-path list.
+        dialogs and a label for the working-path list. See
+        `pick_relink_directory` below for the ONE folder dialog that DOES
+        grant something — a deliberately separate method, not a flag on this
+        one, so this docstring's "grants NO read consent" claim stays true
+        for every existing caller unchanged.
         """
         if self._window is None:
             return {"path": None, "error": "no window attached"}
@@ -147,6 +154,47 @@ class DesktopDialogBridge:
             return {"path": os.path.realpath(str(first))}
         except (OSError, ValueError) as exc:
             return {"path": None, "error": str(exc)}
+
+    def pick_relink_directory(self, directory: str = "") -> dict[str, Any]:
+        """Native folder dialog for the relink panel's "Browse..." control
+        (C1). Unlike `pick_directory` above, the folder returned here IS
+        immediately granted READ-ONLY consent to inspect itself and its
+        descendants for the rest of this process, until revoked
+        (`revoke_relink_dir` below; also project-change and app-exit — see
+        `desktop_consent`'s module doc) — this dialog return IS the
+        deliberate consent gesture, the same "the dialog itself is the
+        proof" precedent `pick_files` already relies on for its own
+        (per-file) grant. Never satisfies a write-consent check, never
+        widens `/import`'s existing root confinement (an unrelated guard),
+        and is reachable only from this native dialog's own return — a
+        typed/pasted path can never produce a grant through this or any
+        other method.
+        """
+        if self._window is None:
+            return {"path": None, "error": "no window attached"}
+        try:
+            chosen = self._window.create_file_dialog(
+                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                directory=directory or os.getcwd(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"path": None, "error": str(exc)}
+        if not chosen:
+            return {"path": None}  # cancelled
+        first = chosen[0] if isinstance(chosen, (list, tuple)) else chosen
+        granted = grant_read_dir(str(first))
+        if granted is None:
+            return {"path": None, "error": "selected path is not a readable directory"}
+        return {"path": granted}
+
+    def revoke_relink_dir(self) -> dict[str, Any]:
+        """Revoke every directory grant minted by `pick_relink_directory`
+        this session. Called by the frontend when the relink panel closes
+        (Cancel, the window's own close, or a completed commit) so the
+        read-only grant never outlives the session that asked for it.
+        Idempotent — safe to call with nothing granted."""
+        clear_dir_grants()
+        return {"ok": True}
 
     # -- path status --------------------------------------------------------
 
@@ -177,13 +225,20 @@ class DesktopDialogBridge:
         """Reachability + fingerprint of a dataset's recorded SOURCE path, for
         relink's missing/offline/changed/permission-denied distinction
         (P1.7 box 4). See ``desktop_bridge.py``'s module doc for the full
-        consent ruling; the short version is that `is_consented` gates the
-        checksum, never the reachability check."""
+        consent ruling; the short version is that a checksum is computed
+        only when `path` is read-consented, never for the reachability
+        check itself. Two independent grants can satisfy that, checked with
+        equal weight: an exact per-file grant (`is_consented` — e.g. a
+        relink OLD path, already declared by the open project) or a C1
+        directory grant covering it (`is_dir_consented` — e.g. a relink
+        CANDIDATE path under a `pick_relink_directory`-granted new root).
+        Neither is a write grant; this method only ever reads."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError):
             return {"state": "invalid"}
-        return probe_source_path(resolved, compute_checksum=is_consented(resolved))
+        consented = is_consented(resolved) or is_dir_consented(resolved)
+        return probe_source_path(resolved, compute_checksum=consented)
 
     def grant_source_paths(self, paths: list[str]) -> dict[str, Any]:
         """Extend READ consent to paths the CALLER ASSERTS are a dataset's
@@ -248,7 +303,12 @@ class DesktopDialogBridge:
         what `grant_source_paths` enforces against; see `desktop_bridge.py`'s
         doc. Never runs on a `None`/error read, nor on a save, so a Save-As
         can't retroactively "declare" a dataset list before it's ever
-        reopened."""
+        reopened.
+
+        C1: the SAME "project change" moment also revokes every relink
+        directory grant (`clear_dir_grants`) — a folder grant minted for
+        project A's relink session must not silently keep covering project
+        B's candidate paths after A closes and B opens."""
         try:
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
@@ -262,6 +322,7 @@ class DesktopDialogBridge:
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
         set_declared_sources(extract_declared_source_paths(content))
+        clear_dir_grants()
         return {"path": granted, "content": content}
 
     def open_project_file(self, directory: str = "") -> dict[str, Any]:

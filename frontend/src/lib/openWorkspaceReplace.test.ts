@@ -16,6 +16,7 @@ import { useApp } from "../store/useApp";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { LockRecord } from "./lockState";
 import { useRecentProjects } from "../store/recentProjects";
+import { useRelink } from "../store/relink";
 
 vi.mock("../store/toasts", () => ({ toast: vi.fn() }));
 
@@ -208,5 +209,27 @@ describe("replaceWorkspace / replaceWorkspaceSafely — Recent Projects push (DE
   it("neither records anything for a browser-picker open (no native identity)", () => {
     replaceWorkspace(() => useApp.getState(), emptyWorkspace());
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+});
+
+// C1 (review F4): the backend independently revokes relink directory grants
+// at the native project-open moment, but the STORE's `newRootConsented`
+// flag would survive an open relink panel across a project switch — the
+// one state the flag exists to label ("this root was really picked and is
+// really granted") would then be false. Both replace chokepoints close the
+// panel, which resets the flag and revokes frontend-side too.
+describe("replaceWorkspace / replaceWorkspaceSafely — relink panel close (C1 F4)", () => {
+  it("replaceWorkspace closes an open relink panel and drops its consent flag", () => {
+    useRelink.setState({ open: true, newRoot: "/granted/root", newRootConsented: true });
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+
+  it("replaceWorkspaceSafely does the same", () => {
+    useRelink.setState({ open: true, newRootConsented: true });
+    replaceWorkspaceSafely(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
   });
 });

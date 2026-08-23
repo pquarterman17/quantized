@@ -22,71 +22,43 @@
 // rather than a guessed reachability state.
 //
 // R3 (POST_SPRINT_INDEPENDENT_REVIEW.md, class #196): `commit()` NEVER
-// trusts a preview row's own remembered fields (`candidateChecksum` etc.) AS
-// THE VERDICT OF RECORD. It looks up the LIVE dataset by id and recomputes
-// against ITS recorded checksum/mtime/size, against a fresh probe taken
-// right there at commit time, through TWO guards (`lib/relink.ts`'s
-// `guardVerdict` — see its own doc for exactly why it exists instead of
-// reusing `sourceChangeVerdict` directly inside a guard): one against what's
-// RECORDED, one against what PREVIEW ITSELF showed the user. A guard
-// "changed" verdict refuses the row unconditionally — even a Preview-time
-// "unknown" that was individually escalated — because escalation approves
-// "unverifiable", never "verified-different". The Preview guard is the one
-// thing anchoring trust for a dataset with NO recorded provenance at all,
-// since the recorded-provenance guard has no baseline to catch drift with.
-// Both guards are named as SEPARATE reasons in the completion toast
-// ("conflicts with recorded provenance" vs "changed since Preview") — they
-// fire for different underlying reasons and lumping them together would
-// misname a row Preview never had an opinion about. A dataset removed, or
-// whose `source` OBJECT no longer matches what the row was computed against
-// (not just a path-string match — a same-path project reload or undo swaps
-// the object too) fails closed with zero mutation, re-checked BOTH before
-// the probe and again, synchronously, immediately before the write, since
-// the probe's own await is itself a gap something else can race. Only once
-// a row clears every guard does provenance get written, and which fields
-// depends on why it's writing (this part uses the STRICT, un-fallen-back
-// `sourceChangeVerdict`, never `guardVerdict` — a stat MATCH when the
-// checksum is unconfirmable only fails to contradict, it never CONFIRMS,
-// so it must never be treated as license to backfill something never
-// actually verified): a confirmed "unchanged" row, or a legacy dataset with
-// nothing recorded yet (which just cleared the Preview guard above),
-// backfills from the fresh probe; an escalated row that DOES have something
-// recorded on file (a checksum this session's probe simply couldn't
-// reconfirm) keeps that ORIGINAL recorded provenance verbatim — only the
-// path moves — rather than fabricating a replacement for the one signal
-// that couldn't be confirmed.
+// trusts a preview row's own remembered fields AS THE VERDICT OF RECORD. It
+// looks up the LIVE dataset and recomputes against ITS recorded
+// checksum/mtime/size, against a fresh probe taken right there at commit
+// time, through TWO guards (`lib/relink.ts`'s `guardVerdict`): one against
+// what's RECORDED, one against what PREVIEW ITSELF showed. A dataset
+// removed, or whose `source` OBJECT no longer matches what the row was
+// computed against, fails closed with zero mutation, re-checked both before
+// the probe and again, synchronously, immediately before the write. Once a
+// row clears every guard, provenance is written using the STRICT
+// `sourceChangeVerdict` (never `guardVerdict` — a stat MATCH when the
+// checksum is unconfirmable only fails to contradict, never CONFIRMS): a
+// confirmed "unchanged" row, or a legacy dataset with nothing recorded yet,
+// backfills from the fresh probe; an escalated row with something recorded
+// that this probe couldn't reconfirm keeps that ORIGINAL provenance
+// verbatim — only the path moves.
 //
-// KNOWN LIMITATION (code-review F2, investigated — not fixed, see
-// POST_SPRINT_INDEPENDENT_REVIEW.md's R3 closure log for the full
-// investigation): `desktop_bridge_dialogs.py`'s `probe_source` computes a
-// CHECKSUM only for a read-consented path (`is_consented`), and a relink
-// CANDIDATE path is never consented — `grantSourceReadPaths`/
-// `grant_source_paths` only ever extends consent to paths already in the
-// project's server-tracked DECLARED-source set (a snapshot taken once, at
-// project-open time), which a not-yet-linked candidate path can never be a
-// member of BY DEFINITION. So every probe of a candidate path — at Preview
-// and at commit — carries `checksum: null` today, for every dataset,
-// always: the CHECKSUM comparison itself is inert in real desktop use — a
-// checksum-bearing dataset's Preview-panel verdict is therefore always
-// "unknown", never "unchanged" or "changed" via checksum. The guards
-// commit() itself runs (`guardVerdict`, above) are NOT equally inert,
-// though (final review pass, F1+F2): when the checksum leg is
-// unconfirmable they fall back to comparing mtime/size, which never need
-// consent — so a size/mtime contradiction still refuses today even though
-// a checksum MATCH never gets confirmed. Fixing the checksum comparison
-// itself for real would need a genuine new consent gesture for candidate
-// paths (the existing native-file-dialog-pick auto-grant precedent,
-// `pick_files` -> `grant_paths`, does not extend to a
-// programmatically-derived candidate path with no such dialog behind it,
-// and the relink panel's old/new root fields are plain text inputs today,
-// not a dialog pick) — out of this file's scope; tracked as an open
-// follow-up rather than silently claimed as already working.
+// C1 (relink consent — closes the KNOWN LIMITATION R3's third-pass
+// investigation left open): a relink CANDIDATE path used to be permanently
+// unconsented (a not-yet-linked path can never join the DECLARED-source set
+// `probe_source` checksums against), so a checksum-bearing dataset's verdict
+// was always "unknown". `browseNewRoot` fixes this the only sound way found
+// — a REAL native folder-picker gesture, never an implicit grant from a
+// typed path — via `pickRelinkDirectory` (`desktop_bridge_dialogs
+// .pick_relink_directory`), which mints a read-only, session-scoped grant
+// over the chosen root; every `probeSource` call for a candidate under it
+// (Preview AND the commit re-probe, same grant) can then checksum for real.
+// Typing `newRoot` still runs Preview, but mints nothing —
+// `newRootConsented` tracks which happened so the view can label a
+// typed-path session honestly stat-only. Revoked on panel close; see
+// `desktop_consent.py`'s doc for the other two revocation points.
 
 import { create } from "zustand";
 
-import { grantSourceReadPaths, hasDesktopShell, probeSource } from "../lib/desktopBridge";
+import { grantSourceReadPaths, hasDesktopShell, probeSource, revokeRelinkDir } from "../lib/desktopBridge";
 import { evaluateCommitProbe, relinkedCandidate, sourceChangeVerdict } from "../lib/relink";
 import type { Dataset } from "../lib/types";
+import { browseForNewRoot } from "./relinkBrowse";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -147,10 +119,16 @@ interface RelinkState {
   preview: RelinkPreviewRow[];
   busy: boolean;
   bridgeAvailable: boolean;
+  /** True only right after `browseNewRoot` grants the CURRENT `newRoot` —
+   *  cleared by any typed edit; the view labels a typed Preview stat-only. */
+  newRootConsented: boolean;
   openPanel: (seed?: { oldRoot?: string; newRoot?: string }) => void;
   closePanel: () => void;
   setOldRoot: (v: string) => void;
   setNewRoot: (v: string) => void;
+  /** C1: the ONLY way `newRootConsented` becomes true — a real dialog
+   *  return (`pickRelinkDirectory`), never a typed path. */
+  browseNewRoot: () => Promise<void>;
   runPreview: () => Promise<void>;
   commit: () => Promise<void>;
   /** Per-row escalation (box 2/5, P1-2 defect 2c): explicit user consent to
@@ -180,6 +158,7 @@ export const useRelink = create<RelinkState>((set, get) => ({
   preview: [],
   busy: false,
   bridgeAvailable: false,
+  newRootConsented: false,
 
   openPanel: (seed) =>
     set({
@@ -188,10 +167,22 @@ export const useRelink = create<RelinkState>((set, get) => ({
       newRoot: seed?.newRoot ?? "",
       preview: [],
       bridgeAvailable: hasDesktopShell(),
+      newRootConsented: false, // a seeded path was never picked THIS session
     }),
-  closePanel: () => set({ open: false }),
+  // C1: revoke any `browseNewRoot` grant here so it never outlives this
+  // session — covers Cancel, the window's own close, AND commit()'s success
+  // path (which routes through this).
+  closePanel: () => {
+    void revokeRelinkDir();
+    set({ open: false, newRootConsented: false });
+  },
   setOldRoot: (v) => set({ oldRoot: v, preview: [] }),
-  setNewRoot: (v) => set({ newRoot: v, preview: [] }),
+  // Typing always clears consent — only a fresh `browseNewRoot` pick grants.
+  setNewRoot: (v) => set({ newRoot: v, preview: [], newRootConsented: false }),
+
+  // Extracted to store/relinkBrowse.ts (500-line ceiling) — see its doc for
+  // the F2/F3/F6 review rulings it carries.
+  browseNewRoot: () => browseForNewRoot(get, set),
 
   runPreview: async () => {
     const { oldRoot, newRoot } = get();
@@ -438,7 +429,8 @@ export const useRelink = create<RelinkState>((set, get) => ({
       }),
     }));
     toast(`relinked ${n} dataset${n === 1 ? "" : "s"}${joined}`, "ok");
-    set({ open: false, preview: [] });
+    get().closePanel(); // also revokes the C1 directory grant, if any
+    set({ preview: [] });
   },
 
   escalateUnknownRow: (datasetId) =>

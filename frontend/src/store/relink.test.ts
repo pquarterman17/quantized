@@ -23,6 +23,8 @@ vi.mock("../lib/desktopBridge", async (orig) => ({
   hasDesktopShell: vi.fn(),
   probeSource: vi.fn(),
   grantSourceReadPaths: vi.fn(),
+  pickRelinkDirectory: vi.fn(),
+  revokeRelinkDir: vi.fn(),
 }));
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
@@ -40,8 +42,192 @@ function baseDataset(over: Partial<Dataset> = {}): Dataset {
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ datasets: [], activeId: null, selectedIds: [], history: [], future: [], status: "" });
-  useRelink.setState({ open: false, oldRoot: "", newRoot: "", preview: [], busy: false, bridgeAvailable: false });
+  useRelink.setState({
+    open: false,
+    oldRoot: "",
+    newRoot: "",
+    preview: [],
+    busy: false,
+    bridgeAvailable: false,
+    newRootConsented: false,
+  });
   vi.mocked(desktopBridge.grantSourceReadPaths).mockResolvedValue([]);
+  vi.mocked(desktopBridge.revokeRelinkDir).mockResolvedValue(undefined);
+});
+
+// C1 (relink consent): browseNewRoot is the ONLY store action that can set
+// `newRootConsented`, and it does so ONLY on a real dialog return.
+describe("browseNewRoot (C1 native folder grant)", () => {
+  it("a real dialog return sets newRoot and marks it consented", async () => {
+    useRelink.getState().openPanel();
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue("/new/place");
+
+    await useRelink.getState().browseNewRoot();
+
+    expect(useRelink.getState().newRoot).toBe("/new/place");
+    expect(useRelink.getState().newRootConsented).toBe(true);
+    expect(useRelink.getState().preview).toEqual([]); // a fresh root invalidates any stale preview
+  });
+
+  // Review F2: a real post-pick failure (backend {path:null, error} or a
+  // bridge throw) is NOT a cancel — the user acted and must hear why
+  // nothing happened; and it must mint no consent.
+  it("a picker error reports the failure and mints nothing", async () => {
+    useRelink.getState().openPanel();
+    useRelink.setState({ newRoot: "/already/typed" });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue({ error: "selected path is not a readable directory" });
+
+    await useRelink.getState().browseNewRoot();
+
+    expect(useRelink.getState().newRoot).toBe("/already/typed");
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(toast).toHaveBeenCalledWith(
+      "folder picker failed — selected path is not a readable directory",
+      "danger",
+    );
+  });
+
+  // Review F3: on a shell whose folder dialog is not modal, the pick can
+  // resolve AFTER the panel closed. The backend grant already exists by
+  // then (minted inside pick_relink_directory), and closePanel's revoke ran
+  // BEFORE it existed — so browseNewRoot itself must revoke it and change
+  // no state, or the grant outlives the relink session.
+  it("a pick resolving after the panel closed revokes the grant and changes nothing", async () => {
+    useRelink.getState().openPanel();
+    let resolvePick: (v: string) => void = () => {};
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockReturnValue(
+      new Promise((res) => {
+        resolvePick = res;
+      }),
+    );
+
+    const browsing = useRelink.getState().browseNewRoot();
+    useRelink.getState().closePanel();
+    vi.mocked(desktopBridge.revokeRelinkDir).mockClear(); // isolate the post-close revoke from closePanel's own
+    resolvePick("/picked/too/late");
+    await browsing;
+
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(useRelink.getState().newRoot).not.toBe("/picked/too/late");
+    expect(desktopBridge.revokeRelinkDir).toHaveBeenCalledTimes(1);
+  });
+
+  // Review F6: the picker opens where the user already is — the typed new
+  // root, falling back to the old root — never the backend's cwd.
+  it("forwards the typed new root (else old root) as the picker's start", async () => {
+    useRelink.getState().openPanel();
+    useRelink.setState({ oldRoot: "/old/root", newRoot: "/typed/new" });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue(desktopBridge.CANCELLED);
+
+    await useRelink.getState().browseNewRoot();
+    expect(desktopBridge.pickRelinkDirectory).toHaveBeenLastCalledWith("/typed/new");
+
+    useRelink.setState({ newRoot: "   " });
+    await useRelink.getState().browseNewRoot();
+    expect(desktopBridge.pickRelinkDirectory).toHaveBeenLastCalledWith("/old/root");
+  });
+
+  // RED-FIRST: session cancellation must change NOTHING — not newRoot, not
+  // the consent flag, not the preview.
+  it("session cancellation (CANCELLED) leaves every field unchanged", async () => {
+    useRelink.setState({ newRoot: "/already/typed", newRootConsented: false, preview: [{ x: 1 } as never] });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue(desktopBridge.CANCELLED);
+
+    await useRelink.getState().browseNewRoot();
+
+    expect(useRelink.getState().newRoot).toBe("/already/typed");
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(useRelink.getState().preview).toEqual([{ x: 1 }]);
+  });
+
+  it("no bridge (null): reports honestly, mints nothing, changes nothing", async () => {
+    useRelink.setState({ newRoot: "/already/typed" });
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue(null);
+
+    await useRelink.getState().browseNewRoot();
+
+    expect(useRelink.getState().newRoot).toBe("/already/typed");
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(toast).toHaveBeenCalledWith("no desktop bridge — type the folder path instead", "info");
+  });
+
+  // The hard rule, asserted directly at the integration seam: typing NEVER
+  // reaches `pickRelinkDirectory` at all — there is no code path from
+  // `setNewRoot` to a grant.
+  it("typing a new root never calls the native picker — a typed path receives no grant", () => {
+    useRelink.getState().setNewRoot("/typed/only");
+    expect(desktopBridge.pickRelinkDirectory).not.toHaveBeenCalled();
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+
+  it("typing after a Browse… pick clears the consent flag", async () => {
+    useRelink.getState().openPanel();
+    vi.mocked(desktopBridge.pickRelinkDirectory).mockResolvedValue("/new/place");
+    await useRelink.getState().browseNewRoot();
+    expect(useRelink.getState().newRootConsented).toBe(true);
+
+    useRelink.getState().setNewRoot("/new/place/edited");
+
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+});
+
+// C1: revocation lifecycle — the grant must not outlive the session that
+// asked for it (dialog close here; project-change and app-exit are the
+// backend's own tests, since they have no frontend counterpart).
+describe("closePanel / commit — C1 revocation", () => {
+  it("closePanel (Cancel, or the window's own close) revokes the directory grant", () => {
+    useRelink.setState({ open: true, newRoot: "/new/place", newRootConsented: true });
+
+    useRelink.getState().closePanel();
+
+    expect(desktopBridge.revokeRelinkDir).toHaveBeenCalledOnce();
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+
+  it("openPanel never carries a seeded root's grant forward — newRootConsented always starts false", () => {
+    useRelink.setState({ newRootConsented: true });
+
+    useRelink.getState().openPanel({ oldRoot: "/old", newRoot: "/new" });
+
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+
+  it("a successful commit also revokes the directory grant (panel closes)", async () => {
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/new/place/run1.csv",
+      size: 10,
+      mtime: 100,
+      checksum: "sha256:same",
+    });
+    useApp.setState({
+      datasets: [baseDataset({ source: { kind: "path", path: "/old/data/run1.csv", checksum: "sha256:same" } })],
+    });
+    useRelink.setState({
+      newRootConsented: true,
+      preview: [
+        {
+          datasetId: "d1",
+          datasetName: "run1.csv",
+          oldPath: "/old/data/run1.csv",
+          candidatePath: "/new/place/run1.csv",
+          status: "resolved",
+          changeVerdict: "unchanged",
+          candidateChecksum: "sha256:same",
+          candidateMtime: 100,
+          candidateSize: 10,
+        },
+      ],
+    });
+
+    await useRelink.getState().commit();
+
+    expect(desktopBridge.revokeRelinkDir).toHaveBeenCalledOnce();
+    expect(useRelink.getState().newRootConsented).toBe(false);
+  });
 });
 
 describe("runPreview — browser degrade (box 4)", () => {

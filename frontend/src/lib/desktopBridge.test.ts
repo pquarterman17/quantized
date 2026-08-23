@@ -13,9 +13,11 @@ import {
   openFiles,
   openProject,
   pickNativeFiles,
+  pickRelinkDirectory,
   pickSaveDestination,
   probe,
   readProject,
+  revokeRelinkDir,
   saveProjectAs,
   saveProjectTo,
 } from "./desktopBridge";
@@ -23,6 +25,8 @@ import {
 interface FakeApi {
   probe?: () => Promise<Record<string, unknown>>;
   pick_files?: (dir?: string, multiple?: boolean) => Promise<Record<string, unknown>>;
+  pick_relink_directory?: (dir?: string) => Promise<Record<string, unknown>>;
+  revoke_relink_dir?: () => Promise<Record<string, unknown>>;
   open_project_file?: (dir?: string) => Promise<Record<string, unknown>>;
   read_project_file?: (path: string) => Promise<Record<string, unknown>>;
   save_file_dialog?: (name?: string) => Promise<Record<string, unknown>>;
@@ -252,6 +256,67 @@ describe("saveProjectTo", () => {
       setShell({ write_project_file: async () => ({ ok: false, error: "disk full" }) });
       expect(await saveProjectTo("/p/w.dwk", "{}", "some-token")).toBeNull();
     });
+  });
+});
+
+// C1 (relink consent): pickRelinkDirectory is the ONE folder dialog that
+// mints a grant — pickNativeDirectory above stays a plain path-selector.
+describe("pickRelinkDirectory", () => {
+  it("returns null with no bridge — never a false grant", async () => {
+    expect(await pickRelinkDirectory()).toBeNull();
+  });
+
+  it("returns the granted path on success, forwarding the starting directory", async () => {
+    const pick = vi.fn(async (dir?: string) => ({ path: `${dir}/picked` }));
+    setShell({ pick_relink_directory: pick });
+    expect(await pickRelinkDirectory("/start")).toBe("/start/picked");
+    expect(pick).toHaveBeenCalledWith("/start");
+  });
+
+  it("returns CANCELLED (not null) when the user backs out — session cancellation", async () => {
+    setShell({ pick_relink_directory: async () => ({ path: null }) });
+    expect(await pickRelinkDirectory()).toBe(CANCELLED);
+  });
+
+  // Review F2: a backend {path:null, error} is a REAL post-pick failure
+  // (folder vanished between pick and grant, dialog error) — the caller
+  // must be able to say so, never treat it as a silent cancel.
+  it("returns the error (not CANCELLED) on a backend {path:null, error} response", async () => {
+    setShell({
+      pick_relink_directory: async () => ({ path: null, error: "selected path is not a readable directory" }),
+    });
+    expect(await pickRelinkDirectory()).toEqual({ error: "selected path is not a readable directory" });
+  });
+
+  it("returns the error (not null) when the bridge call itself throws — a bridge exists, it failed", async () => {
+    setShell({
+      pick_relink_directory: async () => {
+        throw new Error("boom");
+      },
+    });
+    expect(await pickRelinkDirectory()).toEqual({ error: "Error: boom" });
+  });
+});
+
+describe("revokeRelinkDir", () => {
+  it("is a silent no-op with no bridge", async () => {
+    await expect(revokeRelinkDir()).resolves.toBeUndefined();
+  });
+
+  it("calls the bridge method when present", async () => {
+    const revoke = vi.fn(async () => ({ ok: true }));
+    setShell({ revoke_relink_dir: revoke });
+    await revokeRelinkDir();
+    expect(revoke).toHaveBeenCalledOnce();
+  });
+
+  it("swallows a bridge error — best-effort, nothing for a caller to act on", async () => {
+    setShell({
+      revoke_relink_dir: async () => {
+        throw new Error("boom");
+      },
+    });
+    await expect(revokeRelinkDir()).resolves.toBeUndefined();
   });
 });
 

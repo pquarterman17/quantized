@@ -98,6 +98,8 @@ interface PyWebviewApi {
   probe?: () => Promise<Record<string, unknown>>;
   pick_files?: (directory?: string, multiple?: boolean) => Promise<Record<string, unknown>>;
   pick_directory?: (directory?: string) => Promise<Record<string, unknown>>;
+  pick_relink_directory?: (directory?: string) => Promise<Record<string, unknown>>;
+  revoke_relink_dir?: () => Promise<Record<string, unknown>>;
   path_status?: (path: string) => Promise<Record<string, unknown>>;
   save_file_dialog?: (suggestedName?: string) => Promise<Record<string, unknown>>;
   write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
@@ -416,6 +418,61 @@ export async function grantSourceReadPaths(paths: string[]): Promise<string[]> {
     return Array.isArray(granted) ? granted.filter((p): p is string => typeof p === "string") : [];
   } catch {
     return [];
+  }
+}
+
+/** A real dialog failure AFTER the bridge was reached — distinct from both
+ *  `CANCELLED` (the user backed out; nothing to report) and `null` (no
+ *  usable bridge; fall back to typing), because the user DID act and
+ *  deserves to hear why nothing happened (the same error-vs-cancel split
+ *  `openProject`'s doc above rules on for its own post-pick failures). */
+export interface PickDirError {
+  error: string;
+}
+
+/** C1 (relink consent): native folder dialog for the relink panel's
+ *  "Browse..." control (quantized/desktop_bridge_dialogs.py's
+ *  `pick_relink_directory`) — UNLIKE `pickNativeDirectory` above, a real
+ *  return from THIS dialog mints a read-only, session-scoped grant on the
+ *  backend covering the chosen folder and its descendants, which is what
+ *  lets `probeSource` compute a checksum for a candidate under it. `null` =
+ *  no usable bridge (the caller falls back to a typed path, which can be
+ *  Previewed but never gets a grant — see `probeSource`'s doc); `CANCELLED`
+ *  = the user backed out of the dialog — do nothing, and specifically do
+ *  NOT fall back to treating whatever was already typed as consented; a
+ *  `PickDirError` = the dialog or the grant itself failed after a real
+ *  attempt (backend `{path: null, error}` response, or the bridge call
+ *  throwing) — the caller should SAY so, never silently swallow it as a
+ *  cancel or misreport it as a missing bridge. */
+export async function pickRelinkDirectory(
+  directory?: string,
+): Promise<string | Cancelled | PickDirError | null> {
+  const bridge = api();
+  if (!bridge?.pick_relink_directory) return null;
+  try {
+    const out = await bridge.pick_relink_directory(directory ?? "");
+    const path = str(out.path);
+    if (path !== null) return path;
+    const error = str((out as { error?: unknown }).error);
+    return error === null ? CANCELLED : { error };
+  } catch (exc) {
+    return { error: String(exc) };
+  }
+}
+
+/** Revoke every grant `pickRelinkDirectory` minted this session
+ *  (quantized/desktop_bridge_dialogs.py's `revoke_relink_dir`) — called when
+ *  the relink panel closes (Cancel, the window's own close, or a completed
+ *  commit) so the read-only grant never outlives the session that asked for
+ *  it. Best-effort and silent: there is nothing a caller can usefully do
+ *  with a failure here, and no bridge at all is simply a no-op. */
+export async function revokeRelinkDir(): Promise<void> {
+  const bridge = api();
+  if (!bridge?.revoke_relink_dir) return;
+  try {
+    await bridge.revoke_relink_dir();
+  } catch {
+    // best-effort — nothing more a caller can do with a revoke failure
   }
 }
 
