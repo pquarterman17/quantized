@@ -12,13 +12,19 @@
 // early-returns use (polar > stat > stack > plain XY) — so a window whose
 // snapshot carries `polarMode`/`statMode`/`stackMode` shows that mode even
 // while unfocused, fed from its OWN view while the singletons hold whatever
-// the focused window is doing. The spatial/facet/break panel arrangements
-// (and PlotStage's spatial/facet stack gates) are transient SINGLETON state,
-// deliberately absent here — a background stack window is always the plain
-// per-channel stack. Cross-window link groups (item 13) stay XY-only: the
-// `linkGroup` prop is threaded into the XY path's viewport ONLY, never into
-// the alternate mode cores (a stack window's panels sync among THEMSELVES
-// via a per-window key — see `BackgroundAltModes.tsx`).
+// the focused window is doing. Spatial/break stay transient SINGLETON state
+// (focused-only, no durable binding to rebuild from) — a background stack
+// window is always the plain per-channel stack for THOSE two. FACET is
+// different (F4.4 review round L2): `facetKey` is bindings-owned (this
+// window's OWN `view.facetKey`, not the live singleton), so a background
+// window derives its OWN facet grid straight from it
+// (`lib/facet.facetCompositionFromBinding`) instead of silently degrading to
+// a plain plot the moment it loses focus — the "a window silently changing
+// appearance on focus move" dishonest-preview class this review flagged.
+// Cross-window link groups (item 13) stay XY-only: the `linkGroup` prop is
+// threaded into the XY path's viewport ONLY, never into the alternate mode
+// cores (a stack window's panels sync among THEMSELVES via a per-window key
+// — see `BackgroundAltModes.tsx`).
 //
 // Row exclusion/filter still apply (via the shared usePlotPayload → the #50/
 // #53 `lib/rowstate` chokepoint — and `analysisData` inside the stat mode),
@@ -26,10 +32,11 @@
 // together — the item-4 row-state proof, extended per-mode by the item-15
 // tests.
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
+import { facetCompositionFromBinding } from "../../lib/facet";
 import type { FigureDocument } from "../../lib/figureDocument";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
@@ -80,6 +87,18 @@ export default function BackgroundPlotWindow({
   linkGroup,
   document,
 }: BackgroundPlotWindowProps) {
+  // L2: derived unconditionally (before the `!dataset` early return) so this
+  // component's hook order never varies across renders — `dataset` can flip
+  // null/non-null across renders of the SAME mounted instance (its dataset
+  // removed/restored), and React requires every render to call the same
+  // hooks in the same order regardless of which branch below actually runs.
+  // Cheap when there's nothing to derive: `facetCompositionFromBinding`
+  // short-circuits before scanning any rows unless BOTH a dataset and a
+  // facetKey are present.
+  const facetComposition = useMemo(
+    () => facetCompositionFromBinding(dataset, view.facetKey, view.xKey, view.yKeys),
+    [dataset, view.facetKey, view.xKey, view.yKeys],
+  );
   if (!dataset) {
     return (
       <div
@@ -92,16 +111,17 @@ export default function BackgroundPlotWindow({
   }
   // Item 15 mode dispatch — the same precedence as PlotStage's focused
   // early-returns (polar wins, then stats, then stack). The stack gate
-  // mirrors PlotStage's `nPlotted >= 2` (its spatial/facet gates are
-  // singleton-only, see the module doc).
+  // mirrors PlotStage's `nPlotted >= 2 || facetPanels >= 1` gate (L2: facet
+  // is no longer singleton-only — see the module doc; spatial/break stay so).
   if (view.polarMode) return <BackgroundPolarWindow dataset={dataset} view={view} />;
   if (view.statMode) return <BackgroundStatWindow dataset={dataset} view={view} />;
   if (
     view.stackMode &&
-    effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder)
-      .length >= 2
+    (effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder)
+      .length >= 2 ||
+      facetComposition !== null)
   )
-    return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} />;
+    return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} composition={facetComposition} />;
   return (
     <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} />
   );

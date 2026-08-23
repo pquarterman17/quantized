@@ -12,8 +12,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
 import type { SpatialPanel } from "../../lib/multipanel";
 import type { DataStruct } from "../../lib/types";
-import { useApp } from "../../store/useApp";
-import MultiPanelStage from "./MultiPanelStage";
+import { useActiveDataset, useApp } from "../../store/useApp";
+import RealMultiPanelStage from "./MultiPanelStage";
+import { useEffectiveComposition } from "./useEffectiveComposition";
+
+// L4 (review round 3): the real component no longer derives its own
+// effective composition -- `PlotStage.tsx` does that once and passes it
+// down as a prop (`MultiPanelStageProps.composition`). This test file's ~25
+// `render(<MultiPanelStage />)` call sites all predate that split and drive
+// the SAME behavior by mutating the store directly (`useApp.setState({
+// composition: ... })` or `{ facetKey: ... }`), so rather than threading a
+// prop through every one of them, this thin local wrapper reproduces
+// PlotStage's OWN derivation (`useEffectiveComposition`) and forwards it --
+// every test below keeps exercising the identical fallback logic, just via
+// the same seam PlotStage itself uses instead of a copy.
+function MultiPanelStage() {
+  const active = useActiveDataset();
+  const composition = useEffectiveComposition(active);
+  return <RealMultiPanelStage composition={composition} />;
+}
 
 // vi.mock's factory is hoisted above imports, so the recorder + mock class
 // must be created through vi.hoisted rather than referenced as plain

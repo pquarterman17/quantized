@@ -128,9 +128,9 @@ export default function PlotStage() {
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
   // The panel arrangement (#54 pass A): a spatial/facet arrangement is its own
-  // explicit-intent gate (both can show with 0/1 plotted channels), so the
-  // plain "≥2 channels" gate below doesn't apply to either. Durable-fallback-
-  // aware (F4.4 review K1) -- see useEffectiveComposition's own doc.
+  // explicit-intent gate (0/1 plotted channels can still show one). Durable-
+  // fallback-aware (F4.4 K1) -- see useEffectiveComposition's doc; also fed
+  // to MultiPanelStage as a prop below (L4 -- one derivation, not two).
   const composition = useEffectiveComposition(active);
   const spatialPanels = spatialPanelsOf(composition);
   const facetPanels = facetPanelsOf(composition);
@@ -262,7 +262,7 @@ export default function PlotStage() {
     stackMode &&
     (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
   )
-    return <Suspense fallback={null}><MultiPanelStage /></Suspense>;
+    return <Suspense fallback={null}><MultiPanelStage composition={composition} /></Suspense>; // L4: prop, not re-derived
 
   return (
     <AxisDropZones

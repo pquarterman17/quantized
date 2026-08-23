@@ -24,6 +24,7 @@
 
 import { useId } from "react";
 
+import type { Composition } from "../../lib/composition";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
@@ -88,19 +89,29 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
   );
 }
 
-// Background windows never render the transient spatial/facet/break
-// arrangements (focused-only singleton state) — stable empties so the hook's
-// effects don't see fresh references every render.
+// Background windows never render the transient spatial/break arrangements
+// (focused-only singleton state, no durable binding to rebuild from) —
+// stable empty so the hook's spatial-lookup effects don't see a fresh
+// reference every render. FACET is different (L2): its composition is
+// derived from this window's OWN `view.facetKey` and passed in explicitly
+// below (`BackgroundPlotWindow.tsx`'s dispatcher), never spatial, so
+// `datasets` staying empty here is still correct — `useMultiPanelStage`
+// only consults it to resolve a SPATIAL panel's per-panel dataset ref.
 const NO_DATASETS: Dataset[] = [];
 
 export interface BackgroundStackWindowProps extends BackgroundModeProps {
   bg?: PlotBg;
+  /** L2: this window's OWN facet arrangement, derived by the caller
+   *  (`BackgroundPlotWindow.tsx`) from its `view.facetKey` — null renders
+   *  the plain per-channel stack, same as before this field existed. */
+  composition?: Composition | null;
 }
 
-/** Plain per-channel stack mode from the window's own view (focused twin:
- *  `MultiPanelStage`, which can additionally show the spatial/facet/break
- *  arrangements — those stay focused-only, see the module doc). */
-export function BackgroundStackWindow({ dataset, view, bg }: BackgroundStackWindowProps) {
+/** Per-channel stack (or, with a facet binding, a facet grid) from the
+ *  window's own view (focused twin: `MultiPanelStage`, which can
+ *  additionally show the spatial/break arrangements — those stay
+ *  focused-only, see the module doc). */
+export function BackgroundStackWindow({ dataset, view, bg, composition = null }: BackgroundStackWindowProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const ensureBookData = useApp((s) => s.ensureBookData);
@@ -114,7 +125,7 @@ export function BackgroundStackWindow({ dataset, view, bg }: BackgroundStackWind
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,
     datasets: NO_DATASETS,
-    composition: null,
+    composition,
     yScale: view.yScale,
     xScale: view.xScale,
     xLim: view.xLim,

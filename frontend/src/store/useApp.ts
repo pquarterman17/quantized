@@ -1217,6 +1217,18 @@ export const useApp = create<AppState>((set, get) => ({
         const src = refreshed.data;
         const n = src?.labels.length ?? 0;
         set({
+          // F4.4 review L1: every branch below that installs a plot onto an
+          // ALREADY-active dataset must clear the durable `facetKey`
+          // binding explicitly -- `setActive` only resets it on a GENUINE
+          // dataset switch (`datasetViewDefaults`), so re-applying a figure
+          // onto the dataset that's already showing would otherwise leave a
+          // prior `facetByColumn`'s binding in place, and a later focus
+          // round-trip would resurrect that REPLACED facet grid instead of
+          // this plain/spatial one (`useEffectiveComposition`'s fallback).
+          // `composition` itself needs no matching explicit clear here --
+          // `setActive`'s `focusTransientReset()` already nulls it
+          // UNCONDITIONALLY, genuine switch or not.
+          facetKey: null,
           ...ORIGIN_FIGURE_AXIS,
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
@@ -1262,6 +1274,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
+          facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
           ...ORIGIN_FIGURE_AXIS,
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
@@ -1327,6 +1340,7 @@ export const useApp = create<AppState>((set, get) => ({
         set({
           stackMode: true,
           composition: spatialComposition(placed),
+          facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
           // #54: a fresh tiled apply starts at the app-wide default fit
           // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
           // persists in `.dwk`.
@@ -1357,6 +1371,7 @@ export const useApp = create<AppState>((set, get) => ({
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
     const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
+      facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
       ...ORIGIN_FIGURE_AXIS,
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
@@ -1407,13 +1422,26 @@ export const useApp = create<AppState>((set, get) => ({
     // document (below) exactly like `setGroupKey` already does for
     // `groupKey` -- it needs the SAME ONE `recordHistory` call `setGroupKey`
     // makes, or Ctrl+Z after faceting silently reverts whatever edit came
-    // BEFORE it instead (facetByColumn itself pushed nothing). `setActive`
-    // pushes no history of its own (a plain "make this active" navigation),
-    // so this is the gesture's ONE undo entry, covering the activate + facet
-    // together -- same "one gesture, one undo" shape createWindow/
-    // duplicateWindow already follow.
+    // BEFORE it instead (facetByColumn itself pushed nothing).
+    const historyLenBefore = get().history.length;
     get().recordHistory("facet by column");
     get().setActive(datasetId);
+    // L3 (review round 3): `setActive` USUALLY pushes no history of its own
+    // (a plain "make this active" navigation) -- EXCEPT when the focused
+    // window is pinned with no unpinned candidate to retarget to
+    // (`retargetPassiveRebind`), where it creates a fresh window instead, and
+    // `createWindow` pushes ITS OWN "create window" entry. Since nothing
+    // mutates state between our push above and that one, the two entries are
+    // near-duplicate snapshots of the SAME pre-gesture state -- Ctrl+Z would
+    // pop "create window" (still correctly reverting the whole gesture, but
+    // under the wrong label) and leave a same-state phantom entry sitting on
+    // the stack, silently consuming a SECOND Ctrl+Z that the user expects to
+    // reach whatever edit genuinely came before this one. Mechanism: drop
+    // the later (createWindow's) duplicate, keeping our own — one gesture,
+    // one entry, correctly labeled, in BOTH the pinned and unpinned paths.
+    if (get().history.length > historyLenBefore + 1) {
+      set((s) => ({ history: s.history.slice(0, -1) }));
+    }
     // F4.4: `facetKey` is the DURABLE half of this gesture -- bindings-owned
     // like `groupKey`, it commits onto the focused window's document via the
     // SAME "focused facade -> document" sync every other PlotView field
@@ -1456,7 +1484,14 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, composition: breakComposition(panels) });
+    // F4.4 review L1: clear the durable `facetKey` binding too -- a prior
+    // `facetByColumn` on this SAME dataset leaves it set, and `setActive`
+    // only resets it on a genuine dataset switch (`datasetViewDefaults`),
+    // never when re-targeting the dataset that's already active. Without
+    // this, a later focus round-trip resurrects the REPLACED facet grid
+    // instead of this break arrangement (`useEffectiveComposition`'s
+    // fallback reads facetKey whenever `composition` itself is null again).
+    set({ stackMode: true, composition: breakComposition(panels), facetKey: null });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
