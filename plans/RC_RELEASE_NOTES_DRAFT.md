@@ -7,14 +7,18 @@ golden freeze, live Origin COM oracles) landed. Published as a GitHub
 **prerelease**: auto-update keeps serving v0.22.0 until promotion.
 
 **Candidate commit:** the `v0.23.0-rc1` tag target (main after #200 + the
-2026-08-21 verification-campaign commits).
+2026-08-21 verification-campaign commits) — exact SHA `069616d1`, published
+via release workflow run `32548354991` (all legs green: Windows, Linux,
+Apple-silicon macOS).
 
 **Acceptance still owed against THIS build (owner's explicit call —
 deliberately deferred past the tag, not forgotten):** the packaged
 Windows/macOS install + workflow smoke pass, the 60–90 min interactive
 real-data session with friction log, the installer/icon/taskbar check, and
 ChatGPT-Sol's wording/menu review. Promotion to plain v0.23.0 waits on
-those.
+those. Tracked as R2 in `plans/POST_SPRINT_INDEPENDENT_REVIEW.md`, which
+also carries an added product question (the relink per-file-dialog consent
+gesture — see Known limitations) for the owner's list.
 
 ---
 
@@ -28,7 +32,12 @@ audit wave #194–#199)
 - **Relink & portability** (P1.7): moved/renamed source files can be
   relinked; project references survive relocation. Backend-enforced
   declared-source consent — the app can only be granted paths it already
-  declared, never arbitrary local files.
+  declared, never arbitrary local files. R3-fixed (2026-08-22): the commit
+  step now recomputes provenance against the dataset's original recorded
+  checksum/mtime/size and a fresh probe taken at commit time, rather than
+  trusting the Preview-time snapshot alone — a row that changed between
+  Preview and commit is rejected even if it was individually escalated
+  earlier. See Known limitations for the one gap this does not close.
 - **Single-writer locking** (I2, hardened in the audit wave; R1-fixed
   2026-08-22): a second desktop instance opening the same project gets
   read-only, **Open as Copy**, or a guarded **Take Over** — enforced by a
@@ -39,8 +48,11 @@ audit wave #194–#199)
   writer's save is refused, never silently applied, with no gap between
   verification and replacement for another process to land in. An absent
   lock file is treated as an unverifiable claim (refused), not as "nothing
-  to check, proceed." Browser multi-tab is NOT protected (known limitation
-  below).
+  to check, proceed." R4-fixed (2026-08-22): the frontend now fails closed
+  — read-only, never a false "writable" — when the desktop lock bridge
+  itself is absent, throws, or returns a malformed response, not only when
+  the backend explicitly refuses. Browser multi-tab is NOT protected (known
+  limitation below).
 - **Workbook transfer packages** (I): export/import a workbook package
   across instances with fresh-ID rewrite; bounded large transfers,
   incompatible/expired package handling.
@@ -100,6 +112,20 @@ landed with red-first regression tests:
   recovery paths (#194).
 
 ## Known limitations (shipping as-is in this RC)
+- **macOS is Apple silicon only.** `Quantized_0.23.0_aarch64.dmg` is the only
+  macOS artifact; there is no Intel/x86-64 or universal build for this
+  release. (Owner decision, 2026-08-22.)
+- **Relink checksum verification is inert in the desktop app.** Every
+  relink candidate is probed with `checksum: null` today — the app has no
+  consent gesture to read a not-yet-linked candidate file's contents, only
+  its own already-declared project sources — so a row's relink verdict can
+  only ever be confirmed via file size/modification-time comparison, never
+  via a content checksum match. Size/mtime comparison does work and does
+  catch a changed or swapped file; it just cannot positively confirm
+  "byte-identical." Closing this needs a genuine new consent gesture for
+  relink candidates (a product decision, not yet made — tracked against
+  the owner's acceptance pass in `plans/POST_SPRINT_INDEPENDENT_REVIEW.md`
+  R2/R3).
 - **Reimport All (multi-source)** and the full Trash dependency-review UI
   are not built; single-dataset reimport/delete with impact preview is.
 - **Plot recipes** beyond Quick Plot templates (axis limits, legend,
@@ -152,3 +178,24 @@ GitHub **prerelease** (enforced in `release.yml` for `-rc` tags),
 `releases/latest` — and therefore in-app auto-update — continues to serve
 v0.22.0 until the RC is promoted with a plain `v0.23.0` tag. PyPI does not
 receive `-rc` builds at all (guarded in `pypi.yml`).
+
+**Install/platform note:** this RC ships Windows `.exe`, Linux `.deb`, and
+macOS **Apple silicon only** (`Quantized_0.23.0_aarch64.dmg`) — no
+Intel/x86-64 or universal macOS artifact (owner decision, 2026-08-22; see
+`plans/POST_SPRINT_INDEPENDENT_REVIEW.md` R5).
+
+## Post-tag hardening (independent-review wave, PRs #207/#208/#210/#211/#212/#213)
+An independent second review pass (`plans/POST_SPRINT_INDEPENDENT_REVIEW.md`)
+found and fixed further correctness issues after this RC's tag; all landed
+on `main` with adversarial code-review rounds and orchestrator independent
+verification (see that document's closure log). Summary beyond the R1/R3/R4
+callouts above: R6 made an async import-as-new-version's Undo batch
+operation-scoped instead of globally suppressing history, so an unrelated
+edit made while the import is in flight always gets its own, independent
+Undo entry. R7 added a non-blocking performance-regression guard (structural
++ wall-clock) for the large-map fast path this RC's performance section
+measures. R9 resolved all nine pre-existing React-hook lint warnings (two
+were real stale-closure bugs; CI now enforces zero warnings). R8 (eager JS
+bundle headroom) is still in flight on a parallel lane as of this note.
+None of these change the RC's tag or artifacts — they are already on `main`
+and will ship in the promoted `v0.23.0` build.

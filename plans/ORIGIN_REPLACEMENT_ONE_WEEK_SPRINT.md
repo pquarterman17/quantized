@@ -317,17 +317,62 @@ limitation, before Day 7 begins.
 
 - [x] All P0/P1 rows above have a linked fixing PR and independent verdict, or an
   owner-approved defer with user-visible limitation and a named follow-up issue. **(every P0/P1 code row: #194-#199 + the P1-7 comment links; the two remaining P0 rows are owner/Sol-only and stay open above.)**
-- [ ] Re-run the complete matrix on the resulting exact SHA; do not reuse green
-  checks from `1721716b` after fixes land. **— pending at tag time: a fresh dry-run release build will be triggered post-closure so the owner smokes post-audit artifacts; the tag itself re-runs the matrix on the exact candidate SHA.**
+- [x] Re-run the complete matrix on the resulting exact SHA; do not reuse green
+  checks from `1721716b` after fixes land. **DONE 2026-08-21 — the `v0.23.0-rc1`
+  tag at `069616d1` re-ran the full matrix via release workflow run
+  `32548354991`, all legs green (Windows, Linux, Apple-silicon macOS).**
 
 ### Day 7 — release candidate and audit closure
 
-- [ ] Re-run the release matrix on the exact candidate commit.
-- [ ] Publish release notes with known limitations and recovery instructions.
-- [ ] Cut the release candidate and retain the prior stable build for rollback.
-- [ ] Re-audit all plan documents: completed, superseded, deferred, or blocked;
-  none may remain ambiguously “in progress.”
-- [ ] Schedule post-sprint triage after the owner has used the build.
+**Reconciled 2026-08-23 (R10, `plans/POST_SPRINT_INDEPENDENT_REVIEW.md`).**
+Day 7 names three distinct states of "done" that were previously conflated
+under one unchecked list. They are now tracked separately:
+
+- **RC published — DONE.** `v0.23.0-rc1` tagged at `069616d1` (2026-08-21,
+  commit `chore(release): v0.23.0 (#201)`) and published via release workflow
+  run `32548354991` — Windows, Linux and Apple-silicon macOS artifacts, all
+  legs green. Published as a GitHub **prerelease** (enforced in `release.yml`
+  for `-rc` tags): auto-update keeps serving `v0.22.0`; PyPI is untouched
+  (`pypi.yml` skips `-rc` publishes). The remote-agent git proxy could not
+  push the tag ref directly (silently no-ops tag pushes — see
+  `.github/workflows/cut-tag.yml`'s header comment), so the tag was created
+  via that workflow (`#202`, a `workflow_dispatch` using the runner's own
+  `GITHUB_TOKEN`) and `release.yml` was then dispatched manually against the
+  new tag ref.
+- **Engineering sprint complete — DONE, including audit remediation.** Ships
+  the 20 lane PRs #167-#186, the measured map-performance fixes #188/#189/
+  #191, the independent Day-6 audit's correctness wave #194-#200, and —
+  post-tag — the `POST_SPRINT_INDEPENDENT_REVIEW.md` follow-up audit's fixes
+  #206 (calculator provenance), #203/#204/#209 (P1.3 plot-recipe arc), and
+  #207/#208/#210/#211/#212/#213 (R1/R4/R3/R7/R6/R9 — see that document's
+  closure log for independent-review evidence on each). R8 (bundle headroom)
+  is in flight on a parallel lane, not yet merged.
+- **Stable promotion accepted — OPEN, owner.** Not started. Per the owner's
+  own decision (recorded 2026-08-22), promotion is deliberately deferred
+  past the tag: the packaged Windows/macOS install + workflow smoke pass,
+  the 60-90 minute real-data session, the installer/icon/taskbar check, and
+  ChatGPT-Sol's wording/menu review must run **against this exact RC build**
+  first (`POST_SPRINT_INDEPENDENT_REVIEW.md` R2). Promotion itself is a
+  separate plain `v0.23.0` tag (same cut-tag-workflow + manual release-
+  dispatch mechanics as the RC) once the owner gives the word; only then
+  does `releases/latest`/auto-update/PyPI pick it up.
+
+Sub-items, tracked against the three states above:
+
+- [x] Re-run the release matrix on the exact candidate commit. (Done for the
+  RC: release run `32548354991` on `069616d1`, all legs green. Promotion
+  will re-run it again on the promotion tag's own SHA — not yet cut.)
+- [x] Publish release notes with known limitations and recovery instructions.
+  (`plans/RC_RELEASE_NOTES_DRAFT.md`, status FINAL for `v0.23.0-rc1`.)
+- [x] Cut the release candidate and retain the prior stable build for
+  rollback. (`v0.23.0-rc1` cut; `v0.22.0` installers remain on their
+  Release per the RC notes' Rollback section.)
+- [x] Re-audit all plan documents: completed, superseded, deferred, or
+  blocked; none may remain ambiguously “in progress.” (This reconciliation
+  pass: this document, `POST_SPRINT_INDEPENDENT_REVIEW.md`,
+  `RELEASE_BLOCKERS.md`, `RC_RELEASE_NOTES_DRAFT.md`.)
+- [ ] Schedule post-sprint triage after the owner has used the build. **OPEN
+  — depends on R2's owner-acceptance session actually running first.**
 
 ## Definition of done for every slice
 
