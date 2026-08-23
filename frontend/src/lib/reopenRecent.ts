@@ -23,8 +23,10 @@ import { IMPORT_ACCEPT, openFilePicker } from "./openFilePicker";
 import type { RecentFile } from "./recentFiles";
 
 export interface ReopenStore {
-  importFiles: (files: File[]) => Promise<void>;
-  importPaths: (paths: string[]) => Promise<void>;
+  // Promise<unknown> (not <void>) — see ImportEntryStore's identical note
+  // in lib/importEntry.ts (R6 F2, POST_SPRINT_INDEPENDENT_REVIEW.md).
+  importFiles: (files: File[]) => Promise<unknown>;
+  importPaths: (paths: string[]) => Promise<unknown>;
   setStatus: (msg: string) => void;
 }
 

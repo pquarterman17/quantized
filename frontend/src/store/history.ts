@@ -127,6 +127,26 @@ export interface HistoryEntry {
   snapshot: HistorySnapshot;
 }
 
+/** R6 (POST_SPRINT_INDEPENDENT_REVIEW.md): the opaque handle `withHistoryBatch`
+ *  hands to its `fn`, and the ONLY thing that lets a `recordHistory` call fold
+ *  into the batch's single undo entry instead of pushing its own. Identity
+ *  (not a boolean) is what makes this operation-scoped rather than a global
+ *  suppress: an unrelated caller that never received this exact token — every
+ *  ordinary `recordHistory(label)` call site in the app, none of which know
+ *  batches exist — always records its OWN entry with the CURRENT live state,
+ *  regardless of whether some other batch happens to be suppressed at that
+ *  instant. Only a call that was explicitly handed the active batch's token
+ *  (today: `importPaths`'s `historyToken` param, threaded down to
+ *  `addDataset`) can be absorbed. See `withHistoryBatch`'s own doc for why a
+ *  plain "is a batch running" boolean cannot make this distinction: the
+ *  batch's `fn` genuinely yields the JS thread during its own internal
+ *  awaits (a fetch, a probe), and unrelated UI-triggered mutations can only
+ *  ever land in exactly those gaps — a boolean keyed off "batch in flight"
+ *  cannot tell the batch's own post-await continuation apart from a totally
+ *  unrelated event handler that happened to fire during the same gap; only
+ *  an explicitly-threaded identity can. */
+export type HistoryBatchToken = symbol;
+
 export interface ViewSnapshot {
   xLim: [number, number] | null;
   yLim: [number, number] | null;
@@ -221,34 +241,58 @@ function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppState> {
 export interface HistorySlice {
   history: HistoryEntry[];
   future: HistoryEntry[];
-  /** True while a `withHistoryBatch` batch is running — `recordHistory`
-   *  becomes a no-op for its duration (see `withHistoryBatch`'s own doc).
-   *  Session-only control state, not user data — HISTORY_EXCLUDED, same
-   *  class as `history`/`future` themselves. Never set directly outside
-   *  this module. */
+  /** True while a `withHistoryBatch` batch is running. Despite the name,
+   *  this does NOT make `recordHistory` a no-op for unrelated callers any
+   *  more (R6 fix, POST_SPRINT_INDEPENDENT_REVIEW.md) — see
+   *  `HistoryBatchToken`'s doc for why a plain boolean can't gate that
+   *  safely. It still gates the batch's OWN token-bearing calls, and
+   *  remains available for UI that wants to show "an operation is in
+   *  progress" (no consumer does today). Session-only control state, not
+   *  user data — HISTORY_EXCLUDED, same class as `history`/`future`
+   *  themselves. Never set directly outside this module. */
   historySuppressed: boolean;
   /** Push the CURRENT state onto the undo stack under `label` and clear
    *  redo (any newly-recorded action invalidates whatever was undone).
    *  Call this at the very top of a participating mutation, BEFORE its own
-   *  `set()`, so the pushed snapshot is the PRE-mutation state. A no-op
-   *  while `historySuppressed` (inside a `withHistoryBatch`) — the batch
-   *  owns pushing the one entry for the whole operation instead. */
-  recordHistory: (label: string) => void;
-  /** Run `fn` as ONE undo step, no matter how many ordinary
-   *  `recordHistory("...")` calls happen inside it (store/relink.ts's
+   *  `set()`, so the pushed snapshot is the PRE-mutation state.
+   *
+   *  `batchToken`: pass the token an enclosing `withHistoryBatch` handed
+   *  your `fn` to fold this call into that batch's single entry instead of
+   *  pushing its own — ONLY for a mutation that is genuinely part of that
+   *  operation (e.g. `addDataset` forwarding the token it was given). Omit
+   *  it (the overwhelming majority of call sites) for an ordinary
+   *  independent edit: it then ALWAYS pushes its own entry with the
+   *  current live state, even while some unrelated batch is in flight —
+   *  that is what stops an unrelated edit from being silently absorbed
+   *  into someone else's asynchronous undo transaction (R6). A token that
+   *  doesn't match the CURRENTLY active batch (stale, or no batch running
+   *  at all) is treated exactly like no token — recorded on its own. */
+  recordHistory: (label: string, batchToken?: HistoryBatchToken) => void;
+  /** Run `fn` as ONE undo step, no matter how many `recordHistory` calls
+   *  `fn` makes THROUGH THE TOKEN it's handed (store/relink.ts's
    *  `commit()` hand-rolled this exact shape for its own batch before this
    *  existed — see that module's doc; this generalizes it). Snapshots the
-   *  PRE-batch state up front, suppresses every `recordHistory` call for
-   *  `fn`'s duration, then — only if at least one suppressed call actually
-   *  fired (i.e. `fn` mutated participating state at all) — pushes ONE
-   *  entry under `label` holding that pre-batch snapshot. A batch whose
-   *  `fn` mutates nothing (e.g. an import that fails outright) pushes NO
-   *  entry, exactly matching what an unbatched call site would have done.
+   *  PRE-batch state up front, mints a fresh `HistoryBatchToken`, and calls
+   *  `fn(token)` — `fn` must thread that token down to every mutation IT
+   *  OWNS (e.g. `importPaths(paths, token)`) for them to fold together;
+   *  only if at least one folded call actually fired (i.e. the operation
+   *  mutated participating state at all) does this push ONE entry under
+   *  `label` holding the pre-batch snapshot when `fn` settles. A batch that
+   *  mutates nothing (e.g. an import that fails outright) pushes NO entry,
+   *  exactly matching what an unbatched call site would have done.
+   *
+   *  Operation-scoped, NOT a global suppress (R6,
+   *  POST_SPRINT_INDEPENDENT_REVIEW.md): an ordinary `recordHistory(label)`
+   *  call with no token — every pre-existing call site in the app — is
+   *  UNAFFECTED by a batch being in flight and still records its own
+   *  independent entry, undo/redo-able on its own, even if it happens to
+   *  land during one of `fn`'s internal awaits. Only a call explicitly
+   *  handed THIS token can be absorbed.
    *
    *  Reentrant: calling this from inside an already-running batch just runs
-   *  `fn` — the outer batch owns the one entry; nesting never creates a
-   *  second undo step. */
-  withHistoryBatch: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
+   *  `fn` under the OUTER batch's token — the outer batch owns the one
+   *  entry; nesting never creates a second undo step. */
+  withHistoryBatch: <T>(label: string, fn: (token: HistoryBatchToken) => Promise<T>) => Promise<T>;
   /** No-op on an empty stack (callers that want a "nothing to undo" toast
    *  check `history.length` themselves — see components/history). */
   undo: () => void;
@@ -264,14 +308,54 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 
 export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
-  // Set by `recordHistory` whenever it's called while suppressed — tells
-  // the (non-reentrant, so never more than one at a time) active batch
-  // whether ANYTHING inside it actually would have recorded. A module-level
-  // closure variable rather than a store field: it's read/written only by
-  // this one synchronous handshake between recordHistory and
-  // withHistoryBatch, never by a component, so it doesn't need to be
-  // reactive state (and doesn't need a HISTORY_EXCLUDED entry of its own).
+  // Set by `recordHistory` whenever a call carrying the ACTIVE batch's own
+  // token folds in — tells the (non-reentrant, so never more than one at a
+  // time) active batch whether ANYTHING it owns actually would have
+  // recorded. A module-level closure variable rather than a store field:
+  // it's read/written only by this one synchronous handshake between
+  // recordHistory and withHistoryBatch, never by a component, so it
+  // doesn't need to be reactive state (and doesn't need a
+  // HISTORY_EXCLUDED entry of its own).
   let batchHadRecord = false;
+  // The currently-running batch's identity (R6 fix) — `null` when no batch
+  // is in flight. `recordHistory` folds a call in ONLY when its own
+  // `batchToken` argument matches this exactly; anything else (no token,
+  // or a token from a batch that has already finished) records on its own.
+  // Same closure-only reasoning as `batchHadRecord` above.
+  let activeBatchToken: HistoryBatchToken | null = null;
+  // The batch's own "before" snapshot — captured LAZILY, on the FIRST call
+  // that actually folds into the batch, using the LIVE state at that
+  // instant (exactly like an ordinary unsuppressed `recordHistory` would).
+  // NOT captured eagerly when `withHistoryBatch` is first called: an
+  // unrelated edit can land — and now correctly gets its own entry — in the
+  // gap BEFORE the operation's own first mutation (its `await`s haven't
+  // produced anything to fold yet). An eager snapshot taken before that
+  // edit happened would still be wrong: undoing the batch's OWN entry would
+  // restore all the way back to before that unrelated edit too, silently
+  // reverting it a second time even though it now has its own separate undo
+  // entry. Capturing lazily at the first fold means the batch's "before"
+  // already includes anything that happened up to that point, foreign or
+  // not — undoing the batch then only ever unwinds ITS OWN mutations.
+  //
+  // KNOWN LIMITATION (honest, corrected by the R6 code-review round — the
+  // ORIGINAL wording here was false, not merely hypothetical): this only
+  // covers a gap BEFORE the operation's first fold. ANY real `await` that
+  // still runs AFTER the last fold — not just one squeezed BETWEEN two
+  // folds — reopens the same hole, because this is a snapshot-restore
+  // design (an absolute prior state), never an inverse patch of the
+  // operation's own diff: an unrelated edit landing in that later gap gets
+  // its own entry (correct), but undoing the batch's single entry still
+  // reverts it too (wrong). Today's one caller (`importChangedAsNewVersion`)
+  // is safe from this NOT because it only ever makes one fold, but because
+  // `importPaths({ presentOutcome: false })` guarantees NOTHING async runs
+  // after that fold — `presentBatchOutcome`'s own real awaits (a dynamic
+  // import, an async recipe match) are skipped entirely for a batched
+  // caller instead of trusted to finish before the batch's `fn` returns
+  // (F1, POST_SPRINT_INDEPENDENT_REVIEW.md's R6 code-review round; see
+  // `ImportPathsOptions`'s doc, store/importDatasets.ts). Any FUTURE caller
+  // of `withHistoryBatch` must keep this same invariant — zero real awaits
+  // after its last fold — or this limitation is live again for it.
+  let batchPreSnapshot: HistorySnapshot | null = null;
 
   return {
     history: [],
@@ -279,29 +363,58 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
     viewHistory: [],
     viewFuture: [],
     historySuppressed: false,
-    recordHistory: (label) => {
-      if (get().historySuppressed) {
+    recordHistory: (label, batchToken) => {
+      if (get().historySuppressed && batchToken !== undefined && batchToken === activeBatchToken) {
+        if (batchPreSnapshot === null) {
+          batchPreSnapshot = snapshotOf(get());
+          // F3 (R6 code-review): clear redo the moment the batch commits to
+          // actually mutating something — the same "any new action
+          // invalidates redo" rule every other `recordHistory` call enforces
+          // immediately, not deferred until the batch's own entry lands in
+          // `withHistoryBatch`'s `finally` (which can be further awaits
+          // away). Without this, a Redo pressed mid-batch replayed a stale
+          // pre-batch `future` snapshot over already-half-mutated state.
+          set({ future: [] });
+        }
         batchHadRecord = true;
         return;
       }
+      // Either no batch is running, or this call doesn't carry (a match
+      // for) the currently active one's token — an ordinary, independent
+      // edit. Record it on its own, against the CURRENT live state, even
+      // while some other batch is suppressed: this is what stops that
+      // batch from silently absorbing it (R6).
       set((s) => ({
         history: [...s.history, { label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
         future: [],
       }));
     },
     withHistoryBatch: async (label, fn) => {
-      if (get().historySuppressed) return fn(); // reentrant — outer batch owns the one entry
-      const preSnapshot = snapshotOf(get());
+      // Reentrant: run under the OUTER batch's own token so a nested call's
+      // own folded recordHistory calls still land in the one entry the
+      // outer batch owns, rather than starting a second, unrelated token.
+      if (get().historySuppressed && activeBatchToken !== null) return fn(activeBatchToken);
+      const token: HistoryBatchToken = Symbol(label);
       batchHadRecord = false;
+      batchPreSnapshot = null;
+      activeBatchToken = token;
       set({ historySuppressed: true });
       try {
-        return await fn();
+        return await fn(token);
       } finally {
         const had = batchHadRecord;
+        const preSnapshot = batchPreSnapshot;
         batchHadRecord = false;
+        batchPreSnapshot = null;
+        activeBatchToken = null;
         set((s) => ({
           historySuppressed: false,
-          ...(had
+          // `preSnapshot` is non-null whenever `had` is true — the same
+          // fold that set `batchHadRecord` also captured it (see
+          // `recordHistory` above) — but TypeScript can't see that
+          // correlation across the two closures, so the null check reads
+          // as a second guard rather than a real possibility.
+          ...(had && preSnapshot
             ? { history: [...s.history, { label, snapshot: preSnapshot }].slice(-HISTORY_DEPTH), future: [] }
             : {}),
         }));
