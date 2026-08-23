@@ -61,6 +61,20 @@ describe("useDataFilter", () => {
     expect(result.current.active).toBe(true);
   });
 
+  // R9 code-review F3: `filter` (`active?.filter ?? NO_FILTER`) must reuse a
+  // single stable empty-array identity in the common unfiltered case — a
+  // bare `?? []` would mint a fresh array every render, defeating the
+  // `columns` memo's `[active, filter]` dep on every re-render of an
+  // unfiltered dataset (by far the common case). An unrelated re-render
+  // (`rerender()` with no store change) must leave `columns` at the SAME
+  // object identity.
+  it("columns stays referentially stable across an unrelated re-render when unfiltered (NO_FILTER identity)", () => {
+    const { result, rerender } = renderHook(() => useDataFilter());
+    const before = result.current.columns;
+    rerender();
+    expect(result.current.columns).toBe(before);
+  });
+
   // R9 (POST_SPRINT_INDEPENDENT_REVIEW): `columns[*].current` is populated by
   // `currentOf`, a closure over `filter` that the surrounding useMemo
   // deliberately excludes from its own deps (only `[active, filter]` — see

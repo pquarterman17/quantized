@@ -67,6 +67,19 @@ describe("useWaterfall", () => {
     expect(result.current.aligned.ys[1][0]).toBeCloseTo(104); // 4 + 100
   });
 
+  // R9 code-review F2: `included` (feeding the `channels`/`series` memos,
+  // and transitively `traces`/`aligned`) is memoized on `[datasets, excluded]`
+  // — a bare `datasets.filter(...)` minted a fresh array identity on EVERY
+  // render, defeating that whole memo chain regardless of its own deps. An
+  // unrelated re-render (`setLogY`, which nothing here derives from) must
+  // leave `aligned` at the SAME object identity.
+  it("aligned stays referentially stable across an unrelated re-render (included memoization)", () => {
+    const { result } = renderHook(() => useWaterfall());
+    const before = result.current.aligned;
+    act(() => result.current.setLogY(true));
+    expect(result.current.aligned).toBe(before);
+  });
+
   // R9 (POST_SPRINT_INDEPENDENT_REVIEW): `traces`'s useMemo lists
   // `resolvedSpacing`/`mode`/`reverse` individually rather than the `opts`
   // object built from them (see useWaterfall.ts's comment) — pin down that

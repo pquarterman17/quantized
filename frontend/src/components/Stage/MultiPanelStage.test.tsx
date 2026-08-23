@@ -492,9 +492,15 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
   // fires, in both the plain-stack and spatial-apply paths, so a future
   // change can't silently drop the trigger while "fixing" the lint warning.
   it("triggers ensureBookData for a pending active dataset in plain-stack mode", async () => {
-    const ensureBookData = vi.fn();
+    // R9 code-review F4: `vi.spyOn` + `mockRestore()` (the same idiom
+    // WindowCanvas.test.tsx/WorksheetPane.test.tsx/useApp.test.ts use for
+    // this exact action), not `useApp.setState({ ensureBookData: vi.fn() })`
+    // — the latter permanently overwrites the shared store's real action
+    // with a no-op for every LATER test in this file (the shared
+    // `beforeEach` above never restores it), silently breaking any future
+    // test that depends on the real fetch-trigger behavior.
+    const ensureBookData = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
     useApp.setState({
-      ensureBookData,
       datasets: [
         {
           id: "d1",
@@ -513,12 +519,12 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
     // Let the fetch-driven render effect finish too, so no ResizeObserver
     // construction is left dangling past this test's own afterEach unstub.
     await waitFor(() => expect(created.length).toBeGreaterThan(0));
+    ensureBookData.mockRestore();
   });
 
   it("triggers ensureBookData for each pending panel dataset in spatial-apply mode", async () => {
-    const ensureBookData = vi.fn();
+    const ensureBookData = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
     useApp.setState({
-      ensureBookData,
       datasets: [
         {
           id: "d1",
@@ -545,6 +551,7 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
     // Same synchronous-call reasoning as the plain-stack test above.
     expect(ensureBookData).toHaveBeenCalledWith("d1");
     await waitFor(() => expect(created.length).toBeGreaterThan(0));
+    ensureBookData.mockRestore();
   });
 
   it("does NOT suppress independent (non-shared-x) panels — same-shape grid, different x-ranges", async () => {
