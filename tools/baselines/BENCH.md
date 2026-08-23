@@ -57,3 +57,39 @@ threshold's bit-exact passthrough and the point count handed to
 `griddata` (#188); `test_calc_interp2d.py`-adjacent call-count spies pin
 the single-detection invariant (#191). Wall-clock is deliberately never
 asserted in CI.
+
+## R7: bounded wall-clock guard against a return to pre-sprint numbers
+
+The tests above pin *structure* (fast-path selection, call counts) with no
+wall-clock assertion at all, so nothing above fails automatically if the
+optimized path regresses back toward the pre-sprint 30-140s numbers without
+also breaking one of those structural invariants (e.g. a correct fast-path
+call that's simply become O(n^2) internally). `tests/test_perf_map_guard.py`
+(new `perfguard` marker, `pyproject.toml`) closes that gap:
+
+- **What it pins.** Generates a 250k-point RSM-mesh fixture in-test (reuses
+  `rsm.py`'s `write_xrdml_rsm` at the same 500x500 tier as
+  `make_map_fixtures.py`'s smallest size — nothing large is committed), then
+  asserts (a) the same structural invariants as above — exactly one
+  `detect_regular_grid` call, the `_query_grid_linear` fast path engages
+  exactly once, `griddata` is never called — and (b) a loose wall-clock
+  backstop: import+regrid measured cold at ~0.58-0.61s on the reference
+  devbox (2026-08-23), ceiling set to 6.0s (~10x, at/above R7's required 8x
+  floor). The wall-clock assertion's own failure message says to check the
+  structural test first — per `docs/testing.md`, the clock is a backstop,
+  not the primary signal.
+- **Why it's non-blocking (the CI job).** `.github/workflows/ci.yml`'s
+  `perf-guard` job runs `uv run pytest -m perfguard -q` with
+  `continue-on-error: true` and is deliberately NOT in the required-checks
+  set — a noisy shared runner should never be able to block a merge on a
+  timing assertion. (The `perfguard`-marked tests still also run inside the
+  required `backend` job's ordinary `pytest -q`, same as the pre-existing
+  `perf` marker — the ceiling is generous enough that this is not expected
+  to be the thing that trips; the dedicated job's job is the artifact below,
+  not an extra blocking gate.)
+- **How to read the artifact.** Every `perf-guard` run uploads
+  `perf-guard-timing` (90-day retention) — `pytest -vv --durations=0`
+  output naming the two tests' wall times. Reading a run's artifact over
+  time is how a slow, gradual drift back toward the old numbers would show
+  up before it ever gets close to the 6.0s ceiling; treat a climbing trend
+  as the actionable signal even while the job stays green.
