@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
+import { exportFigure, renderFigureHitmap } from "../../../lib/api/figures";
+import { fetchBookData } from "../../../lib/api";
 import {
   createFigureDocument,
   deserializeFigureDocument,
@@ -15,6 +16,9 @@ import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
 
 vi.mock("../../../lib/api", () => ({
+  fetchBookData: vi.fn(),
+}));
+vi.mock("../../../lib/api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
   // the preview now renders through the #13 hit-map endpoint
   renderFigureHitmap: vi.fn().mockResolvedValue({
@@ -24,7 +28,6 @@ vi.mock("../../../lib/api", () => ({
     elements: [{ id: "title", x0: 1, y0: 1, x1: 2, y1: 2 }],
     axes: { x0: 0, y0: 0, x1: 600, y1: 400, xlim: [0, 1], ylim: [0, 1], xlog: false, ylog: false },
   }),
-  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {

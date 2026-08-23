@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from quantized.io.import_preview import (
+    DATA_ROLES,
     ImportSettings,
     guess_settings,
     parse_import,
@@ -124,3 +125,283 @@ def test_import_settings_roundtrip() -> None:
     assert ImportSettings.from_dict(s.to_dict()) == s
     # unknown keys are ignored on decode
     assert ImportSettings.from_dict({"delimiter": ";", "bogus": 1}).delimiter == ";"
+
+
+# --- P1.4: "label" role no longer drops raw strings; "categorical" role ----
+
+_LABEL_TEXT = "Temp,Moment,Sample\n1,10,NbAu-1\n2,20,NbAu-2\n3,30,NbAu-1\n"
+
+
+def test_label_role_captures_raw_strings_instead_of_discarding_them() -> None:
+    """RED before this fix: the wizard's 'label' role silently dropped the
+    'Sample' column entirely -- no metadata trace at all, worse than a
+    default/silent import (which never even offers a 'label' role and so
+    never lost anything). Parity means it now lands in the SAME
+    `text_columns` sidecar shape `import_csv` already emits."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment",)  # label column still excluded from .values
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2", "NbAu-1"]}
+
+
+def test_label_role_strips_whitespace_matching_import_csv_sidecar() -> None:
+    """P1.4 review P2-4: RED before this fix -- the wizard's `label` sidecar
+    capture skipped the `.strip()` that `io/delimited.py`'s `text_columns`
+    sidecar always applies, so a whitespace-padded cell (` NbAu-1 `) landed
+    verbatim instead of matching the generic-import convention."""
+    text = "Temp,Moment,Sample\n1,10, NbAu-1 \n2,20, NbAu-2 \n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    ds = parse_import(text, settings)
+    assert ds.metadata["text_columns"] == {"Sample": ["NbAu-1", "NbAu-2"]}
+
+
+def test_ignore_role_still_drops_with_no_sidecar_capture() -> None:
+    """`ignore` is an explicit user choice to discard -- unlike `label`, it
+    gets no text_columns capture."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment",)
+    assert "text_columns" not in ds.metadata
+
+
+def test_categorical_role_produces_a_categorical_channel() -> None:
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "categorical"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.labels == ("Moment", "Sample")
+    assert ds.cat_levels == {1: ("NbAu-1", "NbAu-2")}
+    assert ds.column("Sample").tolist() == [0.0, 1.0, 0.0]
+    assert "text_columns" not in ds.metadata  # categorical, not label -- no sidecar duplication
+
+
+def test_categorical_role_is_in_data_roles() -> None:
+    assert "categorical" in DATA_ROLES
+
+
+def test_categorical_only_columns_still_import_with_no_y_channels() -> None:
+    """A categorical column alone satisfies "something was selected" -- the
+    old "no y/error columns" gate must not reject a categorical-only pick."""
+    text = "Sample\nA\nB\nA\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["categorical"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Sample",)
+    assert ds.cat_levels == {0: ("A", "B")}
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]  # no x role -> row index
+
+
+def test_categorical_import_round_trips_through_dict() -> None:
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "categorical"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    from quantized.datastruct import DataStruct
+
+    back = DataStruct.from_dict(ds.to_dict())
+    assert back.cat_levels == ds.cat_levels
+    assert back.labels == ds.labels
+
+
+# --- P1.6: legend-label row + retained preamble ----------------------------
+
+_MULTI_ROW_TEXT = "Temp,M1,M2\n(K),(emu),(emu)\n,NbAu-1,NbAu-2\n1,10,11\n2,20,21\n"
+
+
+def test_label_line_overrides_channel_labels() -> None:
+    """RED before this fix: ImportSettings had no label_line field at all --
+    the header row was the only label source, so a 'name'-style legend row
+    (a common instrument-export shape, see io/delimited.py's label_rows)
+    could not drive the DataStruct's channel labels through the wizard."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert ds.labels == ("NbAu-1", "NbAu-2")
+    assert ds.units == ("emu", "emu")  # units_line is untouched by label_line
+
+
+def test_label_line_absent_leaves_header_derived_labels_unchanged() -> None:
+    settings = ImportSettings(header_line=0, units_line=1, data_start_line=3, roles=["x", "y", "y"])
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert ds.labels == ("M1", "M2")
+
+
+def test_label_line_blank_cell_falls_back_to_header_name() -> None:
+    """A blank legend-label cell for one column doesn't blank that label --
+    it falls back to the header-derived name, same as any other missing
+    override."""
+    text = "Temp,M1,M2\n,NbAu-1,\n1,10,11\n2,20,21\n"
+    settings = ImportSettings(header_line=0, label_line=1, data_start_line=2, roles=["x", "y", "y"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("NbAu-1", "M2")
+
+
+def test_label_line_applies_to_categorical_channels_too() -> None:
+    text = "Temp,M1,Sample\n,NbAu-1,\n1,10,A\n2,20,B\n"
+    settings = ImportSettings(
+        header_line=0, label_line=1, data_start_line=2, roles=["x", "y", "categorical"]
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("NbAu-1", "Sample")  # blank override cell -> header name
+
+
+def test_label_line_coinciding_with_header_line_reuses_split_names() -> None:
+    """Review round P2-1: RED before this fix -- pointing label_line AT the
+    header row itself (a plausible "confirm this row as the legend labels
+    too" wizard action) re-read the RAW token row, which still carries the
+    embedded "(unit)" suffix `_extract_units` already split OUT of
+    `p.names` -- so the label silently regained the unit text
+    ('Moment (emu)' instead of 'Moment'). Fixed by reusing `p.names`."""
+    text = "Temp,Moment (emu)\n1,10\n2,20\n"
+    settings = ImportSettings(header_line=0, label_line=0, data_start_line=1, roles=["x", "y"])
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Moment",)
+    assert ds.units == ("emu",)
+
+
+def test_label_line_coinciding_with_units_line_reuses_split_units() -> None:
+    """Same bug, units_line side: label_line pointing at the units row
+    re-read the raw bracketed cell instead of the already `strip("()[]{}")`
+    -processed `p.units`."""
+    text = "Temp,Moment\nK,(emu)\n1,10\n2,20\n"
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=1, data_start_line=2, roles=["x", "y"]
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("emu",)
+    assert ds.units == ("emu",)
+
+
+def test_preview_reports_label_line() -> None:
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert pv["label_line"] == 2
+
+
+_PREAMBLE_TEXT = "# Sample: NbAu bilayer\n# Operator: pq\nTemp,Moment\n1,10\n2,20\n"
+
+
+def test_preamble_lines_retained_as_comments_metadata() -> None:
+    """RED before this fix: every line above data_start_line NOT consumed as
+    header/units was silently dropped -- no trace anywhere in the resulting
+    DataStruct, unlike io/delimited.py's silent-import path, which has always
+    kept this preamble in metadata['comments']."""
+    settings = ImportSettings(header_line=2, data_start_line=3, roles=["x", "y"])
+    ds = parse_import(_PREAMBLE_TEXT, settings)
+    assert ds.metadata["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
+
+
+def test_preview_reports_comments_too() -> None:
+    settings = ImportSettings(header_line=2, data_start_line=3, roles=["x", "y"])
+    pv = preview_import(_PREAMBLE_TEXT, settings)
+    assert pv["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
+
+
+def test_no_comments_key_when_preamble_is_fully_consumed() -> None:
+    """Every preamble line becomes header/units/label -- nothing left over,
+    so no comments key at all (matches io/delimited.py's omit-when-absent
+    convention)."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    assert "comments" not in ds.metadata
+
+
+def test_preamble_comments_capped_at_max() -> None:
+    """Review round P3(b): RED before this fix -- `data_start_line` is
+    directly user-settable through the wizard (unlike `io/delimited.py`'s
+    auto-sniffed preamble), so an oversized value (a typo, or a stale saved
+    filter reapplied to a much longer file) walked and retained EVERY
+    preceding line as a `comments` entry, unbounded. 600 preamble lines
+    caps down to `_MAX_PREAMBLE_COMMENTS` (500), not 600."""
+    from quantized.io.import_preview import _MAX_PREAMBLE_COMMENTS
+
+    lines = [f"# comment {i}" for i in range(600)] + ["Temp,Moment", "1,10"]
+    text = "\n".join(lines) + "\n"
+    settings = ImportSettings(delimiter=",", header_line=600, data_start_line=601, roles=["x", "y"])
+    ds = parse_import(text, settings)
+    assert len(ds.metadata["comments"]) == _MAX_PREAMBLE_COMMENTS == 500
+    assert ds.metadata["comments"][0] == "# comment 0"
+
+
+def test_comments_survive_alongside_label_rows_and_text_columns() -> None:
+    text = "# Instrument log\nTemp,M1,Sample\n1,10,A\n2,20,B\n"
+    settings = ImportSettings(header_line=1, data_start_line=2, roles=["x", "y", "label"])
+    ds = parse_import(text, settings)
+    assert ds.metadata["comments"] == ["# Instrument log"]
+    assert ds.metadata["text_columns"] == {"Sample": ["A", "B"]}
+
+
+# --- P1-5 DEFECT 1: multiple x-role columns must be rejected, not silently ---
+# --- truncated to x_cols[0] (parse_import used to keep only the FIRST x   ---
+# --- column and drop every other one -- not a channel, not text, nothing). --
+
+
+def test_multiple_x_roles_is_rejected_naming_the_columns() -> None:
+    """RED before the fix: two columns marked 'x' used to silently import
+    with only the FIRST as the axis -- the second x column vanished from the
+    DataStruct entirely (not a channel, not a text_columns entry, no trace).
+    parse_import must instead reject with a message naming the columns."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "x"])
+    with pytest.raises(ValueError, match="Temp") as exc_info:
+        parse_import(_LABEL_TEXT, settings)
+    assert "Sample" in str(exc_info.value)
+
+
+def test_single_x_role_still_imports_fine() -> None:
+    """Sanity: the rejection is specific to MULTIPLE x columns -- a single x
+    column (the overwhelmingly common case) is untouched."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.metadata["x_column_name"] == "Temp"
+
+
+def test_no_x_role_still_falls_back_to_sample_index() -> None:
+    """Sanity: zero x columns is unaffected -- the existing sample-index
+    fallback still applies."""
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["y", "y", "ignore"])
+    ds = parse_import(_LABEL_TEXT, settings)
+    assert ds.metadata["x_column_name"] == "Sample Index"
+
+
+# --- P1-5 DEFECT 2: preview_import must report the EFFECTIVE (post-label_line) --
+# --- name per column, since the wizard's suggestion engine classifies against --
+# --- whatever name preview_import returns, and parse_import (not preview_import) --
+# --- is the one that actually applies label_line overrides today.          ---
+
+
+def test_preview_reports_effective_name_matching_label_line_override() -> None:
+    """RED before the fix: preview_import's `columns[k].name` is always the
+    HEADER-derived name -- it never applies `_label_row_overrides`, unlike
+    parse_import. A wizard classifying error-role suggestions against
+    `columns[k].name` (the only name preview_import offers today) would
+    therefore classify against a name the final dataset never carries
+    whenever label_line is set."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert [c["name"] for c in pv["columns"]] == ["Temp", "M1", "M2"]
+    assert [c["effective_name"] for c in pv["columns"]] == ["Temp", "NbAu-1", "NbAu-2"]
+
+
+def test_preview_effective_name_matches_parse_import_labels_exactly() -> None:
+    """The whole point of `effective_name`: on the SAME fixture, the channel
+    columns' effective_name must equal parse_import's actual .labels, so the
+    wizard classifies against the name the dataset will really carry."""
+    settings = ImportSettings(
+        header_line=0, units_line=1, label_line=2, data_start_line=3, roles=["x", "y", "y"]
+    )
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    ds = parse_import(_MULTI_ROW_TEXT, settings)
+    channel_effective_names = [
+        c["effective_name"] for c in pv["columns"] if c["role"] in ("y", "error", "categorical")
+    ]
+    assert tuple(channel_effective_names) == ds.labels
+
+
+def test_preview_effective_name_without_label_line_matches_header_name() -> None:
+    """Absent label_line, effective_name is just the header-derived name --
+    additive, no behavior change for the common no-label_line case."""
+    settings = ImportSettings(header_line=0, units_line=1, data_start_line=3, roles=["x", "y", "y"])
+    pv = preview_import(_MULTI_ROW_TEXT, settings)
+    assert [c["effective_name"] for c in pv["columns"]] == [c["name"] for c in pv["columns"]]

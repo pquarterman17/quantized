@@ -4,7 +4,7 @@ import { buildArtifactMenu, deleteArtifactConfirmed, type ArtifactNode } from ".
 import { askConfirm } from "../overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -93,5 +93,31 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
     expect(action(items, "Duplicate").disabled).toBe(true);
     expect(action(items, "Delete").disabled).toBe(true);
     expect(action(items, "Delete").title).toBe("recovered Origin figures are managed by their source import");
+  });
+});
+
+describe("artifact.saveAsTemplate — PR H5c honest disabled stub", () => {
+  it("appears disabled on an editable-figure node, pointing at the builder", () => {
+    const node = {
+      key: "editable-figure:fig1", entityId: "fig1", kind: "editable-figure", name: "Moment sweep",
+      parentKey: null, depth: 0, children: [],
+      source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+      entity: { id: "fig1", name: "Moment sweep" },
+    } as unknown as Extract<ArtifactNode, { kind: "editable-figure" }>;
+
+    const item = action(buildArtifactMenu(node), "Save as Template…");
+    expect(item.disabled).toBe(true);
+    expect(item.title).toBe("save a Quick Plot template from the Quick Figure Builder instead");
+  });
+
+  it("is absent entirely (not merely disabled) on a non-editable-figure artifact", () => {
+    const node = {
+      key: "origin-figure:o1", entityId: "o1", kind: "origin-figure", name: "Graph1",
+      parentKey: null, depth: 0, children: [],
+      source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+      entity: { id: "o1", datasetId: null },
+    } as unknown as ArtifactNode;
+    const items = buildArtifactMenu(node);
+    expect(items.some((i) => "label" in i && i.label === "Save as Template…")).toBe(false);
   });
 });

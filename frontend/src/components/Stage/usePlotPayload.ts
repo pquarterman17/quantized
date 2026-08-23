@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { groupLevelLabel } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
@@ -28,6 +29,7 @@ import {
   defaultDecimateWidthHint,
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
+import { applyGroupSplit, groupSplitChannelMap } from "../../lib/plotGroupSplit";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 
@@ -37,6 +39,10 @@ export interface PlotPayloadParams {
   xScale: AxisScale;
   xKey: number | null;
   yKeys: number[] | null;
+  /** P1.5 "Group" well channel -- one series per level (plotGroupSplit.ts).
+   *  Ignored when `y2Keys` is non-empty (mirrors the backend's own
+   *  "grouped + secondary Y axis" incompatibility, figureSpec.ts). */
+  groupKey: number | null;
   y2Keys: number[] | null;
   seriesOrder: number[] | null;
   seriesStyles: Record<number, SeriesStyle>;
@@ -174,11 +180,29 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
   const dropped = useMemo(() => droppedRows(active), [active]);
 
-  // Channels actually drawn (y selection minus the x-axis channel), in order.
-  const plotted = useMemo(
+  // P1.5: degrades to ungrouped + y2 (mirrors the backend's own incompatibility).
+  const groupCol = p.groupKey !== null && !(p.y2Keys && p.y2Keys.length > 0) ? p.groupKey : null;
+
+  // Channels actually drawn (y selection minus the x-axis channel), in
+  // order -- the REAL channels to fetch (a group split happens CLIENT-SIDE
+  // below on the fetched columns, not via a separate per-level request).
+  const fetchChannels = useMemo(
     () =>
       active ? effectiveChannels(active.data, p.yKeys, p.xKey, active.channelRoles, p.seriesOrder) : [],
     [active, p.yKeys, p.xKey, p.seriesOrder],
+  );
+  // The group channel's own per-row codes (row-aligned to active.data) --
+  // feeds both the channel-map expansion below and applyGroupSplit's call.
+  const groupCodes = useMemo(
+    () => (groupCol !== null && active ? active.data.values.map((row) => row[groupCol]) : null),
+    [active, groupCol],
+  );
+  // P1.5 edit-one/edit-all ruling (plotGroupSplit.ts header): the per-
+  // DISPLAY-series channel map styleList/labelList/hidden (and PlotLegend/
+  // PlotContextMenu's own `plotted[i]` lookups) key against.
+  const plotted = useMemo(
+    () => (groupCodes ? groupSplitChannelMap(fetchChannels, groupCodes) : fetchChannels),
+    [fetchChannels, groupCodes],
   );
 
   // Fold overlays + exclusion mask + selection brush in (see composeDisplayPayload).
@@ -227,19 +251,23 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   }, [displayPayload, plotted, p.seriesLabels]);
 
   // Error-bar magnitudes per plotted series (keyed by uPlot data column = p+1).
+  // P1.5: suppressed when grouped -- no sound 1:1 mapping to the wells'
+  // y-index pairing, same ruling plotspec.ts's specToRender already applies.
   const errorBars = useMemo(
     () =>
-      active ? buildErrorColumns(active.data, plotted, p.errKeys) : new Map<number, (number | null)[]>(),
-    [active, plotted, p.errKeys],
+      active && groupCol === null
+        ? buildErrorColumns(active.data, plotted, p.errKeys)
+        : new Map<number, (number | null)[]>(),
+    [active, plotted, p.errKeys, groupCol],
   );
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying.
   const colorByColumns = useMemo(
     () =>
-      active
+      active && groupCol === null
         ? buildColorByColumns(active.data, plotted, p.seriesStyles)
         : new Map<number, ColorScatterSpec>(),
-    [active, plotted, p.seriesStyles],
+    [active, plotted, p.seriesStyles, groupCol],
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
@@ -298,13 +326,14 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
         // rule rather than trying to pre-filter to currently-plotted columns.
         hasErrorSpans: useDocumentErrors || !!active.errorRoles?.length,
         hasColorByColumns: colorByColumns.size > 0,
+        hasGroupSplit: groupCol !== null,
       });
     const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
     fetchPlot(
       active.data,
       p.yScale === "log",
       p.xScale === "log",
-      plotted,
+      fetchChannels,
       p.y2Keys,
       p.xKey,
       decimateWidth,
@@ -317,7 +346,17 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       // instead of the raw channel numbers. No-op for a continuous x/time axis
       // (xKey === null, the time column, is never modeled/categorical).
       const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
-      const composed = categoricalXPayload(raw, active.data, p.xKey, xType);
+      const withCategories = categoricalXPayload(raw, active.data, p.xKey, xType);
+      // P1.5: group split runs LAST, client-side, on the never-decimated fetch.
+      const composed =
+        groupCol !== null && groupCodes
+          ? applyGroupSplit(
+              withCategories,
+              groupCodes,
+              active.data.labels[groupCol] ?? `col ${groupCol}`,
+              (code) => groupLevelLabel(active.data, groupCol, code),
+            )
+          : withCategories;
       basePayloadRef.current = composed;
       decimateWidthRef.current = decimateWidth;
       setPayload(composed);
@@ -330,7 +369,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     active,
     p.yScale,
     p.xScale,
-    plotted,
+    fetchChannels,
     p.y2Keys,
     p.xKey,
     p.defaultTrace,
@@ -344,6 +383,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.selection,
     p.excludedDisplay,
     useDocumentErrors,
+    groupCol,
+    groupCodes,
   ]);
 
   // P3.4 zoom-refetch residual: when the BASE payload above came back
@@ -383,7 +424,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       active.data,
       p.yScale === "log",
       p.xScale === "log",
-      plotted,
+      fetchChannels,
       p.y2Keys,
       p.xKey,
       decimateWidthRef.current ?? defaultDecimateWidthHint(),
@@ -407,7 +448,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
     // `payload` is read but NOT listed — see this effect's header comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.xLim, active, plotted, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
+  }, [p.xLim, active, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
 
   // #36 / G4: built from Dataset.errorRoles (the canonical contract) by
   // default — absent for a dataset with no roles, in which case the legacy
@@ -438,10 +479,11 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // dedupe logic was needed; the existing column-based filter already
   // covers a Map built from either source.
   const errorSpans = useMemo(() => {
-    if (!active) return new Map<number, ErrorSpan[]>();
+    // P1.5: suppressed for a grouped render -- see the `errorBars` doc above.
+    if (!active || groupCol !== null) return new Map<number, ErrorSpan[]>();
     const bindings = useDocumentErrors ? p.documentErrors! : active.errorRoles;
     return bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
-  }, [active, plotted, useDocumentErrors, p.documentErrors]);
+  }, [active, plotted, useDocumentErrors, p.documentErrors, groupCol]);
 
   return {
     payload,

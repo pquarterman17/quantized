@@ -1,23 +1,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  reportEmit,
-  statsDescriptive,
-  statsFitDistributions,
-  statsHistogram,
-  statsShapiro,
-} from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
+import { reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import DistributionPanel from "./DistributionPanel";
 
 vi.mock("../../../lib/api", () => ({
   statsHistogram: vi.fn(),
-  statsDescriptive: vi.fn(),
   statsShapiro: vi.fn(),
   statsFitDistributions: vi.fn(),
   reportEmit: vi.fn(),
+}));
+vi.mock("../../../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
 }));
 
 const DATA: DataStruct = {

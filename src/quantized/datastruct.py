@@ -8,15 +8,56 @@ export) reads one. Mirrors the MATLAB ``parser.createDataStruct`` contract:
     labels   (M,)    channel names (deduplicated: 'A','A' -> 'A','A (2)')
     units    (M,)    channel units ('' when unknown)
     metadata         immutable mapping of import metadata
+    cat_levels       optional channel index -> ordered level-string table
+                     (P1.4 categorical contract, see below)
 
 Pure layer — no fastapi/pydantic imports (enforced by test_repo_integrity).
 The instance is frozen and its arrays are read-only, honouring the
 "raw data is preserved, never mutated in place" rule: compute on copies.
+
+CATEGORICAL CONTRACT (P1.4, PRIMARY_SOFTWARE_AUDIT_PLAN): a categorical
+column is not a second data type bolted onto ``values`` -- it IS a numeric
+channel (float codes ``0..n-1``, NaN = missing) PLUS a first-class ordered
+level table (``cat_levels``: channel index -> a non-empty tuple of level
+strings, ``levels[code]`` recovers the original string). ``cat_levels`` is
+ADDITIVE: absent (``None``, the default) means pure numeric, and every
+existing construction/serialization path is byte-identical to before this
+field existed -- ``to_dict()`` omits the key entirely when it's ``None``, so
+no golden fixture (whose DataStruct never carries one) can be affected.
+Level ORDER is the tuple's own order; it is the ordinal ordering a caller
+sees today (first-appearance order from import) and the axis JMP would
+render is user-reorderable in a later slice -- the representation already
+carries an order, it just isn't user-editable yet.
+
+This satisfies JMP-parity's "string levels preserved, not numeric-coded"
+bar (JMP_GAP_PLAN J1) AT THE CONTRACT LEVEL: the original strings are
+preserved exactly, recodable (``level_of``/``level_labels`` below), and
+render everywhere as labels -- the fact that internal STORAGE is a numeric
+code is an implementation detail, not a representational loss, because the
+mapping is lossless and invertible (``levels[code] == original string`` for
+every cell) and the accessor layer below is the ONLY sanctioned read path:
+consumers must call ``is_categorical``/``level_labels``/``level_of`` rather
+than reach into ``cat_levels`` directly, so the day the storage scheme
+changes (e.g. to native strings) only this module's accessors need to.
+
+VALIDATION SCOPE (P1.4 review, P2-3/P3-1 ruling -- document + degrade,
+NEVER throw): ``__post_init__`` validates ``cat_levels``' TABLE SHAPE only
+-- every key is an in-range channel index, every value a non-empty tuple of
+``str``. It deliberately does NOT cross-check CODE/LEVEL COHERENCE against
+``values`` -- a cell's numeric code may be out of range, non-integer, or
+NaN for its channel's level table (a downstream row-edit, a bad merge, or a
+Recode step gone wrong could all produce one), and construction still
+succeeds. Coherence degrades at READ time instead: ``level_of`` returns
+``None`` for any code it cannot resolve rather than raising or returning
+garbage, so a malformed cell degrades to "no label" for that one cell,
+never crashes the caller. This mirrors the frontend's ``levelLabel``
+(``lib/categorical.ts``), which applies the identical rule.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -25,7 +66,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-__all__ = ["DataStruct"]
+__all__ = ["DataStruct", "is_categorical", "level_labels", "level_of"]
 
 
 def _deduplicate(labels: tuple[str, ...]) -> tuple[str, ...]:
@@ -42,6 +83,58 @@ def _deduplicate(labels: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _normalize_cat_levels(
+    cat_levels: Mapping[int, tuple[str, ...]] | None, n_channels: int
+) -> Mapping[int, tuple[str, ...]] | None:
+    """Validate + freeze ``cat_levels`` (P1.4): every key must be a real
+    channel index and every value a non-empty tuple of ``str`` (the level
+    table for a code-0..n-1 categorical channel). ``None`` in -> ``None``
+    out, so a plain-numeric DataStruct never allocates one."""
+    if cat_levels is None:
+        return None
+    normalized: dict[int, tuple[str, ...]] = {}
+    for idx, levels in cat_levels.items():
+        if not isinstance(idx, int) or isinstance(idx, bool) or not (0 <= idx < n_channels):
+            raise ValueError(f"cat_levels channel index {idx!r} out of range [0, {n_channels})")
+        levels_t = tuple(levels)
+        if not levels_t or not all(isinstance(s, str) for s in levels_t):
+            raise ValueError(f"cat_levels[{idx}] must be a non-empty tuple of str, got {levels!r}")
+        normalized[idx] = levels_t
+    return MappingProxyType(normalized)
+
+
+def _parse_cat_levels_payload(raw: Any) -> dict[int, tuple[str, ...]] | None:
+    """Parse the wire-format ``cat_levels`` payload (``DataStruct.from_dict``'s
+    deserialization boundary -- P2-1, Sol's Day-6 audit).
+
+    ``raw`` is UNTRUSTED (a request body, a hand-edited ``.dwk``): the prior
+    one-liner (``{int(k): tuple(v) ...}``) assumed a clean
+    ``{channel_index: [level, ...]}`` shape and blew up on anything else --
+    a non-dict payload raised ``AttributeError`` (an uncaught 500 at the
+    route boundary), a non-int key raised ``ValueError``, and a STRING value
+    (``{"0": "abc"}``) didn't raise at all -- ``tuple("abc")`` silently split
+    it into ``('a', 'b', 'c')``, a wrong-but-successful level table.
+
+    Every per-entry check below degrades instead of raising -- a malformed
+    entry is simply DROPPED, consistent with ``_normalize_cat_levels``'s
+    documented "degrade, never raise" philosophy (see the module docstring's
+    VALIDATION SCOPE section) -- so a corrupted payload still constructs a
+    ``DataStruct`` (possibly with ``cat_levels=None``) rather than 500ing.
+    Well-formed payloads round-trip identically to the old one-liner."""
+    if not isinstance(raw, Mapping) or not raw:
+        return None
+    out: dict[int, tuple[str, ...]] = {}
+    for k, v in raw.items():
+        try:
+            idx = int(k)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(v, (str, bytes)) or not isinstance(v, (list, tuple)):
+            continue
+        out[idx] = tuple(v)
+    return out or None
+
+
 @dataclass(frozen=True, slots=True)
 class DataStruct:
     """Immutable, parser-agnostic dataset. Build via :meth:`create`."""
@@ -51,6 +144,7 @@ class DataStruct:
     labels: tuple[str, ...] = ()
     units: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    cat_levels: Mapping[int, tuple[str, ...]] | None = None
 
     def __post_init__(self) -> None:
         time = np.asarray(self.time, dtype=float).ravel()
@@ -87,6 +181,7 @@ class DataStruct:
         object.__setattr__(self, "labels", labels)
         object.__setattr__(self, "units", units)
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+        object.__setattr__(self, "cat_levels", _normalize_cat_levels(self.cat_levels, m))
 
     # ── Construction ──────────────────────────────────────────────────────
     @classmethod
@@ -98,6 +193,7 @@ class DataStruct:
         labels: Sequence[str] | None = None,
         units: Sequence[str] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        cat_levels: Mapping[int, tuple[str, ...]] | None = None,
     ) -> DataStruct:
         """Mirror of MATLAB ``createDataStruct``. Accepts array-likes.
 
@@ -125,6 +221,7 @@ class DataStruct:
             labels=tuple(labels) if labels is not None else (),
             units=tuple(units) if units is not None else (),
             metadata=dict(metadata) if metadata is not None else {},
+            cat_levels=cat_levels,
         )
 
     # ── Shape helpers ─────────────────────────────────────────────────────
@@ -146,22 +243,34 @@ class DataStruct:
     # stdlib json's non-standard tokens). The HTTP boundary (M1 #5) will map
     # non-finite floats to null for valid wire JSON — that's a routes concern.
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "time": self.time.tolist(),
             "values": self.values.tolist(),
             "labels": list(self.labels),
             "units": list(self.units),
             "metadata": dict(self.metadata),
         }
+        # ADDITIVE (P1.4): the key is only emitted when there IS a categorical
+        # channel, so a pure-numeric DataStruct's to_dict() is byte-identical
+        # to before this field existed -- no golden fixture is affected. JSON
+        # object keys must be strings; from_dict below accepts either (a
+        # direct Python round trip keeps int keys, a JSON round trip yields
+        # str ones).
+        if self.cat_levels is not None:
+            out["cat_levels"] = {str(k): list(v) for k, v in self.cat_levels.items()}
+        return out
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> DataStruct:
+        raw_cat_levels = payload.get("cat_levels")
+        cat_levels = _parse_cat_levels_payload(raw_cat_levels)
         return cls.create(
             time=payload["time"],
             values=payload["values"],
             labels=payload.get("labels"),
             units=payload.get("units"),
             metadata=payload.get("metadata"),
+            cat_levels=cat_levels,
         )
 
     def to_json(self) -> str:
@@ -170,3 +279,45 @@ class DataStruct:
     @classmethod
     def from_json(cls, text: str) -> DataStruct:
         return cls.from_dict(json.loads(text))
+
+
+# ── P1.4 categorical accessors ──────────────────────────────────────────────
+# The ONLY sanctioned read path for `cat_levels` (see the class docstring's
+# CATEGORICAL CONTRACT). Every consumer -- calc/plotting, io importers, routes
+# -- goes through these rather than indexing `ds.cat_levels` directly, so a
+# future storage-scheme change is a one-module edit.
+
+
+def _channel_index(ds: DataStruct, channel: int | str) -> int:
+    return channel if isinstance(channel, int) else ds.labels.index(channel)
+
+
+def is_categorical(ds: DataStruct, channel: int | str) -> bool:
+    """Is `channel` a categorical channel (has a level table)?"""
+    if ds.cat_levels is None:
+        return False
+    return _channel_index(ds, channel) in ds.cat_levels
+
+
+def level_labels(ds: DataStruct, channel: int | str) -> tuple[str, ...]:
+    """The ordered level strings for `channel`, or `()` when it isn't
+    categorical. Order IS the levels' code order (``levels[code]``)."""
+    if ds.cat_levels is None:
+        return ()
+    return ds.cat_levels.get(_channel_index(ds, channel), ())
+
+
+def level_of(ds: DataStruct, channel: int | str, code: float) -> str | None:
+    """The level string for one numeric `code` (a cell value from
+    ``ds.values``), or ``None`` for a non-categorical channel, a non-finite
+    code (NaN = missing), a non-integer code, or an out-of-range one --
+    never raises, so a caller can pass a raw cell value with no pre-check."""
+    levels = level_labels(ds, channel)
+    if not levels or code is None or not math.isfinite(code):
+        return None
+    if not float(code).is_integer():
+        return None
+    idx = int(code)
+    if not (0 <= idx < len(levels)):
+        return None
+    return levels[idx]

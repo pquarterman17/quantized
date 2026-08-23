@@ -4,6 +4,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
+import { probeSource } from "../lib/desktopBridge";
+import type { PlotRecipe } from "../lib/plotRecipe";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Technique } from "../lib/types";
 import { usePendingOps } from "./pendingOps";
@@ -15,6 +17,11 @@ vi.mock("../lib/api", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   importFile: vi.fn(),
   uploadFile: vi.fn(),
+}));
+
+vi.mock("../lib/desktopBridge", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  probeSource: vi.fn(),
 }));
 
 vi.mock("../lib/plotSelectedTogether", () => ({
@@ -41,6 +48,7 @@ beforeEach(() => {
   useToasts.setState({ toasts: [] });
   vi.mocked(importFile).mockResolvedValue(payload());
   vi.mocked(uploadFile).mockResolvedValue(payload());
+  vi.mocked(probeSource).mockResolvedValue(null);
 });
 
 /** An AbortError shaped like what `fetch` actually rejects with — used by
@@ -86,6 +94,51 @@ describe("importPaths", () => {
     expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });
   });
 
+  // P1.7 / L0.32 provenance: "record source path, import time, observed
+  // modification time, and a checksum where practical". RED-FIRST: before
+  // `importPaths` called `probeSource`, a desktop import's `source` NEVER
+  // carried checksum/mtime/size no matter what the bridge reported — this
+  // pins the NEW behavior against a mocked bridge that DOES have one.
+  it("captures checksum/mtime/size from the bridge when one is available", async () => {
+    vi.mocked(probeSource).mockResolvedValue({
+      state: "ok",
+      path: "/data/scan.dat",
+      size: 123,
+      mtime: 1700000000,
+      checksum: "sha256:deadbeef",
+    });
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({
+      kind: "path",
+      path: "/data/scan.dat",
+      checksum: "sha256:deadbeef",
+      mtime: 1700000000,
+      size: 123,
+    });
+  });
+
+  it("degrades to path-only provenance honestly when no bridge is available (browser)", async () => {
+    vi.mocked(probeSource).mockResolvedValue(null); // the no-bridge convention
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });
+    expect(ds.source).not.toHaveProperty("checksum");
+  });
+
+  it("never fabricates a checksum when the probe reports a non-ok state", async () => {
+    vi.mocked(probeSource).mockResolvedValue({
+      state: "missing",
+      path: "/data/scan.dat",
+      size: null,
+      mtime: null,
+      checksum: null,
+    });
+    await useApp.getState().importPaths(["/data/scan.dat"]);
+    const [ds] = useApp.getState().datasets;
+    expect(ds.source).toEqual({ kind: "path", path: "/data/scan.dat" });
+  });
+
   it("names the dataset from the basename, not the whole path", async () => {
     await useApp.getState().importPaths(["/very/long/network/path/scan.dat"]);
     expect(useApp.getState().datasets[0].name).toBe("scan.dat");
@@ -114,6 +167,29 @@ describe("importFiles still behaves as before", () => {
     const [ds] = useApp.getState().datasets;
     expect(ds.name).toBe("browser.csv");
     expect(ds.source).toBeUndefined();
+  });
+
+  // DEFECT B fallout (Sol audit P1-6, 2026-08-21): openFilePicker now fires
+  // `onPick([])` on a canceled dialog, and several call sites
+  // (lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts) pass
+  // that straight into importFiles/importPaths with no length check.
+  // `runImport`'s `label(0)` used to read `describe(items[0])` on an empty
+  // array and throw — this is the single choke-point guard.
+  it("importFiles([]) is a silent no-op — no crash, no upload, no status/toast change", async () => {
+    useApp.setState({ status: "untouched" });
+    await useApp.getState().importFiles([]);
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().status).toBe("untouched");
+    expect(toastMsgs()).toHaveLength(0);
+  });
+
+  it("importPaths([]) is likewise a silent no-op", async () => {
+    useApp.setState({ status: "untouched" });
+    await useApp.getState().importPaths([]);
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().status).toBe("untouched");
   });
 });
 
@@ -436,6 +512,35 @@ describe("batch-import overlay offer (PLOT_WORKFLOW_PLAN #4)", () => {
 
     expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
     expect(plotSelectedTogether).not.toHaveBeenCalled();
+  });
+});
+
+// FINDING 3 (final code-review round): `runImport` awaits
+// `presentBatchOutcome` unguarded (importDatasets.ts) -- if the
+// recipe-suggestion branch inside it rejects (e.g. a dynamic chunk-load
+// failure), the exception used to propagate out of `presentBatchOutcome`
+// itself, skipping the `if (lastError) toast(...)` line that comes right
+// after it and leaking an unhandled rejection out of `runImport`. The fix is
+// a try/catch INSIDE `presentBatchOutcome`'s recipe branch (degrading to the
+// plain "imported N" toast), so the function never rejects and the caller's
+// own post-await danger toast for a failed file always still runs.
+describe("finding 3 — a failed recipe-suggestion lookup never swallows the failed-file danger toast", () => {
+  it("still shows the danger toast for a failed file when the recipe-suggestion branch rejects", async () => {
+    // One recipe in the project scope so the finding-6 empty-scope
+    // short-circuit doesn't skip the recipe branch before it can reject --
+    // its shape doesn't matter, `cleanMatchingPlotRecipe` is stubbed below
+    // and never actually reads it.
+    useApp.setState({ plotRecipes: [{ id: "r1" } as unknown as PlotRecipe] });
+    useApp.setState({
+      cleanMatchingPlotRecipe: vi.fn().mockRejectedValue(new Error("chunk load failed")),
+    });
+    vi.mocked(importFile)
+      .mockRejectedValueOnce(new Error("file not found"))
+      .mockResolvedValueOnce(payload());
+
+    await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
+
+    expect(toastMsgs().some((m) => m.includes("file not found"))).toBe(true);
   });
 });
 

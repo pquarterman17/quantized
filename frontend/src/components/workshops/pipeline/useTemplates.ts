@@ -9,7 +9,8 @@
 import { useCallback, useState } from "react";
 
 import { runTemplateOnDataset } from "./runTemplate";
-import { listFitModels, uploadFile } from "../../../lib/api";
+import { listFitModels } from "../../../lib/api/curvefit";
+import { uploadFile } from "../../../lib/api";
 import { saveBlob } from "../../../lib/download";
 import type { PipelineStep } from "../../../lib/pipeline";
 import {

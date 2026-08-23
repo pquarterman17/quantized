@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import { NumberField, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Select } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
 
 type Annotation = NonNullable<FigureOverrides["annotations"]>[number];

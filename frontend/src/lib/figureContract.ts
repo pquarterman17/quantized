@@ -6,7 +6,7 @@
  * `satisfies` clauses make a model change fail type-checking until its ownership
  * is classified here.
  */
-import type { FigureSpec } from "./api";
+import type { FigureSpec } from "./api/figures";
 import type { FigureConfig, FigureDoc } from "./figuredoc";
 import type { PlotSpec } from "./plotspec";
 import type { PlotView } from "./plotview";
@@ -74,6 +74,10 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   yAxisLabel: canonical("axes.y.label"),
   xKey: canonical("bindings.x.channel"),
   yKeys: canonical("bindings.y.channels"),
+  groupKey: canonical(
+    "bindings.group.channel",
+    "P1.5: the live facade's own copy of the durable group-split binding -- see figureDocument.ts's figureDocumentToPlotView/updateFigureDocumentFromPlotView.",
+  ),
   y2Keys: canonical("bindings.y2.channels"),
   y2Lim: canonical("axes.y2.limits"),
   y2Scale: canonical("axes.y2.scale"),

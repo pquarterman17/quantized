@@ -2,7 +2,7 @@
 // buildFavoritesTab). Same row UI as History; ★ unpins. Reads the standalone
 // calcHistory store.
 
-import { IconButton } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
 import { useCalcHistory } from "../../../store/calcHistory";
 
 const META: React.CSSProperties = {

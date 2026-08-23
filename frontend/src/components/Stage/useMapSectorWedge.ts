@@ -29,7 +29,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cancelActiveGesture, setActiveGestureCancel } from "../../lib/gestureCancel";
 import type { CutSpace } from "../../lib/mapcuts";
-import { rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
+import { rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
 import type { RoiSector } from "../../lib/roi";
 import { applySectorDrag, classifySectorHit, pymod, sectorCursor, type SectorHit } from "../../lib/roiSector";
 import { chiProfileLocal, sectorProfileLocal, type PolarCols, type RoiProfile } from "../../lib/roiMath";

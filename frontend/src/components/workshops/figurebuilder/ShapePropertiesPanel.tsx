@@ -22,7 +22,8 @@ import { deriveShapeRows, SHAPE_KIND_GLYPH, shapeSupportsFill } from "./canonica
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { Shape } from "../../../lib/types";
 import { resolveShapeOpacity } from "../../../lib/uplotShapes";
-import { Checkbox, IconButton } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { IconButton } from "../../primitives/IconButton";
 import PropertyNumberField from "./PropertyNumberField";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];

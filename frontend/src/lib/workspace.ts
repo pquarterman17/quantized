@@ -1,10 +1,7 @@
-// Workspace (.dwk) save/load — serialize the loaded datasets to a portable JSON
-// document and parse one back, with validation. A reload otherwise loses the
-// library (datasets live only in memory); this gives session persistence. Pure +
-// testable; the App wires it to Save/Open commands (download + file picker).
+// Workspace (.dwk) save/load — serialize the loaded datasets to a portable JSON document and
+// parse one back, with validation. A reload otherwise loses the library (datasets live only in
+// memory); this gives session persistence. Pure + testable; the App wires it to Save/Open commands (download + file picker).
 
-import { sanitizeFilter } from "./datafilter";
-import { sanitizeBindings } from "./errorRoles";
 import { parseFolders, pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
@@ -18,6 +15,9 @@ import {
 import { sanitizePageDocuments, type PageDocument } from "./pageDocument";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
+import type { PlotRecipe } from "./plotRecipe";
+import { sanitizeRecipes } from "./plotRecipeIO";
+import { pruneDanglingWorkbookScopeTemplates, sanitizeQuickPlotTemplates, type QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
@@ -31,40 +31,28 @@ import {
 import { sanitizeTechniqueViewMemory, type TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
-import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
+import { sanitizeCollections, type Collection } from "./collections";
+import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
+import { serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
-import type {
-  BookSource,
-  ChannelRole,
-  ComputedColumn,
-  CorrectionParams,
-  Dataset,
-  DataStruct,
-  FitSpec,
-  FitWeighting,
-  FolderNode,
-  ModelingType,
-  WeightMode,
-} from "./types";
+import { parseWorkspaceDataset } from "./workspaceDatasetParse";
+import type { Dataset, FolderNode } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
-// v2 (project-organization plan item 2): adds the folder tree, active/selection,
-// and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
-// mode, per-dataset fit specs, and reports; later also smart folders (org #9),
-// the plot window layout (MULTI_PLOT_PLAN item 7), and the ToolWindow layout
-// registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed.
-// v4 (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds the workbook layer confirmed by
-// L0.1 (folder -> workbook -> worksheet/figure/analysis/note) — `workbooks[]`
-// plus per-dataset `workbookId`. A v1-v3 doc has neither field; parseWorkspace
-// derives them the same way it already migrates folders/pipeline/etc. — ONE
-// parse path for every version (lib/workbooks.ts's `deriveWorkbooks`/
-// `reconcileWorkbookRefs`, ported verbatim from PR A1). See that call site
-// below for the exact per-version behavior, including the v1 `group`-string
-// case (deliberate — see workspace.workbooks.test.ts for the pinned test).
-// Older docs still load — migrated on parse with safe defaults.
+// v2 (project-organization plan item 2): adds the folder tree, active/selection, and folder-expansion.
+// v3 (gap #5): adds the typed pipeline steps, the recalc mode, per-dataset fit specs, and reports;
+// later also smart folders (org #9), the plot window layout (MULTI_PLOT_PLAN item 7), and the
+// ToolWindow layout registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed. v4
+// (LIBRARY_WORKBOOK_UX_PLAN PR A2): adds the workbook layer confirmed by L0.1 (folder -> workbook ->
+// worksheet/figure/analysis/note) — `workbooks[]` plus per-dataset `workbookId`. A v1-v3 doc has
+// neither field; parseWorkspace derives them the same way it already migrates folders/pipeline/etc. —
+// ONE parse path for every version (lib/workbooks.ts's `deriveWorkbooks`/`reconcileWorkbookRefs`,
+// ported verbatim from PR A1) — see that call site below for the exact per-version behavior, including
+// the v1 `group`-string case (deliberate — see workspace.workbooks.test.ts for the pinned test). Older
+// docs still load — migrated on parse with safe defaults.
 export const WORKSPACE_VERSION = 4;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
@@ -106,21 +94,22 @@ export interface WorkspaceState {
   toolWindowLayout?: Record<string, ToolWindowLayout>;
   /** GUI_INTERACTION_PLAN #11 — every named saved Graph Builder spec. */
   savedPlotSpecs?: SavedPlotSpec[];
+  /** PR H — every named saved Quick Plot template (L0.14/L0.31). Additive-optional. */
+  quickPlotTemplates?: QuickPlotTemplate[];
   /** PLOT_WORKFLOW_PLAN item 5 — per-technique last-used view. Additive; a
    *  caller (or a pre-item-5 .dwk) with no field loads as `{}`. */
   techniqueViewMemory?: TechniqueViewMemoryMap;
-  /** RSM_CUTS_PLAN item 13 — every named saved ROI (box/ruler/sector; store/
-   *  rois.ts's `savedRois`). Additive-optional, so a pre-item-13 .dwk loads
-   *  with an empty list. Deliberately NOT the working `mapRoi`/`mapRuler` —
-   *  see store/rois.ts's header for why only the NAMED, saved definitions
-   *  round-trip through a restart. */
+  /** RSM_CUTS_PLAN item 13 — every named saved ROI (store/rois.ts); additive-optional, not the working mapRoi/mapRuler (see store/rois.ts). */
   savedRois?: RoiDef[];
-  /** PR E2 (LIBRARY_WORKBOOK_UX_PLAN) — the Library tree's "current"
-   *  selection, L0.6 remembered child, and workbook disclosure. See
-   *  store/libraryPanel.ts and lib/workspaceLibraryPanel.ts's validators. */
+  /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
   expandedWorkbookIds?: string[];
+  /** PR L (L0.48/L0.49) — saved-search/metadata-filter Collections; additive-optional, absent = none (lib/collections.ts). */
+  collections?: Collection[];
+  visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
+  /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
+  plotRecipes?: PlotRecipe[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -151,10 +140,14 @@ export interface LoadedWorkspace {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  quickPlotTemplates: QuickPlotTemplate[]; // PR H — always populated
   /** PR E2 — see WorkspaceState's doc; always populated. */
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
+  collections: Collection[]; // PR L — always populated
+  visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
+  plotRecipes: PlotRecipe[]; // P1.3 — always populated
 }
 
 interface WorkspaceDoc {
@@ -182,9 +175,13 @@ interface WorkspaceDoc {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  quickPlotTemplates: QuickPlotTemplate[];
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
   expandedWorkbookIds: string[];
+  collections: Collection[];
+  visibleDetailsColumns: LibraryDetailsColumnKey[];
+  plotRecipes: PlotRecipe[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -215,6 +212,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     focusedWindowId: ws.focusedWindowId ?? null,
     toolWindowLayout: ws.toolWindowLayout ?? {},
     savedPlotSpecs: ws.savedPlotSpecs ?? [],
+    quickPlotTemplates: ws.quickPlotTemplates ?? [], // PR H — verbatim, same convention as savedPlotSpecs
     // PLOT_WORKFLOW_PLAN item 5: passed through verbatim, same convention as
     // `plotWindows` above — the caller (windowsForSave()'s save-time-freshen
     // sibling, `captureTechniqueView` applied to the live view) owns the fold.
@@ -227,6 +225,9 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     librarySelection: ws.librarySelection ?? null,
     workbookLastChild: ws.workbookLastChild ?? {},
     expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
+    collections: ws.collections ?? [],
+    visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
+    plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -241,14 +242,11 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.workbookId ? { workbookId: d.workbookId } : {}),
       ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
+      ...serializeComputedColumnsExtras(d),
       ...(d.errorRoles?.length ? { errorRoles: d.errorRoles } : {}),
       ...(d.importedAt ? { importedAt: d.importedAt } : {}),
-      ...(d.channelRoles && Object.keys(d.channelRoles).length
-        ? { channelRoles: d.channelRoles }
-        : {}),
-      ...(d.channelTypes && Object.keys(d.channelTypes).length
-        ? { channelTypes: d.channelTypes }
-        : {}),
+      ...(d.channelRoles && Object.keys(d.channelRoles).length ? { channelRoles: d.channelRoles } : {}),
+      ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
@@ -262,6 +260,11 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       // time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: d.source } : {}),
+      // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
+      // dropped entirely before (not just narrowed like `source`), so a
+      // saved-and-reopened new-version dataset lost its link to the
+      // original outright.
+      ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -289,57 +292,6 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
     );
   }
   return documents;
-}
-
-function isNumberArray(v: unknown): v is number[] {
-  return Array.isArray(v) && v.every((x) => typeof x === "number");
-}
-
-/** Validate a persisted `Dataset.pending` (#38) — a stale/hand-edited value
- *  degrades to "not pending" (the dataset then just shows whatever rows its
- *  `data` happens to carry) rather than throwing. */
-function parsePending(v: unknown): BookSource | null {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  if (typeof o.bookId !== "string" || !o.bookId) return null;
-  const rows = typeof o.rows === "number" && Number.isFinite(o.rows) ? o.rows : 0;
-  const cols = typeof o.cols === "number" && Number.isFinite(o.cols) ? o.cols : 0;
-  if (o.kind === "path" && typeof o.path === "string" && o.path) {
-    return { kind: "path", path: o.path, bookId: o.bookId, rows, cols };
-  }
-  if (o.kind === "upload" && typeof o.token === "string" && o.token) {
-    return { kind: "upload", token: o.token, bookId: o.bookId, rows, cols };
-  }
-  return null;
-}
-
-/** Validate a persisted `Dataset.source` (MAIN_PLAN #10) — a stale/hand-edited
- *  value degrades to "no source" (the dataset just falls back to "Re-import
- *  from file…") rather than throwing. */
-function parseSource(v: unknown): { kind: "path"; path: string } | null {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  if (o.kind === "path" && typeof o.path === "string" && o.path) {
-    return { kind: "path", path: o.path };
-  }
-  return null;
-}
-
-/** Structural check that `v` is a DataStruct (time/values/labels/units/metadata). */
-function isDataStruct(v: unknown): v is DataStruct {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    isNumberArray(o.time) &&
-    Array.isArray(o.values) &&
-    o.values.every((row) => isNumberArray(row)) &&
-    Array.isArray(o.labels) &&
-    o.labels.every((s) => typeof s === "string") &&
-    Array.isArray(o.units) &&
-    o.units.every((s) => typeof s === "string") &&
-    typeof o.metadata === "object" &&
-    o.metadata !== null
-  );
 }
 
 /** Parse a .dwk document into the full workspace state, throwing a clear error on
@@ -371,130 +323,10 @@ export function parseWorkspace(
   if (!Array.isArray(o.datasets)) {
     throw new Error("workspace has no datasets");
   }
-  const datasetsRaw = o.datasets.map((d, i): Dataset => {
-    if (typeof d !== "object" || d === null) {
-      throw new Error(`dataset ${i} is invalid`);
-    }
-    const dd = d as Record<string, unknown>;
-    if (!isDataStruct(dd.data)) {
-      throw new Error(`dataset ${i} ("${String(dd.name ?? "")}") has an invalid data structure`);
-    }
-    const ds: Dataset = {
-      id: typeof dd.id === "string" ? dd.id : `ws-${i}`,
-      name: typeof dd.name === "string" ? dd.name : `dataset ${i + 1}`,
-      data: dd.data,
-    };
-    if (isDataStruct(dd.raw)) ds.raw = dd.raw;
-    if (dd.corrections && typeof dd.corrections === "object") {
-      ds.corrections = dd.corrections as CorrectionParams;
-    }
-    if (
-      dd.bgRef &&
-      typeof dd.bgRef === "object" &&
-      typeof (dd.bgRef as Record<string, unknown>).datasetId === "string"
-    ) {
-      ds.bgRef = dd.bgRef as { datasetId: string; interp: string };
-    }
-    if (typeof dd.notes === "string") ds.notes = dd.notes;
-    if (Array.isArray(dd.tags)) {
-      const tags = dd.tags.filter((t): t is string => typeof t === "string" && t.trim() !== "");
-      if (tags.length) ds.tags = tags;
-    }
-    if (typeof dd.group === "string" && dd.group.trim()) ds.group = dd.group;
-    if (Array.isArray(dd.formulas)) {
-      const formulas = dd.formulas.filter(
-        (f): f is ComputedColumn =>
-          typeof f === "object" &&
-          f !== null &&
-          typeof (f as Record<string, unknown>).name === "string" &&
-          typeof (f as Record<string, unknown>).expr === "string",
-      );
-      if (formulas.length) ds.formulas = formulas;
-    }
-    // MAIN #33: error roles survive save/reapply, but are re-validated
-    // against the CURRENT channel count — a template reapplied to a
-    // differently-shaped source must not bind error bars to whatever column
-    // now happens to sit at that index.
-    const bindings = sanitizeBindings(dd.errorRoles, ds.data.labels.length);
-    if (bindings?.length) ds.errorRoles = bindings;
-    if (typeof dd.importedAt === "string") ds.importedAt = dd.importedAt;
-    if (dd.channelRoles && typeof dd.channelRoles === "object") {
-      const roles: Record<number, ChannelRole> = {};
-      for (const [k, v] of Object.entries(dd.channelRoles as Record<string, unknown>)) {
-        if ((v === "label" || v === "ignore") && Number.isInteger(Number(k))) {
-          roles[Number(k)] = v;
-        }
-      }
-      if (Object.keys(roles).length) ds.channelRoles = roles;
-    }
-    if (dd.channelTypes && typeof dd.channelTypes === "object") {
-      const types: Record<number, ModelingType> = {};
-      for (const [k, v] of Object.entries(dd.channelTypes as Record<string, unknown>)) {
-        if (
-          (v === "continuous" || v === "ordinal" || v === "nominal") &&
-          Number.isInteger(Number(k))
-        ) {
-          types[Number(k)] = v;
-        }
-      }
-      if (Object.keys(types).length) ds.channelTypes = types;
-    }
-    // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
-    // stale .dwk could carry out-of-range indices.
-    const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);
-    if (excluded.length) ds.excludedRows = excluded;
-    // Local data filter (#53): validate predicate columns against the channels.
-    const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
-    if (filter.length) ds.filter = filter;
-    if (
-      dd.fitSpec &&
-      typeof dd.fitSpec === "object" &&
-      typeof (dd.fitSpec as Record<string, unknown>).model === "string"
-    ) {
-      const fs = dd.fitSpec as Record<string, unknown>;
-      const spec: FitSpec = { model: fs.model as string };
-      // Provenance fields (audit P1 #3), each validated; absent = legacy v1.
-      if (fs.xKey === null || (typeof fs.xKey === "number" && Number.isInteger(fs.xKey))) {
-        spec.xKey = fs.xKey as number | null;
-      }
-      if (typeof fs.yKey === "number" && Number.isInteger(fs.yKey) && fs.yKey >= 0) {
-        spec.yKey = fs.yKey;
-      }
-      // Weighting provenance (Sol audit); validated, non-`none` only.
-      const wm = (fs.weight as Record<string, unknown> | undefined)?.mode;
-      if (
-        fs.weight &&
-        typeof fs.weight === "object" &&
-        (["yerr", "poisson", "manual"] as WeightMode[]).includes(wm as WeightMode)
-      ) {
-        const w = fs.weight as Record<string, unknown>;
-        const weight: FitWeighting = { mode: wm as WeightMode };
-        if (typeof w.errKey === "number" && Number.isInteger(w.errKey) && w.errKey >= 0) {
-          weight.errKey = w.errKey;
-        }
-        spec.weight = weight;
-      }
-      if (Array.isArray(fs.params) && fs.params.every((v) => typeof v === "number")) {
-        spec.params = fs.params as number[];
-      }
-      if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
-      ds.fitSpec = spec;
-    }
-    // Lazy per-book reference (#38) — only ever present in an autosave
-    // snapshot (a real "Save workspace" export always resolves it first);
-    // validated the same defensive way as every other optional field here.
-    const pending = parsePending(dd.pending);
-    if (pending) ds.pending = pending;
-    const source = parseSource(dd.source);
-    if (source) ds.source = source;
-    if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
-    // Raw parse only — reconcileWorkbookRefs (below, after folders/datasets are
-    // pruned) is the single place that decides whether this survives, is
-    // repaired, or is replaced; see WORKSPACE_VERSION's v4 comment above.
-    if (typeof dd.workbookId === "string" && dd.workbookId) ds.workbookId = dd.workbookId;
-    if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
-    return ds;
-  });
+  // Per-entry parse/validate lives in lib/workspaceDatasetParse.ts (moved out
+  // under the MODULE_PINS ratchet — see that file's header); it throws the
+  // same per-index errors this inline callback used to.
+  const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i));
 
   // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
   // didn't survive validation; clamp active/selection/expansion to live ids.
@@ -541,12 +373,12 @@ export function parseWorkspace(
       : null;
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
+  const workbookIds = new Set(workbooks.map((w) => w.id)); // PR E2 — hoisted for the H-review dangling-scope prune below
+  const quickPlotTemplates = pruneDanglingWorkbookScopeTemplates(sanitizeQuickPlotTemplates(o.quickPlotTemplates), workbookIds);
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
-  // PR E2 — `workbookIds` is the same set `workbooks` above already carries.
-  const workbookIds = new Set(workbooks.map((w) => w.id));
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,
@@ -554,6 +386,8 @@ export function parseWorkspace(
   );
   const workbookLastChild = parseWorkbookLastChild(o.workbookLastChild, workbookIds);
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
+  const collections = sanitizeCollections(o.collections);
+  const plotRecipes = sanitizeRecipes(o.plotRecipes); // P1.3 — drop-malformed-never-throw, same as sanitizeQuickPlotTemplates
   return {
     datasets,
     folders: migration.folders,
@@ -577,9 +411,13 @@ export function parseWorkspace(
     savedPlotSpecs,
     techniqueViewMemory,
     savedRois,
+    quickPlotTemplates,
     librarySelection,
     workbookLastChild,
     expandedWorkbookIds,
+    collections,
+    visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
+    plotRecipes,
   };
 }
 

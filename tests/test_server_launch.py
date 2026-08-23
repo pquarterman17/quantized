@@ -332,6 +332,24 @@ def test_run_desktop_calc_combo_uses_diraculator_title_and_geometry(
     webview.start.assert_called_once()
 
 
+def test_run_desktop_revokes_relink_directory_grants_on_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """C1 app-exit revocation: closing the window (webview.start() returning,
+    mocked here) must revoke every relink directory grant — RED-FIRST, the
+    finally block had no such call before this slice."""
+    from quantized import desktop_consent
+
+    monkeypatch.setattr(server_launch, "_WEB_DIR", tmp_path)
+    webview = MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setattr(server_launch, "_bind", lambda *a: None)
+    monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)
+    with patch.object(desktop_consent, "clear_dir_grants") as clear:
+        server_launch._run_desktop("127.0.0.1", 8000)
+    clear.assert_called_once()
+
+
 def test_run_desktop_attaches_the_window_to_the_bridge(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

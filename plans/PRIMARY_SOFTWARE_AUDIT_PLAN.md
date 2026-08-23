@@ -3,7 +3,20 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-13 latest (second child plan registered:
+**Updated:** 2026-08-19 latest (Day-5 sprint reconciliation, QA lane): P1.1,
+P1.2, and P1.5 had shipped partial slices (2026-08-17/18) with no `[~]`
+status tag in their section headers, unlike P1.4/P1.6/P1.7 — added the tag
+to all three for consistency; flipped two stale P1.2 boxes to `[x]`
+("recovered work does not overwrite without consent" — `RecoveryChoiceDialog`
++ `applyRecoveryChoice.ts` already gate every named-project overwrite behind
+an explicit three-way choice; "define embedded versus linked portability" —
+P1.7's `lib/projectPortability.ts` already defines all three modes). No
+overclaim found in P1.1/P1.2/P1.4/P1.5/P1.6/P1.7's own per-box text — each
+narrows its claim inline already (a discipline this plan already practices
+well); the corrections here are status-tag/checkbox omissions, not content
+fixes. Full list, the release-blocker list, and the N verdict are in
+`plans/RELEASE_BLOCKERS.md` and `plans/LIBRARY_WORKBOOK_UX_PLAN.md`'s item
+14. Prior: 2026-08-13 (second child plan registered:
 `LIBRARY_WORKBOOK_UX_PLAN.md`, ChatGPT-Sol's 2026-08-12 Library / workbook /
 Quick Plot UX discovery from an owner interview — decisions L0.1–L0.14
 recorded, LQ.1 confirmed 2026-08-13, NO implementation authorized yet.
@@ -90,7 +103,15 @@ Primary-software readiness is **not yet proven**. The largest risks are:
 1. No completed real switch-trigger project and no owner sign-off on the
    Origin screenshot matrix (currently 0/353 owner-reviewed).
 2. No unified native Tauri lifecycle for real paths, named Save/Save As,
-   workspace recents, atomic recovery, and network/offline paths.
+   workspace recents, atomic recovery, and network/offline paths. **Day-5
+   reconciliation note (2026-08-19):** this verdict predates the P1.1/P1.2
+   slices — the shipped bridge uses pywebview (`desktop_bridge.py`,
+   matching CLAUDE.md's actual stack), not Tauri, and named Save/Save As,
+   recents, atomic write-validate-replace, bounded autosave generations, and
+   a consent-gated recovery dialog are now real (see P1.1 `[~]`/P1.2 `[~]`
+   below for the itemized, still-partial state). Packaged Windows/macOS E2E
+   and long-Unicode/network-path behavior remain unverified — that part of
+   this risk item still stands.
 3. Saved graph templates capture style, not a complete reusable plot recipe.
 4. Preserved text and metadata are not uniformly first-class Group/Facet/X
    channels.
@@ -411,7 +432,7 @@ complete**. Gate A determines their evidence-based order and exact scope.
 Agents implement them afterward; the owner is needed again only for the
 acceptance journeys explicitly named by the gates.
 
-### P1.1 — Native desktop file and project bridge
+### P1.1 — Native desktop file and project bridge [~]
 
 **Goal:** native Open, re-import, Save/Save As, recents, working directories,
 and safe missing/offline path handling in packaged Tauri.
@@ -423,17 +444,58 @@ and safe missing/offline path handling in packaged Tauri.
 Rust-only/unwired to the remote frontend; recents are files, not workspaces;
 the existing remote-IPC security boundary must remain.
 
-- [ ] Native Open Files/Project returns durable paths.
-- [ ] Save/Save As chooses and retains a project identity.
+- [x] Native Open Files/Project returns durable paths. (Contract slice —
+  `desktop_bridge.py`'s `open_project_file`/`read_project_file`,
+  `desktopBridge.ts`'s `openProject`; pywebview only. Datasets already had
+  this via `pick_files` — MAIN_PLAN #31 — this ships it for **projects**.)
+- [x] Save/Save As chooses and retains a project identity. Save AS shipped
+  this slice (`saveProjectAs` — native dialog, real path, direct write);
+  project IDENTITY (open path + dirty-state tracking, so a plain "Save"
+  exists as distinct from "Save As") was **P1.2's** to wire up, and it did:
+  **Day-5 reconciliation (2026-08-19):** this box read "nothing calls
+  [`saveProjectTo`] from a UI command yet," but P1.2 (2026-08-18,
+  `store/workspaceIO.ts:138`) wires Ctrl/Cmd+S to it via `store/project.ts`'s
+  identity+dirty slice, with no dialog on the known path. Verified with a
+  grep of `frontend/src` for `saveProjectTo` call sites — flipped to `[x]`.
 - [ ] Re-import uses its path and distinguishes offline from deletion.
-- [ ] Recent Files and Recent Projects are separate.
-- [ ] Working-directory selection affects the next chooser.
-- [ ] Drag/drop and browser inputs remain fallbacks.
-- [ ] Long Unicode/network paths and canceled dialogs work.
-- [ ] Bridge schemas/security assumptions are documented and tested.
-- [ ] Packaged Windows/macOS E2E covers the lifecycle.
+  Datasets already had this (MAIN_PLAN #31, `pathState`/`path_status`).
+  Projects get the same distinction this slice, reused verbatim
+  (`recentProjectsCommands.ts` checks `pathState` before reopening a Recent
+  Projects entry) — but full "re-import a project" semantics beyond reopen
+  are **P1.2's** (project identity again).
+- [x] Recent Files and Recent Projects are separate. (`qz.recentProjects`
+  vs. `qz.recent`, separate storage keys, separate stores — `lib/
+  recentProjects.ts` / `store/recentProjects.ts` vs. the pre-existing
+  `lib/recentFiles.ts` / `store/recents.ts`. Surfaced as ⌘K palette
+  commands, not a MenuBar row — see `recentProjectsCommands.ts`'s header for
+  why: `store/useApp.ts`, which the MenuBar's Recent Files row reads, was
+  pinned for this contract slice.)
+- [ ] Working-directory selection affects the next chooser. Datasets already
+  had this (MAIN_PLAN #31, `useWorkingPaths`). NOT wired for projects this
+  slice — `openProject`/`saveProjectAs` don't thread a working-directory
+  hint yet. **Deferred, no owner assigned** — small, uncontracted follow-up.
+- [x] Drag/drop and browser inputs remain fallbacks. (Every native call
+  degrades to the pre-existing `openFilePicker`/`saveBlob` path exactly —
+  verified by the full existing jsdom suite passing untouched, plus new
+  fallback-branch tests.)
+- [ ] Long Unicode/network paths and canceled dialogs work. Cancel semantics
+  ARE covered this slice (`CANCELLED` sentinel, red-first-tested both sides
+  of the bridge). Long Unicode/network-path behavior is **untested this
+  slice** — no packaged app to exercise real OS dialogs against; owner is
+  the packaged E2E item below.
+- [x] Bridge schemas/security assumptions are documented and tested. (The
+  "## Bridge contract (P1.1)" section in `desktop_bridge.py`'s module
+  docstring; the write-consent security rule is red-first tested in
+  `tests/test_desktop_bridge.py`.)
+- [ ] Packaged Windows/macOS E2E covers the lifecycle. Not shipped —
+  **owner: the packaged-E2E work item**, tracked separately; this slice's
+  tests run the bridge logic against `FakeWindow`/a mocked
+  `window.pywebview`, never a packaged app. The Tauri shell itself is
+  **also** out of scope here — its own contract PR, noted in
+  `desktop_bridge.py`'s docstring (different consent story, cross-process
+  IPC rather than in-process js_api).
 
-### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace [~]
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -451,20 +513,49 @@ but reopen freezes the main thread 5.8 s in synchronous `JSON.parse` — the
 near-term mitigation is P3.4 slice 3 (worker/chunked parse); P1.2 should
 weigh chunked/binary arrays for large members with that number in hand.
 
-- [ ] Show project name/path and dirty state.
-- [ ] Atomic temporary-write, validation, then replace.
-- [ ] Save failure preserves the last good project.
-- [ ] Bounded autosave generations by count/age/total size.
-- [ ] Explain crash recovery source/time/choices.
-- [ ] Recovered work does not overwrite without explicit consent.
+- [x] Show project name/path and dirty state. (2026-08-18: `store/project.ts`
+  identity+dirty slice, Ctrl/Cmd+S "Save" routes to the known path via
+  `saveProjectTo` with no dialog, Shell `TitleBar` shows name + dirty marker.)
+- [x] Atomic temporary-write, validation, then replace. (2026-08-18:
+  `desktop_bridge.py`'s `write_project_file` gained a structural
+  format/version/datasets validation gate before the existing temp+
+  `os.replace`; a bad payload is refused before any file touches disk.)
+- [x] Save failure preserves the last good project. (2026-08-18: pytest
+  pins validation-abort + mocked `os.replace`/disk-full failures leave the
+  prior file byte-identical; frontend quick-save surfaces a clear error
+  status and does NOT fall back to a browser download on failure.)
+- [x] Bounded autosave generations by count/age/total size. (2026-08-18:
+  `autosaveGenerations.ts` gains `capByAge` — count via `MAX_GENERATIONS`,
+  age via `MAX_GENERATION_AGE_MS` (30 days), size via existing `capBySize`;
+  all three always keep the newest generation.)
+- [x] Explain crash recovery source/time/choices. (2026-08-18:
+  `RecoveryChoiceDialog` offers Recover autosave / Keep last project /
+  Cancel — with SOURCE+TIME for both candidates — ONLY when the autosave is
+  newer than the last-known named project; otherwise the pre-P1.2 silent
+  restore is unchanged, since there is nothing named to protect.)
+- [x] Recovered work does not overwrite without explicit consent. **Day-5
+  reconciliation (2026-08-19):** `RecoveryChoiceDialog`/
+  `lib/applyRecoveryChoice.ts` (landed with the 2026-08-18 items above) gate
+  every recovery behind an explicit Recover autosave / Keep last project /
+  Cancel choice with source+time shown — narrowly, only when there IS a
+  named project the autosave is newer than; with nothing named to protect,
+  the pre-P1.2 silent restore is unchanged (stated in this section's own
+  "Current evidence" text above), which is not a consent gap since nothing
+  named could be overwritten in that case.
 - [ ] Missing sources remain relinkable, metadata-rich placeholders.
-- [ ] Define embedded versus linked portability.
+- [x] Define embedded versus linked portability. **Day-5 reconciliation
+  (2026-08-19):** shipped under P1.7 slice 1, not this item —
+  `lib/projectPortability.ts`'s `ProjectPortabilityMode = "embedded" |
+  "linked" | "portable"` defines all three with full rationale; only
+  "embedded" is implemented, "linked"/"portable" are named and deferred to a
+  P1.7 follow-up (see that section). The definition itself — this box's
+  actual ask — is done.
 - [ ] Add workspace version/migration tests.
 - [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
 - [ ] Kill-process/interrupted-write and old-version round trips pass.
 - [ ] Raw source files are never rewritten.
 
-### P1.3 — Complete reusable plot-recipe templates
+### P1.3 — Complete reusable plot-recipe templates [~]
 
 > **Interface contract from the archived PLOT_WORKFLOW plan** (was
 > PLOT_WORKFLOW #6, folded up 2026-08-01 when that plan completed):
@@ -489,30 +580,59 @@ overrides. FigureDoc is complete but tied to a data/live-source context;
 templates are localStorage-oriented rather than portable project/library
 objects.
 
+**Waves 1-3 shipped (PRs #203, #204, wave 3 pending):** `lib/plotRecipe.ts`'s
+schema + `captureRecipe` (wave 1, #203), `store/plotRecipes.ts`'s CRUD/apply/
+preview-confirm pipeline + `.dwk` project-scope persistence (wave 2, #204),
+and wave 3's global scope (`store/globalPlotRecipes.ts`), Recipe Manager
+panel (rename/duplicate/delete/move-scope/import/export/apply-to-dataset),
+preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
+(`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
+point on the focused plot window, and a subtle (never-auto-apply) post-import
+suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
+itemized still-open gaps (live grouping/faceting composition parity,
+version migration beyond the v1 schema parse-gate, waterfall settings beyond
+the scalar offset, preview thumbnails).
+
 Recipes should include:
 
-- [ ] plot type and line/scatter/error mode;
-- [ ] semantic X/Y/error matching by role, label, unit, and alias—not index;
-- [ ] grouping, faceting, ordering, and legend-source metadata;
-- [ ] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
-  tick formats, and outlier policy;
-- [ ] style cycle, visibility/order, annotations/shapes, maps/panels;
-- [ ] waterfall settings;
-- [ ] technique scope such as XRD, XRR, SIMS, or magnetometry;
-- [ ] provenance, schema version, description, and preview.
+- [x] plot type and line/scatter/error mode;
+- [x] semantic X/Y/error matching by role, label, unit, and alias—not index;
+- [~] grouping, faceting, ordering, and legend-source metadata (ordering +
+  legend fields captured/applied; the group/facet BINDINGS are captured and
+  re-key correctly, but rebuilding the actual live composition/panels on
+  apply is a documented gap — F4.4);
+- [~] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
+  tick formats, and outlier policy (everything but outlier policy, which
+  isn't captured);
+- [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
+  cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
+  are not);
+- [~] waterfall settings (only the scalar offset; no richer settings exist to
+  capture);
+- [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
+- [~] provenance, schema version, description, and preview (provenance +
+  schema version + description are captured; preview thumbnails do not
+  exist).
 
 Behavior:
 
-- [ ] Explicit save with global, project, and exportable scopes.
-- [ ] Opt-in apply; suggestions stay subtle.
-- [ ] Never overwrite a customized plot without explicit warning.
-- [ ] Ambiguous matches show mapping/preview and report unmatched fields.
-- [ ] Import/export/duplicate/rename/version migration work.
-- [ ] Reordered equivalent XRD columns map correctly, but the recipe is not
+- [x] Explicit save with global, project, and exportable scopes.
+- [x] Opt-in apply; suggestions stay subtle.
+- [x] Never overwrite a customized plot without explicit warning (applying a
+  recipe always creates a NEW figure; it never edits a live window in place).
+- [x] Ambiguous matches show mapping/preview and report unmatched fields.
+- [~] Import/export/duplicate/rename/version migration work (import, export,
+  duplicate, and rename all work in both scopes via the Recipe Manager
+  panel; schema version migration beyond the v1 parse-gate does not exist).
+- [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
-- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent.
+- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent (a
+  recipe-applied figure is built from the SAME `createWindow`/
+  `createFigureDocument` primitives every other figure uses, so this is
+  architecturally implied, but not independently verified by an owner
+  acceptance journey or an equivalence test).
 
-### P1.4 — First-class categorical and metadata channels
+### P1.4 — First-class categorical and metadata channels [~]
 
 **Goal:** use text columns and multiple metadata rows directly for grouping,
 faceting, legends, categorical axes, filters, and statistics.
@@ -529,66 +649,574 @@ data columns` — categorical columns cannot enter as data at all today. The
 baseline box-plot fixture (`grouped_factors_boxplot.csv`) had to encode
 factors as integer codes with the name legend in the preamble.
 
-- [ ] Stable numeric/datetime/text/categorical/metadata/error semantics.
-- [ ] Display multiple header/comment rows with clear roles.
-- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or X.
-- [ ] Multiple ordered factors and missing-value policy.
-- [ ] Preserve factors through derived data, filter/join, reopen, recipes,
-  and export.
-- [ ] Keep ignored instrumental metadata searchable.
-- [ ] Sample ID, field, or temperature can independently label the legend.
-- [ ] Lot/wafer/type can form nested grouping for a box plot.
-- [ ] Existing numeric projects migrate unchanged.
+**Slice 1 shipped (2026-08-17, Lane C):** the CONTRACT itself — lossless
+representation, import capture for the two measured failures, the
+sanctioned accessor layer, and P1.5/P1.6-ready group-label plumbing. Backend
+`DataStruct.cat_levels: Mapping[int, tuple[str,...]] | None` (channel index
+-> ordered level strings) + `is_categorical`/`level_labels`/`level_of`
+accessors (`src/quantized/datastruct.py`); frontend `DataStruct.cat_levels?:
+Record<number, string[]>` + `lib/categorical.ts`'s
+`isCategoricalChannel`/`categoricalLevels`/`levelLabel`.
 
-### P1.5 — Live Graph Builder grouping parity
+**Review round fixed same-day (P1-1 blocker + adjudicated P2s/P3s):** the
+slice-1 frontend field was originally declared `catLevels` (camelCase)
+while the backend wire payload (`routes/_payload.datastruct_payload`) emits
+`cat_levels` (snake_case, the established convention — see `book_source`/
+`origin_fidelity`) — nothing translated, so every categorical accessor was
+DEAD CODE against any real imported dataset; a reviewer probe caught it
+because same-language test fixtures had (wrongly) used the same broken key
+on both sides and so never noticed. Fixed by renaming the TS field to match
+the wire, and the boundary is now pinned by a SHARED fixture
+(`tests/fixtures/wire/categorical_import.csv` +
+`categorical_import_payload.json`) that both suites read: a backend test
+asserts the ACTUAL `datastruct_payload()` output equals the committed JSON
+byte-for-byte, and a frontend test parses that SAME JSON file through the
+real `parseWorkspace`/`isCategoricalChannel`/`levelLabel` path — this is
+what "round-trip proven both languages" now means, PRECISELY: shared-fixture
+wire parity, one JSON file two suites read, not two hand-synced fixtures
+that could silently drift apart the way the camelCase bug did. Also this
+round: `lib/datasetsplit.ts`'s row-slice and `lib/merge.ts`'s row-concat
+were dropping `cat_levels` entirely (split now carries it forward
+unconditionally — a row slice preserves column layout; merge carries a
+channel's level table only when every merged dataset has an IDENTICAL,
+same-order table for it, dropping just that channel on any mismatch — real
+conflict-resolution/remapping is booked under P1.5, not built); a
+whitespace-strip gap in the Import Wizard's `label`-role sidecar capture
+matched to `io/delimited.py`'s convention; `barlayout.ts`'s
+`resolveCategoryLabels` now reads the generic `text_columns` sidecar (not
+only Origin's `origin_text_columns`, matching `columnmeta.ts`'s own `??`
+order); and both languages' `cat_levels` read paths were hardened against a
+structurally corrupted table (e.g. `{0: "AB"}`, a bare string where a
+string array belongs) to DEGRADE (drop the field, or that one channel) that
+worst case never had a spec quite as tight — the backend's `__post_init__`
+was already shape-only by construction and just gained an explicit
+docstring ruling; the frontend's `lib/categorical.ts` accessors and
+`lib/workspace.ts`'s `.dwk` load path both gained a real runtime check
+(without it, a corrupted string level "list" reads as truthy and JS happily
+INDEXES INTO it character-by-character — silent, plausible-looking, wrong
+output, not a caught error).
+
+- [x] Stable numeric/datetime/text/categorical semantics for GENERIC
+  delimited import (`io/delimited.py`'s two measured failures) and the
+  Import Wizard's `parse_import` (`io/import_preview.py`, new `categorical`
+  role + `label` role no longer drops raw strings). Metadata semantics
+  (multiple comment rows) were already stable pre-slice and are unchanged.
+- [ ] Display multiple header/comment rows with clear roles — unchanged this
+  slice (P1.6's Import Wizard UI territory; the backend `label_rows`/
+  `text_columns` sidecars this depends on already existed and are untouched
+  except for staying aligned to the (possibly larger) final channel list).
+- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
+  X — the REPRESENTATION and the Group-label rendering path
+  (`calc/plotting.build_grouped_series`, `lib/plotspec.ts` `buildXY`) are
+  done; wiring Facet/Legend/Color/Symbol pickers and the Data
+  Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
+  `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
+  Wizard UI) territory — this contract is what they now build against.
+- [ ] Multiple ordered factors and missing-value policy — level ORDER is
+  represented (the tuple's own order; NaN = missing is the representation's
+  missing-value policy) but user-settable REORDERING (J1's ask) is not
+  built yet; that is J2/recode territory.
+- [~] Preserve factors through derived data, filter/join, reopen, recipes,
+  and export — reopen (`.dwk` round-trip) is proven, now via the SHARED wire
+  fixture (`lib/workspace.test.ts` + `tests/test_wire_fixtures.py`), not
+  just a same-language round trip. CONFIRMED (review round, not a hedge
+  anymore): merge (`lib/merge.ts`) and split (`lib/datasetsplit.ts`) BOTH
+  silently dropped `cat_levels` — split is FIXED (a row slice preserves
+  column layout, so it now always carries the table forward unchanged);
+  merge CARRIES-IF-IDENTICAL (a channel's level table survives only when
+  every merged dataset agrees on it, same strings, same order; any mismatch
+  drops just that channel, never the whole merge) — REAL conflict
+  resolution (remapping each dataset's codes onto one union level table when
+  they disagree) SHIPPED under P1.5 (2026-08-18): `lib/merge.ts`'s
+  `planChannel`/`remapFor` now do exactly that; the one remaining drop case
+  (a channel missing its table on even one input) is unchanged, since there
+  is nothing to remap FROM. Filter/recipes/
+  export propagation is still unaudited. Also found this round, booked (not
+  fixed) for P1.6/the worksheet-UI slice: `store/cellEdit.ts`'s
+  `setCellValue`/`setCellBlock` write a raw `number` into any cell,
+  categorical channels included, with NO awareness that the channel is
+  categorical — a user can type a code with no entry in the level table
+  (e.g. `7.5`, or `-1`) and the write succeeds unguarded. This degrades
+  SAFELY today (`level_of`/`levelLabel` render "no label" for that one
+  cell per the P2-3/P3-1 ruling, never garbage or a crash) but there is no
+  UX yet to prevent, flag, or guide the edit (a level-picker/dropdown, a
+  Recode-and-extend-the-table flow) — P1.6's worksheet-UI slice owns
+  closing that gap, not this contract.
+- [ ] Keep ignored instrumental metadata searchable — unchanged (pre-
+  existing `text_columns`/`comments` sidecars; still stand).
+- [ ] Sample ID, field, or temperature can independently label the legend —
+  the representation supports it (any categorical channel can be the group
+  column); the Graph Builder wiring to pick ANY such channel as the legend
+  source specifically is P1.5.
+- [ ] Lot/wafer/type can form nested grouping for a box plot — single-level
+  categorical grouping works (box/bar's `isCategorical` gate now composes
+  with the P1.4 nominal default, see `plotspec.test.ts`); NESTED
+  (multi-factor) grouping is not built.
+- [x] Existing numeric projects migrate unchanged — additive by
+  construction (`cat_levels` absent = byte-identical to before this field
+  existed, both languages); pinned by `test_cat_levels_absent_is_additive_
+  byte_identical` and the full existing suite passing unmodified (`uv run
+  pytest -m golden`: 155 passed, 0 failed, same as pre-slice).
+
+### P1.5 — Live Graph Builder grouping parity [~]
 
 **Goal:** Group/Facet must match and remain editable across preview, Stage,
 Figure Builder, workspace, and export.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P1.4.
 
-**Current evidence:** grouped FigureDoc/export exists, while the Graph Builder
-live path still treats group splitting as preview-oriented; some help wording
-appears stale.
+**Slice shipped (2026-08-18, Lane C, `claude/p15-live-grouping`):** the Group
+well's channel is now a durable LIVE binding, not just a Publication-Preview-
+only one. Root cause traced precisely before writing any code: the canonical
+`FigureDocument.bindings.groupKey` already existed (F2.3h) and already drove
+Publication Preview + backend export (`calc.plotting.build_grouped_series`)
+end to end — but `figureDocumentToPlotView`, the ONE bridge that projects a
+document into the shape the interactive Stage canvas (`usePlotPayload` ->
+`PlotViewport`/uPlot) actually reads, silently dropped `groupKey` on the
+floor. `PlotView` gains a `groupKey: number | null` field (bindings-owned,
+excluded from `FigureViewState` exactly like `xKey`/`yKeys`/`errKeys` —
+`figureDocument.ts`); `store/useApp.ts` gains a `groupKey` singleton +
+`setGroupKey` (mirrors `setXKey` — undo history + macro record) that rides
+the SAME `snapshotView`/`hydrateView`/`.dwk` machinery every other PlotView
+field already does, for free, since `VIEW_KEYS` is derived from
+`defaultPlotView()`'s own keys. A new `lib/plotGroupSplit.ts` (a fresh
+sibling module, funding itself rather than growing `lib/plotdata.ts` past
+its `architecture.test.ts` pin) INDEPENDENTLY implements the same split
+algorithm `lib/plotspec.ts`'s `buildXY` already has (same finite-code sort,
+same `${label} (${groupLabel}=${levelLabel})` format, same
+`lib/categorical.ts` `groupLevelLabel` accessor) — review round P2
+corrected an initial claim that this was merely "a second call site" of
+shared code; it is two hand-written functions, proven equivalent by a REAL
+runtime parity test (`plotGroupSplit.test.ts`: builds the identical payload
+through both and asserts `toEqual`), not by construction. That test also
+caught and fixed one real, if previously inert, divergence: `applyGroupSplit`
+was missing `buildXY`'s explicit `Number.isFinite` mask on a non-finite Y
+value (harmless today only because the upstream fetch already nulls
+non-finite values before either function sees them — fixed to not rely on
+that invariant). Item 3 is satisfied by this proven equivalence, not by a
+new backend/frontend label-resolution site. `usePlotPayload.ts` calls
+it client-side, row-position-aligned to the already-loaded dataset, on the
+never-decimated fetch (`plotDecimate.ts`'s `decimationRequestEligible` gains
+`hasGroupSplit`, same "can't tolerate a reduced row set" reasoning error
+bars/color-by-column already established). `useGraphBuilder.ts`'s
+`commitToPlot` now calls `setGroupKey` instead of toasting "series-split by
+group is preview-only in v1" (item 6's stale wording — the toast itself
+WAS the stale artifact; removed, not reworded).
 
-- [ ] Durable live grouped series with stable identity/style.
-- [ ] Supported statistical/scientific faceting.
-- [ ] Explicit edit-one/edit-all behavior.
-- [ ] Hide/order/restyle/legend/Inspector/menu/undo/reopen/export parity.
-- [ ] Update stale wording/help.
-- [ ] E2E covers drag-to-Group, edit, undo, reopen, copy.
+- [x] Durable live grouped series with stable identity/style — GROUP-WELL
+  CORE, per the dispatch's own scoping. Identity is stable by construction:
+  `usePlotPayload`'s `plotted` array (the SAME array `styleList`/
+  `labelList`/`hidden`/`PlotLegend.tsx`/`PlotContextMenu.tsx` already keyed
+  restyle/hide/legend/context-menu against) repeats each real channel once
+  per level rather than inventing a separate per-level identity — see the
+  edit-one/edit-all ruling below for why. Survives hide/reorder/restyle/
+  legend-interaction/undo/redo/close-reopen/export — pinned in
+  `usePlotPayload.groupSplit.test.ts`, `groupKey.test.ts` (undo + `.dwk`
+  round trip), `useGraphBuilder.test.ts`, and the E2E journey below.
+  A genuine bug caught by the `.dwk`-round-trip test before it shipped:
+  `windowDocumentPersistence.ts`'s `migrateLegacyWindow` (the pre-F1/
+  document-less window bridge) built its `FigureDocument` without threading
+  `view.groupKey` through at all — a document-less grouped window would have
+  silently lost its binding on the very next save/reload. Fixed
+  (`groupKey: window.view.groupKey` now threaded explicitly, since
+  `createFigureDocument`'s `groupKey` is bindings-owned and never reads
+  `view.groupKey` on its own — see that function's own doc).
+- [x] Explicit edit-one/edit-all behavior — RULING (JMP-parity, pinned in
+  `lib/plotGroupSplit.ts`'s header, not re-litigated per call site): restyle,
+  hide/show, and legend-click on ANY one of a group's expanded levels affect
+  the WHOLE group — there is no separate per-level identity to edit
+  individually. Matches (a) JMP Graph Builder's own default overlay
+  behavior (one style setup per grouping variable; per-level colour is
+  automatic, not independently editable) and (b) this codebase's OWN
+  pre-existing Figure Builder precedent (`GroupingPanel.tsx`'s single
+  group-by picker + one `seriesStyles[channel]` entry per Y channel, no
+  per-level styling surface already existed before this slice). The
+  Inspector needs no changes at all under this ruling — it always operated
+  on real dataset channel indices, never the render-time expanded series, so
+  a grouped channel's Inspector entry is unaffected by construction.
+- [x] Editable after Send (G4 commit semantics) — confirmed already-durable
+  via the canonical `FigureDocument.bindings.groupKey` path (unchanged this
+  slice); the NEW live-Stage wiring rides the identical binding, so a
+  grouped figure committed from Graph Builder, edited on either surface
+  (live Stage OR Publication Preview), and reopened from either the Library
+  or a `.dwk` load, reads back the same group.
+- [x] Merge level-table remap (P1.4's booked item) — `lib/merge.ts`'s
+  `mergeDatasets` now does REAL conflict resolution instead of the P1.4-era
+  safe "drop the channel on any mismatch" default: a channel whose datasets
+  ALL carry SOME level table (possibly differing in strings or order) merges
+  onto a coherent UNION table (first dataset's own order, then each
+  subsequent dataset's genuinely NEW levels appended in first-seen order),
+  remapping every dataset's own codes losslessly (`planChannel`/`remapFor`).
+  The one remaining drop case — a channel with NO table at all on even one
+  input dataset — is intentionally unchanged: there is nothing to remap FROM
+  when a dataset's raw values were never codes into anything.
+- [x] Update stale wording/help — the "preview-only" toast (the one stale
+  artifact a repo-wide search found) is gone; `group-facet-journey.spec.ts`'s
+  own header, which had explicitly documented "the interactive uPlot Stage
+  canvas has NO live rendering for a group split at all today" as an
+  architectural fact shaping that journey's scope, is corrected to describe
+  the new reality and points at the new live-Stage test below.
+- [x] E2E covers drag-to-Group, edit, undo, reopen, export parity —
+  `group-facet-journey.spec.ts` gains a SECOND journey (the first,
+  Publication-Preview-only journey is untouched and still passes): drag Y +
+  Group via the real Graph Builder wells -> "Create New Plot" -> the live
+  Stage legend renders one row per group level (real uPlot canvas, no
+  mocks) -> undo collapses to one series -> redo restores the split ->
+  close the window (real title-bar context menu) -> undo-the-close (a
+  genuine close/reopen round trip through the real UI, mirroring
+  `window-arrange.spec.ts`'s own close pattern — the original default
+  window stays open throughout, so the ≥1-window invariant is never at
+  risk) -> a real "Export figure…" request from the reopened window still
+  carries `group_col`. NOT independently run in this session's sandbox: the
+  Playwright browser download (`cdn.playwright.dev`) is blocked by this
+  session's egress policy (confirmed via the agent-proxy's own diagnostic,
+  not assumed) — the spec is verified syntactically (`tsc -p e2e/tsconfig.json`
+  clean, `playwright test --list` discovers both tests) but has NOT been
+  executed against a real browser this session. Needs a CI run or a
+  developer machine with network access before merge.
 
-### P1.6 — Import Wizard metadata and error roles
+**Review round fixed same-day:** P1 (probe-proven blocker) — `groupKey` was
+a channel-indexed field that never reached `store/windowDefaults.ts`'s
+`datasetViewDefaults()` reset table, the shared choke point `setActive`
+(Library click), `addDataset` (import/paste/merge), and a shape-changed
+reimport all rely on; a stale group binding rode into a differently-shaped
+dataset. Fixed with the one-line addition the choke point's own design
+calls for, plus a NEW coverage test pinning `datasetViewDefaults`'s full
+channel-indexed field list (`store/windows.test.ts`) so the next such field
+addition can't silently skip it the same way. P2 (doc accuracy) —
+`plotGroupSplit.ts`'s "second call site of the identical algorithm" claim
+was falsifiable as written (two independently hand-written functions, no
+shared code, no runtime check backing the claim); fixed with a REAL
+parity test (`plotGroupSplit.test.ts`, `buildXY` exported for it) plus the
+one real (previously inert) divergence it surfaced — `applyGroupSplit`
+missing `buildXY`'s explicit non-finite-Y mask, harmless today only because
+the upstream fetch already nulls those values first. P3 (nitpick) — a
+one-line comment in the E2E spec now names which assertion is load-bearing
+for the close/reopen proof, since the final export step also re-commits
+the Graph Builder's own live spec.
+- [ ] Supported statistical/scientific faceting — booked, NOT this slice
+  (the dispatch's own "Group-well core + what falls out naturally" scope;
+  Facet already has its OWN live mechanism, `facetByColumn`'s small-multiples
+  composition, structurally unrelated to the within-panel colour split this
+  slice closes — see `group-facet-journey.spec.ts`'s own header for exactly
+  why `FigureDocument.bindings.facetKey` remains unwired, unchanged by this
+  slice).
+- [ ] Data Filter / Tabulate / Stat Stage workbench wiring through
+  `is_categorical`/`isCategoricalChannel` — booked to a future slice, named
+  home not yet assigned (P1.4's own booking, restated here since it's
+  P1.5-adjacent territory the dispatch explicitly named but scoped out).
+
+### P1.6 — Import Wizard metadata and error roles [~]
 
 **Goal:** fully describe arbitrary scientific data during import and save the
 mapping as a reusable template.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5. **Dependency:** P1.4.
 
-- [ ] Preview/select multiple header/comment/metadata rows.
-- [ ] Select the default legend-label row.
-- [ ] Assign symmetric/asymmetric X and Y error roles explicitly.
-- [ ] Suggest common adjacent/name patterns, confirm ambiguity.
-- [ ] Assign categorical/text roles without losing raw strings.
-- [ ] Retain ignored preamble as searchable metadata.
-- [ ] Save/reapply mappings/transforms with mismatch explanation.
-- [ ] Live preview plus Apply/Cancel.
-- [ ] No guess can silently attach error to the wrong signal.
+**Slice 2 shipped (2026-08-18, Lane C, `claude/p16-import-wizard`, built on
+the merged P1.4 backend, PR #173):** the Import Wizard role-assignment UI
+over `routes/import_preview.py`'s payload. Backend: `ImportSettings` gains
+`label_line: int | None` (the "default legend-label row" — its per-column
+cells override each channel's display label) and every preamble line above
+`data_start_line` not consumed as header/units/label is retained verbatim
+in `metadata["comments"]` (`io/import_preview.py`, mirrors
+`io/delimited.py`'s existing convention exactly) instead of silently
+dropped. Frontend: `lib/errorRoles.ts`'s pairing algorithm extracted to a
+label-only `inferErrorBindingsFromLabels` (zero behavior change, existing
+tests pin the equivalence) so the wizard can seed error-role SUGGESTIONS
+from a preview's column names before any DataStruct exists; a new
+`ErrorRolesEditor.tsx` + `useImportErrorRoles.ts` (a second, narrower state
+hook alongside `useImportWizard.ts` — not a Zustand slice, matching that
+hook's own existing all-local-state convention) render one editable
+target/axis/side row per `error`-role column, pre-filled with the
+suggestion ONLY when unambiguous — an ambiguous column renders as an
+explicit "— unassigned —" row, never a guessed default, and only rows the
+user leaves assigned become `Dataset.errorRoles` on Import. Saved-filter
+reapply (`applyFilter`) now re-previews the CURRENT file under the
+candidate filter's settings and refuses the WHOLE apply — current
+settings/preview untouched, every unmatched column named — on a column-
+count or name mismatch (`lib/importwizard.resolveImportFilter`, mirroring
+`quickPlotTemplates.resolveTemplate`'s refusal SHAPE only, no coupling to
+that module). An explicit Cancel button was added alongside the existing
+window-close control (both leave zero state behind — `ImportWizardPanel`
+only mounts while `importWizardOpen`, AppOverlays.tsx).
 
-### P1.7 — Project portability and source relinking
+- [x] Preview/select multiple header/comment/metadata rows — INTERPRETED as
+  three independently-selectable rows (header/units/label, each with its
+  own field) plus automatic retention of everything else in the preamble
+  as searchable `comments` metadata, rather than a per-line multi-select
+  checkbox UI (every preamble line is ALREADY retained by default, so an
+  explicit per-line "mark as metadata" toggle would add UI weight with no
+  behavioral gain — see the Day-1 scope note if that changes).
+- [x] Select the default legend-label row — `label_line`, above. At the
+  `io/import_preview.py` function level, an out-of-range `label_line`
+  silently no-ops (falls back to the header-derived name) — same
+  convention `header_line`/`units_line` always had, not a new gap (review
+  round P3(c) audit: doc claim now matches the actual, always-shared,
+  out-of-range behavior of all three line settings). The ONE path where
+  this convention is deliberately overridden is a saved-filter reapply
+  (`resolveImportFilter`, review round P1-2): there, a saved line landing
+  at-or-past the FRESH file's own detected data start is treated as a
+  signal the filter no longer fits this file at all, and the whole apply
+  is refused rather than silently no-op-ing into a wrong-looking import.
+- [x] Assign symmetric/asymmetric X and Y error roles explicitly —
+  `ErrorRolesEditor`'s target/axis/side pickers, above.
+- [x] Suggest common adjacent/name patterns, confirm ambiguity —
+  `inferErrorBindingsFromLabels`-seeded suggestions, editable before Import.
+  TWO-TIER (review round P1-1): a NAME-driven match (base-name, e.g. `dR`
+  -> `R`; or an explicit `x`-prefix) is always a real, pre-filled
+  suggestion. A POSITION-only match (nearest preceding column, no name
+  signal) is a real suggestion ONLY when single-candidate — nothing
+  plausible follows the error column, e.g. `Temp, M, err`; when another
+  non-error column ALSO follows (e.g. `T1, "T err", T2`, genuinely
+  ambiguous between the two), it demotes to unassigned instead of binding
+  to whichever happens to precede. Surgical to the wizard's own
+  `suggestErrorBindings` — `errorRoles.inferErrorBindingsFromLabels`
+  itself is untouched for its other callers.
+- [x] Assign categorical/text roles without losing raw strings — the P1.4
+  `categorical` role (and `label`'s `text_columns` capture) now appear in
+  the wizard's own `ROLE_OPTIONS` (previously P1.4 built the backend role
+  but "the existing wizard simply doesn't offer it yet" — now it does).
+- [x] Retain ignored preamble as searchable metadata — `comments`, above.
+- [x] Save/reapply mappings/transforms with mismatch explanation —
+  `resolveImportFilter`, above. Import mappings (`ImportFilterWire`/
+  `io.import_filters`) stay their OWN object; no coupling to
+  `store/quickPlotTemplates.ts` was added.
+- [x] Live preview plus Apply/Cancel — preview was already live (debounced
+  re-preview on every edit); Cancel is now an explicit button in addition
+  to the window's close control. NARROWED (review round P2-2): "live"
+  covers every OTHER settings edit (delimiter/header/units/data-start/
+  role/name), but a `label_line` override's RESOLVED text is not itself
+  reflected anywhere in the preview table's per-column name cell — that
+  cell is `c.name` (header-derived, or `column_names` if hand-edited),
+  the SAME field wired to `setColumnName`, so folding the label override
+  into it would silently conflate a derived suggestion with a user's own
+  typed name (and a later hand-edit would permanently clobber the
+  override display for no data reason). The raw-lines table already
+  highlights the selected `label_line` row with a "label line (legend
+  labels)" badge so the row itself is visible; showing its RESOLVED
+  per-column text needs its own display slot in `PreviewTable`/
+  `preview_import`, not a same-field overwrite. Booked to P1.6b.
+- [x] No guess can silently attach error to the wrong signal — pinned
+  red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
+  with NO suggestion at all; `confirmedErrorBindings` drops any row the
+  user leaves unassigned before it ever reaches `Dataset.errorRoles`).
+
+**P1.6b (worksheet categorical UI) — SHIPPED 2026-08-19 (Lane C2,
+`claude/j2-recode-worksheet`, same slice as JMP_GAP_PLAN's J2 Recode
+workshop — the two share `store/cellEdit.ts`/`lib/categorical.ts`, which is
+why one lane owned both):** the two items booked here, not shipped in the
+P1.4 review slice below —
+1. Worksheet C/O/N modeling-type visibility: `GridHeader.tsx` now shows a
+   per-column badge/select (`auto·C`/`auto·O`/`auto·N` or an explicit
+   override), wired to `setChannelType`. That action's signature widened to
+   take an EXPLICIT dataset id rather than `get().activeId` — the
+   worksheet's floating MDI window (GUI_INTERACTION #14) can browse a
+   NON-active dataset, so the old signature would have silently mutated
+   the wrong one the first time this control was used from there.
+2. `store/cellEdit.ts`'s categorical cell-edit guard: `setCellValue`/
+   `setCellBlock` now REFUSE (zero mutation, status message) a non-NaN
+   numeric write that isn't an existing level code for a categorical
+   column. RULING on the three named options (pick-existing / extend-the-
+   table / refuse) — all three are offered, at different layers: the new
+   `setCategoricalCell(id, row, col, label)` action is the level-aware
+   entry point the worksheet's cell editor calls with a TYPED LABEL (not a
+   code) — it picks an existing level case-insensitively, extends the
+   table with a genuinely new label (one undo entry, never implicit), or
+   clears to missing on blank input; the raw numeric path
+   (`setCellValue`/`setCellBlock`, used by paste/fill) REFUSES an
+   out-of-range/non-integer code instead, since a bare number gives no
+   signal whether it's a typo or a deliberate pre-coded paste. `GridRow.tsx`
+   displays the LEVEL LABEL (not the raw code) and edits via a level-picker
+   `<select>` (+ "Add new level…") instead of a free numeric input.
+   Gates: full `vitest run` 522 files / 7705 tests passed; bundle-size OK,
+   862.0 kB eager (21.9 kB under budget) — the Recode workshop itself is a
+   separate lazy chunk, not part of this cost.
+
+### P1.7 — Project portability and source relinking [~]
 
 **Goal:** move/share projects without confusing raw, linked, corrected, and
 derived data.
 
 **Models:** GPT-5.6 Sol high / Claude Opus 4.8. **Dependencies:** P1.1-P1.2.
 
-- [ ] Define linked, embedded, and portable bundle modes.
-- [ ] Preserve checksum/time/import filter/correction/source provenance.
-- [ ] Relink-one and relink-folder with dry-run preview.
-- [ ] Distinguish missing, offline, changed, and permission denied.
-- [ ] Changed source warns and can import as a new version.
-- [ ] Cross-platform folder-tree relinking passes.
-- [ ] Raw originals are never replaced.
+**Slice 1 shipped (2026-08-18, Lane B, `claude/p17-relink-portability`,
+built on the merged P1.1 bridge `#169` and P1.2 lifecycle `#180`):** the
+relink core (path matching + provenance + missing/offline/changed/
+permission-denied probing + atomic commit) and the mode CONTRACT. The full
+portable-bundle packer ("Pack Project") is explicitly deferred — see below.
+
+**The mode contract (box 1).** Written in `lib/projectPortability.ts`
+(`ProjectPortabilityMode = "embedded" | "linked" | "portable"`, full
+rationale in that module's doc):
+- **embedded** — today's ONLY implemented behavior and the de-facto default
+  (L0.32): the `.dwk` carries a full `DataStruct` snapshot per dataset, so
+  opening never depends on sources being reachable; a source going
+  missing/offline/changing is entirely a Relink/Reimport concern (this
+  slice), never an open-time failure. `Dataset.source` (path + provenance)
+  still rides along even in this mode.
+- **linked** — NOT implemented: no writer strips a save-time snapshot and no
+  reader rehydrates one from sources at open time yet. Needs its own
+  save-time UI decision and open-time "resolve every source first" flow, a
+  materially different shape from what box 3 (relink) needed. Named home:
+  a future P1.7 follow-up slice.
+- **portable** — NOT implemented: the raw-file-copying "Pack Project"
+  packer is explicitly booked to PR-N territory per this slice's own
+  scoping instruction. The relink machinery this slice ships (path
+  matching, dry-run preview, atomic commit) is exactly what a future packer
+  would reuse to repoint sources at its own bundle copies after unpacking
+  — this slice is that packer's future dependency, not a parallel
+  implementation. Named home: same P1.7 follow-up, tracked as "Pack
+  Project".
+
+**Provenance (box 2).** `Dataset.source` (`lib/datasetSource.ts`) gained
+`checksum`/`mtime`/`size`, captured from the desktop bridge's new
+`probe_source` js_api method at IMPORT time (desktop-only — "where
+practical" per L0.32; a browser upload has no bridge to ask, and degrades
+honestly to path-only provenance, pinned in `importDatasets.test.ts`) and
+again at RELINK/reimport-as-new-version time. **Gap found and closed
+honestly:** before this slice, `Dataset.source` recorded ONLY `path` — no
+checksum, no observed mtime, despite L0.32's plan text already promising
+both; `importedAt` existed but nothing captured a source FINGERPRINT at
+all, so "did the source change" was structurally unanswerable. Never
+silently rewritten: a relink backfills provenance only for a row whose
+verdict is `unchanged` (same bytes, still true) or `unknown` (nothing was
+ever recorded — filling a gap, not overwriting a value); a `changed` row is
+excluded from commit entirely (box 5). Raw source files on disk are never
+written to by anything in this slice — the desktop bridge's probe/checksum
+path opens files strictly read-only (`open(path, "rb")`).
+
+**Relink-one / relink-folder + dry-run preview (box 3).** One store
+(`store/relink.ts`) covers both — relink-one is just relink-folder with a
+single dataset's own path as the "old root". `lib/relink.ts` is the pure,
+cross-platform path-matching core (`suffixUnderRoot`/`relinkedCandidate`,
+unit-tested for POSIX, Windows drive-letter, UNC, and cross-platform-move
+shapes, case-insensitive, either separator). The preview runs entirely
+before commit (`runPreview` populates `RelinkPreviewRow[]` with a
+per-dataset status); `commit()` is ONE `recordHistory` call covering every
+resolved row, so undo restores every relinked path in a single step
+(pinned in `relink.test.ts`).
+
+**Missing/offline/changed/permission-denied (box 4).** New
+`desktop_bridge.py` js_api method `probe_source` (backed by the pure
+`desktop_source_probe.py`, split out to stay under the 500-line ceiling)
+returns `ok`/`missing`/`offline`/`invalid`/`permission_denied` plus
+`size`/`mtime`/an optional checksum. **The consent ruling** (documented in
+full in `desktop_bridge.py`'s module doc): a checksum needs a full file
+READ, a strictly bigger ask than the reachability check `path_status`
+already makes with zero consent — so a NEW js_api method,
+`grant_source_paths`, extends read consent for paths eligible under a
+server-tracked *declared-source set*. `probe_source` itself still computes
+a checksum only when the resolved path is already consented at call time —
+an unconsented path never yields file content, only reachability. Browser
+degrade: with no desktop bridge, every preview row reports `unavailable` —
+box 4's "say so, never guess" — never a guessed reachability state
+(`store/relink.ts`'s `bridgeAvailable` gate, pinned red-first in
+`relink.test.ts`).
+
+**P1-A fix round (adversarial review, 2026-08-18, same slice):** the FIRST
+version of `grant_source_paths` was a bare passthrough to `grant_paths`,
+trusting the frontend's own argument list as authority — the reviewer
+verified this as a real, unconditional arbitrary-file-read-consent oracle
+(no dialog, no project even open, any JS in the window could self-grant
+read consent for e.g. a user's SSH key, then read it through the existing
+`/api/parsers/import` route). Fixed by making the declared-source set
+BACKEND-tracked and enforced server-side: `desktop_consent.py`'s
+`set_declared_sources`/`is_declared_source`, populated ONLY as a side
+effect of `_read_granted` (`open_project_file`/`read_project_file`, both
+reachable only via a real native dialog) parsing the just-opened payload's
+OWN `datasets[].source.path` values (`desktop_project_file
+.extract_declared_source_paths`) — wholesale replacing any prior project's
+declared set, never accumulating. `grant_source_paths` now intersects its
+request against that set before ever calling `grant_paths`; the frontend's
+argument list is a request against backend state, never an authority of
+its own. Red-first proven both directions (`test_desktop_bridge.py`): a
+path no open project declared stays ungranted; the SAME request mixing a
+legitimately declared path with a poisoned one grants only the declared
+one (the "compositional pin" — `store/relink.ts`'s argument list, computed
+from in-memory frontend state, cannot smuggle in anything the backend
+didn't itself see declared). Accepted residual scope, stated plainly in
+`desktop_bridge.py`'s doc: once a project IS opened via a real dialog,
+whatever it declares is eligible — the same trust act `pick_files` already
+grants a physically-selected file, applied to content instead of
+selection; this fix closes the unconditional oracle, not full sandboxing
+against a hostile payload's own declared paths.
+
+**P1-B fix round (adversarial review, same slice): provenance completeness.**
+`workspace.ts`'s `parseSource` reconstructed a bare `{kind,path}` on every
+load, silently dropping checksum/mtime/size — and `versionOf` was missing
+from the serializer entirely — so after the first save/reopen,
+`sourceChangeVerdict` degraded to `"unknown"` for every dataset, defeating
+box 5's protection in the realistic import-today/reopen-tomorrow/relink
+workflow. Fixed: the validator moved to `lib/datasetSource.ts`
+(`parseDatasetSource`, also resolving `workspace.ts`'s own line-ceiling
+pin) and now validates/carries every field; `versionOf` was added to both
+the serializer and the parser. Red-first in `workspace.test.ts` (the exact
+reviewer-predicted failures — `expected {kind,path} to deeply equal
+{kind,path,checksum,mtime,size}` and `expected undefined to be
+'orig-id'`), now green; the pre-existing "workspace source reference"
+round-trip describe block was extended in place rather than duplicated.
+
+**P2 fix (TOCTOU at commit, adversarial review):** `commit()` used to write
+whatever `runPreview` had captured with no re-check — a file deleted or
+overwritten in the window between Preview and clicking Relink would land a
+stale checksum silently. Fixed cheaply: `commit()` re-probes every
+committing candidate immediately before writing and drops (never trusts)
+any row whose reachability changed or whose checksum changed again since
+Preview, reported in the success toast rather than silently absorbed.
+Red-first in `relink.test.ts`.
+
+**Changed source -> new version (box 5).** `sourceChangeVerdict`
+(`lib/relink.ts`) diffs checksum first when both sides have one, falls back
+to size+mtime only when neither side has a checksum, and reports
+`"unknown"` — never `"unchanged"` — when there isn't enough information to
+say anything (pinned: a recorded-but-unprobeable checksum must not read as
+fine). A `changed` row is excluded from `commit()`; `importChangedAsNewVersion`
+reuses the EXISTING import path (`importPaths`) and tags the newly created
+dataset(s) with `versionOf` — the original is never touched in place, per
+L0.32.
+
+**Cross-platform folder-tree relinking (box 6).** `lib/relink.test.ts`
+covers POSIX-root/POSIX-move, Windows-drive-root/Windows-move, a UNC root,
+a cross-platform move (Windows-recorded path relinked onto a POSIX new
+root and vice versa), case-only differences, mixed/doubled separators, and
+sibling-name false positives (`/data/run1` vs `/data/run10`).
+
+**Raw originals never replaced (box 7).** Pinned three ways: (1)
+`desktop_source_probe.py`'s checksum path opens strictly `"rb"`, no write
+mode, ever; (2) relink only ever rewrites `Dataset.source.path` in the
+in-memory store (and, on save, the `.dwk` — never the file at either the
+old or new path); (3) `importChangedAsNewVersion` imports a SECOND dataset
+alongside the original rather than refreshing it in place.
+
+- [x] Define linked, embedded, and portable bundle modes — contract above;
+  only "embedded" is implemented, "linked"/"portable" are named + deferred
+  with a home, per this slice's own explicit scoping allowance.
+- [x] Preserve checksum/time/import filter/correction/source provenance —
+  checksum/mtime/size closed this slice (the honestly-found gap above);
+  import-filter/correction provenance was already preserved pre-slice
+  (`ImportSettings`/`Dataset.corrections`) and untouched by this work.
+- [x] Relink-one and relink-folder with dry-run preview.
+- [x] Distinguish missing, offline, changed, and permission denied.
+- [x] Changed source warns and can import as a new version.
+- [x] Cross-platform folder-tree relinking passes.
+- [x] Raw originals are never replaced.
+
+**Explicitly booked, NOT shipped this slice — named home "P1.7 Pack
+Project" (no owner/slice assigned yet):** the full portable-bundle packer
+(copying every dataset's raw source file into a project-adjacent bundle at
+save time) and "linked" mode's save-time strip / open-time rehydrate flow.
+Both build directly on this slice's path-matching + provenance + probing
+primitives; neither needed to exist for the relink core itself.
+
+**P3 booked (adversarial review, cheap-if-fixed-else-book call): `commit()`
+has no dedup when two DIFFERENT old paths case-collide onto the SAME new
+candidate (e.g. two old sources differing only by case, or by a segment
+that normalizes identically under `lib/relink.ts`'s case-insensitive
+matching) — both would relink onto one path with no collision warning.
+Named home: same "P1.7 Pack Project" follow-up (a natural fit alongside
+the packer's own name-collision handling, L0.34's precedent for resolving
+duplicate names on import).
 
 ---
 
@@ -1555,6 +2183,305 @@ work (its BACKLOG row).
   (silent technique defaults, batch overlay offer, Layer 1 pre-P1.3,
   per-technique view memory). P1.3 recipes will build on its technique
   tag.
+
+#### 2026-08-17 — P1.4 categorical/metadata CONTRACT, Slice 1 (Sonnet agent, worktree `lane-c`)
+
+- Shipped the representation + import capture + accessor layer +
+  P1.5/P1.6-ready group-label plumbing on `claude/p14-categorical-contract`
+  (NOT merged to `main` by this slice — orchestrator to land). NOT in
+  scope: the Import Wizard UI overhaul (P1.6) and Graph Builder
+  live-grouping parity (P1.5) — this slice is backend/lib contract only.
+- Red-first on both P0.3-measured failures, verified against pre-fix
+  `import_csv` by hand before the fix landed: f1 (leading text column) gave
+  `ds.time == [nan, nan, nan]`; f2 (trailing text-only columns) raised
+  `ValueError: no valid data columns`. Also red-first on a third bug found
+  while implementing (not one of the two P0.3 failures, but the same
+  "silent loss" class): the Import Wizard's `label` role dropped its raw
+  strings with literally no metadata trace — worse than a default import,
+  which never offers that role and so never lost anything.
+- `DataStruct.cat_levels` is deliberately narrow-gated: `import_csv`'s
+  f2-style promotion (text -> categorical) fires ONLY when the numeric-only
+  column selection is EMPTY (the actual failure condition), so a file with
+  at least one real numeric data column plus a text column is
+  byte-identical to before (`text_columns` sidecar, unchanged) — verified
+  by re-running the pre-existing `test_csv_keeps_a_text_column_as_metadata`
+  family unmodified.
+- Found and deliberately did NOT fix: an all-text CSV with NO numeric column
+  anywhere (e.g. `"Sample,Tag\nA,X\nB,Y\n"`) has its header row misdetected
+  as a THIRD data row by `_delimited_layout._detect_layout` (numeric-score
+  layout detection has no signal when literally nothing in the file is
+  numeric) — pre-existing, unrelated to f1/f2, out of scope for this
+  narrow slice. Left as a residual for whoever next touches layout
+  detection or all-text-file import. Honest severity note (review round):
+  this slice's f2 fix changed that pre-existing bug's OUTWARD BEHAVIOR from
+  loud to silent — before, this exact file raised `ValueError: no valid
+  data columns` (a visible failure); after, it "succeeds" silently with the
+  misdetected header row folded in as spurious categorical levels
+  (`cat_levels` picks up `"Sample"`/`"Tag"` alongside the real `"A"`/`"B"`
+  values, and `n_points` is off by one) — worse to debug than a raised
+  error, even though it is not itself one of the two contracted failure
+  modes. Flagging it here rather than letting the silence stand unremarked.
+- Gates: backend `uv run pytest -q` 3431 passed / 268 skipped / 18 xfailed
+  (0 failed); `-m golden` 155 passed / 93 skipped (missing MATLAB freeze
+  files, expected outside CI) / 0 failed — untouched by this slice, as the
+  contract requires; ruff + mypy --strict clean. Frontend `tsc --noEmit`
+  clean, `eslint --max-warnings=0` on every touched/new file clean, full
+  `vitest run`: 480 test files / 7077 tests, ALL passed on a clean re-run
+  (a first run under heavy shared-machine contention showed one flake in
+  `GridViewport.perf.test.tsx`'s wall-clock fan-out assertion — a
+  pre-existing, unrelated, documented-flaky-under-load test per this
+  plan's own "Test determinism" notes; confirmed unrelated by file-overlap
+  check and by passing 4/4 in isolation before the clean full re-run
+  settled it). `npm run build`: bundle-size OK, 826.5 kB eager (27.5 kB
+  under the 854.0 kB budget). Also discovered and fixed in-flight: the new
+  field pushed `lib/plotspec.ts`/`lib/types.ts` over their
+  `architecture.test.ts` line-count pins — fixed by extracting the shared
+  group-label-resolution logic into the new `lib/categorical.ts` sibling
+  (the ceiling test's own prescribed remedy) rather than raising either
+  pin; both files land at their ORIGINAL line counts.
+
+#### 2026-08-18 — P1.4 review round: P1-1 blocker + adjudicated P2s/P3s fixed same-day (Sonnet agent, worktree `lane-c`)
+
+- **P1-1 (blocker, RESOLVED):** the wire-key mismatch — backend
+  `cat_levels` (snake_case) vs. frontend `catLevels` (camelCase), so every
+  categorical accessor was dead code against a real import. Renamed the TS
+  field everywhere (`types.ts`, `categorical.ts`, `barlayout.ts`,
+  `modeling.ts`, `plotspec.ts`, all touched tests) and pinned the boundary
+  with a SHARED fixture: `tests/fixtures/wire/categorical_import.csv` +
+  `categorical_import_payload.json`, read by a new backend test
+  (`test_wire_fixtures.py`, byte-for-byte against the real
+  `datastruct_payload()` output) AND a new frontend test
+  (`categoricalWireFixture.test.ts`, through the real `parseWorkspace`/
+  `isCategoricalChannel`/`levelLabel` path). Red-first evidence: the
+  frontend fixture test, run against the still-camelCase code before the
+  rename, failed exactly as predicted (`isCategoricalChannel` false,
+  `levelLabel` null against the backend's real payload).
+- **P2-2 (split drops levels), FIXED:** `lib/datasetsplit.ts`'s
+  `sliceDataStruct` now carries `cat_levels` forward (a row slice preserves
+  column layout). Red-first: a dedicated test showed `sliced.cat_levels ===
+  undefined` before the one-line fix.
+- **P2-1 (merge drops levels), FIXED per ruling:** `lib/merge.ts` now
+  carries a channel's level table forward IFF every merged dataset has an
+  IDENTICAL (same order) table for it; any mismatch (differing strings,
+  differing order, or a missing table) drops just that channel. Real
+  conflict resolution (remapping codes onto a union table) is explicitly
+  booked under P1.5, not built. Red-first on both branches (identical ->
+  carried was red before the fix; differing -> dropped already matched the
+  old unconditional-drop behavior, so it wasn't itself a red case, but is
+  pinned going forward).
+- **P2-4, FIXED:** `io/import_preview.py`'s `label`-role `text_columns`
+  capture gained the `.strip()` `io/delimited.py`'s sidecar always applies
+  (one line). Red-first: a whitespace-padded cell round-tripped verbatim
+  before the fix.
+- **P2-5, FIXED:** `lib/barlayout.ts`'s `textLabelsFor` now reads
+  `metadata["text_columns"] ?? metadata["origin_text_columns"]`, matching
+  `columnmeta.ts`'s exact `??` order (was Origin-only). Red-first with the
+  reviewer's probe shape: a generic `text_columns` sidecar labeling a
+  numeric group column returned formatted numeric levels, not the text
+  labels, before the fix.
+- **P2-3 + P3-1 (validation teeth), ruling applied — document + degrade,
+  never throw:** backend `DataStruct`'s docstring now states explicitly
+  that construction validates `cat_levels`' TABLE SHAPE only; a value
+  cell's code/level COHERENCE degrades at read time (`level_of` -> `None`),
+  pinned by a new test constructing a DataStruct with out-of-range/
+  negative/NaN codes in a categorical column (construction succeeds,
+  `level_of` degrades per-cell). Frontend: BOTH `lib/categorical.ts`'s
+  accessors (`isValidLevelList`, checked directly in `isCategoricalChannel`/
+  `categoricalLevels`) AND `lib/workspace.ts`'s `.dwk` load path
+  (`sanitizeDataStruct`, imported from `lib/categorical.ts` to stay under
+  `workspace.ts`'s OWN `architecture.test.ts` line-count pin — moving the
+  logic to the sibling module the SAME lesson slice 1 already applied to
+  `plotspec.ts`/`types.ts`) now reject a structurally corrupted table.
+  Red-first with the reviewer's exact `{0: "AB"}` corruption shape: before
+  the fix, `isCategoricalChannel` returned `true` and `levelLabel`
+  returned the individual CHARACTERS `"A"`/`"B"` (JS indexes into a string
+  the same as an array) — silent, plausible-looking, wrong data, not a
+  caught error. After: no categorical status, `levelLabel` returns `null`.
+  Pinned twice — directly in `categorical.test.ts` (any ingestion path) and
+  through the real `.dwk` load in `workspace.test.ts` (including a
+  mixed-corruption case: one bad channel entry is dropped, a well-formed
+  sibling entry survives).
+- **P3 bookings (plan text only, this entry + the P1.4 section above):**
+  `store/cellEdit.ts`'s `setCellValue`/`setCellBlock` write raw numbers
+  into any cell, categorical channels included, with no level-aware guard
+  or UI — degrades safely today (P2-3/P3-1's ruling) but has no
+  discoverability; booked under P1.6's worksheet-UI slice. The all-text
+  header-misdetection residual (noted above) got an honest severity-change
+  sentence: this slice's f2 fix turned that PRE-EXISTING bug from a loud
+  `ValueError` into a SILENT wrong-shape import for that one edge case —
+  flagged, not fixed (out of scope). Round-trip language narrowed
+  throughout this plan and `JMP_GAP_PLAN.md`: "proven both languages" now
+  means, precisely, SHARED-FIXTURE WIRE PARITY (P1-1's one JSON file two
+  suites read) — distinguished from the pre-existing hand-synced
+  parity-fixture pattern (`build_grouped_series`/`buildXY`'s matching test
+  pair), which only catches the two implementations drifting from EACH
+  OTHER, not from the real wire shape (exactly the class of bug P1-1 was).
+- Gates: backend `uv run pytest -q` 3436 passed / 268 skipped / 18 xfailed
+  (0 failed, +5 over the slice-1 count: 2 wire-fixture + 1 shape-only-
+  validation + 1 whitespace-strip + the new fixture CSV auto-joining the
+  parser matrix walk); `-m golden` 155 passed / 93 skipped / 0 failed,
+  unchanged; ruff + mypy --strict clean. Frontend `tsc --noEmit` clean,
+  `eslint --max-warnings=0` on every touched/new file clean, full `vitest
+  run`: **481 test files / 7100 tests, ALL passed** (clean run, no
+  contention this time). `npm run build`: bundle-size OK, 827.3 kB eager
+  (26.7 kB under the 854.0 kB budget). Also fixed in-flight (same lesson as
+  slice 1): the P2-3/P3-1 fix initially pushed `lib/workspace.ts` over its
+  OWN `architecture.test.ts` pin (592 lines, zero headroom, same as
+  `plotspec.ts`/`types.ts` before it) — moved `sanitizeDataStruct` to
+  `lib/categorical.ts` instead of raising the pin; `workspace.ts` lands at
+  its exact original line count.
+
+#### 2026-08-18 — P1.6 Import Wizard role assignment, Slice 2 (Sonnet agent, worktree `lane-c`, branch `claude/p16-import-wizard`)
+
+- Built on the merged P1.4 backend (PR #173). Backend:
+  `src/quantized/io/import_preview.py` gains `ImportSettings.label_line`
+  and preamble-comment retention (`tests/test_io_import_preview.py`, +12
+  tests). Frontend: `lib/errorRoles.ts` (label-only extraction, +2 tests),
+  `lib/importwizard.ts` (`finalChannelOrder`/`suggestErrorBindings`/
+  `errorRoleChannels`/`seedErrorRows`/`confirmedErrorBindings`/
+  `errorTargetOptions`/`resolveImportFilter`, +18 tests), `lib/types.ts`
+  (wire shape additions), new `components/workshops/importwizard/
+  useImportErrorRoles.ts` (+6 tests) and `ErrorRolesEditor.tsx` (+7 tests),
+  `useImportWizard.ts` + `ImportWizardPanel.tsx` + `PreviewTable.tsx`
+  updated and their existing test suites extended (+2/+6/+2 tests
+  respectively) rather than replaced.
+- Red-first evidence (by hand, before each fix): label_line —
+  `ImportSettings` had no such field at all (TypeError on construction);
+  preamble comments — `parse_import`'s `metadata` never carried a
+  `"comments"` key, confirmed via a direct call before the fix. The
+  "confirm, never silently attach" invariant (item 2) is pinned going
+  forward by `suggestErrorBindings`/`confirmedErrorBindings` tests (an
+  ambiguous column yields no suggestion; an unassigned row never reaches
+  `Dataset.errorRoles`) — this is a NEW feature, not a behavior flip, so
+  "red" here means "did not exist to test" rather than "regressed"; the
+  filter-refusal tests (item 4) are the same shape. One GENUINE bug caught
+  by its own new test during development (not a review find): the reseed
+  effect in `useImportErrorRoles.ts` was gated on a `useMemo`'d signature
+  STRING as the effect dependency, so React's own value-based dependency
+  comparison silently skipped `resetErrorRows`'s forced reseed when the
+  signature string was unchanged — fixed by depending on the `columns`
+  ARRAY reference instead and doing the value comparison manually inside
+  the effect body; `useImportErrorRoles.test.ts`'s "resetErrorRows...
+  forces a fresh reseed" test is the regression guard.
+- Explicitly NOT shipped (booked, see P1.6b above): the worksheet C/O/N
+  modeling-type UI and `cellEdit`'s categorical-write guard — neither fell
+  out naturally from the routes/store work this slice owned.
+- Gates: backend `uv run pytest -q` 3469 passed / 268 skipped / 18 xfailed
+  (0 failed); `-m golden` 155 passed / 93 skipped / 0 failed, unchanged;
+  ruff + mypy --strict clean. Frontend `tsc --noEmit` clean, `eslint
+  --max-warnings=0` clean on every touched/new file, full `vitest run`:
+  **493 test files / 7332 tests, ALL passed** (0 failed). `npm run build`:
+  bundle-size OK, 841.2 kB eager (12.8 kB under the 854.0 kB budget — the
+  narrowest headroom yet; the next slice touching `useApp.ts`'s bundle
+  chunk should watch this). Also fixed in-flight (same lesson as both
+  prior rounds): `lib/types.ts`'s wire-shape additions pushed it back over
+  its `architecture.test.ts` pin (1053 lines, zero headroom yet again) —
+  compressed the new/touched doc comments to single trailing-line style
+  (matching the file's own `values: number[][]; // row-major: ...`
+  precedent) rather than raising the pin; lands at its exact original line
+  count.
+
+#### 2026-08-18 — P1.5 live Graph Builder grouping parity (Sonnet agent, worktree `lane-c`, branch `claude/p15-live-grouping`)
+
+- Root cause traced before writing code: `FigureDocument.bindings.groupKey`
+  already existed and already drove Publication Preview + backend export;
+  `figureDocumentToPlotView` (the ONE bridge into the interactive Stage's
+  render pipeline) silently dropped it. `lib/plotview.ts` (`PlotView.
+  groupKey`, `+3` net lines after two ratchet trims to stay at its
+  978-line pin — `wc -l` undercounts this repo's `split("\n").length`-based
+  guards by 1 whenever a file ends with a trailing newline, a discrepancy
+  worth remembering for future line-budget arithmetic), `lib/figureDocument.ts`
+  (bindings-owned exclusion + the two projection functions), `store/useApp.ts`
+  (`groupKey` singleton + `setGroupKey`, mirrors `setXKey`), new
+  `lib/plotGroupSplit.ts` (a fresh sibling module funding itself rather than
+  growing `lib/plotdata.ts` past ITS pin — `applyGroupSplit`/
+  `groupSplitChannelMap`, algorithm-identical to `plotspec.ts`'s `buildXY`),
+  `components/Stage/usePlotPayload.ts` (wires it into the fetch pipeline,
+  suppresses error-bars/spans/color-by when grouped, same ruling `buildXY`'s
+  own preview already applies), `components/workshops/graphbuilder/
+  useGraphBuilder.ts` (`commitToPlot` calls `setGroupKey` instead of
+  toasting "preview-only"). `lib/merge.ts`'s real conflict-resolution remap
+  (P1.4's booked item) shipped alongside it. `lib/windowDocumentPersistence.ts`
+  gained one real bug fix caught by its own new red-first test:
+  `migrateLegacyWindow` never threaded `view.groupKey` into
+  `createFigureDocument`, silently losing a document-less grouped window's
+  binding on its very next save/reload.
+- Red-first evidence: `useGraphBuilder.test.ts`'s 3 new P1.5 tests confirmed
+  RED (`groupKey` stayed null / stale-2 leaked / toast still showed) before
+  the `commitToPlot` fix; `groupKey.test.ts`'s `.dwk`-round-trip test caught
+  the `migrateLegacyWindow` bug as a genuine RED (not manufactured) before
+  that fix; `merge.test.ts`'s remap assertions were hand-computed against
+  the algorithm before running, confirmed correct on first green run.
+  `usePlotPayload.groupSplit.test.ts`/`plotGroupSplit.test.ts` were composed
+  alongside their (carefully hand-traced) implementations rather than
+  strictly red-first, given the small blast radius of pure functions — noted
+  honestly rather than overclaimed.
+- Explicitly booked, NOT shipped: statistical/scientific faceting parity
+  (Facet's own live mechanism, `facetByColumn`, is structurally unrelated —
+  see `group-facet-journey.spec.ts`'s header) and the Data Filter/Tabulate/
+  Stat Stage workbench wiring through `is_categorical` (P1.4's own booking,
+  still no named-home slice).
+- Gates: no `src/` (backend) files touched this slice, so no backend gate
+  run. Frontend `tsc --noEmit` clean; `eslint --max-warnings=0` clean on
+  every touched/new file except ONE pre-existing warning in
+  `useGraphBuilder.ts` (line 184, an unrelated effect ~170 lines from this
+  slice's own 6-line diff there — confirmed pre-existing via `git diff`
+  line-correlation, not introduced by this slice); full `vitest run`:
+  **514 test files / 7574 tests, ALL passed** (0 failed) — this run also
+  caught and fixed 2 genuine regressions in a PRE-EXISTING F2.5b export
+  test file (`exportFigureCommand.test.ts`): two tests constructed a
+  `FigureDocument` with `groupKey` set directly without ALSO setting the
+  new live `groupKey` singleton, which `windowsForSave()`'s existing
+  live-view rebuild (an established pattern the SAME file's own header
+  already documents for `xKey`/`yKeys`) now legitimately overwrites — fixed
+  by setting the singleton too, matching that established pattern, plus a
+  stale doc-comment correction (item 6) in the same file. `npm run build`:
+  bundle-size OK, 849.9 kB eager (34.0 kB under the 883.9 kB budget).
+  E2E: `group-facet-journey.spec.ts` extended with a second journey (live
+  Stage render/undo/redo/close-reopen/export) and its stale header
+  corrected; verified via `tsc -p e2e/tsconfig.json --noEmit` (clean) and
+  `playwright test --list` (both tests discovered) but NOT executed against
+  a real browser this session — Playwright's Chromium download
+  (`cdn.playwright.dev`) is blocked by this sandbox's egress policy
+  (confirmed via the agent-proxy's own status diagnostic). Needs a CI run
+  or a networked dev machine before merge.
+
+#### 2026-08-18 — P1.5 review round: P1 blocker + P2 doc-accuracy fixed same-day (Sonnet agent, worktree `lane-c`, branch `claude/p15-live-grouping`)
+
+- P1 (probe-proven): `store/windowDefaults.ts`'s `datasetViewDefaults()` —
+  the shared choke point `setActive`/`addDataset`/a shape-changed reimport
+  all rely on to reset channel-indexed PlotView fields — never listed
+  `groupKey`, so a stale group binding survived a dataset switch and rode
+  into the new dataset's (differently-shaped) columns. One-line fix
+  (`groupKey: null` added to the reset object), plus a new coverage test
+  (`store/windows.test.ts`) pinning the full channel-indexed field list so
+  a future field can't slip the same way unnoticed.
+- P2 (doc accuracy): `plotGroupSplit.ts`'s claim that `applyGroupSplit` was
+  "a second call site of the identical algorithm" `buildXY` uses was
+  falsifiable — the two share no code and the existing test never checked
+  against `buildXY` at runtime. Fixed with a REAL parity test
+  (`plotGroupSplit.test.ts`, `buildXY` exported to make it possible), which
+  surfaced one genuine (previously inert) divergence — `applyGroupSplit`
+  lacked `buildXY`'s explicit non-finite-Y mask — fixed to not rely on the
+  upstream-already-nulled coincidence that made it harmless today.
+- P3 (nitpick): one-line comment added to the E2E spec naming which
+  assertion is load-bearing for the close/reopen proof.
+- Red-first evidence: P1's 4 new tests (setActive/addDataset/reimport/
+  coverage) all confirmed genuinely RED against the pre-fix
+  `datasetViewDefaults` (quoted: `expected 1 to be null` / `expected 2 to
+  be null` / `expected +0 to be null` / a missing `"groupKey"` key in the
+  coverage diff) before the one-line fix. P2's finite-guard divergence was
+  verified to actually matter (not just theoretically) by temporarily
+  reverting the guard and confirming the new direct unit test failed
+  (`expected [...NaN...] to equal [...null...]`) before restoring it.
+- Gates: no backend files touched. `tsc --noEmit` clean; `eslint
+  --max-warnings=0` clean on every touched file; full `vitest run`:
+  **514 test files / 7584 tests, ALL passed** (+10 over the prior count,
+  matching the new tests added this round). `npm run build`: bundle-size
+  OK, 849.9 kB eager (34.0 kB under the 883.9 kB budget, unchanged). E2E:
+  `tsc -p e2e/tsconfig.json --noEmit` clean, `playwright test --list`
+  still discovers both tests — still not executable in this sandbox (same
+  blocked-host constraint as the prior entry).
 
 ## Reference baseline
 

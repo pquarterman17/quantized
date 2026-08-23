@@ -21,16 +21,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { statsDescriptive } from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import Worksheet from "../Worksheet";
 import GridViewport from "./GridViewport";
 
 vi.mock("../../../lib/api", () => ({
-  statsDescriptive: vi.fn(),
   applyCorrections: vi.fn(),
   uploadFile: vi.fn(),
+}));
+vi.mock("../../../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
 }));
 
 function makeWideData(nRows: number, nCols: number): DataStruct {

@@ -61,6 +61,43 @@ describe("useDataFilter", () => {
     expect(result.current.active).toBe(true);
   });
 
+  // R9 code-review F3: `filter` (`active?.filter ?? NO_FILTER`) must reuse a
+  // single stable empty-array identity in the common unfiltered case — a
+  // bare `?? []` would mint a fresh array every render, defeating the
+  // `columns` memo's `[active, filter]` dep on every re-render of an
+  // unfiltered dataset (by far the common case). An unrelated re-render
+  // (`rerender()` with no store change) must leave `columns` at the SAME
+  // object identity.
+  it("columns stays referentially stable across an unrelated re-render when unfiltered (NO_FILTER identity)", () => {
+    const { result, rerender } = renderHook(() => useDataFilter());
+    const before = result.current.columns;
+    rerender();
+    expect(result.current.columns).toBe(before);
+  });
+
+  // R9 (POST_SPRINT_INDEPENDENT_REVIEW): `columns[*].current` is populated by
+  // `currentOf`, a closure over `filter` that the surrounding useMemo
+  // deliberately excludes from its own deps (only `[active, filter]` — see
+  // useDataFilter.ts's comment). This pins down that the memo's `current`
+  // field still tracks a fresh filter commit, immediately and on the very
+  // next filter edit, so that exclusion can't quietly regress into a
+  // one-render-stale value.
+  it("columns[*].current reflects the just-written predicate on the same render (currentOf freshness)", () => {
+    const { result } = renderHook(() => useDataFilter());
+    act(() => result.current.setRange(1, 15, undefined));
+    let col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toEqual({ col: 1, kind: "range", min: 15 });
+    // A second, different edit to the SAME column must also show up right
+    // away (not the previous predicate, not stale).
+    act(() => result.current.setRange(1, 20, 30));
+    col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toEqual({ col: 1, kind: "range", min: 20, max: 30 });
+    // Clearing drops it back to undefined on the same render too.
+    act(() => result.current.clear());
+    col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toBeUndefined();
+  });
+
   it("toggleLevel narrows a categorical column to the checked levels", () => {
     const { result } = renderHook(() => useDataFilter());
     act(() => result.current.toggleLevel(0, 1)); // uncheck level 1 → keep {0}

@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 
-import { getElements } from "../../../lib/api";
+import { getElements } from "../../../lib/api/reference";
 import { fmtNum } from "../../../lib/format";
 import type { ElementInfo } from "../../../lib/types";
 

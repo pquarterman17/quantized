@@ -15,7 +15,8 @@ import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../lib/err
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Button, Card, Select } from "../primitives";
+import { Button, Select } from "../primitives";
+import Card from "../primitives/Card";
 
 const SIDES: { value: ErrorSide; label: string }[] = [
   { value: "both", label: "± symmetric" },

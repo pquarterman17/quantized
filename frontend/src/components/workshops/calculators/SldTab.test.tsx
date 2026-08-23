@@ -6,20 +6,24 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getConstants, sldFromFormula } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
+import { sldFromFormula } from "../../../lib/api/sld";
 import { useApp } from "../../../store/useApp";
 import { useCalcHistory } from "../../../store/calcHistory";
 import { useToasts } from "../../../store/toasts";
 import CalculatorsContent from "./CalculatorsContent";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/reference", () => ({
   getConstants: vi.fn(),
+  // Rendered through CalculatorsContent, so useUnitsCalc's effect also fires;
+  // this sibling export now shares a file with getConstants (R8 merge) so a
+  // partial mock must cover it too, or the call throws instead of the
+  // original real-fetch-rejects-and-is-caught behavior.
+  getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
+}));
+vi.mock("../../../lib/api/sld", () => ({
   sldFromFormula: vi.fn(),
 }));
-// useCalculators also fetches the units-converter category table from a
-// sibling module (kept out of the pinned lib/api.ts barrel — see
-// lib/api/reference.ts); unmocked here, its real getJSON() call rejects in
-// jsdom (no fetch) and the hook's .catch() swallows it, same as offline.
 
 const SLD_RESULT = {
   formula: "Si",

@@ -1,7 +1,7 @@
 // Compact multi-select action bar (GUI_INTERACTION_PLAN #13 sub-item 3):
-// "N selected · Plot · Move · Tag · Export · Clear", shown at the top of the
-// Library panel whenever >=2 rows are selected. Every action reuses an
-// EXISTING bulk operation — nothing here is a new primitive:
+// "N selected · Plot · Move · Tag · Export · Combine · Clear", shown at the
+// top of the Library panel whenever >=2 rows are selected. Every action
+// reuses an EXISTING bulk operation — nothing here is a new primitive:
 //   - Plot    -> createPanelWindow(ids, "overlay") + focusWindow, the SAME
 //                "Overlay in one plot" quick pick DatasetRow's context menu
 //                already offers for a multi-selection
@@ -12,10 +12,18 @@
 //                per-row "Move to…" menu items call. No existing standalone
 //                picker component exists to reuse (checked DatasetRow's menu
 //                and folderOps.ts first), so this is that "minimal dialog".
-//   - Tag     -> addDatasetTag per id (the same action the row's ➕ tag chip
-//                calls), after a one-field text prompt.
+//   - Tag     -> batchEditDatasetMetadata (PR L, L0.56 — ONE undo entry for
+//                the whole selection; the row's own ➕ tag chip still calls
+//                addDatasetTag per-row, which is a single-row edit and
+//                correctly gets its own entry), after a one-field text prompt.
 //   - Export  -> folderOps.exportDatasets (the folder-export core, factored
 //                out so this bar doesn't need its own CSV logic).
+//   - Combine -> openCombineDialog (PR J slice 2, L0.32-L0.34) — the SAME
+//                dialog the workbook row's "Combine…" and the row menu's
+//                "Combine N selected…" (lib/combineSeparateActions.ts) open,
+//                seeded with the whole bar selection; the dialog itself is
+//                where the user chooses/confirms exactly which land in the
+//                new workbook.
 //   - Clear   -> selectIds([]) (the same primitive selectFolderContents/
 //                bulk-select already use, just emptied).
 
@@ -24,6 +32,7 @@ import { exportDatasets } from "./folderOps";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
+import { openCombineDialog } from "../../store/combineDialog";
 
 const ROOT = "(top level)";
 
@@ -62,12 +71,22 @@ export default function MultiSelectBar() {
     ]);
     const tag = picked ? String(picked.tag).trim() : "";
     if (!tag) return;
-    const add = useApp.getState().addDatasetTag;
-    selectedIds.forEach((id) => add(id, tag));
-    toast(`tagged ${n} dataset(s) "${tag}"`);
+    // PR L (L0.56): ONE undo entry for the whole batch, not one per dataset.
+    // `selectedIds`/`n` are the render-time selection, captured before this
+    // async dialog resolves — a dataset can vanish while it's open
+    // (adversarial-review P2), so the toast reports the store's returned
+    // LIVE-applied count, never the stale `n`, and stays silent at 0.
+    const updated = useApp.getState().batchEditDatasetMetadata([...selectedIds], { addTags: [tag] });
+    if (updated > 0) toast(`tagged ${updated} dataset(s) "${tag}"`);
   };
 
   const onExport = () => void exportDatasets([...selectedIds], `selection-${n}.csv`, "");
+
+  // PR J slice 2 (L0.32-L0.34): same discoverable-from-the-multi-selection
+  // entry point as Plot/Move/Tag/Export above — the dialog itself (not this
+  // bar) is where the user chooses/confirms exactly which of these land in
+  // the new workbook.
+  const onCombine = () => openCombineDialog({ workbookIds: [], worksheetIds: [...selectedIds] });
 
   const onClear = () => useApp.getState().selectIds([]);
 
@@ -85,6 +104,9 @@ export default function MultiSelectBar() {
       </button>
       <button className="qz-btn" onClick={onExport}>
         Export
+      </button>
+      <button className="qz-btn" onClick={onCombine}>
+        Combine
       </button>
       <button className="qz-btn" onClick={onClear}>
         Clear

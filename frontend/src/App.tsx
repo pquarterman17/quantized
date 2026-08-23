@@ -14,13 +14,16 @@ import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import { buildAppActions } from "./appCommands";
 import { health } from "./lib/api";
+import { hasDesktopShell } from "./lib/desktopBridge";
 import {
   loadLibraryViewMode,
   saveLibraryViewMode,
   type LibraryViewMode,
 } from "./lib/libraryViewPrefs";
+import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
+import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
@@ -59,9 +62,45 @@ export default function App() {
       .catch(() => setStatus("offline — demo mode"));
   }, [setStatus]);
 
+  // P1.3 wave 3, Lane D: load the GLOBAL-scope Plot Recipe cache once at
+  // boot (store/globalPlotRecipes.ts) -- a separate, non-project store, so
+  // this is its own tiny effect rather than folded into
+  // useWorkspaceAutosave's project-workspace restore above. Dynamic import
+  // (the `hasDesktopShell()` lock-provider effect above is the SAME shape in
+  // this file), MEASURED against a plain static import (bundle-size budget,
+  // MAIN_PLAN #29): the dynamic form came out smaller. (When first measured,
+  // `lib/plotRecipe.ts` was still eager via `lib/workspace.ts`'s synchronous
+  // `parseWorkspace`; the R8 schema split -- `lib/plotRecipeSchema.ts` --
+  // has since made capture lazy, so this boundary is worth re-measuring in
+  // the next bundle-diet pass.) Every variant tried in the original wave was
+  // measured rather than assumed; this was the smallest found.
+  useEffect(() => {
+    void import("./store/globalPlotRecipes").then((m) => m.useGlobalPlotRecipes.getState().hydrate());
+  }, []);
+
   // Restore the autosaved library on startup + debounce-save workspace changes
   // (extracted — component-ceiling ratchet).
   useWorkspaceAutosave();
+  useProjectLockHeartbeat();
+
+  // PR I2 (P0-3/P1-1): swap in the real cross-process filesystem lock
+  // provider the moment a desktop shell is present — a plain synchronous
+  // check, same convention `runSaveWorkspace`/every other desktop-detection
+  // call site in this codebase already uses (`window.pywebview.api` is
+  // injected before this component's effects run). A browser tab (no
+  // `window.pywebview`) keeps the in-memory default — see
+  // store/projectLock.ts's header for why that split is correct, not a gap.
+  // Dynamic import keeps the lock wire+adapter out of the eager bundle —
+  // browser tabs never need it, and in desktop mode the module resolves in
+  // milliseconds at startup, long before any user gesture can reach an
+  // open/save path that consults the provider.
+  useEffect(() => {
+    if (hasDesktopShell()) {
+      void import("./lib/desktopLockProvider").then((m) => {
+        useProjectLock.getState().setProvider(m.createDesktopLockProvider());
+      });
+    }
+  }, []);
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──
   // The app is a single-page view with no in-app navigation, so a "back"

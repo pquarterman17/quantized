@@ -6,7 +6,10 @@
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, DataTable, SegmentedControl, Select, StatusDot } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { DataTable } from "../../primitives/DataTable";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button, Select, StatusDot } from "../../primitives";
 import { resultRows } from "../../../lib/statschooser";
 import { useStatsChooser } from "./useStatsChooser";
 

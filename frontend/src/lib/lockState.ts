@@ -1,0 +1,185 @@
+// Single-writer project locking — the pure state machine (PR I2, L0.47).
+// "if the same project is already open for editing, another Quantized
+// instance opens it read-only and offers Open as Copy. Take Over Editing is
+// deliberate and only proceeds after verifying that the first instance is
+// closed or its lock is stale. Never permit silent concurrent writes to one
+// project."
+//
+// Kept free of any I/O (no filesystem, no store, no clock read of its own —
+// `now`/every timestamp is a parameter) so the four-state transition table
+// below is exhaustively testable with plain objects, the same "pure
+// planning, thin store orchestrator" split every other PR I module uses —
+// store/projectLock.ts is the thin orchestrator that reads/writes an actual
+// `LockRecord` through an injectable `LockProvider` (see that module's
+// header for the filesystem-provider deferral and its written reason).
+//
+// STALENESS RULE (frozen-scope item 7's "define staleness explicitly"):
+// a lock is STALE when its `heartbeatAt` is more than `STALE_AFTER_MS` old.
+// The holder is expected to refresh `heartbeatAt` roughly every
+// `HEARTBEAT_INTERVAL_MS` while it keeps the project open; three missed
+// heartbeats (`STALE_AFTER_MS = 3 * HEARTBEAT_INTERVAL_MS`) is the threshold
+// — long enough that one slow tick (a GC pause, a laptop briefly asleep,
+// scheduler jitter) can never trip it, short enough that a genuinely dead
+// instance (crashed, force-quit, network share dropped) is recognized
+// within about a minute and a half rather than leaving a project locked
+// indefinitely.
+//
+// FALSE-POSITIVE RISK (frozen-scope item 7's "and its false-positive risk"):
+// a instance that is merely SUSPENDED — a laptop closed mid-edit, a debugger
+// paused on a breakpoint — stops heartbeating without actually being gone,
+// and will look stale to a second instance well before it would ever choose
+// to give up the project itself. If that second instance takes over and the
+// first later resumes, BOTH could believe they hold the lock. This module's
+// answer is not to make the heuristic never wrong (impossible without a true
+// process-liveness check this pure module cannot perform) but to make being
+// wrong SAFE: `verifyBeforeWrite` is a check that CAN close the window, but
+// it only does so where a caller actually calls it against a FRESH provider
+// read taken immediately before a write commits. Two real callers exist
+// today: `store/projectLock.ts`'s `heartbeat()` (periodic — every
+// `HEARTBEAT_INTERVAL_MS`, ~30 s) and `store/workspaceIO.ts`'s
+// `runSaveWorkspace` (per-write — a fresh provider read taken right before
+// `saveProjectTo`, not the store's cached `status`). The per-write call is
+// what actually makes "the resumed original's very next SAVE is refused"
+// true; the periodic heartbeat call is a courtesy that demotes a stale
+// session's UI/status even between explicit writes, and is the ONLY
+// enforcement for any write path that does not itself re-verify (there is
+// exactly one such write path in this codebase today, `runSaveWorkspace`,
+// and it re-verifies — see its own doc). A future write path that skips
+// calling `verifyBeforeWrite` against a fresh read immediately before it
+// writes gets NO protection from this module beyond the cached `status`
+// the periodic heartbeat maintains — that gap is on the write path's own
+// author, not a guarantee this module can make on their behalf.
+
+export interface LockRecord {
+  /** Opaque id unique to one running Quantized process (a session/tab, not
+   *  a user) — store/projectLock.ts mints this once per process lifetime
+   *  for the in-memory provider; the desktop filesystem provider's id is
+   *  minted SERVER-side (`desktop_bridge.py`'s `DesktopApi.__init__`) and
+   *  adopted by the store the first time a lock call reports it — see
+   *  store/projectLock.ts's `instanceId` doc. */
+  instanceId: string;
+  /** Epoch ms the lock was first acquired (informational — Properties/
+   *  status display; no transition below reads it). */
+  acquiredAt: number;
+  /** Epoch ms of the holder's most recent heartbeat — the ONLY field
+   *  staleness is computed from. */
+  heartbeatAt: number;
+  /** Best-effort OS process id, when knowable (desktop shell only — a
+   *  browser tab has none). Never load-bearing for any transition here;
+   *  carried only for a human-readable "held by pid N" status line. */
+  pid?: string;
+  /** Opaque possession token (I2 audit fix, P0-3/P1-1) — what a
+   *  `LockProvider`'s atomic verbs (`refresh`/`takeOver`/`release`) use to
+   *  prove ownership server-side via compare-and-swap, instead of a plain
+   *  read-then-write. Deliberately NOT read by any transition in this pure
+   *  module (classification stays `instanceId`-based, unchanged) —
+   *  `store/projectLock.ts` is the only reader, and only to pass it back
+   *  to the provider on the NEXT call. Optional so a provider that has no
+   *  concept of a token (there is none left; every provider mints one, in-
+   *  memory included) can still satisfy this type. */
+  token?: string;
+}
+
+export type LockStatus = "unlocked" | "held-by-me" | "held-by-other-live" | "held-by-other-stale";
+
+/** A holder is expected to refresh roughly this often while editing. */
+export const HEARTBEAT_INTERVAL_MS = 30_000;
+/** Three missed heartbeats — see this module's header for the reasoning. */
+export const STALE_AFTER_MS = 3 * HEARTBEAT_INTERVAL_MS;
+
+/** R4 (post-sprint independent review): how many CONSECUTIVE heartbeats a
+ *  previously-writable ("held-by-me") session tolerates failing to VERIFY
+ *  ownership at all — no bridge, a thrown bridge call, a malformed
+ *  response, or a corrupt lock file, collectively "unverifiable" — before
+ *  demoting itself to read-only. Deliberately mirrors `STALE_AFTER_MS`'s
+ *  own "three missed heartbeats" reasoning (this module's header) for the
+ *  SYMMETRIC failure mode: `STALE_AFTER_MS` is how long ANOTHER instance
+ *  gets before this one gives up waiting for ITS proof of life; this
+ *  constant is how long THIS instance gets before it gives up trying to
+ *  prove its OWN lock is still real. Three consecutive misses is the same
+ *  ~`STALE_AFTER_MS` (`3 * HEARTBEAT_INTERVAL_MS`, ~90s) of wall-clock
+ *  time either way — long enough that a single transient hiccup (a slow
+ *  tick, a momentary IPC glitch) never flickers the UI read-only, short
+ *  enough that a genuinely broken bridge is caught and a stale "editable"
+ *  banner corrected within about the same window a truly-dead PEER's own
+ *  lock would be recognized as stale. Not itself a duration — it counts
+ *  heartbeat ATTEMPTS (`HEARTBEAT_INTERVAL_MS` apart), so an app that is
+ *  merely suspended (no ticks fire at all) never burns down the counter
+ *  the way wall-clock staleness would. */
+export const UNVERIFIABLE_DEMOTE_AFTER = 3;
+
+/** Classify a lock record read from the provider. `record: null` means no
+ *  one currently holds it (never written, or a clean release). */
+export function classifyLock(record: LockRecord | null, myInstanceId: string, now: number): LockStatus {
+  if (record === null) return "unlocked";
+  if (record.instanceId === myInstanceId) return "held-by-me";
+  return now - record.heartbeatAt > STALE_AFTER_MS ? "held-by-other-stale" : "held-by-other-live";
+}
+
+/** May this instance open the project read-write and acquire/refresh the
+ *  lock outright, with no takeover step? True for `unlocked` (nothing to
+ *  take over) and `held-by-me` (re-opening a project this SAME process
+ *  already holds — re-entrant, not a second writer). */
+export function canAcquireDirectly(status: LockStatus): boolean {
+  return status === "unlocked" || status === "held-by-me";
+}
+
+/** L0.47's hard gate: Take Over Editing proceeds ONLY when the other
+ *  holder's lock is stale — never merely because a user clicked the button.
+ *  `held-by-other-live` always refuses; there is no override. */
+export function canTakeOver(status: LockStatus): boolean {
+  return status === "held-by-other-stale";
+}
+
+/** Must this project stay read-only right now? True for both "someone else
+ *  has it" states — a stale lock does NOT become writable on its own; only
+ *  an explicit, successful `canTakeOver`-gated takeover changes that. */
+export function isReadOnly(status: LockStatus): boolean {
+  return status === "held-by-other-live" || status === "held-by-other-stale";
+}
+
+/** Fresh lock record for THIS instance acquiring (or re-acquiring) the
+ *  project — the only place a `LockRecord` is minted. */
+export function acquire(myInstanceId: string, now: number, pid?: string): LockRecord {
+  return { instanceId: myInstanceId, acquiredAt: now, heartbeatAt: now, ...(pid ? { pid } : {}) };
+}
+
+/** Refresh `record`'s heartbeat — ONLY valid when `record` is already held
+ *  BY `myInstanceId`; refreshing a lock this instance does not hold would
+ *  silently extend someone else's session, so this returns `null` instead
+ *  (mirrors `desktop_consent`'s "never trust the caller" shape: ownership is
+ *  verified against the record itself, not assumed from the call site). */
+export function refreshHeartbeat(record: LockRecord, myInstanceId: string, now: number): LockRecord | null {
+  if (record.instanceId !== myInstanceId) return null;
+  return { ...record, heartbeatAt: now };
+}
+
+/** Take over a STALE lock — the ONE place `canTakeOver`'s gate is actually
+ *  enforced at the data level (never trust a caller to have checked it):
+ *  refuses (`null`) unless `classifyLock(current, myInstanceId, now)` is
+ *  exactly `"held-by-other-stale"`. Success mints a completely fresh record
+ *  for `myInstanceId` — the previous holder's `acquiredAt` is NOT carried
+ *  forward, this is a new editing session, not a continuation. */
+export function takeOver(current: LockRecord | null, myInstanceId: string, now: number, pid?: string): LockRecord | null {
+  if (!canTakeOver(classifyLock(current, myInstanceId, now))) return null;
+  return acquire(myInstanceId, now, pid);
+}
+
+/** THE false-positive safety net (this module's header, "FALSE-POSITIVE
+ *  RISK"): may `myInstanceId` still safely write, given the CURRENT record
+ *  read fresh from the provider right before the write? False whenever the
+ *  record no longer names this instance — including `null` (someone
+ *  cleanly released and re-acquired, or the record was cleared) — so a
+ *  resumed-from-suspension instance that lost a stale-takeover race refuses
+ *  its own write instead of silently clobbering the new holder's changes. */
+export function verifyBeforeWrite(current: LockRecord | null, myInstanceId: string): current is LockRecord {
+  return current !== null && current.instanceId === myInstanceId;
+}
+
+/** Release — only the actual holder can clear its own lock; releasing a
+ *  lock this instance doesn't hold is a no-op signal (`false`) rather than
+ *  clearing someone else's, so the caller can tell "released" from
+ *  "nothing to release". */
+export function canRelease(record: LockRecord | null, myInstanceId: string): boolean {
+  return record !== null && record.instanceId === myInstanceId;
+}

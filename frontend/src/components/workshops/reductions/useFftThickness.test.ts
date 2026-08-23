@@ -1,12 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fftThickness } from "../../../lib/api";
+import { fftThickness } from "../../../lib/api/reductions";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useFftThickness } from "./useFftThickness";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/reductions", () => ({
   fftThickness: vi.fn(),
 }));
 

@@ -7,27 +7,25 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  convertUnits,
-  crystalCell,
-  crystalDSpacing,
-  sldFromFormula,
-  xrayCalc,
-} from "../../../lib/api";
+import { convertUnits } from "../../../lib/api/reference";
+import { sldFromFormula } from "../../../lib/api/sld";
+import { crystalCell, crystalDSpacing, xrayCalc } from "../../../lib/api";
 import { useCalcHistory } from "../../../store/calcHistory";
 import { useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
-  convertUnits: vi.fn(),
-  getConstants: vi.fn().mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } }),
   xrayCalc: vi.fn(),
   crystalDSpacing: vi.fn(),
   crystalCell: vi.fn(),
+}));
+vi.mock("../../../lib/api/sld", () => ({
   sldFromFormula: vi.fn(),
 }));
 
 vi.mock("../../../lib/api/reference", () => ({
   getUnitCategories: vi.fn().mockResolvedValue({ categories: [] }),
+  convertUnits: vi.fn(),
+  getConstants: vi.fn().mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } }),
 }));
 
 /** A promise whose resolve/reject the test holds. */

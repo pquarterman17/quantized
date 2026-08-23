@@ -6,11 +6,14 @@ looks like under adjustable settings and re-preview on every tweak, then parse
 with the confirmed settings. This module provides that:
 
 - :class:`ImportSettings` — a serializable description of how to read a file
-  (delimiter, which absolute lines are the header / units / first data row,
-  column-name overrides, and a per-column role: ``x`` / ``y`` / ``error`` /
-  ``label`` / ``ignore``). This is also the persistable "import filter" shape;
-  binding a saved filter to a glob and consulting it from the registry is the
-  remaining (design) half of #40.
+  (delimiter, which absolute lines are the header / units / label / first
+  data row, column-name overrides, and a per-column role: ``x`` / ``y`` /
+  ``error`` / ``label`` / ``ignore`` / ``categorical``, P1.4/P1.6). This is
+  also the persistable "import filter" shape; binding a saved filter to a
+  glob and consulting it from the registry is the remaining (design) half
+  of #40. Every preamble line above ``data_start_line`` NOT consumed as
+  header/units/label is retained (``metadata["comments"]``, P1.6 item 3)
+  instead of silently dropped.
 - :func:`guess_settings` — a starting guess from the raw text (reusing the
   ``delimited`` detectors).
 - :func:`preview_import` — parse the first rows under given settings and return
@@ -35,6 +38,7 @@ from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _looks_like_units_row, _numeric_score
 from quantized.io.delimited import (
     _detect_delimiter,
+    _encode_categorical,
     _extract_units,
     _to_float,
 )
@@ -47,11 +51,25 @@ __all__ = [
     "preview_import",
 ]
 
-DATA_ROLES = ("x", "y", "error", "label", "ignore")
+# P1.4: "categorical" joins the roles a column can carry -- it produces a
+# categorical DataStruct channel (see `_encode_categorical`/`cat_levels`
+# below). The Import Wizard UI for picking it is P1.6's slice; the backend
+# role already works (guess_settings never suggests it -- only an explicit
+# ImportSettings.roles entry selects it).
+DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
+_CATEGORICAL_ROLE = "categorical"
 # friendly delimiter aliases -> how to split
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
                  "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
+
+# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
+# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
+# far the sniffer actually looks) -- an accidental huge value would make
+# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
+# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
+# `max_lines` bound on `raw_lines`.
+_MAX_PREAMBLE_COMMENTS = 500
 
 
 @dataclass(frozen=True)
@@ -61,6 +79,12 @@ class ImportSettings:
     delimiter: str = "auto"
     header_line: int | None = None
     units_line: int | None = None
+    # P1.6: the "default legend-label row" -- when set, its per-column cells
+    # (aligned by raw column position, same as header_line/units_line)
+    # override each CHANNEL column's display LABEL (not its unit). Absent
+    # (None, the default) means the header-derived name stands unchanged --
+    # additive, no behavior change for a settings object that doesn't set it.
+    label_line: int | None = None
     data_start_line: int = 0
     column_names: list[str] | None = None
     roles: list[str] | None = None
@@ -83,6 +107,13 @@ class _Parsed:
     roles: list[str]
     matrix: np.ndarray  # (n_rows, n_cols) float
     data_start: int
+    # Raw string cells per data row (n_rows entries, each up to n_cols wide),
+    # BEFORE `_to_float` conversion -- the P1.4 "label"/"categorical" roles
+    # need the original text, which the numeric `matrix` has already erased.
+    data_tokens: list[list[str]]
+    # Every line, delimiter-split (P1.6: label_line lookup + preamble capture
+    # both need lines ABOVE data_start, which `data_tokens` excludes).
+    all_tokens: list[list[str]]
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -181,7 +212,73 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     for i, row in enumerate(data_tokens):
         for k in range(min(len(row), n_cols)):
             matrix[i, k] = _to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds)
+    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens)
+
+
+def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
+    """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
+    POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
+    `label_line` isn't set or is out of range (no override, unchanged
+    behavior).
+
+    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
+    `units_line`), reuse the already `_extract_units`-split `p.names` (or
+    `p.units`) rather than re-reading the raw token row -- the raw row still
+    has an embedded "Name (unit)" suffix that `_extract_units` already
+    stripped out of `p.names`, so reading it again would silently
+    reintroduce the unit text into the label."""
+    ll = settings.label_line
+    if ll is None:
+        return None
+    if ll == settings.header_line:
+        return list(p.names)
+    if ll == settings.units_line:
+        return list(p.units)
+    if not (0 <= ll < len(p.all_tokens)):
+        return None
+    row = p.all_tokens[ll]
+    return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
+
+
+def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int) -> list[str]:
+    """P1-5 DEFECT 2: the name each column's DataStruct channel/label will
+    ACTUALLY carry -- `label_overrides[k]` when set (P1.6 `label_line`),
+    else the header-derived `p.names[k]` unchanged. This is the SAME rule
+    `parse_import`'s local `label_for` applies; factored out here so
+    `preview_import` can report it too (`columns[k].effective_name`)
+    instead of only ever offering the raw header name, which a wizard
+    classifying error-role suggestions against would otherwise be matching
+    a name the final dataset never carries whenever `label_line` is set."""
+    return [
+        label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
+        for k in range(n_cols)
+    ]
+
+
+def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
+    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
+    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
+    (raw stripped text) as searchable metadata instead of silently dropped.
+    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
+    consumer (search, the Inspector) reads one convention regardless of
+    which import path produced the dataset.
+
+    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
+    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
+    directly user-settable through the wizard, so an oversized value (typo,
+    or a stale saved filter) can't balloon `metadata["comments"]` to the
+    size of the whole file."""
+    consumed = {settings.header_line, settings.units_line, settings.label_line}
+    out: list[str] = []
+    for i in range(p.data_start):
+        if len(out) >= _MAX_PREAMBLE_COMMENTS:
+            break
+        if i in consumed:
+            continue
+        raw = p.lines[i].strip() if i < len(p.lines) else ""
+        if raw:
+            out.append(raw)
+    return out
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
@@ -206,8 +303,22 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         [None if np.isnan(v) else float(v) for v in p.matrix[i, :]]
         for i in range(min(n_rows, max_rows))
     ]
+    # P1-5 DEFECT 2: `effective_name` alongside the raw header `name` -- the
+    # name parse_import's label_for would ACTUALLY assign this column once
+    # `label_line` overrides are applied, so the wizard's suggestion engine
+    # can classify against what the dataset will really carry instead of
+    # the header text alone (`name` stays the raw header text, unchanged,
+    # for display of what the file itself says).
+    label_overrides = _label_row_overrides(p, settings, n_cols)
+    effective_names = _effective_names(p, label_overrides, n_cols)
     columns = [
-        {"index": k, "name": p.names[k], "unit": p.units[k], "role": p.roles[k]}
+        {
+            "index": k,
+            "name": p.names[k],
+            "unit": p.units[k],
+            "role": p.roles[k],
+            "effective_name": effective_names[k],
+        }
         for k in range(n_cols)
     ]
     return {
@@ -216,11 +327,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "delimiter": p.delim,
         "header_line": settings.header_line,
         "units_line": settings.units_line,
+        "label_line": settings.label_line,
         "data_start_line": p.data_start,
         "columns": columns,
         "rows": preview_rows,
         "n_data_rows": int(n_rows),
         "n_preview_rows": len(preview_rows),
+        "comments": _preamble_comments(p, settings),
     }
 
 
@@ -228,8 +341,25 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     """Parse the full ``text`` under ``settings`` into a ``DataStruct``.
 
     The ``x`` role column becomes the axis (a 1..N sample index if none is
-    marked); ``y`` / ``error`` columns become channels; ``label`` / ``ignore``
-    columns are dropped (``DataStruct`` is numeric-only).
+    marked); ``y`` / ``error`` columns become numeric channels;
+    ``categorical`` columns become P1.4 categorical channels (float codes +
+    a level table), appended after the numeric ones; ``label`` columns are
+    dropped from ``.values`` (DataStruct stays numeric-only) but their raw
+    strings are captured to the ``text_columns`` metadata sidecar -- the
+    SAME shape ``import_csv`` already emits -- rather than silently lost
+    (P1.4's wizard-label-drop fix: parity with a silent/default import,
+    which never had this role to begin with and so never dropped anything).
+    ``ignore`` columns are dropped entirely, with no sidecar capture --the
+    user explicitly asked for that.
+
+    Raises ``ValueError`` when MORE THAN ONE column is marked ``x`` (P1-5
+    DEFECT 1) -- previously this silently kept only ``x_cols[0]`` as the
+    axis and dropped every OTHER x column entirely: not a channel, not a
+    ``text_columns`` entry, no trace anywhere in the resulting DataStruct.
+    The wizard UI makes this unreachable by disabling Import on the same
+    condition; this is defense-in-depth for any other caller (a direct API
+    request, a stale saved filter) that reaches ``parse_import`` with an
+    invalid multi-x selection.
     """
     p = _parse_core(text, settings)
     n_rows, n_cols = p.matrix.shape
@@ -238,8 +368,15 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
 
     x_cols = [k for k in range(n_cols) if p.roles[k] == "x"]
     chan_cols = [k for k in range(n_cols) if p.roles[k] in _CHANNEL_ROLES]
-    if not chan_cols:
-        raise ValueError("no y/error columns selected to import")
+    cat_cols = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
+    if not chan_cols and not cat_cols:
+        raise ValueError("no y/error columns (or categorical) selected to import")
+    if len(x_cols) > 1:
+        names = ", ".join(p.names[k] for k in x_cols)
+        raise ValueError(
+            f"more than one column is marked as the x role ({names}) -- "
+            "only one column can be x; change the others to y/error/label/ignore"
+        )
     if x_cols:
         x = p.matrix[:, x_cols[0]]
         x_name, x_unit = p.names[x_cols[0]], p.units[x_cols[0]]
@@ -247,8 +384,31 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         x = np.arange(1, n_rows + 1, dtype=float)
         x_name, x_unit = "Sample Index", ""
 
-    labels = [p.names[k] for k in chan_cols]
+    # P1.6: the "default legend-label row" overrides a channel's LABEL (not
+    # its unit) -- absent (None) leaves the header-derived name untouched.
+    # P1-5 DEFECT 2: shared with `preview_import` via `_effective_names` so
+    # the two never drift apart.
+    label_overrides = _label_row_overrides(p, settings, n_cols)
+    effective_names = _effective_names(p, label_overrides, n_cols)
+
+    labels = [effective_names[k] for k in chan_cols]
     units = [p.units[k] for k in chan_cols]
+    values = p.matrix[:, chan_cols] if chan_cols else np.empty((n_rows, 0), dtype=float)
+
+    # P1.4: categorical channels append AFTER the numeric ones -- same rule
+    # as import_csv's f1/f2 fallback, one predictable ordering everywhere.
+    cat_levels: dict[int, tuple[str, ...]] = {}
+    if cat_cols:
+        cat_arrays = []
+        for k in cat_cols:
+            cells = [row[k] if k < len(row) else "" for row in p.data_tokens]
+            codes, levels = _encode_categorical(cells)
+            cat_levels[len(labels)] = levels
+            labels.append(effective_names[k])
+            units.append(p.units[k])
+            cat_arrays.append(codes)
+        values = np.hstack([values, np.column_stack(cat_arrays)])
+
     metadata: dict[str, Any] = {
         "parser_name": "import_preview",
         "x_column_name": x_name,
@@ -257,5 +417,15 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "all_column_names": p.names,
         "import_settings": settings.to_dict(),
     }
-    return DataStruct.create(x, p.matrix[:, chan_cols], labels=labels, units=units,
-                             metadata=metadata)
+    label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
+    if label_cols:
+        metadata["text_columns"] = {
+            p.names[k]: [row[k].strip() if k < len(row) else "" for row in p.data_tokens]
+            for k in label_cols
+        }
+    comments = _preamble_comments(p, settings)
+    if comments:
+        metadata["comments"] = comments
+    return DataStruct.create(
+        x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
+    )

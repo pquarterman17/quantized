@@ -32,7 +32,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { rsmBoxCut, rsmBoxStats, type BoxCutRequest, type BoxStats, type BoxStatsRequest } from "../../lib/api/rsm";
 import { cancelActiveGesture, setActiveGestureCancel } from "../../lib/gestureCancel";
 import type { CutSpace } from "../../lib/mapcuts";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import {
   applyRulerDrag,
   classifyRulerHit,

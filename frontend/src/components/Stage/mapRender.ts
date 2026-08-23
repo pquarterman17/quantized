@@ -7,7 +7,7 @@
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
 

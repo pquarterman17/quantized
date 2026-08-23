@@ -18,8 +18,13 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
   uploadFile: uploadMock,
   fitModel: fitMock,
-  listFitModels: modelsMock,
   reportEmit: emitMock,
+}));
+// listFitModels moved to lib/api/curvefit.ts (R8 bundle-diet pass) — mock
+// it at its real import path.
+vi.mock("../../../lib/api/curvefit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/curvefit")>()),
+  listFitModels: modelsMock,
 }));
 
 const DATA: DataStruct = {

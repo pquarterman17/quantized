@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  applyCorrections as applyCorrectionsApi,
-  fetchBookData,
-  guessImportSettings,
-  parseImportText,
-  uploadFile,
-} from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, fetchBookData, guessImportSettings, parseImportText, uploadFile } from "../lib/api";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import {
   breakPanelsOf,
@@ -855,6 +849,45 @@ describe("useApp x-axis channel", () => {
     useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old", xKey: 3 });
     useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "n", data: raw }] });
     expect(useApp.getState().xKey).toBeNull();
+  });
+});
+
+// P1.5 review round P1: groupKey is a CHANNEL-INDEXED PlotView field exactly
+// like xKey (indexes the ACTIVE dataset's columns) -- it must reset through
+// the SAME datasetViewDefaults choke point the "resets xKey" test above
+// covers, or a stale index rides into a differently-shaped dataset and
+// renders a bogus per-value split (or silently degrades to ungrouped if the
+// stale code is out of range for the new dataset). RED before the fix:
+// datasetViewDefaults's object literal never mentioned groupKey at all, so
+// it survived every one of these resets untouched.
+describe("useApp groupKey channel-indexed reset (P1.5 review P1)", () => {
+  it("resets groupKey to null when setActive switches to a different dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      groupKey: 1,
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("resets groupKey to null when addDataset adds a new dataset", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      groupKey: 2,
+    });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("loadWorkspace resets groupKey", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old", groupKey: 3 });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "n", data: raw }] });
+    expect(useApp.getState().groupKey).toBeNull();
   });
 });
 
@@ -2747,6 +2780,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     book: string,
     frame: Frame | null,
     yRange: [number, number],
+    axisExtra?: { x_log?: boolean; y_log?: boolean; x_step?: number | null; y_step?: number | null },
   ) => ({
     id,
     stem: "Fixed Lambdas SI",
@@ -2757,10 +2791,12 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
       layer,
       x_from: 0,
       x_to: 10,
-      x_log: false,
+      x_log: axisExtra?.x_log ?? false,
       y_from: yRange[0],
       y_to: yRange[1],
-      y_log: false,
+      y_log: axisExtra?.y_log ?? false,
+      x_step: axisExtra?.x_step ?? null,
+      y_step: axisExtra?.y_step ?? null,
       n_curves: 1,
       annotations: [] as string[],
       curves: [{ book, x: "A", y: "B" }],
@@ -2814,6 +2850,48 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     ]);
     // The clicked layer's OWN dataset activates, even though it isn't first.
     expect(s.activeId).toBe("p2");
+  });
+
+  // Visual-harness regression (tools/visual/origin_figures.mjs structural
+  // report, 2026-08-21): a RockingCurve.opju Graph3-shaped family (3 layers,
+  // no decoded frame geometry -> ordinal stack, one layer log-scale) proves
+  // BOTH halves of the fix. The store's real apply path (this test) writes
+  // every layer's decoded range/log/step onto its OWN panel inside
+  // `composition` -- never onto the top-level singleton `xLim`/`yLim`/
+  // `xScale`/`yScale`/`xStep`/`yStep` fields, and there is no raw
+  // `spatialPanels` array on state at all (it was collapsed into
+  // `composition` by commit 5cdc7303, 2026-07-19). The harness read
+  // `s.spatialPanels` directly and compared the (unrelated, untouched)
+  // top-level singleton fields against the clicked layer's own figure --
+  // silently misclassifying every spatial multi-panel apply as "single" and
+  // failing its range/step/log checks by construction. The fix reads through
+  // the same `spatialPanelsOf(composition)` accessor this test uses.
+  it("a log-scale ordinal multi-panel family carries its decoded range/log/step per PANEL, not on the top-level singleton axis fields or a raw spatialPanels array", () => {
+    const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [1, 100], { y_log: true, x_step: 2, y_step: 1 });
+    const l2 = mkEntry("fig-1", 2, "p2", "Book2", null, [0, 50], { x_step: 5, y_step: 10 });
+    const l3 = mkEntry("fig-2", 3, "p3", "Book3", null, [0, 30]);
+    useApp.setState({ originFigures: [l1, l2, l3] });
+
+    useApp.getState().applyOriginFigure("fig-0"); // clicking layer 1 (the log-scale layer)
+    const s = useApp.getState();
+
+    // The regression's core assumption, proven false: the pre-#54-refactor
+    // field name the harness kept reading does not exist on state.
+    expect((s as unknown as Record<string, unknown>).spatialPanels).toBeUndefined();
+
+    // The real per-panel decoded state -- what a correct reader must use.
+    const panels = spatialPanelsOf(s.composition);
+    expect(panels).toEqual([
+      expect.objectContaining({ datasetId: "p1", xLim: [0, 10], yLim: [1, 100], xLog: false, yLog: true, xStep: 2, yStep: 1 }),
+      expect.objectContaining({ datasetId: "p2", xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: false, xStep: 5, yStep: 10 }),
+      expect.objectContaining({ datasetId: "p3", xLim: [0, 10], yLim: [0, 30], xLog: false, yLog: false, xStep: null, yStep: null }),
+    ]);
+
+    // The top-level singleton axis fields a "single-layer" comparison would
+    // wrongly read stay at whatever they were before this apply (untouched
+    // by the spatial branch) -- they carry none of layer 1's decoded state,
+    // which is exactly why comparing against them misfires.
+    expect(s.yScale).not.toBe("log"); // layer 1 IS y_log:true; the singleton never learns that
   });
 
   it("opens trusted overlapping/inset layers in page mode instead of flattening them", () => {
@@ -3415,9 +3493,13 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      quickPlotTemplates: [],
       librarySelection: null,
       workbookLastChild: {},
       expandedWorkbookIds: [],
+      collections: [],
+      visibleDetailsColumns: [],
+      plotRecipes: [],
     };
   }
 
@@ -3550,7 +3632,9 @@ describe("useApp computed columns (recompute)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
     useApp.getState().addFormula("d1", "S", "A + B");
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`
+    // at authoring time.
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
     expect(d.data.labels).toEqual(["A", "B", "S"]);
     expect(d.data.values).toEqual([
       [10, 20, 30],
@@ -3606,6 +3690,63 @@ describe("useApp computed columns (recompute)", () => {
     const d = useApp.getState().datasets[0];
     // corrected A column drove a fresh S = A + B (999 discarded).
     expect(d.data.values[0][2]).toBe(20); // 0 + 20
+    expect(d.data.values[1][2]).toBe(60); // 20 + 40
+  });
+
+  // Review-round P3: formulaErrors (K5b) clears through the SAME `recompute`
+  // chokepoint corrections/reimport already route through — pinning that a
+  // BASE-DATA change (not a formula EDIT — updateFormula is untouched here)
+  // can turn a previously-failing formula valid again.
+  it("formulaErrors clears when a base-data change (not a formula edit) makes a previously-erroring formula valid", async () => {
+    // Start already in the erroring state directly (bypassing addFormula —
+    // its own K4 cycle guard is irrelevant here and, for a BRAND-NEW
+    // formula, would always reject referencing "the next unassigned
+    // letter" as a self-reference, since that's necessarily both the
+    // missing letter AND the new formula's own slot — see formulaLetter).
+    // What P3 pins is the `recompute` chokepoint's error-clearing, not
+    // addFormula's authoring-time guard (covered elsewhere).
+    const erroring: DataStruct = {
+      time: [1, 2],
+      labels: ["A", "S"],
+      units: ["u", ""],
+      values: [
+        [10, NaN],
+        [30, NaN],
+      ],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x",
+          data: erroring,
+          formulas: [{ name: "S", expr: "A + B", deps: ["A", "B"] }],
+          formulaErrors: { S: 'unknown variable "B"' },
+        },
+      ],
+      activeId: "d1",
+    });
+
+    // A correction (a base-data change, NOT a formula edit) grows the base
+    // to include B — the backend echoes the shape it received (3 cols incl.
+    // the stale/erroring S, discarded on recompute).
+    const corrected: DataStruct = {
+      time: [1, 2],
+      labels: ["A", "B", "S"],
+      units: ["u", "v", ""],
+      values: [
+        [0, 20, NaN],
+        [20, 40, NaN],
+      ],
+      metadata: {},
+    };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(corrected);
+    await useApp.getState().applyCorrections("d1", { yOff: -10 });
+
+    const d = useApp.getState().datasets[0];
+    expect(d.formulaErrors).toBeUndefined();
+    expect(d.data.values[0][2]).toBe(20); // 0 + 20, freshly evaluated
     expect(d.data.values[1][2]).toBe(60); // 20 + 40
   });
 });
@@ -3753,20 +3894,36 @@ describe("useApp channel modeling types — per dataset", () => {
     metadata: {},
   };
 
-  it("sets and clears a type override on the active dataset", () => {
+  it("sets and clears a type override on the named dataset", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "a", data: wide }], activeId: "d1" });
-    useApp.getState().setChannelType(1, "nominal");
+    useApp.getState().setChannelType("d1", 1, "nominal");
     expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "nominal" });
-    useApp.getState().setChannelType(1, "ordinal");
+    useApp.getState().setChannelType("d1", 1, "ordinal");
     expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "ordinal" });
-    useApp.getState().setChannelType(1, null);
+    useApp.getState().setChannelType("d1", 1, null);
     expect(useApp.getState().datasets[0].channelTypes).toBeUndefined(); // empties to undefined
   });
 
-  it("is a no-op with no active dataset", () => {
+  it("is a no-op for an unknown dataset id", () => {
     useApp.setState({ datasets: [], activeId: null });
-    useApp.getState().setChannelType(0, "nominal");
+    useApp.getState().setChannelType("nope", 0, "nominal");
     expect(useApp.getState().datasets).toEqual([]);
+  });
+
+  // P1.6b: the worksheet's floating window (GUI_INTERACTION #14) can browse a
+  // NON-active dataset — setChannelType must act on the EXPLICIT id, not
+  // silently mutate whatever happens to be active.
+  it("acts on the named dataset even when a DIFFERENT one is active", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: wide },
+        { id: "d2", name: "b", data: wide },
+      ],
+      activeId: "d1",
+    });
+    useApp.getState().setChannelType("d2", 1, "nominal");
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")!.channelTypes).toBeUndefined();
+    expect(useApp.getState().datasets.find((d) => d.id === "d2")!.channelTypes).toEqual({ 1: "nominal" });
   });
 });
 

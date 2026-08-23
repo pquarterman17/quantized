@@ -23,11 +23,48 @@ meshes) are usually already a regular grid under the hood, so
 (``RegularGridInterpolator``, no triangulation) instead. Genuinely scattered
 input is unaffected -- detection returns ``None`` and the original
 ``griddata`` call runs unchanged.
+
+Scattered-input pre-aggregation (RELEASE_BLOCKERS item 3): when input is
+genuinely scattered (not caught by the fast path above) AND far denser than
+the requested output grid, ``regrid2d`` still handed the WHOLE cloud to
+``griddata``/``sibson_interpolate`` -- 29.8s/141.6s measured on ``main`` at
+1M/4M points into a 500x500 output, as a synchronous blocking call. The
+output is a fixed ``nx x ny`` raster; points much finer than one output
+cell cannot change a cell's rendered value in any way a viewer could see,
+so ``_thin_scattered`` bin-averages the input onto a ``(2*ny) x (2*nx)``
+grid (2x the output resolution per axis -- fine enough that the averaged
+representatives still resolve every feature the output raster itself can
+display, coarse enough to bound the Delaunay/Sibson build to a small fixed
+multiple of the output size) before triangulation, when (and only when) the
+input exceeds ``_THIN_K`` times the output cell count. See ``_THIN_K``'s
+comment for why that threshold is exactly the bin count, and
+``_thin_scattered``'s docstring for the bin-average method and its NaN
+handling. Below the threshold the input is passed to the interpolator
+completely untouched -- bit-exact with the pre-existing behaviour, which
+the golden suite pins. Above it, results legitimately diverge from a full,
+un-thinned Delaunay/Sibson build; see ``_thin_scattered`` and
+``tests/test_calc_interp2d.py``'s pre-aggregation tests for the measured
+bound on smooth data.
+
+``detect_regular_grid`` double-call dedupe (RELEASE_BLOCKERS.md IMPORTANT):
+for ``method="linear"`` above the thinning threshold, ``regrid2d``'s thinning
+gate and ``_interp_scattered``'s P2.8 dispatch used to each call
+``detect_regular_grid`` independently on the SAME untouched cloud whenever a
+grid was found -- ~4.1s duplicated per call at 4M points. ``regrid2d`` now
+calls it at most once and threads the result into ``_interp_scattered`` via
+a ``grid_hint`` param (see ``_Unset``): ``_UNSET`` (default) means "not
+checked -- detect fresh" (every direct ``interpolate2d`` call, and every
+``regrid2d`` call that never reaches the gate); an explicit
+``GridLayout | None`` means "already checked, reuse this verdict". A
+thinning-replaced cloud still gets the gate's ``None`` verdict (safe -- see
+``regrid2d``'s thinning block); a non-``None`` hint is guarded against
+``_unique_rows`` shrinking the cloud out from under its ``ix``/``iy``
+indices (see ``_interp_scattered``'s size check).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -41,6 +78,91 @@ from quantized.calc._natural_neighbor import sibson_interpolate
 __all__ = ["interpolate2d", "regrid2d"]
 
 _SCATTERED = ("linear", "natural", "nearest", "cubic")
+
+
+class _Unset:
+    """Sentinel type for the ``grid_hint`` parameter threaded through
+    ``interpolate2d``/``_interp_scattered`` (see the IMPORTANT dedupe note in
+    ``RELEASE_BLOCKERS.md`` and this module's docstring).
+
+    A bare ``None`` default can't distinguish "the caller never ran
+    ``detect_regular_grid``" from "the caller ran it and it found no grid" --
+    the second must NOT trigger a fresh detection, the first must. ``_UNSET``
+    (the one instance of this class) means the former; an explicit
+    ``GridLayout | None`` value means the latter. ``isinstance`` narrows the
+    ``GridLayout | None | _Unset`` union cleanly under mypy --strict.
+    """
+
+    __slots__ = ()
+
+
+_UNSET: Final = _Unset()
+
+# RELEASE_BLOCKERS item 3: bin-average pre-aggregation for _interp_scattered's
+# full-cloud Delaunay/Sibson build (see module docstring). The fine grid used
+# for binning is 2x the output resolution per axis, i.e. (2*ny)*(2*nx) bins --
+# so setting the engagement threshold to exactly that many points means
+# thinning only ever kicks in when it can actually reduce the point count
+# (every bin holding >1 point on average); below it, the input is already at
+# or below one point per bin, thinning would do nothing useful, and the code
+# takes the exact old path so the golden suite stays byte-identical. K=4
+# falls straight out of that -- it is not a separately-tuned knob, it is
+# 2*2 (per-axis doubling on two axes).
+_THIN_K = 4
+
+
+def _thin_scattered(
+    xv: NDArray[np.float64],
+    yv: NDArray[np.float64],
+    zv: NDArray[np.float64],
+    xl: tuple[float, float],
+    yl: tuple[float, float],
+    nx: int,
+    ny: int,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """Bin-average ``(x, y, z)`` onto a ``(2*ny) x (2*nx)`` grid before triangulation.
+
+    Each occupied bin is replaced by the mean of the ACTUAL (x, y, z) triples
+    that fell into it -- not the bin centre -- so sub-bin position information
+    (which matters for the Delaunay geometry the interpolator builds) survives
+    averaging; only intensity noise and point count are reduced. Bin edges
+    span ``xl`` x ``yl`` -- the same resolved extent (data min/max, or an
+    explicit ``xlim``/``ylim``) that ``regrid2d`` grids over. Points outside
+    that extent (an explicit ``xlim``/``ylim`` narrower than the data) are
+    clipped into the edge bin rather than dropped, so they still contribute
+    near the boundary, same as they would in the un-thinned path.
+
+    NaN handling: this function assumes ``xv``/``yv``/``zv`` are already
+    finite -- ``regrid2d`` filters non-finite ``(x, y, z)`` triples before
+    calling this, and that is also the ONLY place a caller of ``interpolate2d``
+    can reach this code today (see ``regrid2d``'s call site below), so there
+    is nothing to average around. Kept as an assumption (not a re-filter) so
+    a violation is loud rather than silently masked; see the module docstring
+    and ``regrid2d`` for where the finite-only invariant is actually enforced.
+
+    Returns fewer points than went in whenever any bin holds >1 point (the
+    common case above the calling threshold); if the thinned result would
+    somehow drop below 3 points (degenerate/near-empty bins), the caller
+    falls back to the untouched input instead of risking a downstream
+    "at least 3 data points" error introduced by thinning itself.
+    """
+    bins_x = max(2 * nx, 1)
+    bins_y = max(2 * ny, 1)
+    x_edges = np.linspace(xl[0], xl[1], bins_x + 1)
+    y_edges = np.linspace(yl[0], yl[1], bins_y + 1)
+    ix = np.clip(np.searchsorted(x_edges, xv, side="right") - 1, 0, bins_x - 1)
+    iy = np.clip(np.searchsorted(y_edges, yv, side="right") - 1, 0, bins_y - 1)
+    flat = iy.astype(np.int64) * bins_x + ix.astype(np.int64)
+
+    order = np.argsort(flat, kind="stable")
+    flat_sorted = flat[order]
+    _, start_idx, counts = np.unique(flat_sorted, return_index=True, return_counts=True)
+    counts_f = np.asarray(counts, dtype=float)
+
+    sum_x = np.asarray(np.add.reduceat(xv[order], start_idx), dtype=float)
+    sum_y = np.asarray(np.add.reduceat(yv[order], start_idx), dtype=float)
+    sum_z = np.asarray(np.add.reduceat(zv[order], start_idx), dtype=float)
+    return sum_x / counts_f, sum_y / counts_f, sum_z / counts_f
 
 
 def _unique_rows(
@@ -114,6 +236,7 @@ def _interp_scattered(
     yqv: NDArray[np.float64],
     method: str,
     extrapolation: str,
+    grid_hint: GridLayout | None | _Unset = _UNSET,
 ) -> NDArray[np.float64]:
     pts = np.column_stack([xv, yv])
     qpts = np.column_stack([xqv, yqv])
@@ -127,7 +250,28 @@ def _interp_scattered(
             zqv = _hull_mask(xv, yv, qpts, zqv)
         return zqv
     else:  # linear
-        grid = detect_regular_grid(xv, yv)
+        # `grid_hint` distinguishes "caller (regrid2d) already ran
+        # detect_regular_grid on this exact call's data" (an explicit
+        # GridLayout or None) from "not checked" (_UNSET, e.g. a direct
+        # interpolate2d() call with no hint) -- see _Unset's docstring and
+        # the module docstring's dedupe note. Only the _UNSET case re-detects.
+        grid: GridLayout | None
+        if isinstance(grid_hint, _Unset):
+            grid = detect_regular_grid(xv, yv)
+        elif grid_hint is not None and grid_hint.ix.shape[0] != xv.shape[0]:
+            # A non-None hint's ix/iy are per-input-point cell indices,
+            # positionally tied to the point cloud it was computed on. If
+            # `xv` here is a different size (e.g. interpolate2d's own
+            # _unique_rows just dropped exact-duplicate (x, y) rows the hint
+            # was computed before that dedup), those indices no longer line
+            # up with `zv` -- the hint can't be trusted, so fall back to a
+            # fresh detection exactly as an un-hinted call would do. Never
+            # fires for the duplicate-free clouds the dedupe actually
+            # targets (real gridded XRD/RSM meshes) -- see the module
+            # docstring's dedupe note.
+            grid = detect_regular_grid(xv, yv)
+        else:
+            grid = grid_hint
         if grid is not None:
             # Gridded input (P2.8): skip the Delaunay triangulation entirely.
             zqv = _query_grid_linear(grid, zv, xqv, yqv)
@@ -217,12 +361,19 @@ def interpolate2d(
     idw_power: float = 2.0,
     extrapolation: str = "none",
     smoothing: float = 0.0,
+    _grid_hint: GridLayout | None | _Unset = _UNSET,
 ) -> dict[str, Any]:
     """Interpolate scattered (x, y, z) onto query points. Port of utilities.interpolate2D.
 
     Returns ``{"zq", "method", "stats": {"nPoints", "rmse"}}`` (rmse is NaN — the
     expensive leave-one-out estimate is not computed). See module docstring for
     per-method parity. ``extrapolation='none'`` yields NaN outside the convex hull.
+
+    ``_grid_hint`` is internal wiring, not part of the public contract: ``regrid2d``
+    passes a precomputed ``detect_regular_grid(x, y)`` result through it to avoid
+    redoing that O(n log n) scan for ``method="linear"`` (see the module docstring's
+    dedupe note and ``_Unset``). Ordinary callers should never pass it -- the
+    default (unset) reproduces exactly today's fresh-detection behaviour.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
@@ -238,7 +389,7 @@ def interpolate2d(
     yqv = np.asarray(yq, dtype=float).ravel()
 
     if method in _SCATTERED:
-        zqv = _interp_scattered(xv, yv, zv, xqv, yqv, method, extrapolation)
+        zqv = _interp_scattered(xv, yv, zv, xqv, yqv, method, extrapolation, _grid_hint)
     elif method == "thinplate":
         zqv = _interp_thinplate(xv, yv, zv, xqv, yqv, smoothing, extrapolation)
     elif method == "idw":
@@ -295,11 +446,53 @@ def regrid2d(
             "cannot build a 2-D grid: the y axis has no range "
             f"(min == max == {yl[0]:g}); it is constant or single-valued"
         )
+    # RELEASE_BLOCKERS item 3 / _THIN_K: only the methods that funnel through
+    # _interp_scattered's full-cloud Delaunay/Sibson build benefit (idw/
+    # thinplate are untouched -- out of scope, see module docstring). Below
+    # the threshold this whole block is a no-op and (xv, yv, zv) reach
+    # interpolate2d completely untouched -- the bit-exact-below-threshold
+    # guarantee the golden suite depends on. The ``method != "linear"``
+    # short-circuit skips a redundant detect_regular_grid call: of the
+    # _SCATTERED methods, ONLY "linear" has a grid fast path in
+    # _interp_scattered (P2.8's ``_query_grid_linear``) -- "natural"/"cubic"
+    # always run full Sibson and "nearest" always calls griddata over the
+    # whole cloud, gridded or not, so for those three there is no existing
+    # fast path to preserve and thinning applies purely on point count.
+    # For "linear", detect_regular_grid gates thinning OUT on a detected
+    # grid so that already-fast, already-tested path keeps receiving the
+    # untouched cloud rather than a binned one.
+    # IMPORTANT (RELEASE_BLOCKERS.md dedupe note): for method="linear", this is
+    # the ONLY detect_regular_grid call this function makes -- its result is
+    # threaded through as `grid_hint` all the way into `_interp_scattered`
+    # instead of being recomputed there, which used to cost a second full
+    # O(n log n) detection over the same data (~4.1s of the two ~4.1s calls
+    # measured at 4M points). `grid_hint` stays `_UNSET` (interpolate2d's
+    # default -- "not checked") for every other method, and for "linear" at
+    # or below the threshold, since this whole block never runs there either.
+    grid_hint: GridLayout | None | _Unset = _UNSET
+    if method in _SCATTERED and xv.size > _THIN_K * nx * ny:
+        if method == "linear":
+            grid_hint = detect_regular_grid(xv, yv)
+        if method != "linear" or grid_hint is None:
+            xt, yt, zt = _thin_scattered(xv, yv, zv, xl, yl, nx, ny)
+            if xt.size >= 3:
+                # `grid_hint` (None here) was computed on the cloud ABOVE,
+                # before thinning replaced it with new bin-averaged
+                # representatives -- it is threaded through unchanged rather
+                # than reset to `_UNSET`. This is safe because it is only
+                # ever a *negative* finding at this point ("not gridded");
+                # bin-mean positions derived from a genuinely non-gridded
+                # cloud are, in every realistic/measured case, non-gridded
+                # themselves (see the module docstring's dedupe note for the
+                # full argument), so a fresh re-check on the thinned points
+                # would return the same None anyway.
+                xv, yv, zv = xt, yt, zt
     x_grid = np.linspace(xl[0], xl[1], nx)
     y_grid = np.linspace(yl[0], yl[1], ny)
     xq, yq = np.meshgrid(x_grid, y_grid)
     result = interpolate2d(
         xv, yv, zv, xq, yq,
         method=method, extrapolation=extrapolation, smoothing=smoothing, idw_power=idw_power,
+        _grid_hint=grid_hint,
     )
     return xq, yq, np.asarray(result["zq"], dtype=float)

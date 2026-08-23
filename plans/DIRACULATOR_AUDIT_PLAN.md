@@ -1,8 +1,8 @@
 # DiraCulator Calculator Audit Plan
 
-**Status:** MERGED (PR #143, merge `ebe06c3`, 2026-08-16); OPEN follow-ups tracked below — owner MATLAB freeze run, history input-snapshot capture, critical-thickness formula decision, Scherrer port  
+**Status:** MERGED (PR #143, merge `ebe06c3`, 2026-08-16); GOLDEN CAMPAIGN FROZEN; OPEN follow-ups tracked below — history input-snapshot capture, critical-thickness formula decision, Scherrer port
 **Created:** 2026-08-15  
-**Updated:** 2026-08-15 — P2s, P1 provenance, P3 splits shipped; 93-case freeze campaign staged  
+**Updated:** 2026-08-22 — 93-case campaign frozen from `quantized_matlab@aee70d12`; 248 golden tests pass; review fixes close the Optics bidirectional stale-write race and reconcile campaign provenance
 **Repository:** `C:\Users\patri\git\quantized`  
 **Scope:** `frontend/src/components/workshops/calculators/`, calculator API
 contracts, calculator parity evidence, and calculator session history  
@@ -105,11 +105,15 @@ MATLAB bugs.
   Python behavior with no MATLAB counterpart, or an intentional MATLAB bug fix.
 - [x] Add inline cases (in the new `tools/matlab/freeze_diraculator_values.m` — same style, campaign-scoped) for every
   reference-only MATLAB-backed operation.
-- [ ] **OWNER STEP (needs MATLAB):** Freeze outputs from the current authoritative `../quantized_matlab`
-  commit and record that commit plus tolerances in the golden manifest —
-  run `freeze_diraculator_values()` (classification was done against upstream
-  commit `c853414`), then `uv run pytest -m golden` (93 staged skips go live),
-  then flip the twelve `[~]` PORT_CHECKLIST entries back to `[x]`.
+- [x] Freeze outputs from the authoritative `../quantized_matlab` commit and
+  record that commit plus tolerances in the golden manifest. The 93-case
+  campaign was frozen from
+  `aee70d12ddd13024a33ac8d29fafbd3245442c7e` by
+  `tools/matlab/freeze_diraculator_values.m`; its provenance is recorded in
+  `tests/golden/manifest.json`, and `uv run pytest -m golden` passes all 248
+  golden tests with zero skips. Applicable PORT_CHECKLIST entries are restored
+  to `[x]`; Thin Film and Substrates remain `[~]` only for their explicitly
+  tracked feature/formula follow-ups.
 - [x] Add `@pytest.mark.golden` coverage that calls the same pure functions used
   by the routes.
 - [x] For intentional departures from MATLAB bugs, freeze and document the
@@ -200,11 +204,6 @@ exception.
 
 ## Open follow-ups (explicit — none of these is claimed complete)
 
-- [ ] **Owner MATLAB freeze run** — `freeze_diraculator_values()` beside
-  `../quantized_matlab` (classification pinned at `c853414`), then
-  `uv run pytest -m golden` (93 staged skips go live), then flip the twelve
-  PORT_CHECKLIST `[~]` entries back to `[x]`. Until then the 93 cases are
-  STAGED SCAFFOLDING, not parity evidence.
 - [ ] **History input-snapshot capture** — the P1 provenance acceptance-gate
   remainder (see the unchecked item in that section).
 - [ ] **`substrates.critical_thickness` formula decision** — Python and MATLAB
@@ -277,7 +276,7 @@ line ceilings, dependency policy, and frontend conventions are checked together.
     the 11 pre-existing command-glue importers).
   - **P1 parity campaign staged** (MATLAB unavailable in the container — the
     freeze run itself is the one remaining owner step): all 12 domains
-    inventoried and classified against upstream `quantized_matlab@c853414`;
+    inventoried and classified against upstream `quantized_matlab@aee70d12`;
     93 freeze cases assembled into `tools/matlab/freeze_diraculator_values.m`
     in exact bijection with 93 staged `@pytest.mark.golden` tests across 12
     new `tests/test_calc_*_golden.py` files (all skip via `load_golden` until
@@ -313,7 +312,15 @@ line ceilings, dependency policy, and frontend conventions are checked together.
 - 2026-08-16 — **Merged** as PR #143 (`ebe06c3`) on the owner's instruction,
   after review round 2 (Energy→λ helper provenance + doc reconciliation) was
   verified-then-fixed and CI-green (run 918). The stacked PR #144 (D2)
-  merged immediately after (`565bf08`). The Open follow-ups section above
-  remains the live tracker — most immediately the owner MATLAB freeze run
-  that turns the 93 staged skips into real parity evidence.
-
+  merged immediately after (`565bf08`).
+- 2026-08-21 — **MATLAB freeze completed** (`5f9054b1`). All 93 DiraCulator
+  cases were frozen from
+  `quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e`; the repository
+  golden suite now passes 248 tests with zero skips.
+- 2026-08-22 — **Post-sprint critical review remediation.** Protected both
+  directions of the Optics n,k↔epsilon card from stale response side effects,
+  added deferred-request regressions, recorded the freeze campaign's source
+  commit/tolerances in the golden manifest with a coverage guard, and
+  reconciled this plan, the W4 checklist, and all twelve campaign test
+  docstrings. History input snapshots, the critical-thickness formula decision,
+  and the Scherrer port remain explicitly open.

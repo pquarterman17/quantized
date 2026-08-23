@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "./figureDocument";
-import { createPageDocument } from "./pageDocument";
+import { createPageDocument } from "./pageDocumentActions";
 import { buildLibraryHierarchy } from "./libraryHierarchy";
 import { defaultPlotView } from "./plotview";
 import { generateFigureThumbnail } from "./thumbnailArtifacts";

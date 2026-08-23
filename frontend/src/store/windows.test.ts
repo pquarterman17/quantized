@@ -136,3 +136,60 @@ describe("datasetViewDefaults — per-technique view memory (item 5)", () => {
     expect(patch.yScale).toBeUndefined();
   });
 });
+
+// P1.5 review round P1: datasetViewDefaults is the SHARED choke point
+// setActive/addDataset/reimport's shape-changed path all rely on to reset
+// every CHANNEL-INDEXED PlotView field (one whose value IS a channel index,
+// a list of them, or a Record keyed by one) when the active dataset's
+// column layout changes -- an omitted field keeps indexing the OLD
+// dataset's columns and silently misrenders (or misgroups) against the new
+// one. P1.5's own groupKey slipped through exactly this gap (caught by
+// review, not by a test -- this pins the full field list so the NEXT such
+// field can't slip the same way). Cross-check this list by hand whenever
+// PlotView gains a field shaped like a channel index/list/map; a plain
+// style/label/scale/geometry field does NOT belong here (see the
+// technique-defaults tests above for why yScale/xScale are deliberately
+// NOT in this set -- those come from the technique table, not a blank reset).
+const CHANNEL_INDEXED_PLOTVIEW_FIELDS = [
+  "xKey",
+  "yKeys",
+  "groupKey",
+  "y2Keys",
+  "y2Lim",
+  "y2Scale",
+  "y2Step",
+  "y2AxisLabel",
+  "seriesStyles",
+  "seriesLabels",
+  "errKeys",
+  "seriesOrder",
+  "hiddenChannels",
+  "xLim",
+  "yLim",
+  "xStep",
+  "yStep",
+] as const;
+
+describe("datasetViewDefaults — channel-indexed field coverage (P1.5 review P1)", () => {
+  it("resets every known channel-indexed PlotView field, no more and no fewer", () => {
+    const patch = datasetViewDefaults(ds("generic"));
+    // "generic" contributes no technique-defaults spread, so the returned
+    // keys are EXACTLY the unconditional reset object's own keys -- a
+    // precise set match, not just "contains".
+    expect(Object.keys(patch).sort()).toEqual([...CHANNEL_INDEXED_PLOTVIEW_FIELDS].sort());
+  });
+
+  it("every listed field actually resets to its blank value (not just present)", () => {
+    const patch = datasetViewDefaults(ds("generic"));
+    expect(patch.xKey).toBeNull();
+    expect(patch.yKeys).toBeNull();
+    expect(patch.groupKey).toBeNull();
+    expect(patch.y2Keys).toBeNull();
+    expect(patch.seriesStyles).toEqual({});
+    expect(patch.seriesLabels).toEqual({});
+    expect(patch.seriesOrder).toBeNull();
+    expect(patch.hiddenChannels).toEqual([]);
+    expect(patch.xLim).toBeNull();
+    expect(patch.yLim).toBeNull();
+  });
+});

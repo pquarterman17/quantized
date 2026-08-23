@@ -2,25 +2,27 @@
 // Thin wrappers over the `qz-*` class layer in styles/components.css; all
 // styling is token-driven. Cursors are `default`; icons are Unicode glyphs.
 
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
-} from "react";
+import type { ButtonHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import clsx from "clsx";
 
-export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
-export { default as BufferedNumberField } from "./BufferedNumberField";
-export { default as Card, type CardProps } from "./Card";
+// RangeSlider, BufferedNumberField, Card, RichLabelInput, SymbolPalette,
+// IconButton, MetaRow, SegmentedControl, NumberField, Checkbox, Switch,
+// SliderRow, Pill, and DataTable deliberately do NOT re-export from here
+// (bundle-size pass 2026-08-18, widened 2026-08-23/R8 — see
+// scripts/check-bundle-size.mjs's header for the ratchet this barrel keeps
+// tripping): every consumer of theirs is a lazy workshop/Inspector panel,
+// but a static re-export in this barrel creates a static import edge from
+// THIS module — which Button/Select/StatusDot/Badge/RichText below force
+// into the eager chunk — to those files, dragging them along regardless of
+// who actually uses them. Import them from their own file directly (e.g.
+// `"../primitives/Card"`, `"../primitives/NumberField"`) instead. Before
+// adding ANY export to this barrel, verify it has a genuinely eager
+// consumer (grep for a real import, not just a text match) — that check is
+// exactly what the 2026-08-23 pass found missing for eight of the symbols
+// above, none of which had ever been reachable outside a lazy panel.
+// `RichText` stays barrel-exported: `components/Stage/PlotLegend.tsx`
+// (always-eager Stage tree) needs it via this same barrel.
 export { default as RichText } from "./RichText";
-export { default as RichLabelInput } from "./RichLabelInput";
-export {
-  default as SymbolPalette,
-  insertLabelToken,
-  countUnescapedDollars,
-  type PaletteEntry,
-} from "./SymbolPalette";
 
 // ── Button ────────────────────────────────────────────────────────────────
 type ButtonVariant = "default" | "primary" | "ghost" | "danger";
@@ -54,42 +56,6 @@ export function Button({
       {icon != null && <span className="qz-btn-icon">{icon}</span>}
       {children}
     </button>
-  );
-}
-
-// ── IconButton ──────────────────────────────────────────────────────────────
-interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  active?: boolean;
-}
-
-export function IconButton({
-  children,
-  active = false,
-  className,
-  ...rest
-}: IconButtonProps) {
-  return (
-    <button className={clsx("qz-icon-btn", active && "qz-active", className)} {...rest}>
-      {children}
-    </button>
-  );
-}
-
-// ── MetaRow ─────────────────────────────────────────────────────────────────
-interface MetaRowProps {
-  label: ReactNode;
-  value: ReactNode;
-  title?: string;
-}
-
-export function MetaRow({ label, value, title }: MetaRowProps) {
-  return (
-    <div className="qz-meta-row">
-      <span className="qz-k">{label}</span>
-      <span className="qz-v" title={title}>
-        {value}
-      </span>
-    </div>
   );
 }
 
@@ -145,41 +111,6 @@ export function StatusDot({ tone = "neutral", label }: { tone?: Tone; label?: Re
   );
 }
 
-// ── SegmentedControl ────────────────────────────────────────────────────────
-export type SegOption<T extends string> = T | { value: T; label: ReactNode };
-
-export function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
-  className,
-}: {
-  options: SegOption<T>[];
-  value: T;
-  onChange?: (value: T) => void;
-  className?: string;
-}) {
-  return (
-    <div className={clsx("qz-seg", className)} role="tablist">
-      {options.map((opt) => {
-        const val = (typeof opt === "string" ? opt : opt.value) as T;
-        const label = typeof opt === "string" ? opt : opt.label;
-        return (
-          <button
-            key={val}
-            role="tab"
-            aria-selected={val === value}
-            className={clsx("qz-seg-btn", val === value && "qz-active")}
-            onClick={() => onChange?.(val)}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Select ──────────────────────────────────────────────────────────────────
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
@@ -194,184 +125,5 @@ export function Select({ options, className, ...rest }: SelectProps) {
         </option>
       ))}
     </select>
-  );
-}
-
-// ── NumberField ─────────────────────────────────────────────────────────────
-interface NumberFieldProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value"> {
-  value: string | number;
-  onChange?: (value: string) => void;
-  numeric?: boolean;
-  unit?: ReactNode;
-  width?: number;
-}
-
-export function NumberField({
-  value,
-  onChange,
-  numeric = true,
-  unit,
-  width = 72,
-  className,
-  ...rest
-}: NumberFieldProps) {
-  const input = (
-    <input
-      className={clsx("qz-input", numeric && "qz-num", className)}
-      value={value}
-      onChange={(e) => onChange?.(e.target.value)}
-      style={{ width }}
-      {...rest}
-    />
-  );
-  if (!unit) return input;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      {input}
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--font-size-sm)",
-          color: "var(--text-faint)",
-        }}
-      >
-        {unit}
-      </span>
-    </span>
-  );
-}
-
-// ── Checkbox ────────────────────────────────────────────────────────────────
-export function Checkbox({
-  checked,
-  onChange,
-  children,
-  disabled = false,
-}: {
-  checked: boolean;
-  onChange?: (checked: boolean) => void;
-  children?: ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <label className={clsx("qz-check", disabled && "qz-disabled")}>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange?.(e.target.checked)}
-      />
-      {children}
-    </label>
-  );
-}
-
-// ── Switch ──────────────────────────────────────────────────────────────────
-export function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange?: (checked: boolean) => void;
-  label?: ReactNode;
-}) {
-  const sw = (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      className={clsx("qz-switch", checked && "qz-on")}
-      onClick={() => onChange?.(!checked)}
-    />
-  );
-  if (label == null) return sw;
-  return (
-    <label className="qz-check" style={{ justifyContent: "space-between" }}>
-      <span>{label}</span>
-      {sw}
-    </label>
-  );
-}
-
-// ── SliderRow ───────────────────────────────────────────────────────────────
-export function SliderRow({
-  label,
-  value,
-  min = 0,
-  max = 100,
-  step = 1,
-  onChange,
-  format,
-}: {
-  label: ReactNode;
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange?: (value: number) => void;
-  format?: (value: number) => ReactNode;
-}) {
-  return (
-    <div className="qz-slider-row">
-      <span className="qz-k">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange?.(Number(e.target.value))}
-      />
-      <span className="qz-v">{format ? format(value) : value}</span>
-    </div>
-  );
-}
-
-// ── Pill ────────────────────────────────────────────────────────────────────
-interface PillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  active?: boolean;
-}
-
-export function Pill({ children, active = false, className, ...rest }: PillProps) {
-  return (
-    <button
-      className={clsx("qz-pill", active && "qz-active", className)}
-      aria-pressed={active}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── DataTable ───────────────────────────────────────────────────────────────
-export function DataTable({
-  columns,
-  rows,
-}: {
-  columns: ReactNode[];
-  rows: ReactNode[][];
-}) {
-  return (
-    <table className="qz-table">
-      <thead>
-        <tr>
-          {columns.map((c, i) => (
-            <th key={i}>{c}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            {row.map((cell, j) => (
-              <td key={j}>{cell}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

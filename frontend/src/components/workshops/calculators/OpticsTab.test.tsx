@@ -1,15 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  opticsBrewsterAngle,
-  opticsCriticalAngle,
-  opticsFresnel,
-  opticsSkinDepth,
-} from "../../../lib/api";
+import { opticsBrewsterAngle, opticsCriticalAngle, opticsDielectricToRefractive, opticsFresnel, opticsRefractiveToDielectric, opticsSkinDepth } from "../../../lib/api/optics";
 import OpticsTab from "./OpticsTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/optics", () => ({
   opticsFresnel: vi.fn(),
   opticsCriticalAngle: vi.fn(),
   opticsBrewsterAngle: vi.fn(),
@@ -79,5 +74,41 @@ describe("OpticsTab", () => {
     // Edit the card's own "n₁" field — the result no longer matches the inputs.
     fireEvent.change(screen.getAllByLabelText("n₁")[0], { target: { value: "1.2" } });
     expect(screen.queryByText(/Rs = .* · Rp = .*/)).not.toBeInTheDocument();
+  });
+
+  it("a stale n,k → ε completion cannot overwrite newer dielectric inputs", async () => {
+    let resolveCalc!: (v: { eps1: number; eps2: number }) => void;
+    vi.mocked(opticsRefractiveToDielectric).mockImplementation(
+      () => new Promise((resolve) => (resolveCalc = resolve)),
+    );
+    render(<OpticsTab />);
+
+    fireEvent.click(screen.getByText("n,k → ε"));
+    fireEvent.change(screen.getByLabelText("ε₁"), { target: { value: "20" } });
+    await act(async () => {
+      resolveCalc({ eps1: 12.25, eps2: 0 });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+    expect(screen.queryByText(/ε₁ = .* · ε₂ = .*/)).not.toBeInTheDocument();
+  });
+
+  it("a stale ε → n,k completion cannot overwrite newer refractive inputs", async () => {
+    let resolveCalc!: (v: { n: number; k: number }) => void;
+    vi.mocked(opticsDielectricToRefractive).mockImplementation(
+      () => new Promise((resolve) => (resolveCalc = resolve)),
+    );
+    render(<OpticsTab />);
+
+    fireEvent.click(screen.getByText("ε → n,k"));
+    fireEvent.change(screen.getAllByLabelText("n")[1], { target: { value: "4.2" } });
+    await act(async () => {
+      resolveCalc({ n: 3.5, k: 0 });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByDisplayValue("4.2")).toBeInTheDocument();
+    expect(screen.queryByText(/n = .* · k = .*/)).not.toBeInTheDocument();
   });
 });

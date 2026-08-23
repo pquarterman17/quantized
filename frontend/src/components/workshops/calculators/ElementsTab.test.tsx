@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getElements } from "../../../lib/api";
+import { getElements } from "../../../lib/api/reference";
 import type { ElementInfo } from "../../../lib/types";
 import ElementsTab from "./ElementsTab";
 
-vi.mock("../../../lib/api", () => ({ getElements: vi.fn() }));
+vi.mock("../../../lib/api/reference", () => ({
+  getElements: vi.fn(),
+}));
 
 const ELEMENTS: ElementInfo[] = [
   { Z: 1, symbol: "H", name: "Hydrogen", mass: 1.008, category: "nonmetal" },

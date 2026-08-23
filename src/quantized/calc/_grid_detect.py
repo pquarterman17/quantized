@@ -65,8 +65,60 @@ _MIN_COVERAGE = 0.9
 
 # How uniform the merged grid lines' pitch must be (relative to the median
 # pitch) to accept the axis -- rejects log axes and merged-grid pitch
-# mismatches.
+# mismatches. This is a RELATIVE tolerance alone, which is backwards for
+# quantized coordinates: real instrument exports write angular positions as
+# decimal text at a fixed number of places (e.g. "%.6f" -- see
+# ``tools/baselines/rsm.py``, every committed ``.xrdml`` fixture), which
+# quantizes each coordinate onto a ``10**-6``-ish lattice. That injects an
+# ABSOLUTE gap error (bounded by one quantum, see ``_QUANTUM_SAFETY_FACTOR``)
+# independent of pitch, so its size RELATIVE to pitch grows as the pitch gets
+# finer -- exactly backwards, since a fine pitch means a big map, the case
+# that most needs this fast path. ``_axis_clusters`` therefore accepts an
+# axis when its pitch deviation clears EITHER this relative bound OR an
+# absolute one derived from the data's own inferred quantization step (see
+# ``_infer_quantum`` / ``_QUANTUM_MAX_FRACTION_OF_PITCH``), never by loosening
+# this constant itself -- doing that would blunt rejection uniformly (log
+# axes, merged-pitch mismatches) instead of only where quantization actually
+# explains the deviation.
 _SPACING_RTOL = 1e-3
+
+# Powers of ten searched (10**-d) when inferring a coordinate's quantization
+# step from its own values -- see ``_infer_quantum``. 12 places comfortably
+# covers any plausible instrument text precision (6dp is typical) while
+# staying well inside float64's ~15-16 significant digits.
+_QUANTUM_MAX_DECIMALS = 12
+
+# How close (as a fraction of the candidate quantum q) a value's ratio v/q
+# must sit to an integer to count as "on" that lattice. Real 6dp-rounded
+# values round-trip through float64 division/multiplication with residuals
+# around 1e-13 (many orders of magnitude below this); genuinely continuous
+# (non-quantized) data essentially never lands this close to an integer
+# ratio for every point at once. Wide margin on both sides.
+_QUANTUM_RESIDUAL_TOL = 1e-6
+
+# Cap: the inferred quantum may never exceed this fraction of the axis's own
+# nominal pitch. Without a cap, a handful of coarse, round-numbered axis
+# values (e.g. a genuinely irregular 3-point axis at 10, 20, 30) can look
+# "quantized" at a scale close to the pitch itself, which would smuggle a
+# large absolute tolerance in through the back door -- exactly the
+# credulousness this module has to avoid. Real coordinate quantization
+# (instrument export precision) is orders of magnitude finer than any
+# physical grid pitch, so 1% is generous headroom for genuine cases while
+# keeping the absolute term negligible whenever "quantization" is really
+# just the data's pitch happening to be a round decimal number.
+_QUANTUM_MAX_FRACTION_OF_PITCH = 0.01
+
+# Worst-case gap error under quantization, in units of the quantum q. A gap
+# is the difference of two independently-rounded coordinates,
+# ``round(v1) - round(v2)``; each rounding perturbs its value by at most
+# q/2, so the gap's error is bounded by q/2 + q/2 = one full quantum.
+# Empirically (see ``test_calc_grid_detect.py``'s quantization cases) the
+# observed deviation sits almost exactly at 1.0*q. This constant applies a
+# 2x safety margin above that textbook bound, to absorb the extra
+# floating-point round-trip noise repeated arithmetic (meshgrid broadcast,
+# subtraction, cluster-center averaging) can add on top of the pure
+# rounding error.
+_QUANTUM_SAFETY_FACTOR = 2.0
 
 # How much bigger the "pitch" band of consecutive-gap sizes must be than the
 # "jitter" band before they're treated as separate bands at all (see
@@ -123,6 +175,34 @@ def _jitter_threshold(diffs: NDArray[np.float64]) -> float:
     return float(np.sqrt(low * high))  # geometric-mean boundary
 
 
+def _infer_quantum(v: NDArray[np.float64]) -> float:
+    """Infer the coordinate quantization step embedded in ``v``'s values.
+
+    Returns the COARSEST power-of-ten grid (``10 ** -d``) that every value
+    in ``v`` sits on (up to ``_QUANTUM_RESIDUAL_TOL``), or ``0.0`` if no such
+    grid is found within ``_QUANTUM_MAX_DECIMALS`` places -- i.e. ``v``
+    doesn't look decimal-quantized at all (continuous data, float jitter).
+
+    Searches from the coarsest candidate (``d=0``, ``q=1``) upward and
+    returns the FIRST hit. An exact multiple of a fine grid (``1e-6``) is
+    trivially also an exact multiple of every finer grid (``1e-7``,
+    ``1e-8``, ...), so without stopping at the first match this would keep
+    "succeeding" at implausibly fine, uninformative quanta all the way down
+    to ``_QUANTUM_MAX_DECIMALS``. The first (coarsest) match is the one that
+    reflects how the instrument software actually wrote the numbers (6
+    decimal places, typically).
+    """
+    if v.size == 0:
+        return 0.0
+    for d in range(_QUANTUM_MAX_DECIMALS + 1):
+        q = 10.0**-d
+        ratio = np.asarray(v / q, dtype=float)
+        residual = np.abs(ratio - np.round(ratio))
+        if bool(np.all(residual < _QUANTUM_RESIDUAL_TOL)):
+            return q
+    return 0.0
+
+
 def _axis_clusters(
     v: NDArray[np.float64], *, spacing_rtol: float
 ) -> tuple[NDArray[np.float64], NDArray[np.intp]] | None:
@@ -156,7 +236,17 @@ def _axis_clusters(
     pitch_nominal = float(np.median(pitches))
     if pitch_nominal <= 0:
         return None
-    if float(np.max(np.abs(pitches - pitch_nominal))) > pitch_nominal * spacing_rtol:
+    # Combined relative + absolute tolerance: the relative term (spacing_rtol
+    # * pitch) is the original guard against log axes / merged-pitch
+    # mismatches; the absolute term (quantum * safety factor) accepts pitch
+    # deviation explained purely by the coordinates' own decimal
+    # quantization, capped so it can never dominate for an axis whose values
+    # merely happen to be round numbers (see the module-level constants for
+    # the full derivation).
+    quantum = min(_infer_quantum(raw), pitch_nominal * _QUANTUM_MAX_FRACTION_OF_PITCH)
+    abs_tol = _QUANTUM_SAFETY_FACTOR * quantum
+    tol = max(pitch_nominal * spacing_rtol, abs_tol)
+    if float(np.max(np.abs(pitches - pitch_nominal))) > tol:
         return None  # non-uniform spacing: log axis, or merged grids at different pitch
     return centers, cluster_id
 

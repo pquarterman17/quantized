@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import Library from "./Library";
 import { createFigureDocument } from "../../lib/figureDocument";
 import type { OriginFigureEntry } from "../../lib/originFigures";
-import { createPageDocument } from "../../lib/pageDocument";
+import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { LIBRARY_VIEW_PREFS_KEY } from "../../lib/libraryViewPrefs";
@@ -353,12 +353,14 @@ describe("Library — smart-folder query grammar in the filter box (item 9)", ()
     expect(screen.queryByText("mvsh-named-but-untagged.dat")).not.toBeInTheDocument();
   });
 
-  it("offers ☆ save-as-smart-folder only while a query is typed", () => {
-    useApp.setState({ datasets: [dsWith("a")], smartFolders: [] });
+  it("offers ☆ save-as-smart-folder and ⊙ save-as-Collection only while a query is typed", () => {
+    useApp.setState({ datasets: [dsWith("a")], smartFolders: [], collections: [] });
     render(<Library />);
-    expect(screen.queryByTitle(/Save this filter/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Save this filter as a smart folder/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Save this filter as a Collection/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "tag:x" } });
-    expect(screen.getByTitle(/Save this filter/)).toBeInTheDocument();
+    expect(screen.getByTitle(/Save this filter as a smart folder/)).toBeInTheDocument();
+    expect(screen.getByTitle(/Save this filter as a Collection/)).toBeInTheDocument();
   });
 
   it("renders the smart-folders section when saved queries exist", () => {

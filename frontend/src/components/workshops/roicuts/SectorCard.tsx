@@ -8,7 +8,8 @@
 // disabled control with no explanation is exactly what this rule forbids.
 
 import Card from "../../primitives/Card";
-import { Button, Select, SegmentedControl } from "../../primitives";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button, Select } from "../../primitives";
 import type { RoiCutsState } from "./useRoiCuts";
 import Field from "./Field";
 

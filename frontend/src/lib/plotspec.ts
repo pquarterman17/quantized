@@ -113,6 +113,7 @@ import { buildBarMatrix, type BarChartData } from "./barlayout";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
+import { groupLevelLabel } from "./categorical";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
@@ -554,10 +555,9 @@ function channelLabel(data: DataStruct, channel: number): string {
   return data.labels[channel] ?? `col ${channel}`;
 }
 
-/** Build the xy payload, splitting into one series per group level when a group
- *  channel is set (a colour split; each series is the Y value where the row's
- *  group matches, null elsewhere, so all series share the one x column). */
-function buildXY(
+/** Build the xy payload, splitting into one series per group level when a group channel is set
+ *  (a colour split; each series is the Y value where the row's group matches, null elsewhere, so all series share the one x column; a categorical group channel's label is its string level, P4-4). Exported so plotGroupSplit.test.ts can assert REAL parity against applyGroupSplit (P1.5 review P2), not a hand-synced twin. */
+export function buildXY(
   data: DataStruct,
   xKey: number | null,
   yChannels: number[],
@@ -580,7 +580,7 @@ function buildXY(
           row[groupCol] === lvl && Number.isFinite(row[yc]) ? row[yc] : null,
         ),
       );
-      series.push({ label: `${yLabel} (${gLabel}=${lvl})`, unit: data.units[yc] ?? "", axis: 0 });
+      series.push({ label: `${yLabel} (${gLabel}=${groupLevelLabel(data, groupCol, lvl)})`, unit: data.units[yc] ?? "", axis: 0 });
     }
   }
   return {

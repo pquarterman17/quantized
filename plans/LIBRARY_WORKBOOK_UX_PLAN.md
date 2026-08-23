@@ -1,10 +1,18 @@
 # Library, Workbook, and Quick Plot UX Plan
 
-**Status:** Active — milestone 1; PRs A–F and G1–G4 merged; G5 release
-hardening in progress
+**Status:** Active — milestone 1 (A-G) complete; milestone 2/3 in progress:
+H shipped and reviewed, J/K/L each have slice 1 landed (K also has slice 2),
+M slice 1 landed, N deferred with evidence (see item 14), I/I2 not started
 **Created:** 2026-08-12  
-**Updated:** 2026-08-17 — ChatGPT-Sol delegated the bounded G5 readiness slice;
-G1–G4 are merged and G5 remains in focused hardening
+**Updated:** 2026-08-19 — Day-5 sprint reconciliation (QA lane): corrected H
+(`[~]`→`[x]`, merged+reviewed since 2026-08-17), M (`[ ]`→`[~]`, slice 1
+landed 2026-08-18 as PR #179 was never reflected here), two derived-data
+integrity requirements flipped to `[x]` with evidence, the stale L1.4 booking
+note closed, and a BUILD/DEFER evidence verdict added to the N entry. Prior:
+2026-08-17 — Claude completed the G5 canonical-state review,
+correcting an independent reviewer's merge-blocking overclaim flag on the
+prior lifecycle-proof slice's `[x]`; see the PR G / G5 entries and the
+change-log for the full record
 **Plan author:** ChatGPT-Sol (not Claude)  
 **Repository:** `C:\Users\patri\git\quantized`  
 **Parent:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`  
@@ -353,10 +361,21 @@ as a CSS-only tree redesign.
 
 ### Derived-data integrity requirements
 
-- [ ] Store a dependency graph and reject cycles between calculated columns,
-  derived worksheets, and analyses with a clear explanation.
-- [ ] Mark stale/error states without replacing the last valid output.
-- [ ] Preview the effect of deleting or moving a dependency before committing.
+- [x] Store a dependency graph and reject cycles between calculated columns,
+  derived worksheets, and analyses with a clear explanation. (PR K slices
+  1-2: `lib/recalc.ts`'s `wouldCreateCycle`, wired into addFormula/
+  updateFormula, applyCorrections' bgRef, and createDerivedWorksheet.)
+- [x] Mark stale/error states without replacing the last valid output.
+  **Day-5 reconciliation (2026-08-19):** `Dataset.formulaErrors`
+  (`store/useApp.ts:155-163`, K5b) marks a failing formula column visibly
+  while `recomputeData` keeps the last valid values; K5c stale-marks a
+  `derivedFrom` worksheet without synchronously recomputing it
+  (`downstreamOf`'s generalization, PR K slice 1).
+- [x] Preview the effect of deleting or moving a dependency before
+  committing. **Day-5 reconciliation (2026-08-19):** delete preview is
+  `lib/dependencyImpact.ts` (PR M slice 1, merged `ab3861a`); move preview
+  is `lib/workbookSeparate.ts`'s `computeSeparatePlan` (PR J slice 1, merged
+  `abbf0ae`) — both build the affected-item list before the user commits.
 - [ ] Preserve formulas, pipeline parameters, units, exclusions, and provenance
   through project save/load and workbook copy/paste.
 - [ ] Keep recalculation deterministic and auditable; never hide an automatic
@@ -379,25 +398,41 @@ as a CSS-only tree redesign.
 
 ### Cross-session workbook transfer requirements
 
-- [ ] Transfer worksheets/data, editable figures, analyses/derived results,
+- [x] Transfer worksheets/data, editable figures, analyses/derived results,
   notes, metadata, templates scoped to that workbook, and internal links as one
-  coherent bundle.
-- [ ] Generate fresh destination IDs and rewrite internal references so the
-  pasted workbook cannot mutate or collide with its source.
-- [ ] Preserve provenance and original source-path metadata without requiring
-  the source project to remain open.
-- [ ] Support Windows and macOS desktop instances. Use a versioned portable
+  coherent bundle. (PR I, `lib/workbookTransfer.ts`'s `buildTransferPackage`.
+  Legacy `FigureDoc`/multi-panel `PageDocument`s/`originFigures` deliberately
+  excluded — see PR I's plan-doc entry.)
+- [x] Generate fresh destination IDs and rewrite internal references so the
+  pasted workbook cannot mutate or collide with its source. (PR I,
+  `pasteTransferPackage` — unconditional fresh ids, mutation-tested.)
+- [x] Preserve provenance and original source-path metadata without requiring
+  the source project to remain open. (PR I — `Dataset.source` rides
+  untouched; unreachable sources get an honest "Source unavailable" +
+  Relink Source, not a raw import error, on Reimport.)
+- [x] Support Windows and macOS desktop instances. Use a versioned portable
   transfer format rather than assuming two processes share Zustand state.
-- [ ] Avoid placing an unbounded scientific payload directly on the system
+  (PR I — plain `format`/`version`-stamped JSON text; the transport is the
+  browser Clipboard API pywebview embeds identically on both platforms, no
+  OS-specific code path.)
+- [~] Avoid placing an unbounded scientific payload directly on the system
   clipboard. A robust implementation may use a small clipboard descriptor plus
   a guarded temporary transfer package for large workbooks, with expiry and
-  cleanup safeguards.
-- [ ] If the transfer package is unavailable or incompatible, explain the
-  failure and leave the destination unchanged.
-- [ ] Preserve normal text/file clipboard behavior; Quantized-specific Paste is
-  enabled only when a compatible workbook payload is present.
-- [ ] Add cross-process contract tests for ID remapping, internal links,
-  version compatibility, missing transfer packages, and cleanup.
+  cleanup safeguards. (PR I ships the BOUND — refuse above
+  `MAX_TRANSFER_PACKAGE_CHARS` with the size named — not the small-descriptor/
+  temp-package scheme; that file-based fallback is an explicit, booked defer,
+  see PR I's plan-doc entry for the write-consent reasoning.)
+- [x] If the transfer package is unavailable or incompatible, explain the
+  failure and leave the destination unchanged. (PR I — every refusal path
+  returns before `recordHistory`/`set`, tested.)
+- [x] Preserve normal text/file clipboard behavior; Quantized-specific Paste is
+  enabled only when a compatible workbook payload is present. (PR I —
+  `canPasteWorkbook`; no clipboard interception beyond the plain
+  `writeText`/`readText` calls every other clipboard feature already uses.)
+- [x] Add cross-process contract tests for ID remapping, internal links,
+  version compatibility, missing transfer packages, and cleanup. (PR I —
+  `lib/workbookTransfer.test.ts`/`store/workbookTransfer.test.ts`; "cleanup"
+  is N/A for the shipped clipboard-only transport, no temp files are created.)
 
 ## Template-matching contract (CONFIRMED 2026-08-13 — see L0.14)
 
@@ -495,12 +530,19 @@ Library presentation without changing organization or duplicating objects.
     switching cancellation remains E-c.
 - [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
-  - [ ] Booking (2026-08-15 retrospective audit): artifact-row context menus
-    and registry Delete actions (the "later PR (L0.39/L0.40)" promised at
-    the consume-only Delete sites in LibraryTree.tsx/LibraryDetails.tsx)
-    have no owning slice — assign at the next kickoff (candidates: D2 while
-    it touches Details rows, or E's shared-action pass). Until assigned,
-    those sites correctly consume the keystroke and do nothing.
+  - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
+    reconciliation (2026-08-19):** artifact-row context menus and registry
+    Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
+    `c07b136`, see item 5's E-b2 entry above) assigned and shipped it —
+    `LibraryTree.tsx` and `LibraryDetails.tsx` both import
+    `buildArtifactMenu`/`deleteArtifactConfirmed` from
+    `artifactContextActions.ts` (grepped both files, 2026-08-19: `LibraryTree
+    .tsx`'s keyboard handler at line ~223 is commented "Artifact rows
+    (E-b2): Delete routes through the SAME registry action";
+    `LibraryDetails.tsx` line ~307 likewise). The consume-only no-op sites
+    this booking described no longer exist. L1.4's BROADER claim (full
+    rename/move/drag-drop parity across all three views) remains unverified
+    and this parent checkbox stays open for that reason alone.
 - [x] **L1.5 Wide tile surface design:** produced thorough mockups and confirmed
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
@@ -824,7 +866,7 @@ build, and focused interaction coverage where appropriate.
      projection cannot express, closing the gap where a builder-edited error
      binding rendered in the preview but silently dropped in the real figure
      window.
-   - [ ] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
+   - [x] **G5 — ambiguity and end-to-end hardening:** compact uncertainty
      explanation, real-browser keyboard/cancel/error-bar coverage, reopen proof,
      and visual acceptance at common desktop sizes. Explicit requirement (G2
      review, 2026-08-17): surface half-complete asymmetric error pairs (a `+`
@@ -872,32 +914,751 @@ build, and focused interaction coverage where appropriate.
        allow-and-drop), and the joint-condition case (both a role-filtered Y
        and an incomplete pair at once) now reports both notices via
        `aria-describedby`/title instead of only the higher-priority one.
-8. [ ] **PR H — template persistence and scopes.** Save named mappings/styles
-   with explicit scope and safe mismatch behavior.
-9. [ ] **PR I — cross-instance workbook transfer.** Implement the versioned,
-   bounded Copy/Paste package, fresh-ID rewrite, provenance, and failure-safe
-   cleanup contract from L0.23-L0.24.
-9b. [ ] **PR I2 — single-writer project locking.** Implement L0.47:
-    second-instance read-only open, **Open as Copy**, and guarded stale-lock
-    **Take Over Editing**. Requires the same platform-boundary answer as PR I
-    (backend `io/` + thin route on the served modes; define the two-browser-
-    tabs-one-backend story explicitly). (Booked 2026-08-14 — L0.47 previously
-    had no owning slice.)
-10. [ ] **PR J — combined and split workbooks.** Implement explicit combine,
+     - [x] **2026-08-17 — Claude, the lifecycle proof (save/close/reopen/
+       project-reload, closing the remaining Claude-owned G5 work):** Phase 0
+       probed the three riskiest seams BEFORE building the journey and found
+       all three already correct, with evidence: (P0-a) the `.dwk` round trip
+       of a figure-scoped asymmetric pair + an X-error binding — both through
+       `editableFigures` and the window-attached document path
+       (`windowDocumentPersistence.ts`) — because `sanitizeFigureDocument`'s
+       `errorBindings()` reads `bindings.errors` straight off the persisted
+       JSON and never reconstructs from `plot.view`/legacy `errKeys`; (P0-b)
+       a normal property edit (a per-series style / axis label, the same
+       fields `updateFigureDocumentFromPlotView` folds in) survives Save,
+       window close, and reopen from Editable Figures, because that function
+       deliberately preserves every non-symmetric-Y binding while only
+       replacing the legacy projection it can actually edit; (P0-c) Undo/Redo
+       stays coherent across create → edit → save → close → reopen, because
+       `recordHistory`'s allowlisted snapshot already carries both
+       `editableFigures` and `plotWindows` together, so no step in the chain
+       can detach an edit from its document or resurrect a closed window.
+       Since nothing was broken, the probes became permanent regression pins
+       (`frontend/src/lib/workspace.test.ts`,
+       `frontend/src/store/quickFigureLifecycle.test.ts`) rather than fixes.
+       The real-browser proof (`frontend/e2e/specs/quick-figure-lifecycle.spec.ts`)
+       drives the owner's full checklist as ONE Chromium journey: builds a
+       Quick Figure through the real Library → Configure Quick Plot flow
+       (alternate X, 2 Y series, a complete asymmetric Y pair, an X-error
+       binding, line+symbol style); edits the Y-axis label through the
+       Inspector; saves and closes via the window's own title-bar controls;
+       reopens from the Editable Figures Library section; saves the complete
+       project through the real File ▸ "Save workspace (.dwk)…" menu (a real
+       browser download) and reloads it through the real File ▸ "Open
+       workspace (.dwk)…" native file picker (a real `filechooser` event,
+       confirmed through the actual "Replace the current workspace?"
+       dialog) — the realest driveable path, not a store-only shortcut; then
+       reopens the figure again post-reload and asserts the X/Y mapping,
+       mark + line-symbol `seriesStyles`, the axis-label edit, and both rich
+       error bindings all survived byte-exact, with a final real-keyboard
+       (Ctrl+Z / Ctrl+Shift+Z) Undo/Redo spot-check that leaves exactly one
+       window bound to the document throughout. (Two spec-authoring bugs
+       caught and fixed red-first along the way, not app bugs: the Quick
+       Figure Builder's "Plot style" `<select>` is a wrapping `<label>` whose
+       real-Chromium accessible name folds in the current option text, so an
+       exact `getByLabel` match hung — fixed with a class-scoped locator; and
+       the Library TREE row's L0.25 single-click-selects/double-click-opens
+       convention means a single `.click()` on "Editable figures" only
+       selected the row — fixed with `.dblclick()`, matching
+       figure-document-roundtrip.spec.ts's existing precedent.) Gate: 478/478 vitest files,
+       7,061/7,061 tests; tsc (app + e2e) and eslint clean; build 826.1 kB
+       eager (27.9 kB under budget); full local Playwright 54/54 passed.
+       **Correction (independent reviewer, 2026-08-17, merge-blocking):**
+       this bullet marked G5 `[x]` claiming everything but the
+       release-candidate human visual acceptance was done, but the plan's
+       own G ownership-matrix row ("Sonnet reviews canonical-state writes")
+       and the sentence originally written below this one both named a
+       second Claude-owned handoff item — a review of the canonical
+       figure-document write paths — that this slice silently never
+       performed. See the dedicated review bullet immediately below, which
+       performs it and corrects the record.
+     - [x] **2026-08-17 — Claude, the canonical-state review (closing the
+       gap the correction above documents):** authority documents:
+       `lib/figureContract.ts` (the field-ownership census) and the plan's
+       L0.12/L0.13 contracts (editor continuity into the SAME canonical
+       system; creating/saving a figure never mutates raw worksheet data).
+       Enumerated every code path that writes canonical `FigureDocument`
+       state (grepped `editableFigures`/`withPlotWindowDocument`/
+       `createFigureDocument` for anything the known list missed — none
+       found) and reviewed each against never-replace, live/frozen
+       invariants, rich-error round-trip integrity, name/id uniqueness,
+       history coherence, and degrade-never-throw on malformed input:
+         - `lib/figureDocument.ts` (`createFigureDocument`,
+           `updateFigureDocumentFromPlotView`, `sanitizeFigureDocument`,
+           `figureDocumentToPlotView`) — CLEAN. Pure and immutable (every
+           path returns a fresh object; grepped the whole `frontend/src`
+           tree for a direct `document.bindings.* =` / `document.plot.* =`
+           field assignment — none exists outside a local, freshly cloned
+           value). `createFigureDocument` throws on an inconsistent
+           live/frozen combination; `sanitizeFigureDocument` rejects the
+           whole document only on a bad envelope/identity/data-mode/frozen
+           snapshot, degrading every other malformed optional field to a
+           safe default. `updateFigureDocumentFromPlotView` preserves every
+           non-symmetric-Y (X-axis, asymmetric) error binding while only
+           replacing the legacy `errKeys` projection it can actually edit —
+           no lossy round trip (the exact contract G4's fix established,
+           reconfirmed here).
+         - `store/windowDocuments.ts` (`withPlotWindowDocument`,
+           `createPlotWindowDocument`, `syncPlotWindow`,
+           `withWindowDocumentErrors`, `pruneWindowDatasetRefs`) — CLEAN.
+           `withPlotWindowDocument` is the one documented chokepoint
+           (`structuredClone`s on every call) every other write path routes
+           through; `pruneWindowDatasetRefs` nulls a removed dataset's
+           binding in BOTH the canonical document and the legacy facade
+           together, never one without the other.
+         - `store/quickPlotAction.ts` / `store/quickFigureCreate.ts` —
+           CLEAN. Structurally identical shape: fail-closed gate
+           (`quickPlotAvailability` / the shared `canCreateQuickFigure`
+           predicate), fresh id, `dedupeWindowTitle`-deduped name, APPEND
+           to `editableFigures` (never an existing-by-datasetId lookup+
+           overwrite), one `recordHistory` for the whole gesture (riding on
+           `createWindow`'s).
+         - `store/figureLifecycle.ts` (`saveFigure`/`saveFigureAs`/
+           `openEditableFigure`/`renameEditableFigure`/
+           `duplicateEditableFigure`/`deleteEditableFigure`/
+           `applyFigurePublicationEdit`'s three targets) — CLEAN.
+           `saveFigure`'s overwrite-by-id only ever replaces the SAME
+           document being re-saved, never a different figure; the
+           `new-editable` Apply branch always appends fresh; one
+           `recordHistory` per user gesture throughout; no direct field
+           mutation (same grep as above).
+         - Window-close path (`store/windows.ts`'s `closeWindow`,
+           `components/windows/figureLifecycleUi.ts`'s
+           `closeFigureWindow`/`cancelPublicationPreview`) — CLEAN and
+           deliberate: a window never saved as a figure closes plainly
+           (undoable, per GUI_INTERACTION #17's confirm-exemption); a SAVED
+           figure with unsaved drift, and an untracked Publication Preview
+           draft, both get an explicit discard confirm first. Matches
+           documented intent — not silently lossy.
+         - Reimport/dataset-replacement path (`lib/reimport.ts`,
+           `store/reimport.ts`, `lib/figureDocumentReimport.ts`) — CLEAN
+           for the channel-indexed fields that reach the interactive
+           renderer: `reimportColumnsChanged` fires on ANY column-count
+           change (grow OR shrink — it only compares counts, not
+           direction), and `resetFigureDocumentForReshape` clears
+           `xKey`/`yKeys`/`y2Keys`/`errors` plus every channel-indexed
+           `plot.view` field to the safe null/empty sentinel for BOTH the
+           saved `editableFigures` entry and every bound open `plotWindows`
+           document. **Probed** (new permanent regression pin,
+           `frontend/src/store/quickFigureReimport.test.ts`): built a rich
+           mapping (alternate X, one Y, a complete asymmetric Y pair, an
+           X-error binding on channels 2/3/4) into a figure through the
+           real G4/G5 creation path (`createQuickFigureFromMapping`), mocked
+           a reimport of its dataset down from 5 columns to 1 (the exact
+           columns the rich bindings target vanish entirely, not merely
+           renumber), and confirmed: the saved document's and the open
+           window's canonical bindings both reset to
+           null/null/`[]` (no dangling reference to the vanished columns),
+           and `figureDocumentToPlotView` on the reset document neither
+           throws nor still names them (`errKeys: {}`). Passed on the first
+           run — found already correct, not a fix. **Real finding, out of
+           G5 scope, booked under PR M** (with a pointer at that item):
+           `resetFigureDocumentForReshape` deliberately leaves
+           `bindings.groupKey`/`facetKey` untouched on reimport; `groupKey`
+           reaches the backend as `FigureSpec.group_col` and a stale index
+           raises a raw `ValueError` from `calc/plotting.py` at
+           export/preview time instead of a clear explanation (not a crash
+           or silent mis-bind, and unreachable via the Quick Figure Builder
+           itself — only via the separate Figure Builder workshop's
+           Grouping panel) — L0.55's territory, not G5's.
+         - `store/history.ts` undo/redo restore of `editableFigures`/
+           `plotWindows` — CLEAN. Structural sharing (old snapshots keep
+           array/object references from the live state at record time) is
+           safe here specifically BECAUSE every document write path above
+           was confirmed to construct new objects rather than ever mutating
+           one in place — a restored snapshot's document references can be
+           shared with what was live at snapshot time without risk, since
+           no later edit can reach through and corrupt them. Separately
+           probed `restorePatch`'s dangling-dataset-binding guard
+           (`history.test.ts:130`) against a document-backed window (the
+           existing test's `PlotWindow` fixture omits `.document`, so it
+           only exercises the legacy facade field): every real mutation
+           that changes a window's dataset binding routes through
+           `syncPlotWindow`/`withPlotWindowDocument`, which keep the facade
+           `datasetId` and the canonical `document.bindings.datasetId`
+           synchronized together, so no reachable sequence left them
+           disagreeing in a recorded snapshot — the guard's facade-only
+           patch never diverges from the canonical document in practice.
+           No fix needed; noted here rather than left unrecorded.
+       Gate: `frontend && npx tsc --noEmit` clean; `npx eslint` (touched
+       files) clean; full `npx vitest run` 479/479 files, 7,062/7,062 tests
+       (one new pin over the prior 478/7,061); `npm run build` 826.1 kB
+       eager (27.9 kB under budget, unchanged — no app code touched). No
+       Playwright changes needed (no app code changed — this bullet is
+       review + one new permanent test file:
+       `frontend/src/store/quickFigureReimport.test.ts`). G5's remaining
+       line is unchanged: the release-candidate human visual acceptance
+       pass noted above.
+8. [x] **PR H — template persistence and scopes.** Save named mappings/styles
+   with explicit scope and safe mismatch behavior. **Day-5 reconciliation
+   correction (2026-08-19):** this line read `[~]` "implemented-pending-review"
+   even though PR H merged to `main` as PR #171 (`55f723e`, 2026-08-17) and its
+   review round (the orphan-template bug, documented in this item's own
+   "Review round (2026-08-18)" bullet below) is already closed — `git log
+   --oneline main` shows both `55f723e` and the follow-up fix `2749c2c`.
+   Corrected to `[x]`; no further H work is open. Shipped
+   (2026-08-17): `lib/quickPlotTemplates.ts` (H1 object + sanitizer, H4
+   `resolveTemplate`), `store/quickPlotTemplates.ts` (H3 CRUD +
+   apply-delegation), the `.dwk` `quickPlotTemplates` field
+   (`lib/workspace.ts`'s four-site additive pattern) and its `HistorySnapshot`
+   inclusion (`store/history.ts`, same commit as the slice — the savedRois-
+   incident gate), the Quick Figure Builder's **Save Quick Plot Template…**
+   action, and the **Quick Plot With…** chooser
+   (`components/overlays/QuickPlotWithDialog.tsx`) wired onto the worksheet
+   and workbook context menus + the ⌘K palette, hidden until ≥1 template
+   exists (L0.37). Rulings recorded here:
+   - **Lean template object, two scopes.** Scope is exactly `{kind:"workbook",
+     workbookId}` or `{kind:"schema"}` (L0.31's confirmed default) — no
+     third/global/named-import scope yet.
+   - **Refusal-with-report, never partial apply.** `resolveTemplate` re-keys
+     every mapped channel (X, each Y, each error binding endpoint) by its
+     saved LABEL, exactly like `techniqueViewMemory`'s re-key idiom, but
+     UNLIKE that function's partial tolerance: any single unresolved channel
+     refuses the WHOLE apply, naming every unmatched field — a silently
+     partial figure is a worse failure than an honest
+     "Configure Quick Plot..." refusal. Cross-technique is never bridged,
+     workbook-scoped templates gate to their own workbook, and a same-label-
+     different-unit column (e.g. "B" in Oe vs. Tesla) is treated as
+     unresolved too. The captured `signature` (H1) plays a deliberately
+     BOUNDED role in matching — it is not a second independent matcher: the
+     saved LABEL re-key above is the real matcher (which channel is which),
+     and `signature` only feeds the per-channel UNIT check at the label's
+     resolved index (same-label-different-unit refusal, just above).
+   - **History inclusion is not optional.** `quickPlotTemplates` landed in
+     `HistorySnapshot`/`snapshotOf` in the SAME commit as the store slice —
+     see `store/history.ts`'s own savedRois-incident warning this guards
+     against.
+   - **Never auto-save, never silently overwrite.** Only the builder's
+     explicit **Save Quick Plot Template…** action creates a template;
+     saving under a name already in use dedupes it (`dedupeWindowTitle`
+     idiom: "Name", "Name (2)", ...) rather than replacing the existing
+     entry. `applyQuickPlotTemplate` never touches `quickPlotTemplates`
+     itself — it only resolves + delegates to the canonical
+     `createQuickFigureFromMapping` (G4), so apply carries the SAME
+     one-undo-per-gesture guarantee as Quick Plot/the builder's own Create.
+   - **What stays open under P1.3:** the full recipe-field vocabulary (only
+     mapping/style/technique/signature are captured here, not axis
+     limits/legend/decor), a global or exportable/cross-project scope, and
+     reverse-mapping an existing editable FigureDocument back into a
+     template (the editable-figure context menu's **Save as Template…**
+     ships as an honest disabled stub pointing at the builder, per H5c —
+     `components/Library/artifactContextActions.ts`).
+   - **Review round (2026-08-18) — the orphan bug, fixed:** a workbook-scoped
+     template must never become permanently invisible/unmanageable. DANGLING
+     (the owning workbook no longer exists in the doc) is sanitized out at
+     `.dwk` LOAD time (`lib/workspace.ts`'s `parseWorkspace`, the E2
+     `librarySelection`/`parseWorkbookLastChild` aliveness pattern) —
+     `lib/quickPlotTemplates.ts`'s `pruneDanglingWorkbookScopeTemplates`.
+     MEMBERLESS-but-ALIVE (the workbook exists but currently has zero
+     worksheet children — reachable via ordinary `removeDatasets`) is
+     deliberately NOT pruned — a workbook can regain members — and stays
+     reachable through the manage surface: the workbook menu's **Quick Plot
+     With…** is visible whenever the workbook owns ANY workbook-scoped
+     template, even with no worksheet child, opening the chooser in a
+     workbook-only mode (`store/quickPlotWithDialog.ts`'s `workbookId`) that
+     lists those templates disabled with "workbook has no worksheets" and
+     keeps inline rename/delete fully functional (L0.36: disabled with
+     reason, never hidden). Pruning on an actual workbook DELETE is booked
+     under PR M, not here — see that item's entry above.
+9. [x] **PR I — cross-instance workbook transfer (Claude Opus 5, worktree
+   agent, sprint Day-5, `claude/i-transfer-locking`).** Implemented the
+   versioned, bounded Copy/Paste package, fresh-ID rewrite, provenance, and
+   failure-safe cleanup contract from L0.23-L0.24. `lib/workbookTransfer.ts`
+   (pure): `buildTransferPackage` gathers a workbook's worksheets + the
+   editable figures/reports/quickPlotTemplates scoped to it (single-`datasetId`
+   membership, per PR J slice-1's own finding) into a `format`/`version`-
+   stamped `WorkbookTransferPackage`, BOUNDED at `MAX_TRANSFER_PACKAGE_CHARS`
+   (8,000,000 chars) with the size named in the refusal; `parseTransferPackage`
+   validates a package read back from text by wrapping it in a synthetic
+   single-workbook `.dwk` document and reusing `lib/workspace.ts`'s own
+   `parseWorkspace` sanitizers wholesale (DataStruct/bgRef/derivedFrom/
+   FigureDocument-version-skip/dsId-scoped filtering all come for free —
+   no parallel validator); `pasteTransferPackage` is the fresh-id-rewrite
+   core Paste and Duplicate both share — EVERY id (workbook, dataset, figure,
+   report, template) is reassigned unconditionally (never only on collision,
+   the deliberate divergence from `lib/workspaceMerge.ts`'s same-session
+   append policy — see that module's own header for why cross-process needs
+   the stronger rule), and every internal edge (`bgRef`/`derivedFrom`/
+   `versionOf`/figure+report `datasetId`/template `scope.workbookId`) is
+   rewritten through the resulting id map or dropped (never aliased) when it
+   points outside the pasted set. `store/workbookTransfer.ts` orchestrates:
+   `copyWorkbookToClipboard` (resolves pending worksheets, builds, writes via
+   `lib/clipboard.ts`'s `copyText`), `pasteWorkbookFromClipboard` (reads,
+   validates, builds the COMPLETE replacement arrays, THEN one
+   `recordHistory` + one `set()` — a refused paste never touches state),
+   `duplicateWorkbook` (same core, round-tripped through the identical
+   parse validation, lands in the source's own folder, "X copy" naming).
+   Composed into `useApp.ts` per the size-ratchet convention (one import
+   line, one extends-union word, one creator-spread line; pin unchanged at
+   2818). **Transport ruling (frozen-scope item 2):** clipboard-text only
+   (`navigator.clipboard.writeText`/`readText`, the same pair every other
+   clipboard feature in this app uses) — a file-based fallback for
+   oversize/unavailable-clipboard cases is EXPLICITLY DEFERRED (new
+   filesystem-write authority needs its own adversarially-reviewed contract
+   PR, the `grant_source_paths` precedent) and booked as `desktop_bridge.py`'s
+   next slice. **Provenance (requirement 4):** `Dataset.source` rides
+   untouched through the id rewrite; `reimportDataset` (`store/reimport.ts`)
+   now probes an unreachable source (`hasDesktopShell()` + `pathState`) and
+   reports "source unavailable" + opens the LANDED P1.7 `useRelink` panel
+   instead of surfacing a raw backend import error. **Deliberately NOT
+   carried** (documented scope, not a silent gap): legacy `FigureDoc`
+   (superseded by `editableFigures`), multi-panel `PageDocument`s (can span
+   several workbooks), `originFigures`/`originFidelity` (keyed to the
+   source project's own book layout). UI: Copy/Duplicate wired as workbook
+   context-menu rows (`lib/workbookContextActions.ts`); Paste as a
+   command-palette entry (`commands/workbookTransferCommands.ts`) targeting
+   the Library root — a folder-targeted Paste context-menu row is deferred
+   until this codebase grows a folder/root context-menu surface, the same
+   "expose a tested action contract, UI wiring is the next slice's job"
+   scoping PR J/K slice 1 already used (`pasteWorkbookFromClipboard` already
+   accepts `targetFolderId` for that follow-up). Red-first throughout,
+   including two mutation-tested pins (the unconditional-fresh-id collision
+   guarantee, and the build-fully-before-touching-history ordering).
+9b. [~] **PR I2 — single-writer project locking (Claude Opus 5, worktree
+    agent, sprint Day-5, `claude/i-transfer-locking`).** Implemented L0.47's
+    state machine and UX; the actual cross-process filesystem enforcement
+    is an honest, named defer (see below — this item's own booking already
+    flagged "requires the same platform-boundary answer as PR I", and that
+    boundary answer is what's deferred). `lib/lockState.ts` (pure): four
+    states (unlocked / held-by-me / held-by-other-live / held-by-other-stale),
+    staleness = heartbeat older than `STALE_AFTER_MS` (3× a 30s heartbeat
+    interval — documented false-positive risk: a suspended/paused instance
+    can look stale before it's actually gone; the safety net is
+    `verifyBeforeWrite`, re-checked on every heartbeat tick, which forces a
+    resumed original holder to detect a stale-takeover raced ahead of it and
+    demote to read-only rather than risk a silent concurrent write — pinned
+    by a dedicated "forces the resumed-holder race" test). `canTakeOver`
+    gates **Take Over Editing** to `held-by-other-stale` ONLY, enforced again
+    at the data level inside `takeOver` itself (never trusts a caller to have
+    checked it first) — mutation-tested. `store/projectLock.ts`: a standalone
+    store (ambient session state, never HistorySnapshot-tracked, zero
+    `useApp.ts` footprint) orchestrating an injectable `LockProvider`
+    (`read`/`write`/`clear`); `openProject` acquires directly when possible
+    else surfaces read-only + the takeover choice; `takeOverEditing`
+    re-verifies staleness against a FRESH read right before writing (a
+    preview-then-commit TOCTOU guard, mutation-tested); `openAsCopy` clears
+    `currentProject` without touching the original lock. Wired for real: a
+    genuine native workspace open (`lib/openWorkspaceReplace.ts`) registers
+    with the lock machine and releases any PREVIOUS project this same
+    instance held; the quick-save path (`store/workspaceIO.ts`'s
+    `runSaveWorkspace`) refuses when the lock is tracking the current
+    project's path and this instance isn't the allowed writer (Save As stays
+    ungated — a fresh native dialog is always a deliberate new destination);
+    `useProjectLockHeartbeat.ts` schedules the actual heartbeat interval
+    (App-level hook, mirrors `useWorkspaceAutosave.ts`'s "hook wires the
+    effect, store stays pure" split) so a healthy session never goes falsely
+    stale; **Take Over Editing**/**Open as Copy** ship as command-palette
+    entries (`commands/projectLockCommands.ts`) that refuse gracefully with
+    a reason when not applicable (this app's `Action` type has no `disabled`
+    field). **Consent ruling applied (frozen-scope item 8's explicit escape
+    hatch, taken deliberately):** the shipped `LockProvider` is IN-MEMORY,
+    process-local — it exercises the complete state machine in every
+    environment but is NOT genuinely cross-process (two separate `qz
+    --desktop` processes each get their own empty lock table). Making it
+    real needs a lock record that survives outside one process — a file
+    beside the project, written through the EXACT write-consent discipline
+    `desktop_bridge.py`'s `save_file_dialog`/`write_project_file` pair
+    already established (backend-verifiable, never caller-asserted). That is
+    new js_api surface (an `acquire_lock`/`refresh_lock`/`release_lock`
+    triple deriving a sibling `.qzlock` path from an ALREADY write-consented
+    project path — the same "derive from, don't invent, an existing consent"
+    shape the P1.7 `grant_source_paths` ruling used) which this slice's
+    budget does not allow to design and adversarially review responsibly.
+    `desktop_consent.py` itself is untouched — not weakened, not duplicated,
+    not reached into. Booked home: `desktop_bridge.py`'s next slice, "PR I2
+    filesystem lock provider" — `LockProvider`'s interface is exactly the
+    seam that slice plugs into (`setProvider`); nothing else changes shape
+    when it lands. **Two-browser-tabs-one-backend, answered explicitly (P2,
+    adversarial review round, 2026-08-19):** this item's own booking asked
+    for that story to be defined — running `qz` (no `--desktop`) over HTTP,
+    two ordinary browser tabs against the SAME server get ZERO protection
+    today (every lock-machine call site is gated behind `hasDesktopShell()`
+    or a native-open identity, neither of which a browser tab has), so two
+    tabs can quick-save the same project and silently clobber each other —
+    the exact failure L0.47 exists to prevent for two desktop instances.
+    This is a SEPARATE gap from the filesystem-provider defer above, not
+    automatically closed by it: a filesystem-backed `LockProvider` shares a
+    record across OS PROCESSES, but two tabs in one browser share no
+    filesystem access at all. Booked as its own named home, "PR I2 cross-tab
+    lock provider" (an in-browser channel — `BroadcastChannel` or a
+    `localStorage` storage-event listener — backed by the same
+    `LockProvider` interface so the pure state machine stays the single
+    source of truth either way). See `store/projectLock.ts`'s module doc for
+    the identical record in code. **Booked, not built (adversarial review,
+    2026-08-19):** a PERSISTENT read-only status indicator (a status-bar/
+    title-bar chip that stays visible for the whole read-only session, not
+    just the one-shot toast `registerWithLockStateMachine` fires when a
+    read-only open resolves) — today the toast is the only signal, and it
+    fades; a user who missed it, or who is deep in a long editing session,
+    has no ambient way to notice they're read-only short of trying to save
+    and hitting the refusal. Named home: a small `Shell/`-chrome component
+    reading `useProjectLock`'s `status`/`canWriteNow` reactively, alongside
+    the existing project name/dirty-state display (store/project.ts's
+    header names that exact display as the precedent to extend). Not built
+    in this round because it's new UI surface under real bundle pressure
+    (867.7/883.9 kB at the time of this review, with more lanes still
+    landing) — the owner asked to measure the INTEGRATED build before any
+    more UI lands, not churn at freeze.
+10. [~] **PR J — combined and split workbooks.** Implement explicit combine,
     transactional multi-source reimport, collision-safe naming, and dependency-
     aware separation from L0.32-L0.34 and L0.51.
-11. [ ] **PR K — calculated columns and derived worksheets.** Add the acyclic
+    - [x] **slice 1 — combine/separate against the frozen dependency contract
+      (Claude, worktree agent, sprint Day-2):** implemented pending review, on
+      `claude/j-combine-split`. Store-only (no UI) — mirrors PR K slice 1's
+      scoping precedent (see that item's log). **Combine** (L0.32-L0.34):
+      `lib/workbookCombine.ts`'s pure `resolveCombineTargets` (expands a
+      selected whole workbook to every live member + individually-picked
+      worksheets, de-duplicated), `suggestCombinedWorkbookName` (longest
+      shared basename prefix, undefined below a 3-char floor — "when one is
+      clear"), and `dedupeWorksheetNames` (the `dedupeWindowTitle` "Name",
+      "Name (2)", … idiom, scoped to the incoming batch only — two unrelated
+      workbooks may legitimately share a worksheet name elsewhere);
+      `store/workbookCombine.ts`'s `combineWorkbooks(selection, name)` mints
+      ONE new workbook (`nextWorkbookId`) and reassigns the resolved
+      worksheets' `workbookId` (+ deduped display name) in one `set()`/one
+      `recordHistory`. Source path/importedAt provenance rides the dataset
+      object untouched — no reimport machinery is invoked (L0.33 stays PR
+      M's). Source workbooks are DELIBERATELY never deleted (even fully
+      drained) — the plan's documented memberless-but-alive state, so a
+      workbook-scoped Quick Plot template never dangles and PR M's
+      delete/prune contract is never triggered by this PR. Refuses (zero
+      mutation) on an empty selection or blank name. **Separate** (L0.51):
+      `lib/workbookSeparate.ts`'s `closeExclusiveDependents` — a fixpoint
+      closure over the SAME bgRef/derivedFrom edges `lib/recalc.ts`'s
+      `buildEdges` folds (re-derived rather than imported, since
+      `downstreamOf` answers "reachable" not "exclusively dependent" — a
+      dataset with an EXTRA dependency outside the moving set never joins,
+      pinned by a two-upstream-fields test) — and `computeSeparatePlan`,
+      which builds the affected-item preview by calling
+      `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy` TWICE (current
+      state, and a hypothetical post-separate state) and diffing each
+      figure/page/report/derived-worksheet's placement: **the key finding
+      this slice turned up is that no explicit "rewrite a source link" step
+      exists anywhere in this codebase** — every artifact kind (origin/
+      editable/publication figure, page, report) resolves its Library
+      placement FRESH from its source dataset(s)' CURRENT `workbookId` on
+      every hierarchy build (already true before this PR; FigureDocument/
+      FigureDoc/ReportEntry are all single-`datasetId`-only, so only Origin
+      figure families and multi-panel Pages can even span >1 worksheet), so
+      the ENTIRE commit mutation is "mint one workbook, reassign
+      `workbookId` on the moving dataset ids" — nothing else to touch, and
+      nothing that can drift out of sync with a stored link, because there
+      is no stored link. Preview/commit are two store actions
+      (`store/workbookSeparate.ts`): `previewSeparateWorksheets` computes and
+      opens a `SeparatePlan` (new `separatePreview` state field — transient,
+      added to `architecture.test.ts`'s HISTORY_EXCLUDED, mirroring
+      `splitDialogTargetId`); `commitSeparateWorksheets` REFUSES with zero
+      mutation unless a preview is open (preview-before-commit is a hard
+      gate, not just a UI convention) and re-validates every previewed
+      moving id is still live before applying (fails closed on a
+      preview/commit race, e.g. the worksheet got removed by something else
+      meanwhile) — one `recordHistory`/one `set()` on success. Both slices
+      composed into `useApp.ts` exactly like `workbookActions.ts` (2 import
+      lines + 2 extends-union words + 2 spread lines + one `loadWorkspace`
+      reset line for `separatePreview`; the 2818 pin is untouched, still
+      well under it). P1.4's `cat_levels` merge contract was checked and
+      found N/A: combine never merges worksheet ROW data into one sheet
+      (`lib/merge.ts`'s `mergeDatasets` is the feature that does that,
+      untouched here) — L0.34 keeps every combined worksheet a separate
+      child by design. Red-first throughout; every pin (collision
+      suffixing, the exclusive-vs-shared dependency split, the
+      preview-before-commit/staleness gate) mutation-tested by temporarily
+      breaking it and confirming the test catches it. Gates green: `tsc
+      --noEmit` clean, `eslint --max-warnings=0` clean on touched files,
+      full `vitest run` 495/495 files, 7338/7338 tests, `npm run build`
+      845.2 kB eager (8.8 kB under the 854.0 kB budget). **Deferred to a
+      later slice** (booked here, not silently dropped): the actual dialog
+      UI (name-prompt/prefix-suggestion for Combine, the affected-item
+      preview list for Separate) and Library context-menu wiring —
+      `store/workbookCombine.ts`/`store/workbookSeparate.ts` expose a
+      complete, independently-tested action contract for that UI to call
+      directly, same "NO UI, slice 2's job" scoping PR K slice 1 used;
+      L0.33's transactional multi-source reimport (PR M's machinery, per
+      this PR's brief); PR I's cross-instance transfer; Lane D2's
+      dependency-graph WRITES (this slice only READS `downstreamOf`-adjacent
+      structure via `closeExclusiveDependents`, never persists a graph).
+      **Slice-2 caveat (booked from the adversarial review, 2026-08-18):**
+      `previewSeparateWorksheets` mints `nextWorkbookId()` once per preview
+      OPEN — fine for today's static, open-once-per-gesture preview, but a
+      live-updating preview (re-running as the user tweaks the separate
+      selection) must NOT re-mint on every recompute/keystroke; mint once at
+      commit instead, or memoize the id across recomputes of the same open
+      preview. Booked as a slice-2 constraint, not built here.
+    - **Review round (2026-08-18, adversarial verdict SOUND-WITH-FIXES) —
+      P1/P2 fixed, same commit as slice 1's plan-doc entry:** P1 (probe-
+      proven): `combineWorkbooks`/`commitSeparateWorksheets` reassigned
+      `Dataset.workbookId` but left `folderId` untouched, breaking the
+      `lib/workbooks.ts:52-54`/`moveWorkbookToFolder` invariant ("folder
+      placement is owned by the WORKBOOK") and split-braining Folder view
+      (`lib/foldertree.ts`'s `folderDatasets`, read by `Library.tsx`/
+      `SmartFoldersSection.tsx`/`datasetRowMenu.ts`) against the workbook
+      tree. Fixed: combine's new workbook lands at the Library root, so
+      every moved worksheet's `folderId` is set to `undefined` UNCONDITIONALLY
+      (mirroring `moveWorkbookToFolder`'s own `folderId ?? undefined`);
+      separate's moving datasets (seed + closure-swept dependents, which can
+      carry a DIFFERENT drifted `folderId` than the seed) are all re-homed to
+      `SeparatePlan.newWorkbookFolderId` (the source workbook's folder).
+      Red-first: a dataset moved from a foldered workbook no longer
+      disappears from `folderDatasets(oldFolder)` (combine) and a
+      closure-swept dependent with a drifted `folderId` gets re-homed to
+      match the seed's new placement (separate) — both quoted red in the
+      session transcript, both mutation-tested by reverting the fix. P2
+      (should-fix): `closeExclusiveDependents`'s bgRef live-edge predicate
+      (`d.bgRef && d.corrections && d.raw`) had no test isolating each half —
+      the sole negative case dropped BOTH `corrections` and `raw` at once, so
+      a mutated predicate missing just `&& d.raw` (or just `&& d.corrections`)
+      still passed all 14 prior tests. Added two isolated cases; each was
+      proven red under its matching single-field mutation, then the
+      predicate was restored. P3 (booked): `previewSeparateWorksheets`'s
+      `nextWorkbookId()`-per-open caveat above.
+11. [x] **PR K — calculated columns and derived worksheets.** Add the acyclic
     dependency graph, visible formula/derived state, deterministic recalculation,
     and **Freeze Copy** from L0.43 and L0.50.
-12. [ ] **PR L — Details metadata and Collections.** Add column selection,
+    - [x] **slice 1 — dependency foundation (Claude, worktree agent):**
+      implemented pending review, on `claude/k-dependency-foundation`. K1
+      static `referencedColumns` (reuses compileFormula's own parse, one new
+      `onRef` hook — no second parser); K2 schema (`ComputedColumn.deps`,
+      `Dataset.derivedFrom`, `Dataset.formulaErrors`, all additive .dwk,
+      no version bump — `formulas[].deps` rides the existing per-entry
+      passthrough, `derivedFrom`/`formulaErrors` got their own
+      `lib/workspaceComputedColumns.ts` serialize/parse helpers); K3
+      widened `lib/recalc.ts` graph (ds:/col:/sheet:/fit: vocabulary) —
+      THE RULING: the graph is derived fresh from `Dataset.bgRef` /
+      `.fitSpec` / `.derivedFrom` / `ComputedColumn.deps` on every query,
+      never itself persisted (documented in the module header) —
+      `downstreamOf` reimplemented on top of it, same public shape, all
+      prior tests green; K4 write-time cycle rejection
+      (`wouldCreateCycle`, pure + exported) wired into `addFormula`/
+      `updateFormula` (new `store/computedColumns.ts` slice — also funded
+      useApp.ts headroom by extracting addFormula/removeFormula out of the
+      pinned file) and `applyCorrections`' bgRef (`store/corrections.ts`) —
+      the constructible-today A↔B bgRef cycle is now REFUSED at write time
+      (red-first pin in `store/recalc.test.ts`), zero mutation, clear
+      status explanation naming the cycle path; K5 invariants pinned by
+      test — (a) synchronous same-dataset formula freshness unchanged,
+      (b) a failing formula now carries a visible `Dataset.formulaErrors`
+      entry alongside its NaN column (previously silent), (c) a derived
+      worksheet (`derivedFrom` set) is stale-marked but never synchronously
+      recomputed — `downstreamOf`'s generalization gives this for free, no
+      `touchDataset` logic change needed, (d) a ds→sheet→fit chain settles
+      in topological order inside one `recalcNow` (also free, from the
+      existing two-phase corrections-then-fits order once `staleFits` is
+      populated by the same widened graph walk), (e) one `recordHistory`
+      per gesture pinned. `updateFormula` — an authoring action the
+      contract names but that didn't exist before this slice — is new
+      (edit an existing computed column's name/expr/unit in place). NO UI:
+      no derived-worksheet creation surface, no Freeze Copy, no visible
+      error-state marking in the worksheet grid — those + the `derivedFrom`
+      setter's own cycle-check wiring are slice 2. Unblocks: PR M's
+      dependency-aware Trash/reimport preview (booked pointer at line
+      ~537/2353) can now query `downstreamOf`/`wouldCreateCycle` for
+      derived worksheets, not just bgRef chains; PR J's dependency-aware
+      workbook separation (L0.51) has the same generalized graph to query.
+    - [x] **slice 2 — derived worksheets + Freeze Copy, happy path (Claude,
+      worktree agent):** on `claude/k-derived-worksheets`, rebased onto
+      main after slice 1 merged (PR #172) plus H's Quick Plot templates
+      and P1.4's categorical contract. The `derivedFrom` setter is
+      `store/derivedWorksheets.ts`'s `createDerivedWorksheet(sourceId,
+      params, pipelineLabel?)`: runs `params` (the SAME `CorrectionParams`
+      shape `applyCorrections` already uses — no new pipeline DSL) against
+      the source's CURRENT raw/data via the existing corrections API, and
+      commits the result as a brand-new dataset (`get().addDataset`, the
+      MAIN_PLAN #9 single entry point) carrying `derivedFrom` + the SAME
+      workbook/folder as its source — wired through `wouldCreateCycle`
+      first (K4), refusing with zero mutation; the source itself is never
+      mutated. The REAL EXECUTOR (replacing slice 1's honest no-op):
+      `recomputeDerivedSheet` re-runs a derived sheet's own `.corrections`
+      (its re-runnable pipeline recipe) against its source's LATEST raw/
+      data, called ONLY from `useApp.ts`'s `recalcNow` — never
+      synchronously from `touchDataset` — keeping slice 1's invariant (c)
+      intact (pinned red-first: temporarily reverting the `recalcNow`
+      branch to the old no-op fails 3 tests in `store/recalc.test.ts`,
+      restoring passes all). **Freeze Copy** (`freezeCopy(id)`) severs the
+      link entirely: a plain dataset with no `derivedFrom`/`corrections`/
+      `raw`, `data.metadata.frozenFrom` recording source id/pipeline/
+      timestamp, one `addDataset`-supplied history entry. Visible marking:
+      a derived-worksheet badge (new `DerivedWorksheetMark.tsx`, the
+      `RecomputedMark.tsx` pattern — `DatasetRow.tsx` sits at the 400-line
+      ceiling) in the Library row, a source+pipeline banner with an inline
+      **Freeze Copy** button in the Worksheet pane, and a K5b formula-error
+      header badge threaded `WorksheetPane → GridViewport → GridHeader`.
+      Both actions get dataset-row context-menu entries (new
+      `lib/derivedWorksheetActions.ts`, spliced into
+      `datasetRowMenu.ts` — kept out of `lib/contextActions.ts`, which
+      sits exactly at the general 500-line ceiling with zero headroom).
+      OUT of scope (per the dispatch): M's reimport/delete propagation,
+      J's separation, user-settable level ordering, any UI beyond grid/
+      Library marking + the create/freeze actions and their menu entries.
+12. [~] **PR L — Details metadata and Collections.** Add column selection,
     batch project-metadata edits, grouping/filtering, session undo, and
-    project-local saved Collections from L0.48-L0.49 and L0.56.
-13. [ ] **PR M — dependency-aware reimport and deletion.** Add previews,
+    project-local saved Collections from L0.48-L0.49 and L0.56. **Slice 1
+    (sprint Day-2, `claude/l-metadata-collections`):** selectable Details
+    columns, batch project-metadata edit, and basic Collections landed.
+    Selectable columns — `lib/libraryDetailsColumns.ts` (bounded 10-column
+    set; Name stays mandatory, the original seven default ON, three new
+    project-metadata columns — sample/notes/group — default OFF and
+    discoverable via the new `LibraryDetailsColumnsMenu.tsx` picker; the
+    picker is session-local state on `LibraryDetails.tsx`, not yet
+    `.dwk`-persisted). Batch edit — `store/datasetMeta.ts`'s new
+    `batchEditDatasetMetadata(ids, patch)`: notes/group/add-tags/remove-tags
+    applied to the whole selection as ONE `recordHistory` call (pinned by
+    `datasetMeta.test.ts`'s "is undoable as exactly ONE entry" +
+    "NEVER rewrites the imported raw data/header" boundary tests); wired to
+    a new "Edit metadata (N)…" control in the Details toolbar (shows the
+    affected count in the dialog title and the confirmation toast) and to
+    `MultiSelectBar`'s existing Tag button (previously N `recordHistory`
+    calls for a tag-the-selection gesture — a live L0.56 violation the new
+    action also fixes, pinned by a new "exactly ONE entry" test there).
+    Tags — already first-class project metadata from PR A2
+    (`addDatasetTag`/`removeDatasetTag`, shown in Details, searchable via
+    the existing `tag:` grammar); no new work needed, confirmed by test.
+    Collections — new `lib/collections.ts` (`Collection` type,
+    `collectionMembers` derived over the canonical `LibraryHierarchy` via
+    the SAME shared query grammar Smart Folders/search already use, never a
+    stored id list) + `store/collections.ts` (CRUD slice: add/rename/
+    re-query/delete, each one undoable `recordHistory` call) +
+    `components/Library/CollectionsSection.tsx` (a cross-cutting section
+    beside Smart Folders; a member row reveals its ONE real location via
+    "Show in Library" rather than opening a second place for it — L0.48's
+    ownership distinction) + a "⊙ Save this filter as a Collection…" button
+    beside the existing ☆ smart-folder one. Persists in `.dwk` additively
+    (`lib/workspace.ts`'s `collections?` field, sanitized by
+    `sanitizeCollections`; absent on an older doc loads as `[]`) — kept
+    project-local per L0.49 (no cross-project index exists to add one to).
+    Deferred to a later slice (booked, not built): `.dwk`-persisting the
+    Details column selection itself; drag-to-group/filter interactions
+    beyond the basic filter/save-as-Collection UI; cross-project catalogs
+    (banned outright by L0.49); grouping polish. File ownership: Details-
+    view metadata UI, tags, Collections store/persistence only — workbook
+    combine/split (Lane E-J), derived worksheets/computedColumns
+    (Lane D2), and the Import Wizard (Lane C) untouched.
+13. [~] **PR M — dependency-aware reimport and deletion.** Add previews,
     transactional propagation, stale analysis state, Trash dependency review,
-    and freeze/materialize recovery from L0.45 and L0.55.
+    and freeze/materialize recovery from L0.45 and L0.55. **Day-5
+    reconciliation correction (2026-08-19):** this item was still marked `[ ]`
+    with no slice recorded, but slice 1 merged as PR #179 (`ab3861a`,
+    2026-08-18) — `git log` shows it on `main`. **Slice 1 — impact preview +
+    confirm gating (merged):** `lib/dependencyImpact.ts`'s
+    `computeDependencyImpact`/`formatDependencyImpact` (pure, built on K's
+    `downstreamOf` graph) computes the affected-dataset/affected-fit closure
+    for BOTH reimport (`store/reimport.ts`) and delete
+    (`lib/workbookContextActions.ts`), and both confirm dialogs now name the
+    dependents before the user commits. This ALSO lifted L0.45's blocking
+    condition: `store/workbookActions.ts`'s `workbookDeleteBlockers` was
+    changed from unconditional-disable (PR #139 round 3) to always-`null`
+    (`workbookActions.ts:27`, comment "LIFTED by PR M") — workbook Delete is
+    now enabled, sends members to the SAME single-dataset Trash
+    (`removeDatasetsPatch`) under one history entry, and the confirm dialog
+    states the grouping-loss consequence explicitly (L0.45's "never break a
+    dependency silently" satisfied by disclosure, not by a second
+    workbook-aware Trash format — deliberately, see that file's header). The
+    same commit also closes the "Booked finding (PR H review round,
+    2026-08-18)" below: `deleteWorkbook` now calls
+    `pruneDanglingWorkbookScopeTemplates` in the SAME atomic update, so a
+    workbook's own Quick Plot templates are pruned on actual deletion, not
+    just at load time. **Still NOT built (narrowing the claim, not the
+    scope):** L0.33's transactional multi-source "Reimport All" (grepped
+    `frontend/src` for `reimportAll`/`ReimportAll` — no hits); the full Trash
+    dependency-review UI offering restore/delete-dependent/freeze-materialize
+    as distinct choices (today's UI is preview-then-confirm-then-Trash only);
+    one-session Undo spanning a multi-source reimport transaction. These stay
+    open under PR M. **Booked finding (G5 canonical-state review, 2026-08-17,
+    STILL OPEN):** a shape-changing reimport
+    resets a FigureDocument's `bindings.xKey/yKeys/y2Keys/errors` (and every
+    channel-indexed `plot.view` field) to the safe null/empty sentinel, but
+    deliberately leaves `bindings.groupKey`/`facetKey` untouched
+    (`lib/figureDocumentReimport.ts`, tested at
+    `lib/figureDocumentReimport.test.ts:77-84`). `facetKey` is inert today
+    (no renderer reads it yet). `groupKey` DOES reach the backend as
+    `FigureSpec.group_col` (`lib/figureSpec.ts:200`) for Publication
+    Preview/export, and `calc/plotting.py`'s `build_grouped_series` raises
+    `ValueError(f"group_col {group_col!r} is out of range")` for a stale
+    index — so a Figure-Builder-grouped figure whose grouping column is
+    removed or shifted by reimport surfaces a raw backend error at
+    export/preview time instead of a clear "grouping column no longer
+    exists" message, rather than crashing or silently mis-grouping. Not
+    reachable via the Quick Figure Builder (the G-series create paths never
+    set `groupKey`) — only via the separate Figure Builder workshop's
+    Grouping panel. Squarely L0.55's "update linked plots" contract; belongs
+    here, not in G5. **Booked finding (PR H review round, 2026-08-18):**
+    pruning a workbook-scoped Quick Plot template when its owning workbook is
+    actually DELETED belongs here (this PR's workbook-delete machinery), not
+    to PR H — H only handles the load-time-dangling case (a `.dwk` whose
+    scoped template already names no live workbook, sanitized out on parse)
+    and the memberless-but-alive case (kept reachable via the manage
+    surface); see `lib/quickPlotTemplates.ts`'s
+    `pruneDanglingWorkbookScopeTemplates` doc.
 14. [ ] **PR N — managed large-data sidecars.** Add threshold policy,
     explicit externalization, missing/offline recovery, **Relink Data...**, and
     portable **Pack Project...** from L0.54.
+
+    **Day-5 evidence verdict (2026-08-19, QA lane reconciliation): DEFER WITH
+    EVIDENCE.** The sprint plan gates N on existing large-data evidence
+    (`ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md`: "N ships only if existing
+    large-data evidence justifies it; otherwise its evidence-backed defer is
+    the correct closure"). The evidence in hand does not justify building it
+    this sprint:
+
+    - **The numbers, quoted from `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P0.4**
+      (measured 2026-07-26, `be40a69`): a large `.dwk` with a 1M-row member
+      plus derived data/figures/results is **188 MB**, serializes in
+      **641 ms**, and autosaves successfully with a full integrity round
+      trip — writing is not the problem. Reopening it **freezes the main
+      thread 5.8 s in synchronous `JSON.parse`**. At the ordinary scale N
+      would otherwise target — 50+ datasets, 20+ plot windows — P1.2's own
+      measurement is 13 ms serialize / 3.6 MB file / 194 ms restore / ~17 ms
+      autosave, and P0.4 explicitly answered "compressed containers/chunked
+      binary arrays only if required" as **NOT REQUIRED at that scale**
+      (P0.4 acceptance bullet, `PRIMARY_SOFTWARE_AUDIT_PLAN.md:361`). The
+      pain is concentrated in one large-member residual case, not the
+      common project shape.
+    - **P3.4 already investigated the SAME freeze mechanism and found parse
+      is not the dominant cost.** P3.4 slice 3 (also 2026-07-26, `481e0ea`)
+      shipped an off-main-thread worker parse for workspace open (with a
+      sync fallback) specifically to attack this freeze, and measured that
+      the wall-clock freeze **did not move** (~6.5 s A/B both ways) on its
+      own fixture because `JSON.parse` was only ~0.4-0.6 s of the total —
+      the dominant cost was render/mount, which slice 4 (staged restore,
+      time-to-first-paint 906→106 ms) and the later WeakMap-cache fix
+      (heavy window mount 6,066→~3,800 ms; restore freeze 5,604→~3,660 ms)
+      then substantially reduced. That is direct evidence the reopen-freeze
+      class of problem responds to **mount/render optimization**
+      (P3.4's territory, already shipping real wins) rather than to moving
+      bytes out of the project file into a managed external store
+      (N's mechanism) — the two plan sections are not measuring
+      contradictory things, but P3.4's fix path is already showing returns
+      where N's would be speculative.
+    - **A genuine evidence gap, disclosed rather than papered over:** no one
+      has re-measured the SPECIFIC 188 MB/1M-row-member `.dwk` reopen AFTER
+      P3.4's worker-parse + mount-cache fixes landed. The 5.8 s figure
+      predates those fixes. Building N now would be sizing a storage
+      architecture against a number that may already be smaller.
+    - **N's own nominal trigger (very large 2-D payloads, L0.54) doesn't
+      currently point at storage either.** P0.4's 2-D map measurements
+      (500²/1000²/2000² backend; 12-13 s / 52-59 s browser-side to
+      map-visible) are attributed to a named, DIFFERENT mechanism — full-input
+      re-triangulation per regrid — booked as a P2.8 class fix, not a
+      storage-format problem.
+    - **Deferring doesn't waste the sprint's investment.** P1.7 slice 1
+      (merged, `claude/p17-relink-portability`) already built the exact
+      primitives a future sidecar/Pack-Project mechanism would reuse:
+      checksum/mtime/size provenance probing, atomic dry-run-then-commit
+      relink, and cross-platform path matching. P1.7's own text says so
+      explicitly: "the raw-file-copying 'Pack Project' packer is explicitly
+      booked to PR-N territory" and "the relink machinery this slice ships
+      is exactly what a future packer would reuse." Nothing here needs to
+      be rebuilt when N is eventually picked up.
+
+    **What would flip this to BUILD N NOW:** either (a) a re-measurement of
+    the 188 MB/1M-row-member `.dwk` reopen taken AFTER the P3.4 mount/render
+    fixes, showing the freeze still exceeds a real usability threshold
+    (say, >2-3 s) with `JSON.parse` — not mount — as the dominant remaining
+    term, i.e. proof this specific number is actually a storage/parse
+    problem and not a mount problem in disguise; or (b) evidence from the
+    owner's OWN data (the still-outstanding P0.1 switch-trigger project) that
+    multi-hundred-MB `.dwk` files are the NORMAL case for her workflow, not a
+    synthetic 1M-row stress fixture — i.e., that this is a daily-driver
+    blocker rather than an edge case. Re-open this item the moment either
+    measurement exists; until then the defer stands.
 
 ## Agent and model routing
 
@@ -1362,6 +2123,93 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **2026-08-19 — Claude Opus 5, PR I + PR I2 implementation (worktree agent,
+  sprint Day-5, `claude/i-transfer-locking`, pending review):** cross-instance
+  workbook transfer (L0.23/L0.24) and single-writer project locking (L0.47).
+  Full detail lives on items 9/9b above and the "Cross-session workbook
+  transfer requirements" checklist; summary: `lib/workbookTransfer.ts` (pure
+  build/parse/paste, unconditional fresh-id rewrite, `MAX_TRANSFER_PACKAGE_CHARS`
+  bound) + `store/workbookTransfer.ts` (clipboard-text Copy/Paste, Duplicate
+  sharing the same core) ship PR I complete against its frozen scope, with the
+  file-based-transport fallback and folder-targeted Paste context-menu row
+  both explicitly booked, not silently dropped. `lib/lockState.ts` (pure
+  four-state machine, staleness + false-positive safety net) +
+  `store/projectLock.ts` (injectable `LockProvider`, in-memory by default)
+  ship PR I2's state machine and UX (Take Over Editing / Open as Copy as
+  palette commands, quick-save gated, a real heartbeat scheduler) against the
+  frozen scope's own explicit escape hatch — the filesystem-backed
+  `LockProvider` making this genuinely cross-process is a named, reasoned
+  defer (`desktop_bridge.py`'s next slice), never invented ad hoc against
+  `desktop_consent.py`. Reimport now reports "Source unavailable" and opens
+  the LANDED P1.7 Relink Source panel for an unreachable source (requirement
+  4), rather than a raw backend error. Red-first throughout; the fresh-id
+  collision guarantee, the takeover TOCTOU re-verification, and the
+  false-positive write-safety-net were each mutation-tested (temporarily
+  broken, confirmed the test catches it, reverted). Gate: `tsc --noEmit`
+  clean; `eslint --max-warnings=0` clean on every touched file; full `vitest
+  run` green (see this session's own final tally); `npm run build` 867.7 kB
+  eager (16.2 kB under the 883.9 kB budget); backend `pytest -q` and `ruff
+  check src tests` green (no backend files touched by this slice).
+- **2026-08-19 — Review round (adversarial verdict SOUND-WITH-FIXES), same
+  commit range as the entry above:** the reviewer independently
+  re-enumerated every id-bearing field in PR I and found nothing missed,
+  probed the round trip for real (computed columns, `derivedFrom`, `cat_levels`,
+  `downstreamOf`), and confirmed the missing-vs-offline reimport distinction
+  is real wiring — PR I shipped clean. Four PR I2 fixes: **P1**
+  (`lib/lockState.ts`'s "very next write attempt is refused" claim was true
+  only for the periodic ~30s heartbeat, not the actual write path) —
+  `store/workspaceIO.ts`'s `runSaveWorkspace` now re-verifies against a
+  FRESH provider read immediately before `saveProjectTo`, making the claim
+  true for the one write path that exists, and the module doc was corrected
+  to name exactly which callers enforce it. **P2a** (Save As could silently
+  overwrite a path another LIVE instance holds) — `desktopBridge.ts`'s
+  `saveProjectAs` split into `pickSaveDestination` (dialog only) +
+  `saveProjectTo` (write) so `runSaveWorkspaceToFile` can refuse between the
+  two when the resolved destination is live-locked; a stale/unheld
+  destination still proceeds. **P2b** (the two-browser-tabs-one-backend
+  story the item's own booking asked for was still undefined) — stated
+  explicitly in `store/projectLock.ts`'s module doc and this item's own
+  entry above: browser/multi-tab mode is ungated today, a SEPARATE gap from
+  the filesystem-provider defer, booked as its own "PR I2 cross-tab lock
+  provider" home. **P3** (a synchronous/async ordering gap in
+  `lib/openWorkspaceReplace.ts` let `useApp.currentProject.path` name the
+  new project while `useProjectLock.path` still named the old one for a
+  window save gates could observe and skip) — `reserveLockForSwitch` now
+  points the lock machine at the new path SYNCHRONOUSLY, before
+  `setCurrentProject`, with a conservative read-only placeholder status
+  resolved to the real one once the async check completes; releasing the
+  prior lock moved off the `releaseLock` action (which reads live state,
+  now already overwritten) onto a captured snapshot + direct
+  `provider.clear`. Booked without building: a persistent read-only status
+  indicator, and `buildTransferPackage`'s materialize-then-size-check order
+  (both documented above and in-code, deferred for bundle-pressure/warranted-
+  need reasons respectively). Red-first for all four, each with a genuine
+  pre-fix failing run quoted in the session transcript (not synthetic
+  mutations) plus one mutation check each on the two most safety-critical
+  (P1's fresh re-verification, confirmed exactly one test catches its
+  removal). Gate: `tsc --noEmit` clean; `eslint --max-warnings=0` clean on
+  every touched file; full `vitest run` green; `npm run build` budget green
+  (exact post-fix numbers in the session's own final report).
+- **2026-08-17 — Claude, PR H implementation checkpoint (pending review):**
+  Quick Plot template persistence, scopes, and matching. `lib/quickPlotTemplates.ts`
+  (H1 template object + `sanitizeQuickPlotTemplates`; H4 pure `resolveTemplate`
+  — technique equality, scope gating, per-channel label re-key with
+  refusal-with-named-fields on ANY unresolved channel, never a partial
+  apply); `store/quickPlotTemplates.ts` (H3 save/rename/delete/apply, apply
+  delegates to the canonical `createQuickFigureFromMapping` — never a second
+  create path); `.dwk` `quickPlotTemplates` field via `lib/workspace.ts`'s
+  four-site additive pattern (module pin raised 592 → 600 with written
+  justification — the minimal unavoidable cost of the pattern, no extractable
+  block available to fund it) and `HistorySnapshot` inclusion in the SAME
+  commit as the slice; builder **Save Quick Plot Template…** action
+  (name+scope prompt, gated on `canCreateQuickFigure`); **Quick Plot With…**
+  chooser (`components/overlays/QuickPlotWithDialog.tsx`, lazy-loaded) wired
+  onto the worksheet/workbook context menus + the ⌘K palette, hidden until
+  ≥1 template exists; editable-figure **Save as Template…** honest disabled
+  stub (`artifactContextActions.ts`). See item H above for the full ruling
+  record. Gate: 647 targeted tests + full suite 482 files/7,128 tests green,
+  tsc/eslint clean, build + bundle budget green (832.5 kB eager, 21.4 kB
+  under budget).
 - **2026-08-15 — ChatGPT-Sol, PR E-a implementation checkpoint (pending
   review):** Added the main-workspace Tile browser from the approved L0.15
   mockup without creating another Library model. `App.tsx` owns the renderer
@@ -1566,6 +2414,31 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-08-19 — Claude (QA lane), Day-5 sprint reconciliation:** verified
+  every H-N checkbox against `main` (`git log`, direct file reads) rather
+  than the plan's own prose, per the sprint's Day-5 gate ("Reconcile the
+  H-N plan entries and every linked unchecked item"). Corrections made, each
+  cited at its own location above: PR H's checkbox was `[~]`
+  "implementation checkpoint (pending review)" though PR #171 merged and its
+  review round closed on 2026-08-17-18 — flipped to `[x]`. PR M's checkbox
+  was `[ ]` with no text at all though slice 1 merged as PR #179
+  (`ab3861a`, 2026-08-18) — flipped to `[~]` and given a full slice-1
+  summary, narrowing what remains (Reimport All, full Trash dependency
+  review, multi-source Undo) rather than claiming the whole item. Two
+  "Derived-data integrity requirements" boxes ("mark stale/error state",
+  "preview a dependency's removal before committing") were still `[ ]`
+  though K5b/K5c and M's `dependencyImpact.ts`/J's `computeSeparatePlan`
+  already satisfy them — flipped to `[x]`. The L1.4 "artifact-row context
+  menu" booking note from the 2026-08-15 retrospective audit was still
+  open though PR E-b2 (`c07b136`) closed it — marked closed with the
+  current grep evidence. No item was found overclaiming (marked `[x]` for
+  narrower-than-described work) in this pass; all corrections were
+  under-claims (stale `[ ]`/`[~]` left behind after real merges). Added a
+  BUILD/DEFER evidence verdict to the N entry (item 14): **DEFER WITH
+  EVIDENCE**, full reasoning and the flip condition there. See
+  `plans/RELEASE_BLOCKERS.md` for the sprint-wide release-blocker list this
+  reconciliation feeds.
 
 - **2026-08-16 — Claude (Fable):** PR #146 (E-a1 hardening) reviewed and
   merged (`98ea821`) under the owner's overnight handle-everything directive.
@@ -2134,3 +3007,37 @@ back to the owner. No Library implementation is authorized by this pause.
   13/13 checks green pre-merge. G5 remains partially open: Claude-owned
   save/close/reopen/project-reload proof and canonical-state review;
   final human visual acceptance stays a release-candidate task.
+- **2026-08-17 — Claude, the G5 lifecycle proof (save/close/reopen/
+  project-reload):** closed the first of the two remaining Claude-owned
+  G5 handoff items — see the PR G / G5 entry above for the full Phase-0
+  probe + real-browser-journey record. Its own summary line claimed G5
+  `[x]` with only the release-candidate visual-acceptance pass left open,
+  but silently dropped the SECOND handoff item (the canonical-state
+  review the ownership matrix names). An independent reviewer flagged the
+  `[x]` as a merge-blocking overclaim.
+- **2026-08-17 — Claude, the G5 canonical-state review (correcting the
+  overclaim above):** performed the review the previous entry's slice
+  skipped — every code path that writes canonical `FigureDocument` state,
+  against `lib/figureContract.ts` and the plan's L0.12/L0.13 contracts.
+  Full path-by-path record is on the PR G / G5 entry above (search
+  "canonical-state review"); summary: every write path CLEAN (pure,
+  immutable, never-replace, one-history-entry-per-gesture, degrade-never-
+  throw); reimport channel-index safety PROBED through the real
+  `createQuickFigureFromMapping` path and confirmed already correct (new
+  permanent pin, `frontend/src/store/quickFigureReimport.test.ts` — not a
+  fix, nothing was broken); one real-but-out-of-scope finding (a stale
+  `groupKey` surviving a shape-changing reimport can raise a raw backend
+  `ValueError` at export/preview time instead of a clear message) booked
+  under PR M with a pointer, per L0.55. Gate: tsc/eslint clean; full
+  vitest 479/479 files, 7,062/7,062 tests; build 826.1 kB eager (27.9 kB
+  headroom, unchanged). G5's `[x]` is now honest: both Claude-owned
+  handoff items are done; only the release-candidate human visual
+  acceptance pass remains, as originally noted.
+- **2026-08-17 — Claude, PR #160 merged (`0519280`) — PR G closed:** the G5
+  lifecycle proof + canonical-state review branch merged after both
+  orchestrated review rounds (mutation-tested pins; the plan-honesty
+  correction that surfaced and then performed the canonical-state review)
+  and 13/13 checks green (one e2e runner hang — GitHub infra, cleared by
+  re-run in the normal ~3 min). PR G (G1-G5) is complete end to end;
+  the sole remaining G-item is the release-candidate human visual
+  acceptance pass, owner-only by design.

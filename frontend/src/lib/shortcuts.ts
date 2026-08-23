@@ -31,6 +31,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "⌘ K", desc: "Open the command palette" },
       { keys: "⌘ O", desc: "Import data files" },
+      { keys: "⌘ S", desc: "Save workspace (to its known project file once one exists)" },
       { keys: "⌘ Z", desc: "Undo the last change" },
       { keys: "⌘ ⇧ Z", desc: "Redo" },
       { keys: "⌘ V", desc: "Paste data from the clipboard" },

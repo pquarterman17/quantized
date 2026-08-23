@@ -30,7 +30,7 @@
 
 import { Button } from "../primitives";
 import { removeRowSafely } from "../../lib/focusGuard";
-import type { MapPayload } from "../../lib/mapdata";
+import type { MapPayload } from "../../lib/mapdataFetch";
 import { handlePositions, rectToPx, rulerCorners, type RoiRect, type RoiRuler } from "../../lib/roi";
 import type { RoiBoxStats, RoiProfile } from "../../lib/roiMath";
 import type { BoxStats } from "../../lib/api/rsm";

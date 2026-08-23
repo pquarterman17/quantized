@@ -16,6 +16,12 @@ export function datasetViewDefaults(
   return {
     xKey: null,
     yKeys: null,
+    // P1.5 review P1: groupKey indexes the active dataset's columns exactly
+    // like xKey/yKeys -- omitted here, it rode a stale index into a
+    // differently-shaped dataset on setActive/addDataset/a shape-changed
+    // reimport (lib/figureDocumentReimport.ts already reset the SAVED
+    // editableFigures copy of this same field for the identical reason).
+    groupKey: null,
     y2Keys: null,
     y2Lim: null,
     y2Scale: null,

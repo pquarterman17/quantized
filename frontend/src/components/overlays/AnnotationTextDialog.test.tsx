@@ -5,7 +5,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import AnnotationTextDialog, { askAnnotationText } from "./AnnotationTextDialog";
+import AnnotationTextDialog from "./AnnotationTextDialog";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 
 /** Open the dialog inside act() so its state update + effect flush. */
 function open(...args: Parameters<typeof askAnnotationText>): Promise<string | null> {

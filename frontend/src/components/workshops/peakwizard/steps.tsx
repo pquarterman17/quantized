@@ -6,7 +6,10 @@
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { Button, Checkbox, DataTable, NumberField, Select, StatusDot } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select, StatusDot } from "../../primitives";
 import type { PeakWizardState } from "./usePeakWizard";
 
 const faint = { color: "var(--text-faint)" } as const;

@@ -1,0 +1,1 @@
+{"input":{"ion":"Ar","target":"Si","energy":100},"output":{"Rp":2.2383965902497402E-5,"deltaRp":4.4082086201714462E-6,"ion":"Ar","target":"Si","energy":100,"warning":"Approximate (±20-30%). Use SRIM for precise work."}}

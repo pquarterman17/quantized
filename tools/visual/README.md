@@ -150,6 +150,10 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   apply routing and key rendered invariants, but does not replace the Origin
   screenshot review for colour/marker/text fidelity. Log checks derive from the current typed
   `xScale`/`yScale`/`y2Scale` fields; legacy `xLog` store fields do not exist.
+  Spatial multi-panel geometry is read via the harness-exposed
+  `spatialPanelsOf(composition)` accessor (`lib/composition.ts`), not a raw
+  `spatialPanels` store field — that field was collapsed into the
+  `composition` discriminated union and no longer exists either.
   Browser exceptions are attributed to the graph being applied, deduplicated,
   recorded in both manifests, and make that graph structurally fail even when
   its axis/panel checks happen to pass.

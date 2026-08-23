@@ -14,7 +14,8 @@
 // every OTHER workspace-LEVEL structure on the incoming doc (folders,
 // originFigures, smartFolders, reports, macroSteps, figureDocs, plotWindows,
 // activeId, selectedIds, expandedFolders, recalcMode, focusedWindowId,
-// savedPlotSpecs, savedRois) is still deliberately never read here — the
+// savedPlotSpecs, savedRois, collections) is still deliberately never read
+// here — the
 // store action built on top of this (`useApp.appendWorkspace`) doesn't touch
 // the destination folder tree, view state, or window layout either, so
 // merging those in would create structures the store then silently ignores.

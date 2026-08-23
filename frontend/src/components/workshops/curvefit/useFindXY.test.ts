@@ -6,10 +6,10 @@ import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findXY } from "../../../lib/api";
+import { findXY } from "../../../lib/api/curvefit";
 import { useFindXY, type FindXYTarget } from "./useFindXY";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/curvefit", () => ({
   findXY: vi.fn(),
 }));
 

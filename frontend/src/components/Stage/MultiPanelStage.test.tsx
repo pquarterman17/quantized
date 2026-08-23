@@ -484,6 +484,76 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
     ]);
   });
 
+  // R9 (POST_SPRINT_INDEPENDENT_REVIEW): useMultiPanelStage.ts's two fetch
+  // effects call `ensureBookData` imperatively but deliberately exclude it
+  // from their dependency arrays (it's a stable Zustand-store action
+  // reference — see the hook's own `ensureBookData` param doc). These pin
+  // down that the lazy-book fetch trigger this exclusion doc promises still
+  // fires, in both the plain-stack and spatial-apply paths, so a future
+  // change can't silently drop the trigger while "fixing" the lint warning.
+  it("triggers ensureBookData for a pending active dataset in plain-stack mode", async () => {
+    // R9 code-review F4: `vi.spyOn` + `mockRestore()` (the same idiom
+    // WindowCanvas.test.tsx/WorksheetPane.test.tsx/useApp.test.ts use for
+    // this exact action), not `useApp.setState({ ensureBookData: vi.fn() })`
+    // — the latter permanently overwrites the shared store's real action
+    // with a no-op for every LATER test in this file (the shared
+    // `beforeEach` above never restores it), silently breaking any future
+    // test that depends on the real fetch-trigger behavior.
+    const ensureBookData = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "ds1",
+          data: DATA,
+          pending: { kind: "path", bookId: "book-1", rows: 4, cols: 2 },
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    // `ensureBookData` is called synchronously inside the fetch effect
+    // (before its `fetchPlot(...).then(...)`), so it's already true once
+    // `render` (act-wrapped) returns — no need to wait on the mock call
+    // itself (TEST_DETERMINISM_PLAN #6's weak-wait ratchet).
+    expect(ensureBookData).toHaveBeenCalledWith("d1");
+    // Let the fetch-driven render effect finish too, so no ResizeObserver
+    // construction is left dangling past this test's own afterEach unstub.
+    await waitFor(() => expect(created.length).toBeGreaterThan(0));
+    ensureBookData.mockRestore();
+  });
+
+  it("triggers ensureBookData for each pending panel dataset in spatial-apply mode", async () => {
+    const ensureBookData = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "ds1",
+          data: DATA,
+          pending: { kind: "path", bookId: "book-1", rows: 4, cols: 2 },
+        },
+      ],
+      composition: spatialComposition([
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+        },
+      ]),
+    });
+    render(<MultiPanelStage />);
+    // Same synchronous-call reasoning as the plain-stack test above.
+    expect(ensureBookData).toHaveBeenCalledWith("d1");
+    await waitFor(() => expect(created.length).toBeGreaterThan(0));
+    ensureBookData.mockRestore();
+  });
+
   it("does NOT suppress independent (non-shared-x) panels — same-shape grid, different x-ranges", async () => {
     useApp.setState({
       composition: spatialComposition([

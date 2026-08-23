@@ -240,11 +240,25 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          # An -rc tag publishes a PRERELEASE: GitHub excludes prereleases
+          # from releases/latest, so installed apps' auto-update (which reads
+          # releases/latest/download/latest.json) keeps serving the prior
+          # stable until the RC is promoted with a plain vX.Y.Z tag — the
+          # rollback invariant RC_RELEASE_NOTES_DRAFT.md's Rollback section
+          # states. Without this flag the RC would become "latest" and
+          # auto-update every install to an unsmoked build.
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
           files: |
             ${{ matrix.installer-glob }}
             ${{ matrix.updater-glob }}
             ${{ matrix.server-archive }}
-          generate_release_notes: true
+          # Generate the "What's Changed" notes from exactly ONE matrix job.
+          # GitHub's update-release API PREPENDS the existing body to freshly
+          # generated notes, so three jobs each asking for notes left every
+          # release page (v0.19.0-v0.21.0) with the changelog tripled. The
+          # other two jobs pass the body through unchanged (this action only
+          # rewrites the body when asked to).
+          generate_release_notes: ${{ matrix.os == 'ubuntu-latest' }}
 
   # Build the updater manifest (latest.json) AFTER all installers have attached
   # their signed updater bundles + .sig files to the Release. The installed

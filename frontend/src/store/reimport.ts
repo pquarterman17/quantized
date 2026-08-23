@@ -35,18 +35,18 @@
 // so the whole re-import is ONE `recordHistory` entry, not two: undo must
 // restore the pre-reimport dataset in a single step.
 
-import {
-  applyCorrections as applyCorrectionsApi,
-  importFile,
-  uploadFile,
-  type CorrectionsRequest,
-} from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
+import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { recomputeData } from "../lib/formula";
+import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { useRelink } from "./relink";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { datasetViewDefaults } from "./windows";
@@ -102,6 +102,13 @@ async function commitReimport(
   // provably valid, and a saved document is a durable artifact (see the
   // helper's module doc for why in-range indices are not proof of freshness).
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
+  // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
+  // now clears a stale groupKey (see its module doc) — capture whether any
+  // bound figure actually HAD one set, BEFORE the reset, so the toast below
+  // only fires when grouping was genuinely lost, never on every reshape.
+  const hadGroupedFigure =
+    columnsChanged &&
+    get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null);
   set((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
@@ -147,6 +154,11 @@ async function commitReimport(
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");
   }
+  if (hadGroupedFigure) {
+    // PR M booked finding: a clear message instead of a raw backend
+    // ValueError at export/preview time (lib/figureSpec.ts's group_col).
+    toast(`"${ds.name}" re-import: a figure's grouping column no longer exists — grouping was reset`, "info");
+  }
   get().recordMacro(`Re-import "${ds.name}"`, `qz.reimportDataset(${lit(ds.name)})`);
   get().touchDataset(ds.id);
 }
@@ -176,9 +188,15 @@ async function runReimport(
 }
 
 /** Promisify the native file dialog for the no-source fallback — resolves the
- *  FIRST picked file, or never resolves on cancel (the picker's `<input>`
- *  fires no event then; matches every other `openFilePicker` call site in
- *  this codebase, none of which await completion either). */
+ *  FIRST picked file, or `null` on cancel. DEFECT B fix (Sol audit P1-6,
+ *  2026-08-21): this used to document itself as "never resolves on cancel",
+ *  because `openFilePicker`'s `<input>` fired no event on Cancel and this is
+ *  the ONE call site in the codebase that actually `await`s the result — a
+ *  canceled picker left `reimportDataset`'s continuation (the status
+ *  cleanup below) permanently suspended. `openFilePicker` now also fires
+ *  `onPick([])` on the `<input>`'s `cancel` event, and `files[0] ?? null`
+ *  here already turns an empty array into `null` — no other change needed
+ *  in this function itself. */
 function pickOneFile(): Promise<File | null> {
   return new Promise((resolve) => {
     openFilePicker((files) => resolve(files[0] ?? null), IMPORT_ACCEPT);
@@ -190,15 +208,69 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
     reimportDataset: async (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return;
+      // PR M (L0.55): preview the downstream impact BEFORE committing, via
+      // the SAME `downstreamOf` closure the recalc engine itself uses —
+      // skipped entirely when there's nothing downstream (today's
+      // frictionless no-dependents case stays frictionless).
+      const impact = computeDependencyImpact(get().datasets, [id]);
+      if (hasDependencyImpact(impact)) {
+        const ok = await askConfirm(`Re-import "${ds.name}"?`, formatDependencyImpact(impact), "Re-import");
+        if (!ok) return;
+      }
       if (ds.source) {
+        // PR I requirement 4: a workbook pasted from another instance/
+        // project (or one whose source drive is simply gone) may name a
+        // path this MACHINE can never read, no matter how many times the
+        // backend is asked. Probing first (only possible with a desktop
+        // bridge — see pathState's own "unknown, never guessed missing"
+        // doc) turns that into an honest "Source unavailable" + the LANDED
+        // P1.7 Relink Source path, instead of a raw backend import error
+        // that leaves the user nowhere to go. Anything short of a CONFIRMED
+        // "missing"/"offline" (ok/invalid/unknown, or no bridge at all —
+        // every existing browser-mode behavior) falls through to the
+        // ordinary reimport unchanged.
+        //
+        // DEFECT C fix (Sol audit P1-6, 2026-08-21): "offline" (the volume
+        // itself is unreachable — desktop_source_probe.py's
+        // FileNotFoundError-but-volume-absent branch) used to fall through
+        // here too, past the check above (only "missing" was tested), and
+        // land on the ordinary reimport — which then failed with a raw
+        // "re-import failed: <fetch error>" toast instead of the same
+        // honest Relink recovery a confirmed-missing source gets.
+        // RelinkPanel/lib/reopenRecent.ts already treat offline as its own
+        // distinct, non-destructive state ("the file is probably fine, the
+        // share is just not mounted" — reopenRecent.ts's own module doc);
+        // this is the one flow that had not caught up.
+        if (hasDesktopShell()) {
+          const state = await pathState(ds.source.path);
+          if (state === "missing" || state === "offline") {
+            const msg =
+              state === "offline"
+                ? `source volume unreachable — reconnect the drive/network and retry, or relink "${ds.name}"`
+                : `source unavailable — "${ds.name}" (${ds.source.path})`;
+            get().setStatus(msg);
+            toast(msg, "danger");
+            useRelink.getState().openPanel({ oldRoot: parentDirectory(ds.source.path) });
+            return;
+          }
+        }
         await runReimport(set, get, ds, () => importFile(ds.source!.path));
         return;
       }
       // No known source (a browser upload never carries a real path) — the
       // fallback re-opens the picker and merges through the SAME logic; it
       // never sets `source` (an upload still can't know a path).
+      //
+      // DEFECT B fix (Sol audit P1-6, 2026-08-21): a canceled picker now
+      // resolves `null` (pickOneFile's doc) instead of hanging forever, so
+      // this settles quietly — a brief status, no toast, no import attempt —
+      // rather than leaving the earlier "re-importing …" status stuck on
+      // screen with nothing ever following it up.
       const file = await pickOneFile();
-      if (!file) return;
+      if (!file) {
+        get().setStatus("re-import canceled");
+        return;
+      }
       await runReimport(set, get, ds, () => uploadFile(file));
     },
   };

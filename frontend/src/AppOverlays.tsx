@@ -17,12 +17,20 @@
 // is eager because it self-gates on a `SHOW_SQLITE_QUERY` window event
 // registered in a `useEffect`, so it must stay mounted to hear it at all.
 //
-// Three more overlays were evaluated for the same treatment and two stay put:
-// `AnnotationTextDialog` exposes a promise-based `askAnnotationText()` API
-// like ParamDialog/ConfirmDialog, AND `components/Stage/useShapeDraw.ts` (part
-// of the always-eager Stage tree) imports it statically, so the module is
-// already in the eager graph regardless of what this file does — lazy-loading
-// only the mount here would save nothing. `InteractionHints` registers its
+// Three more overlays were evaluated for the same treatment; two stay put and
+// one now joins the lazy panels below. `AnnotationTextDialog` exposes a
+// promise-based `askAnnotationText()` API like ParamDialog/ConfirmDialog, and
+// `components/Stage/useShapeDraw.ts` (part of the always-eager Stage tree)
+// does call it — but as of the 2026-08-18 bundle-size pass, `askAnnotationText()`
+// and its store moved to `store/annotationTextDialog.ts` (the same shape as
+// `store/quickPlotWithDialog.ts`), so that eager call site no longer touches
+// this component file at all. The DIALOG itself (RichLabelInput ->
+// SymbolPalette, the Omega symbol grid) is now a `lazyPanel()` below, gated
+// the same way as SplitDatasetDialog/QuickPlotWithDialog: no keep-mounted
+// wrapper needed because the component already reseeds `draft` from
+// `initial` in a `useEffect` every time it mounts with a non-null title, so a
+// fresh mount per open is behavior-identical to the old always-mounted-but-
+// hidden one. `InteractionHints` registers its
 // `SHOW_INTERACTION_HINTS` window listener unconditionally on mount (so
 // Help's "Show interaction hints" can reopen it after the first-run card is
 // dismissed) — gating the mount would drop that listener while dismissed and
@@ -40,7 +48,6 @@
 // violation of that byte-identical rule.
 
 import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
-import AnnotationTextDialog from "./components/overlays/AnnotationTextDialog";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -48,11 +55,18 @@ import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
+import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
+import { useAnnotationTextDialog } from "./store/annotationTextDialog";
+import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useVariabilityStore } from "./store/variability";
+import { useRelink } from "./store/relink";
+import { useRecode } from "./store/recode";
+import { useCombineDialog } from "./store/combineDialog";
+import { useRecipeManager } from "./store/recipeManager";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -119,6 +133,19 @@ const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
 // already in this composition root, so loading them only when opened removes
 // their implementation (and dialog-only helpers) from first-paint JS.
 const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
+// LIBRARY_WORKBOOK_UX_PLAN PR J slice 2 (L0.32-L0.34/L0.51): same "on-demand
+// dialog with no startup responsibility" class as SplitDatasetDialog above.
+const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"));
+const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"));
+const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
+// P1.3 wave 3, Lane D: the plot-recipe apply preview+confirm dialog -- same
+// "on-demand dialog with no startup responsibility" class as QuickPlotWithDialog.
+const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/PlotRecipeApplyDialog"));
+// The Recipe Manager panel -- rare-ish, on-demand (opened from the command
+// palette / a menu), so it stays out of the eager bundle like every other
+// workshop panel above.
+const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"));
+const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
 const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"));
@@ -126,6 +153,19 @@ const PreferencesDialog = lazyPanel(() => import("./components/overlays/Preferen
 // so a plain lazyPanel — not useKeepMountedAfterOpen — matches its former
 // always-mounted-but-self-hiding behavior exactly.
 const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"));
+// P1.2 box 5: the crash-recovery chooser. Rare (only when a startup autosave
+// candidate outdates the last-known named project — see
+// lib/recoveryChoice.ts), so it stays out of the eager bundle like every
+// other on-demand dialog above.
+const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"));
+// P1.7: relink-one/relink-folder dry-run + commit. Rare-ish, on-demand
+// action (opened from the command palette, never on startup), so it stays
+// out of the eager bundle like every other workshop panel above.
+const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"));
+// J2: the Recode workshop, opened from the worksheet's column context menu
+// (a categorical column only) — rare-ish, on-demand, so it stays out of the
+// eager bundle like every other workshop panel above.
+const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"));
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -163,10 +203,22 @@ export default function AppOverlays() {
   const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const splitDialogOpen = useApp((s) => s.splitDialogTargetId !== null);
+  const combineDialogOpen = useCombineDialog((s) => s.seed !== null);
+  const separateDialogOpen = useApp((s) => s.separatePreview !== null);
+  const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
+  const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
+  const recipeManagerOpen = useRecipeManager((s) => s.open);
+  const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
+  const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
+  const relinkOpen = useRelink((s) => s.open);
+  const recodeOpen = useRecode((s) => s.open);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
+  const combineDialogMounted = useKeepMountedAfterOpen(combineDialogOpen);
+  const separateDialogMounted = useKeepMountedAfterOpen(separateDialogOpen);
+  const quickPlotWithMounted = useKeepMountedAfterOpen(quickPlotWithOpen);
   const shortcutsMounted = useKeepMountedAfterOpen(shortcutsOpen);
   const textFormatHelpMounted = useKeepMountedAfterOpen(textFormatHelpOpen);
   const prefsMounted = useKeepMountedAfterOpen(prefsOpen);
@@ -175,8 +227,13 @@ export default function AppOverlays() {
     <>
       <ParamDialog />
       <ConfirmDialog />
-      <AnnotationTextDialog />
+      {annotationTextOpen && <AnnotationTextDialog />}
       {splitDialogMounted && <SplitDatasetDialog />}
+      {combineDialogMounted && <CombineWorkbooksDialog />}
+      {separateDialogMounted && <SeparateWorksheetsDialog />}
+      {quickPlotWithMounted && <QuickPlotWithDialog />}
+      {pendingRecipeOpen && <PlotRecipeApplyDialog />}
+      {recipeManagerOpen && <RecipeManagerPanel />}
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />
@@ -217,6 +274,9 @@ export default function AppOverlays() {
       {helpOpen && <HelpDialog />}
       {textFormatHelpMounted && <TextFormatHelp />}
       {prefsMounted && <PreferencesDialog />}
+      {recoveryPending && <RecoveryChoiceDialog />}
+      {relinkOpen && <RelinkPanel />}
+      {recodeOpen && <RecodePanel />}
       <Toaster />
     </>
   );

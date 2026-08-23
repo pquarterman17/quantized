@@ -9,7 +9,8 @@ import { useState } from "react";
 
 import { exportCorrelationHeatmapFigure } from "../../../lib/api";
 import { copyText } from "../../../lib/clipboard";
-import { Button, SegmentedControl } from "../../primitives";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import CorrelationMatrix from "./CorrelationMatrix";
 import type { CorrMethod, MultivarState } from "./useMultivar";

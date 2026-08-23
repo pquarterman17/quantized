@@ -18,10 +18,13 @@
 
 import { openLibraryNode } from "../components/Library/libraryOpen";
 import type { ContextAction } from "./contextActions";
+import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "./dependencyImpact";
 import type { LibraryNode } from "./libraryHierarchy";
 import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkbookGate } from "./quickPlot";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";
+import { openCombineDialog } from "../store/combineDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
 
 export interface WorkbookActionTarget {
@@ -41,6 +44,9 @@ export interface WorkbookActionTarget {
 
 const memberCount = (t: WorkbookActionTarget): number =>
   t.node.children.filter((c) => c.kind === "worksheet").length;
+
+const memberIds = (t: WorkbookActionTarget): string[] =>
+  t.node.children.filter((c) => c.kind === "worksheet").map((c) => c.entity.id);
 
 export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
   { id: "workbook.open", label: "Open", run: (t) => t.onOpen ? t.onOpen() : openLibraryNode(t.node) },
@@ -71,6 +77,29 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     },
   },
   {
+    id: "workbook.quickPlotWith",
+    label: "Quick Plot With…",
+    // L0.37: hidden until a template exists AND either this workbook has a
+    // worksheet to target OR it has its OWN workbook-scoped templates
+    // (review-round P2b: a memberless-but-alive workbook must not lose the
+    // manage affordance for templates scoped to it — mirrors
+    // dataset.quickPlotWith's hidden gate for the worksheet-present case).
+    hidden: (t) => {
+      const s = useApp.getState();
+      if (s.quickPlotTemplates.length === 0) return true;
+      if (t.node.children.some((child) => child.kind === "worksheet")) return false;
+      return !s.quickPlotTemplates.some(
+        (tpl) => tpl.scope.kind === "workbook" && tpl.scope.workbookId === t.node.entity.id,
+      );
+    },
+    run: (t) => {
+      const s = useApp.getState();
+      const worksheet = pickConfigureQuickPlotWorksheet(t.node.children, s.workbookLastChild, t.node.entity.id);
+      if (worksheet) openQuickPlotWith(worksheet.id);
+      else openQuickPlotWithForWorkbook(t.node.entity.id);
+    },
+  },
+  {
     id: "workbook.browse",
     label: "Browse",
     enabled: (t) => t.onBrowse != null,
@@ -78,6 +107,39 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     run: (t) => t.onBrowse?.(),
   },
   { id: "workbook.rename", label: "Rename…", run: (t) => t.onRename() },
+  // PR J slice 2 (L0.32-L0.34): seeds the Combine dialog with THIS workbook
+  // as the starting selection — the dialog itself is where the user
+  // "chooses/confirms the selection" (uncheck any member before naming the
+  // result), never a second full Library picker (see
+  // CombineWorkbooksDialog.tsx's header). The richer entry point is the
+  // dataset multi-select's own "Combine…" (lib/combineSeparateActions.ts) —
+  // this one exists so a workbook is reachable without first hand-selecting
+  // its members.
+  {
+    id: "workbook.combine",
+    label: "Combine…",
+    run: (t) => openCombineDialog({ workbookIds: [t.node.entity.id], worksheetIds: [] }),
+  },
+  // PR I (L0.23/L0.36): Copy/Duplicate now have a settled contract
+  // (store/workbookTransfer.ts) — Paste is deliberately NOT a per-workbook
+  // menu row (pasting targets a FOLDER or the Library root, not an existing
+  // workbook — see commands/workbookTransferCommands.ts, which offers it as
+  // a command-palette entry until this codebase grows a folder/root
+  // context-menu surface to host it natively).
+  {
+    id: "workbook.copy",
+    label: "Copy",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets to copy",
+    run: (t) => void useApp.getState().copyWorkbookToClipboard(t.node.entity.id),
+  },
+  {
+    id: "workbook.duplicate",
+    label: "Duplicate",
+    enabled: (t) => memberCount(t) > 0,
+    disabledReason: () => "this workbook has no worksheets to duplicate",
+    run: (t) => void useApp.getState().duplicateWorkbook(t.node.entity.id),
+  },
 ];
 
 export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [
@@ -110,14 +172,24 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
     id: "workbook.delete",
     label: "Delete",
     destructive: true,
-    // L0.45 fail-closed (PR #139 review): disabled — with the reason — while
-    // any recovered figure/report/binding depends on a member worksheet;
-    // deleteWorkbook re-checks the same gate so the key shortcut can't
-    // bypass it. PR M's dependency-aware Trash lifts this.
+    // L0.45 (PR M, 2026-08-19): unconditionally enabled — workbookDeleteBlockers
+    // is kept as plumbing but always returns null now (see its doc). The
+    // real L0.45 gate is the confirm message below: it names EVERY
+    // consequence — the workbook grouping loss AND (PR M) the full
+    // downstream dependency impact — so the user chooses with full
+    // information instead of the command being blocked outright.
     enabled: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) == null,
     disabledReason: (t) => workbookDeleteBlockers(useApp.getState(), t.node.entity.id) ?? "",
     confirm: (t) => {
       const n = memberCount(t);
+      // PR M (L0.45 + L0.55): the full downstream closure of every member
+      // worksheet — bgRef chains, derived worksheets, fits — via the SAME
+      // `downstreamOf` the recalc engine itself uses (lib/dependencyImpact.ts).
+      // `removed: true` (review round P2): these members are DESTROYED, not
+      // reimported — a member's own saved fit goes with it, so it must not
+      // be listed as something that will merely go stale.
+      const impact = computeDependencyImpact(useApp.getState().datasets, memberIds(t), { removed: true });
+      const impactText = hasDependencyImpact(impact) ? ` ${formatDependencyImpact(impact)}` : "";
       return {
         title: `Delete "${t.node.entity.name}"?`,
         // P1 fix: say exactly what happens. The WORKBOOK GROUPING is gone
@@ -126,10 +198,11 @@ export const workbookDeleteActions: ContextAction<WorkbookActionTarget>[] = [
         // recoverable, and restoring one later (store/trash.ts's
         // restoreFromTrash self-heal) gives it a fresh workbook of its own
         // rather than reconstituting this one.
-        message:
+        message: `${
           n > 0
             ? `${n} worksheet${n === 1 ? "" : "s"} will move to Trash and can be restored — but the "${t.node.entity.name}" workbook grouping itself is removed for good; each worksheet restored later becomes its own new workbook.`
-            : "This workbook has no worksheets; the grouping is removed for good.",
+            : "This workbook has no worksheets; the grouping is removed for good."
+        }${impactText}`,
         confirmLabel: "Delete",
       };
     },

@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile } from "../lib/api";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct, Dataset } from "../lib/types";
@@ -29,6 +30,11 @@ vi.mock("../lib/openFilePicker", () => ({
 }));
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+vi.mock("../lib/desktopBridge", () => ({
+  hasDesktopShell: vi.fn(() => false),
+  pathState: vi.fn(async () => "unknown"),
+}));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -70,6 +76,7 @@ beforeEach(() => {
     history: [],
     future: [],
     status: "",
+    groupKey: null,
   });
 });
 
@@ -349,18 +356,22 @@ describe("reimportDataset — no-source fallback", () => {
     expect(ds.source).toBeUndefined(); // an upload still never learns a path
   });
 
-  it("does nothing when the picker is cancelled (no file chosen)", async () => {
-    openFilePickerMock.mockImplementation(() => {
-      /* user cancelled — onPick never called, so the returned promise never
-       * resolves either (matches every other openFilePicker call site). */
-    });
+  // DEFECT B (Sol audit P1-6, 2026-08-21): a canceled picker now settles the
+  // promise with `null` (openFilePicker's new `cancel`-event handling) —
+  // reimportDataset's continuation must actually run, set a brief status,
+  // and attempt nothing else.
+  it("settles quietly on a cancelled picker — status set, no import attempted, dataset untouched", async () => {
+    openFilePickerMock.mockImplementation((onPick: (files: File[]) => void) => onPick([]));
     useApp.setState({ datasets: [baseDataset({ source: undefined })] });
 
-    void useApp.getState().reimportDataset("d1"); // never resolves — don't await
-    await Promise.resolve();
+    await useApp.getState().reimportDataset("d1"); // must actually resolve now
 
     expect(uploadFile).not.toHaveBeenCalled();
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("re-import canceled");
     expect(useApp.getState().datasets[0].data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 
@@ -433,5 +444,206 @@ describe("reimportDataset — undo", () => {
     const ds = useApp.getState().datasets[0];
     expect(ds.data).toEqual(raw);
     expect(ds.raw).toEqual(raw);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR M (L0.55): preview the downstream impact
+// BEFORE committing, via the SAME `downstreamOf` closure the recalc engine
+// uses (lib/dependencyImpact.ts).
+describe("reimportDataset — dependency impact preview (PR M)", () => {
+  it("skips the confirm entirely when nothing depends on the dataset (today's frictionless case)", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    useApp.setState({ datasets: [baseDataset()] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(importFile).toHaveBeenCalled();
+  });
+
+  it("previews the impact and proceeds when confirmed", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived-sheet",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    useApp.setState({ datasets: [baseDataset(), derived] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Re-import "sample.dat"?',
+      expect.stringContaining("derived-sheet"),
+      "Re-import",
+    );
+    expect(importFile).toHaveBeenCalled();
+    expect(useApp.getState().datasets.find((d) => d.id === "d1")?.data).toEqual(fresh);
+  });
+
+  it("does nothing (zero mutation, no API call) when the preview is declined", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+    const derived: Dataset = {
+      id: "d2",
+      name: "derived-sheet",
+      data: raw,
+      derivedFrom: { datasetId: "d1", pipeline: "x" },
+    };
+    useApp.setState({ datasets: [baseDataset(), derived] });
+    const before = useApp.getState().datasets;
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR M booked finding (G5 canonical-state review):
+// a shape-changing reimport that invalidates a bound figure's groupKey
+// surfaces a clear message instead of a raw backend ValueError later.
+describe("reimportDataset — groupKey reset on reshape (PR M booked finding)", () => {
+  it("clears a bound figure's groupKey/facetKey on a column-count change and toasts why", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Figure",
+      datasetId: "d1",
+      view: defaultPlotView(),
+      groupKey: 0,
+    });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const updated = useApp.getState().editableFigures[0];
+    expect(updated.bindings.groupKey).toBeNull();
+    expect(updated.bindings.facetKey).toBeNull();
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(
+      expect.stringContaining("grouping column no longer exists"),
+      "info",
+    );
+  });
+
+  it("does not toast the groupKey message when no bound figure had one set", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    const doc = createFigureDocument({ id: "fig1", name: "Figure", datasetId: "d1", view: defaultPlotView() });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(vi.mocked(toast)).not.toHaveBeenCalledWith(expect.stringContaining("grouping column"), "info");
+  });
+
+  it("leaves groupKey untouched on a row-only reshape (columns unchanged)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2], values: [[11], [21]] }); // fewer rows, same columns
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Figure",
+      datasetId: "d1",
+      view: defaultPlotView(),
+      groupKey: 0,
+    });
+    useApp.setState({ datasets: [baseDataset()], editableFigures: [doc] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().editableFigures[0].bindings.groupKey).toBe(0);
+  });
+
+  // P1.5 review round P1: the LIVE view's groupKey singleton is a SEPARATE
+  // reset target from editableFigures above (it didn't exist as a PlotView
+  // field until P1.5) -- it must clear through the SAME datasetViewDefaults
+  // choke point commitReimport's `viewReset` already routes xKey/yKeys
+  // through on a shape-changed reimport of the ACTIVE dataset.
+  it("clears the LIVE groupKey singleton on a shape-changed reimport of the active dataset", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, labels: ["m", "extra"], units: ["emu", ""], values: [[11, 0], [21, 0], [31, 0]] });
+    useApp.setState({ datasets: [baseDataset()], activeId: "d1", groupKey: 0 });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+});
+
+// PR I requirement 4: a pasted-workbook worksheet's source may not be
+// reachable from the destination machine at all — Reimport must report
+// "Source unavailable" and offer the LANDED P1.7 Relink Source path, never a
+// raw backend error and never a silent no-op.
+describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
+  it("reports Source unavailable and opens Relink Source, without ever calling importFile, when the desktop bridge confirms the path is missing", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("missing");
+    const { useRelink } = await import("./relink");
+    const openPanel = vi.fn();
+    useRelink.setState({ openPanel });
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/source unavailable/i);
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/source unavailable/i), "danger");
+    expect(openPanel).toHaveBeenCalledWith({ oldRoot: "/data" });
+    // The dataset itself is left completely untouched.
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+  });
+
+  it("proceeds with the ordinary reimport when the bridge reports the path is reachable", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(importFile).mockResolvedValue(fresh);
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).toHaveBeenCalledWith("/data/sample.dat");
+    expect(useApp.getState().datasets[0].data).toEqual(fresh);
+  });
+
+  it("proceeds with the ordinary reimport in browser mode (no desktop bridge) — never guesses missing", async () => {
+    const { hasDesktopShell } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(false);
+    vi.mocked(importFile).mockResolvedValue(fresh);
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).toHaveBeenCalledWith("/data/sample.dat");
+  });
+
+  // DEFECT C (Sol audit P1-6, 2026-08-21): an "offline" source used to fall
+  // through this whole check (only "missing" was tested) and attempt the
+  // ordinary reimport, which then failed with a raw "re-import failed: …"
+  // toast — RelinkPanel/reopenRecent.ts already treat offline as its own
+  // distinct, non-destructive state; this flow had not caught up.
+  it("offline: reports a distinct message, opens Relink, and never attempts the doomed import", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("offline");
+    const { useRelink } = await import("./relink");
+    const openPanel = vi.fn();
+    useRelink.setState({ openPanel });
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
+    const status = useApp.getState().status;
+    expect(status).toMatch(/unreachable/i);
+    // Distinct from the "missing" message (never says "not found" for an
+    // offline volume — the file is presumably fine, just unmounted).
+    expect(status).not.toMatch(/source unavailable/i);
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/unreachable/i), "danger");
+    expect(openPanel).toHaveBeenCalledWith({ oldRoot: "/data" });
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });

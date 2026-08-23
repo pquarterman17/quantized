@@ -175,7 +175,7 @@ export interface DatasetActionTarget {
   onStageOpen?: () => void;
 }
 
-const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
+export const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
 // genuinely-dynamic per-folder "Move to …" list (one entry per live folder —

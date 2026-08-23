@@ -1,12 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reflPresets, reflSimulate, reflSldProfile } from "../../../lib/api";
+import { reflPresets, reflSimulate, reflSldProfile } from "../../../lib/api/reflectivity";
 import type { SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useReflectivity } from "./useReflectivity";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/reflectivity", () => ({
   reflPresets: vi.fn(),
   reflSimulate: vi.fn(),
   reflSldProfile: vi.fn(),

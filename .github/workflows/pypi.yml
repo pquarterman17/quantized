@@ -99,5 +99,9 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
 
       - name: Publish to PyPI (tag push)
-        if: startsWith(github.ref, 'refs/tags/')
+        # -rc tags never publish to PyPI: pip has no prerelease shielding
+        # for a plain 0.X.Y version string, so an RC would immediately
+        # become what `pip install quantized-lab` resolves. Promotion
+        # (a plain vX.Y.Z tag) publishes.
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')
         uses: pypa/gh-action-pypi-publish@release/v1

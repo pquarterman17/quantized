@@ -74,13 +74,17 @@ describe("resetFigureDocumentForReshape", () => {
     expect(reset.plot.view.seriesStyles).toEqual({});
   });
 
-  it("leaves groupKey/facetKey untouched — the established window-path reset preserves them too", () => {
+  // PR M booked finding (G5 canonical-state review): groupKey/facetKey now
+  // clear like every other channel-indexed binding — a stale groupKey used
+  // to reach the backend as FigureSpec.group_col and raise a raw ValueError
+  // instead of a clear message (lib/figureSpec.ts, calc/plotting.py).
+  it("clears groupKey/facetKey on a column reshape (PR M booked finding)", () => {
     const source = doc({ ...defaultPlotView(), yKeys: [5] });
 
     const reset = resetFigureDocumentForReshape(source);
 
-    expect(reset.bindings.groupKey).toBe(4);
-    expect(reset.bindings.facetKey).toBe(5);
+    expect(reset.bindings.groupKey).toBeNull();
+    expect(reset.bindings.facetKey).toBeNull();
   });
 
   it("preserves non-channel-indexed state (name, output, publication, data mode)", () => {

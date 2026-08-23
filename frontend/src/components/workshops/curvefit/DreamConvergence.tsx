@@ -5,7 +5,7 @@
 
 import { fmtNum as fmt } from "../../../lib/format";
 import type { BumpsPosterior } from "../../../lib/fitbumps";
-import { DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
 
 export default function DreamConvergence({ posterior }: { posterior?: BumpsPosterior }) {
   if (!posterior || posterior.rHatMax == null) return null;

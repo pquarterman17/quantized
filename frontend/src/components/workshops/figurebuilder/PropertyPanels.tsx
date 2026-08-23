@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
-import { Checkbox, NumberField, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
@@ -15,15 +17,7 @@ import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
 import RefLinePropertiesPanel from "./RefLinePropertiesPanel";
 import RegionShadePropertiesPanel from "./RegionShadePropertiesPanel";
-import type {
-  ChannelsPanelProps,
-  ErrorColumnsPanelProps,
-  RefLinesPanelProps,
-  RegionShadesPanelProps,
-  SeriesPanelProps,
-  ShapesPanelProps,
-  TickFormatPanelProps,
-} from "./propertyPanelTypes";
+import type { ChannelsPanelProps, ErrorColumnsPanelProps, RefLinesPanelProps, RegionShadesPanelProps, SeriesPanelProps, ShapesPanelProps, TickFormatPanelProps } from "./propertyPanelTypes";
 import TickFormatPanel from "./TickFormatPanel";
 import ShapePropertiesPanel from "./ShapePropertiesPanel";
 

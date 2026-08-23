@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { thermalDebye, thermalDiffusivity, thermalWiedemannFranz } from "../../../lib/api";
+import { thermalDebye, thermalDiffusivity, thermalWiedemannFranz } from "../../../lib/api/thermal";
 import ThermalTab from "./ThermalTab";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/thermal", () => ({
   thermalWiedemannFranz: vi.fn(),
   thermalDebye: vi.fn(),
   thermalDiffusivity: vi.fn(),

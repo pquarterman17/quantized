@@ -21,7 +21,7 @@
 // represent at all) and only falls back to the live-view builder when no
 // canonical document applies.
 
-import { renderFigureBlob } from "./api";
+import { renderFigureBlob } from "./api/figures";
 import {
   clipboardImageSupported,
   clipboardSvgSupported,

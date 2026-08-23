@@ -2,25 +2,24 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  autoGuess,
-  bootstrapFit,
-  exportCornerFigure,
-  fetchBookData,
-  fitModel,
-  listFitModels,
-} from "../../../lib/api";
+import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
+import { exportCornerFigure } from "../../../lib/api/figures";
+import { fetchBookData, fitModel } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
 
 vi.mock("../../../lib/api", () => ({
-  autoGuess: vi.fn(),
   fitModel: vi.fn(),
+  fetchBookData: vi.fn(),
+}));
+vi.mock("../../../lib/api/curvefit", () => ({
+  autoGuess: vi.fn(),
   listFitModels: vi.fn(),
   bootstrapFit: vi.fn(),
+}));
+vi.mock("../../../lib/api/figures", () => ({
   exportCornerFigure: vi.fn(),
-  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {

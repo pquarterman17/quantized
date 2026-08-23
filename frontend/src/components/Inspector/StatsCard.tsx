@@ -4,10 +4,11 @@
 
 import { useEffect, useState } from "react";
 
-import { statsDescriptive } from "../../lib/api";
+import { statsDescriptive } from "../../lib/api/statsDescriptive";
 import { fmtNum } from "../../lib/format";
 import type { CalcResult, Dataset } from "../../lib/types";
-import { Card, MetaRow } from "../primitives";
+import { MetaRow } from "../primitives/MetaRow";
+import Card from "../primitives/Card";
 
 const ROWS: [string, string][] = [
   ["Mean", "mean"],

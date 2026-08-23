@@ -4,7 +4,9 @@
 // all state/logic lives in the hook.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, SegmentedControl } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import LayerTable from "./LayerTable";
 import { useReflectivity, type Radiation } from "./useReflectivity";

@@ -6,7 +6,8 @@
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
 import type { SeriesStyle } from "../../lib/types";
-import { Checkbox, Select } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
+import { Select } from "../primitives";
 
 const COLORMAP_NAMES = Object.keys(COLORMAPS) as ColormapName[];
 

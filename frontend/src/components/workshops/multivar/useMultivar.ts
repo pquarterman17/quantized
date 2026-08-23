@@ -16,12 +16,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  type CorrelationResponse,
-  type PCAResponse,
-  statsCorrelation,
-  statsPCA,
-} from "../../../lib/api";
+import { type CorrelationResponse, type PCAResponse, statsCorrelation, statsPCA } from "../../../lib/api";
 import {
   correlationToTSV,
   defaultContinuousColumns,

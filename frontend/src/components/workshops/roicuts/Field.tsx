@@ -7,7 +7,7 @@
 // precedent this generalizes) avoids a cross-workshop coupling for six lines
 // of JSX.
 
-import { NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
 
 export default function Field({
   label,

@@ -19,7 +19,10 @@ import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGu
 import { resolveShapeStroke } from "../../lib/uplotShapes";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
-import { BufferedNumberField, Button, Card, IconButton } from "../primitives";
+import { IconButton } from "../primitives/IconButton";
+import { Button } from "../primitives";
+import BufferedNumberField from "../primitives/BufferedNumberField";
+import Card from "../primitives/Card";
 
 const KIND_GLYPH: Record<string, string> = { arrow: "↗", line: "╱", rect: "▭", ellipse: "◯" };
 

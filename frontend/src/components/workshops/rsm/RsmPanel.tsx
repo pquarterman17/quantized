@@ -11,7 +11,8 @@
 // row once the table renders, so any peak is one click away as the anchor.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { peakHasQCentre } from "../../../lib/rsmPeakCut";
 import type { RsmPeak } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";

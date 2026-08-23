@@ -1,16 +1,20 @@
 import type { ErrorBinding } from "./errorRoles";
 import { describe, expect, it } from "vitest";
 
+import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
-import { createPageDocument } from "./pageDocument";
+import { createPageDocument } from "./pageDocumentActions";
+import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
+import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { RoiDef } from "./roi";
 import type { Dataset, OriginFigure } from "./types";
+import type { WorkbookNode } from "./workbooks";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
 function makeDataset(id: string, name: string): Dataset {
@@ -186,6 +190,49 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
   });
 });
 
+// LIBRARY_WORKBOOK_UX_PLAN PR K (K2): deps/derivedFrom/formulaErrors round
+// trip through the existing .dwk dataset path — no version bump.
+describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
+  it("round-trips a formula's deps nested inside `formulas` (no explicit workspace.ts handling)", () => {
+    const ds = makeDataset("a", "with-formula");
+    ds.formulas = [{ name: "S", expr: "A + B", deps: ["A", "B"] }];
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
+  });
+
+  it("a legacy formula without `deps` round-trips as absent (degrades, not defaulted)", () => {
+    const ds = makeDataset("a", "legacy-formula");
+    ds.formulas = [{ name: "S", expr: "A + B" }];
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    expect(restored.formulas?.[0].deps).toBeUndefined();
+  });
+
+  it("round-trips derivedFrom (and omits it when absent)", () => {
+    const ds = makeDataset("a", "sheet");
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "flatten + smooth" };
+    const [restored] = parse(ser([ds]));
+    expect(restored.derivedFrom).toEqual({ datasetId: "raw1", pipeline: "flatten + smooth" });
+    const bare = makeDataset("b", "bare");
+    expect(parse(ser([bare]))[0].derivedFrom).toBeUndefined();
+  });
+
+  it("degrades a malformed derivedFrom (missing pipeline) instead of throwing", () => {
+    const bad = { ...makeDataset("a", "x"), derivedFrom: { datasetId: "raw1" } } as unknown as Dataset;
+    expect(() => parseWorkspace(ser([bad]))).not.toThrow();
+    expect(parseWorkspace(ser([bad])).datasets[0].derivedFrom).toBeUndefined();
+  });
+
+  it("round-trips formulaErrors (and omits an empty map)", () => {
+    const ds = makeDataset("a", "erroring");
+    ds.formulaErrors = { bad: "unknown variable \"Z\"" };
+    const [restored] = parse(ser([ds]));
+    expect(restored.formulaErrors).toEqual({ bad: 'unknown variable "Z"' });
+    const clean = { ...makeDataset("b", "clean"), formulaErrors: {} };
+    expect(parse(ser([clean]))[0].formulaErrors).toBeUndefined();
+  });
+});
+
 describe("workspace v2 folder tree", () => {
   it("round-trips the folder tree, active/selection, and expansion", () => {
     const a = { ...makeDataset("a", "in-f1"), folderId: "f1", order: 0 };
@@ -351,6 +398,78 @@ describe("workspace channel modeling types", () => {
     const doc = JSON.parse(ser([ds]));
     doc.datasets[0].channelTypes = { 0: "continuous", 2: "bogus" };
     expect(parse(JSON.stringify(doc))[0].channelTypes).toEqual({ 0: "continuous" });
+  });
+});
+
+// P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN, Day-1 round-trip gate): `cat_levels`
+// lives on `DataStruct` itself (not `Dataset`), so a WELL-FORMED one
+// survives .dwk save/reload for free — `isDataStruct` is a structural check
+// that narrows `unknown` to `DataStruct` without stripping extra fields,
+// and `data: dd.data` originally kept the whole parsed object verbatim.
+// UPDATE (P1.4 review round, P2-3/P3-1): workspace.ts is NO LONGER
+// untouched — a hand-edited/corrupted `cat_levels` (structurally wrong, not
+// just semantically stale) needed a degrade-not-throw repair
+// (`sanitizedCatLevels`/`sanitizedDataStruct`) so it can't propagate into
+// `lib/categorical.ts`'s accessors as string-indexed garbage. The
+// well-formed round trip below is UNCHANGED by that; the corruption tests
+// after it pin the new repair.
+describe("workspace categorical channel levels (P1.4)", () => {
+  it("round-trips a well-formed DataStruct.cat_levels through serializeWorkspace/parseWorkspace unchanged", () => {
+    const ds = makeDataset("a", "categorical");
+    ds.data = {
+      ...ds.data,
+      values: [[10, 0], [20, 1], [30, 0]],
+      cat_levels: { 1: ["NbAu-1", "NbAu-2"] },
+    };
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.cat_levels).toEqual({ 1: ["NbAu-1", "NbAu-2"] });
+    expect(restored.data.values).toEqual([[10, 0], [20, 1], [30, 0]]);
+  });
+
+  it("a dataset with no cat_levels round-trips with the key simply absent", () => {
+    const ds = makeDataset("a", "plain");
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.cat_levels).toBeUndefined();
+  });
+
+  // P1.4 review P2-3/P3-1: the reviewer's exact corruption shape — a level
+  // "list" that is a bare string, not an array of strings. Without the
+  // repair, `lib/categorical.ts`'s `levelLabel` would index INTO the string
+  // ("AB"[0] === "A") as if it were `["A", "B"]` — plausible-looking but
+  // WRONG string-indexed garbage, not a caught error.
+  it("drops a corrupted cat_levels entry (string instead of string[]) — no categorical status, no string-indexed garbage", () => {
+    const ds = makeDataset("a", "corrupted");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: "AB" };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
+    expect(isCategoricalChannel(restored.data, 0)).toBe(false);
+    expect(levelLabel(restored.data, 0, 0)).toBeNull(); // NOT "A"
+    expect(levelLabel(restored.data, 0, 1)).toBeNull(); // NOT "B"
+  });
+
+  it("drops only the corrupted channel's entry, keeping a well-formed sibling entry", () => {
+    const ds = makeDataset("a", "mixed");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: "AB", 1: ["North", "South"] };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toEqual({ 1: ["North", "South"] });
+  });
+
+  it("drops a non-array, non-object cat_levels entirely (e.g. a bare string)", () => {
+    const ds = makeDataset("a", "wrong-type");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = "not even an object";
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
+  });
+
+  it("drops a level list containing a non-string element", () => {
+    const ds = makeDataset("a", "mixed-elems");
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.cat_levels = { 0: ["A", 2, "C"] };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.cat_levels).toBeUndefined();
   });
 });
 
@@ -623,6 +742,42 @@ describe("workspace source reference (MAIN_PLAN #10, re-import from source)", ()
     doc.datasets[0].source = { kind: "path", path: "" }; // empty path
     expect(parseWorkspace(JSON.stringify(doc)).datasets[0].source).toBeUndefined();
   });
+
+  // P1.7 P1-B (adversarial review): parseSource used to reconstruct a bare
+  // {kind,path}, silently dropping checksum/mtime/size on every save/reload
+  // — defeating box 5's "changed source" protection the moment a project is
+  // reopened. RED-FIRST against the current parseSource.
+  it("round-trips a source's checksum/mtime/size provenance, not just its path", () => {
+    const ds = makeDataset("a", "x");
+    ds.source = { kind: "path", path: "/data/sample.dat", checksum: "sha256:abc", mtime: 1700000000, size: 42 };
+    const restored = parse(ser([ds]))[0];
+    expect(restored.source).toEqual(ds.source);
+  });
+
+  it("drops an invalid checksum/mtime/size rather than restoring garbage", () => {
+    const doc = JSON.parse(ser([makeDataset("a", "x")])) as {
+      datasets: (Omit<Dataset, "source"> & { source?: unknown })[];
+    };
+    doc.datasets[0].source = { kind: "path", path: "/data/x.dat", checksum: 123, mtime: "later", size: "big" };
+    const restored = parseWorkspace(JSON.stringify(doc)).datasets[0].source;
+    expect(restored).toEqual({ kind: "path", path: "/data/x.dat" });
+  });
+});
+
+describe("workspace versionOf (P1.7 box 5: import as new version)", () => {
+  it("round-trips versionOf so a reopened project still knows a dataset's lineage", () => {
+    const ds = makeDataset("copy", "x (new version)");
+    ds.versionOf = "orig-id";
+    const restored = parse(ser([ds]))[0];
+    expect(restored.versionOf).toBe("orig-id");
+  });
+
+  it("omits versionOf when absent", () => {
+    const restored = parse(ser([makeDataset("a", "normal")]))[0];
+    expect(restored.versionOf).toBeUndefined();
+    const doc = JSON.parse(ser([makeDataset("a", "normal")])) as { datasets: Record<string, unknown>[] };
+    expect("versionOf" in doc.datasets[0]).toBe(false);
+  });
 });
 
 describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
@@ -779,6 +934,50 @@ describe("workspace smart folders (org #9)", () => {
   });
 });
 
+describe("workspace Collections (LIBRARY_WORKBOOK_UX_PLAN PR L, L0.48/L0.49)", () => {
+  it("round-trips saved Collection queries (additive-optional — no version bump)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const collections = [
+      { id: "c1", name: "Hysteresis loops", query: "tag:mvsh" },
+      { id: "c2", name: "QD data", query: "format:qd" },
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, collections }));
+    expect(loaded.collections).toEqual(collections);
+  });
+
+  it("sanitizes malformed entries on load and defaults to [] for an older doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.collections = [{ id: "ok", name: "Fine", query: "" }, { id: 7, name: "bad" }, "junk"];
+    expect(parseWorkspace(JSON.stringify(doc)).collections).toEqual([
+      { id: "ok", name: "Fine", query: "" },
+    ]);
+    delete doc.collections; // a pre-PR-L doc
+    expect(parseWorkspace(JSON.stringify(doc)).collections).toEqual([]);
+  });
+});
+
+describe("workspace Details columns (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2)", () => {
+  it("round-trips the selected Details columns (additive-optional — no version bump)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, visibleDetailsColumns: ["type", "sample", "group"] }),
+    );
+    expect(loaded.visibleDetailsColumns).toEqual(["type", "sample", "group"]);
+  });
+
+  it("sanitizes an unknown column key on load and defaults to the original seven for an older doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.visibleDetailsColumns = ["type", "not-a-real-column", 7, "notes"];
+    expect(parseWorkspace(JSON.stringify(doc)).visibleDetailsColumns).toEqual(["type", "notes"]);
+    delete doc.visibleDetailsColumns; // a pre-slice-2 doc
+    expect(parseWorkspace(JSON.stringify(doc)).visibleDetailsColumns).toEqual([
+      "type", "location", "dimensions", "dataType", "source", "modified", "tags",
+    ]);
+  });
+});
+
 describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, no version bump)", () => {
   const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
     id: "w1",
@@ -839,6 +1038,46 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     const loaded = parseWorkspace(serializeWorkspace({ datasets, editableFigures: [editable] }));
     expect(loaded.editableFigures).toEqual([editable]);
     expect(loaded.figureDocs).toEqual([]);
+  });
+
+  // G5 lifecycle proof (LIBRARY_WORKBOOK_UX_PLAN PR G5) pin: P0-a's probe
+  // found this seam ALREADY correct (sanitizeFigureDocument's `errorBindings`
+  // reads `bindings.errors` directly off the persisted JSON — it never
+  // reconstructs from `plot.view`/legacy `errKeys`), but the exact failure
+  // mode this slice exists to catch (a parse path that rebuilds documents
+  // from views/legacy errKeys and silently drops asymmetric/X bindings) has
+  // no permanent regression pin anywhere else, so it gets one here.
+  it("round-trips a figure-scoped asymmetric pair AND an X-error binding exactly, byte-for-byte (G5 lifecycle proof)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const errors: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+      { channel: 3, target: -1, axis: "x", side: "both" },
+    ];
+    const editable = createFigureDocument({
+      id: "rich-errors",
+      name: "Rich errors",
+      datasetId: "a",
+      view: defaultPlotView(),
+      errors,
+    });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, editableFigures: [editable] }));
+    expect(loaded.editableFigures).toEqual([editable]);
+    expect(loaded.editableFigures[0].bindings.errors).toEqual(errors);
+
+    // The window-attached document path (windowDocumentPersistence.ts) is a
+    // SEPARATE parse function from editableFigures' — pin it too so the two
+    // can't silently drift.
+    const winLoaded = parseWorkspace(serializeWorkspace({
+      datasets,
+      plotWindows: [{
+        id: "w1", kind: "plot", title: "t", datasetId: "a",
+        geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+        view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+        document: editable,
+      }],
+    }));
+    expect(winLoaded.plotWindows[0].document?.bindings.errors).toEqual(errors);
   });
 
   it("migrates v1 editable documents to v2 without inventing publication state", () => {
@@ -1209,6 +1448,101 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
     );
     expect(loaded.savedPlotSpecs).toHaveLength(1);
     expect(loaded.savedPlotSpecs[0].spec).toEqual(emptySpec());
+  });
+});
+
+describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR H)", () => {
+  const templateA: QuickPlotTemplate = {
+    id: "qpt-1",
+    name: "My Template",
+    createdAt: "2026-08-17T00:00:00.000Z",
+    modifiedAt: "2026-08-17T00:00:00.000Z",
+    scope: { kind: "schema" },
+    technique: "magnetometry.mvsh",
+    signature: {
+      channels: [
+        { label: "a", unit: "emu", errorRole: "value" },
+        { label: "b", unit: "oe", errorRole: "value" },
+      ],
+    },
+    mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [1] },
+    style: "line",
+    labels: { 0: "A" },
+  };
+
+  it("round-trips a well-formed template list byte-exact", () => {
+    const datasets = [makeDataset("a", "first")];
+    const serialized = serializeWorkspace({ datasets, quickPlotTemplates: [templateA] });
+    const loaded = parseWorkspace(serialized);
+    expect(loaded.quickPlotTemplates).toEqual([templateA]);
+    // Byte-exact re-serialization of the templates field itself (the doc's
+    // `savedAt` is a fresh timestamp each call, so compare the field in
+    // isolation rather than the whole document).
+    const reserialized = JSON.parse(serializeWorkspace({ datasets, quickPlotTemplates: loaded.quickPlotTemplates })) as {
+      quickPlotTemplates: unknown;
+    };
+    const original = JSON.parse(serialized) as { quickPlotTemplates: unknown };
+    expect(JSON.stringify(reserialized.quickPlotTemplates)).toBe(JSON.stringify(original.quickPlotTemplates));
+  });
+
+  it("round-trips a workbook-scoped template whose workbook is live", () => {
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-2", scope: { kind: "workbook", workbookId: "wb-1" } };
+    const datasets = [makeDataset("a", "first")];
+    const workbooks: WorkbookNode[] = [{ id: "wb-1", name: "WB" }];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, workbooks, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([scoped]);
+  });
+
+  // Review-round P2 (the orphan bug): a workbook-scoped template whose
+  // workbook does NOT exist in the loaded doc is DANGLING, not merely
+  // memberless -- sanitized out at load time (the E2 aliveness pattern),
+  // like parseWorkbookLastChild already does for its own workbook-keyed field.
+  it("drops a workbook-scoped template whose workbookId names no live workbook (load-time aliveness)", () => {
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-orphan", scope: { kind: "workbook", workbookId: "wb-nonexistent" } };
+    const datasets = [makeDataset("a", "first")];
+    // No `workbooks` field at all -- "wb-nonexistent" names nothing.
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([]);
+  });
+
+  it("keeps a workbook-scoped template whose workbook is live but currently has no worksheet members", () => {
+    // Memberless-but-ALIVE must survive load — only a genuinely gone
+    // workbook is pruned. The workbook here has no dataset pointing at it.
+    const scoped: QuickPlotTemplate = { ...templateA, id: "qpt-memberless", scope: { kind: "workbook", workbookId: "wb-1" } };
+    const datasets = [makeDataset("a", "first")]; // unrelated to wb-1
+    const workbooks: WorkbookNode[] = [{ id: "wb-1", name: "Empty WB" }];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, workbooks, quickPlotTemplates: [scoped] }));
+    expect(loaded.quickPlotTemplates).toEqual([scoped]);
+  });
+
+  it("defaults to an empty list for a legacy doc with no quickPlotTemplates field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.quickPlotTemplates).toEqual([]);
+  });
+
+  it("drops a corrupt template entry without throwing or dropping the rest of the doc (never throws on load)", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], quickPlotTemplates: [templateA] }),
+    ) as Record<string, unknown>;
+    doc.quickPlotTemplates = [
+      (doc.quickPlotTemplates as unknown[])[0],
+      { id: "bad" }, // missing everything else
+      { ...templateA, id: "bad2", mapping: { xKey: 0, yKeys: "not-an-array" } }, // corrupt nested mapping
+    ];
+    expect(() => parseWorkspace(JSON.stringify(doc))).not.toThrow();
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.quickPlotTemplates).toHaveLength(1);
+    expect(loaded.quickPlotTemplates[0].id).toBe("qpt-1");
+  });
+
+  it("never throws on a hand-edited non-array quickPlotTemplates", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.quickPlotTemplates = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).quickPlotTemplates).toEqual([]);
   });
 });
 
@@ -1598,5 +1932,65 @@ describe("workspace session restoration (LIBRARY_WORKBOOK_UX_PLAN PR E2)", () =>
     };
     const loaded = parseWorkspace(serializeWorkspace({ datasets: [d] }));
     expect(loaded.datasets[0].pending).toEqual(d.pending);
+  });
+});
+
+describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)", () => {
+  function recipeDataset(): Dataset {
+    return {
+      id: "a",
+      name: "xrd-scan.xy",
+      data: {
+        time: [0, 1, 2],
+        values: [[10, 100, 1], [20, 200, 2], [30, 300, 3]],
+        labels: ["2theta", "Intensity", "Ierr"],
+        units: ["deg", "cps", "cps"],
+        metadata: { technique: "xrd.powder" },
+      },
+    };
+  }
+
+  function recipe(id: string, name: string): PlotRecipe {
+    return captureRecipe(
+      recipeDataset(),
+      { ...defaultPlotView(), xKey: 0, yKeys: [1], errKeys: { 1: 2 } },
+      null,
+      { id, name, appVersion: "0", now: () => "2026-08-22T00:00:00.000Z" },
+    );
+  }
+
+  it("round-trips a well-formed recipe list unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const recipes = [recipe("r1", "XRD standard"), recipe("r2", "XRD zoomed")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotRecipes: recipes }));
+    expect(loaded.plotRecipes).toEqual(recipes);
+  });
+
+  it("defaults to an empty list for a legacy/absent plotRecipes field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.plotRecipes).toEqual([]);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotRecipes: [recipe("r1", "XRD standard")] }),
+    ) as Record<string, unknown>;
+    doc.plotRecipes = [
+      (doc.plotRecipes as unknown[])[0],
+      { id: "bad" }, // missing name/technique/signature/mapping/visual
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.plotRecipes).toHaveLength(1);
+    expect(loaded.plotRecipes[0].id).toBe("r1");
+  });
+
+  it("never throws on a hand-edited non-array plotRecipes", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")] }),
+    ) as Record<string, unknown>;
+    doc.plotRecipes = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).plotRecipes).toEqual([]);
   });
 });

@@ -1,0 +1,53 @@
+{
+  "labels": [
+    "NbAu-Alpha",
+    "NbAu-Beta"
+  ],
+  "metadata": {
+    "all_column_names": [
+      "Temp",
+      "M1",
+      "M2"
+    ],
+    "comments": [
+      "# Sample: NbAu bilayer",
+      "# Operator: pq"
+    ],
+    "delimiter": ",",
+    "import_settings": {
+      "column_names": null,
+      "data_start_line": 5,
+      "delimiter": ",",
+      "header_line": 2,
+      "label_line": 4,
+      "roles": [
+        "x",
+        "y",
+        "y"
+      ],
+      "units_line": 3
+    },
+    "parser_name": "import_preview",
+    "source": "label_import.csv",
+    "x_column_name": "Temp",
+    "x_column_unit": "K"
+  },
+  "time": [
+    1.0,
+    2.0
+  ],
+  "units": [
+    "emu",
+    "emu"
+  ],
+  "values": [
+    [
+      10.0,
+      11.0
+    ],
+    [
+      20.0,
+      21.0
+    ]
+  ]
+}

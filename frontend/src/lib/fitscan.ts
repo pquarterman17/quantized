@@ -9,7 +9,8 @@
 // edits that file), but the error handling rides api.ts's shared `unwrap`
 // (MAIN #8b — no drifted copy).
 
-import { unwrap, type ScanEquationCandidate } from "./api";
+import { type ScanEquationCandidate } from "./api/curvefit";
+import { unwrap } from "./api";
 import type { JobSubmitResponse } from "./jobs";
 
 export interface ScanJobRequest {

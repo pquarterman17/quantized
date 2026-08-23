@@ -13,6 +13,7 @@
 import { quickPlotAvailability } from "./quickPlot";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { useApp } from "../store/useApp";
+import { openQuickPlotWith } from "../store/quickPlotWithDialog";
 
 export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
   {
@@ -35,6 +36,14 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
     run: (t) => {
       useApp.getState().openQuickFigureBuilder(t.dataset.id);
     },
+  },
+  {
+    id: "dataset.quickPlotWith",
+    label: "Quick Plot With…",
+    // L0.37: the chooser has no useful content before any template exists —
+    // hidden outright rather than a permanently-disabled entry.
+    hidden: () => useApp.getState().quickPlotTemplates.length === 0,
+    run: (t) => openQuickPlotWith(t.dataset.id),
   },
 ];
 

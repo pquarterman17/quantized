@@ -3,7 +3,8 @@
 // non-estimable disclosures the backend already carries — never hidden).
 
 import { fmtNum } from "../../../lib/format";
-import { DataTable, StatusDot } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { StatusDot } from "../../primitives";
 import type { NestedAnovaResponse, VarianceComponentsResponse } from "./useVariability";
 
 export default function VarianceComponentsView({

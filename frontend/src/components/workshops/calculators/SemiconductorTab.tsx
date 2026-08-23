@@ -8,20 +8,7 @@
 
 import { useState } from "react";
 
-import {
-  semiconductorBuiltInPotential,
-  semiconductorCarrierConc,
-  semiconductorDebyeLength,
-  semiconductorDepletionWidth,
-  semiconductorDiffusionCoeff,
-  semiconductorDiffusionLength,
-  semiconductorFermiLevel,
-  semiconductorHallCoefficient,
-  semiconductorIntrinsic,
-  semiconductorMobilityModel,
-  semiconductorSheetCarrierDensity,
-  semiconductorThermalVelocity,
-} from "../../../lib/api";
+import { semiconductorBuiltInPotential, semiconductorCarrierConc, semiconductorDebyeLength, semiconductorDepletionWidth, semiconductorDiffusionCoeff, semiconductorDiffusionLength, semiconductorFermiLevel, semiconductorHallCoefficient, semiconductorIntrinsic, semiconductorMobilityModel, semiconductorSheetCarrierDensity, semiconductorThermalVelocity } from "../../../lib/api/semiconductor";
 import {
   Button,
   Card,

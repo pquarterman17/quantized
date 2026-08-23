@@ -82,7 +82,7 @@ tooling (EELS/EDS, imaging) is **out of scope** and lives in the separate
 | pipx (recommended) | `pipx install quantized-lab && qz` | isolated env, `qz` on PATH, no dev tools needed |
 | uv tool | `uv tool install quantized-lab && qz` | same idea, via `uv` |
 | pip | `pip install quantized-lab && qz` | into whatever env is active |
-| Native installer | download from [Releases](https://github.com/pquarterman17/quantized/releases) | Windows `.exe` (NSIS, auto-updates), macOS `.dmg`, Linux `.deb` — no Python required |
+| Native installer | download from [Releases](https://github.com/pquarterman17/quantized/releases) | Windows `.exe` (NSIS, auto-updates), macOS `.dmg` (Apple silicon only — no Intel/x86-64 build), Linux `.deb` — no Python required |
 | From source | see below | for development |
 
 Once installed, `qz` serves the app at `http://127.0.0.1:8000` and opens a

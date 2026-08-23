@@ -5,14 +5,7 @@
 // build/export entries that are intentionally filed under Plot.
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import {
-  exportConsolidated,
-  exportHdf5,
-  exportOrigin,
-  exportXrdCsv,
-  originComStatus,
-  sendToOrigin,
-} from "../lib/api";
+import { exportConsolidated, exportHdf5, exportOrigin, exportXrdCsv, originComStatus, sendToOrigin } from "../lib/api";
 import { makeDemoDataset } from "../lib/demo";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
@@ -22,6 +15,7 @@ import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
   replaceConfirmMessage,
@@ -29,12 +23,11 @@ import {
   replaceWorkspaceSafely,
 } from "../lib/openWorkspaceReplace";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
-import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
 import { snapshotView } from "../lib/plotview";
-import type { LoadedWorkspace } from "../lib/workspace";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
+import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
@@ -59,36 +52,11 @@ let sampleCounter = 0;
 // replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
 // shared by both open commands below — live in lib/openWorkspaceReplace.ts
 // (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
-
-/** Shared Open/Append-workspace flow (the only difference between the two
- *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
- *  (`loadWorkspace` or `appendWorkspace`).
- *
- *  P3.4 slice 3: the picker's `onchange` callback fires the moment a file is
- *  chosen — well before any parsing starts — so the `withOp` busy state is
- *  registered HERE, inside the callback, not around the `openFilePicker`
- *  call itself (which would show "Opening…" while the OS file dialog is
- *  merely sitting open and the user hasn't picked anything yet). The parse
- *  itself runs off the main thread via `parseWorkspaceFile` (a module Worker
- *  when available, the prior synchronous path as a fallback) — see that
- *  module's doc comment for why the two paths can't diverge. */
-function openWorkspaceCommand(
-  s: StoreGet,
-  verb: string,
-  dispatch: (ws: LoadedWorkspace) => void,
-): () => void {
-  const label = verb === "open" ? "Opening workspace…" : "Appending workspace…";
-  return () =>
-    openFilePicker((files) => {
-      const file = files[0];
-      if (!file) return;
-      void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
-        .then(dispatch)
-        .catch((e: unknown) =>
-          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
-        );
-    }, ".dwk,.json");
-}
+// `openWorkspaceCommand` itself — the shared pick/native-open + parse flow
+// both "open-workspace"/"open-workspace-safe" and "append-workspace" call
+// below — lives in lib/openWorkspaceCommand.ts for the identical reason
+// (P1.1 C3's native-open wiring pushed this module over the ceiling; see
+// that file's header for the extraction note).
 
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -185,7 +153,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
-      // like every other one in this list.
+      // like every other one in this list. Always prompts (native Save As
+      // dialog, or a browser download) — never reuses a known project path.
+      // P1.2 originally renamed this to "...as (.dwk)…" to disambiguate from
+      // a sibling quick-save command (⌘S); that command was later removed
+      // for bundle-size reasons (AppOverlays.tsx's eager budget), leaving
+      // the "as" with nothing left to disambiguate FROM — reverted back to
+      // the original label, which is also the exact-text locator
+      // e2e/specs/quick-figure-lifecycle.spec.ts drives to trigger a real
+      // browser download (pinned by commands/fileCommands.test.ts).
       run: () => s().saveWorkspaceToFile(),
     },
     {
@@ -199,10 +175,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
         void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
-          (ok) => ok && replaceWorkspace(s, ws),
+          (ok) => ok && replaceWorkspace(s, ws, native),
         );
       }),
     },
@@ -214,15 +190,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws);
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
+        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
           "Replace the current workspace?",
           replaceConfirmMessage(s().datasets.length, extra),
           "Replace",
           true,
-        ).then((ok) => ok && replaceWorkspaceSafely(s, ws));
+        ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
       }),
     },
     {
@@ -234,7 +210,17 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // P3.4 slice 4: no stageWorkspaceRestore call here — appendWorkspace
       // only merges `datasets` (store/useApp.ts), never `plotWindows`, so an
       // append can't trigger the multi-window mount storm loadWorkspace can.
-      run: openWorkspaceCommand(s, "append", (ws) => s().appendWorkspace(ws)),
+      //
+      // DEFECT A fix (2026-08-21): append never gates on a confirm (unlike
+      // open/open-safe — see the comment on that guard above), so recording
+      // the Recent Projects entry right here, at the actual merge, can never
+      // over-record; it just can't share openWorkspaceReplace.ts's
+      // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
+      // its own push at its own commit point instead.
+      run: openWorkspaceCommand(s, "append", (ws, native) => {
+        s().appendWorkspace(ws);
+        if (native) useRecentProjects.getState().pushRecentProject(native.name, native.path);
+      }),
     },
     {
       id: "clear-autosave",

@@ -1,3 +1,5 @@
+// Covers BOTH halves of the C2 eager/lazy split: `datasetsplit.ts` and
+// `datasetsplitDefault.ts` (lazy default-column pick).
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,13 +10,13 @@ import {
   formatGroupLabel,
   groupByExactValue,
   isCategoricalColumn,
-  pickDefaultSplitColumn,
   sliceDataStruct,
   SPLIT_GROUP_CAP,
   splitColumn,
   tooManyGroups,
   type SplitGroup,
 } from "./datasetsplit";
+import { pickDefaultSplitColumn } from "./datasetsplitDefault";
 import type { DataStruct } from "./types";
 
 /** Sum of every group's row count — a split must always account for every
@@ -391,6 +393,17 @@ describe("sliceDataStruct", () => {
     expect(sliced.labels).toEqual(["A", "B"]);
     expect(sliced.units).toEqual(["Oe", "K"]);
     expect(sliced.metadata).toEqual({ note: "src" });
+  });
+
+  it("P1.4 review P2-2: carries cat_levels forward (a row slice preserves column layout)", () => {
+    const catSource: DataStruct = { ...source, cat_levels: { 1: ["North", "South"] } };
+    const sliced = sliceDataStruct(catSource, [1, 3]);
+    expect(sliced.cat_levels).toEqual({ 1: ["North", "South"] });
+  });
+
+  it("omits cat_levels when the source has none (additive, not a stray undefined key)", () => {
+    const sliced = sliceDataStruct(source, [0, 1]);
+    expect("cat_levels" in sliced).toBe(false);
   });
 
   it("never aliases the source's mutable arrays", () => {

@@ -181,7 +181,7 @@ export function useGraphBuilder(): GraphBuilderState {
       useApp.getState().setActivePlotSpecId(null);
     }
     // active-dataset change, by design (#8i); `spec`/`datasets` read fresh.
-  }, [active?.id]);
+  }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- `spec` deliberately excluded (R9): would refire the wipe-check on every edit, not just an active-dataset change (#8i tests below).
 
   // One-shot seed (MAIN_PLAN #4 — the worksheet's "Open in Graph Builder"):
   // consume + clear a store-handed spec, mirroring how useStatStage consumes
@@ -352,9 +352,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // closes the save/reopen/apply loop. A v1 spec (no blocks) makes zero
       // calls here — see plotspecApply.ts's regression-pin note.
       applySpecBlocks(spec, useApp.getState);
-      if (spec.zones.group) {
-        toast("series-split by group is preview-only in v1 (lands with faceting)", "info");
-      }
+      // P1.5: durable live binding (store.groupKey) -- clears any stale group
+      // left over from a prior commit when this one carries none.
+      useApp.getState().setGroupKey(spec.zones.group?.channel ?? null);
       // Facet zone filled (gap #21 residual): enter the main Stage's facet
       // grid instead of the flat plot. facetByColumn is called AFTER
       // setXKey/setYKeys above, so its own "carry the current x/y selection

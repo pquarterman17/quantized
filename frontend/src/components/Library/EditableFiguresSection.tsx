@@ -2,7 +2,7 @@
 // figures so users can tell an editable plot from an export-preview artifact.
 import { useState } from "react";
 
-import { pagesReferencingFigure } from "../../lib/pageDocument";
+import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
 import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
 import { useApp } from "../../store/useApp";

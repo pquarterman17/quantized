@@ -5,24 +5,27 @@
 // `workbooks` already rides HistorySnapshot (added ahead of any mutator in
 // PR A2, see history.ts), so every action here inherits undo for free.
 
+import { pruneDanglingWorkbookScopeTemplates } from "../lib/quickPlotTemplates";
 import { removeDatasetsPatch } from "./removeDatasets";
 import type { AppState } from "./useApp";
 
-/** L0.45 fail-closed gate (PR #139 review, round 3): workbook Delete is
- *  disabled UNCONDITIONALLY until PR M's dependency-aware Trash. Even with
- *  zero dependent artifacts, Trash today stores only individual Dataset
- *  snapshots — deleting a workbook loses the grouping itself (id, name,
- *  order, folder, source provenance, membership), and restoring sheets one
- *  at a time re-derives SEPARATE workbooks. That contradicts L0.45's "the
- *  workbook moves to recoverable Trash", so the command stays visible but
- *  disabled with this stable reason (disable-don't-remove, L0.36) rather
- *  than shipping a partial second Trash format inside PR C. Individual
- *  worksheet Delete is unaffected. Shared by the menu registry
- *  (lib/workbookContextActions.ts), the tree's Delete-key path, and
- *  `deleteWorkbook` itself, so no caller can bypass the gate; PR M lifts it
- *  by making this return null when the atomic workbook package exists. */
+/** L0.45 gate (PR #139 review, round 3; LIFTED by PR M, 2026-08-19): workbook
+ *  Delete was disabled UNCONDITIONALLY pending dependency-aware handling —
+ *  the concern was that Trash stores only individual Dataset snapshots, so
+ *  deleting a workbook loses the grouping itself and restoring sheets one
+ *  at a time re-derives SEPARATE workbooks. PR M does not build a second,
+ *  workbook-aware Trash format (booked as a later item — see the plan); it
+ *  resolves the SAME concern the L0.45 way instead: the command's own
+ *  confirm dialog (lib/workbookContextActions.ts's `workbook.delete`) now
+ *  states this consequence explicitly — "the grouping itself is removed for
+ *  good; each worksheet restored later becomes its own new workbook" — plus
+ *  the FULL downstream dependency impact (lib/dependencyImpact.ts, the K
+ *  graph) — before the user confirms. Nothing is broken silently (L0.45's
+ *  actual requirement); the user chooses with full information. Kept as a
+ *  function (not just deleted) so a future GENUINE blocking condition has
+ *  somewhere to live without re-threading three call sites again. */
 export function workbookDeleteBlockers(_s: AppState, _workbookId: string): string | null {
-  return "Workbook Delete arrives with dependency-aware Trash (PR M)";
+  return null;
 }
 
 export interface WorkbookActionsSlice {
@@ -33,11 +36,13 @@ export interface WorkbookActionsSlice {
    *  action so search/reveal/smart-folders — every legacy consumer that still
    *  reads `Dataset.folderId` directly — stay in sync. */
   moveWorkbookToFolder: (id: string, folderId: string | null) => void;
-  /** L0.22/L0.45: fail-closed no-op until PR M lifts
-   *  `workbookDeleteBlockers` (see its doc). The body below is the intended
-   *  post-M shape — ONE atomic update under ONE history entry via the shared
-   *  removeDatasetsPatch — but M must ALSO make Trash workbook-aware before
-   *  enabling it, or restore still can't rebuild the grouping. */
+  /** L0.22/L0.45/L0.36 (PR H booked finding): ONE atomic update under ONE
+   *  history entry — the shared `removeDatasetsPatch` (members to Trash) AND
+   *  the workbook-scoped Quick Plot templates that named this workbook
+   *  (H's `pruneDanglingWorkbookScopeTemplates`, reused verbatim: the
+   *  workbook is about to stop existing, the exact predicate that function
+   *  already tests) — so undo restores workbook, members, AND their
+   *  templates together, never a partial state. */
   deleteWorkbook: (id: string) => void;
 }
 
@@ -75,10 +80,21 @@ export function createWorkbookActionsSlice(set: SliceSet, get: SliceGet): Workbo
       // removal so a single Undo restores workbook + members together.
       get().recordHistory("delete workbook");
       get().sendToTrash(s.datasets.filter((d) => memberIds.includes(d.id)));
-      set((s2) => ({
-        ...removeDatasetsPatch(s2, memberIds),
-        workbooks: s2.workbooks.filter((w) => w.id !== id),
-      }));
+      set((s2) => {
+        const workbooks = s2.workbooks.filter((w) => w.id !== id);
+        // PR H booked finding: prune this workbook's OWN scoped Quick Plot
+        // templates in the SAME atomic update — `pruneDanglingWorkbookScopeTemplates`
+        // already tests exactly "does this template's workbookId still name
+        // a LIVE workbook", so the post-delete `workbooks` list is enough.
+        return {
+          ...removeDatasetsPatch(s2, memberIds),
+          workbooks,
+          quickPlotTemplates: pruneDanglingWorkbookScopeTemplates(
+            s2.quickPlotTemplates,
+            new Set(workbooks.map((w) => w.id)),
+          ),
+        };
+      });
     },
   };
 }

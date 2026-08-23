@@ -17,7 +17,7 @@ import {
   resolvePanelSource,
   slotLabels,
   type PanelSource,
-} from "./figurepage";
+} from "./figurepageActions";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { DataStruct } from "./types";
 

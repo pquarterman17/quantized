@@ -10,7 +10,9 @@ import { saveBlob } from "../../../lib/download";
 import { pipelineToScript, STEP_FIELDS, type PipelineStep } from "../../../lib/pipeline";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField, StatusDot } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, StatusDot } from "../../primitives";
 import TemplatesSection from "./TemplatesSection";
 import { usePipeline, type StepStatus } from "./usePipeline";
 

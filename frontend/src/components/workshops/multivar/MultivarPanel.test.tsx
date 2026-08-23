@@ -1,16 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  type CorrelationResponse,
-  type PCAResponse,
-  exportCorrelationHeatmapFigure,
-  exportPcaFigure,
-  exportPcaScreeFigure,
-  exportSplomFigure,
-  statsCorrelation,
-  statsPCA,
-} from "../../../lib/api";
+import { type CorrelationResponse, type PCAResponse, exportCorrelationHeatmapFigure, exportPcaFigure, exportPcaScreeFigure, exportSplomFigure, statsCorrelation, statsPCA } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import MultivarPanel from "./MultivarPanel";

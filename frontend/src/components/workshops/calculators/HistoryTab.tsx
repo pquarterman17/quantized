@@ -4,7 +4,8 @@
 // (favorites are kept). Reads the standalone calcHistory store.
 
 import { askConfirm } from "../../overlays/ConfirmDialog";
-import { Button, IconButton } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { Button } from "../../primitives";
 import { useCalcHistory } from "../../../store/calcHistory";
 
 const META: React.CSSProperties = {

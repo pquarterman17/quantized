@@ -5,17 +5,23 @@ import {
   detailsNavIndex,
   libraryDetailsRows,
   sortLibraryDetailsRows,
+  type LibraryDetailsRow,
   type LibraryDetailsSortDirection,
   type LibraryDetailsSortKey,
 } from "../../lib/libraryDetails";
+import { LIBRARY_DETAILS_COLUMNS } from "../../lib/libraryDetailsColumns";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
 import { parseQuery } from "../../lib/smartfolders";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
+import type { BatchMetadataPatch } from "../../store/datasetMeta";
+import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
+import { askParams } from "../overlays/ParamDialog";
+import LibraryDetailsColumnsMenu from "./LibraryDetailsColumnsMenu";
 
 interface Props {
   hierarchy: LibraryHierarchy;
@@ -30,16 +36,25 @@ interface Props {
   onShowInLibrary?: (node: LibraryNode) => void;
 }
 
-const COLUMNS: Array<{ key: Exclude<LibraryDetailsSortKey, "manual">; label: string; className?: string }> = [
-  { key: "name", label: "Name" },
-  { key: "type", label: "Type" },
-  { key: "location", label: "Folder / workbook", className: "qzk-details-wide" },
-  { key: "dimensions", label: "Rows × cols", className: "qzk-details-medium" },
-  { key: "dataType", label: "Data type", className: "qzk-details-wide" },
-  { key: "source", label: "Source", className: "qzk-details-medium" },
-  { key: "modified", label: "Imported / modified", className: "qzk-details-wide" },
-  { key: "tags", label: "Tags", className: "qzk-details-wide" },
-];
+// PR L (L0.56) — Name is the one mandatory, non-toggleable column; every
+// other header comes from the user's `visibleColumns` selection below.
+const NAME_COLUMN: { key: "name"; label: string; className?: string } = { key: "name", label: "Name" };
+
+/** Batch-edit dialog -> BatchMetadataPatch. A checked "Clear x" wins over a
+ *  typed value (clearing while also typing text is a contradiction; the
+ *  explicit clear is the less surprising outcome to honor). */
+function batchPatchFrom(picked: Record<string, unknown>): BatchMetadataPatch {
+  const patch: BatchMetadataPatch = {};
+  if (picked.clearNotes) patch.notes = "";
+  else if (String(picked.notes ?? "").trim()) patch.notes = String(picked.notes);
+  if (picked.clearGroup) patch.group = "";
+  else if (String(picked.group ?? "").trim()) patch.group = String(picked.group);
+  const addTags = String(picked.addTags ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const removeTags = String(picked.removeTags ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  if (addTags.length) patch.addTags = addTags;
+  if (removeTags.length) patch.removeTags = removeTags;
+  return patch;
+}
 
 function isSelected(node: LibraryNode, selectedIds: readonly string[], selection: { kind: string; id: string } | null) {
   return node.kind === "worksheet"
@@ -53,6 +68,17 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
+  // PR L slice 2 (L0.56): the user's selected metadata columns — now the
+  // store field (store/libraryDetailsColumns.ts), .dwk-persisted (additive;
+  // absent on an older doc loads as today's original seven, unchanged).
+  const visibleColumnsArr = useApp((s) => s.visibleDetailsColumns);
+  const toggleColumn = useApp((s) => s.toggleVisibleDetailsColumn);
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const visibleColumns = useMemo(() => new Set(visibleColumnsArr), [visibleColumnsArr]);
+  const columns = useMemo(
+    () => [NAME_COLUMN, ...LIBRARY_DETAILS_COLUMNS.filter((c) => visibleColumns.has(c.key))],
+    [visibleColumns],
+  );
   const searching = searchQuery != null && searchQuery.trim() !== "";
   const rows = useMemo(() => {
     let projected = libraryDetailsRows(hierarchy);
@@ -78,15 +104,15 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   // component's full sequential tab surface is now exactly two stops:
   // the header row and the data row.
   const [headerKey, setHeaderKey] = useState<string | null>(null);
-  const rovingHeader = (headerKey != null && COLUMNS.some((c) => c.key === headerKey) ? headerKey : null)
-    ?? (sortKey !== "manual" && COLUMNS.some((c) => c.key === sortKey) ? sortKey : COLUMNS[0].key);
+  const rovingHeader = (headerKey != null && columns.some((c) => c.key === headerKey) ? headerKey : null)
+    ?? (sortKey !== "manual" && columns.some((c) => c.key === sortKey) ? sortKey : columns[0].key);
   const onHeaderKeyDown = (event: React.KeyboardEvent): void => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    const idx = COLUMNS.findIndex((c) => c.key === (event.target as Element).closest("th")?.getAttribute("data-col"));
+    const idx = columns.findIndex((c) => c.key === (event.target as Element).closest("th")?.getAttribute("data-col"));
     if (idx < 0) return;
     event.preventDefault();
-    const next = Math.min(COLUMNS.length - 1, Math.max(0, idx + (event.key === "ArrowRight" ? 1 : -1)));
-    (scrollRef.current?.querySelector(`th[data-col="${COLUMNS[next].key}"] button`) as HTMLElement | null)?.focus();
+    const next = Math.min(columns.length - 1, Math.max(0, idx + (event.key === "ArrowRight" ? 1 : -1)));
+    (scrollRef.current?.querySelector(`th[data-col="${columns[next].key}"] button`) as HTMLElement | null)?.focus();
   };
   const prevRowsRef = useRef(rows);
   const keyIndex = (key: string | null): number => (key == null ? -1 : rows.findIndex((r) => r.node.key === key));
@@ -143,15 +169,56 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
     }
   };
 
+  // PR L (L0.56): shows the affected-item count IN the dialog title before
+  // apply. ONE store call for the whole selection (store/datasetMeta.ts's
+  // `batchEditDatasetMetadata` records ONE history entry), so Ctrl+Z undoes
+  // the entire batch in one step. `ids` is captured before the async dialog,
+  // so every named dataset can be deleted/trashed while it's open
+  // (adversarial-review P2) — the confirmation toast reports the store's
+  // returned LIVE-applied count, never the stale `ids.length`, and stays
+  // silent entirely when that count is 0 (a no-op edit deserves no "it
+  // happened" confirmation).
+  const onBatchEditMetadata = async (): Promise<void> => {
+    const ids = useApp.getState().selectedIds;
+    if (ids.length < 2) return;
+    const picked = await askParams(`Edit metadata for ${ids.length} selected`, [
+      { key: "notes", label: "Notes", type: "text", default: "", hint: "blank = leave unchanged" },
+      { key: "clearNotes", label: "Clear notes", type: "boolean", default: false },
+      { key: "group", label: "Group", type: "text", default: "", hint: "blank = leave unchanged" },
+      { key: "clearGroup", label: "Clear group", type: "boolean", default: false },
+      { key: "addTags", label: "Add tags", type: "text", default: "", hint: "comma-separated" },
+      { key: "removeTags", label: "Remove tags", type: "text", default: "", hint: "comma-separated" },
+    ]);
+    if (!picked) return;
+    const updated = useApp.getState().batchEditDatasetMetadata(ids, batchPatchFrom(picked));
+    if (updated > 0) toast(`Updated metadata for ${updated} dataset(s)`);
+  };
+
   return (
     <div className="qzk-details-wrap">
       <div className="qzk-details-tools">
         <span>{rows.length.toLocaleString()} {searching ? "matches" : "items"}</span>
-        {sortKey !== "manual" && (
-          <button type="button" className="qzk-details-manual" onClick={() => { setSortKey("manual"); setDirection("asc"); }}>
-            Manual order
-          </button>
-        )}
+        <div className="qzk-details-tools-actions">
+          {/* PR L (L0.56): multi-select rows -> edit a metadata field/tags
+           *  once -> applies to all selected. selectedIds IS the worksheet
+           *  selection (L0.25), so no extra filtering is needed here. */}
+          {selectedIds.length >= 2 && (
+            <button type="button" className="qzk-details-manual" onClick={() => void onBatchEditMetadata()}>
+              Edit metadata ({selectedIds.length})…
+            </button>
+          )}
+          {sortKey !== "manual" && (
+            <button type="button" className="qzk-details-manual" onClick={() => { setSortKey("manual"); setDirection("asc"); }}>
+              Manual order
+            </button>
+          )}
+          <LibraryDetailsColumnsMenu
+            open={columnsMenuOpen}
+            visibleColumns={visibleColumns}
+            onToggleOpen={() => setColumnsMenuOpen((v) => !v)}
+            onToggleColumn={toggleColumn}
+          />
+        </div>
       </div>
       {/* P1 review fix: the scroll wrapper is NOT in the Tab order — the
        *  roving row is this component's single sequential tab stop, so
@@ -163,7 +230,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
         <table className="qzk-details-table" aria-label="Library details table">
           <thead>
             <tr>
-              {COLUMNS.map((column) => (
+              {columns.map((column) => (
                 <th key={column.key} data-col={column.key} className={column.className} scope="col" aria-sort={sortKey === column.key ? (direction === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
@@ -252,13 +319,14 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                     <span>{row.node.name}</span>
                     <small>{row.location} · {row.dimensions}</small>
                   </td>
-                  <td>{row.type}</td>
-                  <td className="qzk-details-wide">{row.location}</td>
-                  <td className="qzk-details-medium">{row.dimensions}</td>
-                  <td className="qzk-details-wide">{row.dataType}</td>
-                  <td className="qzk-details-medium">{row.source}</td>
-                  <td className="qzk-details-wide">{row.modified}</td>
-                  <td className="qzk-details-wide">{row.tags}</td>
+                  {/* PR L (L0.56): generic over the user's selected columns —
+                   *  `columns` always starts with NAME_COLUMN (rendered
+                   *  specially above), so this covers everything after it. */}
+                  {columns.slice(1).map((col) => (
+                    <td key={col.key} className={col.className}>
+                      {row[col.key as Exclude<keyof LibraryDetailsRow, "node" | "manualIndex">]}
+                    </td>
+                  ))}
                   {searching && (
                     <td className="qzk-details-actions">
                       {/* Rides the roving row's tab stop: reachable by Tab

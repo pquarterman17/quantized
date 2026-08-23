@@ -291,9 +291,13 @@ describe("per-action-class undo/redo coverage", () => {
       savedPlotSpecs: [],
       techniqueViewMemory: {},
       savedRois: [],
+      quickPlotTemplates: [],
       librarySelection: null,
       workbookLastChild: {},
       expandedWorkbookIds: [],
+      collections: [],
+      visibleDetailsColumns: [],
+      plotRecipes: [],
     };
 
     useApp.getState().appendWorkspace(incoming);
@@ -531,5 +535,96 @@ describe("per-action-class undo/redo coverage", () => {
     // The mapRuler should be UNCHANGED by undo — it is working geometry, not history
     expect(useApp.getState().mapRuler).toEqual(rulerAfterDraw);
     expect(useApp.getState().mapRuler).not.toBeNull();
+  });
+});
+
+// R6 code-review round, F4 (POST_SPRINT_INDEPENDENT_REVIEW.md): direct unit
+// tests for the `HistoryBatchToken` mechanics `withHistoryBatch`'s own doc
+// promises — the end-to-end coverage lives in relink.test.ts, but these pin
+// the primitive itself so a future change to history.ts can't silently drop
+// one of its own documented guarantees.
+describe("withHistoryBatch / HistoryBatchToken mechanics (R6)", () => {
+  it("a stale or foreign token is treated exactly like no token — always records its own entry", async () => {
+    const foreignToken = Symbol("foreign, from some other/finished batch");
+    await useApp.getState().withHistoryBatch("batch", async () => {
+      // Tagged with a token that is NOT this batch's own — must not fold.
+      useApp.getState().recordHistory("foreign-tagged edit", foreignToken);
+      useApp.setState({ datasets: [{ id: "x", name: "x", data: raw }] });
+    });
+    // The foreign-tagged call got its own entry; the batch itself folded
+    // NOTHING under its real token, so it pushes no entry of its own.
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["foreign-tagged edit"]);
+  });
+
+  it("pushes no entry when nothing folds under the batch's own token", async () => {
+    await useApp.getState().withHistoryBatch("no-op batch", async () => {
+      // Does nothing that records — an import that fails outright, e.g.
+    });
+    expect(useApp.getState().history).toEqual([]);
+  });
+
+  it("a nested withHistoryBatch call reuses the OUTER active token — nesting never creates a second undo step", async () => {
+    let innerToken: unknown;
+    let outerToken: unknown;
+    await useApp.getState().withHistoryBatch("outer op", async (token) => {
+      outerToken = token;
+      useApp.getState().recordHistory("outer mutation", token);
+      useApp.setState({ datasets: [{ id: "d1", name: "a", data: raw }] });
+
+      await useApp.getState().withHistoryBatch("inner op (must never surface)", async (nestedToken) => {
+        innerToken = nestedToken;
+        useApp.getState().recordHistory("inner mutation", nestedToken);
+        useApp.setState((s) => ({ datasets: [...s.datasets, { id: "d2", name: "b", data: raw }] }));
+      });
+    });
+
+    expect(innerToken).toBe(outerToken); // reentrant: the SAME identity, never a fresh one
+    const { history } = useApp.getState();
+    expect(history).toHaveLength(1); // ONE entry for the whole nested operation
+    expect(history[0].label).toBe("outer op"); // the outer label wins
+
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toEqual([]); // both mutations reverted together
+  });
+
+  it("captures its own snapshot lazily at the FIRST fold, not at batch-open time", async () => {
+    useApp.setState({ datasets: [{ id: "orig", name: "orig", data: raw }] });
+
+    await useApp.getState().withHistoryBatch("batched op", async (token) => {
+      // An interleaved, UNTOKENED edit landing before the operation's own
+      // first mutation — gets its own entry (R6), and must survive the
+      // batch's eventual undo rather than being silently reverted a second
+      // time by an eagerly-captured pre-batch snapshot.
+      useApp.getState().renameDataset("orig", "renamed mid-batch");
+
+      useApp.getState().recordHistory("create dataset", token);
+      useApp.setState((s) => ({ datasets: [...s.datasets, { id: "new", name: "new", data: raw }] }));
+    });
+
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["rename dataset", "batched op"]);
+
+    useApp.getState().undo(); // undoes "batched op"
+    const live = useApp.getState().datasets;
+    expect(live.map((d) => d.id)).toEqual(["orig"]); // the created dataset is gone
+    expect(live.find((d) => d.id === "orig")!.name).toBe("renamed mid-batch"); // the rename SURVIVES
+  });
+
+  // F3 (R6 code-review): a Redo pressed MID-BATCH — after the batch's first
+  // fold but before its own entry lands in `withHistoryBatch`'s `finally`,
+  // which can be further awaits away for a real caller — must never replay a
+  // stale pre-batch `future` snapshot over already-half-mutated state.
+  it("clears `future` (redo) as soon as the batch's first fold lands, not only once the batch's own entry is finally pushed", async () => {
+    useApp.getState().addDataset({ id: "d1", name: "a", data: raw }); // history: [add dataset]
+    useApp.getState().undo(); // history: [], future: [add dataset]
+    expect(useApp.getState().future).toHaveLength(1);
+
+    await useApp.getState().withHistoryBatch("batched op", async (token) => {
+      useApp.getState().recordHistory("first fold", token);
+      useApp.setState({ datasets: [{ id: "d2", name: "b", data: raw }] });
+      // Assert INSIDE the batch, synchronously right after the fold.
+      expect(useApp.getState().future).toEqual([]);
+    });
+
+    expect(useApp.getState().future).toEqual([]); // still clear once the batch completes
   });
 });

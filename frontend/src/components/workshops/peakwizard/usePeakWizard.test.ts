@@ -16,10 +16,18 @@ import { usePeakWizard } from "./usePeakWizard";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
-  findPeaks: vi.fn(),
-  fitMultiPeak: vi.fn(),
   peaksIntegrate: vi.fn(),
   reportEmit: vi.fn(),
+}));
+// findPeaks/fitMultiPeak and baselineALS moved to their own siblings (R8
+// bundle-diet pass) — mock them at their real import paths.
+vi.mock("../../../lib/api/peaks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/peaks")>()),
+  findPeaks: vi.fn(),
+  fitMultiPeak: vi.fn(),
+}));
+vi.mock("../../../lib/api/baseline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/baseline")>()),
   baselineALS: vi.fn(),
 }));
 
@@ -85,6 +93,28 @@ describe("usePeakWizard — click-on-plot marker editing scoping", () => {
     act(() => result.current.setStep(1));
     expect(result.current.markerEditActive).toBe(false);
     expect(useApp.getState().peakWizardEdit).toBeNull();
+  });
+
+  // R9 (POST_SPRINT_INDEPENDENT_REVIEW): PlotViewport.tsx documents
+  // `peakWizardEdit` as a prop that should stay a STABLE reference except for
+  // "a discrete add/remove click" — its own create/destroy effect keys off
+  // it and rebuilds the WHOLE uPlot instance whenever it changes identity.
+  // `addPeakAt`/`removePeak` here were plain (non-memoized) closures, so an
+  // UNRELATED re-render of the wizard (e.g. patching a recipe field on a
+  // step ③/model field, nothing to do with candidates) redefined them and
+  // re-pushed a brand-new bridge object into the store — forcing that full
+  // plot rebuild for no reason. This pins the bridge's reference down as
+  // stable across such unrelated re-renders, so it stays cheap.
+  it("does not push a new peakWizardEdit bridge on an unrelated re-render (recipe patch, candidates unchanged)", () => {
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    const before = useApp.getState().peakWizardEdit;
+    expect(before).not.toBeNull();
+
+    act(() => result.current.patchRecipe({ model: { shape: "Lorentzian" } }));
+
+    const after = useApp.getState().peakWizardEdit;
+    expect(after).toBe(before); // same object identity — no needless plot rebuild
   });
 });
 
@@ -155,7 +185,7 @@ describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
 // be — findPeaks is only called by runFind(), never by addPeakAt/removePeak).
 describe("usePeakWizard — click-on-plot editing never triggers a find/fit call", () => {
   it("addPeakAt/removePeak do not call findPeaks", async () => {
-    const { findPeaks } = await import("../../../lib/api");
+    const { findPeaks } = await import("../../../lib/api/peaks");
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.setStep(1));
     act(() => result.current.addPeakAt(1));
@@ -166,7 +196,7 @@ describe("usePeakWizard — click-on-plot editing never triggers a find/fit call
 
 describe("usePeakWizard — plotted-channel selection (audit P1 #1)", () => {
   it("runs its working segment on the plotted X/primary-Y, not time/values[0]", async () => {
-    const { findPeaks } = await import("../../../lib/api");
+    const { findPeaks } = await import("../../../lib/api/peaks");
     vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
     const multi: DataStruct = {
       time: [0, 1, 2, 3],

@@ -11,6 +11,7 @@ import {
   errKeysFromBindings,
   hasRichErrorBindings,
   inferErrorBindings,
+  inferErrorBindingsFromLabels,
   sanitizeBindings,
   symmetricBinding,
   type ErrorBinding,
@@ -88,6 +89,25 @@ describe("inferErrorBindings", () => {
 
   it("returns nothing for a dataset with no error columns", () => {
     expect(inferErrorBindings(ds(["Temp", "Moment"]))).toEqual([]);
+  });
+});
+
+// P1.6 (Import Wizard): inferErrorBindingsFromLabels is the label-only core
+// inferErrorBindings delegates to — the wizard seeds suggestions from it
+// directly, against a preview's resolved column names, before any
+// DataStruct/`.values` exists at all.
+describe("inferErrorBindingsFromLabels (label-only core, P1.6)", () => {
+  it("is exactly what inferErrorBindings delegates to for a real DataStruct", () => {
+    const labels = ["R", "dR", "M_err+", "M_err-", "M"];
+    expect(inferErrorBindingsFromLabels(labels)).toEqual(inferErrorBindings(ds(labels)));
+  });
+
+  it("works with no DataStruct at all — just the label array", () => {
+    expect(inferErrorBindingsFromLabels(["Signal", "xerr"])[0]).toMatchObject({
+      channel: 1,
+      target: -1,
+      axis: "x",
+    });
   });
 });
 

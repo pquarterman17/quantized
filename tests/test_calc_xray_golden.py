@@ -1,8 +1,8 @@
 """X-ray & Neutron calculators (calc.xray) -- golden parity vs quantized_matlab.
 
-DIRACULATOR_AUDIT P1 evidence. Golden fixtures are STAGED: run
-tools/matlab/freeze_diraculator_values.m against ../quantized_matlab, then
-these tests exercise for real; until then they SKIP via load_golden.
+DIRACULATOR_AUDIT P1 evidence. Fixtures were frozen on 2026-08-21 by
+tools/matlab/freeze_diraculator_values.m against
+quantized_matlab@aee70d12ddd13024a33ac8d29fafbd3245442c7e.
 
 Classification (see calc/xray.py module docstring for the full provenance):
   class (a) -- MATLAB counterpart exists, golden-tested below:

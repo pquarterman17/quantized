@@ -28,7 +28,8 @@ import { useRef, useState } from "react";
 
 import { rsmBoxCut, rsmBoxStats, type BoxCutRequest, type BoxStats, type BoxStatsRequest } from "../../../lib/api/rsm";
 import { saveBlob } from "../../../lib/download";
-import { hasQSpace, is2DMap } from "../../../lib/mapdata";
+import { is2DMap } from "../../../lib/mapdata";
+import { hasQSpace } from "../../../lib/mapdataFetch";
 import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
 import { normalizeRect, roiBoxBody, roiStatsBody, type BoxCutOptions, type RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";

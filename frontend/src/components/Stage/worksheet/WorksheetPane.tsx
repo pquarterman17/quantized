@@ -25,9 +25,12 @@
 
 import { useEffect, useState } from "react";
 
+import { isCategoricalChannel } from "../../../lib/categorical";
 import { hasOriginReportSheets } from "../../../lib/columnmeta";
+import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useRecode } from "../../../store/recode";
 import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
 import SheetTabs from "./SheetTabs";
@@ -41,6 +44,28 @@ export interface WorksheetPaneProps {
   /** GUI_INTERACTION #14: an MDI document window's id — omit for the Stage
    *  "Worksheet" tab (see useWorksheetView's doc for what this changes). */
   windowId?: string;
+}
+
+/** PR K (L0.50): the derived-worksheet identity banner + Freeze Copy action.
+ *  Its own function (not a separate file) — WorksheetPane has room under the
+ *  component ceiling; splitting further would be premature. */
+function DerivedWorksheetBanner({ ds }: { ds: Dataset }) {
+  const sourceName = useApp((s) => s.datasets.find((d) => d.id === ds.derivedFrom?.datasetId)?.name);
+  if (!ds.derivedFrom) return null;
+  return (
+    <div className="qzk-ds-meta" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+      <span title={`Pipeline: ${ds.derivedFrom.pipeline}`}>
+        Derived worksheet — source: {sourceName ?? ds.derivedFrom.datasetId}
+      </span>
+      <button
+        className="qz-btn"
+        title="Create a permanent, independent snapshot of this worksheet's current data (link severed)"
+        onClick={() => useApp.getState().freezeCopy(ds.id)}
+      >
+        Freeze Copy
+      </button>
+    </div>
+  );
 }
 
 export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
@@ -160,6 +185,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         canExtract={view.canExtract}
         onExtract={view.extractSubset}
       />
+      <DerivedWorksheetBanner ds={ds} />
       {ds.pending && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
           Loading full data ({ds.pending.rows} rows × {ds.pending.cols} channels) — showing a preview
@@ -193,8 +219,10 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         onToggleSelect={view.toggleRowSelected}
         onSelectRange={view.setRowSelection}
         onEditCell={view.onEditCell}
+        onEditCategoricalCell={(row, col, label) => useApp.getState().setCategoricalCell(ds.id, row, col, label)}
         baseCount={view.baseCount}
         onRemoveFormula={view.onRemoveFormula}
+        formulaErrors={ds.formulaErrors}
         showStats={view.showStats}
         colStats={view.colStats}
         statsErr={view.statsErr}
@@ -204,6 +232,9 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         colWidths={view.colWidths}
         onResizeCol={view.setColWidth}
         onAutofitCol={view.autofitCol}
+        modelingTypeOf={(col) => channelModelingType(ds, col)}
+        channelTypes={ds.channelTypes}
+        onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
       />
 
       {menu && (
@@ -213,21 +244,31 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
           onClose={() => setMenu(null)}
           items={
             menu.kind === "col"
-              ? columnMenuItems(menu.target, {
-                  xKey: view.xKey,
-                  yKeys: view.yKeys,
-                  labelCount: view.data.labels.length,
-                  setXKey: view.setXKey,
-                  setYKeys: view.setYKeys,
-                  sortAsc: (col) => view.setSort({ col, dir: 1 }),
-                  sortDesc: (col) => view.setSort({ col, dir: -1 }),
-                  onNewColumn: () => void view.promptColumn(),
-                  showStats: view.showStats,
-                  onToggleStats: () => view.setShowStats((v) => !v),
-                  onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
-                  onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
-                  onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
-                })
+              ? [
+                  ...columnMenuItems(menu.target, {
+                    xKey: view.xKey,
+                    yKeys: view.yKeys,
+                    labelCount: view.data.labels.length,
+                    setXKey: view.setXKey,
+                    setYKeys: view.setYKeys,
+                    sortAsc: (col) => view.setSort({ col, dir: 1 }),
+                    sortDesc: (col) => view.setSort({ col, dir: -1 }),
+                    onNewColumn: () => void view.promptColumn(),
+                    showStats: view.showStats,
+                    onToggleStats: () => view.setShowStats((v) => !v),
+                    onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
+                    onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
+                    onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
+                  }),
+                  // J2: only a real, categorical value column can be recoded
+                  // (never the x column or a column with no level table).
+                  ...(menu.target >= 0 && isCategoricalChannel(ds.data, menu.target)
+                    ? ([
+                        { separator: true },
+                        { label: "Recode…", run: () => useRecode.getState().openRecode(ds.id, menu.target) },
+                      ] as const)
+                    : []),
+                ]
               : rowMenuItems(menu.target, {
                   masked: view.masked,
                   toggleMask: view.toggleMask,

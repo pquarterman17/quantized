@@ -11,7 +11,10 @@ import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card, Pill, Select, SliderRow } from "../primitives";
+import { Pill } from "../primitives/Pill";
+import { SliderRow } from "../primitives/SliderRow";
+import { Select } from "../primitives";
+import Card from "../primitives/Card";
 
 /** Compact modeling-type tags for the per-channel select. */
 const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
@@ -195,7 +198,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 style={{ maxWidth: 64, minWidth: 0 }}
                 value={active.channelTypes?.[i] ?? ""}
                 onChange={(e) =>
-                  setChannelType(i, e.target.value === "" ? null : (e.target.value as ModelingType))
+                  setChannelType(active.id, i, e.target.value === "" ? null : (e.target.value as ModelingType))
                 }
                 title="Modeling type — what this column means. Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories. Auto = inferred from the values; drives categorical plotting (boxes/violins group by nominal columns)."
                 options={[

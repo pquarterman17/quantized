@@ -9,13 +9,12 @@
 //
 // Re-exported by `lib/api.ts`, so every consumer (the Figure Page workshop)
 // keeps importing from `./lib/api` unchanged. `FigureSpec` is a type-only
-// import from `../api` (erased at compile time -- no runtime circular
-// dependency), since it is api.ts's own single-figure payload type and the
-// established sibling convention (api/plot.ts, api/stats.ts) is to avoid a
-// VALUE dependency on api.ts, not a type-only one.
+// import from `./figures` (erased at compile time -- no runtime dependency
+// on that lazy-only sibling; R8 bundle-diet pass moved FigureSpec out of
+// api.ts itself, see api/figures.ts's own header).
 
 import { postBlob, postDownload } from "./http";
-import type { FigureSpec } from "../api";
+import type { FigureSpec } from "./figures";
 
 /** One figure-page panel (GOTO #4): a single-figure payload + its grid cell.
  *  The nested figure's own fmt/style/dpi/filename are ignored (page-level). */

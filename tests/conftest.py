@@ -73,7 +73,10 @@ def load_golden() -> Callable[[str], dict[str, Any]]:
     def _load(name: str) -> dict[str, Any]:
         path = GOLDEN / name
         if not path.exists():
-            pytest.skip(f"golden file missing: {name} (run tools/matlab/freeze_reference_values.m)")
+            pytest.skip(
+                f"golden file missing: {name} "
+                "(run the matching tools/matlab/freeze_*.m script)"
+            )
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _load

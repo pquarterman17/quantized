@@ -173,3 +173,28 @@ def test_build_grouped_series_explicit_x_key() -> None:
 def test_build_grouped_series_bad_group_col_raises() -> None:
     with pytest.raises(ValueError):
         build_grouped_series(_parity_ds(), None, [0], 99)
+
+
+# ── P1.4: categorical group labels (P4-4) ────────────────────────────────────
+
+
+def test_build_grouped_series_uses_level_labels_for_a_categorical_group_col() -> None:
+    """Same shape as the frontend parity fixture, but `Group` is now a P1.4
+    categorical channel -- labels should read the STRING level, not the raw
+    numeric code."""
+    ds = DataStruct.create(
+        time=[0.0, 1.0, 2.0, 3.0],
+        values=[[10.0, 0.0], [20.0, 1.0], [30.0, 0.0], [40.0, 1.0]],
+        labels=["Value", "Region"],
+        units=["V", ""],
+        cat_levels={1: ("North", "South")},
+    )
+    plot = build_grouped_series(ds, None, [0], 1)
+    assert [s.label for s in plot.series] == ["Value (Region=North)", "Value (Region=South)"]
+
+
+def test_build_grouped_series_non_categorical_group_col_is_unchanged() -> None:
+    """Pin: a non-categorical channel's grouped-label output must be
+    byte-identical to before P1.4 -- the numeric _format_level path."""
+    plot = build_grouped_series(_parity_ds(), None, [0], 1)
+    assert [s.label for s in plot.series] == ["Value (Group=1)", "Value (Group=2)"]

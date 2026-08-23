@@ -5,15 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  opticsBrewsterAngle,
-  opticsCriticalAngle,
-  opticsDielectricToRefractive,
-  opticsFresnel,
-  opticsPenetrationDepth,
-  opticsRefractiveToDielectric,
-  opticsSkinDepth,
-} from "../../../lib/api";
+import { opticsBrewsterAngle, opticsCriticalAngle, opticsDielectricToRefractive, opticsFresnel, opticsPenetrationDepth, opticsRefractiveToDielectric, opticsSkinDepth } from "../../../lib/api/optics";
 import {
   Button,
   Card,
@@ -152,10 +144,15 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c5.run("Refractive index / Dielectric function", async () => {
+              void c5.run("Refractive index / Dielectric function", async (isCurrent) => {
                 const r = await opticsRefractiveToDielectric(Number(rdN), Number(rdK));
-                setRdE1(String(r.eps1));
-                setRdE2(String(r.eps2));
+                // These are editable inputs, not just result text. Gate the
+                // chained writes before mutating them: useCard drops a stale
+                // return value only after this callback completes.
+                if (isCurrent()) {
+                  setRdE1(String(r.eps1));
+                  setRdE2(String(r.eps2));
+                }
                 return `ε₁ = ${fmtNum(r.eps1)} · ε₂ = ${fmtNum(r.eps2)}`;
               })
             }
@@ -169,10 +166,12 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c5.run("Refractive index / Dielectric function", async () => {
+              void c5.run("Refractive index / Dielectric function", async (isCurrent) => {
                 const r = await opticsDielectricToRefractive(Number(rdE1), Number(rdE2));
-                setRdN(String(r.n));
-                setRdK(String(r.k));
+                if (isCurrent()) {
+                  setRdN(String(r.n));
+                  setRdK(String(r.k));
+                }
                 return `n = ${fmtNum(r.n)} · k = ${fmtNum(r.k)}`;
               })
             }

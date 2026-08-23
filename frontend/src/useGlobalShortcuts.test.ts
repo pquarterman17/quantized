@@ -176,3 +176,31 @@ describe("useGlobalShortcuts — Delete does not steal a consumed keystroke", ()
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 });
+
+// P1.2 box 1: Ctrl/Cmd+S is the "Save" quick-save binding.
+describe("useGlobalShortcuts — Ctrl/Cmd+S (P1.2 box 1)", () => {
+  it("calls saveWorkspace and prevents the browser Save dialog", () => {
+    const saveWorkspace = vi.fn();
+    useApp.setState({ saveWorkspace });
+    renderHook(() => useGlobalShortcuts());
+    const e = fireEvent.keyDown(window, { key: "s", ctrlKey: true, cancelable: true });
+    expect(saveWorkspace).toHaveBeenCalledOnce();
+    expect(e).toBe(false); // fireEvent returns false when preventDefault() ran
+  });
+
+  it("does not fire on Ctrl+Shift+S — that combo is reserved", () => {
+    const saveWorkspace = vi.fn();
+    useApp.setState({ saveWorkspace });
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true, shiftKey: true });
+    expect(saveWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("works with the Meta key too (macOS ⌘S)", () => {
+    const saveWorkspace = vi.fn();
+    useApp.setState({ saveWorkspace });
+    renderHook(() => useGlobalShortcuts());
+    fireEvent.keyDown(window, { key: "s", metaKey: true });
+    expect(saveWorkspace).toHaveBeenCalledOnce();
+  });
+});

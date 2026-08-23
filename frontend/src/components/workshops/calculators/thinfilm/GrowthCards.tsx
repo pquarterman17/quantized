@@ -6,13 +6,7 @@
 
 import { useState } from "react";
 
-import {
-  thinFilmDepositionRate,
-  thinFilmDiffusionLength,
-  thinFilmDoseFromCurrent,
-  thinFilmDoseToConcentration,
-  thinFilmSputterRate,
-} from "../../../../lib/api";
+import { thinFilmDepositionRate, thinFilmDiffusionLength, thinFilmDoseFromCurrent, thinFilmDoseToConcentration, thinFilmSputterRate } from "../../../../lib/api/thinFilm";
 import {
   Button,
   Card,

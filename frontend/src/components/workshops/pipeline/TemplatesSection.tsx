@@ -5,7 +5,8 @@
 
 import { useRef, useState } from "react";
 
-import { Button, NumberField, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { useTemplates } from "./useTemplates";
 
 export default function TemplatesSection() {

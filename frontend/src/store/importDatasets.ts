@@ -28,22 +28,22 @@
 import { create } from "zustand";
 
 import { importFile, uploadFile } from "../lib/api";
+import type { HistoryBatchToken } from "./history";
+import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginImport } from "../lib/originFolders";
-import { plotSelectedTogether } from "../lib/plotSelectedTogether";
-import { techniqueOf } from "../lib/techniqueDefaults";
 import {
   isLazyBookEntry,
   isPrimaryBookMarker,
   type DataStruct,
   type Dataset,
-  type Technique,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
-import { batchFolderOffer, createFolderForBatch, resolveImportTargetFolderId } from "./importTargetFolder";
+import { presentBatchOutcome } from "./importBatchOffers";
+import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
-import { TOAST_ACTION_TTL, toast } from "./toasts";
+import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
@@ -87,8 +87,10 @@ interface ImportOrigin {
    *  not stat the file, and a wrong number would be worse than none). */
   size: number;
   /** Set ONLY for a path import — see `Dataset.source`'s doc for the full
-   *  "where a path is/isn't knowable" matrix. */
-  source?: { kind: "path"; path: string };
+   *  "where a path is/isn't knowable" matrix, including the P1.7
+   *  checksum/mtime/size provenance fields threaded through from
+   *  `importPaths`'s `probeSource` call below. */
+  source?: Dataset["source"];
 }
 
 interface ErrorRolesActions {
@@ -125,11 +127,43 @@ function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesAction
   };
 }
 
+/** R6 F1/F2 (POST_SPRINT_INDEPENDENT_REVIEW.md code-review round): options
+ *  for a batched, self-reporting caller — today only
+ *  `store/relink.ts`'s `importChangedAsNewVersion`. Every ordinary caller
+ *  (⌘O, drag-drop, the command palette, Recent files, …) omits this entirely
+ *  and gets today's unchanged behavior. */
+export interface ImportPathsOptions {
+  /** Forward an enclosing `withHistoryBatch`'s token so every dataset this
+   *  call creates folds into that batch's ONE undo entry instead of each
+   *  recording its own. */
+  historyToken?: HistoryBatchToken;
+  /** Skip `presentBatchOutcome` (the overlay/folder/recipe-suggestion/plain
+   *  "imported N" toast cascade) entirely. Default `true`. F1: that cascade's
+   *  recipe-suggestion branch makes REAL awaits (a dynamic import, an async
+   *  recipe match) — sitting inside an enclosing `withHistoryBatch` window
+   *  AFTER its last fold, that latency reopened exactly the gap the batch-
+   *  token fix was meant to close (a foreign edit landing there was still
+   *  corrupted by the batch's fold-time-frozen snapshot on undo, since this
+   *  is a snapshot-restore design — see `HistoryBatchToken`'s doc,
+   *  store/history.ts). `importChangedAsNewVersion` passes `false`: that
+   *  gesture already reports its own "imported ... as a new version"
+   *  outcome, so a second, generic offer toast on top would double up
+   *  anyway — this is correct L0.46 behavior, not only a history-safety
+   *  patch. */
+  presentOutcome?: boolean;
+}
+
 export interface ImportSlice extends ErrorRolesActions {
-  importFiles: (files: File[]) => Promise<void>;
+  /** Returns the created dataset ids (empty when nothing landed). */
+  importFiles: (files: File[]) => Promise<string[]>;
   /** Import real filesystem paths (native desktop dialog, MAIN_PLAN #31). Each
-   *  dataset carries `source.path`, so re-import needs no second picker. */
-  importPaths: (paths: string[]) => Promise<void>;
+   *  dataset carries `source.path`, so re-import needs no second picker.
+   *  Returns the created dataset ids (empty when nothing landed) — the
+   *  caller's own authoritative record of what THIS call created, never a
+   *  before/after set-diff against the live store (R6 F2: a diff mislabels
+   *  ANY dataset a concurrent, unblocked action — paste, demo, merge — adds
+   *  during the same window as this call's own). */
+  importPaths: (paths: string[], opts?: ImportPathsOptions) => Promise<string[]>;
 }
 
 
@@ -151,6 +185,7 @@ function addFromPayload(
   data: DataStruct,
   origin: ImportOrigin,
   targetFolderId: string | undefined,
+  historyToken: HistoryBatchToken | undefined,
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
@@ -190,7 +225,7 @@ function addFromPayload(
             metadata: book.metadata,
           },
           ...src,
-        });
+        }, historyToken);
       } else if (isLazyBookEntry(book)) {
         get().addDataset({
           id,
@@ -206,9 +241,9 @@ function addFromPayload(
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
-        });
+        }, historyToken);
       } else {
-        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src });
+        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src }, historyToken);
       }
       newIds.push(id);
     }
@@ -243,7 +278,7 @@ function addFromPayload(
       id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
-    get().addDataset(dsInput);
+    get().addDataset(dsInput, historyToken);
     newIds.push(id);
     // LIBRARY_WORKBOOK_UX_PLAN PR A3: one workbook per imported source file
     // (L0.2), or per book for a single-book Origin project (its origin_book
@@ -277,35 +312,6 @@ function addFromPayload(
   return newIds;
 }
 
-/** PLOT_WORKFLOW_PLAN item 4: when a batch import's successfully-created
- *  datasets all resolve to the SAME non-generic technique, offer ONE overlay
- *  plot instead of leaving N separate ones — offer, never force (declining
- *  or letting the toast time out is exactly today's per-file behavior, the
- *  batch datasets stay in the Library regardless). Two files that both
- *  happen to be "generic" are not knowably similar (the plan's mixed-batch
- *  rule), so `generic` never qualifies even when it's the only tag present.
- *
- *  Counts by DATASET id rather than by file, but that's equivalent for
- *  every batch that can actually pass this gate: the only import that turns
- *  one file into several datasets is an Origin multi-book project, and item
- *  1 stamps Origin imports `generic` unconditionally — so a book-expansion
- *  batch always fails the non-generic check before the file/dataset count
- *  distinction would matter. */
-function batchOverlayOffer(
-  get: SliceGet,
-  createdIds: readonly string[],
-): { technique: Technique; ids: string[] } | null {
-  if (createdIds.length < 2) return null;
-  const idSet = new Set(createdIds);
-  const datasets = get().datasets.filter((d) => idSet.has(d.id));
-  if (datasets.length < 2) return null;
-  const techniques = new Set(datasets.map((d) => techniqueOf(d)));
-  if (techniques.size !== 1) return null;
-  const [technique] = techniques;
-  if (technique === "generic") return null;
-  return { technique, ids: datasets.map((d) => d.id) };
-}
-
 /** Shared per-batch loop + status/toast summary.
  *
  *  P3.4 slice 1: registers ONE pendingOps entry for the whole batch (label
@@ -329,11 +335,23 @@ async function runImport<T>(
   items: T[],
   describe: (item: T) => string,
   load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
-): Promise<void> {
+  historyToken?: HistoryBatchToken,
+  presentOutcome = true,
+): Promise<string[]> {
+  // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
+  // are called directly (no length guard) by several `openFilePicker` sites
+  // — lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts (x3) —
+  // now that a canceled picker settles with `onPick([])` instead of never
+  // firing. Without this guard `label(0)` below reads `describe(items[0])`
+  // on an empty array and throws. A single choke point here (rather than
+  // patching every one of those call sites) protects every current AND
+  // future caller the same way; a silent no-op matches every other
+  // openFilePicker cancel path in this codebase (no status/toast change).
+  if (items.length === 0) return [];
   if (useImportBatch.getState().running) {
     get().setStatus(ALREADY_RUNNING_MSG);
     toast(ALREADY_RUNNING_MSG, "danger");
-    return;
+    return [];
   }
 
   const controller = new AbortController();
@@ -361,7 +379,7 @@ async function runImport<T>(
       get().setStatus(`importing ${describe(item)}…`);
       try {
         const { data, origin } = await load(item, controller.signal);
-        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId));
+        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId, historyToken));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -384,7 +402,7 @@ async function runImport<T>(
     const summary = `import cancelled — ${added}/${items.length} completed`;
     get().setStatus(summary);
     toast(summary, "info");
-    return;
+    return createdIds; // files already fully imported STAY — see this function's own doc
   }
 
   // A parse failure is the wizard's second front door (#40): the auto-detect
@@ -395,42 +413,19 @@ async function runImport<T>(
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
     : `imported ${added} file${added === 1 ? "" : "s"}`;
   get().setStatus(summary);
-  if (added > 0) {
-    const offer = batchOverlayOffer(get, createdIds);
-    // P2 review fix: `added` (files actually imported), not createdIds.length
-    // (datasets created) — a multi-book Origin file inflates the latter.
-    const folderOffer = offer ? null : batchFolderOffer(get, createdIds, added);
-    if (offer) {
-      // The offer toast states "imported" itself, so it replaces (not
-      // supplements) the plain success toast below — two toasts saying the
-      // same thing back to back is noise, not confirmation. If BOTH the
-      // overlay and folder offers would qualify, the overlay wins (L0.46 —
-      // never stack two action toasts for one batch).
-      toast(
-        `${offer.ids.length} ${offer.technique} files imported — overlay in one plot?`,
-        "ok",
-        {
-          action: { label: "Overlay", onClick: () => void plotSelectedTogether(offer.ids) },
-          ttlMs: TOAST_ACTION_TTL,
-        },
-      );
-    } else if (folderOffer) {
-      toast(
-        `${folderOffer.ids.length} files imported — create folder "${folderOffer.prefix}"?`,
-        "ok",
-        {
-          action: {
-            label: `Create folder "${folderOffer.prefix}"`,
-            onClick: () => createFolderForBatch(get, folderOffer.prefix, folderOffer.ids, targetFolderId),
-          },
-          ttlMs: TOAST_ACTION_TTL,
-        },
-      );
-    } else {
-      toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
-    }
-  }
+  // P2 review fix: `added` (files actually imported), not createdIds.length
+  // (datasets created) — a multi-book Origin file inflates the latter. The
+  // toast cascade itself (overlay / folder / P1.3 wave-3 recipe-suggestion /
+  // plain fallback, ranked per L0.46) lives in importBatchOffers.ts — see
+  // that module's header for the full precedence rationale.
+  // F1 (R6 code-review): `presentOutcome` gates the ENTIRE cascade, not just
+  // whether a toast fires — its recipe-suggestion branch's real awaits (a
+  // dynamic import, an async recipe match) must never run at all for a
+  // caller that has its own `withHistoryBatch` wrapped around this call, per
+  // `ImportPathsOptions.presentOutcome`'s own doc.
+  if (added > 0 && presentOutcome) await presentBatchOutcome(get, added, createdIds, targetFolderId);
   if (lastError) toast(`${lastError}${hint}`, "danger");
+  return createdIds;
 }
 
 export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
@@ -445,12 +440,31 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
         origin: { name: file.name, size: file.size },
       })),
 
-    importPaths: (paths) =>
-      runImport(set, get, paths, pathBasename, async (path, signal) => ({
-        data: await importFile(path, signal),
+    importPaths: (paths, opts) =>
+      runImport(set, get, paths, pathBasename, async (path, signal) => {
+        const data = await importFile(path, signal);
+        // P1.7 / L0.32 provenance: "record source path, import time,
+        // observed modification time, and a checksum where practical".
+        // `probeSource` returns null with no bridge (a browser tab, or a
+        // test with no mock) — degrades to path-only provenance rather
+        // than failing the import; a native pick already granted this
+        // exact path read consent moments ago (lib/importEntry.ts's
+        // `chooseAndImport` -> `pick_files`), so the checksum is real
+        // whenever a bridge is present at all.
+        const probe = await probeSource(path);
+        const source: Dataset["source"] =
+          probe?.state === "ok"
+            ? {
+                kind: "path",
+                path,
+                ...(probe.checksum != null ? { checksum: probe.checksum } : {}),
+                ...(probe.mtime != null ? { mtime: probe.mtime } : {}),
+                ...(probe.size != null ? { size: probe.size } : {}),
+              }
+            : { kind: "path", path };
         // The path is what makes this import re-importable without a picker.
-        origin: { name: pathBasename(path), size: 0, source: { kind: "path", path } },
-      })),
+        return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
+      }, opts?.historyToken, opts?.presentOutcome ?? true),
   };
 }
 

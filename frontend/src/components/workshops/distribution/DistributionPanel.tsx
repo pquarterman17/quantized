@@ -10,7 +10,9 @@
 import { fmtNum } from "../../../lib/format";
 import { DIST_FAMILIES, type DistFamily } from "../../../lib/distpdf";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, Select, StatusDot, Switch } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Switch } from "../../primitives/Switch";
+import { Button, Select, StatusDot } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import BoxStrip from "./BoxStrip";
 import CompareDistributionsTable from "./CompareDistributionsTable";

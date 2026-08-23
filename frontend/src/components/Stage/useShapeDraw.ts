@@ -16,7 +16,7 @@ import { useEffect, useMemo } from "react";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { askAnnotationText } from "../overlays/AnnotationTextDialog";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 
 export type DrawShapeKind = Shape["kind"] | "textbox";
 

@@ -7,10 +7,11 @@
 // jsdom never lays elements out, so `clientHeight`/`clientWidth` are stubbed
 // directly on the scroll container to simulate a real, bounded viewport.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../../lib/types";
+import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
 
 function makeData(nRows: number): DataStruct {
@@ -244,5 +245,269 @@ describe("GridViewport column resize (MAIN_PLAN #3)", () => {
     Object.defineProperty(scrollEl, "scrollLeft", { configurable: true, value: 5000 });
     fireEvent.scroll(scrollEl);
     expect(screen.queryByText("C0")).not.toBeInTheDocument();
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): the per-column formula-error badge.
+describe("GridViewport formula-error marking (K5b)", () => {
+  function renderWithFormula(formulaErrors?: Record<string, string>) {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[10, NaN], [20, NaN]],
+      labels: ["A", "S"],
+      units: ["", ""],
+      metadata: {},
+    };
+    return render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={1}
+        onRemoveFormula={noop}
+        formulaErrors={formulaErrors}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+      />,
+    );
+  }
+
+  it("shows a warning badge on a computed column with a recorded error", () => {
+    renderWithFormula({ S: 'unknown variable "Z"' });
+    expect(screen.getByTitle('Formula error: unknown variable "Z"')).toBeInTheDocument();
+  });
+
+  it("shows no badge when the column has no error", () => {
+    renderWithFormula({});
+    expect(screen.queryByTitle(/Formula error/)).not.toBeInTheDocument();
+  });
+
+  it("shows no badge when formulaErrors is entirely absent", () => {
+    renderWithFormula(undefined);
+    expect(screen.queryByTitle(/Formula error/)).not.toBeInTheDocument();
+  });
+});
+
+// P1.6b item 6: the worksheet header's C/O/N modeling-type badge + editor.
+describe("GridViewport modeling-type badge (P1.6b)", () => {
+  function renderTyped(channelTypes?: Record<number, "continuous" | "ordinal" | "nominal">) {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[0], [1]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Pass", "Fail"] },
+    };
+    const onChangeChannelType = vi.fn();
+    const utils = render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={1}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+        modelingTypeOf={() => "nominal"}
+        channelTypes={channelTypes}
+        onChangeChannelType={onChangeChannelType}
+      />,
+    );
+    return { ...utils, onChangeChannelType };
+  }
+
+  it("omits the badge entirely when modelingTypeOf isn't supplied (every pre-existing caller)", () => {
+    renderGrid(2);
+    expect(screen.queryByTitle(/Modeling type/)).not.toBeInTheDocument();
+  });
+
+  it("shows 'auto·N' for a categorical column with no override", () => {
+    renderTyped();
+    expect(screen.getByTitle(/Modeling type/)).toHaveValue("");
+    expect(screen.getByText("auto·N")).toBeInTheDocument();
+  });
+
+  it("reflects a user override in the select's value", () => {
+    renderTyped({ 0: "ordinal" });
+    expect(screen.getByTitle(/Modeling type/)).toHaveValue("ordinal");
+  });
+
+  it("changing the select calls onChangeChannelType with the new type (or null for auto)", () => {
+    const { onChangeChannelType } = renderTyped();
+    const select = screen.getByTitle(/Modeling type/);
+    fireEvent.change(select, { target: { value: "ordinal" } });
+    expect(onChangeChannelType).toHaveBeenCalledWith(0, "ordinal");
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onChangeChannelType).toHaveBeenCalledWith(0, null);
+  });
+});
+
+// P1.6b item 7: the worksheet's categorical cell display + level-picker edit.
+describe("GridViewport categorical cells (P1.6b)", () => {
+  function renderCategorical(onEditCategoricalCell = vi.fn(), onEditCell = vi.fn()) {
+    const data: DataStruct = {
+      time: [10, 11, 12], // distinct from the codes below, so "0.0000"/"1.0000" can't be the x cell
+      values: [[0], [1], [Number.NaN]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Pass", "Fail"] },
+    };
+    const utils = render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1, 2]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={onEditCell}
+        onEditCategoricalCell={onEditCategoricalCell}
+        baseCount={1}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+      />,
+    );
+    return { ...utils, onEditCategoricalCell, onEditCell };
+  }
+
+  it("displays the LEVEL LABEL, not the raw numeric code", () => {
+    renderCategorical();
+    expect(screen.getByText("Pass")).toBeInTheDocument();
+    expect(screen.getByText("Fail")).toBeInTheDocument();
+    expect(screen.queryByText("0.0000")).not.toBeInTheDocument();
+  });
+
+  it("double-clicking opens a level-picker <select>, showing its OWN INDEX as the controlled value (not the label text — see the case-duplicate test below for why)", () => {
+    renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    const select = screen.getByRole("combobox");
+    expect(select).toHaveValue("0"); // "Pass" is level index 0
+    expect(within(select).getByText("Pass")).toBeInTheDocument(); // still shown as its label
+  });
+
+  it("picking an existing level commits it BY CODE (not by re-deriving the label) and closes the editor", () => {
+    const { onEditCell, onEditCategoricalCell } = renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "1" } }); // "Fail" is index 1
+    expect(onEditCell).toHaveBeenCalledWith(0, 0, 1);
+    expect(onEditCategoricalCell).not.toHaveBeenCalled(); // the label-based path is untouched by a pick
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument(); // editor closed
+  });
+
+  it("picking '— missing —' clears the cell (NaN) via the numeric path", () => {
+    const { onEditCell } = renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
+    expect(onEditCell).toHaveBeenCalledTimes(1);
+    expect(onEditCell.mock.calls[0][0]).toBe(0);
+    expect(onEditCell.mock.calls[0][1]).toBe(0);
+    expect(onEditCell.mock.calls[0][2]).toBeNaN();
+  });
+
+  it("choosing '+ Add new level…' reveals a text input; Enter commits the typed label", () => {
+    const { onEditCategoricalCell } = renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "__new__" } });
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Incomplete" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onEditCategoricalCell).toHaveBeenCalledWith(0, 0, "Incomplete");
+  });
+
+  // Adversarial review P1: levels differing only by case ("pass" / "PASS")
+  // are genuinely reachable (the backend's `_encode_categorical` is
+  // case-sensitive with no dedup, so an inconsistently-capitalized CSV
+  // imports exactly this level table; find-replace/rename can also create
+  // one from inside the app). Picking the SECOND option ("PASS", index 1)
+  // must write ITS code (1), never silently fall back to the first
+  // case-insensitive match ("pass", index 0) — wired through the REAL
+  // store (not a mock) so this proves the end-to-end path, not just what
+  // GridRow happens to call.
+  it("picking a case-duplicate level writes ITS code, not the first case-insensitive match", () => {
+    const data: DataStruct = {
+      time: [0],
+      values: [[0]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["pass", "PASS", "Fail"] },
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "grades.dat", data }], activeId: "d1" });
+    render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={(row, col, value) => useApp.getState().setCellValue("d1", row, col, value)}
+        onEditCategoricalCell={(row, col, label) => useApp.getState().setCategoricalCell("d1", row, col, label)}
+        baseCount={1}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+      />,
+    );
+    fireEvent.doubleClick(screen.getByText("pass")); // row 0's current code (0) displays as "pass"
+    // Options are keyed by INDEX now (the fix), not by label text — this
+    // IS how a real click on the "PASS" <option> reports itself; selecting
+    // by label text would be ambiguous by construction (that was the bug).
+    const select = screen.getByRole("combobox");
+    const pass2 = within(select).getAllByText("PASS")[0] as HTMLOptionElement;
+    fireEvent.change(select, { target: { value: pass2.value } });
+    expect(pass2.value).toBe("1"); // sanity: really did target the SECOND option
+    expect(useApp.getState().datasets[0].data.values[0][0]).toBe(1);
   });
 });

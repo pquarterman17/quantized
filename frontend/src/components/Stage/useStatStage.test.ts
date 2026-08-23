@@ -1,12 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  exportCategoricalFigure,
-  exportStatplotFigure,
-  statsBox,
-  statsViolin,
-} from "../../lib/api";
+import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
+import { statsBox, statsViolin } from "../../lib/api";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import { useStatStage, type UseStatStageParams } from "./useStatStage";
@@ -15,6 +11,11 @@ vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
   statsBox: vi.fn(),
   statsViolin: vi.fn(),
+}));
+// exportStatplotFigure/exportCategoricalFigure moved to lib/api/figures.ts
+// (R8 bundle-diet pass) — mock them at their real import path.
+vi.mock("../../lib/api/figures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/api/figures")>()),
   exportStatplotFigure: vi.fn(),
   exportCategoricalFigure: vi.fn(),
 }));

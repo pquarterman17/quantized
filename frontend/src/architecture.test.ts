@@ -178,6 +178,23 @@ const STORE_PINS: Record<string, number> = {
   // renderer's first workbook mutations), composed in exactly like
   // datasetMeta.ts: one import line + one `WorkbookActionsSlice` word on the
   // extends clause + one spread line. Net still well down.
+  // 2818 -> 2661 (2026-08-17, sprint Day-0 pre-bank, PIN LEFT AT 2818 —
+  // the one deliberate exception to "no slack, tight pin" above): the
+  // #152/#153 merge landed useApp.ts 2 lines over this pin, because the
+  // ratchet sums line deltas across branches — two lanes can each add a
+  // few lines and still collide at merge even though neither alone crossed
+  // the ceiling. installBookData (lib/bookData.ts) was that incident's
+  // fix; with seven lanes landing store-slice registrations in parallel
+  // this week, the same collision was likely again. Moved
+  // ensureBookData/resolvePendingDatasets/resolveDataset/resolveDatasets
+  // (ORIGIN_FILE_DECODE_PLAN #38, around installBookData's call sites) and
+  // pasteDataFromClipboard (gap #47) — each already self-contained, no
+  // state of its own — to the new store/dataIntake.ts (DataIntakeSlice),
+  // composed in exactly like datasetMeta.ts. The pin stays at 2818 on
+  // purpose so the 157 lines of headroom are actually usable by the
+  // week's lanes instead of being immediately reclaimed; the NEXT
+  // extraction after the sprint should ratchet the pin back down to
+  // whatever useApp.ts actually is then, per the iron rule above.
   "/store/useApp.ts": 2818,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
@@ -262,7 +279,24 @@ const MODULE_PINS: Record<string, number> = {
   // belonged in the new domain module from their first use; moving them now
   // lowers the pin (55 function lines + 2 type imports = 57 lines removed).
   // New /api/rsm/* wrappers belong in lib/api/rsm.ts.
-  "/lib/api.ts": 1725,
+  // lib/api.ts GRADUATED 2026-08-23 (pin was 1725; R8 bundle-diet pass):
+  // the reference/units, sld, electrical, optics, vacuum, thermal,
+  // diffusion, electrochemistry, semiconductor, thin-film, superconductor,
+  // magnetic, baseline, curvefit (autoGuess/listFitModels/bootstrapFit/
+  // validateEquation/fitEquation/findXY/scanFitModels), figures
+  // (FigureSpec + export/render wrappers), datasetAlgebra, magnetometry,
+  // peaks (findPeaks/fitPeak/fitMultiPeak), reflectivity, import-filter,
+  // and reductions wrappers all moved to their own `api/<domain>.ts`
+  // siblings — not a line-count exercise this time, but an EAGER-BYTES one
+  // (see frontend/scripts/check-bundle-size.mjs's 2026-08-23 history
+  // entry): every one of these was lazy-workshop-only, but co-location in
+  // this file with useApp.ts's eager fftSpectral/fitModel/peaksIntegrate/
+  // uploadFile imports was dragging the whole lazy set into the eager
+  // bundle, since Rollup ships a module's code to wherever ANY of its
+  // importers' chunks land. Dropped 1725 -> 299 lines, under this test's
+  // own TSX_CEILING graduation bar, so the pin is deleted rather than
+  // lowered (the "pins stay honest" check below). New wrappers for any of
+  // those domains go in their sibling file, never back in lib/api.ts.
   // 583 -> 492 (2026-07-29): the J7 By-level half (per-level fetch effect,
   // its result shape, and the shared column/normality primitives) moved to
   // distribution/useDistributionByLevels.ts. The remaining oversize half is
@@ -294,7 +328,35 @@ const MODULE_PINS: Record<string, number> = {
   // which also now applies A1's surrogate-folder conversion (dropping a
   // converted folder from folders/expandedFolders and re-homing its former
   // occupants) — a NET SHRINK even with the new conversion step folded in.
-  "/lib/workspace.ts": 592,
+  // 592 -> 600 (2026-08-17, LIBRARY_WORKBOOK_UX_PLAN PR H): the four-site
+  // additive .dwk field pattern (WorkspaceState optional field,
+  // LoadedWorkspace required field, WorkspaceDoc field, serializer default +
+  // parseWorkspace sanitize call + return field) for the new
+  // `quickPlotTemplates` field, mirroring `savedPlotSpecs`'s existing
+  // hook-in exactly. No extractable cohesive block funds this minimal
+  // 8-line addition (comments trimmed to one line per site); written
+  // justification per CLAUDE.md's "raise only with written justification".
+  // 600 -> 421 (2026-08-22, P1.3 headroom funding): the per-dataset .dwk
+  // parse/validate block (`isNumberArray`/`isDataStruct`/`parsePending` plus
+  // the whole `o.datasets.map(...)` callback body — pure, only ever touched
+  // `dd`/`i`, no closure over parseWorkspace's other locals) moved verbatim
+  // to the new lib/workspaceDatasetParse.ts as `parseWorkspaceDataset`,
+  // funding the still-unwired `plotRecipes` (P1.3) and `savedRecodeMappings`
+  // (see store/recode.ts's SAVED MAPPINGS note, which names this exact
+  // extraction as the intended funding move) additive-list hook-ins — an
+  // extraction, not a bump, per the ratchet's own rule above.
+  // 421 -> 430 (2026-08-22, P1.3 wave 2 Lane C): the `plotRecipes` project-
+  // scope field wiring the note directly above pre-funded ("funding the
+  // still-unwired `plotRecipes` (P1.3) ... additive-list hook-ins") — the
+  // four-site additive .dwk field pattern (WorkspaceState optional field +
+  // doc comment, LoadedWorkspace required field, WorkspaceDoc field,
+  // serializer default + parseWorkspace sanitizeRecipes call + return field)
+  // plus two new top-level imports (`PlotRecipe` type, `sanitizeRecipes`),
+  // mirroring `quickPlotTemplates`'s own hook-in exactly. No extractable
+  // cohesive block funds this 9-line addition; written justification per
+  // CLAUDE.md's "raise only with written justification" — the pin's own
+  // history comment named this exact addition as the intended spend.
+  "/lib/workspace.ts": 430,
   "/lib/plotview.ts": 978,
 };
 
@@ -513,6 +575,10 @@ describe("row-state model guard (#50 universal linking)", () => {
     const allow = [
       "/lib/rowstate.ts",
       "/lib/workspace.ts",
+      // The per-dataset .dwk parse/validate body that used to live inline in
+      // workspace.ts's parseWorkspace (2026-08-22 extraction) — same .dwk
+      // (de)serialize role as workspace.ts itself, just relocated.
+      "/lib/workspaceDatasetParse.ts",
       "/store/useApp.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",
@@ -722,6 +788,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   future: "redo stack; the history system itself, not undoable data",
   viewHistory: "zoom/pan navigation history; separate Back/Forward, not edit undo",
   viewFuture: "zoom/pan redo stack; separate Back/Forward, not edit undo",
+  historySuppressed: "withHistoryBatch's in-flight flag; history-system control state, not undoable data",
 
   // libraryPanel slice: UI state only
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
@@ -774,6 +841,28 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // split slice: dialog state
   splitDialogTargetId: "target dataset for split operation; UI dialog state, ephemeral",
 
+  // plotRecipes slice (P1.3 wave 2 Lane B): the staged unmatched-fields
+  // preview+confirm result. Transient gesture state discarded on confirm/
+  // cancel -- never an edit itself (confirmPendingRecipeApplication's actual
+  // figure creation is the undoable gesture, via editableFigures/plotWindows
+  // already in HistorySnapshot), same class as separatePreview above.
+  pendingRecipeApplication: "staged plot-recipe apply preview (unmatched fields); transient gesture state, discarded on confirm/cancel, not an undoable edit",
+
+  // workbookSeparate slice (LIBRARY_WORKBOOK_UX_PLAN PR J, L0.51): the
+  // affected-item preview plan. Transient dialog state discarded on
+  // commit/cancel — never an edit itself (commitSeparateWorksheets is the
+  // actual undoable gesture, via the ordinary datasets/workbooks fields
+  // already in HistorySnapshot), same class as splitDialogTargetId above.
+  separatePreview: "Separate-worksheet affected-item preview; transient dialog state, discarded on commit/cancel, not an undoable edit",
+
+  // libraryDetailsColumns slice (LIBRARY_WORKBOOK_UX_PLAN PR L slice 2,
+  // L0.56): the Details view's selected metadata columns. Persists in
+  // `.dwk` (PR E2/E's own `expandedWorkbookIds`/`librarySelection` precedent
+  // right above — persisted view state is not the same as undoable) — a
+  // column visibility toggle should never eat a Ctrl+Z step meant for an
+  // actual data edit.
+  visibleDetailsColumns: "Details view selected metadata columns; persisted view state (PR L slice 2), not an undoable edit",
+
   // toolwindows slice: window geometry (separate from persistent layout in plotWindows)
   toolWindowLayout: "transient tool window positions (unclear if persists, mark for review)",
 
@@ -803,6 +892,15 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
   // Worksheet selection slice: row selection per window (UI state)
   worksheetSelections: "row selection per worksheet window; UI state, not persistent edit",
+
+  // project slice (P1.2 box 1): the CURRENT project's name/path + dirty flag.
+  // Session-local identity/status about WHERE the workspace lives and
+  // whether it matches disk — not an edit to the workspace's own data, so
+  // stepping Ctrl+Z through it would be meaningless (undoing to "a different
+  // file is open" isn't a content edit). Never serialized into a `.dwk`
+  // either (see store/project.ts's header).
+  currentProject: "current project name/path identity; session-local, not an undoable data edit",
+  projectDirty: "unsaved-changes flag for the current project; derived status, not an undoable data edit",
 
   // shell/layout UI state (retrospective-audit sweep: fields declared directly on AppState, newly visible to this guard)
   leftCollapsed: "left panel collapsed; shell layout UI",

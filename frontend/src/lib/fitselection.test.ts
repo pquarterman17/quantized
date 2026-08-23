@@ -1,7 +1,10 @@
+// Covers BOTH halves of the C2 eager/lazy split: `fitselection.ts` (eager
+// selection half) and `fitselectionActions.ts` (lazy actions).
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import { activeCorrectionNames, fitDataForSpec, fitSpecFrom, fitSpecFromStepParams, fitStepParams, fullPlottedX, selectedFitData, stampRecompute } from "./fitselection";
+import { fitDataForSpec, fitSpecFromStepParams, fitStepParams, selectedFitData, stampRecompute } from "./fitselection";
+import { activeCorrectionNames, fitSpecFrom, fullPlottedX } from "./fitselectionActions";
 
 const dataset: Dataset = {
   id: "d",

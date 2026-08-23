@@ -9,7 +9,10 @@ import PreviewOverlay from "./PreviewOverlay";
 import PropertyPanels from "./PropertyPanels";
 import { cancelPublicationPreview } from "../../windows/figureLifecycleUi";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField, RichLabelInput, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
+import RichLabelInput from "../../primitives/RichLabelInput";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES, useFigureBuilder } from "./useFigureBuilder";
 

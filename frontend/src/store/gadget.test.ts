@@ -12,11 +12,16 @@ vi.mock("../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/api")>()),
   fitModel: vi.fn(),
   peaksIntegrate: vi.fn(),
-  statsDescriptive: vi.fn(),
   fftSpectral: vi.fn(),
 }));
+// statsDescriptive moved to its own sibling (R8 bundle-diet pass) so it no
+// longer round-trips through the "../lib/api" facade above.
+vi.mock("../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
+}));
 
-import { fftSpectral, peaksIntegrate, statsDescriptive } from "../lib/api";
+import { statsDescriptive } from "../lib/api/statsDescriptive";
+import { fftSpectral, peaksIntegrate } from "../lib/api";
 
 const data = (): DataStruct => ({
   time: [0, 1, 2, 3, 4, 5],

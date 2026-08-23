@@ -7,7 +7,7 @@
 // closure-binding wrapper; behavior stays exercised through the hook's own
 // export tests.
 
-import { exportFigure, type FigureSpec } from "../../../lib/api";
+import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { CanonicalReadiness } from "./canonicalReadiness";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";

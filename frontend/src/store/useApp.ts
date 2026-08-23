@@ -2,23 +2,15 @@
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
-import {
-  fftSpectral,
-  fitModel,
-  guessImportSettings,
-  parseImportText,
-  peaksIntegrate,
-  statsDescriptive,
-  uploadFile,
-} from "../lib/api";
-import { installBookData } from "../lib/bookData";
+import { statsDescriptive } from "../lib/api/statsDescriptive";
+import { fftSpectral, fitModel, peaksIntegrate, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
 import { centralDifference, sortByX, type DerivativeResult } from "../lib/differentiate";
 import { computeCursorReadout } from "../lib/gadgetCursors";
 import type { Measurement } from "../lib/measure";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import type { Notation } from "../lib/format";
-import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
+import { recomputeWithErrors } from "../lib/formula";
 import { lit } from "../lib/macro";
 import {
   makeStep,
@@ -38,6 +30,7 @@ import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
+import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import type { WorkbookNode } from "../lib/workbooks";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import {
@@ -72,11 +65,11 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, syncDatasetWindowDocuments, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
-import { createHistorySlice, type HistorySlice } from "./history";
+import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-import { runAppendWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
+import { runAppendWorkspace, runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
@@ -89,17 +82,28 @@ import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
+import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
 import { folderDeletePatch } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
+import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
+import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
+import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
 import { recomputeStaleFits } from "./recalcFits";
 import { removeDatasetsPatch } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
+import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
-import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
+import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
+import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
+import { createCorrectionsSlice, rowsChangedGuard, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
 import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./quickFigureCreate";
+import { createQuickPlotTemplatesSlice, type QuickPlotTemplatesSlice } from "./quickPlotTemplates";
+import { createPlotRecipesSlice, type PlotRecipesSlice } from "./plotRecipes";
+import { createCollectionsSlice, type CollectionsSlice } from "./collections";
+import { createLibraryDetailsColumnsSlice, type LibraryDetailsColumnsSlice } from "./libraryDetailsColumns";
 import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
@@ -107,7 +111,6 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
@@ -133,7 +136,6 @@ import type {
   BaselineOverlay,
   CalcResult,
   ChannelRole,
-  ComputedColumn,
   DataFilter,
   Dataset,
   DataStruct,
@@ -148,9 +150,17 @@ import type {
  *  formulas). Routed through after any base-data mutation (cell edit, corrections).
  *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
  *  corrections slice re-derives computed columns after every apply/reset from
- *  the SAME formula-recompute logic every other base-data mutation here uses. */
-export const recompute = (d: Dataset): Dataset =>
-  d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
+ *  the SAME formula-recompute logic every other base-data mutation here uses.
+ *  LIBRARY_WORKBOOK_UX_PLAN PR K (K5b): also refreshes `formulaErrors` in the
+ *  same pass, so a base-data edit that fixes (or breaks) a formula's
+ *  evaluation keeps the visible error state in sync everywhere `recompute`
+ *  is the chokepoint — not just at the store/computedColumns.ts authoring
+ *  sites. */
+export const recompute = (d: Dataset): Dataset => {
+  if (!d.formulas?.length) return d;
+  const { data, errors } = recomputeWithErrors(d.data, d.formulas);
+  return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+};
 let _refSeq = 0;
 let _annSeq = 0;
 let _idSeq = 0;
@@ -163,15 +173,13 @@ const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 // (window ids: see store/windows.ts — the MDI slice owns its own sequence)
 
 // (single-flight lazy-book resolution — ORIGIN_FILE_DECODE_PLAN #38 —
-// extracted to lib/bookData.ts under this module's size ratchet; the three
-// resolve* actions below pass their own `set`.)
+// extracted to lib/bookData.ts under this module's size ratchet; the four
+// resolve*/ensureBookData actions that call it, plus pasteDataFromClipboard,
+// now live in store/dataIntake.ts — DataIntakeSlice, composed below.)
 
 // (mainWindow / focusTransientReset / datasetViewDefaults / focusedRebindPatch /
 // retargetPassiveRebind moved to store/windows.ts with the window slice —
 // imported above for the setActive/addDataset/loadWorkspace paths.)
-
-// Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
-let _pasteSeq = 0;
 
 // Recalc scheduler internals (#1): a module-level debounce timer plus an
 // in-progress guard so the recalc's own applyCorrections calls never re-mark
@@ -278,7 +286,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, DatasetMetaSlice, TrashSlice, ImportSlice, RecentsSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -397,6 +405,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   yAxisLabel: string; // override for the primary y-axis label ("" = auto)
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
+  groupKey: number | null; // P1.5 "Group" well channel — splits each plotted Y into one series per level
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
   y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
@@ -514,55 +523,30 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   pipelineRunning: boolean;
   status: string;
 
-  addDataset: (ds: Dataset) => void;
+  /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
+   *  the caller (e.g. `importPaths`) so this add folds into that batch's
+   *  one undo entry instead of pushing its own — see `HistoryBatchToken`'s
+   *  doc (store/history.ts) for why a token, not a boolean, is what makes
+   *  that operation-scoped rather than a global suppress (R6). Omitted by
+   *  every other call site (paste/merge/demo/derived-worksheet/etc.), which
+   *  keep recording their own independent entry exactly as before. */
+  addDataset: (ds: Dataset, historyToken?: HistoryBatchToken) => void;
   // Import ≥2 files and concatenate them row-wise into ONE dataset (gap #47) —
   // the alternative to importFiles' N-separate-datasets result, for same-shape
   // multi-file series (e.g. a scan split across daily files). Falls back to
   // importFiles (separate datasets + a toast) on a shape mismatch or an Origin
   // multi-workbook file, so it never produces a dead import.
   importFilesAppended: (files: File[]) => Promise<void>;
-  // Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): fire-and-forget fetch
-  // of a pending dataset's full data (no-op if it isn't pending, or a fetch
-  // for it is already in flight — single-flight, see `installBookData`).
-  // Swaps `data` to the fetched full DataStruct and clears `pending` on
-  // success; toasts and leaves `pending` set on failure (so the next call —
-  // e.g. the user retrying, or simply re-activating the dataset — retries).
-  // Call this from any view that's about to READ a dataset's `.data` for
-  // real (not just list it): setActive, a plot window binding, a multi-panel
-  // cell, the worksheet.
-  ensureBookData: (id: string) => void;
-  // Awaited version for a caller that needs every pending dataset FULLY
-  // resolved before proceeding — the "Save workspace (.dwk)…" command, so an
-  // exported .dwk is always self-contained (never references a book by a
-  // path/token that may not exist on another machine or after a restart).
-  // Rejects if any fetch fails (the caller should abort the save and toast).
-  resolvePendingDatasets: () => Promise<void>;
-  // Resolve ONE dataset's full data if it's still a lazy-book preview (#38's
-  // deferred edge: a compute or export entry point must never silently run
-  // on the small preview). No-op — resolves immediately with the dataset
-  // as-is — when it isn't pending (or doesn't exist, returning undefined).
-  // Toasts only if the fetch is still running past a short grace period (the
-  // common cached-parse case resolves in ~20ms, not worth interrupting for).
-  // Rejects on fetch failure so the caller's existing error handling (every
-  // compute/export entry already has a catch → setError/toast) aborts the
-  // operation instead of falling through to the preview.
-  resolveDataset: (id: string) => Promise<Dataset | undefined>;
-  // Bounded-concurrency batch version of resolveDataset — batch export/
-  // folder ops/macro replay can touch dozens of never-activated datasets at
-  // once; this caps simultaneous fetches rather than firing them all. Missing
-  // ids are silently dropped from the result; a fetch failure rejects (same
-  // "abort, don't proceed on a preview" contract as resolveDataset).
-  resolveDatasets: (ids: string[]) => Promise<Dataset[]>;
+  // ensureBookData / resolvePendingDatasets / resolveDataset / resolveDatasets
+  // / pasteDataFromClipboard: see store/dataIntake.ts (DataIntakeSlice).
   // "Save workspace (.dwk)…" (App.tsx's File menu command): resolves every
   // pending lazy book first (see `resolvePendingDatasets`'s doc), then
   // serializes + downloads. Owns its own status/toast messaging so the
   // command itself stays a thin `run: () => s().saveWorkspaceToFile()`.
   saveWorkspaceToFile: () => Promise<void>;
-  // Import the OS clipboard's text through the shared paste/import-wizard text
-  // engine (`/api/import/guess` + `/parse`, gap #47) into a new dataset named
-  // "pasted data N". Tab/comma/semicolon/whitespace tables with or without a
-  // header row all work — it's the same guesser the import wizard uses.
-  pasteDataFromClipboard: () => Promise<void>;
+  // P1.2 box 1: "Save" (Ctrl+S) — writes to the known project path with no
+  // dialog when one exists; otherwise identical to saveWorkspaceToFile.
+  saveWorkspace: () => Promise<void>;
   // Apply a stored figure after resolving lazy source books; unresolved = no-op.
   // `opts.newWindow` (item 9) opens a fresh window (bound to the figure's
   // dataset) and focuses it FIRST, so the rest of the apply logic — already
@@ -662,8 +646,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   duplicateDataset: (id: string) => Promise<void>;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
-  addFormula: (id: string, name: string, expr: string) => void;
-  removeFormula: (id: string, index: number) => void;
+  // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
+  // (store/computedColumns.ts) — see AppState's extends list.
   // Folder tree (project-organization plan item 1). Thin wrappers over
   // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
   createFolder: (parentId: string | null, name?: string) => string;
@@ -721,6 +705,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setY2AxisLabel: (y2AxisLabel: string) => void;
   setXKey: (xKey: number | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
+  setGroupKey: (groupKey: number | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
@@ -732,7 +717,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
-  setChannelType: (channel: number, t: ModelingType | null) => void;
+  setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
   // Row state (#50): persistent per-row exclusion on a dataset. Excluded rows
   // stay visible but drop from analysis everywhere; round-trips .dwk.
   toggleRowExcluded: (id: string, row: number) => void;
@@ -880,7 +865,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Composed slices — one create*Slice per store/ file, each self-documented.
   ...createWindowsSlice(set, get),
   ...createWorksheetSelectionSlice(set),
-  ...createHistorySlice(set),
+  ...createHistorySlice(set, get),
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createPanelsSlice(set),
@@ -894,19 +879,30 @@ export const useApp = create<AppState>((set, get) => ({
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
   ...createGraphBuilderSlice(set, get),
   ...createCorrectionsSlice(set, get),
+  ...createComputedColumnsSlice(set, get),
+  ...createDerivedWorksheetsSlice(set, get),
   ...createCellEditSlice(set, get),
   ...createDatasetMetaSlice(set, get),
+  ...createDataIntakeSlice(set, get),
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
+  ...createProjectSlice(set),
   ...createFigureLifecycleSlice(set, get),
   ...createQuickPlotActionSlice(set, get),
   ...createQuickFigureCreateSlice(set, get),
+  ...createQuickPlotTemplatesSlice(set, get),
+  ...createPlotRecipesSlice(set, get),
   ...createQuickFigureBuilderSlice(set, get),
   ...createPageDocumentsSlice(set, get),
   ...createRoisSlice(set, get),
   ...createRoiCutsPanelSlice(set),
   ...createWorkbookActionsSlice(set, get),
+  ...createCollectionsSlice(set, get),
+  ...createLibraryDetailsColumnsSlice(set),
+  ...createWorkbookCombineSlice(set, get),
+  ...createWorkbookSeparateSlice(set, get),
+  ...createWorkbookTransferSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -971,6 +967,7 @@ export const useApp = create<AppState>((set, get) => ({
   yAxisLabel: "",
   xKey: null,
   yKeys: null,
+  groupKey: null,
   y2Keys: null,
   y2Lim: null,
   y2Scale: null,
@@ -1049,11 +1046,11 @@ export const useApp = create<AppState>((set, get) => ({
   pipelineRunning: false,
   status: "starting…",
 
-  addDataset: (ds) => {
+  addDataset: (ds, historyToken) => {
     // MAIN_PLAN #9: the single entry point for import/paste/demo/merge — one
     // call site covers all of them (mergeSelected/importFilesAppended/
     // pasteDataFromClipboard all route through here).
-    get().recordHistory("add dataset");
+    get().recordHistory("add dataset", historyToken);
     // Item 14 pin opt-out: an import is a passive rebind, same as a Library
     // click — a pinned focused window never absorbs it (shared helper;
     // `ds.name` seeds the title when a fresh window must be created, since
@@ -1148,94 +1145,10 @@ export const useApp = create<AppState>((set, get) => ({
     await get().importFiles(files);
   },
 
-  ensureBookData: (id) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    if (!ds?.pending) return;
-    installBookData(set, id, ds.pending).catch((e) => {
-      toast(
-        `couldn't load full data for "${ds.name}" — ${e instanceof Error ? e.message : "error"}`,
-        "danger",
-      );
-    });
-  },
-  resolvePendingDatasets: async () => {
-    const pending = get().datasets.filter((d) => d.pending);
-    await Promise.all(pending.map((d) => installBookData(set, d.id, d.pending!)));
-  },
-  resolveDataset: async (id) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    if (!ds?.pending) return ds;
-    // Slow-path notice only — a toast on every activation would be noise
-    // since the common cached-parse fetch resolves in ~20ms.
-    const timer = setTimeout(() => {
-      toast(`fetching full data for "${ds.name}"…`);
-    }, 400);
-    try {
-      await installBookData(set, id, ds.pending);
-    } finally {
-      clearTimeout(timer);
-    }
-    return get().datasets.find((d) => d.id === id);
-  },
-  resolveDatasets: async (ids) => {
-    const CONCURRENCY = 6;
-    const results: (Dataset | undefined)[] = new Array(ids.length);
-    let cursor = 0;
-    const worker = async (): Promise<void> => {
-      for (;;) {
-        const i = cursor++;
-        if (i >= ids.length) return;
-        results[i] = await get().resolveDataset(ids[i]);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
-    return results.filter((d): d is Dataset => d != null);
-  },
   // Body lives in ./workspaceIO (store-size ratchet offset for MAIN_PLAN
   // #16's appendWorkspace — see that file's doc).
   saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
-
-  // Import the OS clipboard's text (gap #47) through the same guess/parse text
-  // engine that backs the import wizard, so a pasted Excel/Origin selection or
-  // any tab/comma/semicolon/whitespace table (with or without a header row)
-  // lands as a correctly-parsed dataset — never a second parser.
-  pasteDataFromClipboard: async () => {
-    let text: string;
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      const msg = "clipboard read failed — check browser permissions";
-      get().setStatus(msg);
-      toast(msg, "danger");
-      return;
-    }
-    if (!text.trim()) {
-      const msg = "clipboard is empty";
-      get().setStatus(msg);
-      toast(msg, "danger");
-      return;
-    }
-    get().setStatus("parsing pasted data…");
-    try {
-      const settings = await guessImportSettings(text);
-      const data = await parseImportText(text, settings);
-      _pasteSeq += 1;
-      const id = nextDatasetId();
-      const name = `pasted data ${_pasteSeq}`;
-      get().addDataset({ id, name, data });
-      get().recordMacro(`Paste ${name}`, `qz.pasteData(${lit(name)})`, {
-        kind: "import",
-        params: { name },
-      });
-      const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${data.labels.length === 1 ? "" : "s"}`;
-      get().setStatus(msg);
-      toast(msg, "ok");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "paste import failed";
-      get().setStatus(msg);
-      toast(msg, "danger");
-    }
-  },
+  saveWorkspace: () => runSaveWorkspace(get),
 
   applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);
@@ -1610,14 +1523,31 @@ export const useApp = create<AppState>((set, get) => ({
         pages: ws.pages ?? [],
         figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
+        quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
         savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
+        collections: ws.collections ?? [], // saved-search Collections (PR L, L0.48/L0.49) — .dwk v4 additive
+        // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
+        // serialized by the whole-state-spread save path (workspaceIO.ts /
+        // useWorkspaceAutosave.ts) but never restored here — a load silently
+        // dropped every saved recipe AND, worse, left the PREVIOUS project's
+        // live list in place (the same cross-project-leak class `workbooks`
+        // above calls out). MUST be explicit, same reasoning.
+        plotRecipes: ws.plotRecipes ?? [],
+        visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
         activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
+        separatePreview: null, // PR J transient dialog state — never resumes on a fresh load
+        // P1.3 wave 2: transient preview/confirm state for a staged recipe
+        // apply — never resumes on a fresh load, same as separatePreview/
+        // quickFigureBuilderDatasetId above (a stale pending would confirm
+        // against whatever dataset happens to share its id in the NEW project).
+        pendingRecipeApplication: null,
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
         xKey: restoredView ? restoredView.xKey : null,
         yKeys: restoredView ? restoredView.yKeys : null,
+        groupKey: restoredView ? restoredView.groupKey : null,
         y2Keys: restoredView ? restoredView.y2Keys : null,
         y2Lim: restoredView ? restoredView.y2Lim : null,
         y2Scale: restoredView ? restoredView.y2Scale : null,
@@ -1855,6 +1785,7 @@ export const useApp = create<AppState>((set, get) => ({
         stageTab: nextStageTab(clone, s.stageTab),
         xKey: null,
         yKeys: null,
+        groupKey: null,
         y2Keys: null,
       y2Lim: null,
       y2Scale: null,
@@ -1914,62 +1845,8 @@ export const useApp = create<AppState>((set, get) => ({
   // are read-only — a recompute would overwrite them — so an edit there is a
   // no-op. Editing a base cell recomputes the computed columns. Recovery of the
   // original is via Duplicate.
-  // Append a computed column (formula) to a dataset and evaluate it. The column
-  // lands as the last column of `data` and recomputes whenever the base changes.
-  // Strips the OLD computed columns first, then reapplies the grown list.
-  addFormula: (id, name, expr) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    get().recordHistory("add column");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const base = baseColumns(d.data, d.formulas?.length ?? 0);
-        const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr }];
-        return { ...d, formulas, data: applyFormulas(base, formulas) };
-      }),
-    }));
-    if (ds) {
-      get().recordMacro(`Add column ${name}`, `qz.addColumn(${lit(name)}, ${lit(expr)})`, {
-        kind: "expression",
-        params: { name, expr },
-      });
-    }
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
-  // Remove the computed column at `index` (in the formulas list). Strips the OLD
-  // computed columns, then reapplies the shrunk list (NaN-stable indices).
-  removeFormula: (id, index) => {
-    get().recordHistory("remove column");
-    // Computed columns are the LAST formulas.length value columns, in order,
-    // so the removed one is column (baseCount + index) and every later column
-    // shifts down by one. BOTH halves of the index-keyed state have to follow
-    // it -- the dataset-scoped roles/types/filter AND the live view's
-    // xKey/yKeys/styles/hidden/errKeys. See lib/channelRemap.ts for why the
-    // view half was missing until 2026-07-19.
-    const target = get().datasets.find((d) => d.id === id);
-    if (!target?.formulas) return;
-    const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
-    set((s) => {
-      const datasets = s.datasets.map((d) => {
-        if (d.id !== id || !d.formulas) return d;
-        const base = baseColumns(d.data, d.formulas.length);
-        const formulas = d.formulas.filter((_, i) => i !== index);
-        return {
-          ...d,
-          formulas: formulas.length ? formulas : undefined,
-          data: applyFormulas(base, formulas),
-          ...remapDatasetChannels(d, removedCol),
-        };
-      });
-      const remappedWindows = remapWindowViews(s.plotWindows, id, removedCol);
-      const remappedDataset = datasets.find((dataset) => dataset.id === id);
-      return { datasets,
-      ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
-      plotWindows: syncDatasetWindowDocuments(remappedWindows, id, remappedDataset?.errorRoles),
-      };
-    });
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
+  // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
+  // (store/computedColumns.ts) — see AppState's extends list.
   // ── Folder tree (project-organization plan item 1) ──────────────────────
   // All five delegate to the pure lib/foldertree ops; the store only supplies
   // ids and threads state. deleteFolder re-homes datasets (never destroys them).
@@ -2086,6 +1963,18 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordHistory("change X channel"); set({ xKey });
     get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
   },
+  // P1.5: durable live grouping -- committed by useGraphBuilder's commitToPlot
+  // (replacing the old "preview-only" toast) and editable directly once a
+  // window exists. Mirrors setXKey exactly (undo history + macro record);
+  // syncPlotWindow/updateFigureDocumentFromPlotView (windowDocuments.ts /
+  // figureDocument.ts) then carry this singleton into the focused window's
+  // canonical FigureDocument on the next view sync, same as every other
+  // PlotView field.
+  setGroupKey: (groupKey) => {
+    get().recordHistory("change group");
+    set({ groupKey });
+    get().recordMacro(`Group by channel ${groupKey ?? "none"}`, `qz.setGroupKey(${lit(groupKey)})`);
+  },
   setYKeys: (yKeys) => {
     get().recordHistory("change Y channels"); set({ yKeys });
     get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
@@ -2158,12 +2047,14 @@ export const useApp = create<AppState>((set, get) => ({
       `qz.setChannelRole(${channel}, ${lit(role)})`,
     );
   },
-  // Set (or clear, t=null) a modeling-type OVERRIDE on the ACTIVE dataset.
-  // Mirrors setChannelRole: overrides live on the dataset (persist across
+  // Set (or clear, t=null) a modeling-type OVERRIDE on dataset `id`. Takes an
+  // EXPLICIT id (P1.6b: the worksheet's own C/O/N header badge is the first
+  // caller that isn't always the active dataset — GUI_INTERACTION #14's
+  // floating worksheet window can browse a NON-active one) rather than
+  // `get().activeId` — overrides live on the dataset (persist across
   // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
-  setChannelType: (channel, t) => {
-    const id = get().activeId;
-    if (id == null) return;
+  setChannelType: (id, channel, t) => {
+    if (!get().datasets.some((d) => d.id === id)) return;
     get().recordHistory("channel type");
     set((s) => ({
       datasets: s.datasets.map((d) => {
@@ -2649,6 +2540,11 @@ export const useApp = create<AppState>((set, get) => ({
       ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
       xKey: c.xKey,
       yKeys: c.yKeys,
+      // P1.5: a legacy FigureDoc's own grouping (Graph Builder's
+      // plotSpecToFigureDoc is the only producer) now carries over into the
+      // opened window's live groupKey too, same as xKey/yKeys just above --
+      // previously this whole binding was silently dropped on "open in window".
+      groupKey: c.groupCol ?? null,
       xScale: c.xScale,
       yScale: c.yScale,
       plotTitle: c.title,
@@ -2660,7 +2556,22 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
   },
   clearFigureDocSeed: () => set({ figureDocSeed: null }),
-  // ── Recalc engine (#1) ───────────────────────────────────────────────────
+  // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
+  // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
+  // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already
+  // lands in `down.datasets`/`down.fits` here exactly like a bgRef-chained
+  // one — no separate sheet-marking path needed. That satisfies K5c's "no
+  // automatic recompute on source edit beyond stale-marking" for free: this
+  // action only ever ADDS ids to `staleDatasets`/`staleFits`, never mutates
+  // data, whether the auto-mode debounce below fires or not. `recalcNow`
+  // below is the actual "async stale-marked scheduler path" a sheet
+  // recalculates through — today a stale sheet with no `corrections` simply
+  // clears (the honest no-op: no pipeline EXECUTOR exists yet, that's
+  // LIBRARY_WORKBOOK_UX_PLAN PR K slice 2), and because `down.fits` was
+  // populated from the SAME graph walk, a downstream fit on a sheet is
+  // already stale in this SAME call — recalcNow's existing two-phase order
+  // (datasets, then `recomputeStaleFits`) processes a ds→sheet→fit chain in
+  // the right order inside one pass without further changes here.
   setRecalcMode: (recalcMode) => set({ recalcMode }),
   touchDataset: (id) => {
     if (_recalcInProgress) return; // the recalc's own writes never re-mark
@@ -2686,9 +2597,38 @@ export const useApp = create<AppState>((set, get) => ({
     _recalcInProgress = true;
     try {
       // Corrections first (they change the data fits consume), then fits.
+      // PR K slice 2 (K5c/K5d "real executor"): a derived worksheet (K2)
+      // recomputes through its OWN pipeline-against-source executor, never
+      // the plain bgRef/corrections path below — checked FIRST since a
+      // derived sheet also carries `.corrections`/`.raw` (its pipeline
+      // recipe + a cache of the SOURCE's data), which would otherwise match
+      // the generic branch and silently re-run against its own stale cache
+      // instead of the source's current data.
       for (const id of [...get().staleDatasets]) {
         const d = get().datasets.find((x) => x.id === id);
-        if (d?.corrections && d.raw) {
+        if (d?.derivedFrom) {
+          try {
+            const updated = await recomputeDerivedSheet(get, d);
+            // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
+            // invalidates excludedRows + the four overlays — the SAME shared
+            // helper applyCorrections uses, so the two call sites can't drift.
+            const rowsChanged = updated.data.time.length !== d.data.time.length;
+            let statusMsg: string | undefined;
+            set((s) => {
+              const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
+              statusMsg = guard.statusMessage;
+              return {
+                datasets: s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x)),
+                staleDatasets: s.staleDatasets.filter((x) => x !== id),
+                ...guard.statePatch,
+              };
+            });
+            if (statusMsg) get().setStatus(statusMsg);
+          } catch (e) {
+            get().setStatus(`derived worksheet recompute failed: ${e instanceof Error ? e.message : "error"}`);
+            /* stays stale */
+          }
+        } else if (d?.corrections && d.raw) {
           try {
             await get().applyCorrections(id, d.corrections, d.bgRef);
             set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));

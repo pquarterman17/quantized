@@ -8,7 +8,7 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
-import { pagesReferencingFigure } from "../../lib/pageDocument";
+import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 
 export type ArtifactNode = Extract<
   LibraryNode,
@@ -68,6 +68,20 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
       else if (target.node.kind === "publication-figure") state.duplicateFigureDoc(target.node.entityId);
       else if (target.node.kind === "page") state.duplicatePageDocument(target.node.entityId);
     },
+  },
+  {
+    id: "artifact.saveAsTemplate",
+    label: "Save as Template…",
+    hidden: (target) => target.node.kind !== "editable-figure",
+    enabled: () => false,
+    // H5c (frozen contract): an honest disabled stub, not a second create
+    // path. Reverse-mapping an arbitrary editable FigureDocument's bindings
+    // back into a QuickFigureMapping is out of scope for PR H — a Quick Plot
+    // template is captured from the BUILDER's own live (dataset, mapping,
+    // style), never derived from a finished figure (see plan item H, "what
+    // stays open under P1.3").
+    disabledReason: () => "save a Quick Plot template from the Quick Figure Builder instead",
+    run: () => {},
   },
   {
     id: "artifact.revealSource",

@@ -1,0 +1,1 @@
+{"input":{"alphaFilm":1.7E-5,"alphaSub":3E-6,"deltaT":-500,"E":2.0E+11,"nu":0.28},"output":{"strain":-0.007,"stressMPa":-1944.4444444444443,"alphaFilm":1.7E-5,"alphaSub":3E-6,"deltaT":-500,"description":"compressive"}}

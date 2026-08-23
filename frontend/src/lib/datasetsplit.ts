@@ -25,6 +25,12 @@
 //
 // Column addressing follows `ColumnFilter.col`'s existing convention
 // (lib/types.ts): -1 = the x/time column, 0.. = a value channel.
+//
+// `pickDefaultSplitColumn` (the dialog's initial-column suggestion) lives in
+// the sibling `lib/datasetsplitDefault.ts` (2026-08-23, C2 bundle pass) — it
+// is the one export here with no consumer in `store/split.ts`'s eager
+// `splitColumn`/`tooManyGroups`/`sliceDataStruct` chain, only the (lazy)
+// SplitDatasetDialog picking a suggestion.
 
 import { fmtNum } from "./format";
 import { inferModelingType } from "./modeling";
@@ -295,49 +301,15 @@ export function splitColumn(data: DataStruct, col: number, tolerance?: number): 
   return clusterByGaps(values, tol, unit);
 }
 
-/** Cheap "how setpoint-like is this column" score for the dialog's default
- *  column pick — LOWER is better; `Infinity` marks a column that can't
- *  usefully split (≤1 group: nothing to split, or every row its own
- *  group would be worse than useless). Fewer groups reads as more
- *  setpoint-like (a 4-level temperature column beats a near-continuous
- *  field column, which groups into hundreds under the same math). */
-function setpointScore(data: DataStruct, col: number): number {
-  const n = splitColumn(data, col).groups.length;
-  return n > 1 ? n : Infinity;
-}
-
-/** Pick a sensible default split column for the dialog (MAIN_PLAN #26):
- *  the value channel whose cheap grouping looks most setpoint-like (fewest
- *  groups, so long as it splits into more than one) — e.g. a 4-level
- *  temperature column beats a near-continuous field column. Falls back to
- *  the FIRST value channel when nothing looks setpoint-like (every column
- *  is single-valued or highly fragmented — `setpointScore` is `Infinity`
- *  for all of them). Never the x/time column: a PPMS/MPMS-style export
- *  loops the SAME x sweep (e.g. field) once per setpoint, so x itself is
- *  essentially never the split key. Returns a channel index (0-based,
- *  into `DataStruct.values`), or -1 if `data` has no channels at all (a
- *  degenerate/empty dataset — the caller should disable the picker). */
-export function pickDefaultSplitColumn(data: DataStruct): number {
-  const n = data.labels.length;
-  if (n === 0) return -1;
-  let best = 0;
-  let bestScore = Infinity;
-  for (let c = 0; c < n; c++) {
-    const score = setpointScore(data, c);
-    if (score < bestScore) {
-      bestScore = score;
-      best = c;
-    }
-  }
-  return best;
-}
-
 /** Slice a DataStruct's time+values rows down to `rowIndexes` (any order —
  *  typically ascending, straight from a `SplitGroup`) into a fresh,
- *  non-aliased DataStruct. labels/units/metadata are structural (per-
- *  COLUMN, not per-row) so they're copied whole, unaffected by which rows
- *  survive — this is the "per-row-safe fields" the store's
- *  `splitDatasetByColumn` action builds each child dataset's `data` from. */
+ *  non-aliased DataStruct. labels/units/metadata/cat_levels are structural
+ *  (per-COLUMN, not per-row) so they're copied whole, unaffected by which
+ *  rows survive -- a row slice preserves column LAYOUT (P1.4 review P2-2:
+ *  a categorical child dataset must stay categorical, since its level table
+ *  and codes are untouched by which rows remain) -- this is the
+ *  "per-row-safe fields" the store's `splitDatasetByColumn` action builds
+ *  each child dataset's `data` from. */
 export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[]): DataStruct {
   return {
     time: rowIndexes.map((i) => data.time[i]),
@@ -345,5 +317,6 @@ export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[])
     labels: [...data.labels],
     units: [...data.units],
     metadata: { ...data.metadata },
+    ...(data.cat_levels ? { cat_levels: data.cat_levels } : {}),
   };
 }

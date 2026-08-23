@@ -103,14 +103,12 @@ the ones specific to THIS script (found live, 2026-07-09, while building it):
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any
 
 TARGET_WIDTH_PX = 1200
 SUSPICIOUS_BYTES_FLOOR = 10_000  # a real graph render should exceed this
@@ -208,34 +206,17 @@ def png_dims(path: Path) -> tuple[int, int] | None:
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
-# ── manifest checkpoint helpers ──────────────────────────────────────────────
+# ── manifest checkpoint helpers (extracted: manifest_checkpoint.py) ──────────
 
-
-def load_manifest(path: Path, project: Path) -> dict[str, Any]:
-    if path.exists():
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("project") == str(project):
-            data.setdefault("graphs", {})
-            return data
-        print(
-            f"[manifest] existing manifest is for a different project "
-            f"({data.get('project')!r}) -- starting fresh",
-            flush=True,
-        )
-    return {"project": str(project), "graphs": {}}
-
-
-def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(manifest, indent=1, default=str), encoding="utf-8")
-    tmp.replace(path)  # same-volume rename is atomic on Windows
-
+from manifest_checkpoint import load_manifest, write_manifest  # noqa: E402
 
 # ── the export run ───────────────────────────────────────────────────────────
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("project", type=Path, help="path to an Origin .opj/.opju project file")
     ap.add_argument("--out", type=Path, default=None,
                      help="output dir (default: <project's parent>/_exports/<stem>)")

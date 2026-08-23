@@ -5,13 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  electrochemButlerVolmer,
-  electrochemDoubleLayer,
-  electrochemNernst,
-  electrochemOhmicDrop,
-  electrochemTafel,
-} from "../../../lib/api";
+import { electrochemButlerVolmer, electrochemDoubleLayer, electrochemNernst, electrochemOhmicDrop, electrochemTafel } from "../../../lib/api/electrochemistry";
 import {
   Button,
   Card,

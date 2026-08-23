@@ -3,7 +3,17 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-28
-**Updated:** 2026-08-10 (plan-hygiene reconciliation: tier-section items
+**Updated:** 2026-08-19 (Lane C2, `claude/j2-recode-worksheet`): J2 —
+Recode workshop — SHIPPED; flipped `[ ]` → `[x]` at the item, with the
+same slice also closing PRIMARY P1.6b (worksheet C/O/N badge + categorical
+cell-edit guard). J1 stays `[~]` — recode riding on top of it does not by
+itself close J1's remaining open sub-item (user-settable level ORDER).
+Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): J4 was still
+`[ ]` though PRIMARY P1.5 shipped its exact acceptance criteria on
+2026-08-18 (merged `440b0cb`) — flipped to `[x]` with evidence at the item.
+J1 and J2 were already accurately tracked (`[~]` and `[ ]` respectively,
+matching PRIMARY P1.4's own state and the still-unlanded J2/worksheet-UI
+work) and needed no correction. Prior: 2026-08-10 (plan-hygiene reconciliation: tier-section items
 3/6/7/8/9/10/11/12/13/14 — J3, J6, J7, J8, J9, J10, J11, J12, J17, and the
 Module-size follow-ups — were struck "SHIPPED (see Completed)" in their own
 text but the tier-section copies were never deleted; removed as duplicates,
@@ -170,29 +180,111 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 1 — High Impact (fails any JMP-shaped workflow)
 
-1. **[ ] J1 — String categorical levels end-to-end** (with P1.4; design
+1. **[~] J1 — String categorical levels end-to-end** (with P1.4; design
    the contract once). Acceptance beyond P1.4's own boxes:
-   - [ ] A text column imports as a first-class categorical column
-     (string levels preserved, not numeric-coded), visible in the
-     worksheet, editable type C/O/N.
-   - [ ] Categorical columns drive Graph Builder X/Group/Facet, Stat
-     Stage group/facet, Data Filter level-sets, Tabulate wells, legend
-     labels, and `facet-by-column` — with their **string** labels on
-     axes/legends everywhere including matplotlib export.
+   - [x] **Contract designed once (2026-08-17, P1.4 Slice 1 + same-day
+     review round, `claude/p14-categorical-contract`).** A text column
+     imports as a first-class categorical channel via BOTH generic import
+     paths (`io/delimited.py`'s f1/f2 fixes, `io/import_preview.py`'s new
+     `categorical` role). Ruling recorded here per this plan's own
+     instruction: JMP's "string levels preserved, not numeric-coded" bar is
+     satisfied AT THE CONTRACT LEVEL, not by literal string storage — the
+     representation is float codes `0..n-1` PLUS a first-class ordered
+     level table (`DataStruct.cat_levels`, identically named both
+     languages — the review round's blocker fix: the frontend field was
+     briefly `catLevels`, camelCase, silently un-wired from the backend's
+     snake_case wire payload, so no categorical accessor ever fired against
+     a real import until that was caught and renamed), and the mapping is
+     LOSSLESS + INVERTIBLE (`levels[code] == original string` for every
+     cell). This is now proven by SHARED-FIXTURE WIRE PARITY, precisely: a
+     single committed JSON payload (`tests/fixtures/wire/
+     categorical_import_payload.json`) that a backend test
+     (`test_wire_fixtures.py`) asserts the real `datastruct_payload()`
+     output matches byte-for-byte, and a frontend test
+     (`categoricalWireFixture.test.ts`) parses through the real
+     `parseWorkspace`/accessor path — one source of truth both suites read,
+     not two hand-synced fixtures that could (and did) silently drift. The
+     accessor layer (`is_categorical`/`level_labels`/`level_of` in
+     `quantized/datastruct.py`; `isCategoricalChannel`/`categoricalLevels`/
+     `levelLabel` in `lib/categorical.ts`) is declared the ONLY sanctioned
+     read path specifically so this internal-numeric-storage choice never
+     leaks as a representational loss to any consumer or to a future
+     storage-scheme change — see the full ruling in `DataStruct`'s
+     docstring (`src/quantized/datastruct.py`), which now also states
+     explicitly that construction validates the level table's SHAPE only;
+     a value cell's code/level COHERENCE degrades at read time
+     (`level_of`/`levelLabel` -> `None`), never raises. Both languages'
+     read paths also degrade safely on a structurally corrupted table
+     (e.g. `{0: "AB"}`) rather than treating a bare string as if it were a
+     string array.
+   - [ ] Worksheet-visible, editable type C/O/N: the MODELING-TYPE half
+     landed (a channel with a level table defaults to "nominal",
+     `lib/modeling.ts`'s `channelModelingType`, user override still wins),
+     but no worksheet UI change shipped this slice (P1.6 territory).
+   - [~] Categorical columns drive Graph Builder X/Group/Facet, Stat Stage
+     group/facet, Data Filter level-sets, Tabulate wells, legend labels,
+     and `facet-by-column` — with their **string** labels on axes/legends
+     everywhere including matplotlib export. DONE this slice: the box/bar
+     categorical gate composes with the nominal default (no manual
+     `channelTypes` override needed), and Group's series labels resolve
+     string levels (`calc/plotting.build_grouped_series`,
+     `lib/plotspec.ts` `buildXY`) — pinned by a hand-synced fixture in each
+     language (`test_build_grouped_series_matches_frontend_parity_fixture`
+     / `plotspec.test.ts`'s "cross-language parity fixture"), the SAME
+     pre-existing mechanism the P4-4 categorical-label tests extend, which
+     is a weaker guarantee than P1-1's shared-fixture wire parity above (it
+     catches the two implementations drifting from EACH OTHER, not from
+     the real wire shape — exactly the class of bug the shared fixture
+     exists to catch that this one could not have). NOT done: Facet/Data
+     Filter/Tabulate/`facet-by-column`/matplotlib export wiring (P1.5/P1.6
+     territory — they now build against this contract instead of
+     inventing their own).
    - [ ] Level *ordering* is user-settable (ordinal value order) and
-     survives `.dwk` round-trip and export.
-   - [ ] Existing numeric-coded workflows migrate unchanged.
+     survives `.dwk` round-trip and export. The representation CARRIES an
+     order (the level tuple's own order, first-appearance from import) and
+     it survives `.dwk` round-trip (proven, `workspace.test.ts`); making it
+     USER-settable is J2/recode territory, not built yet.
+   - [x] Existing numeric-coded workflows migrate unchanged — additive by
+     construction, proven by the full pre-existing suite passing
+     unmodified plus a dedicated byte-identical-when-absent test.
 
-2. **[ ] J2 — Recode workshop.** Merge/rename/bin levels of a
+2. **[x] J2 — Recode workshop.** Merge/rename/bin levels of a
    categorical column with live preview (old → new mapping table),
    producing a derived column (raw immutable), one undo entry,
    provenance recorded; mapping saveable/reapplicable. Includes plain
-   find-replace over text cells.
+   find-replace over text cells. **Shipped 2026-08-19 (Lane C2,
+   `claude/j2-recode-worksheet`):** `lib/recode.ts` (pure mapping math —
+   merge/rename/identity groups, `buildRecodePreview`'s live old→new table,
+   `mappingFromFindReplace`, `resolveRecodeMapping`'s all-or-nothing
+   refusal for a saved mapping reapplied to a mismatched column) +
+   `store/recode.ts` (the workshop's standalone store — the
+   `store/relink.ts` precedent, since `store/useApp.ts` sits close to its
+   size-ratchet pin) + `components/workshops/recode/`. A recode column is a
+   `ComputedColumn` with `.recode` set instead of a parsed `expr` —
+   `lib/formula.ts`'s `computeFormulas` branches on it — so it inherits the
+   existing computed-column machinery for free: appended (raw untouched),
+   auto-recomputed on every base-data edit, K3/K4 recalc-graph
+   participation, and channel-removal remapping. Saved mappings are
+   session-only (not yet `.dwk`-persisted — `lib/workspace.ts` had no
+   headroom under its own pin this slice; named deferral in
+   `store/recode.ts`'s header). Also ships PRIMARY P1.6b (the worksheet C/O/N
+   badge + the categorical cell-edit guard) in the same slice — see that
+   plan's entry.
 
-4. **[ ] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
+4. **[x] J4 — Live Group split for xy marks** (= PRIMARY P1.5; JMP
    acceptance): durable grouped series with stable identity/legend from
    the Group well, editable after Send, parity across
-   Stage/export/reopen.
+   Stage/export/reopen. **Day-5 reconciliation (2026-08-19):** PRIMARY P1.5
+   shipped this slice 2026-08-18 (`claude/p15-live-grouping`, merged
+   `440b0cb`) — `store/useApp.ts`'s `groupKey` field, `lib/plotGroupSplit.ts`,
+   and a regression test literally titled "does NOT show a preview-only
+   toast anymore" (`useGraphBuilder.test.ts:453`) confirm the exact gap this
+   row named ("series-split by group is preview-only in v1") is closed: the
+   Group well is a durable live binding now, editable after Send, surviving
+   undo/redo/close/reopen/export (P1.5's own checkboxes). P1.5 itself stays
+   `[~]` for two items outside J4's acceptance text — statistical/scientific
+   faceting and Data Filter/Tabulate/Stat Stage wiring — see that section in
+   `PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
 
 5. **[x] J5 — Grouped-plot mark completion.** COMPLETE 2026-07-29:
    items 1–3 (deterministic-jitter raw points, mean ± 95% t-CI marker,
@@ -255,6 +347,17 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**J2 — Recode workshop**~~ (2026-08-19, Lane C2,
+  `claude/j2-recode-worksheet`) — merge/rename/bin categorical levels with
+  a live old→new preview table, a derived (non-destructive) column, one
+  undo entry, provenance, find-replace over level text, and a saveable/
+  reapplicable mapping with all-or-nothing refusal on mismatch. Same slice
+  ships PRIMARY P1.6b (worksheet C/O/N badge + categorical cell-edit
+  guard) — see PRIMARY_SOFTWARE_AUDIT_PLAN.md's entry for that half. Gates:
+  full `vitest run` 522 files / 7705 tests passed; `tsc`/`eslint --max-
+  warnings=0` clean; bundle-size OK, 862.0 kB eager (21.9 kB under the
+  883.9 kB budget) — the workshop panel is its own lazy chunk.
 
 - ~~**Residual wave: J8 UI, J10 export, J3 mosaic+band, J7 curve-fit By,
   Dixon verify**~~ (2026-07-31, merged `060c11c`) — one Sonnet agent, 5

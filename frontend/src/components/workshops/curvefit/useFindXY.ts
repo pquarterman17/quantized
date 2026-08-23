@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 
-import { findXY } from "../../../lib/api";
+import { findXY } from "../../../lib/api/curvefit";
 
 /** The fit this section inverse-evaluates: exactly one of model / equation,
  *  its fitted params, and the x-range the fit was run over. */

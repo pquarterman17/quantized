@@ -19,7 +19,10 @@ import { useRef, useState } from "react";
 import { deriveRegionShadeRows } from "./canonicalRegionShades";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../../lib/focusGuard";
 import type { RegionShade } from "../../../lib/types";
-import { Button, IconButton, NumberField, SegmentedControl } from "../../primitives";
+import { IconButton } from "../../primitives/IconButton";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button } from "../../primitives";
 import PropertyNumberField from "./PropertyNumberField";
 
 const DEFAULT_FILL = "#3388cc";

@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from "react";
 
-import { fftThickness } from "../../../lib/api";
+import { fftThickness } from "../../../lib/api/reductions";
 import type { FftThicknessResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";

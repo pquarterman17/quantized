@@ -1,10 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { williamsonHall } from "../../../lib/api";
+import { williamsonHall } from "../../../lib/api/reductions";
 import { useWilliamsonHall } from "./useWilliamsonHall";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/reductions", () => ({
   williamsonHall: vi.fn(),
 }));
 

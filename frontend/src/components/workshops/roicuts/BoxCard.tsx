@@ -8,7 +8,8 @@
 // canvas at all (repeat-across-datasets, exact numeric bounds).
 
 import Card from "../../primitives/Card";
-import { Button, Select, SegmentedControl } from "../../primitives";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button, Select } from "../../primitives";
 import type { CutSpace } from "../../../lib/mapcuts";
 import type { RoiCutsState } from "./useRoiCuts";
 import Field from "./Field";

@@ -5,7 +5,9 @@
 // workshop's main Fit button stays the parity path. Uncertainties are
 // labeled by kind (Hessian vs posterior) per the GOTO #10 decision.
 
-import { Button, DataTable, NumberField, Select } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import DreamConvergence from "./DreamConvergence";
 import { useBumpsFit, type EngineChoice } from "./useBumpsFit";

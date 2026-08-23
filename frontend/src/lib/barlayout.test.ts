@@ -56,6 +56,31 @@ describe("resolveCategoryLabels (RESOLVED decision: text column then numeric fal
     expect(resolveCategoryLabels(ds, 0, [1, 2])).toEqual(["Room A", "Room B"]);
   });
 
+  // P1.4 review P2-5: RED before this fix -- textLabelsFor read ONLY
+  // `metadata.origin_text_columns`, so a GENERIC (non-Origin) import's
+  // `text_columns` sidecar (io/delimited.py's `text_columns`,
+  // io/import_preview.py's `label`-role capture) never labeled a numeric
+  // group column, even though columnmeta.ts's `originTextColumns` already
+  // reads `text_columns ?? origin_text_columns` for exactly this reason.
+  it("uses a GENERIC text_columns sidecar (not just origin_text_columns) that consistently labels every level", () => {
+    const ds: DataStruct = {
+      ...base,
+      metadata: { text_columns: { Sample: ["NbAu-1", "NbAu-2", "NbAu-1", "NbAu-2"] } },
+    };
+    expect(resolveCategoryLabels(ds, 0, [1, 2])).toEqual(["NbAu-1", "NbAu-2"]);
+  });
+
+  it("prefers text_columns over origin_text_columns when both are present (matches columnmeta.ts's ?? order)", () => {
+    const ds: DataStruct = {
+      ...base,
+      metadata: {
+        text_columns: { Sample: ["NbAu-1", "NbAu-2", "NbAu-1", "NbAu-2"] },
+        origin_text_columns: { B: ["Stale A", "Stale B", "Stale A", "Stale B"] },
+      },
+    };
+    expect(resolveCategoryLabels(ds, 0, [1, 2])).toEqual(["NbAu-1", "NbAu-2"]);
+  });
+
   it("ignores a text column that disagrees with itself on some level", () => {
     const ds: DataStruct = {
       ...base,
@@ -91,6 +116,35 @@ describe("resolveCategoryLabels (RESOLVED decision: text column then numeric fal
     expect(resolveCategoryLabels(base, 0, [1, 2])).toEqual(["1", "2"]);
     const frac: DataStruct = { ...base, values: [[1.5], [2.25], [1.5], [2.25]] };
     expect(resolveCategoryLabels(frac, 0, [1.5, 2.25])).toEqual(["1.5", "2.25"]);
+  });
+
+  // P1.4 categorical codes are 0-indexed (`levels[code]`), unlike `base`'s
+  // 1/2-valued numeric group column above — a dedicated 0/1-coded fixture.
+  const catBase: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [[0], [1], [0], [1]],
+    labels: ["group"],
+    units: [""],
+    metadata: {},
+  };
+
+  // P1.4: cat_levels is the FIRST source, taking precedence even over an
+  // origin_text_columns entry that would otherwise qualify — fixes the
+  // pre-P1.4 inconsistency where this module read ONLY origin_text_columns.
+  it("a P1.4 categorical channel's own level table wins over origin_text_columns", () => {
+    const ds: DataStruct = {
+      ...catBase,
+      metadata: { origin_text_columns: { B: ["Stale A", "Stale B", "Stale A", "Stale B"] } },
+      cat_levels: { 0: ["Room A", "Room B"] },
+    };
+    expect(resolveCategoryLabels(ds, 0, [0, 1])).toEqual(["Room A", "Room B"]);
+  });
+
+  it("a P1.4 categorical channel still falls back to formatted numeric levels for an out-of-table code", () => {
+    const ds: DataStruct = { ...catBase, cat_levels: { 0: ["Room A", "Room B"] } };
+    expect(resolveCategoryLabels(ds, 0, [0, 1])).toEqual(["Room A", "Room B"]);
+    // a level code with no entry in the table falls back to the numeric format
+    expect(resolveCategoryLabels(ds, 0, [0, 1, 2])).toEqual(["Room A", "Room B", "2"]);
   });
 });
 

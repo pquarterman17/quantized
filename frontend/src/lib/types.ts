@@ -5,6 +5,8 @@
 import type { ErrorBinding } from "./errorRoles";
 
 import type { ColormapName } from "./colormap";
+import type { DatasetSource } from "./datasetSource";
+import type { RecodeSpec } from "./recode";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -13,10 +15,10 @@ export interface DataStruct {
   labels: string[];
   units: string[];
   metadata: Record<string, unknown>;
-  /** Origin projects only: every workbook, when the file holds more than one.
-   *  Each entry is EITHER a full `DataStruct` (the `full_books=true` escape
-   *  hatch, or any entry under it) OR one of the two lazy-transport shapes
-   *  below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */
+  cat_levels?: Record<number, string[]>; // P1.4: channel idx -> ordered level strings; values carry float codes 0..n-1 (lib/categorical.ts)
+  /** Origin projects only: every workbook, when the file holds more than one. Each entry is EITHER
+   *  a full `DataStruct` (the `full_books=true` escape hatch, or any entry under it) OR one of the
+   *  two lazy-transport shapes below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */
   books?: BookEntry[];
   /** Present alongside a lazy `books[]` (absent under `full_books=true`): the
    *  reference `POST /api/parsers/books/data` needs (with a book's `id`) to
@@ -287,42 +289,11 @@ export interface MapResponse {
   z: { label: string; unit: string; min: number | null; max: number | null };
 }
 
-/** One peak from POST /api/rsm/analyze. Centres/FWHM are `[omega, 2theta]` in
- *  angle space and `[Qx, Qz]` in reciprocal space (null when no Q-space). */
-export interface RsmPeak {
-  rank: number;
-  centre_angle: [number, number];
-  centre_Q: [number | null, number | null];
-  fwhm_angle: [number, number];
-  fwhm_Q: [number | null, number | null];
-  amplitude: number;
-  background: number;
-  classification: string; // "substrate" | "film" | "unknown"
-}
-
-/** Response of POST /api/rsm/analyze. */
-export interface RsmAnalysisResponse {
-  peaks: RsmPeak[];
-  n_peaks_found: number;
-  intensity_unit: string;
-  used_q_space: boolean;
-}
-
-/** Response of POST /api/rsm/strain (NaN fields serialize as null).
- *  `warnings` explains a null `eps_parallel`: near-symmetric reflections
- *  (|Qx|/|Qz| below the degeneracy threshold — see calc/rsm.py) carry no
- *  in-plane information, so eps_parallel is refused rather than fabricated
- *  from noise. Empty when nothing was degenerate. */
-export interface RsmStrainResponse {
-  eps_parallel: number | null;
-  eps_perp: number | null;
-  a_sub_parallel: number;
-  a_sub_perp: number;
-  a_film_parallel: number;
-  a_film_perp: number;
-  relaxation: number | null;
-  warnings: string[];
-}
+// RsmPeak/RsmAnalysisResponse/RsmStrainResponse moved to lib/reductionTypes.ts
+// (J2/P1.6b, funding the new ComputedColumn.recode field below without
+// raising this file's TS_MODULE_PINS ceiling) — re-exported so every import
+// site (`from "./types"`) is unaffected.
+export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductionTypes";
 
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `raw` is the pristine import; `data` is the currently displayed (corrected)
@@ -335,6 +306,12 @@ export interface ComputedColumn {
   name: string;
   expr: string;
   unit?: string;
+  /** PR K: referenced columns (formula.referencedColumns) — feeds recalc's col→col edges; legacy columns re-derive. */
+  deps?: string[];
+  /** J2 Recode workshop: set only for a recode-produced column, mutually
+   *  exclusive with a real `expr` (formula.computeFormulas branches on this
+   *  field instead of compiling `expr` when present) — see lib/recode.ts. */
+  recode?: RecodeSpec;
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..
@@ -445,8 +422,7 @@ export interface Dataset {
   raw?: DataStruct;
   corrections?: CorrectionParams;
   /** Reference-background subtraction folded into `corrections`: the picked
-   *  background dataset's id + the interpolation method. Persisted so the
-   *  Corrections card can re-populate and re-apply it reproducibly. */
+   *  background dataset's id + interp method, so the Corrections card can re-populate/re-apply it. */
   bgRef?: { datasetId: string; interp: string };
   /** The last fit run on this dataset — the recalc graph (#1) re-runs it when
    *  the data changes (auto mode) or marks it stale (manual). Set by the Curve
@@ -457,11 +433,9 @@ export interface Dataset {
    *  and `exitFlag`. `xKey`/`yKey` are absent on legacy v1 (`{model}`) specs —
    *  recompute then falls back to the live plotted selection. */
   fitSpec?: FitSpec;
-  /** Free-text user notes about this dataset (sample, conditions, caveats).
-   *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
+  /** Free-text user notes (sample, conditions, caveats); shown in the Inspector Notes card. */
   notes?: string;
-  /** User tags for organizing + filtering the Library (e.g. "MvsH", "sample-A").
-   *  Round-trips through the .dwk workspace. */
+  /** User tags for organizing + filtering the Library. */
   tags?: string[];
   /** LEGACY read-only field — superseded by the folder tree (`folderId`).
    *  `useApp.loadWorkspace` promotes any un-foldered `group` into a
@@ -470,19 +444,20 @@ export interface Dataset {
    *  anymore. Kept only so an old .dwk v1 doc (datasets carrying just a
    *  `group` string, no folder tree at all) still parses and migrates. */
   group?: string;
-  /** Containing folder id (project-organization plan, Approach B). Absent = the
-   *  dataset lives at the tree root. The folder tree itself is the store's
-   *  `folders` slice; membership lives HERE (not as a folder child-list) so
-   *  deleting a dataset can never dangle a ref. Pure organization — it never
-   *  gates row-state (excludedRows/filter). Round-trips through .dwk v2. */
+  /** Containing folder id (project-organization plan, Approach B). Absent =
+   *  the dataset lives at the tree root; membership lives HERE (not as a
+   *  folder child-list) so deleting a dataset can never dangle a ref. Pure
+   *  organization — it never gates row-state (excludedRows/filter). */
   folderId?: string;
-  /** Sort key within the containing folder (see lib/order). Absent = fall back
-   *  to insertion order. Round-trips through .dwk v2. */
+  /** Sort key within the containing folder (see lib/order); absent falls back to insertion order. */
   order?: number;
-  /** Worksheet computed columns. They occupy the last `formulas.length` columns
-   *  of `data` and recompute when the base data changes (cell edits, corrections).
-   *  Round-trips through the .dwk workspace. */
+  /** Worksheet computed columns — occupy the last `formulas.length` columns of `data`; recompute on base-data changes. */
   formulas?: ComputedColumn[];
+  /** PR K: per-column error for a failing formula, keyed by name. */
+  formulaErrors?: Record<string, string>;
+  /** PR K (L0.50): set for a DERIVED WORKSHEET — recalculates only via the
+   *  async scheduler (K5c); `pipeline` is a short descriptor for now. */
+  derivedFrom?: { datasetId: string; pipeline: string };
   /** Per-channel column roles (label / ignore) — channel index → role. Excluded
    *  from the plot; semantic metadata about the columns, so they live ON the
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
@@ -530,13 +505,12 @@ export interface Dataset {
    *  path-based `/api/parsers/import` route already validated. Set ONLY where
    *  a real path is actually knowable — mirrors `pending`'s `BookSource.kind
    *  === "path"` precedent. A browser file-picker/drag-drop upload never gets
-   *  one (the File API exposes no path, and neither the pywebview desktop
-   *  shell — no js_api bridge — nor the Tauri shell — `tauri-plugin-dialog`
-   *  is Rust-only, never invoked from the frontend — surface one today); a
-   *  sourceless dataset instead falls back to "Re-import from file…"
-   *  (re-picks via the browser dialog, see `store/reimport.ts`). Round-trips
-   *  through .dwk. */
-  source?: { kind: "path"; path: string };
+   *  one (neither File API nor pywebview/Tauri surface one today); falls back
+   *  to "Re-import from file…" instead (`store/reimport.ts`). Round-trips
+   *  through .dwk. Shape + P1.7 provenance fields: `lib/datasetSource.ts`. */
+  source?: DatasetSource;
+  /** P1.7 box 5: "Import as new version" (a changed source; never an in-place refresh, L0.32) — the original dataset's id. Round-trips `.dwk`. */
+  versionOf?: string;
   /** Containing WORKBOOK id (LIBRARY_WORKBOOK_UX_PLAN PR A1 — the
    *  folder -> workbook -> worksheet/figure/analysis/note hierarchy, L0.1).
    *  Absent = not yet assigned a workbook (pre-migration legacy data, or a
@@ -996,18 +970,16 @@ export interface CorrectionParams {
 
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
 
-/** Per-column role, mirroring the backend's `ImportSettings.roles` semantics
- *  (`io/import_preview.DATA_ROLES`): `x` becomes the axis, `y`/`error` become
- *  DataStruct channels, `label`/`ignore` are dropped (numeric-only contract). */
-export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore";
+/** Per-column role (`io/import_preview.DATA_ROLES`): `x` -> axis; `y`/`error` -> DataStruct channels; `categorical` -> a P1.4 categorical channel (string levels preserved); `label`/`ignore` drop from `.values` (`label`'s raw strings still land in `text_columns`, `ignore`'s don't). */
+export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore" | "categorical";
 
-/** How to read a delimited file — mirrors
- *  `quantized.io.import_preview.ImportSettings.to_dict()` exactly (also the
- *  persistable import-filter shape). */
+/** How to read a delimited file — mirrors `quantized.io.import_preview.
+ *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
 export interface ImportSettingsWire {
   delimiter: string;
   header_line: number | null;
   units_line: number | null;
+  label_line: number | null; // P1.6: legend-label row's cells override each channel's display label; null = header-derived name stands
   data_start_line: number;
   column_names: string[] | null;
   roles: ImportColumnRole[] | null;
@@ -1017,6 +989,14 @@ export interface ImportSettingsWire {
 export interface ImportPreviewColumn {
   index: number;
   name: string;
+  /** P1-5 DEFECT 2: the name this column's channel/label will ACTUALLY
+   *  carry once imported -- `name` with any `label_line` override applied
+   *  (io/import_preview.py's `_effective_names`, the same rule
+   *  `parse_import` uses for `.labels`). Optional on the wire type (older
+   *  fixtures / mocked previews may omit it); callers that need the true
+   *  post-import name should read `c.effective_name ?? c.name`. Equal to
+   *  `name` whenever no `label_line` override applies to this column. */
+  effective_name?: string;
   unit: string;
   role: ImportColumnRole;
 }
@@ -1028,11 +1008,13 @@ export interface ImportPreviewResponse {
   delimiter: string;
   header_line: number | null;
   units_line: number | null;
+  label_line: number | null;
   data_start_line: number;
   columns: ImportPreviewColumn[];
   rows: (number | null)[][];
   n_data_rows: number;
   n_preview_rows: number;
+  comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
 }
 
 /** A saved, named `ImportSettingsWire` bound to a filename glob

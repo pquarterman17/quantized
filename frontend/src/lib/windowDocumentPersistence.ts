@@ -27,6 +27,12 @@ function migrateLegacyWindow(window: PlotWindow): FigureDocument {
     name: window.title,
     datasetId: window.datasetId,
     view: window.view,
+    // P1.5: createFigureDocument's `groupKey` is bindings-owned and comes
+    // from this EXPLICIT arg, never `view.groupKey` (see its own doc) --
+    // without threading it here, a pre-F1/document-less window (or any
+    // window promoted through this legacy bridge) silently lost a durable
+    // group binding on the very next .dwk save/reload.
+    groupKey: window.view.groupKey,
   });
 }
 

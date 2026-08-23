@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askParams } from "../components/overlays/ParamDialog";
-import { exportFigure } from "./api";
+import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureSpec";
@@ -15,7 +15,7 @@ import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
-vi.mock("./api", () => ({
+vi.mock("./api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -586,9 +586,13 @@ describe("runExportFigureCommand — P0.4 finding 15 (malformed/partial askParam
 // PlotView fields (`yKeys`/`y2Keys`/`xKey`/…), not from whatever `view` a
 // test attached to the window's own `document` — that mirrors production
 // ("the focused window's live view IS the singleton fields", windows.ts's
-// own doc). `groupKey`/`axisBreaks`/`publication` are NOT part of PlotView,
-// so they survive that rebuild from the attached document untouched; yKeys/
-// y2Keys/xKey do not and must be set as live singletons too.
+// own doc). `axisBreaks`/`publication` are NOT part of PlotView, so they
+// survive that rebuild from the attached document untouched. `groupKey`
+// graduated to a live-singleton-synced PlotView field under P1.5 (it used
+// to be bindings-only, exempt from this rebuild like axisBreaks/publication
+// still are) — yKeys/y2Keys/xKey/groupKey must ALL be set as live
+// singletons too, or the rebuild silently reverts them to the singleton's
+// (usually null/default) value.
 describe("runExportFigureCommand — F2.5b (routes through the focused window's canonical document)", () => {
   const DATASET_ID = "d1";
 
@@ -667,7 +671,10 @@ describe("runExportFigureCommand — F2.5b (routes through the focused window's 
   });
 
   it("carries a grouped window's group_col onto the exported spec, not just the live view", async () => {
-    useApp.setState({ yKeys: [0] }); // the live singleton windowsForSave() snapshots for the focused window
+    // P1.5: groupKey is now ALSO a live-singleton-synced binding (like
+    // xKey/yKeys/errKeys) -- windowsForSave() snapshots it for the focused
+    // window the same way, so it must agree with the document here too.
+    useApp.setState({ yKeys: [0], groupKey: 1 });
     const document = createFigureDocument({
       id: "figure-w1",
       name: "Window 1",
@@ -700,7 +707,9 @@ describe("runExportFigureCommand — F2.5b (routes through the focused window's 
   });
 
   it("surfaces a grouped+secondary-axis document as an export-failed status, not an unhandled rejection", async () => {
-    useApp.setState({ yKeys: [0, 1], y2Keys: [1] }); // grouping + a secondary axis is a backend-invalid combination
+    // grouping + a secondary axis is a backend-invalid combination; groupKey
+    // is live-singleton-synced (P1.5), same reasoning as the test above.
+    useApp.setState({ yKeys: [0, 1], y2Keys: [1], groupKey: 1 });
     const document = createFigureDocument({
       id: "figure-w1-invalid",
       name: "Window invalid",

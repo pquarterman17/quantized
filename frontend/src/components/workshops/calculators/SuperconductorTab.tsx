@@ -7,14 +7,7 @@
 
 import { useState } from "react";
 
-import {
-  scBcsGap,
-  scCoherenceLength,
-  scCriticalFields,
-  scDepairingCurrent,
-  scGlParameter,
-  scLondonDepth,
-} from "../../../lib/api";
+import { scBcsGap, scCoherenceLength, scCriticalFields, scDepairingCurrent, scGlParameter, scLondonDepth } from "../../../lib/api/superconductor";
 import {
   Button,
   Card,

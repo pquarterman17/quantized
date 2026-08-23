@@ -3,7 +3,8 @@
 // M-H dataset. Thin by design — all logic lives in useHysteresis.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { Button } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { useHysteresis } from "./useHysteresis";

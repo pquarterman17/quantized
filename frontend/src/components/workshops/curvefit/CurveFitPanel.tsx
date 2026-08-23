@@ -7,7 +7,8 @@
 import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, DataTable, Select } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import { loadCustomModels, type CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";

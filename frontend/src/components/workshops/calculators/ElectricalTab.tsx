@@ -5,15 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  electricalConductivity,
-  electricalCurrentDensity,
-  electricalHall,
-  electricalMobility,
-  electricalResistivity,
-  electricalSheetResistance,
-} from "../../../lib/api";
-import { electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
+import { electricalConductivity, electricalCurrentDensity, electricalHall, electricalMobility, electricalResistivity, electricalSheetResistance, electricalHallSweep, electricalVanDerPauw } from "../../../lib/api/electrical";
 import {
   Button,
   Card,

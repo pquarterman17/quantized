@@ -5,7 +5,8 @@
 // Inspector).
 
 import { useApp } from "../../store/useApp";
-import { Card, Select } from "../primitives";
+import { Select } from "../primitives";
+import Card from "../primitives/Card";
 
 const METHODS = [
   { value: "natural", label: "natural (Sibson)" },

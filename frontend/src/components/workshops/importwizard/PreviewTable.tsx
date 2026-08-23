@@ -6,7 +6,7 @@
 // holds no state of its own.
 
 import { fmtNum } from "../../../lib/format";
-import { ROLE_OPTIONS } from "../../../lib/importwizard";
+import { ROLE_OPTIONS, xRoleColumns } from "../../../lib/importwizard";
 import type { ImportColumnRole, ImportPreviewResponse } from "../../../lib/types";
 import { Select } from "../../primitives";
 
@@ -24,14 +24,22 @@ export default function PreviewTable({
   const rowBg = (i: number): string | undefined => {
     if (i === preview.header_line) return "var(--accent-soft)";
     if (i === preview.units_line) return "var(--capture-soft)";
+    if (i === preview.label_line) return "var(--border-soft)";
     return undefined;
   };
   const rowTitle = (i: number): string | undefined => {
     if (i === preview.header_line) return "header line";
     if (i === preview.units_line) return "units line";
+    if (i === preview.label_line) return "label line (legend labels)";
     if (i === preview.data_start_line) return "first data line";
     return undefined;
   };
+
+  // P1-5 DEFECT 1: every column currently marked x, when there's more than
+  // one -- parse_import only ever keeps the first as the axis and silently
+  // drops the rest, so each offending select gets a visible invalid state.
+  const xConflicts = xRoleColumns(preview.columns);
+  const xConflictIndices = new Set(xConflicts.length > 1 ? xConflicts.map((c) => c.index) : []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -70,31 +78,44 @@ export default function PreviewTable({
         <table className="qz-table">
           <thead>
             <tr>
-              {preview.columns.map((c) => (
-                <th key={c.index} style={{ textAlign: "left", minWidth: 120 }}>
-                  <input
-                    className="qz-input"
-                    style={{ width: "100%", marginBottom: 3 }}
-                    value={c.name}
-                    onChange={(e) => onNameChange(c.index, e.target.value)}
-                    aria-label={`column ${c.index + 1} name`}
-                  />
-                  <input
-                    className="qz-input"
-                    style={{ width: "100%", marginBottom: 3 }}
-                    value={c.unit}
-                    placeholder="unit"
-                    onChange={(e) => onUnitChange(c.index, e.target.value)}
-                    aria-label={`column ${c.index + 1} unit`}
-                  />
-                  <Select
-                    options={ROLE_OPTIONS}
-                    value={c.role}
-                    onChange={(e) => onRoleChange(c.index, e.target.value as ImportColumnRole)}
-                    aria-label={`column ${c.index + 1} role`}
-                  />
-                </th>
-              ))}
+              {preview.columns.map((c) => {
+                const xConflict = xConflictIndices.has(c.index);
+                return (
+                  <th key={c.index} style={{ textAlign: "left", minWidth: 120 }}>
+                    <input
+                      className="qz-input"
+                      style={{ width: "100%", marginBottom: 3 }}
+                      value={c.name}
+                      onChange={(e) => onNameChange(c.index, e.target.value)}
+                      aria-label={`column ${c.index + 1} name`}
+                    />
+                    <input
+                      className="qz-input"
+                      style={{ width: "100%", marginBottom: 3 }}
+                      value={c.unit}
+                      placeholder="unit"
+                      onChange={(e) => onUnitChange(c.index, e.target.value)}
+                      aria-label={`column ${c.index + 1} unit`}
+                    />
+                    <Select
+                      options={ROLE_OPTIONS}
+                      value={c.role}
+                      onChange={(e) => onRoleChange(c.index, e.target.value as ImportColumnRole)}
+                      aria-label={`column ${c.index + 1} role`}
+                      aria-invalid={xConflict ? "true" : undefined}
+                      style={xConflict ? { borderColor: "var(--danger)" } : undefined}
+                    />
+                    {xConflict && (
+                      <div
+                        className="qzk-ds-meta"
+                        style={{ color: "var(--danger)", marginTop: 2 }}
+                      >
+                        only one column can be x
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

@@ -18,6 +18,7 @@
 
 import { applyCorrections as applyCorrectionsApi, type CorrectionsRequest } from "../lib/api";
 import { lit } from "../lib/macro";
+import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
 
@@ -56,6 +57,33 @@ export function clearOverlaysFor(s: AppState, id: string): Partial<AppState> {
   return p;
 }
 
+/** Review round P1-2: the #50/#53 row-count-changed guard — excludedRows
+ *  (raw row INDICES into `.data`, invalidated the same way a trim shifts
+ *  them here) and the four singleton overlays — extracted into ONE shared
+ *  helper so `applyCorrections` (in-place re-correction) and
+ *  `store/derivedWorksheets.ts`'s cross-dataset recompute (via useApp.ts's
+ *  `recalcNow`) can't drift: duplicating this by hand is exactly how the
+ *  reviewer's probe (a row-count-changing derived-sheet recompute leaving
+ *  excludedRows out-of-bounds and every overlay stale) happened. Pure —
+ *  takes a state snapshot, returns the dataset-level patch, the AppState-
+ *  level patch, and the status message to surface (if any); the caller
+ *  performs the actual `set()`/`setStatus()`. */
+export function rowsChangedGuard(
+  s: AppState,
+  id: string,
+  rowsChanged: boolean,
+  priorExcludedRows: number[] | undefined,
+): { datasetPatch: { excludedRows?: undefined }; statePatch: Partial<AppState>; statusMessage?: string } {
+  if (!rowsChanged) return { datasetPatch: {}, statePatch: {} };
+  return {
+    datasetPatch: { excludedRows: undefined },
+    statePatch: clearOverlaysFor(s, id),
+    statusMessage: priorExcludedRows?.length
+      ? "Row exclusions cleared: a trim changed the row count, so the saved row indices no longer apply."
+      : undefined,
+  };
+}
+
 export function createCorrectionsSlice(set: SliceSet, get: SliceGet): CorrectionsSlice {
   return {
     applyCorrections: async (id, params, bg) => {
@@ -72,6 +100,21 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         const bgDs =
           bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
         const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
+        // LIBRARY_WORKBOOK_UX_PLAN PR K (K4): write-time cycle rejection —
+        // refuse BEFORE calling the API, with zero mutation, when picking
+        // `bgDs` as this dataset's background would close a loop (the
+        // constructible-today A↔B case: B already subtracts A, now A tries
+        // to subtract B).
+        if (bgRef) {
+          const reason = wouldCreateCycle(get().datasets, {
+            from: recalcNodes.dataset(bgRef.datasetId),
+            to: recalcNodes.dataset(id),
+          });
+          if (reason) {
+            get().setStatus(`Can't set "${bgDs!.name}" as the background: ${reason}`);
+            return false;
+          }
+        }
         const req: CorrectionsRequest = { dataset: raw, params };
         if (bgDs) {
           req.bg_dataset = bgDs.data;
@@ -81,32 +124,25 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         // excludedRows are raw row INDICES into ds.data; an xTrim shrinks/shifts
         // the rows (corrections.py step 1), so carrying stale indices forward would
         // exclude the WRONG rows (or silently lose the exclusion). Drop them when
-        // the row count changes rather than corrupt the analysis view.
+        // the row count changes rather than corrupt the analysis view (#50/#53
+        // guard, shared with derivedWorksheets.ts's recompute — rowsChangedGuard).
         const rowsChanged = corrected.time.length !== ds.data.time.length;
         // Recompute any computed columns from the freshly-corrected base.
         get().recordHistory("apply corrections");
-        set((s) => ({
-          datasets: s.datasets.map((d) =>
-            d.id === id
-              ? recompute({
-                  ...d,
-                  data: corrected,
-                  raw,
-                  corrections: params,
-                  bgRef,
-                  ...(rowsChanged ? { excludedRows: undefined } : {}),
-                })
-              : d,
-          ),
-          // A trim also invalidates the row-indexed fit/peak/baseline/deriv
-          // overlays for this dataset (see clearOverlaysFor).
-          ...(rowsChanged ? clearOverlaysFor(s, id) : {}),
-        }));
-        if (rowsChanged && ds.excludedRows?.length) {
-          get().setStatus(
-            "Row exclusions cleared: a trim changed the row count, so the saved row indices no longer apply.",
-          );
-        }
+        let statusMsg: string | undefined;
+        set((s) => {
+          const guard = rowsChangedGuard(s, id, rowsChanged, ds.excludedRows);
+          statusMsg = guard.statusMessage;
+          return {
+            datasets: s.datasets.map((d) =>
+              d.id === id
+                ? recompute({ ...d, data: corrected, raw, corrections: params, bgRef, ...guard.datasetPatch })
+                : d,
+            ),
+            ...guard.statePatch,
+          };
+        });
+        if (statusMsg) get().setStatus(statusMsg);
         get().recordMacro(
           `Corrections → ${ds.name}`,
           bgDs

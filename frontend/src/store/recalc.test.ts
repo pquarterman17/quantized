@@ -165,3 +165,261 @@ describe("recalc engine (#1)", () => {
     expect(useApp.getState().status).toContain("recalc fit failed");
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K, K4: write-time bgRef cycle rejection.
+describe("applyCorrections — write-time cycle rejection (K4)", () => {
+  it("refuses (zero mutation, no API call) the A<->B bgRef cycle recalc.test.ts's traversal test documents as constructible today", async () => {
+    // b already subtracts a (an already-applied bgRef, same shape the
+    // lib/recalc.test.ts traversal-safety fixture uses).
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a", { raw: data(), corrections: {} }),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ],
+    });
+    const before = useApp.getState().datasets;
+    // Now try to make a subtract b — closes the loop.
+    const ok = await useApp.getState().applyCorrections("a", {}, { datasetId: "b", interp: "linear" });
+    expect(ok).toBe(false);
+    expect(useApp.getState().status).toMatch(/circular/);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toBe(before); // zero mutation
+  });
+
+  it("a non-cyclic bgRef still applies normally (no false positive)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data());
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a"), ds("b")],
+    });
+    const ok = await useApp.getState().applyCorrections("a", { yOff: 1 }, { datasetId: "b", interp: "linear" });
+    expect(ok).toBe(true);
+    expect(applyCorrectionsApi).toHaveBeenCalledTimes(1);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN PR K, K5c/K5d: derived worksheets (L0.50) recalc
+// only through the async stale-marked scheduler, never synchronously; a
+// ds->sheet->fit chain settles in topological order inside one recalcNow.
+describe("derived worksheets (K5c/K5d)", () => {
+  it("a source edit marks a downstream derived worksheet stale but does NOT recompute it", () => {
+    const sheet = ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" } });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a"), sheet],
+    });
+    useApp.getState().setCellValue("a", 0, 0, 99);
+    expect(useApp.getState().staleDatasets).toEqual(["b"]);
+    // Not recomputed: the sheet's own data/derivedFrom are byte-identical.
+    expect(useApp.getState().datasets.find((d) => d.id === "b")).toEqual(sheet);
+  });
+
+  // PR K slice 2 — the real executor happy path replaces slice 1's honest
+  // no-op: recalcNow now actually re-runs the sheet's own `.corrections`
+  // pipeline against its SOURCE's CURRENT raw/data (not the sheet's own
+  // stale cache), via the exact `applyCorrections` API call regular
+  // corrections use.
+  it("recalcNow actually recomputes a stale derived sheet from its source's CURRENT data (K5c/K5d real executor)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[99]] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "yOff=-1" },
+          corrections: { yOff: -1 },
+          data: { ...data(), values: [[1]] }, // stale — must NOT survive the recompute
+        }),
+      ],
+      staleDatasets: ["b"],
+    });
+
+    await useApp.getState().recalcNow();
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith(
+      expect.objectContaining({ params: { yOff: -1 } }),
+    );
+    const sheet = useApp.getState().datasets.find((d) => d.id === "b");
+    expect(sheet?.data.values).toEqual([[99]]); // freshly recomputed, not the stale cache
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
+  it("a ds->sheet->fit chain recomputes in topological order inside ONE recalcNow", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], R2: 1, yFit: [1, 2, 3] });
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[9], [9], [9]] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "flatten" },
+          corrections: {},
+          fitSpec: { model: "Linear" },
+        }),
+      ],
+    });
+    useApp.getState().setCellValue("a", 0, 0, 99);
+    // Both the sheet AND its fit are already stale from the SAME touch.
+    expect(useApp.getState().staleDatasets).toEqual(["b"]);
+    expect(useApp.getState().staleFits).toEqual(["b"]);
+
+    await useApp.getState().recalcNow();
+    // The sheet's own pipeline executor runs BEFORE its fit is recomputed —
+    // the existing two-phase (datasets, then fits) order, unchanged.
+    expect(useApp.getState().staleDatasets).toEqual([]);
+    expect(useApp.getState().datasets.find((d) => d.id === "b")?.data.values).toEqual([[9], [9], [9]]);
+    expect(fitModel).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().staleFits).toEqual([]);
+  });
+
+  // Review round P1-1: recomputeDerivedSheet must read the source's CURRENT
+  // .data, never its .raw — same regression class as createDerivedWorksheet's,
+  // but on the recalcNow recompute path.
+  it("recomputes from the source's CURRENT .data even when the source has its own .raw/.corrections (P1-1 regression)", async () => {
+    const sourceRaw = data(); // [[2],[4],[6]]
+    const sourceData = { ...data(), values: [[20], [40], [60]] }; // "what the user sees"
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data());
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a", { raw: sourceRaw, data: sourceData, corrections: { yOff: 18 } }),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" }, corrections: {} }),
+      ],
+      staleDatasets: ["b"],
+    });
+
+    await useApp.getState().recalcNow();
+
+    expect(applyCorrectionsApi).toHaveBeenCalledWith(expect.objectContaining({ dataset: sourceData }));
+  });
+
+  // Two-hop chain settling: touching A marks BOTH B (derived from A) and C
+  // (derived from B) stale in the SAME touch (K3's generalized graph walk,
+  // slice 1); recalcNow must then recompute them in order so C ends up
+  // built from B's FRESHLY recomputed output, not A's raw value.
+  it("a two-hop derived chain (C from B, B from A) settles topologically in ONE recalcNow (P1-1 regression)", async () => {
+    vi.mocked(applyCorrectionsApi)
+      .mockResolvedValueOnce({ ...data(), values: [[50]] }) // B's recompute
+      .mockResolvedValueOnce({ ...data(), values: [[70]] }); // C's recompute
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" }, corrections: {} }),
+        ds("c", { derivedFrom: { datasetId: "b", pipeline: "y" }, corrections: {} }),
+      ],
+    });
+
+    useApp.getState().setCellValue("a", 0, 0, 5); // one gesture
+    expect(useApp.getState().staleDatasets).toEqual(["b", "c"]); // both stale from ONE touch
+
+    await useApp.getState().recalcNow();
+
+    // B built from A's CURRENT (post-edit) data — value[0][0] is now 5.
+    expect(applyCorrectionsApi).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ dataset: expect.objectContaining({ values: [[5], [4], [6]] }) }),
+    );
+    const b = useApp.getState().datasets.find((d) => d.id === "b");
+    expect(b?.data.values).toEqual([[50]]);
+    // C must be built from B's FRESH data ([[50]]), never A's.
+    expect(applyCorrectionsApi).toHaveBeenNthCalledWith(2, expect.objectContaining({ dataset: b?.data }));
+    expect(applyCorrectionsApi).not.toHaveBeenNthCalledWith(2, expect.objectContaining({ dataset: data() }));
+    expect(useApp.getState().datasets.find((d) => d.id === "c")?.data.values).toEqual([[70]]);
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
+  // Review round P1-2: recomputeDerivedSheet bypassed corrections.ts's
+  // rowsChanged guard (#50/#53) — a row-count-changing recompute must clear
+  // excludedRows + the four overlays and surface a status, the SAME as an
+  // in-place applyCorrections trim does.
+  it("a row-count-changing recompute clears excludedRows + overlays and sets a status (P1-2 regression)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), time: [1, 2], values: [[1], [2]] }); // 2 rows, was 3
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", {
+          derivedFrom: { datasetId: "a", pipeline: "x" },
+          corrections: {},
+          excludedRows: [2],
+        }),
+      ],
+      staleDatasets: ["b"],
+      status: "",
+      fitOverlay: { datasetId: "b", y: [1, 2, 3] },
+      peakOverlay: { datasetId: "b", y: [1, 2, 3] },
+      baselineOverlay: { datasetId: "b", y: [1, 2, 3] },
+      derivOverlay: { datasetId: "b", y: [1, 2, 3] },
+    });
+
+    await useApp.getState().recalcNow();
+
+    const b = useApp.getState().datasets.find((d) => d.id === "b");
+    expect(b?.excludedRows).toBeUndefined();
+    expect(useApp.getState().fitOverlay).toBeNull();
+    expect(useApp.getState().peakOverlay).toBeNull();
+    expect(useApp.getState().baselineOverlay).toBeNull();
+    expect(useApp.getState().derivOverlay).toBeNull();
+    expect(useApp.getState().status).toContain("Row exclusions cleared");
+  });
+
+  it("a row-count-UNCHANGED recompute leaves excludedRows/overlays untouched", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(data()); // same 3 rows
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" }, corrections: {}, excludedRows: [1] }),
+      ],
+      staleDatasets: ["b"],
+      fitOverlay: { datasetId: "b", y: [1, 2, 3] },
+    });
+    await useApp.getState().recalcNow();
+    expect(useApp.getState().datasets.find((d) => d.id === "b")?.excludedRows).toEqual([1]);
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "b", y: [1, 2, 3] });
+  });
+
+  it("a source that no longer exists leaves the sheet stale instead of throwing", async () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("b", { derivedFrom: { datasetId: "ghost", pipeline: "x" }, corrections: {} })],
+      staleDatasets: ["b"],
+    });
+    await useApp.getState().recalcNow();
+    expect(useApp.getState().staleDatasets).toEqual(["b"]); // stays stale
+    expect(useApp.getState().status).toContain("derived worksheet recompute failed");
+  });
+
+  it("a still-pending source leaves the sheet stale instead of deriving from a preview (P1-1)", async () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a", { pending: { kind: "path", path: "/x.opj", bookId: "b1", rows: 5000, cols: 4 } }),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" }, corrections: {} }),
+      ],
+      staleDatasets: ["b"],
+    });
+    await useApp.getState().recalcNow();
+    expect(useApp.getState().staleDatasets).toEqual(["b"]);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toMatch(/hasn't fully loaded yet/);
+  });
+
+  it("staleDatasets/staleFits accumulation is one recordHistory per triggering gesture (K5e)", () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { derivedFrom: { datasetId: "a", pipeline: "flatten" }, fitSpec: { model: "Linear" } }),
+      ],
+    });
+    const before = useApp.getState().history.length;
+    useApp.getState().setCellValue("a", 0, 0, 99); // one gesture
+    // touchDataset's own stale-marking writes are NOT history entries (only
+    // the triggering cell edit is) — exactly one entry for the whole
+    // propagation (bgRef chain, sheet stale-marking, fit stale-marking).
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+});

@@ -8,7 +8,8 @@
 // so this file can be read as "what the rescale controls look like" and
 // nothing else.
 
-import { NumberField, Select } from "../primitives";
+import { NumberField } from "../primitives/NumberField";
+import { Select } from "../primitives";
 import type { ScaleOp } from "../../lib/rescale";
 
 const SCALE_OPS: { value: ScaleOp; label: ScaleOp }[] = [

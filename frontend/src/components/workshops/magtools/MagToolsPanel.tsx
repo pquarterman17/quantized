@@ -4,7 +4,9 @@
 // Thin — all state/logic lives in the hook; the math is golden in calc.magnetometry.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, SegmentedControl, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import {

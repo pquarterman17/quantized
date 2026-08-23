@@ -51,9 +51,13 @@ function asLoaded(datasets: Dataset[], workbooks: WorkbookNode[] = []): LoadedWo
     savedPlotSpecs: [],
     techniqueViewMemory: {},
     savedRois: [],
+    quickPlotTemplates: [],
     librarySelection: null,
     workbookLastChild: {},
     expandedWorkbookIds: [],
+    collections: [],
+    visibleDetailsColumns: [],
+    plotRecipes: [],
   };
 }
 

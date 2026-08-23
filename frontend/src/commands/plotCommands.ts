@@ -14,6 +14,7 @@ import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
+import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
 
 /** Build the Plot- and Insert-group curated palette actions against the
@@ -44,6 +45,19 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Waterfall (stack datasets)…",
       description: "Separate overlapping curves with an adjustable vertical offset.",
       run: () => s().setWaterfallOpen(true),
+    },
+    {
+      // P1.3 wave 3, Lane D deliverable 3: the recipe list/apply/scope-move
+      // manager surface. Project + global scopes are BOTH read here (see
+      // store/globalPlotRecipes.ts's header) -- this command just opens the
+      // panel, which owns reading both lists itself.
+      id: "plot-recipe-manager",
+      group: "Plot",
+      section: "Layout",
+      label: "Plot Recipe Manager…",
+      description: "List, apply, rename, duplicate, move between scopes, and import/export saved Plot Recipes.",
+      keywords: "plot recipe manager template reuse global project",
+      run: () => useRecipeManager.getState().openRecipeManager(),
     },
     // ── Plot ──
     {

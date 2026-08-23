@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card } from "../primitives";
+import Card from "../primitives/Card";
 
 export default function NotesCard({ active }: { active: Dataset | null }) {
   const setDatasetNotes = useApp((s) => s.setDatasetNotes);
@@ -15,8 +15,12 @@ export default function NotesCard({ active }: { active: Dataset | null }) {
 
   // Resync the draft when the active dataset changes (id-keyed so an edit to the
   // current dataset's notes elsewhere doesn't clobber an in-progress edit).
+  // `active?.notes` is DELIBERATELY excluded (R9): pinned by
+  // NotesCard.test.tsx's "does not clobber an in-progress edit" /
+  // "resyncs ... when the active id changes" tests.
   useEffect(() => {
     setDraft(active?.notes ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `active?.notes` deliberately excluded: id-keyed resync only, see comment above.
   }, [active?.id]);
 
   if (!active) return null;

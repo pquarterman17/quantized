@@ -1,12 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertMagUnits, subtractMagBackground } from "../../../lib/api";
+import { convertMagUnits, subtractMagBackground } from "../../../lib/api/magnetometry";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useMagTools } from "./useMagTools";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/magnetometry", () => ({
   subtractMagBackground: vi.fn(),
   convertMagUnits: vi.fn(),
 }));

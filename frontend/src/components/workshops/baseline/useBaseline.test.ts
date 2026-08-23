@@ -1,24 +1,17 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  applyCorrections as applyCorrectionsApi,
-  baselineALS,
-  baselineAnchor,
-  baselineEstimate,
-  baselineModPoly,
-  baselineRegion,
-  baselineRollingBall,
-  baselineShirley,
-  baselineXrdLowAngle,
-  fetchBookData,
-} from "../../../lib/api";
+import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
+import { applyCorrections as applyCorrectionsApi, fetchBookData } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useBaseline } from "./useBaseline";
 
 vi.mock("../../../lib/api", () => ({
   applyCorrections: vi.fn(),
+  fetchBookData: vi.fn(),
+}));
+vi.mock("../../../lib/api/baseline", () => ({
   baselineALS: vi.fn(),
   baselineAnchor: vi.fn(),
   baselineEstimate: vi.fn(),
@@ -27,7 +20,6 @@ vi.mock("../../../lib/api", () => ({
   baselineRollingBall: vi.fn(),
   baselineShirley: vi.fn(),
   baselineXrdLowAngle: vi.fn(),
-  fetchBookData: vi.fn(),
 }));
 
 const raw: DataStruct = {

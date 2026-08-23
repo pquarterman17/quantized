@@ -14,7 +14,26 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-08-10 (plan-hygiene reconciliation: #21's frontend hook-in,
+**Updated:** 2026-08-21 (real-data + live-Origin verification campaign. The
+"25 pre-existing renderer failures" every sweep since 2026-07-25 carried
+were PHANTOM: commit `5cdc7303` (2026-07-19, composition-union refactor)
+removed the raw `spatialPanels` store field, and the harness's structural
+check kept reading it, misclassifying every spatial multi-panel apply as
+"single" and comparing against singleton axis fields the spatial path never
+writes — the APP was correct the whole time (root-caused + fixed
+`a8b3970a`: harness reads `spatialPanelsOf(composition)` through the seam;
+regression-tested at unit level in `origin_acceptance.test.mjs` +
+`useApp.test.ts`). Full 12-project corpus re-sweep after the fix: 350
+graphs, 332 resolved fully-consistent, 18 known-unresolved (Hc2 register),
+0 renderer / 0 process failures — baseline restored. Same campaign: live
+Origin 2026b COM exports added for the 9 projects that had no Origin-side
+oracle (fit-report FitLine/Residual pages fail/hang `expGraph` — recorded
+as errors/skips in each manifest, a known Origin-side class, not a decode
+gap); COM checkpoint manifests now survive corpus relocation (`85e99d30`);
+DiraCulator W4 golden freeze finally run — 93 cases frozen, golden suite
+248 passed/0 skipped, one real parity fix in `calc/magnetic.py`
+(`curie_weiss_moment`/`langevin` now use the MATLAB GUI's own 4-sig-fig
+constants, `5f9054b1`). Prior: 2026-08-10 (plan-hygiene reconciliation: #21's frontend hook-in,
 deferred here to `GAP_ECOSYSTEM_PLAN.md` item 5, actually shipped
 2026-07-11 (`07e9d4fa`) and is recorded in `MAIN_PLAN.md`'s Completed
 section — this item's own text was never updated, so it sat unstruck

@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { FigureSpec } from "../../../lib/api";
+import type { FigureSpec } from "../../../lib/api/figures";
 import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
 import { toggleChannelPlotted, toggleChannelSecondary, type ChannelMembership } from "./canonicalChannels";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";

@@ -1,3 +1,5 @@
+// Covers BOTH halves of the C2 eager/lazy split: `pageDocument.ts`
+// (eager schema/parse half) and `pageDocumentActions.ts` (lazy actions).
 // Pure PageDocument tests (FIGURE_AUTHORING_WORKFLOW_PLAN F3.1) — schema,
 // sanitization/migration, serialization round-trip, and the fail-closed
 // missing-reference contract (F3.2).
@@ -9,21 +11,23 @@ import { defaultPlotView } from "./plotview";
 import {
   PAGE_DOCUMENT_SCHEMA,
   PAGE_DOCUMENT_VERSION,
+  emptyPagePanels,
+  sanitizePageDocument,
+  sanitizePageDocuments,
+  type PageDocument,
+  type PageLayoutSettings,
+} from "./pageDocument";
+import {
   createPageDocument,
   deserializePageDocument,
-  emptyPagePanels,
   pageDocumentDirty,
   pageDocumentHasUnsavedEdits,
   pagePanelLabels,
   pagePanelLifecycle,
   pagesReferencingFigure,
   resolvePagePanel,
-  sanitizePageDocument,
-  sanitizePageDocuments,
   serializePageDocument,
-  type PageDocument,
-  type PageLayoutSettings,
-} from "./pageDocument";
+} from "./pageDocumentActions";
 
 const FIGURE = createFigureDocument({
   id: "figure-1",

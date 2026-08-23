@@ -4,7 +4,7 @@ import {
   assignQuickFigureColumn,
   initialQuickFigureMapping,
   useAcquisitionAxis,
-} from "./quickFigureMapping";
+} from "./quickFigureMappingActions";
 import { quickFigurePreview } from "./quickFigurePreview";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { DataStruct, Dataset } from "./types";

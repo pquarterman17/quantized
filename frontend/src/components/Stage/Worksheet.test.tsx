@@ -1,15 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { statsDescriptive } from "../../lib/api";
+import { statsDescriptive } from "../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import Worksheet from "./Worksheet";
 
 vi.mock("../../lib/api", () => ({
-  statsDescriptive: vi.fn(),
   applyCorrections: vi.fn(),
   uploadFile: vi.fn(),
+}));
+vi.mock("../../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
 }));
 
 const data: DataStruct = {
@@ -309,7 +311,8 @@ describe("Worksheet computed columns (recompute)", () => {
     addColumn("A + B", "S");
     expect(useApp.getState().datasets).toHaveLength(1); // in place, not a new dataset
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`.
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
     expect(d.data.values[0][2]).toBe(30); // 10 + 20
     expect(screen.getByText("30.0000")).toBeInTheDocument();
   });

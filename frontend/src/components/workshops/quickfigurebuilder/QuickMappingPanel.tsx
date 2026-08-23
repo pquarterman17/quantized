@@ -1,11 +1,8 @@
 import type { DragEvent } from "react";
 
 import type { ErrorSide } from "../../../lib/errorRoles";
-import {
-  assignmentFor,
-  type QuickColumnAssignment,
-  type QuickFigureMapping,
-} from "../../../lib/quickFigureMapping";
+import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
+import { assignmentFor, type QuickColumnAssignment } from "../../../lib/quickFigureMappingActions";
 import type { DataStruct } from "../../../lib/types";
 
 interface Props {
