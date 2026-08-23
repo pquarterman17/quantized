@@ -3,8 +3,11 @@
 // plus the full visual payload, captured once explicitly from a live PlotView
 // (never auto-saved), that a later dataset of the SAME technique can try to
 // REAPPLY. Matching lives in `plotRecipeMatch.ts`; parsing/sanitizing for the
-// untrusted `.dwk`/import boundary lives in `plotRecipeIO.ts`. This module
-// owns only the schema itself and the pure capture half.
+// untrusted `.dwk`/import boundary lives in `plotRecipeIO.ts`; the schema
+// types + version constant live in `plotRecipeSchema.ts` (re-exported below
+// for compatibility -- the split keeps startup workspace parsing from
+// pulling this capture implementation into the eager bundle). This module
+// owns only the pure capture half.
 //
 // Builds on established idioms rather than inventing new ones:
 //   - `lib/quickPlotTemplates.ts` (H1/H4): technique-equality gate, per-channel
