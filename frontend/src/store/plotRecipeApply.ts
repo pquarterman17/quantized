@@ -50,7 +50,6 @@
 // already-eager module from dragging the otherwise boot-lazy global store
 // into the always-loaded graph -- see that module's own doc.
 
-import { captureRecipe } from "../lib/plotRecipe";
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import type { PlotRecipe } from "../lib/plotRecipe";
@@ -197,26 +196,19 @@ export function resolveApplyOrStage(
 }
 
 interface RecipeLibs {
-  captureRecipe: typeof captureRecipe;
+  captureRecipe: typeof import("../lib/plotRecipe").captureRecipe;
   resolveRecipe: typeof import("../lib/plotRecipeMatch").resolveRecipe;
 }
 let _recipeLibs: Promise<RecipeLibs> | null = null;
-/** Load (once, then cache) the one still-lazy wave-1 library this slice
- *  needs. Only `lib/plotRecipeMatch.ts` (`resolveRecipe`) stays behind a
- *  dynamic import: `lib/plotRecipe.ts` became unavoidably EAGER when Lane C
- *  wired `sanitizeRecipes` (lib/plotRecipeIO.ts, which value-imports it)
- *  into `lib/workspace.ts`'s synchronous `parseWorkspace` — so a dynamic
- *  import of it here would add chunk-glue without deferring a single byte
- *  (the dual eager+lazy import shape also makes Rollup carve shared deps
- *  into their own always-preloaded chunks, which measured WORSE). The
- *  async method signatures are kept as-is — they were public API shape
- *  from this slice's first commit and resolveRecipe still loads lazily. */
+/** Load capture/matching only after a recipe action. `plotRecipeSchema.ts`
+ *  now supplies workspace parsing's lightweight runtime constant, so the
+ *  previous synchronous workspace -> plotRecipeIO -> plotRecipe capture
+ *  edge no longer exists and both expensive libraries can remain lazy. */
 export function recipeLibs(): Promise<RecipeLibs> {
   if (!_recipeLibs) {
-    _recipeLibs = import("../lib/plotRecipeMatch").then((m) => ({
-      captureRecipe,
-      resolveRecipe: m.resolveRecipe,
-    }));
+    _recipeLibs = Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")]).then(
+      ([capture, match]) => ({ captureRecipe: capture.captureRecipe, resolveRecipe: match.resolveRecipe }),
+    );
   }
   return _recipeLibs;
 }
