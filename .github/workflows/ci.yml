@@ -36,6 +36,44 @@ jobs:
       - name: Tests
         run: uv run pytest -q
 
+  # POST_SPRINT_INDEPENDENT_REVIEW.md R7: bounded performance-regression
+  # protection for the large-2-D-map import+regrid path. `tests/test_perf_
+  # map_guard.py`'s `perfguard`-marked tests already run inside the required
+  # `backend` job's plain `pytest -q` above (same pattern the pre-existing
+  # `perf` marker uses -- generously bounded tripwires are cheap enough and
+  # unlikely enough to trip that they stay in the blocking gate too). This
+  # job exists ONLY for the "recorded trend data" half of R7's ask: a
+  # `continue-on-error: true` job, deliberately NOT added to branch
+  # protection's required-checks set, that runs the guard in isolation and
+  # uploads its timing output as a downloadable artifact on every run so a
+  # slow drift shows up in the run history even before it's large enough to
+  # trip the (deliberately generous, ~10x-measured) wall-clock ceiling.
+  perf-guard:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: Sync deps
+        run: uv sync --group dev
+      - name: Run R7 large-map perf guard (non-blocking)
+        # pipefail so a real pytest failure still shows red on this step
+        # (distinct from `continue-on-error: true` above, which is what
+        # actually keeps that red from blocking the merge) rather than
+        # being masked by `tee`'s own always-zero exit code.
+        run: |
+          set -o pipefail
+          uv run pytest -m perfguard -q -vv --durations=0 | tee perf-guard-timing.txt
+      - name: Upload timing artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-guard-timing
+          path: perf-guard-timing.txt
+          retention-days: 90
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
