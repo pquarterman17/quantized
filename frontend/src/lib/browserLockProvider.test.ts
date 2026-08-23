@@ -14,7 +14,7 @@
 // real cross-tab interleaving would land, so the race is reproduced on every
 // run rather than hoped-for under real scheduling.
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserLockProvider, type BrowserLockDeps, type LockRequester, type MinimalStorage } from "./browserLockProvider";
 import { STALE_AFTER_MS } from "./lockState";
@@ -75,13 +75,13 @@ function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } 
   return { promise, resolve };
 }
 
-/** Every test opts OUT of registering a real `pagehide`/`beforeunload`
- *  listener on jsdom's shared `window` by default (a no-op
- *  `subscribeUnload`) — the dedicated "release on tab close" tests below
- *  inject a capturing fake instead. Without this, every other test in this
- *  file would leak a real DOM listener onto the shared jsdom window. */
+/** Every test opts OUT of registering a real `pagehide` listener on jsdom's
+ *  shared `window` by default (a no-op `subscribeUnload` returning a no-op
+ *  unsubscribe) — the dedicated "release on tab close" tests below inject a
+ *  capturing fake instead. Without this, every other test in this file
+ *  would leak a real DOM listener onto the shared jsdom window. */
 function makeTab(instanceId: string, overrides: BrowserLockDeps = {}): ReturnType<typeof createBrowserLockProvider> {
-  return createBrowserLockProvider(instanceId, { subscribeUnload: () => {}, ...overrides });
+  return createBrowserLockProvider(instanceId, { subscribeUnload: () => () => {}, ...overrides });
 }
 
 const PATH = "/projects/demo.dwk";
@@ -343,15 +343,31 @@ describe("createBrowserLockProvider — release", () => {
 // ── best-effort release on tab close ───────────────────────────────────
 
 describe("createBrowserLockProvider — release on tab close", () => {
-  function captureUnloadHandler(): { deps: Pick<BrowserLockDeps, "subscribeUnload">; fire: () => void } {
+  function captureUnloadHandler(): {
+    deps: Pick<BrowserLockDeps, "subscribeUnload">;
+    fire: () => void;
+    unsubscribeCalls: number;
+  } {
     let handler: (() => void) | null = null;
+    const state = { unsubscribeCalls: 0 };
     return {
-      deps: { subscribeUnload: (fn) => (handler = fn) },
+      deps: {
+        subscribeUnload: (fn) => {
+          handler = fn;
+          return () => {
+            state.unsubscribeCalls++;
+            handler = null;
+          };
+        },
+      },
       fire: () => handler?.(),
+      get unsubscribeCalls() {
+        return state.unsubscribeCalls;
+      },
     };
   }
 
-  it("clears this instance's own lock when the captured pagehide/beforeunload handler fires", async () => {
+  it("clears this instance's own lock when the captured pagehide handler fires", async () => {
     const storage = makeFakeStorage();
     const { deps, fire } = captureUnloadHandler();
     const tab = createBrowserLockProvider("inst-a", { storage, ...deps });
@@ -359,10 +375,11 @@ describe("createBrowserLockProvider — release on tab close", () => {
     expect(await tab.read(PATH)).not.toBeNull();
 
     fire();
+    await Promise.resolve(); // M2: the release now runs inside an async withCas body
     expect(await tab.read(PATH)).toBeNull();
   });
 
-  it("never clobbers a lock a DIFFERENT tab has since taken over", async () => {
+  it("never clobbers a lock a DIFFERENT tab has since taken over (sequential — see the forced-race pair below for the concurrent case)", async () => {
     const storage = makeFakeStorage();
     const { deps, fire } = captureUnloadHandler();
     const tabA = createBrowserLockProvider("inst-a", { storage, ...deps });
@@ -377,8 +394,164 @@ describe("createBrowserLockProvider — release on tab close", () => {
     expect(b.acquired).toBe(true);
 
     fire(); // A's stale unload handler must not touch B's fresh lock
+    await Promise.resolve();
     const stillThere = await tabB.read(PATH);
     expect(stillThere?.instanceId).toBe("inst-b");
+  });
+
+  // M3 (coordinator review): `beforeunload` fires for a page merely being
+  // frozen into the back/forward cache, not only a real unload, and cannot
+  // tell the two apart — release must be tied to `pagehide`'s own
+  // `persisted` flag instead. These three exercise the REAL
+  // `defaultSubscribeUnload` (no injected fake), captured off jsdom's real
+  // `window.addEventListener` via a spy, so they prove the production
+  // wiring itself, not just the injectable seam.
+  it("M3: does NOT release on a pagehide whose persisted flag is true (bfcache freeze, not a real unload)", async () => {
+    const storage = makeFakeStorage();
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const tab = createBrowserLockProvider("inst-a", { storage });
+    const onPageHide = addSpy.mock.calls.find((c) => c[0] === "pagehide")?.[1] as unknown as (e: { persisted: boolean }) => void;
+    addSpy.mockRestore();
+
+    await tab.tryAcquire(PATH);
+    expect(await tab.read(PATH)).not.toBeNull();
+
+    onPageHide({ persisted: true });
+    await Promise.resolve();
+    expect(await tab.read(PATH)).not.toBeNull(); // untouched — this was a bfcache freeze, not a real unload
+    tab.dispose();
+  });
+
+  it("M3: DOES release on a pagehide with persisted: false (a genuine unload)", async () => {
+    const storage = makeFakeStorage();
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const tab = createBrowserLockProvider("inst-a", { storage });
+    const onPageHide = addSpy.mock.calls.find((c) => c[0] === "pagehide")?.[1] as unknown as (e: { persisted: boolean }) => void;
+    addSpy.mockRestore();
+
+    await tab.tryAcquire(PATH);
+    onPageHide({ persisted: false });
+    await Promise.resolve();
+    expect(await tab.read(PATH)).toBeNull();
+    tab.dispose();
+  });
+
+  it("M3: beforeunload is not wired to release at all", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const tab = createBrowserLockProvider("inst-a", { storage: makeFakeStorage() });
+    expect(addSpy.mock.calls.some((c) => c[0] === "beforeunload")).toBe(false);
+    addSpy.mockRestore();
+    tab.dispose();
+  });
+
+  // M6: a remount (StrictMode double-mount, or any real unmount/remount of
+  // the installing effect) must be able to remove exactly the listener IT
+  // registered, not leak a second permanent one.
+  it("M6: dispose() unsubscribes — the captured pagehide handler no longer fires after dispose", async () => {
+    const storage = makeFakeStorage();
+    // `unsubscribeCalls` is a GETTER on the returned object — read it off
+    // the object itself (not destructured into a local, which would
+    // snapshot the value at destructure time, before dispose() ever runs).
+    const handle = captureUnloadHandler();
+    const tab = createBrowserLockProvider("inst-a", { storage, ...handle.deps });
+    await tab.tryAcquire(PATH);
+
+    tab.dispose();
+    expect(handle.unsubscribeCalls).toBe(1);
+
+    handle.fire(); // the handler was cleared by the fake's own unsubscribe — a no-op
+    await Promise.resolve();
+    expect(await tab.read(PATH)).not.toBeNull(); // never released — dispose real-unsubscribed it first
+  });
+});
+
+// ── M2: unload release vs a concurrent takeover (forced race) ──────────
+
+describe("createBrowserLockProvider — unload release vs concurrent takeover", () => {
+  it("forces the no-mutex race: a delayed unload release can delete a fresh takeover's record", async () => {
+    const storage = makeFakeStorage();
+    // A mutable indirection: setup (the initial acquire) must NOT be gated
+    // by the race's own `gate`, or it would deadlock waiting on a promise
+    // nothing resolves until AFTER setup is supposed to have finished.
+    // `yieldForTest` dereferences whatever `gateFn` points to AT CALL TIME,
+    // so it can be armed only once setup is done.
+    let gateFn: () => Promise<void> = () => Promise.resolve();
+    // A mutable BOX (not a bare `let`) for the captured handler — TS narrows
+    // a plain `let` reassigned only inside a callback passed to an
+    // intervening function call back to its initializer's type at the outer
+    // scope, which would make `box.handler` unusable below; a property on an
+    // object sidesteps that (same shape `captureUnloadHandler`'s `state`
+    // object already uses for `unsubscribeCalls`).
+    const box: { handler: (() => void) | null } = { handler: null };
+    const tabA = createBrowserLockProvider("inst-a", {
+      storage,
+      lockRequest: null,
+      yieldForTest: () => gateFn(),
+      subscribeUnload: (fn) => {
+        box.handler = fn;
+        return () => {};
+      },
+    });
+    const tabB = makeTab("inst-b", { storage, lockRequest: null, yieldForTest: () => gateFn() });
+
+    const a = await tabA.tryAcquire(PATH);
+    const key = "qz-project-lock:v1:" + PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+
+    const gate = deferred<void>();
+    gateFn = () => gate.promise; // arm the race gate now that setup is done
+
+    // Order matters for forcing the BAD interleaving: B's takeOver attaches
+    // to `gate.promise` FIRST (so it resumes and WRITES first once the gate
+    // opens); A's fire-and-forget release attaches SECOND, so its captured
+    // (now-stale) "yes this is still my token" decision executes LAST —
+    // deleting whatever is in storage by then, which is B's brand-new record.
+    const takeoverPromise = tabB.takeOver(PATH, a.record?.token ?? "");
+    box.handler?.();
+    gate.resolve();
+    await takeoverPromise;
+    await new Promise((r) => setTimeout(r, 0)); // let A's queued microtasks finish
+
+    expect(await tabB.read(PATH)).toBeNull(); // the race this test forces into the open
+  });
+
+  it("the Web Locks mutex closes that exact window: the takeover's record survives regardless of ordering", async () => {
+    const storage = makeFakeStorage();
+    const lockRequest = makeFakeLockManager();
+    // Same mutable-indirection reason as the no-mutex test above: setup
+    // must not be gated by the race's own (not-yet-created) `gate`.
+    let gateFn: () => Promise<void> = () => Promise.resolve();
+    const box: { handler: (() => void) | null } = { handler: null };
+    const tabA = createBrowserLockProvider("inst-a", {
+      storage,
+      lockRequest,
+      yieldForTest: () => gateFn(),
+      subscribeUnload: (fn) => {
+        box.handler = fn;
+        return () => {};
+      },
+    });
+    const tabB = makeTab("inst-b", { storage, lockRequest, yieldForTest: () => gateFn() });
+
+    const a = await tabA.tryAcquire(PATH);
+    const key = "qz-project-lock:v1:" + PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+
+    const gate = deferred<void>();
+    gateFn = () => gate.promise;
+
+    const takeoverPromise = tabB.takeOver(PATH, a.record?.token ?? "");
+    box.handler?.();
+    gate.resolve();
+    await takeoverPromise;
+    await new Promise((r) => setTimeout(r, 0));
+
+    const stillThere = await tabB.read(PATH);
+    expect(stillThere?.instanceId).toBe("inst-b"); // safe either way: the release's own read now happens INSIDE the mutex
   });
 });
 

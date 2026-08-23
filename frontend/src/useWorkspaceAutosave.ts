@@ -2,6 +2,37 @@
 // ratchet — org plan #10 direction): restore the autosaved library once on
 // startup, then debounce-save whenever the persisted workspace slice changes.
 // The storage half lives in lib/autosave; this hook is only the store bridge.
+//
+// BROWSER MULTI-TAB (coordinator review round, M1): the autosave slot itself
+// — one shared IndexedDB/localStorage store per browser origin, read on
+// every startup and written on every debounced save below — is the actual
+// same-browser collision surface for a plain `qz` browser tab: unlike a
+// desktop session, a browser tab carries no real project PATH the lock
+// machine can key on (a browser-picker open never gets a `native` identity —
+// see `lib/openWorkspaceReplace.ts` — and quick-save falls straight to a
+// download, `store/workspaceIO.ts`'s `runSaveWorkspace`), so two tabs of the
+// same browser silently autosaving into the SAME slot got zero protection
+// even after `lib/browserLockProvider.ts` landed as a provider nothing yet
+// called. `BROWSER_AUTOSAVE_LOCK_PATH` is a synthetic, stable "project path"
+// naming that ONE shared slot — not a real file, but a stable key the
+// EXISTING lock state machine (`store/projectLock.ts`) can track exactly
+// like a real `.dwk` path, so two tabs restoring/autosaving into it get the
+// same read-only / Take Over Editing protection a real file gets. Only ever
+// engaged for browser sessions (`App.tsx`'s install effect, gated on
+// `!hasDesktopShell()`) — two separate `qz --desktop` processes do not share
+// this storage at all, so there is nothing here for them to contend over.
+// `engageBrowserAutosaveLock` is the one new state-machine ENTRY POINT this
+// wiring adds a caller for (`openProject`, unchanged); the debounced-save
+// effect's own gate below reads `canWriteNow()`, also unchanged — no new
+// semantics in `store/projectLock.ts`/`lib/lockState.ts` themselves.
+//
+// SCOPE, STATED HONESTLY: this covers the AUTOSAVE SLOT only. A browser tab
+// explicitly opening or saving a NAMED `.dwk` (the file-picker open / the
+// blob-download quick-save) still gets no lock protection at all — neither
+// carries a stable identity the browser LockProvider could key on the same
+// way, and wiring that is a materially larger change (giving a browser-
+// picked file a durable identity) this task's scope did not ask for. See
+// `store/projectLock.ts`'s own header for the fuller, up-to-date account.
 
 import { useEffect } from "react";
 
@@ -10,11 +41,38 @@ import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryCh
 import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
+import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
 import { stageWorkspaceRestore } from "./store/windowHydration";
+
+/** Synthetic, stable "project path" for the shared browser autosave slot —
+ *  see this module's header. Exported so App.tsx's install effect and this
+ *  module's own debounced-save gate always agree on the exact same key. */
+export const BROWSER_AUTOSAVE_LOCK_PATH = "qz://browser-autosave-session";
+
+/** Engage the lock state machine for the shared browser autosave slot —
+ *  called once by App.tsx's install effect, right after the browser
+ *  `LockProvider` is set (ordering matters: `openProject` must see the REAL
+ *  provider, never the process-local in-memory default it replaces).
+ *  `openProject` is the EXISTING entry point (`store/projectLock.ts`) — this
+ *  function adds no new one; it only decides WHEN to call it and how to
+ *  report a read-only result, mirroring
+ *  `lib/openWorkspaceReplace.ts`'s `registerWithLockStateMachine` toast for
+ *  a real native open. Exported for direct testing (see
+ *  useWorkspaceAutosave.test.ts's "browser autosave lock" tests) — App.tsx
+ *  itself has no dedicated test file. */
+export async function engageBrowserAutosaveLock(): Promise<void> {
+  const result = await useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
+  if (!result.readOnly) return;
+  const reason =
+    result.status === "held-by-other-stale"
+      ? "another tab (unresponsive) has this browser session open — Take Over Editing is available"
+      : "another tab has this browser session open for editing — opened read-only";
+  toast(reason, "info");
+}
 
 function lastKnownProject(): LastProjectRef | null {
   const entry = useRecentProjects.getState().recentProjects[0];
@@ -190,6 +248,19 @@ export function useWorkspaceAutosave(): void {
       useApp.getState().markProjectDirty();
       clearTimeout(timer);
       timer = setTimeout(() => {
+        // M1 (coordinator review): re-check FRESH, right before the actual
+        // write — same discipline `store/workspaceIO.ts`'s `runSaveWorkspace`
+        // uses for its own quick-save gate. Only ever fires when the lock IS
+        // tracking the exact browser autosave path (a desktop session, or a
+        // browser tab whose install effect hasn't resolved yet, has
+        // `lock.path !== BROWSER_AUTOSAVE_LOCK_PATH` and is UNAFFECTED — this
+        // can only ever make a write MORE cautious, never invent a refusal
+        // the lock state itself doesn't support, mirroring
+        // `runSaveWorkspace`'s own comment on the identical shape).
+        const lock = useProjectLock.getState();
+        if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH && !lock.canWriteNow()) {
+          return;
+        }
         const s = useApp.getState();
         // `windowsForSave()` freezes the FOCUSED window's live view into its
         // record first (the plan's "save is one of the three sanctioned

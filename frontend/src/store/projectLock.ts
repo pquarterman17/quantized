@@ -62,30 +62,30 @@
 // `desktop_bridge.py`'s "PR I2" section).
 //
 // TWO-BROWSER-TABS-ONE-BACKEND — STATED EXPLICITLY, NOT SILENTLY GAPPED
-// (P2, adversarial review, 2026-08-19; this was the platform-boundary
-// question item 9b's own booking asked to be answered, and the first
-// version of this slice answered only the `qz --desktop` process-pair half
-// of it). Running `qz` (no `--desktop`) serves the API + SPA over HTTP;
-// nothing stops opening the SAME project in two ordinary browser TABS
-// against that one server. Today that pair gets ZERO protection from this
-// module: `hasDesktopShell()` gates every call site that would register
-// with the lock machine at all (`store/workspaceIO.ts`'s `runSaveWorkspace`
-// short-circuits to Save-As before ever reaching the lock check;
-// `lib/openWorkspaceReplace.ts`'s `registerWithLockStateMachine` only fires
-// on a `native` identity, which a browser tab never has), so two tabs can
-// quick-save the same project and silently clobber each other exactly the
-// way L0.47 exists to prevent for two DESKTOP instances. This is not the
-// same gap the filesystem provider above closes and is NOT automatically
-// fixed by it: a filesystem-backed `LockProvider` gives two separate OS
-// PROCESSES a shared record, but two tabs in the SAME browser
-// share no filesystem access at all — closing this gap needs a different
-// mechanism entirely (an in-browser cross-tab channel, e.g.
-// `BroadcastChannel`/a `localStorage` "storage" event listener, backed by
-// the SAME `LockProvider` interface so `classifyLock`/`takeOver`/
-// `verifyBeforeWrite` stay the single source of truth either way). Named
-// home: "PR I2 cross-tab lock provider" — until it lands, browser/multi-tab
-// mode is honestly ungated, and this paragraph is the record of that, not a
-// promise the code doesn't keep.
+// (P2, 2026-08-19; UPDATED by the coordinator review round that landed
+// `lib/browserLockProvider.ts` AND wired it up — M4, 2026-08-23. Two
+// browser tabs collide on TWO surfaces, not one fix):
+//  (1) THE SHARED AUTOSAVE SLOT — NOW COVERED. `useWorkspaceAutosave.ts`'s
+//  restore/debounced-save loop reads/writes ONE shared IndexedDB/
+//  localStorage slot per origin regardless of an explicit project —
+//  the surface two tabs ACTUALLY collide on (see that module's scouted
+//  header). `App.tsx`'s install effect installs the browser `LockProvider`
+//  AND engages this store (`openProject`, unchanged) against a synthetic,
+//  stable path naming that slot (`BROWSER_AUTOSAVE_LOCK_PATH`); the
+//  debounced save gates on `canWriteNow()` for that exact path
+//  (`runSaveWorkspace`'s own "only ever more cautious" discipline). No new
+//  verbs, no `lib/lockState.ts` change — red-first coverage in
+//  useWorkspaceAutosave.test.ts's "browser autosave lock" tests.
+//  (2) AN EXPLICIT NAMED `.dwk` — STILL UNGATED. `hasDesktopShell()` still
+//  gates `runSaveWorkspace` (falls to blob-download before any lock check)
+//  and `registerWithLockStateMachine` (fires only on a `native` identity, a
+//  browser-picker open never has — no durable key). Two tabs picking "the
+//  same" file can still clobber each other — L0.47's scenario, on a
+//  surface out of this round's scope (a durable cross-tab identity for a
+//  picked file is materially larger). Honest named gap: "PR I2 cross-tab
+//  lock provider for an explicit browser file" — ungated until it lands.
+// Neither is the filesystem provider's to close — two tabs share no
+// filesystem access; both are `lib/browserLockProvider.ts`'s domain.
 
 import { create } from "zustand";
 

@@ -63,17 +63,44 @@
 // unverifiable: true }` (or `read` -> `null`, `release` -> `false`) — never a
 // guessed success, never a thrown exception out of this module.
 //
-// RELEASE ON TAB CLOSE: best-effort only, per the task's own ruling — a
-// `pagehide`/`beforeunload` listener releases every path this INSTANCE
-// still believes it holds (tracked in `heldPaths` below), using the same
-// token-CAS `release` logic so it can never clobber a path someone else has
-// since taken over. This is deliberately NOT the only line of defense: a
-// hard crash (no unload event at all) leaves the record in place until
+// RELEASE ON TAB CLOSE (coordinator review round, M2/M3): best-effort only —
+// a `pagehide` listener releases every path this INSTANCE still believes it
+// holds (tracked in `heldPaths` below), using the SAME token-CAS logic the
+// other verbs use so it can never clobber a path someone else has since
+// taken over. Two hardening fixes from the review:
+//  - M3: `beforeunload` is NOT wired to release at all — it fires for a page
+//    merely being frozen into the back/forward cache, not only a real
+//    unload, and it carries no way to tell the two apart. `pagehide`'s own
+//    `event.persisted` flag IS that signal: `false` is a genuine unload
+//    (release); `true` means bfcache is preserving this exact JS context
+//    (this tab's `heldPaths`/token survive untouched) — the installing side
+//    (App.tsx) re-validates via the EXISTING `heartbeat()` state-machine
+//    entry point on the matching `pageshow` restore, not this module.
+//  - M2: the read-decide-remove is now routed through the SAME `withCas`
+//    mutex the other four verbs use, closing the same read-then-act TOCTOU
+//    window a bare compare-and-delete would otherwise have against a
+//    concurrent `takeOver` (a delayed, unconditional `removeItem` deciding
+//    from a STALE captured read could otherwise delete a fresh winner's
+//    brand-new record). When Web Locks is unavailable, this degrades to
+//    the same single synchronous compare-and-delete block as before — a
+//    narrow residual, same class as every other verb's documented no-mutex
+//    fallback risk, not a new one.
+// A hard crash (no unload event at all) leaves the record in place until
 // `STALE_AFTER_MS` passes, exactly like a killed desktop process leaves its
 // OS lock file until the same staleness math takes over — the pure state
 // machine in `lib/lockState.ts` was written to tolerate exactly this.
+//
+// DISPOSAL (M6): `subscribeUnload` returns an unsubscribe, and the provider
+// exposes it as `dispose()` — an extra property beyond the plain
+// `LockProvider` shape (every existing `LockProvider` call site is
+// unaffected; only the installing effect in App.tsx reads it). Without this,
+// a React StrictMode double-mount (or any remount) of the installing effect
+// would register a second permanent `pagehide` listener with no way to
+// remove the first, leaking one per remount — mirrors
+// `lib/sessionMarker.ts`'s `installSessionMarker()` returning its own
+// teardown for the identical reason.
 
-import { classifyLock, canTakeOver, type LockRecord } from "./lockState";
+import { acquire, classifyLock, canTakeOver, type LockRecord } from "./lockState";
 import type { LockCasResult, LockProvider } from "../store/projectLock";
 
 const STORAGE_PREFIX = "qz-project-lock:v1:";
@@ -135,7 +162,10 @@ export type LockRequester = (name: string, fn: () => unknown) => Promise<unknown
 export interface BrowserLockDeps {
   storage?: MinimalStorage;
   lockRequest?: LockRequester | null;
-  subscribeUnload?: (fn: () => void) => void;
+  /** Registers `fn` to run on a genuine tab close (see "RELEASE ON TAB
+   *  CLOSE" above) and returns an unsubscribe — M6: the installing effect
+   *  calls it on cleanup so a remount never leaks a second listener. */
+  subscribeUnload?: (fn: () => void) => () => void;
   /** TEST-ONLY seam (never set in production): awaited, if provided, between
    *  the CAS read and the CAS write in every mutating verb — the deferred-
    *  promise hook `docs/testing.md`'s evidence standard calls for, letting a
@@ -163,34 +193,47 @@ function defaultLockRequest(): LockRequester | null {
   return null;
 }
 
-function defaultSubscribeUnload(fn: () => void): void {
+function defaultSubscribeUnload(fn: () => void): () => void {
   try {
-    if (typeof window === "undefined") return;
-    window.addEventListener("pagehide", fn);
-    window.addEventListener("beforeunload", fn);
+    if (typeof window === "undefined") return () => {};
+    // M3: `pagehide` only, and only fires `fn` on a genuine unload
+    // (`!event.persisted`) — see this module's header. No `beforeunload`
+    // here (unlike `lib/sessionMarker.ts`'s unrelated clean-shutdown flag,
+    // which has its own reasons to register both).
+    const onPageHide = (e: PageTransitionEvent) => {
+      if (!e.persisted) fn();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
   } catch {
-    // best-effort only — never let listener registration itself throw
+    return () => {}; // best-effort only — never let registration itself throw
   }
 }
+
+/** What `createBrowserLockProvider` returns — the plain `LockProvider`
+ *  shape plus `dispose()` (M6): every existing `LockProvider`-typed call
+ *  site (every other provider, every test) is unaffected, since this is a
+ *  strict superset; only the installing effect in App.tsx reads `dispose`. */
+export type BrowserLockProvider = LockProvider & { dispose: () => void };
 
 /** The browser-tab provider. `App.tsx` installs this (dynamic import, the
  *  same lazy shape as `createDesktopLockProvider`) in the non-desktop
  *  branch — see that module's lock-provider effect. */
-export function createBrowserLockProvider(instanceId: string, deps: BrowserLockDeps = {}): LockProvider {
+export function createBrowserLockProvider(instanceId: string, deps: BrowserLockDeps = {}): BrowserLockProvider {
   const storage = deps.storage ?? safeLocalStorage();
   const lockRequest = "lockRequest" in deps ? (deps.lockRequest ?? null) : defaultLockRequest();
   const subscribeUnload = deps.subscribeUnload ?? defaultSubscribeUnload;
   const yieldForTest = deps.yieldForTest;
 
   let tokenSeq = 0;
-  // `LockRecord.token` is optional in the shared type (a provider that had
-  // no concept of a token could omit it — see `lib/lockState.ts`) but THIS
-  // provider always mints one; narrowing the return type lets `heldPaths`
-  // below (a plain `Map<string, string>`) take it with no `?? ""` filler.
-  const mintRecord = (): LockRecord & { token: string } => {
-    const now = Date.now();
-    return { instanceId, acquiredAt: now, heartbeatAt: now, token: `browser-${instanceId}-${++tokenSeq}` };
-  };
+  // M5: reuse `lib/lockState.ts`'s own `acquire()` for the shared
+  // instanceId/acquiredAt/heartbeatAt shape — the SAME helper
+  // `store/inMemoryLockProvider.ts`'s `mintRecord` uses, rather than a
+  // second hand-rolled copy of what a fresh record looks like.
+  const mintRecord = (): LockRecord & { token: string } => ({
+    ...acquire(instanceId, Date.now()),
+    token: `browser-${instanceId}-${++tokenSeq}`,
+  });
 
   /** Paths this instance currently believes it holds, for the best-effort
    *  unload release below — never itself consulted for a CAS decision. */
@@ -248,23 +291,35 @@ export function createBrowserLockProvider(instanceId: string, deps: BrowserLockD
 
   // Best-effort release on tab close — registered BEFORE the `return` below
   // so it actually runs (a statement after a function's `return` is dead
-  // code); see this module's header, "RELEASE ON TAB CLOSE". Deliberately
-  // NOT routed through `withCas`/Web Locks: a mutex request may never get to
-  // run its callback before the page is torn down, and a plain token-matched
-  // `removeItem` is a single native call that cannot half-apply. A wrong-
-  // token attempt (the path was already taken over by someone else) is
-  // simply refused by the token check — never clobbers another holder.
-  subscribeUnload(() => {
+  // code); see this module's header, "RELEASE ON TAB CLOSE" and M2/M3/M6.
+  // M2: routed through the SAME `withCas` mutex the other verbs use — when
+  // Web Locks is available, this closes the read-then-act TOCTOU window a
+  // bare, unguarded compare-and-delete would have against a concurrent
+  // `takeOver` (see browserLockProvider.test.ts's forced-race pair for the
+  // worked proof). `void`d — a pagehide handler cannot usefully await
+  // anything (the page may finish tearing down regardless), so this is
+  // fire-and-forget: it runs to completion when the engine gives it the
+  // chance, and simply doesn't when it doesn't (the documented no-mutex-
+  // style residual, M2's own "accept + document" clause). Without Web
+  // Locks, `withCas` runs `body` synchronously with no `await` before the
+  // compare-and-delete, same single-block guarantee as before.
+  const unsubscribeUnload = subscribeUnload(() => {
     for (const [path, token] of heldPaths) {
-      const { record, unverifiable } = readEnvelope(path);
-      if (!unverifiable && record !== null && record.token === token) {
-        removeEnvelope(path);
-      }
+      void withCas(path, async () => {
+        const { record, unverifiable } = readEnvelope(path);
+        if (unverifiable) return;
+        if (yieldForTest) await yieldForTest();
+        if (record !== null && record.token === token) {
+          removeEnvelope(path);
+        }
+      });
     }
     heldPaths.clear();
   });
 
   return {
+    dispose: () => unsubscribeUnload(),
+
     read: async (path) => {
       const { record, unverifiable } = readEnvelope(path);
       return unverifiable ? null : record;

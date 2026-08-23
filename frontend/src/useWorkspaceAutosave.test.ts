@@ -1,13 +1,22 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { setAutosaveBackend } from "./lib/autosave";
+import { autosaveHealth, setAutosaveBackend } from "./lib/autosave";
 import { memoryBackend } from "./lib/autosaveBackend";
+import { createBrowserLockProvider } from "./lib/browserLockProvider";
+import { STALE_AFTER_MS } from "./lib/lockState";
 import { serializeWorkspace } from "./lib/workspace";
+import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useApp, type AppState } from "./store/useApp";
-import { shouldAutosave, useWorkspaceAutosave, type AutosaveState } from "./useWorkspaceAutosave";
+import {
+  BROWSER_AUTOSAVE_LOCK_PATH,
+  engageBrowserAutosaveLock,
+  shouldAutosave,
+  useWorkspaceAutosave,
+  type AutosaveState,
+} from "./useWorkspaceAutosave";
 
 const ds = {
   id: "a",
@@ -354,5 +363,145 @@ describe("AutosaveState completeness sweep (P2-1)", () => {
 
   it("finds a non-trivial number of persisted fields (the scan still works)", () => {
     expect(workspaceDocFields().length).toBeGreaterThan(15);
+  });
+});
+
+// -- Browser autosave lock (coordinator review round, M1) ------------------
+//
+// M1's finding: the browser LockProvider (lib/browserLockProvider.ts) was
+// dead code — nothing on a browser-tab path ever called one of its verbs.
+// The autosave slot (this module's own restore/debounced-save loop) is the
+// actual same-browser collision surface, scouted in this module's own
+// header. "Two simulated tabs" below is the same technique
+// lib/browserLockProvider.test.ts and store/projectLock.test.ts already
+// use: a raw `createBrowserLockProvider` instance mutates the SHARED fake
+// storage directly (bypassing `useProjectLock` entirely) to stand in for
+// "the other tab", while `useProjectLock`'s own real provider/actions stand
+// in for "this tab".
+function fakeAutosaveStorage() {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      map.set(k, v);
+    },
+    removeItem: (k: string) => {
+      map.delete(k);
+    },
+  };
+}
+
+describe("browser autosave lock — engage/takeover (M1)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+  });
+
+  afterEach(() => {
+    useProjectLock.setState(original);
+  });
+
+  it("engageBrowserAutosaveLock acquires the synthetic lock when the slot is free", async () => {
+    const storage = fakeAutosaveStorage();
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} }),
+    });
+
+    await engageBrowserAutosaveLock();
+
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().path).toBe(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+
+  it("a second tab is read-only with the first tab's record, and Take Over Editing works once it's stale", async () => {
+    const storage = fakeAutosaveStorage();
+    // "Tab A" acquires directly, bypassing the store — a different tab's
+    // own action, never routed through THIS session's useProjectLock.
+    const otherTab = createBrowserLockProvider("tab-a", { storage, subscribeUnload: () => () => {} });
+    const acquired = await otherTab.tryAcquire(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(acquired.acquired).toBe(true);
+
+    // "This tab" installs its own provider sharing the SAME storage and
+    // engages — must observe tab A's record and land read-only, the same
+    // read-only + Take Over Editing UX a real desktop project open gets.
+    useProjectLock.setState({
+      provider: createBrowserLockProvider("tab-b", { storage, subscribeUnload: () => () => {} }),
+    });
+    await engageBrowserAutosaveLock();
+
+    expect(useProjectLock.getState().status).toBe("held-by-other-live");
+    expect(useProjectLock.getState().record?.instanceId).toBe("tab-a");
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+
+    // Force tab A stale (the deterministic stand-in for "real time passed"
+    // every other lock-provider test in this codebase uses) and re-open to
+    // pick up the fresh classification before Take Over Editing's own gate
+    // (`canTakeOver`) will act on it — mirrors L0.47's re-verify discipline.
+    const key = "qz-project-lock:v1:" + BROWSER_AUTOSAVE_LOCK_PATH;
+    const parsed = JSON.parse(storage.getItem(key) as string);
+    parsed.record.heartbeatAt = Date.now() - STALE_AFTER_MS - 1;
+    storage.setItem(key, JSON.stringify(parsed));
+    await useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().status).toBe("held-by-other-stale");
+
+    const tookOver = await useProjectLock.getState().takeOverEditing();
+    expect(tookOver).toBe(true);
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+    expect(useProjectLock.getState().canWriteNow()).toBe(true);
+  });
+});
+
+describe("browser autosave lock — the debounced write actually consults it (M1)", () => {
+  let original: ReturnType<typeof useProjectLock.getState>;
+
+  beforeEach(() => {
+    original = useProjectLock.getState();
+    setAutosaveBackend(memoryBackend());
+    useApp.setState({ datasets: [], plotWindows: [], focusedWindowId: null, projectDirty: false });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    useProjectLock.setState(original);
+    useApp.setState({ projectDirty: false });
+  });
+
+  async function editAndFlushDebounce(): Promise<void> {
+    act(() => {
+      useApp.setState({ datasets: [{ ...ds }] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+  }
+
+  it("skips the write when the lock reports read-only for the browser autosave path", async () => {
+    useProjectLock.setState({ path: BROWSER_AUTOSAVE_LOCK_PATH, status: "held-by-other-live", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).toBeNull();
+  });
+
+  it("performs the write when held-by-me for the browser autosave path", async () => {
+    useProjectLock.setState({ path: BROWSER_AUTOSAVE_LOCK_PATH, status: "held-by-me", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).not.toBeNull();
+  });
+
+  it("writes normally when the lock isn't tracking the browser autosave path at all (desktop, or not yet engaged)", async () => {
+    useProjectLock.setState({ path: null, status: "unlocked", record: null });
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(autosaveHealth().savedAt).not.toBeNull();
   });
 });

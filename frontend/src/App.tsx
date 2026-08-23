@@ -24,7 +24,7 @@ import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
 import { useProjectLockHeartbeat } from "./useProjectLockHeartbeat";
-import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
+import { engageBrowserAutosaveLock, useWorkspaceAutosave } from "./useWorkspaceAutosave";
 
 const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
 const QuickFigureBuilderWorkspace = lazy(() => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"));
@@ -87,38 +87,71 @@ export default function App() {
   // provider the moment a desktop shell is present — a plain synchronous
   // check, same convention `runSaveWorkspace`/every other desktop-detection
   // call site in this codebase already uses (`window.pywebview.api` is
-  // injected before this component's effects run). A browser tab (no
-  // `window.pywebview`) keeps the in-memory default — see
-  // store/projectLock.ts's header for why that split is correct, not a gap.
-  // Dynamic import keeps the lock wire+adapter out of the eager bundle —
-  // browser tabs never need it, and in desktop mode the module resolves in
-  // milliseconds at startup, long before any user gesture can reach an
-  // open/save path that consults the provider.
-  // Non-desktop branch (a plain `qz` browser tab): swap in the localStorage-
-  // backed cross-TAB provider so two tabs of the SAME browser against the
-  // same project get real mutual exclusion — closes the "browser multi-tab"
-  // defer named in `plans/RELEASE_BLOCKERS.md`'s I2 entry (see
-  // `lib/browserLockProvider.ts`'s header for the honest scope: same
-  // browser/origin only, not cross-browser or cross-machine). Same
-  // instanceId the in-memory default was seeded with, so a lock this SAME
-  // tab already holds still classifies as `held-by-me` after the swap.
-  // Dynamic import for the same reason as the desktop branch below: keeps
-  // the storage/Web-Locks wiring out of the eager bundle for every session
-  // that never actually needs it before a real open/save gesture.
-  useEffect(() => {
-    if (!hasDesktopShell()) {
-      void import("./lib/browserLockProvider").then((m) => {
-        useProjectLock.getState().setProvider(m.createBrowserLockProvider(useProjectLock.getState().instanceId));
-      });
-    }
-  }, []);
-
+  // injected before this component's effects run). Dynamic import keeps the
+  // lock wire+adapter out of the eager bundle — browser tabs never need it,
+  // and in desktop mode the module resolves in milliseconds at startup, long
+  // before any user gesture can reach an open/save path that consults the
+  // provider.
   useEffect(() => {
     if (hasDesktopShell()) {
       void import("./lib/desktopLockProvider").then((m) => {
         useProjectLock.getState().setProvider(m.createDesktopLockProvider());
       });
     }
+  }, []);
+
+  // Non-desktop branch (a plain `qz` browser tab, M4 update — this USED TO
+  // say "keeps the in-memory default... not a gap"; it no longer does):
+  // swap in the localStorage-backed cross-tab provider (dynamic import, same
+  // eager-bundle reasoning as the desktop branch above), then ENGAGE the
+  // lock state machine for the shared browser autosave slot the moment the
+  // real provider is live (M1 — see useWorkspaceAutosave.ts's header for why
+  // that slot, not an explicit project path, is the actual same-browser
+  // collision surface here). `engageBrowserAutosaveLock` must run strictly
+  // AFTER `setProvider` — both inside this SAME `.then()`, never split
+  // across two effects — or it would race the in-memory default still being
+  // live and lock nothing meaningful. Closes the "browser multi-tab" defer
+  // named in `plans/RELEASE_BLOCKERS.md`'s I2 entry for that ONE slot; see
+  // `lib/browserLockProvider.ts`'s header for the primitive-level honest
+  // scope (same browser/origin only) and `store/projectLock.ts`'s header for
+  // what is STILL uncovered (an explicit named-file browser open/save).
+  //
+  // M3: `pageshow` with `persisted: true` means bfcache restored this exact
+  // JS context (this tab's lock state survived untouched in memory) after
+  // real wall-clock time passed with no heartbeat ticking — re-verify via
+  // the EXISTING `heartbeat()` entry point (a CAS refresh; demotes on a
+  // genuine loss, no-ops otherwise) rather than trusting the frozen belief.
+  // Registered unconditionally in this branch (not gated on the import
+  // having resolved yet) so an instant back-navigation before the module
+  // even loads still can't leave this tab without recourse.
+  //
+  // M6: cleanup — `cancelled` stops a stale `.then()` from installing after
+  // this effect was torn down (a React StrictMode double-mount, or a real
+  // unmount), and `provider.dispose()` removes the `pagehide` listener
+  // `createBrowserLockProvider` registered, so a remount can never leak a
+  // second permanent one (mirrors `lib/sessionMarker.ts`'s
+  // `installSessionMarker()` returning its own teardown).
+  useEffect(() => {
+    if (hasDesktopShell()) return;
+    let cancelled = false;
+    let dispose: (() => void) | null = null;
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void useProjectLock.getState().heartbeat();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    void import("./lib/browserLockProvider").then((m) => {
+      if (cancelled) return;
+      const lock = useProjectLock.getState();
+      const provider = m.createBrowserLockProvider(lock.instanceId);
+      dispose = provider.dispose;
+      lock.setProvider(provider);
+      void engageBrowserAutosaveLock();
+    });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pageshow", onPageShow);
+      dispose?.();
+    };
   }, []);
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──
