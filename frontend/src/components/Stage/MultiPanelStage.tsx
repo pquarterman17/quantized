@@ -32,7 +32,13 @@
 //     mode needs no fetch — and shares ONE x-domain across all panels
 //     (`lib/facet.sharedXDomain`), with box-zoom/pan sync like the plain
 //     stack (same idiom, since the x AXIS means the same thing in every
-//     panel). Each panel's uPlot `title` shows its facet level.
+//     panel). Each panel's uPlot `title` shows its facet level. F4.4: the
+//     underlying `facetKey` binding is durable (bindings-owned like
+//     `groupKey`) even though `composition` itself is an ephemeral cache --
+//     this component rebuilds it on the fly (`lib/facet.
+//     facetCompositionFromBinding`) whenever `composition` is null but
+//     `facetKey` isn't, so a facet grid survives a focus switch, a
+//     workspace reopen, or a resolved recipe's rebuild.
 //  4) Paneled x-breaks (gap #21 LAST residual): `store.breakPanels`, set by
 //     the `breakAtGaps` action, splits ONE series at large x-gaps
 //     (`lib/facet.suggestBreaks` or an explicit override) into adjacent
@@ -52,10 +58,12 @@
 
 import "uplot/dist/uPlot.min.css";
 
+import { useMemo } from "react";
 import { createPortal } from "react-dom";
 
 import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
+import { facetCompositionFromBinding } from "../../lib/facet";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
@@ -67,7 +75,20 @@ export default function MultiPanelStage() {
   const setStackMode = useApp((s) => s.setStackMode);
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
-  const composition = useApp((s) => s.composition);
+  const rawComposition = useApp((s) => s.composition);
+  const facetKey = useApp((s) => s.facetKey);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  // F4.4: `composition` is the immediate render cache `facetByColumn` fills
+  // in right away; once it's gone (a focus switch, a workspace reopen, a
+  // resolved recipe's freshly-focused window) the durable `facetKey`
+  // binding (bindings-owned like `groupKey` — see `lib/plotview.ts`) rebuilds
+  // the SAME facet grid on the fly. Spatial/break stay whatever `composition`
+  // already holds -- neither has a durable binding to rebuild from.
+  const composition = useMemo(
+    () => rawComposition ?? facetCompositionFromBinding(active, facetKey, xKey, yKeys),
+    [rawComposition, active, facetKey, xKey, yKeys],
+  );
   const spatialPanels = spatialPanelsOf(composition);
   const yScale = useApp((s) => s.yScale);
   const xScale = useApp((s) => s.xScale);
@@ -83,8 +104,6 @@ export default function MultiPanelStage() {
   const defaultTrace = useApp((s) => s.defaultTrace);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
-  const xKey = useApp((s) => s.xKey);
-  const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);

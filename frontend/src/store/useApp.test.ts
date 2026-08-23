@@ -10,6 +10,7 @@ import {
   spatialPanelsOf,
 } from "../lib/composition";
 import { defaultErrKeys } from "../lib/errorbars";
+import { facetCompositionFromBinding } from "../lib/facet";
 import { createFigureDocument } from "../lib/figureDocument";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
@@ -2996,6 +2997,23 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     expect(facetPanelsOf(s.composition)?.map((p) => p.label)).toEqual(["1", "2"]);
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: `facetKey` is the DURABLE half of
+  // this gesture (bindings-owned like `groupKey`) -- `composition` itself is
+  // only the immediate render cache, so this is what actually survives a
+  // focus switch/save/reopen once `composition` is gone.
+  it("also sets the durable facetKey binding", () => {
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+  });
+
+  it("resets facetKey (like groupKey) on a genuine dataset switch", () => {
+    useApp.setState({ datasets: [...useApp.getState().datasets, { id: "d2", name: "ds2", data: facetData }] });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().facetKey).toBeNull();
+  });
+
   it("clears a prior spatial arrangement", () => {
     useApp.setState({
       composition: spatialComposition([
@@ -3087,6 +3105,88 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0].code).toBe('qz.facetByColumn("d1", 0)');
     expect(steps[0].label).toBe("Facet by grp");
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: a facet arrangement must remain
+// editable on Stage AND survive save/reopen. `composition` itself is only
+// the immediate render cache (never persisted); `facetKey` is the durable
+// half (bindings-owned like `groupKey`) that actually rides through
+// `loadWorkspace` via the focused window's `FigureDocument.bindings.facetKey`
+// -- see `lib/workspace.test.ts` for the raw .dwk byte-fidelity round trip.
+describe("useApp loadWorkspace restores a live facet arrangement (F4.4)", () => {
+  const facetData: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [[1, 10], [1, 20], [2, 30], [2, 40]],
+    labels: ["grp", "y"],
+    units: ["", ""],
+    metadata: {},
+  };
+
+  it("restores facetKey from the focused window's document, ready to render", () => {
+    const document = createFigureDocument({
+      id: "figure-facet",
+      name: "Faceted",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1], stackMode: true },
+      facetKey: 0,
+    });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "ds1", data: facetData }],
+      plotWindows: [
+        { id: "w1", kind: "plot", title: "Faceted", datasetId: "d1", geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "maximized", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false, document },
+      ],
+      focusedWindowId: "w1",
+    });
+    const s = useApp.getState();
+    expect(s.facetKey).toBe(0);
+    expect(s.stackMode).toBe(true);
+    // The exact rebuild `MultiPanelStage.tsx`'s render-layer fallback performs.
+    const rebuilt = facetCompositionFromBinding(s.datasets[0], s.facetKey, s.xKey, s.yKeys);
+    expect(facetPanelsOf(rebuilt)).toHaveLength(2);
+  });
+
+  it("stays editable after restore -- a fresh facetByColumn call on the restored session behaves identically to a never-restored one", () => {
+    const document = createFigureDocument({
+      id: "figure-facet-2",
+      name: "Faceted",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [1] },
+      facetKey: 0,
+    });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "ds1", data: facetData }],
+      plotWindows: [
+        { id: "w1", kind: "plot", title: "Faceted", datasetId: "d1", geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "maximized", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false, document },
+      ],
+      focusedWindowId: "w1",
+    });
+
+    // Re-facet by the OTHER column on the restored session -- ordinary Stage
+    // editing, not a special "post-restore" code path.
+    useApp.getState().facetByColumn("d1", 1);
+    const s = useApp.getState();
+    expect(s.facetKey).toBe(1);
+    expect(facetPanelsOf(s.composition)).toHaveLength(4); // "y" has 4 distinct values
+  });
+
+  // Regression: `setStackMode` (the "back to single overlaid plot" button,
+  // and the plain "Stack" toggle in PlotToolbar) must ALSO clear `facetKey`,
+  // not just `composition` -- otherwise leaving a facet via that button then
+  // toggling stack mode back on (never through `facetByColumn` again) would
+  // resurrect the old facet grid, since the render layer rebuilds it from
+  // `facetKey` alone whenever `composition` is null.
+  it("setStackMode(false) clears facetKey too, so toggling stack mode back on never resurrects a stale facet", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: facetData }] });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+
+    useApp.getState().setStackMode(false);
+    expect(useApp.getState().facetKey).toBeNull();
+
+    useApp.getState().setStackMode(true); // the plain "Stack" toggle, not facetByColumn
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(useApp.getState().composition).toBeNull();
   });
 });
 

@@ -63,6 +63,12 @@ beforeEach(() => {
     seriesOrder: null,
     stackMode: true,
     composition: null,
+    // F4.4: `facetKey` is now a durable binding a prior test's
+    // `facetByColumn` call leaves set on the shared store singleton
+    // (`useApp.setState` merges) -- reset it here too, or a LATER test
+    // expecting plain-stack mode gets a resurrected facet grid instead
+    // (`MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback).
+    facetKey: null,
     showLegend: true,
     showAxisBox: false,
     plotTemplate: "screen",
@@ -110,6 +116,25 @@ describe("MultiPanelStage — mode regressions", () => {
     useApp.getState().facetByColumn("d1", 0);
     const expected = facetPanelsOf(useApp.getState().composition)?.length ?? 0;
     expect(expected).toBeGreaterThan(0);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(expected));
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: `composition` (the immediate render
+  // cache `facetByColumn` fills in) is gone -- exactly the state a focus
+  // switch, a workspace reopen, or a resolved recipe's freshly-focused window
+  // leaves behind -- yet the facet grid renders anyway, rebuilt from the
+  // durable `facetKey` binding alone. This is the actual proof a facet
+  // arrangement is "editable on Stage" after a restore, not just a store-side
+  // field check.
+  it("rebuilds the facet grid from facetKey ALONE when composition is null (post-restore/focus-switch)", async () => {
+    // Build once (for the expected panel count), then drop `composition` --
+    // exactly the state a focus switch/workspace reopen/recipe-apply leaves
+    // behind -- and confirm the SAME grid still renders from `facetKey` alone.
+    useApp.getState().facetByColumn("d1", 0);
+    const expected = facetPanelsOf(useApp.getState().composition)?.length ?? 0;
+    expect(expected).toBeGreaterThan(0);
+    useApp.setState({ composition: null });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
   });

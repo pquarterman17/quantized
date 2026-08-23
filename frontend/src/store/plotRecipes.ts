@@ -55,16 +55,16 @@
 // write chokepoint (architecture.test.ts's "FigureDocument write
 // chokepoint (F1)") -- this module never assigns `.document` directly.
 //
-// GAP (documented, not a bug): `resolved.visual.compositionKind` records
-// WHICH arrangement (spatial/facet/break) was active at capture time, but
-// is deliberately not turned back into a live composition here. Rebuilding
-// actual panels needs the dataset-specific payload builders
-// (`spatialComposition`/`facetComposition`/`breakComposition`,
-// lib/composition.ts) with inputs this resolve step doesn't produce (per-
-// panel placement, break ranges, ...) -- exactly why `lib/plotRecipe.ts`'s
-// own header says the concrete panels are deliberately NOT captured. A
-// later integration slice that has those inputs can read
-// `compositionKind` off the resolution and rebuild them.
+// GAP (documented, not a bug -- NARROWED to spatial/break by F4.4,
+// 2026-08-23): `resolved.visual.compositionKind` records which arrangement
+// was active at capture time. FACET now round-trips with zero rebuild code
+// in this module -- see `store/plotRecipeApply.ts`'s `applyResolvedRecipe`
+// doc for how. SPATIAL/BREAK remain a real gap: their panels need inputs
+// this resolve step genuinely can't produce (per-panel placement, break
+// ranges) and have no bindings-owned carrier the way facet now does -- see
+// `lib/plotRecipe.ts`'s header for why their panels are deliberately
+// uncaptured. A later slice with those inputs can read `compositionKind`
+// and rebuild via `spatialComposition`/`breakComposition` (lib/composition.ts).
 //
 // PERSISTENCE: `plotRecipes` lives in memory only this lane (the
 // `store/quickPlotTemplates.ts` PR-H two-commit precedent) -- `setPlotRecipes`
@@ -309,7 +309,7 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         appVersion: PLOT_RECIPE_APP_VERSION,
         mark: focused.document?.plot.mark,
         errors: focused.document?.bindings.errors,
-        facetKey: focused.document?.bindings.facetKey ?? null,
+        facetKey: state.facetKey, // F4.4: the LIVE singleton -- the document copy is stale-while-focused
         axisBreaks: focused.document?.plot.axisBreaks,
       });
       get().recordHistory("Save Plot Recipe");

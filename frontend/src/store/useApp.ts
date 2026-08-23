@@ -381,9 +381,15 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Set by `applyOriginFigure` (spatial), `facetByColumn` (facet) and
   // `breakAtGaps` (break); cleared by `setStackMode` and `setActive` so a
   // manual toggle or a different dataset never shows a stale arrangement.
-  // EPHEMERAL — never persisted; a `.dwk` restore nulls it and the producing
-  // action recomputes. Each kind's panel shape, why the three differ, and the
-  // reference-stable accessors: `lib/composition.ts`.
+  // EPHEMERAL — never persisted directly; a `.dwk` restore/focus switch
+  // nulls it. For FACET specifically (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4)
+  // this is no longer a durability gap: `facetKey` below is the durable
+  // binding (bindings-owned, survives save/reopen/recipe-apply exactly like
+  // `groupKey`), and `MultiPanelStage.tsx` rebuilds this field on demand from
+  // it (`lib/facet.facetCompositionFromBinding`) whenever it's null — see
+  // that component's own doc. Spatial/break stay genuinely ephemeral (no
+  // binding to rebuild from). Each kind's panel shape, why the three differ,
+  // and the reference-stable accessors: `lib/composition.ts`.
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
@@ -407,6 +413,11 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
   groupKey: number | null; // P1.5 "Group" well channel — splits each plotted Y into one series per level
+  // F4.4: the durable facet-by-column binding (bindings-owned like groupKey
+  // — see `composition`'s doc above). `facetByColumn` sets it; a genuine
+  // dataset switch resets it (`store/windowDefaults.ts`'s
+  // `datasetViewDefaults`, same treatment as groupKey).
+  facetKey: number | null;
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
   y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
@@ -970,6 +981,7 @@ export const useApp = create<AppState>((set, get) => ({
   xKey: null,
   yKeys: null,
   groupKey: null,
+  facetKey: null,
   y2Keys: null,
   y2Lim: null,
   y2Scale: null,
@@ -1392,7 +1404,14 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, composition: facetComposition(panels) });
+    // F4.4: `facetKey` is the DURABLE half of this gesture -- bindings-owned
+    // like `groupKey`, it commits onto the focused window's document via the
+    // SAME "focused facade -> document" sync every other PlotView field
+    // already uses (`windowsForSave`/`focusWindow`'s outgoing snapshot), so
+    // this facet survives save/reopen and stays rebuildable after a focus
+    // switch even once `composition` itself (the immediate render cache) is
+    // gone -- see `MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback.
+    set({ stackMode: true, composition: facetComposition(panels), facetKey: col });
     get().recordMacro(
       `Facet by ${ds.data.labels[col] ?? `column ${col}`}`,
       `qz.facetByColumn(${lit(datasetId)}, ${col})`,
@@ -1556,6 +1575,7 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: restoredView ? restoredView.xKey : null,
         yKeys: restoredView ? restoredView.yKeys : null,
         groupKey: restoredView ? restoredView.groupKey : null,
+        facetKey: restoredView ? restoredView.facetKey : null,
         y2Keys: restoredView ? restoredView.y2Keys : null,
         y2Lim: restoredView ? restoredView.y2Lim : null,
         y2Scale: restoredView ? restoredView.y2Scale : null,
@@ -1794,6 +1814,7 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: null,
         yKeys: null,
         groupKey: null,
+        facetKey: null,
         y2Keys: null,
       y2Lim: null,
       y2Scale: null,
@@ -1939,7 +1960,14 @@ export const useApp = create<AppState>((set, get) => ({
   // prior Origin multi-panel apply, or a prior facet-by-column arrangement
   // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
   // is what the user asked for, never a stale spatial/facet grid.
-  setStackMode: (stackMode) => (get().recordHistory("change plot layout"), set({ stackMode, composition: null })),
+  // F4.4: also clears `facetKey` -- without it, toggling OFF a facet
+  // (`composition: null` here) then toggling stack mode back ON via the
+  // plain "Stack" button (never through `facetByColumn`) would resurrect the
+  // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
+  // rebuilds it from `facetKey` whenever `composition` is null.
+  setStackMode: (stackMode) => (
+    get().recordHistory("change plot layout"), set({ stackMode, composition: null, facetKey: null })
+  ),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).
   setPanelFit: (panelFit) => { get().recordHistory("change panel fit"); set({ panelFit }); },

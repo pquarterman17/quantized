@@ -78,6 +78,10 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
     "bindings.group.channel",
     "P1.5: the live facade's own copy of the durable group-split binding -- see figureDocument.ts's figureDocumentToPlotView/updateFigureDocumentFromPlotView.",
   ),
+  facetKey: canonical(
+    "bindings.facet.channel",
+    "F4.4: the live facade's own copy of the durable facet-by-column binding, same mirrored pattern as groupKey -- see figureDocument.ts's figureDocumentToPlotView/updateFigureDocumentFromPlotView and lib/facet.ts's facetCompositionFromBinding.",
+  ),
   y2Keys: canonical("bindings.y2.channels"),
   y2Lim: canonical("axes.y2.limits"),
   y2Scale: canonical("axes.y2.scale"),

@@ -154,6 +154,9 @@ const CHANNEL_INDEXED_PLOTVIEW_FIELDS = [
   "xKey",
   "yKeys",
   "groupKey",
+  // F4.4: facetKey is the same class of field as groupKey (a channel index
+  // into the active dataset's columns) -- reset it here too, same reasoning.
+  "facetKey",
   "y2Keys",
   "y2Lim",
   "y2Scale",

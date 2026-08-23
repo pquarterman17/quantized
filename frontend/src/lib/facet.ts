@@ -23,8 +23,10 @@
 // y-domain (`sharedYDomain`) and each keep their OWN local x-range.
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { facetComposition, type Composition } from "./composition";
 import { buildColumns, type PlotPayload } from "./plotdata";
-import type { DataStruct } from "./types";
+import { analysisData } from "./rowstate";
+import type { DataStruct, Dataset } from "./types";
 
 export interface FacetPanel {
   label: string;
@@ -194,4 +196,28 @@ export function sharedYDomain(panels: readonly BreakPanel[]): [number, number] |
     }
   }
   return min <= max ? [min, max] : null;
+}
+
+/** Rebuild a live facet `Composition` from a durable binding
+ *  (`FigureDocument.bindings.facetKey`) -- the ONE derivation
+ *  (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4) that makes a facet arrangement
+ *  survive anywhere a window's view gets rehydrated (focus switch, workspace
+ *  reopen) instead of `store/windows.ts`'s `focusTransientReset` silently
+ *  dropping it, and the same mechanism that turns a resolved recipe's
+ *  `facetKey` binding (`store/plotRecipeApply.ts`'s `applyResolvedRecipe`,
+ *  which already stores it on the new figure's document) into an actual
+ *  small-multiples grid once that figure is focused. Mirrors `facetByColumn`'s
+ *  own build (same `facetPayloads` call over the dataset's ANALYSIS view --
+ *  row exclusion/filter, guards #50/#53 -- so a restored facet honors
+ *  whatever rows are currently in play, exactly like a fresh gesture would).
+ *  Returns null (an ordinary plot) when there's no binding, no bound
+ *  dataset, or the column has no finite levels to arrange -- never throws. */
+export function facetCompositionFromBinding(
+  dataset: Dataset | null | undefined,
+  facetKey: number | null,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  if (facetKey == null || !dataset) return null;
+  return facetComposition(facetPayloads(analysisData(dataset) ?? dataset.data, facetKey, xKey, yKeys));
 }

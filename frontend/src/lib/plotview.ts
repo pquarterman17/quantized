@@ -146,6 +146,7 @@ export interface PlotView {
   xKey: number | null;
   yKeys: number[] | null;
   groupKey: number | null; // P1.5 "Group" well channel -- one series per level; bindings-owned like xKey/yKeys
+  facetKey: number | null; // F4.4 facet-by-column binding; bindings-owned + reset-on-switch like groupKey
   y2Keys: number[] | null;
   y2Lim: [number, number] | null;
   y2Scale: AxisScale | null;
@@ -213,6 +214,7 @@ export function defaultPlotView(): PlotView {
     xKey: null,
     yKeys: null,
     groupKey: null,
+    facetKey: null,
     y2Keys: null,
     y2Lim: null,
     y2Scale: null,
@@ -738,6 +740,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     xKey: numOrNull(o.xKey),
     yKeys: Array.isArray(o.yKeys) ? o.yKeys.filter((n): n is number => typeof n === "number") : null,
     groupKey: numOrNull(o.groupKey),
+    facetKey: numOrNull(o.facetKey),
     y2Keys: Array.isArray(o.y2Keys) ? o.y2Keys.filter((n): n is number => typeof n === "number") : null,
     y2Lim: isRange(o.y2Lim) ? o.y2Lim : null,
     y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),

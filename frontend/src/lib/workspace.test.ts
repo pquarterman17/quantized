@@ -1027,6 +1027,34 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     });
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: a facet arrangement's durable half
+  // (`bindings.facetKey`, bindings-owned like `groupKey`) rides on the SAME
+  // FigureDocument persistence every other binding already uses -- no new
+  // .dwk schema field, no version bump. Byte-fidelity: the restored document
+  // is `toEqual` the pre-save one, and the projected facade view carries the
+  // binding too (`figureDocumentToPlotView`, exercised by `loaded.plotWindows[0].view`).
+  it("round-trips a facet-by-column figure's durable facetKey binding byte-for-byte", () => {
+    const datasets = [makeDataset("a", "first")];
+    const document = createFigureDocument({
+      id: "figure-facet",
+      name: "Faceted graph",
+      datasetId: "a",
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1], stackMode: true },
+      facetKey: 2,
+    });
+    const loaded = parseWorkspace(serializeWorkspace({
+      datasets,
+      plotWindows: [win({ title: "stale", view: defaultPlotView(), document })],
+    }));
+
+    expect(loaded.plotWindows[0].document).toEqual(document);
+    expect(loaded.plotWindows[0].document?.bindings.facetKey).toBe(2);
+    // The live-facade projection (what `useApp.ts`'s `loadWorkspace` hydrates
+    // the focused window's singleton `facetKey` field from) also survives.
+    expect(loaded.plotWindows[0].view.facetKey).toBe(2);
+    expect(loaded.plotWindows[0].view.stackMode).toBe(true);
+  });
+
   it("round-trips saved editable figures separately from publication figures", () => {
     const datasets = [makeDataset("a", "first")];
     const editable = createFigureDocument({
