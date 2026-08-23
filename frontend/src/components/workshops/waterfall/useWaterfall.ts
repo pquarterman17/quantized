@@ -90,8 +90,14 @@ export function useWaterfall(): WaterfallState {
   );
 
   const resolvedSpacing = autoSpace ? autoSpacing(series.map((s) => s.range)) : manualSpacing;
+  // `opts` is a fresh object literal every render, built from EXACTLY
+  // `resolvedSpacing`/`mode`/`reverse` (nothing else) — those three are
+  // already the memo's real deps below, so listing `opts` itself would only
+  // add a dependency that's referentially new every render (defeating the
+  // memo) without changing what it actually depends on (R9).
   const opts: WaterfallOptions = { spacing: resolvedSpacing, mode, reverse };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `opts` deliberately excluded, see comment above.
   const traces = useMemo(() => buildWaterfall(series, opts), [series, resolvedSpacing, mode, reverse]);
   const aligned = useMemo(() => alignToUnionX(traces), [traces]);
 

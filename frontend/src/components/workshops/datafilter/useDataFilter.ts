@@ -91,7 +91,14 @@ export function useDataFilter(): DataFilterState {
       });
     }
     return cols;
-    // filter is captured via currentOf; recompute when the dataset or filter changes.
+    // `currentOf` deliberately excluded (R9): it's a plain closure over
+    // `filter` (already a dep) redefined fresh every render, so whenever
+    // this memo DOES recompute it always uses the CURRENT render's
+    // `currentOf` — never a stale one from a prior render. Listing it would
+    // only force a recompute on every render (a fresh closure identity each
+    // time), defeating the memo. Pinned by useDataFilter.test.ts's
+    // "currentOf freshness" test.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `currentOf` deliberately excluded, see comment above.
   }, [active, filter]);
 
   const { kept, total } = useMemo(() => {

@@ -259,26 +259,37 @@ export function usePeakWizard(): PeakWizardState {
 
   const togglePeak = (i: number) =>
     setCandidates((cs) => cs.map((c, j) => (j === i ? { ...c, included: !c.included } : c)));
-  const removePeak = (i: number) => setCandidates((cs) => cs.filter((_, j) => j !== i));
-  const addPeakAt = (center: number) => {
-    if (!segment || !workingY || segment.x.length === 0) return;
-    // Seed height from the nearest working point; FWHM from 2% of the range.
-    let nearest = 0;
-    for (let i = 1; i < segment.x.length; i++) {
-      if (Math.abs(segment.x[i] - center) < Math.abs(segment.x[nearest] - center)) nearest = i;
-    }
-    const span = segment.x[segment.x.length - 1] - segment.x[0];
-    setCandidates((cs) => [
-      ...cs,
-      {
-        center,
-        height: workingY[nearest],
-        fwhm: span / 50 || 1,
-        included: true,
-        manual: true,
-      },
-    ]);
-  };
+  // R9: memoized (not plain closures) so their identity — and therefore the
+  // `peakWizardEdit` bridge effect below that lists them as deps — stays
+  // STABLE across a re-render that changes neither `segment`/`workingY` nor
+  // `candidates`. PlotViewport.tsx's create effect keys off `peakWizardEdit`
+  // and rebuilds the WHOLE uPlot instance on any identity change, so an
+  // unrelated re-render (e.g. patching an unrelated recipe field) must never
+  // manufacture a new bridge object — see usePeakWizard.test.ts's "does not
+  // push a new peakWizardEdit bridge on an unrelated re-render" regression.
+  const removePeak = useCallback((i: number) => setCandidates((cs) => cs.filter((_, j) => j !== i)), []);
+  const addPeakAt = useCallback(
+    (center: number) => {
+      if (!segment || !workingY || segment.x.length === 0) return;
+      // Seed height from the nearest working point; FWHM from 2% of the range.
+      let nearest = 0;
+      for (let i = 1; i < segment.x.length; i++) {
+        if (Math.abs(segment.x[i] - center) < Math.abs(segment.x[nearest] - center)) nearest = i;
+      }
+      const span = segment.x[segment.x.length - 1] - segment.x[0];
+      setCandidates((cs) => [
+        ...cs,
+        {
+          center,
+          height: workingY[nearest],
+          fwhm: span / 50 || 1,
+          included: true,
+          manual: true,
+        },
+      ]);
+    },
+    [segment, workingY],
+  );
 
   // Click-on-plot marker editing (interaction item 5, deferred from closed
   // gap #31): live only while step ② is showing, a dataset is active, and
@@ -307,11 +318,16 @@ export function usePeakWizard(): PeakWizardState {
     setEditSuppressed(false);
   }, [step]);
 
-  // Push the current bridge into the store on every render while active (so a
-  // stale `segment`/`workingY` closure — e.g. a baseline recompute landing
-  // without the candidate list itself changing — can never leave `addPeakAt`
-  // out of sync with what the manual "+ Add" field in step ② would use); a
-  // full unmount (wizard closed) always clears it.
+  // Push the current bridge into the store whenever markerEditActive,
+  // candidates, or addPeakAt/removePeak's own identity change (R9: the
+  // latter two are now `useCallback`-memoized on [segment, workingY]/[], not
+  // plain closures — see their definitions above) — so a stale
+  // `segment`/`workingY` closure (e.g. a baseline recompute landing without
+  // the candidate list itself changing) can never leave `addPeakAt` out of
+  // sync with what the manual "+ Add" field in step ② would use, WITHOUT
+  // also re-pushing (and forcing PlotViewport to rebuild the whole uPlot
+  // instance) on every unrelated re-render; a full unmount (wizard closed)
+  // always clears it.
   useEffect(() => {
     setPeakWizardEdit(
       markerEditActive

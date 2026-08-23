@@ -61,6 +61,29 @@ describe("useDataFilter", () => {
     expect(result.current.active).toBe(true);
   });
 
+  // R9 (POST_SPRINT_INDEPENDENT_REVIEW): `columns[*].current` is populated by
+  // `currentOf`, a closure over `filter` that the surrounding useMemo
+  // deliberately excludes from its own deps (only `[active, filter]` — see
+  // useDataFilter.ts's comment). This pins down that the memo's `current`
+  // field still tracks a fresh filter commit, immediately and on the very
+  // next filter edit, so that exclusion can't quietly regress into a
+  // one-render-stale value.
+  it("columns[*].current reflects the just-written predicate on the same render (currentOf freshness)", () => {
+    const { result } = renderHook(() => useDataFilter());
+    act(() => result.current.setRange(1, 15, undefined));
+    let col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toEqual({ col: 1, kind: "range", min: 15 });
+    // A second, different edit to the SAME column must also show up right
+    // away (not the previous predicate, not stale).
+    act(() => result.current.setRange(1, 20, 30));
+    col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toEqual({ col: 1, kind: "range", min: 20, max: 30 });
+    // Clearing drops it back to undefined on the same render too.
+    act(() => result.current.clear());
+    col = result.current.columns.find((c) => c.index === 1);
+    expect(col?.current).toBeUndefined();
+  });
+
   it("toggleLevel narrows a categorical column to the checked levels", () => {
     const { result } = renderHook(() => useDataFilter());
     act(() => result.current.toggleLevel(0, 1)); // uncheck level 1 → keep {0}

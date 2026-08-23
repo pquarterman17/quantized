@@ -55,7 +55,10 @@ jobs:
         # different dependency versions than any local checkout (this hid a
         # real Playwright 1.61-vs-1.62 e2e regression on 2026-07-25).
         run: npm ci
-      - name: Lint (eslint flat config; errors fail, warnings don't)
+      # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
+      # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
+      # warning fails CI same as an error — no warning can go unnoticed again.
+      - name: Lint (eslint flat config; errors AND warnings fail via --max-warnings=0)
         run: npm run lint
       - name: Unit tests (vitest)
         run: npm test
@@ -94,7 +97,10 @@ jobs:
           node-version: current
       - name: Install
         run: npm ci
-      - name: Lint (eslint flat config; errors fail, warnings don't)
+      # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
+      # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
+      # warning fails CI same as an error — no warning can go unnoticed again.
+      - name: Lint (eslint flat config; errors AND warnings fail via --max-warnings=0)
         run: npm run lint
       - name: Unit tests (vitest)
         run: npm test

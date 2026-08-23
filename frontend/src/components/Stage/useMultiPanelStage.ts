@@ -300,7 +300,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     return () => {
       cancelled = true;
     };
-  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey, defaultTrace, errKeys]);
+  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey, defaultTrace, errKeys]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
 
   useEffect(() => {
     let cancelled = false;
@@ -375,7 +375,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     return () => {
       cancelled = true;
     };
-  }, [spatial, panels, datasets, defaultTrace]);
+  }, [spatial, panels, datasets, defaultTrace]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
 
   useEffect(() => {
     const host = hostRef.current;
