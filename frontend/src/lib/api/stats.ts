@@ -10,14 +10,20 @@
 // their tests) keep importing from `./lib/api` unchanged. Module resolution
 // note: `./lib/api` resolves to the FILE `api.ts`, never this directory —
 // file beats directory in both tsc and Vite.
+//
+// `statsDescriptive` moved OUT to its own sibling, api/statsDescriptive.ts
+// (R8 bundle-diet pass, 2026-08-23): it's the one function in this whole
+// file useApp.ts needs eagerly (a plot-cursor gadget readout), and that
+// single eager edge was dragging every OTHER function below — statschooser/
+// distribution/multivar/variability workshops, all lazy-only — into the
+// eager bundle purely by file co-location (same mechanics as api.ts's own
+// header comment describes). `statsRecommend`/`statsRunTest` (the
+// statschooser "Test chooser" pair) joined this file in the same pass —
+// they used to live directly in lib/api.ts for the identical reason.
 
 import { postJSON } from "./http";
 import type { CalcResult } from "../types";
-
-// ── Stats ───────────────────────────────────────────────────────────────────
-export function statsDescriptive(x: number[]): Promise<CalcResult> {
-  return postJSON("/api/stats/descriptive", { x });
-}
+import type { Recommendation } from "../statschooser";
 
 /** Histogram with a data-driven bin rule (`fd`/`sturges`/`scott`/…/int) and an
  *  optional distribution-fit overlay (scipy dist name). */
@@ -437,4 +443,35 @@ export interface VariabilitySummaryResponse {
  *  data contract (JMP_GAP_PLAN #8). */
 export function statsVariabilitySummary(groups: number[][][]): Promise<VariabilitySummaryResponse> {
   return postJSON("/api/stats/variability-summary", { groups });
+}
+
+// ── Test chooser (#26) ──────────────────────────────────────────────────────
+
+/** Assumption checks -> recommended test (+ endpoint + reasons). */
+export function statsRecommend(body: {
+  groups: number[][];
+  paired?: boolean;
+  alpha?: number;
+}): Promise<Recommendation> {
+  return postJSON("/api/stats/recommend", body);
+}
+
+/** The tests the chooser can recommend — the only paths statsRunTest accepts. */
+const RUNNABLE_TESTS = new Set([
+  "/api/stats/ttest",
+  "/api/stats/wilcoxon",
+  "/api/stats/mann-whitney",
+  "/api/stats/anova",
+  "/api/stats/kruskal",
+]);
+
+/** Run a chooser-recommended test by its endpoint path (allowlisted). */
+export function statsRunTest(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<CalcResult> {
+  if (!RUNNABLE_TESTS.has(path)) {
+    return Promise.reject(new Error(`unknown test endpoint: ${path}`));
+  }
+  return postJSON(path, body);
 }

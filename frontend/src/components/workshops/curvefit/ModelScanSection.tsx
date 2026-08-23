@@ -15,7 +15,7 @@
 
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
-import type { ScanEntry } from "../../../lib/api";
+import type { ScanEntry } from "../../../lib/api/curvefit";
 import type { ModelScanState } from "./useModelScan";
 
 interface Props {

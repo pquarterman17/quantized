@@ -51,7 +51,8 @@ import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./mu
 import { pageValidRects } from "./panelLayout";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
 import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
-import type { FigurePageSpec, FigureSpec, PagePanelSpec } from "./api";
+import type { FigurePageSpec, PagePanelSpec } from "./api";
+import type { FigureSpec } from "./api/figures";
 
 /** One spatial panel's own dataset + channel selection -> the single-figure
  *  payload the page route embeds — the same field mapping the on-screen

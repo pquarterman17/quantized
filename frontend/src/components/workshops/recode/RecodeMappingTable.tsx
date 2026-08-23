@@ -9,7 +9,7 @@
 // RecodePanel) purely for the workshop-pattern shape — RecodePanel has room
 // under the component ceiling either way.
 
-import { DataTable } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
 import { useRecode } from "../../../store/recode";
 import type { RecodePreview } from "../../../lib/recode";
 

@@ -14,7 +14,8 @@
 import { useState } from "react";
 
 import type { FitParamRow } from "../../../lib/fitParams";
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 
 export interface FitParamsSectionProps {
   rows: FitParamRow[];

@@ -44,12 +44,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askParams } from "../components/overlays/ParamDialog";
-import { exportFigure } from "./api";
+import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { useApp } from "../store/useApp";
 import type { DataStruct, Dataset } from "./types";
 
-vi.mock("./api", () => ({
+vi.mock("./api/figures", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
 }));
 

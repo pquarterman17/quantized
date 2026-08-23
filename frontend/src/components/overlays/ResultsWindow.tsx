@@ -5,7 +5,8 @@
 // per distinct results view so its position/size persist independently.
 
 import ToolWindow from "./ToolWindow";
-import { Button, DataTable } from "../primitives";
+import { DataTable } from "../primitives/DataTable";
+import { Button } from "../primitives";
 
 export interface ResultsData {
   title: string;

@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 
 import { useApp } from "../../store/useApp";
-import { NumberField } from "../primitives";
+import { NumberField } from "../primitives/NumberField";
 
 type Lim = [number, number] | null;
 

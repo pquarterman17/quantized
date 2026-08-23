@@ -3,7 +3,10 @@
 // not. "→ Library" pushes the FFT magnitude spectrum as a new dataset. Thin —
 // logic lives in useReflectivityFft.
 
-import { Button, Checkbox, DataTable, NumberField, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import { type ReflFftPreprocess, useReflectivityFft } from "./useReflectivityFft";
 

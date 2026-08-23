@@ -6,7 +6,8 @@
 // custom equations); the target shape (model XOR equation + params + the
 // fitted x-range) is all either caller needs to provide.
 
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useFindXY, type FindXYTarget } from "./useFindXY";
 

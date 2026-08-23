@@ -11,16 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  baselineALS,
-  baselineAnchor,
-  baselineEstimate,
-  baselineModPoly,
-  baselineRegion,
-  baselineRollingBall,
-  baselineShirley,
-  baselineXrdLowAngle,
-} from "../../../lib/api";
+import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselection";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";

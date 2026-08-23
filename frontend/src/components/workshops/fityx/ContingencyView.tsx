@@ -6,7 +6,8 @@
 // than hiding the chi-square caveat.
 
 import { fmtNum } from "../../../lib/format";
-import { DataTable, StatusDot } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { StatusDot } from "../../primitives";
 import MosaicPlot from "./MosaicPlot";
 import type { ContingencyResult } from "./useFitYByX";
 

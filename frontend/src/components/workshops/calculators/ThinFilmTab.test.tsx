@@ -1,17 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  thinFilmDepositionRate,
-  thinFilmKiessig,
-  thinFilmProjectedRange,
-  thinFilmStoneyStress,
-  thinFilmThermalMismatch,
-} from "../../../lib/api";
-import { thinFilmSauerbrey } from "../../../lib/api/thinFilm";
+import { thinFilmDepositionRate, thinFilmKiessig, thinFilmProjectedRange, thinFilmStoneyStress, thinFilmThermalMismatch, thinFilmSauerbrey } from "../../../lib/api/thinFilm";
 import ThinFilmTab from "./ThinFilmTab";
 
-vi.mock("../../../lib/api", () => ({
+
+vi.mock("../../../lib/api/thinFilm", () => ({
+  thinFilmSauerbrey: vi.fn(),
   thinFilmDepositionRate: vi.fn(),
   thinFilmSputterRate: vi.fn(),
   thinFilmDiffusionLength: vi.fn(),
@@ -22,10 +17,6 @@ vi.mock("../../../lib/api", () => ({
   thinFilmProjectedRange: vi.fn(),
   thinFilmStoneyStress: vi.fn(),
   thinFilmThermalMismatch: vi.fn(),
-}));
-
-vi.mock("../../../lib/api/thinFilm", () => ({
-  thinFilmSauerbrey: vi.fn(),
 }));
 
 beforeEach(() => {

@@ -7,7 +7,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ScanEntry } from "../../../lib/api";
+import type { ScanEntry } from "../../../lib/api/curvefit";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { saveCustomModel } from "../../../lib/fitmodels";
 import { JobCancelledError } from "../../../lib/jobs";

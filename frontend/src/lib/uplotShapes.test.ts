@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import { CLICK_PX } from "./pointGesture";
-import type { Annotation } from "./types";
-import type { Shape } from "./types";
+import type { Annotation, Shape } from "./types";
 import { annotationPlugin } from "./uplotOverlays";
 import {
   defaultShapeOpacity,

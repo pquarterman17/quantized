@@ -5,14 +5,7 @@
 // build/export entries that are intentionally filed under Plot.
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import {
-  exportConsolidated,
-  exportHdf5,
-  exportOrigin,
-  exportXrdCsv,
-  originComStatus,
-  sendToOrigin,
-} from "../lib/api";
+import { exportConsolidated, exportHdf5, exportOrigin, exportXrdCsv, originComStatus, sendToOrigin } from "../lib/api";
 import { makeDemoDataset } from "../lib/demo";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";

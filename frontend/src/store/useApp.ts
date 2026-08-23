@@ -2,13 +2,8 @@
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
 import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
-import {
-  fftSpectral,
-  fitModel,
-  peaksIntegrate,
-  statsDescriptive,
-  uploadFile,
-} from "../lib/api";
+import { statsDescriptive } from "../lib/api/statsDescriptive";
+import { fftSpectral, fitModel, peaksIntegrate, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
 import { centralDifference, sortByX, type DerivativeResult } from "../lib/differentiate";
 import { computeCursorReadout } from "../lib/gadgetCursors";

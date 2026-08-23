@@ -37,15 +37,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  type DistFitAllResponse,
-  type DistFitResult,
-  reportEmit,
-  statsDescriptive,
-  statsFitDistributions,
-  statsHistogram,
-  statsShapiro,
-} from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
+import { type DistFitAllResponse, type DistFitResult, reportEmit, statsFitDistributions, statsHistogram, statsShapiro } from "../../../lib/api";
 import { type DistFamily, distPdfCurve, distQuantile } from "../../../lib/distpdf";
 import { rowsInBins } from "../../../lib/distribution";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";

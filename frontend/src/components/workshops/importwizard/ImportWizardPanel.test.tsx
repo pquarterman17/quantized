@@ -22,8 +22,10 @@ const {
   deleteImportFilterMock: vi.fn(),
 }));
 
-vi.mock("../../../lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../lib/api")>()),
+// All six moved to lib/api/importFilters.ts (R8 bundle-diet pass) — mock
+// them at their real import path.
+vi.mock("../../../lib/api/importFilters", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api/importFilters")>()),
   importGuess: importGuessMock,
   importPreview: importPreviewMock,
   importParse: importParseMock,

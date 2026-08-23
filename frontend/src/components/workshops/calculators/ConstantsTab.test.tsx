@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getConstants } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
 import type { ConstantEntry, ConstantSystem } from "../../../lib/types";
 import ConstantsTab from "./ConstantsTab";
 
-vi.mock("../../../lib/api", () => ({ getConstants: vi.fn() }));
+vi.mock("../../../lib/api/reference", () => ({
+  getConstants: vi.fn(),
+}));
 
 const SYSTEMS: Record<ConstantSystem, ConstantEntry[]> = {
   SI: [

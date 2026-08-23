@@ -20,16 +20,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  statsDixonQ,
-  statsGrubbs,
-  statsMadOutliers,
-  statsRosner,
-  type OutlierDixonResult,
-  type OutlierGrubbsResult,
-  type OutlierMadResult,
-  type OutlierRosnerResult,
-} from "../../../lib/api";
+import { statsDixonQ, statsGrubbs, statsMadOutliers, statsRosner, type OutlierDixonResult, type OutlierGrubbsResult, type OutlierMadResult, type OutlierRosnerResult } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { DataStruct } from "../../../lib/types";

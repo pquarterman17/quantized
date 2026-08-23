@@ -1,15 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { statsDescriptive } from "../../lib/api";
+import { statsDescriptive } from "../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import Worksheet from "./Worksheet";
 
 vi.mock("../../lib/api", () => ({
-  statsDescriptive: vi.fn(),
   applyCorrections: vi.fn(),
   uploadFile: vi.fn(),
+}));
+vi.mock("../../lib/api/statsDescriptive", () => ({
+  statsDescriptive: vi.fn(),
 }));
 
 const data: DataStruct = {

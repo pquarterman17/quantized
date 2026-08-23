@@ -15,7 +15,7 @@
 // (a saved doc that reopens looking different from the preview it was saved
 // from). One input type makes that structural instead of a review question.
 
-import type { FigureSpec } from "../../../lib/api";
+import type { FigureSpec } from "../../../lib/api/figures";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";

@@ -7,8 +7,8 @@
 
 import { useRef, useState } from "react";
 
-import { sldFromFormula } from "../../../lib/api";
-import type { SldFormulaResult } from "../../../lib/api";
+import { sldFromFormula } from "../../../lib/api/sld";
+import type { SldFormulaResult } from "../../../lib/api/sld";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
 

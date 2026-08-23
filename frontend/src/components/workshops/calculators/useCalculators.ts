@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 
-import { getConstants } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
 import { useCrystalCalc, type CrystalCalcState } from "./useCrystalCalc";
 import { useSldCalc, type SldCalcState } from "./useSldCalc";
 import { useUnitsCalc, type UnitsCalcState } from "./useUnitsCalc";

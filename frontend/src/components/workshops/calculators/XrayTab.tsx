@@ -7,7 +7,9 @@
 
 import { useRef, useState } from "react";
 
-import { Button, NumberField, Pill, Select } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Pill } from "../../primitives/Pill";
+import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { neutronCalc, xrayCalc } from "../../../lib/api";
 import {

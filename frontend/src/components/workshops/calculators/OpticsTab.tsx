@@ -5,15 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  opticsBrewsterAngle,
-  opticsCriticalAngle,
-  opticsDielectricToRefractive,
-  opticsFresnel,
-  opticsPenetrationDepth,
-  opticsRefractiveToDielectric,
-  opticsSkinDepth,
-} from "../../../lib/api";
+import { opticsBrewsterAngle, opticsCriticalAngle, opticsDielectricToRefractive, opticsFresnel, opticsPenetrationDepth, opticsRefractiveToDielectric, opticsSkinDepth } from "../../../lib/api/optics";
 import {
   Button,
   Card,

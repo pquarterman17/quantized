@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { statsDescriptive } from "../../../lib/api";
+import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../../lib/formula";
 import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";

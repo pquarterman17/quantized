@@ -2,7 +2,9 @@
 // window, run the FFT, show thickness ± uncertainty, and push the FFT
 // magnitude spectrum to the library. Thin — logic lives in useFftThickness.
 
-import { Button, DataTable, NumberField, Select } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import { useFftThickness } from "./useFftThickness";
 

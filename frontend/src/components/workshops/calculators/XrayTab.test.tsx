@@ -5,14 +5,22 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getConstants, neutronCalc, xrayCalc } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
+import { neutronCalc, xrayCalc } from "../../../lib/api";
 import { setFormatOpts } from "../../../lib/format";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
-  getConstants: vi.fn(),
   xrayCalc: vi.fn(),
   neutronCalc: vi.fn(),
+}));
+vi.mock("../../../lib/api/reference", () => ({
+  getConstants: vi.fn(),
+  // Rendered through CalculatorsContent, so useUnitsCalc's effect also fires;
+  // this sibling export now shares a file with getConstants (R8 merge) so a
+  // partial mock must cover it too, or the call throws instead of the
+  // original real-fetch-rejects-and-is-caught behavior.
+  getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
 }));
 
 function openXrayTab(): void {

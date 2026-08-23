@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api";
+import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
 import { fullPlottedX, selectedFitData } from "../../../lib/fitselection";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import { analysisData } from "../../../lib/rowstate";

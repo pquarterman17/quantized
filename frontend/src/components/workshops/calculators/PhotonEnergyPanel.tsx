@@ -4,7 +4,9 @@
 // the component-size convention. Presentational; math via useCalculators'
 // peCompute (calc.unit_convert, routed through a common energy hub).
 
-import { Button, DataTable, NumberField, Select } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { CopyButton } from "./shared";
 import type { CalculatorsState } from "./useCalculators";

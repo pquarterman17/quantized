@@ -32,7 +32,9 @@
 // vector figures poorly), same tradeoff the single-figure copy makes.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { NumberField } from "../../primitives/NumberField";
+import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
 import {
   PAGE_LABEL_FORMATS,

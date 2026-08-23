@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { querySqlite } from "../../../lib/api";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField } from "../../primitives";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 
 export const SHOW_SQLITE_QUERY = "qz:show-sqlite-query";
 

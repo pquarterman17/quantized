@@ -1,14 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  deleteImportFilter,
-  importGuess,
-  importParse,
-  importPreview,
-  listImportFilters,
-  saveImportFilter,
-} from "../../../lib/api";
+import { deleteImportFilter, importGuess, importParse, importPreview, listImportFilters, saveImportFilter } from "../../../lib/api/importFilters";
 import type {
   DataStruct,
   ImportFilterWire,
@@ -18,7 +11,7 @@ import type {
 import { useApp } from "../../../store/useApp";
 import { useImportWizard } from "./useImportWizard";
 
-vi.mock("../../../lib/api", () => ({
+vi.mock("../../../lib/api/importFilters", () => ({
   importGuess: vi.fn(),
   importPreview: vi.fn(),
   importParse: vi.fn(),

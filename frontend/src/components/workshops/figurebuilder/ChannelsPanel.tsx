@@ -18,7 +18,9 @@
 
 import { resolvedYKeys } from "./canonicalChannels";
 import type { ChannelRole } from "../../../lib/types";
-import { Checkbox, Pill, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { Pill } from "../../primitives/Pill";
+import { Select } from "../../primitives";
 
 export default function ChannelsPanel({
   labels,

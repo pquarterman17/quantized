@@ -6,7 +6,7 @@
  * `satisfies` clauses make a model change fail type-checking until its ownership
  * is classified here.
  */
-import type { FigureSpec } from "./api";
+import type { FigureSpec } from "./api/figures";
 import type { FigureConfig, FigureDoc } from "./figuredoc";
 import type { PlotSpec } from "./plotspec";
 import type { PlotView } from "./plotview";

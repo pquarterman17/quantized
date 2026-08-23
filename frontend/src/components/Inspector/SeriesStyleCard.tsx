@@ -8,7 +8,11 @@ import { defaultErrKeys } from "../../lib/errorbars";
 import { MARKER_SHAPES } from "../../lib/markers";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Checkbox, IconButton, NumberField, SegmentedControl, Select } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
+import { IconButton } from "../primitives/IconButton";
+import { NumberField } from "../primitives/NumberField";
+import { SegmentedControl } from "../primitives/SegmentedControl";
+import { Select } from "../primitives";
 import Card from "../primitives/Card";
 import SeriesFillColorControls from "./SeriesFillColorControls";
 

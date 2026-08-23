@@ -6,14 +6,7 @@
 import { useState } from "react";
 
 import { Select } from "../../primitives";
-import {
-  vacuumGasFlow,
-  vacuumKnudsen,
-  vacuumMeanFreePath,
-  vacuumMonolayerTime,
-  vacuumPumpDownTime,
-  vacuumSputterYield,
-} from "../../../lib/api";
+import { vacuumGasFlow, vacuumKnudsen, vacuumMeanFreePath, vacuumMonolayerTime, vacuumPumpDownTime, vacuumSputterYield } from "../../../lib/api/vacuum";
 import {
   Button,
   Card,

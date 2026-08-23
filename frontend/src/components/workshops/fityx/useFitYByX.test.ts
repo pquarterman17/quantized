@@ -1,16 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  reportEmit,
-  statsAnova,
-  statsChiSquareIndependence,
-  statsFisherExact,
-  statsLevene,
-  statsRecommend,
-  statsRegression,
-  statsTukey,
-} from "../../../lib/api";
+import { reportEmit, statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useFitYByX } from "./useFitYByX";

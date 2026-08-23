@@ -8,18 +8,19 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getConstants } from "./lib/api";
+import { getConstants } from "./lib/api/reference";
 import CalcOnlyApp from "./CalcOnlyApp";
 import { useCalcHistory } from "./store/calcHistory";
 import { useApp } from "./store/useApp";
 
-vi.mock("./lib/api", () => ({
+vi.mock("./lib/api/reference", () => ({
   getConstants: vi.fn(),
+  // useCalculators also fetches the units-converter category table from
+  // this sibling export — a partial mock must cover it too (R8 merged it
+  // into the same file as getConstants), or the call throws instead of the
+  // original real-fetch-rejects-and-is-caught behavior.
+  getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
 }));
-// useCalculators also fetches the units-converter category table from a
-// sibling module (kept out of the pinned lib/api.ts barrel — see
-// lib/api/reference.ts); unmocked here, its real getJSON() call rejects in
-// jsdom (no fetch) and the hook's .catch() swallows it, same as offline.
 
 beforeEach(() => {
   vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });

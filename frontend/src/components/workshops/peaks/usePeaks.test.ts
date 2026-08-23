@@ -1,17 +1,20 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchBookData, findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api";
+import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
+import { fetchBookData } from "../../../lib/api";
 import type { DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { usePeaks } from "./usePeaks";
 
 vi.mock("../../../lib/api", () => ({
+  fetchBookData: vi.fn(),
+}));
+vi.mock("../../../lib/api/peaks", () => ({
   findPeaks: vi.fn(),
   fitMultiPeak: vi.fn(),
   fitPeak: vi.fn(),
-  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {

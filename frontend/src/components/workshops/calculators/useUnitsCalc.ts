@@ -8,8 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { convertUnits } from "../../../lib/api";
-import { getUnitCategories } from "../../../lib/api/reference";
+import { convertUnits, getUnitCategories } from "../../../lib/api/reference";
 import type { UnitCategoryDef } from "../../../lib/api/reference";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";

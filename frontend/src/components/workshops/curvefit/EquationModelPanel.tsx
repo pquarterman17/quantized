@@ -7,7 +7,9 @@
 // saved model; kept as its own sub-component + hook (useEquationFit) so
 // edits to the shared workshop files stay minimal.
 
-import { Button, DataTable, NumberField } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { NumberField } from "../../primitives/NumberField";
+import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import FindXYSection from "./FindXYSection";

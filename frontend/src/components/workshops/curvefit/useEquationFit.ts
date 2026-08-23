@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { fitEquation, validateEquation } from "../../../lib/api";
+import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
 import {
   deleteCustomModel,
   saveCustomModel,

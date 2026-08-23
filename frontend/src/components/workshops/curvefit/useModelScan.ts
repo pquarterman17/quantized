@@ -11,7 +11,7 @@
 
 import { useRef, useState } from "react";
 
-import { type ScanEntry } from "../../../lib/api";
+import { type ScanEntry } from "../../../lib/api/curvefit";
 import { loadCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";

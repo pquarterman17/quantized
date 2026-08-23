@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderFigureBlob } from "./api";
+import { renderFigureBlob } from "./api/figures";
 import {
   clipboardImageSupported,
   clipboardSvgSupported,
@@ -22,7 +22,9 @@ import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct, Dataset } from "./types";
 
-vi.mock("./api", () => ({ renderFigureBlob: vi.fn() }));
+vi.mock("./api/figures", () => ({
+  renderFigureBlob: vi.fn(),
+}));
 vi.mock("./clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
   clipboardSvgSupported: vi.fn(() => true),

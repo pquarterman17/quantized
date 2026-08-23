@@ -6,10 +6,11 @@
 
 import { useEffect, useState } from "react";
 
-import { getConstants } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
 import { fmtNum } from "../../../lib/format";
 import type { ConstantEntry, ConstantSystem } from "../../../lib/types";
-import { DataTable, Select } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { Select } from "../../primitives";
 
 const SYSTEM_OPTIONS: { value: ConstantSystem; label: string }[] = [
   { value: "SI", label: "SI" },

@@ -5,12 +5,7 @@
 
 import { useState } from "react";
 
-import {
-  diffusionArrhenius,
-  diffusionFickFlux,
-  diffusionLength,
-} from "../../../lib/api";
-import { diffusionCProfile } from "../../../lib/api/diffusion";
+import { diffusionArrhenius, diffusionFickFlux, diffusionLength, diffusionCProfile } from "../../../lib/api/diffusion";
 import {
   Button,
   Card,

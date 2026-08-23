@@ -22,7 +22,9 @@ import {
 } from "../../lib/tickFormat";
 import type { AxisFormat, TickMode } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { Checkbox, NumberField, SegmentedControl } from "../primitives";
+import { Checkbox } from "../primitives/Checkbox";
+import { NumberField } from "../primitives/NumberField";
+import { SegmentedControl } from "../primitives/SegmentedControl";
 
 export default function TickFormat() {
   const xFmt = useApp((s) => s.xFmt);

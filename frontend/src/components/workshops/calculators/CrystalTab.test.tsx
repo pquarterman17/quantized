@@ -6,14 +6,22 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { crystalDSpacing, getConstants } from "../../../lib/api";
+import { getConstants } from "../../../lib/api/reference";
+import { crystalDSpacing } from "../../../lib/api";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
-  getConstants: vi.fn(),
   crystalDSpacing: vi.fn(),
   crystalCell: vi.fn(),
+}));
+vi.mock("../../../lib/api/reference", () => ({
+  getConstants: vi.fn(),
+  // Rendered through CalculatorsContent, so useUnitsCalc's effect also fires;
+  // this sibling export now shares a file with getConstants (R8 merge) so a
+  // partial mock must cover it too, or the call throws instead of the
+  // original real-fetch-rejects-and-is-caught behavior.
+  getUnitCategories: vi.fn().mockRejectedValue(new Error("offline")),
 }));
 
 vi.mock("../../../lib/api/crystallography", () => ({

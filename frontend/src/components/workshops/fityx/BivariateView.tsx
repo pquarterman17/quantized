@@ -8,7 +8,9 @@
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { Checkbox, DataTable, SegmentedControl } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
+import { DataTable } from "../../primitives/DataTable";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
 import type { BivariateResult } from "./useFitYByX";
 
 const W = 320;

@@ -6,14 +6,7 @@
 
 import { useState } from "react";
 
-import {
-  magneticCurieWeiss,
-  magneticDemag,
-  magneticDomainWall,
-  magneticLangevin,
-  magneticMomentConvert,
-} from "../../../lib/api";
-import { magneticCurieWeissFit } from "../../../lib/api/magnetic";
+import { magneticCurieWeiss, magneticDemag, magneticDomainWall, magneticLangevin, magneticMomentConvert, magneticCurieWeissFit } from "../../../lib/api/magnetic";
 import {
   Button,
   Card,

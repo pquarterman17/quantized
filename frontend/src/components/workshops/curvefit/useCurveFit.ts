@@ -4,7 +4,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
+import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
+import { exportCornerFigure } from "../../../lib/api/figures";
+import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";

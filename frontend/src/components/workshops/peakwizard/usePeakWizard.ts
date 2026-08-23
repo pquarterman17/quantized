@@ -10,16 +10,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  baselineALS,
-  baselineModPoly,
-  baselineRollingBall,
-  findPeaks,
-  fitMultiPeak,
-  peaksIntegrate,
-  reportEmit,
-  type IntegratedPeak,
-} from "../../../lib/api";
+import { baselineALS, baselineModPoly, baselineRollingBall } from "../../../lib/api/baseline";
+import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
+import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
   cutRange,

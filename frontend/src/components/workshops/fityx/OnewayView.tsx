@@ -4,7 +4,8 @@
 // recommend_test chooser surfaced as a plain-language hint line.
 
 import { fmtNum } from "../../../lib/format";
-import { DataTable, StatusDot } from "../../primitives";
+import { DataTable } from "../../primitives/DataTable";
+import { StatusDot } from "../../primitives";
 import GroupedStrip from "./GroupedStrip";
 import type { OnewayResult } from "./useFitYByX";
 
