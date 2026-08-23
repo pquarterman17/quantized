@@ -296,9 +296,9 @@ export function useFigureBuilder() {
   // F2.3h: same `document.bindings` shape as F2.3f's error bindings above
   // (not the PlotView) -- patches the document directly. Already reaches
   // the renderer (`group_col`); the panel was the only missing piece.
-  // Facet editing is deliberately NOT exposed -- `bindings.facetKey` has no
-  // render-request wire and no creation surface anywhere in the app; see
-  // GroupingPanel.tsx's doc for the full reasoning (the F2.3d precedent).
+  // Facet editing is deliberately STILL NOT exposed HERE -- F4.4 gave
+  // `bindings.facetKey` a real Stage wire (`facetCompositionFromBinding`) and
+  // creation surface (`facetByColumn`), neither reaching this panel (F2.3d).
   const groupKey = canonicalDocument?.bindings.groupKey ?? null;
   const setGroupKey = (next: number | null) =>
     patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, groupKey: next } }));

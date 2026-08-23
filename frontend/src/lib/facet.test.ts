@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { facetPanelsOf } from "./composition";
 import {
   breakPayloads,
+  facetCompositionFromBinding,
   facetPayloads,
   facetSlices,
   sharedXDomain,
@@ -11,7 +13,7 @@ import {
   type FacetPanel,
 } from "./facet";
 import type { PlotPayload } from "./plotdata";
-import type { DataStruct } from "./types";
+import type { DataStruct, Dataset } from "./types";
 
 describe("facetPayloads", () => {
   const ds: DataStruct = {
@@ -346,5 +348,55 @@ describe("sharedYDomain", () => {
       },
     };
     expect(sharedYDomain([twoSeries])).toEqual([-10, 6]);
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: the ONE derivation that rebuilds a
+// live facet Composition from the durable `facetKey` binding wherever a
+// window's view gets rehydrated (focus switch, workspace reopen, a
+// resolved recipe's freshly-focused window).
+describe("facetCompositionFromBinding", () => {
+  const data: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [
+      [1, 10],
+      [1, 20],
+      [2, 30],
+      [2, 40],
+    ],
+    labels: ["grp", "y"],
+    units: ["", ""],
+    metadata: {},
+  };
+  const ds: Dataset = { id: "d1", name: "ds1", data };
+
+  it("rebuilds the SAME facet composition facetByColumn would build", () => {
+    const composition = facetCompositionFromBinding(ds, 0, null, [1]);
+    const panels = facetPanelsOf(composition);
+    expect(panels).not.toBeNull();
+    expect(panels).toHaveLength(2);
+    expect(panels![0].label).toBe("1");
+    expect(panels![1].label).toBe("2");
+  });
+
+  it("returns null when facetKey is null (an ordinary plot)", () => {
+    expect(facetCompositionFromBinding(ds, null, null, [1])).toBeNull();
+  });
+
+  it("returns null when there is no dataset to facet", () => {
+    expect(facetCompositionFromBinding(undefined, 0, null, [1])).toBeNull();
+    expect(facetCompositionFromBinding(null, 0, null, [1])).toBeNull();
+  });
+
+  it("returns null (never throws) for an out-of-range facetKey", () => {
+    expect(facetCompositionFromBinding(ds, 99, null, [1])).toBeNull();
+  });
+
+  it("honors row exclusion (analysisData), same as a fresh facetByColumn gesture", () => {
+    const excluded: Dataset = { ...ds, excludedRows: [0, 1] }; // drop every "grp"=1 row
+    const composition = facetCompositionFromBinding(excluded, 0, null, [1]);
+    const panels = facetPanelsOf(composition);
+    expect(panels).toHaveLength(1);
+    expect(panels![0].label).toBe("2");
   });
 });

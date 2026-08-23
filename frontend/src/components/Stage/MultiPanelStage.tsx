@@ -32,7 +32,17 @@
 //     mode needs no fetch — and shares ONE x-domain across all panels
 //     (`lib/facet.sharedXDomain`), with box-zoom/pan sync like the plain
 //     stack (same idiom, since the x AXIS means the same thing in every
-//     panel). Each panel's uPlot `title` shows its facet level.
+//     panel). Each panel's uPlot `title` shows its facet level. F4.4: the
+//     underlying `facetKey` binding is durable (bindings-owned like
+//     `groupKey`) even though `composition` itself is an ephemeral cache --
+//     `useEffectiveComposition` (`PlotStage.tsx`'s doc) rebuilds it on the
+//     fly whenever `composition` is null but `facetKey` isn't, so a facet
+//     grid survives a focus switch, a workspace reopen, or a resolved
+//     recipe's rebuild. L4 (review round 3): derived ONCE by `PlotStage.tsx`
+//     (which needs it anyway for its own mount gate) and passed down as the
+//     `composition` prop below — this file never calls the hook itself, so
+//     the O(rows) facetPayloads scan the fallback can trigger never runs
+//     twice for the one arrangement actually on screen.
 //  4) Paneled x-breaks (gap #21 LAST residual): `store.breakPanels`, set by
 //     the `breakAtGaps` action, splits ONE series at large x-gaps
 //     (`lib/facet.suggestBreaks` or an explicit override) into adjacent
@@ -54,6 +64,7 @@ import "uplot/dist/uPlot.min.css";
 
 import { createPortal } from "react-dom";
 
+import type { Composition } from "../../lib/composition";
 import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -63,12 +74,23 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import SpatialPanelLegend from "./SpatialPanelLegend";
 
-export default function MultiPanelStage() {
+export interface MultiPanelStageProps {
+  /** The effective arrangement to render — L4 (review round 3): derived
+   *  EXACTLY ONCE, by `PlotStage.tsx` (via `useEffectiveComposition`, which
+   *  this component used to also call itself, running the fallback's
+   *  O(rows) `facetPayloads` scan a second time for nothing), and passed
+   *  down here as a plain prop. This file owns no composition derivation of
+   *  its own — `useEffectiveComposition` stays the ONE implementation. */
+  composition: Composition | null;
+}
+
+export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const setStackMode = useApp((s) => s.setStackMode);
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
-  const composition = useApp((s) => s.composition);
   const spatialPanels = spatialPanelsOf(composition);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
   const yScale = useApp((s) => s.yScale);
   const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
@@ -83,8 +105,6 @@ export default function MultiPanelStage() {
   const defaultTrace = useApp((s) => s.defaultTrace);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
-  const xKey = useApp((s) => s.xKey);
-  const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);

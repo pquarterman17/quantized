@@ -389,6 +389,30 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(spec.filename).toBe("device-stem");
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: export never breaks on a facet-
+  // bound document -- it just doesn't transport the facet layout, exactly
+  // the same (pre-existing, documented) scope boundary as before this item
+  // (`buildFigureSpecFromDocument`'s own header: "FigureSpec has no
+  // transport fields for mark, facetKey"). This is the "verify the existing
+  // export path against a restored composition" half of F4.4: a restored
+  // facet is no MORE and no LESS exportable than a freshly-built one.
+  it("exports a facet-bound window identically to the same view without a facet binding (documented scope boundary, not a regression)", () => {
+    const withFacet = createFigureDocument({
+      id: "faceted-window", name: "Faceted", datasetId: dataset.id, view: richView(), facetKey: 1,
+    });
+    const withoutFacet = createFigureDocument({
+      id: "faceted-window", name: "Faceted", datasetId: dataset.id, view: richView(),
+    });
+    const specFor = (document: typeof withFacet) =>
+      buildStageFigureSpec(
+        fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+        dataset,
+        "device",
+        opts,
+      );
+    expect(specFor(withFacet)).toEqual(specFor(withoutFacet));
+  });
+
   it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {
     const spec = buildStageFigureSpec(fakeStage(), dataset, "device", opts, { transparent: true });
     expect(spec.transparent).toBe(true);

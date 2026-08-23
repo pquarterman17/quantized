@@ -357,7 +357,16 @@ const MODULE_PINS: Record<string, number> = {
   // CLAUDE.md's "raise only with written justification" — the pin's own
   // history comment named this exact addition as the intended spend.
   "/lib/workspace.ts": 430,
-  "/lib/plotview.ts": 978,
+  // 978 -> 981 (2026-08-23, FIGURE_AUTHORING_WORKFLOW_PLAN F4.4): `facetKey`
+  // added to `PlotView` (interface field + `defaultPlotView()` +
+  // `sanitizePlotView()`), mirroring `groupKey`'s own three-site pattern
+  // exactly (bindings-owned, reset-on-switch, projected to/from
+  // `FigureDocument.bindings.facetKey`) so a facet arrangement survives
+  // focus switch/save/reopen/recipe-apply through the SAME already-correct
+  // machinery `groupKey` uses — no new machinery, no extractable cohesive
+  // block to fund it with. Written justification per CLAUDE.md's "raise
+  // only with written justification".
+  "/lib/plotview.ts": 981,
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {

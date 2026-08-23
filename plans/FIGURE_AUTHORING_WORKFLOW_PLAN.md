@@ -506,9 +506,10 @@ with parent items P1.3 and P1.5.
         unmatched" opt-in, a "Save as Plot Recipe…" entry point on the
         focused plot window, and a subtle (never-auto-apply) post-import
         suggestion toast. Still open: transformations and style-template
-        choice (this item's own text), live grouping/faceting COMPOSITION
-        parity (F4.4 below — the bindings are captured and re-key correctly,
-        but rebuilding the actual panels on apply is a documented gap), a
+        choice (this item's own text), SPATIAL/BREAK composition rebuild on
+        apply (F4.4 below — genuinely out of scope: those need per-panel
+        placement/break ranges the resolve step can't produce; FACET rebuild
+        itself is closed by F4.4 via the durable `facetKey` binding), a
         maps/panels payload, schema version migration beyond the v1 parse-
         gate, waterfall settings beyond the scalar offset, and preview
         thumbnails.
@@ -519,13 +520,46 @@ with parent items P1.3 and P1.5.
       ambiguous match stages a preview+confirm dialog naming the mapping and
       unmatched fields rather than guessing; a clean or confirmed apply always
       creates a new figure, so an already-customized one is never touched.)
-- [ ] **F4.4 Complete live grouping/faceting parity.** Grouped/faceted results
-      must remain editable on Stage and survive save/reopen/export. (Not
-      recipe-specific work — this item covers the Graph Builder/Stage
-      grouping-composition parity generally; P1.3's own group/facet BINDING
-      capture+re-key is done, per F4.2b above, but reconstructing a live
-      composition from an applied recipe is out of scope until this item
-      lands, per `plotRecipes.ts`'s own documented GAP note.)
+- [~] **F4.4 Complete live grouping/faceting parity (Claude, 2026-08-23).**
+      Grouped/faceted results must remain editable on Stage and survive
+      save/reopen/export. GROUPING was already fully live (`groupKey` has
+      always been a first-class, bindings-owned `PlotView` field reaching
+      `usePlotPayload`/export) — this slice closes the FACET half the same
+      way: `facetKey` is now a bindings-owned `PlotView` field, mirroring
+      `groupKey`'s exact three-site wiring (interface + `defaultPlotView()` +
+      `sanitizePlotView()` in `lib/plotview.ts`; projected to/from
+      `FigureDocument.bindings.facetKey` in `lib/figureDocument.ts`; reset on
+      a genuine dataset switch in `store/windowDefaults.ts`). `composition`
+      itself stays the ephemeral render cache `facetByColumn` fills
+      immediately, but `MultiPanelStage.tsx` now rebuilds it on the fly from
+      `facetKey` (`lib/facet.facetCompositionFromBinding`) whenever
+      `composition` is null — the ONE mechanism that makes a facet survive a
+      focus switch, a `.dwk` reopen (`lib/workspace.test.ts`'s byte-fidelity
+      round trip — no new schema field; it rides the existing
+      `editableFigures`/`plotWindows` FigureDocument persistence), AND a
+      resolved recipe's rebuild (`store/plotRecipeApply.ts`'s
+      `applyResolvedRecipe` already wrote `facetKey` onto the new document;
+      this closes `store/plotRecipes.ts`'s own documented GAP note for the
+      facet case — see that file, narrowed rather than deleted). Stays
+      editable after restore: a fresh `facetByColumn` call on a
+      just-restored session behaves identically to a never-restored one
+      (same code path, no special-cased "restored" state).
+      **Still open (the GAP note's remaining, narrowed scope):**
+      (1) SPATIAL and BREAK composition parity — genuinely NOT addressed:
+      spatial panels need per-panel placement and break panels need break
+      ranges, neither of which the recipe-resolve step (or any bindings-owned
+      `PlotView` field) produces; rebuilding those still needs a dedicated
+      integration slice with those inputs. (2) EXPORT does not render a
+      facet layout — this was already true before this slice and remains a
+      separately-scoped gap: `buildFigureSpecFromDocument`'s own header notes
+      "FigureSpec has no transport fields for mark, facetKey", so exporting a
+      faceted window silently produces the plain (unfaceted) view, identical
+      to a non-faceted export of the same channels
+      (`lib/figureSpec.test.ts`'s own coverage) — never crashes, never
+      corrupts, but the facet ARRANGEMENT itself needs a backend
+      (calc/routes) change this frontend-only slice deliberately didn't
+      reach into. Because of (2), this item's own sentence ("survive
+      save/reopen/**export**") is not yet fully true — hence `[~]`, not `[x]`.
 
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.

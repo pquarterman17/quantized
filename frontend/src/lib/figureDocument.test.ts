@@ -67,6 +67,10 @@ describe("FigureDocument v2", () => {
     expect(document.bindings.errors.map(({ side }) => side)).toEqual(["+", "-"]);
     expect(document.plot.view).not.toHaveProperty("xKey");
     expect(document.plot.view).not.toHaveProperty("errKeys");
+    // F4.4: facetKey (like groupKey) is bindings-owned -- it must never leak
+    // into `plot.view` as a second, driftable copy.
+    expect(document.plot.view).not.toHaveProperty("groupKey");
+    expect(document.plot.view).not.toHaveProperty("facetKey");
   });
 
   it("projects legacy symmetric Y errors without losing them", () => {
@@ -284,6 +288,40 @@ describe("FigureDocument v2", () => {
       { channel: 6, target: -1, axis: "x", side: "both" },
       { channel: 7, target: 2, axis: "y", side: "both" },
     ]);
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: facetKey is bindings-owned, wired
+  // the SAME two-direction way groupKey already was -- a facet arrangement
+  // built via `facetByColumn` (which lives on the live PlotView facade, see
+  // `store/useApp.ts`) must reach `document.bindings.facetKey` on commit,
+  // and a document's durable facetKey must reach the facade on open/reopen.
+  it("projects the durable facetKey into the live facade view", () => {
+    const document = createFigureDocument({
+      id: "figure-facet",
+      name: "Faceted",
+      datasetId: "dataset-1",
+      view: defaultPlotView(),
+      facetKey: 2,
+    });
+    expect(figureDocumentToPlotView(document).facetKey).toBe(2);
+  });
+
+  it("commits a live facetKey edit back onto the canonical document", () => {
+    const document = createFigureDocument({
+      id: "figure-facet-2",
+      name: "Before",
+      datasetId: "dataset-1",
+      view: defaultPlotView(),
+    });
+    expect(document.bindings.facetKey).toBeNull();
+    const updated = updateFigureDocumentFromPlotView(document, {
+      view: { ...figureDocumentToPlotView(document), facetKey: 3 },
+    });
+    expect(updated.bindings.facetKey).toBe(3);
+    // Round-trips through the SAME full JSON serialization save/reopen relies on.
+    const restored = deserializeFigureDocument(serializeFigureDocument(updated));
+    expect(restored?.bindings.facetKey).toBe(3);
+    expect(figureDocumentToPlotView(restored!).facetKey).toBe(3);
   });
 
   it("rejects contradictory live/frozen data ownership", () => {

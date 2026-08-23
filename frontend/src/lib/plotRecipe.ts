@@ -98,9 +98,6 @@ export interface CaptureRecipeOptions {
    *  caller with only a live `PlotView` (no canonical document open) still
    *  captures whatever error pairing is visible today. */
   errors?: readonly ErrorBinding[];
-  /** `PlotView` carries no facet channel (`FigureBindings.facetKey` does) --
-   *  pass it explicitly when a canonical document backs the view. */
-  facetKey?: number | null;
   axisBreaks?: Partial<RecipeAxisBreaks>;
   /** Injectable clock for deterministic tests; defaults to
    *  `() => new Date().toISOString()`. */
@@ -163,7 +160,12 @@ export function captureRecipe(
   const yIds = (view.yKeys ?? []).map((ch) => entryFor(ch, "y"));
   const y2Ids = (view.y2Keys ?? []).map((ch) => entryFor(ch, "y2"));
   const groupId = view.groupKey !== null ? entryFor(view.groupKey, "group") : null;
-  const facetId = opts.facetKey != null ? entryFor(opts.facetKey, "facet") : null;
+  // F4.4 (review K4/K6): `facetKey` is bindings-owned, symmetric with
+  // `groupKey` above, since F4.4 made it a real `PlotView` field -- no
+  // longer a separate opt a caller must remember to thread in from
+  // `document.bindings.facetKey` (the old comment's "PlotView carries no
+  // facet channel" is exactly the claim F4.4 made false).
+  const facetId = view.facetKey !== null ? entryFor(view.facetKey, "facet") : null;
 
   const errors: RecipeErrorBinding[] = errorBindings.map((b) => ({
     channel: entryFor(b.channel, "error"),
@@ -242,7 +244,12 @@ export function captureRecipe(
         shapes: view.shapes.map((s) => ({ ...s })),
         regionShades: view.regionShades.map((r) => ({ ...r })),
       },
-      compositionKind: composition ? composition.kind : null,
+      // F4.4 (review K4): `composition` is the ephemeral render cache -- it's
+      // null the moment a facet was built, focus moved away, and moved back
+      // (or a workspace reopened) without anyone re-running `facetByColumn`.
+      // The durable `facetKey` binding is what's actually still true in that
+      // case, so it wins whenever `composition` itself has nothing to say.
+      compositionKind: composition ? composition.kind : view.facetKey !== null ? "facet" : null,
     },
   };
 }

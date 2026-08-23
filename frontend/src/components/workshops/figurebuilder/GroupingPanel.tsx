@@ -20,10 +20,12 @@
 // exact reason, and duplicating the check here would just be a second,
 // potentially stale copy of the one source of truth.
 //
-// Facet editing is deliberately NOT in this panel -- see
-// useFigureBuilder.ts's `setGroupKey` doc for the full reasoning
-// (`document.bindings.facetKey` has no wire to the render request and no
-// creation surface anywhere in the app; the F2.3d region-shades precedent).
+// Facet editing is deliberately NOT in THIS panel -- see useFigureBuilder.ts's
+// `setGroupKey` doc for the full reasoning (F4.4, 2026-08-23, gave
+// `document.bindings.facetKey` a real Stage render wire and creation
+// surface -- `facetByColumn` -- neither of which reaches the Figure
+// Builder/Publication Preview draft this panel edits; the F2.3d
+// region-shades precedent).
 
 import { Select } from "../../primitives";
 

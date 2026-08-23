@@ -82,6 +82,7 @@ export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: Resolve
     yKeys: mapping.yKeys,
     y2Keys: mapping.y2Keys,
     groupKey: mapping.groupKey,
+    facetKey: mapping.facetKey,
     errKeys: errKeysFromBindings(mapping.errors),
     xScale: visual.xScale,
     yScale: visual.yScale,
@@ -158,6 +159,14 @@ export function applyResolvedRecipe(
     plotWindows: current.plotWindows.map((w) => (w.id === windowId ? withPlotWindowDocument(w, document) : w)),
     status: `applied plot recipe "${recipe.name}"`,
   }));
+  // F4.4: `document.bindings.facetKey` above is a real, live facet arrangement
+  // waiting to be rendered, not just inert metadata (`facetKey` is now a
+  // bindings-owned `PlotView` field, mirroring `groupKey` -- see
+  // `lib/figureDocument.ts`'s `figureDocumentToPlotView`). `focusWindow`
+  // hydrates this window's document into the live singleton facade, which
+  // `MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback then turns
+  // into an actual small-multiples grid -- closing `store/plotRecipes.ts`'s
+  // own documented GAP note for the facet case (spatial/break still open).
   get().focusWindow(windowId);
   return true;
 }

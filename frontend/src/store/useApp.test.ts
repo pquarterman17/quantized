@@ -10,6 +10,7 @@ import {
   spatialPanelsOf,
 } from "../lib/composition";
 import { defaultErrKeys } from "../lib/errorbars";
+import { facetCompositionFromBinding } from "../lib/facet";
 import { createFigureDocument } from "../lib/figureDocument";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
@@ -2022,6 +2023,19 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round L1: re-applying a
+  // figure onto a dataset that's ALREADY active is not a genuine dataset
+  // switch, so `setActive` alone never resets `facetKey`
+  // (`datasetViewDefaults` only fires on a real switch) -- a stale facet
+  // binding from a PRIOR gesture on this same dataset must be cleared
+  // explicitly, or a later focus round-trip resurrects it over this plain
+  // applied figure.
+  it("clears a stale facetKey when re-applying onto the ALREADY-active dataset (L1)", () => {
+    useApp.setState({ activeId: "d2", facetKey: 3 });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().facetKey).toBeNull();
+  });
+
   it("boxes the axes and turns OFF gridlines (Origin has none; grid undecodable)", () => {
     useApp.getState().applyOriginFigure("fig-XRD-0");
     const s = useApp.getState();
@@ -2649,6 +2663,16 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     });
   });
 
+  // F4.4 review round L1: same reasoning as the single-layer test of the
+  // same name -- re-applying onto the ALREADY-active dataset is not a
+  // genuine switch, so a stale facetKey from a prior gesture survives
+  // unless this branch clears it explicitly.
+  it("clears a stale facetKey when re-applying a double-Y figure onto the ALREADY-active dataset (L1)", () => {
+    useApp.setState({ activeId: "d2", facetKey: 1 });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().facetKey).toBeNull();
+  });
+
   it("applying layer 1 plots the UNION of both layers, y2Keys tags layer 2's on the right", () => {
     useApp.setState({ showAxisBox: false });
     useApp.getState().applyOriginFigure("fig-XRD-0");
@@ -2819,6 +2843,16 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     });
   });
 
+  // F4.4 review round L1: same reasoning as the single-layer/double-Y tests
+  // of the same name.
+  it("clears a stale facetKey when re-applying a spatial figure onto the ALREADY-active dataset (L1)", () => {
+    const top = mkEntry("fig-0", 1, "p1", "Book1", null, [0, 100]);
+    const bottom = mkEntry("fig-1", 2, "p2", "Book2", null, [0, 200]);
+    useApp.setState({ originFigures: [top, bottom], activeId: "p1", facetKey: 4 });
+    useApp.getState().applyOriginFigure("fig-0");
+    expect(useApp.getState().facetKey).toBeNull();
+  });
+
   it("arranges a 2-layer stack using real decoded frame geometry ('Fixed Lambdas SI'!Graph6 shape)", () => {
     const top = mkEntry("fig-0", 1, "p1", "Book1", { left: 0, top: 0, right: 995, bottom: 480 }, [0, 100]);
     const bottom = mkEntry("fig-1", 2, "p2", "Book2", { left: 0, top: 520, right: 995, bottom: 990 }, [0, 200]);
@@ -2981,8 +3015,15 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
       activeId: null,
       stackMode: false,
       composition: null,
+      // F4.4 review K5: facetByColumn now also sets the durable `facetKey`
+      // singleton -- reset it here too, or a LATER test in this block
+      // inherits whatever a PRIOR test's facetByColumn call left behind.
+      facetKey: null,
       macroRecording: false,
       macroSteps: [],
+      history: [],
+      future: [],
+      plotTitle: "",
     });
   });
 
@@ -2994,6 +3035,23 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     expect(spatialPanelsOf(s.composition)).toBeNull();
     expect(facetPanelsOf(s.composition)).toHaveLength(2);
     expect(facetPanelsOf(s.composition)?.map((p) => p.label)).toEqual(["1", "2"]);
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: `facetKey` is the DURABLE half of
+  // this gesture (bindings-owned like `groupKey`) -- `composition` itself is
+  // only the immediate render cache, so this is what actually survives a
+  // focus switch/save/reopen once `composition` is gone.
+  it("also sets the durable facetKey binding", () => {
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+  });
+
+  it("resets facetKey (like groupKey) on a genuine dataset switch", () => {
+    useApp.setState({ datasets: [...useApp.getState().datasets, { id: "d2", name: "ds2", data: facetData }] });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().facetKey).toBeNull();
   });
 
   it("clears a prior spatial arrangement", () => {
@@ -3088,6 +3146,158 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     expect(steps[0].code).toBe('qz.facetByColumn("d1", 0)');
     expect(steps[0].label).toBe("Facet by grp");
   });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K5: facetByColumn
+  // durably commits document-backed state (facetKey) but used to push NO
+  // undo entry of its own -- Ctrl+Z right after faceting silently reverted
+  // whatever edit came BEFORE it instead, skipping over the facet gesture
+  // entirely (there was nothing on the history stack for it to land on).
+  it("pushes its own undo entry — undo after facetByColumn reverts ONLY the facet, not an earlier edit (K5)", () => {
+    useApp.getState().setPlotTitle("before facet"); // an ordinary prior edit, its own undo entry
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+    expect(facetPanelsOf(useApp.getState().composition)).not.toBeNull();
+
+    useApp.getState().undo();
+
+    // The facet is gone...
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(facetPanelsOf(useApp.getState().composition)).toBeNull();
+    // ...but the EARLIER edit survives -- one undo, one gesture reverted.
+    expect(useApp.getState().plotTitle).toBe("before facet");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round L3: on a PINNED focused
+  // window, `setActive`'s `retargetPassiveRebind` creates a fresh window
+  // instead of rebinding the pinned one in place — and `createWindow` pushes
+  // its OWN "create window" undo entry. Since nothing mutates state between
+  // facetByColumn's own `recordHistory` push and that one, the two were
+  // near-duplicate snapshots of the SAME pre-gesture state: Ctrl+Z popped
+  // "create window" (which happened to still fully revert the gesture, just
+  // under the wrong label) and left a same-state phantom entry that silently
+  // swallowed the NEXT Ctrl+Z instead of reaching the genuinely-prior edit.
+  it("on a pinned focused window, produces exactly ONE undo entry — a second undo reaches the prior edit (L3)", () => {
+    const priorWindows = useApp.getState().plotWindows;
+    const priorFocused = useApp.getState().focusedWindowId;
+    try {
+      useApp.setState({
+        plotWindows: [
+          {
+            id: "w-pinned", kind: "plot", title: "", datasetId: "d1",
+            geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "normal",
+            bg: "theme", linkGroup: null, pinned: true, view: defaultPlotView(),
+          },
+        ],
+        focusedWindowId: "w-pinned",
+        history: [],
+        future: [],
+      });
+
+      useApp.getState().setPlotTitle("prior edit"); // its own, separate undo entry
+      const historyAfterPriorEdit = useApp.getState().history.length;
+
+      useApp.getState().facetByColumn("d1", 0);
+
+      // Exactly ONE new entry for the whole pinned-retarget-and-facet gesture.
+      expect(useApp.getState().history.length).toBe(historyAfterPriorEdit + 1);
+      expect(useApp.getState().plotWindows).toHaveLength(2); // the pinned original + the retargeted new one
+      expect(useApp.getState().facetKey).toBe(0);
+
+      useApp.getState().undo(); // pops the ONE facet-gesture entry
+      expect(useApp.getState().plotWindows).toHaveLength(1); // the retargeted window is gone
+      expect(useApp.getState().plotWindows[0].id).toBe("w-pinned");
+      expect(useApp.getState().focusedWindowId).toBe("w-pinned");
+      expect(useApp.getState().facetKey).toBeNull();
+      expect(useApp.getState().plotTitle).toBe("prior edit"); // NOT reverted yet
+
+      useApp.getState().undo(); // reaches the genuinely-prior edit, not a phantom
+      expect(useApp.getState().plotTitle).toBe("");
+    } finally {
+      useApp.setState({ plotWindows: priorWindows, focusedWindowId: priorFocused, history: [], future: [] });
+    }
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: a facet arrangement must remain
+// editable on Stage AND survive save/reopen. `composition` itself is only
+// the immediate render cache (never persisted); `facetKey` is the durable
+// half (bindings-owned like `groupKey`) that actually rides through
+// `loadWorkspace` via the focused window's `FigureDocument.bindings.facetKey`
+// -- see `lib/workspace.test.ts` for the raw .dwk byte-fidelity round trip.
+describe("useApp loadWorkspace restores a live facet arrangement (F4.4)", () => {
+  const facetData: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [[1, 10], [1, 20], [2, 30], [2, 40]],
+    labels: ["grp", "y"],
+    units: ["", ""],
+    metadata: {},
+  };
+
+  it("restores facetKey from the focused window's document, ready to render", () => {
+    const document = createFigureDocument({
+      id: "figure-facet",
+      name: "Faceted",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1], stackMode: true },
+      facetKey: 0,
+    });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "ds1", data: facetData }],
+      plotWindows: [
+        { id: "w1", kind: "plot", title: "Faceted", datasetId: "d1", geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "maximized", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false, document },
+      ],
+      focusedWindowId: "w1",
+    });
+    const s = useApp.getState();
+    expect(s.facetKey).toBe(0);
+    expect(s.stackMode).toBe(true);
+    // The exact rebuild `MultiPanelStage.tsx`'s render-layer fallback performs.
+    const rebuilt = facetCompositionFromBinding(s.datasets[0], s.facetKey, s.xKey, s.yKeys);
+    expect(facetPanelsOf(rebuilt)).toHaveLength(2);
+  });
+
+  it("stays editable after restore -- a fresh facetByColumn call on the restored session behaves identically to a never-restored one", () => {
+    const document = createFigureDocument({
+      id: "figure-facet-2",
+      name: "Faceted",
+      datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [1] },
+      facetKey: 0,
+    });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "ds1", data: facetData }],
+      plotWindows: [
+        { id: "w1", kind: "plot", title: "Faceted", datasetId: "d1", geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "maximized", view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false, document },
+      ],
+      focusedWindowId: "w1",
+    });
+
+    // Re-facet by the OTHER column on the restored session -- ordinary Stage
+    // editing, not a special "post-restore" code path.
+    useApp.getState().facetByColumn("d1", 1);
+    const s = useApp.getState();
+    expect(s.facetKey).toBe(1);
+    expect(facetPanelsOf(s.composition)).toHaveLength(4); // "y" has 4 distinct values
+  });
+
+  // Regression: `setStackMode` (the "back to single overlaid plot" button,
+  // and the plain "Stack" toggle in PlotToolbar) must ALSO clear `facetKey`,
+  // not just `composition` -- otherwise leaving a facet via that button then
+  // toggling stack mode back on (never through `facetByColumn` again) would
+  // resurrect the old facet grid, since the render layer rebuilds it from
+  // `facetKey` alone whenever `composition` is null.
+  it("setStackMode(false) clears facetKey too, so toggling stack mode back on never resurrects a stale facet", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: facetData }] });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+
+    useApp.getState().setStackMode(false);
+    expect(useApp.getState().facetKey).toBeNull();
+
+    useApp.getState().setStackMode(true); // the plain "Stack" toggle, not facetByColumn
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(useApp.getState().composition).toBeNull();
+  });
 });
 
 describe("useApp breakAtGaps (gap #21 last residual)", () => {
@@ -3148,14 +3358,19 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     expect(spatialPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
-  it("clears a prior facet arrangement", () => {
+  it("clears a prior facet arrangement AND its durable facetKey binding (F4.4 review L1)", () => {
     useApp.setState({
       composition: facetComposition([
         { label: "x", payload: { data: [[0]], series: [], xLabel: "", xUnit: "" } },
       ]),
+      facetKey: 0, // a real facetByColumn always sets this alongside composition
     });
     useApp.getState().breakAtGaps("d1");
     expect(facetPanelsOf(useApp.getState().composition)).toBeNull();
+    // Without this, useEffectiveComposition's fallback would resurrect the
+    // REPLACED facet the moment `composition` itself goes ephemeral again
+    // (a focus round-trip -- see the dedicated round-trip test below).
+    expect(useApp.getState().facetKey).toBeNull();
   });
 
   it("no-ops (with a toast, no crash) when the dataset is missing", () => {
@@ -3243,6 +3458,64 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0].code).toBe('qz.breakAtGaps("d1")');
     expect(steps[0].label).toBe("Break x-axis at gaps");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round L1: `facetKey` is a
+  // DURABLE, document-backed binding now -- installing a DIFFERENT
+  // composition kind on top of a prior facet must clear it, or a later
+  // focus round-trip (away, then back) resurrects the REPLACED facet grid
+  // via `useEffectiveComposition`'s fallback (`composition` itself is
+  // ephemeral and always goes null on a focus switch either way). This is
+  // the FULL commit+rehydrate cycle proof -- not just the immediate
+  // in-memory check the test above makes -- because the focused window's
+  // OWN document only catches up to the live singleton on a real focus
+  // change (`syncPlotWindow`'s "stale while focused" contract).
+  it("a facet superseded by breakAtGaps never resurrects after a real focus round-trip (L1)", () => {
+    const w1Document = createFigureDocument({
+      id: "fig-w1", name: "w1", datasetId: "d1", view: defaultPlotView(),
+    });
+    useApp.setState({
+      plotWindows: [
+        {
+          id: "w1", kind: "plot", title: "", datasetId: "d1",
+          geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "normal",
+          bg: "theme", linkGroup: null, pinned: false,
+          view: defaultPlotView(), document: w1Document,
+        },
+        {
+          id: "w2", kind: "plot", title: "", datasetId: null,
+          geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 1, winState: "normal",
+          bg: "theme", linkGroup: null, pinned: false, view: defaultPlotView(),
+        },
+      ],
+      focusedWindowId: "w1",
+      activeId: "d1",
+    });
+
+    // "y" (channel 0) is strictly increasing -> every row its own facet level.
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0);
+    expect(facetPanelsOf(useApp.getState().composition)).not.toBeNull();
+
+    // The user explicitly replaces the facet with a break arrangement.
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
+
+    // Focus round-trip: away to w2 (an empty background window), then back.
+    useApp.getState().focusWindow("w2");
+    useApp.getState().focusWindow("w1");
+
+    const s = useApp.getState();
+    expect(s.facetKey).toBeNull(); // never resurrected by the round-trip
+    const ds = s.datasets.find((d) => d.id === "d1");
+    expect(facetCompositionFromBinding(ds, s.facetKey, s.xKey, s.yKeys)).toBeNull();
+    // `composition` itself (break's own ephemeral cache) doesn't survive a
+    // focus switch either -- a pre-existing, separately-scoped fact (break
+    // has no durable binding to rebuild from, unlike facet) -- the point
+    // proven here is narrower and load-bearing: effective composition is
+    // break-or-none, NEVER facet.
+    expect(facetPanelsOf(s.composition)).toBeNull();
   });
 });
 
@@ -4556,6 +4829,29 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(dup?.document?.plot.view.plotTitle).toBe("live title");
     // Save on the duplicate must never overwrite the ORIGINAL saved figure.
     expect(dup?.document?.id).not.toBe("figure-w1");
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round K3: `facetByColumn`
+  // commits `facetKey` onto the LIVE singleton facade immediately, but the
+  // FOCUSED window's `.document` stays "stale while focused" until the next
+  // commit (a focus switch, `windowsForSave()`) -- so duplicating a window
+  // RIGHT AFTER faceting it (before ever leaving focus) used to read the
+  // stale, not-yet-committed `previous.bindings.facetKey` instead of the
+  // live snapshot `duplicateWindow` already correctly uses for `view`.
+  it("duplicateWindow carries over an UNCOMMITTED live facetKey (K3)", () => {
+    const source = win({ id: "w1", datasetId: "d1" });
+    const sourceDocument = createFigureDocument({
+      id: "figure-w1", name: "w1", datasetId: "d1", view: source.view, // facetKey: null (not yet committed)
+    });
+    useApp.setState({
+      plotWindows: [{ ...source, document: sourceDocument }],
+      focusedWindowId: "w1",
+      facetKey: 2, // facetByColumn just ran; never committed via a focus switch
+    });
+    const newId = useApp.getState().duplicateWindow("w1");
+    const dup = useApp.getState().plotWindows.find((w) => w.id === newId);
+    expect(dup?.document?.bindings.facetKey).toBe(2);
+    expect(dup?.view.facetKey).toBe(2);
   });
 
   it("duplicateWindow returns null for an unknown id", () => {

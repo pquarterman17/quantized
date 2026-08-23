@@ -250,6 +250,24 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
     expect(opts.cursor.sync).toBeUndefined(); // the XY path, unlinked
   });
 
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 review round L2: a faceted window
+  // with <2 plotted channels must NOT silently degrade to the plain XY
+  // fallback just because it lost focus -- `view.facetKey` is a durable,
+  // bindings-owned binding (this window's OWN, not the live singleton's),
+  // so a background window renders the SAME facet grid a focused one would.
+  it("view.stackMode with a single plotted channel AND a facetKey binding renders a facet grid, not the plain XY fallback (L2)", async () => {
+    const view = { ...defaultPlotView(), stackMode: true, facetKey: 0 };
+    render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
+    // "a" (channel 0) has 4 distinct values -> 4 facet panels, not 1 plain plot.
+    await waitFor(() => expect(created).toHaveLength(4));
+  });
+
+  it("a facetKey pointing at a column with no finite levels still falls back to the plain XY path, never a crash", async () => {
+    const view = { ...defaultPlotView(), stackMode: true, facetKey: 99 };
+    render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+  });
+
   it("view.insetMode renders the magnifier inset alongside the XY viewport (previously dropped while unfocused)", async () => {
     expect(useApp.getState().insetMode).toBe(false);
     const view = { ...defaultPlotView(), insetMode: true };

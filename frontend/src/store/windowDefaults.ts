@@ -22,6 +22,11 @@ export function datasetViewDefaults(
     // reimport (lib/figureDocumentReimport.ts already reset the SAVED
     // editableFigures copy of this same field for the identical reason).
     groupKey: null,
+    // F4.4: facetKey is the SAME class of channel-indexed field -- a facet
+    // binding built against the OLD dataset's columns is meaningless (or
+    // silently wrong) applied to a new one, so a genuine dataset switch
+    // resets it exactly like groupKey.
+    facetKey: null,
     y2Keys: null,
     y2Lim: null,
     y2Scale: null,

@@ -381,9 +381,15 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Set by `applyOriginFigure` (spatial), `facetByColumn` (facet) and
   // `breakAtGaps` (break); cleared by `setStackMode` and `setActive` so a
   // manual toggle or a different dataset never shows a stale arrangement.
-  // EPHEMERAL — never persisted; a `.dwk` restore nulls it and the producing
-  // action recomputes. Each kind's panel shape, why the three differ, and the
-  // reference-stable accessors: `lib/composition.ts`.
+  // EPHEMERAL — never persisted directly; a `.dwk` restore/focus switch
+  // nulls it. For FACET specifically (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4)
+  // this is no longer a durability gap: `facetKey` below is the durable
+  // binding (bindings-owned, survives save/reopen/recipe-apply exactly like
+  // `groupKey`), and `MultiPanelStage.tsx` rebuilds this field on demand from
+  // it (`lib/facet.facetCompositionFromBinding`) whenever it's null — see
+  // that component's own doc. Spatial/break stay genuinely ephemeral (no
+  // binding to rebuild from). Each kind's panel shape, why the three differ,
+  // and the reference-stable accessors: `lib/composition.ts`.
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
@@ -407,6 +413,11 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
   groupKey: number | null; // P1.5 "Group" well channel — splits each plotted Y into one series per level
+  // F4.4: the durable facet-by-column binding (bindings-owned like groupKey
+  // — see `composition`'s doc above). `facetByColumn` sets it; a genuine
+  // dataset switch resets it (`store/windowDefaults.ts`'s
+  // `datasetViewDefaults`, same treatment as groupKey).
+  facetKey: number | null;
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
   y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
@@ -970,6 +981,7 @@ export const useApp = create<AppState>((set, get) => ({
   xKey: null,
   yKeys: null,
   groupKey: null,
+  facetKey: null,
   y2Keys: null,
   y2Lim: null,
   y2Scale: null,
@@ -1205,6 +1217,18 @@ export const useApp = create<AppState>((set, get) => ({
         const src = refreshed.data;
         const n = src?.labels.length ?? 0;
         set({
+          // F4.4 review L1: every branch below that installs a plot onto an
+          // ALREADY-active dataset must clear the durable `facetKey`
+          // binding explicitly -- `setActive` only resets it on a GENUINE
+          // dataset switch (`datasetViewDefaults`), so re-applying a figure
+          // onto the dataset that's already showing would otherwise leave a
+          // prior `facetByColumn`'s binding in place, and a later focus
+          // round-trip would resurrect that REPLACED facet grid instead of
+          // this plain/spatial one (`useEffectiveComposition`'s fallback).
+          // `composition` itself needs no matching explicit clear here --
+          // `setActive`'s `focusTransientReset()` already nulls it
+          // UNCONDITIONALLY, genuine switch or not.
+          facetKey: null,
           ...ORIGIN_FIGURE_AXIS,
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
@@ -1250,6 +1274,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
+          facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
           ...ORIGIN_FIGURE_AXIS,
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
@@ -1315,6 +1340,7 @@ export const useApp = create<AppState>((set, get) => ({
         set({
           stackMode: true,
           composition: spatialComposition(placed),
+          facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
           // #54: a fresh tiled apply starts at the app-wide default fit
           // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
           // persists in `.dwk`.
@@ -1345,6 +1371,7 @@ export const useApp = create<AppState>((set, get) => ({
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
     const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
+      facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
       ...ORIGIN_FIGURE_AXIS,
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
@@ -1391,8 +1418,38 @@ export const useApp = create<AppState>((set, get) => ({
       toast("that column has no finite levels to facet on", "danger");
       return;
     }
+    // F4.4 (review K5): `facetKey` durably commits onto the focused window's
+    // document (below) exactly like `setGroupKey` already does for
+    // `groupKey` -- it needs the SAME ONE `recordHistory` call `setGroupKey`
+    // makes, or Ctrl+Z after faceting silently reverts whatever edit came
+    // BEFORE it instead (facetByColumn itself pushed nothing).
+    const historyLenBefore = get().history.length;
+    get().recordHistory("facet by column");
     get().setActive(datasetId);
-    set({ stackMode: true, composition: facetComposition(panels) });
+    // L3 (review round 3): `setActive` USUALLY pushes no history of its own
+    // (a plain "make this active" navigation) -- EXCEPT when the focused
+    // window is pinned with no unpinned candidate to retarget to
+    // (`retargetPassiveRebind`), where it creates a fresh window instead, and
+    // `createWindow` pushes ITS OWN "create window" entry. Since nothing
+    // mutates state between our push above and that one, the two entries are
+    // near-duplicate snapshots of the SAME pre-gesture state -- Ctrl+Z would
+    // pop "create window" (still correctly reverting the whole gesture, but
+    // under the wrong label) and leave a same-state phantom entry sitting on
+    // the stack, silently consuming a SECOND Ctrl+Z that the user expects to
+    // reach whatever edit genuinely came before this one. Mechanism: drop
+    // the later (createWindow's) duplicate, keeping our own — one gesture,
+    // one entry, correctly labeled, in BOTH the pinned and unpinned paths.
+    if (get().history.length > historyLenBefore + 1) {
+      set((s) => ({ history: s.history.slice(0, -1) }));
+    }
+    // F4.4: `facetKey` is the DURABLE half of this gesture -- bindings-owned
+    // like `groupKey`, it commits onto the focused window's document via the
+    // SAME "focused facade -> document" sync every other PlotView field
+    // already uses (`windowsForSave`/`focusWindow`'s outgoing snapshot), so
+    // this facet survives save/reopen and stays rebuildable after a focus
+    // switch even once `composition` itself (the immediate render cache) is
+    // gone -- see `MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback.
+    set({ stackMode: true, composition: facetComposition(panels), facetKey: col });
     get().recordMacro(
       `Facet by ${ds.data.labels[col] ?? `column ${col}`}`,
       `qz.facetByColumn(${lit(datasetId)}, ${col})`,
@@ -1427,7 +1484,14 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, composition: breakComposition(panels) });
+    // F4.4 review L1: clear the durable `facetKey` binding too -- a prior
+    // `facetByColumn` on this SAME dataset leaves it set, and `setActive`
+    // only resets it on a genuine dataset switch (`datasetViewDefaults`),
+    // never when re-targeting the dataset that's already active. Without
+    // this, a later focus round-trip resurrects the REPLACED facet grid
+    // instead of this break arrangement (`useEffectiveComposition`'s
+    // fallback reads facetKey whenever `composition` itself is null again).
+    set({ stackMode: true, composition: breakComposition(panels), facetKey: null });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
@@ -1556,6 +1620,7 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: restoredView ? restoredView.xKey : null,
         yKeys: restoredView ? restoredView.yKeys : null,
         groupKey: restoredView ? restoredView.groupKey : null,
+        facetKey: restoredView ? restoredView.facetKey : null,
         y2Keys: restoredView ? restoredView.y2Keys : null,
         y2Lim: restoredView ? restoredView.y2Lim : null,
         y2Scale: restoredView ? restoredView.y2Scale : null,
@@ -1794,6 +1859,7 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: null,
         yKeys: null,
         groupKey: null,
+        facetKey: null,
         y2Keys: null,
       y2Lim: null,
       y2Scale: null,
@@ -1939,7 +2005,14 @@ export const useApp = create<AppState>((set, get) => ({
   // prior Origin multi-panel apply, or a prior facet-by-column arrangement
   // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
   // is what the user asked for, never a stale spatial/facet grid.
-  setStackMode: (stackMode) => (get().recordHistory("change plot layout"), set({ stackMode, composition: null })),
+  // F4.4: also clears `facetKey` -- without it, toggling OFF a facet
+  // (`composition: null` here) then toggling stack mode back ON via the
+  // plain "Stack" button (never through `facetByColumn`) would resurrect the
+  // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
+  // rebuilds it from `facetKey` whenever `composition` is null.
+  setStackMode: (stackMode) => (
+    get().recordHistory("change plot layout"), set({ stackMode, composition: null, facetKey: null })
+  ),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).
   setPanelFit: (panelFit) => { get().recordHistory("change panel fit"); set({ panelFit }); },

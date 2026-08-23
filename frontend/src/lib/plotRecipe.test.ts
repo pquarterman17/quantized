@@ -96,18 +96,20 @@ describe("captureRecipe", () => {
     });
   });
 
-  it("a channel referenced only for a role NOT captured here (no facetKey passed) never gets an entry", () => {
+  it("a channel referenced only for a role NOT captured here (view.facetKey null) never gets an entry", () => {
     const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1] }), null, { id: "r2", name: "n", appVersion: "0" });
     expect(r.mapping.facetId).toBeNull();
     expect(r.signature.some((e) => e.role === "facet")).toBe(false);
   });
 
-  it("captures group/facet channels by signature when supplied", () => {
+  // F4.4 (review K4/K6): facetKey is a real `PlotView` field now, captured
+  // straight off `view` -- symmetric with groupKey, no separate opt.
+  it("captures group/facet channels off view.groupKey/view.facetKey when supplied", () => {
     const r = captureRecipe(
       ds,
-      view({ xKey: 0, yKeys: [1], groupKey: 2 }),
+      view({ xKey: 0, yKeys: [1], groupKey: 2, facetKey: 1 }),
       null,
-      { id: "r3", name: "n", appVersion: "0", facetKey: 1 },
+      { id: "r3", name: "n", appVersion: "0" },
     );
     // groupKey (channel 2, "Ierr") registers as its own "group" entry even
     // though the SAME channel also happens to look like an error column by
@@ -118,6 +120,23 @@ describe("captureRecipe", () => {
     // first-assigned role wins; facetId points at the existing entry rather
     // than minting a duplicate for the same channel.
     expect(r.mapping.facetId).toBe("y0");
+  });
+
+  // F4.4 (review K4): compositionKind reads the durable facetKey binding
+  // when the ephemeral `composition` argument has nothing to say -- a
+  // recipe saved after a focus switch (composition null, facetKey still
+  // set) must not silently record compositionKind: null alongside a real
+  // mapping.facetId.
+  it("compositionKind falls back to \"facet\" from view.facetKey when composition is null", () => {
+    const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1], facetKey: 1 }), null, {
+      id: "r3b", name: "n", appVersion: "0",
+    });
+    expect(r.visual.compositionKind).toBe("facet");
+  });
+
+  it("compositionKind stays null when neither composition nor facetKey say anything", () => {
+    const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1] }), null, { id: "r3c", name: "n", appVersion: "0" });
+    expect(r.visual.compositionKind).toBeNull();
   });
 
   it("captures autoscale-vs-fixed range policy per axis", () => {

@@ -11,6 +11,8 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { facetPanelsOf } from "../lib/composition";
+import { facetCompositionFromBinding } from "../lib/facet";
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
@@ -47,6 +49,7 @@ function resetStore(datasets: Dataset[] = [dataset("d1")]) {
     plotRecipes: [],
     pendingRecipeApplication: null,
     composition: null,
+    facetKey: null,
     history: [],
     future: [],
     status: "",
@@ -835,5 +838,51 @@ describe("loadWorkspace clears pendingRecipeApplication (finding 3)", () => {
     const confirmed = await useApp.getState().confirmPendingRecipeApplication();
     expect(confirmed).toBe(false);
     expect(useApp.getState().editableFigures).toHaveLength(figuresBefore); // zero mutation
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: closes `store/plotRecipes.ts`'s own
+// documented GAP for the facet case -- a recipe captured from a live facet
+// arrangement must rebuild a live facet grid on the TARGET dataset, re-keyed
+// by label like every other binding, once the new figure is focused.
+describe("applyPlotRecipe rebuilds a live facet composition (F4.4)", () => {
+  it("re-keys facetKey onto the target dataset and the focused facade can rebuild the grid", async () => {
+    // "2theta" has 3 distinct values (10/20/30) -- a valid facet column.
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetKey).toBe(0); // sanity: the live gesture set it
+
+    const id = (await useApp.getState().saveAsPlotRecipe("Faceted XRD", "d1"))!;
+    const savedRecipes = useApp.getState().plotRecipes;
+
+    // A second dataset, same technique/labels/units -- resolveRecipe re-keys
+    // BY LABEL (never by index), same as every other binding; the reordered-
+    // columns acceptance case is already covered elsewhere in this suite for
+    // xKey/yKeys/errors, so this test's own job is proving the FACET half of
+    // that same re-key path actually reaches a live composition.
+    const d2: Dataset = dataset("d2");
+    useApp.setState({ datasets: [dataset("d1"), d2], plotRecipes: savedRecipes });
+
+    const ok = await useApp.getState().applyPlotRecipe(id, "d2");
+
+    expect(ok).toBe(true);
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.facetKey).toBe(0); // "2theta" is column 0 on d2 too
+    const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    expect(focused?.kind === "plot" ? focused.document?.bindings.facetKey : null).toBe(0);
+
+    // The render-layer fallback (`MultiPanelStage.tsx`) rebuilds the SAME
+    // live grid from exactly these hydrated fields -- prove it end to end.
+    const rebuilt = facetCompositionFromBinding(d2, s.facetKey, s.xKey, s.yKeys);
+    expect(facetPanelsOf(rebuilt)).toHaveLength(3);
+  });
+
+  it("still narrows scope honestly: compositionKind is captured but this module never rebuilds panels itself", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    useApp.getState().facetByColumn("d1", 0);
+    const id = (await useApp.getState().saveAsPlotRecipe("Faceted XRD", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    expect(recipe.visual.compositionKind).toBe("facet");
   });
 });

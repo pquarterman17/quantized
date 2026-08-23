@@ -17,7 +17,7 @@ export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
 export const FIGURE_DOCUMENT_VERSION = 2 as const;
 
 /** Bindings have one owner; they are deliberately removed from visual state. */
-export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errKeys" | "groupKey">;
+export type FigureViewState = Omit<PlotView, "xKey" | "yKeys" | "y2Keys" | "errKeys" | "groupKey" | "facetKey">;
 
 export interface FigureBindings {
   datasetId: string | null;
@@ -144,8 +144,12 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
   // field existed on PlotView) stays the authority; a caller that threads a
   // live `input.view.groupKey` passes it through `input.groupKey` explicitly
   // (see `updateFigureDocumentFromPlotView` below) rather than this destructure
-  // silently picking it up a second, possibly-stale way.
-  const { xKey, yKeys, y2Keys, errKeys, groupKey: _viewGroupKey, ...view } = clone(snapshotView(input.view));
+  // silently picking it up a second, possibly-stale way. F4.4: `facetKey`
+  // (also a PlotView field now) is bindings-owned the SAME way -- same
+  // destructure-and-discard, same explicit-constructor-arg authority.
+  const {
+    xKey, yKeys, y2Keys, errKeys, groupKey: _viewGroupKey, facetKey: _viewFacetKey, ...view
+  } = clone(snapshotView(input.view));
   const data = input.data ?? { mode: "live" as const };
   if (data.mode === "frozen" && data.snapshot === undefined) {
     throw new Error("a frozen figure document requires a data snapshot");
@@ -202,6 +206,14 @@ export function figureDocumentToPlotView(document: FigureDocument): PlotView {
     // rendered as an ordinary ungrouped plot despite the binding being
     // right there in `document.bindings`.
     groupKey: document.bindings.groupKey,
+    // F4.4: same projection, for the same reason -- `facetKey` is bindings-
+    // owned (see `createFigureDocument`'s doc), so without this a window's
+    // durable facet binding (survives save/reopen/recipe-apply via the
+    // document) never reached the render layer (`MultiPanelStage.tsx`'s
+    // `facetCompositionFromBinding` fallback), and a faceted figure opened
+    // here rendered as an ordinary ungrouped plot despite the binding being
+    // right there in `document.bindings`.
+    facetKey: document.bindings.facetKey,
     y2Keys: clone(document.bindings.y2Keys),
     errKeys: errKeysFromBindings(document.bindings.errors),
   };
@@ -236,7 +248,11 @@ export function updateFigureDocumentFromPlotView(
     // through undo/redo, close/reopen, and export exactly like every other
     // binding already did.
     groupKey: input.view.groupKey,
-    facetKey: document.bindings.facetKey,
+    // F4.4: commit the LIVE facade's facetKey back too, same reasoning as
+    // groupKey above -- a `facetByColumn` gesture (or a resolved recipe's
+    // rebuild) sets the live singleton, and this is the ONE place that
+    // durably commits it back onto the canonical document.
+    facetKey: input.view.facetKey,
     errors: [...richErrors, ...legacyErrorBindings(input.view.errKeys)],
     data: document.data,
     axisBreaks: document.plot.axisBreaks,
@@ -334,10 +350,13 @@ function figureView(value: unknown, bindings: FigureBindings): FigureViewState {
     xKey: bindings.xKey,
     yKeys: bindings.yKeys,
     groupKey: bindings.groupKey,
+    facetKey: bindings.facetKey,
     y2Keys: bindings.y2Keys,
     errKeys: errKeysFromBindings(bindings.errors),
   });
-  const { xKey: _xKey, yKeys: _yKeys, groupKey: _groupKey, y2Keys: _y2Keys, errKeys: _errKeys, ...view } = sanitized;
+  const {
+    xKey: _xKey, yKeys: _yKeys, groupKey: _groupKey, facetKey: _facetKey, y2Keys: _y2Keys, errKeys: _errKeys, ...view
+  } = sanitized;
   return clone(view);
 }
 

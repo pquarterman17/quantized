@@ -99,6 +99,36 @@ describe("sanitizeView panelFit (#54)", () => {
   });
 });
 
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: facetKey is a bindings-owned PlotView
+// field (mirrors groupKey's own wiring) so a facet-by-column arrangement
+// survives save/reopen. The sanitizer must degrade a malformed/malicious
+// persisted value to null rather than trust it (same discipline every other
+// PlotView field here gets), never throw.
+describe("sanitizeView — facetKey (F4.4)", () => {
+  it("defaults an absent (pre-F4.4) facetKey to null", () => {
+    const out = sanitizePlotWindows([win({ view: legacyView() as PlotView })], new Set(["d1"]));
+    expect(out[0].view.facetKey).toBeNull();
+  });
+
+  it("round-trips a valid facetKey", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), facetKey: 2 } })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.facetKey).toBe(2);
+  });
+
+  it("falls back to null for a malformed facetKey (string, NaN, object)", () => {
+    for (const bogus of ["2", NaN, { at: 2 }, [2]]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), facetKey: bogus } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.facetKey).toBeNull();
+    }
+  });
+});
+
 describe("scaleFromLog / isAxisScale / cycleAxisScale (MAIN #12)", () => {
   it("scaleFromLog maps the old boolean flags 1:1", () => {
     expect(scaleFromLog(true)).toBe("log");
