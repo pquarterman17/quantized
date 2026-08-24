@@ -53,8 +53,8 @@ beforeEach(() => {
   });
   vi.mocked(findPeaks).mockResolvedValue({
     peaks: [
-      { center: 1, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null },
-      { center: 3, height: 6, fwhm: 0.9, prominence: 1, localSNR: 10, area: null },
+      { center: 1, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null, bg: 0 },
+      { center: 3, height: 6, fwhm: 0.9, prominence: 1, localSNR: 10, area: null, bg: 0 },
     ],
     background: [],
   });

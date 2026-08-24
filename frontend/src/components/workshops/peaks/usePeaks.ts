@@ -57,6 +57,26 @@ function finiteRange(values: readonly number[]): [number, number] {
   return Number.isFinite(lo) && Number.isFinite(hi) ? [lo, hi] : [0, 1];
 }
 
+/** L5 review finding: `withHistoryBatch` folds ANY caller into whichever
+ *  batch happens to already be in flight — not just a genuinely nested call
+ *  from the SAME operation (see history.ts's `withHistoryBatch`: its
+ *  reentrant check is keyed only on "is a batch running", not on caller
+ *  identity). Reachable from the UI: `relink.ts`'s `importChangedAsNewVersion`
+ *  (and `reimportAllRun.ts`'s bulk re-import) call `withHistoryBatch` with a
+ *  real internal `await` (`importPaths`'s network round trips), and nothing
+ *  disables the rest of the app — including an already-open Peaks panel —
+ *  while that's in flight. Without this guard, labeling mid-import would
+ *  silently ride the import's ONE undo entry: a single Ctrl+Z would revert
+ *  the import AND delete every label. Same pre-flight-check + toast shape as
+ *  `commands/fileCommands.ts`'s `rejectIfImportRunning` (`isImportRunning`,
+ *  store/importDatasets.ts) — a cooperative, not a hard, lock: it narrows
+ *  the window rather than eliminating it (see the two call sites below). */
+function rejectIfHistoryBatchRunning(): boolean {
+  if (!useApp.getState().historySuppressed) return false;
+  toast("Another operation is in progress — try Label peaks again in a moment.", "danger");
+  return true;
+}
+
 export interface PeakFitOptions {
   model: string;
   bgDegree: number;
@@ -145,9 +165,15 @@ export function usePeaks(): PeaksState {
         setPeaks(res.peaks);
         // Overlay on the FULL plotted x (not the pruned x) so markers align with
         // the full-length plot; peak centers land on their nearest full-x point.
+        // L2 (review, latent pre-existing bug this work surfaced): `p.height`
+        // is measured ABOVE `p.bg` (see `Peak`'s doc, lib/types.ts) — the
+        // marker's actual y is `height + bg`, same as `overlayFitted` below
+        // already does for fitted peaks. Left as bare `p.height` here, every
+        // detected-peak marker on a backgrounded dataset (e.g. any real XRD
+        // pattern) drew a whole background below the actual peak.
         setPeakOverlay({
           datasetId: ds.id,
-          y: peakOverlayArray(fullX, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
+          y: peakOverlayArray(fullX, res.peaks.map((p) => ({ center: p.center, height: p.height + p.bg }))),
         });
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
@@ -262,10 +288,16 @@ export function usePeaks(): PeaksState {
 
   const labelPeaks = useCallback(async () => {
     if (!active) return;
+    // L5: refuse up front if another history batch (e.g. an in-flight
+    // "import as a new version") is already running — see
+    // `rejectIfHistoryBatchRunning`'s doc for why this is reachable and why
+    // it's a cooperative pre-flight check, not a hard lock.
+    if (rejectIfHistoryBatchRunning()) return;
+
     // RULING 7: FITTED peaks when a fit result exists, otherwise DETECTED —
     // never both, never a user-driven selection (no row-selection exists on
     // DataTable today; booked as a follow-up in the UX-R6 status note).
-    const source: { center: number; height: number; fwhm: number; area: number | null }[] =
+    const source: { center: number; height: number; fwhm: number; area: number | null; bg: number }[] =
       fitResult && fitResult.peaks.length > 0 ? fitResult.peaks : peaks;
     if (source.length === 0) {
       toast("Find (or fit) peaks before labeling.", "danger");
@@ -284,41 +316,83 @@ export function usePeaks(): PeaksState {
     ]);
     if (!values) return; // cancelled — creates nothing (RULING 7's guard)
 
-    const template =
-      typeof values.template === "string" && values.template.trim().length > 0
-        ? values.template
-        : DEFAULT_LABEL_TEMPLATE;
-    const precisionRaw = Number(values.precision);
-    const precision = Number.isFinite(precisionRaw) ? Math.max(0, Math.round(precisionRaw)) : 2;
+    // L5: the dialog await is the widest window another batch could have
+    // started in — re-check right before doing any real work.
+    if (rejectIfHistoryBatchRunning()) return;
 
-    // #38 deferred edge: resolve the active dataset's full data (a no-op if
-    // it isn't pending) before reading the plotted x/y ranges placement is
-    // based on — never the RAW dataset in a way that could be mutated; this
-    // is a READ ONLY lookup (RULING 4).
-    const ds = await useApp.getState().resolveDataset(active.id);
-    if (!ds) return;
-    const st = useApp.getState();
-    const { x, y } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
-    const xRange = finiteRange(x);
-    const yRange = finiteRange(y);
+    // L3: match the sibling fit actions' (fitTogether/fitEach) error-
+    // surfacing pattern — every entry point calls this with `void`, so an
+    // uncaught rejection here would fail utterly silently (no labels, no
+    // toast, nothing).
+    try {
+      const template =
+        typeof values.template === "string" && values.template.trim().length > 0
+          ? values.template
+          : DEFAULT_LABEL_TEMPLATE;
+      const precisionRaw = Number(values.precision);
+      // L4: clamp BOTH ends. `toFixed` throws `RangeError` above 100 (in
+      // practice anything past ~10 is unreadable anyway) — an unclamped
+      // high value used to silently abort the whole run (see L3 above).
+      const precision = Number.isFinite(precisionRaw)
+        ? Math.min(10, Math.max(0, Math.round(precisionRaw)))
+        : 2;
 
-    const labels = source.map((p, i) => renderLabelTemplate(template, p, i, precision));
-    const points = source.map((p) => ({ x: p.center, y: p.height }));
-    const placements = placeLabels(points, labels, xRange, yRange);
+      // #38 deferred edge: resolve the active dataset's full data (a no-op
+      // if it isn't pending) before reading the plotted x/y ranges
+      // placement is based on — never the RAW dataset in a way that could
+      // be mutated; this is a READ ONLY lookup (RULING 4).
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const st = useApp.getState();
+      const { x, y } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+      const xRange = finiteRange(x);
+      const yRange = finiteRange(y);
 
-    // RULING 1/2/3: ordinary annotations via addAnnotation + updateAnnotation
-    // (never a new decoration model), one shared groupId for the run, the
-    // whole batch folded into ONE undo entry via withHistoryBatch.
-    const groupId = nextLabelGroupId();
-    const historyLabel = `label ${source.length} peak${source.length === 1 ? "" : "s"}`;
-    await useApp.getState().withHistoryBatch(historyLabel, async (token) => {
-      const store = useApp.getState();
-      for (let i = 0; i < source.length; i++) {
-        const pos = placements[i] ?? points[i];
-        const id = store.addAnnotation(pos.x, pos.y, labels[i], token);
-        store.updateAnnotation(id, { groupId }, token);
+      // L1 CRITICAL (review): a peak's apex y is `height + bg`, NEVER
+      // `height` alone — `height` is measured ABOVE background by the
+      // backend for BOTH sources (`calc/peaks.py`'s `find_peaks_robust`
+      // AND the fit routines). `overlayFitted` above already applies this
+      // for the fitted-peak marker overlay; `labelPeaks` must use the same
+      // formula for both branches, or every label on a backgrounded
+      // dataset (i.e. any real XRD pattern) lands far below the peak it
+      // names.
+      const rendered = source.map((p, i) => ({
+        label: renderLabelTemplate(template, p, i, precision),
+        point: { x: p.center, y: p.height + p.bg },
+      }));
+
+      // L7: a template that renders blank for a peak (e.g. `{area}` on a
+      // detected peak — always `area: null` — or `{fwhm}` on a
+      // fit-in-progress placeholder) must never create an invisible blank
+      // annotation. If EVERY peak's label comes out blank, create nothing
+      // at all — no annotations, no undo entry either.
+      const kept = rendered.filter((r) => r.label.trim().length > 0);
+      if (kept.length === 0) {
+        toast("Nothing to label — the template rendered blank for every peak.", "danger");
+        return;
       }
-    });
+
+      const labels = kept.map((r) => r.label);
+      const points = kept.map((r) => r.point);
+      const placements = placeLabels(points, labels, xRange, yRange);
+
+      // RULING 1/2/3: ordinary annotations via addAnnotation +
+      // updateAnnotation (never a new decoration model), one shared groupId
+      // for the run, the whole batch folded into ONE undo entry via
+      // withHistoryBatch.
+      const groupId = nextLabelGroupId();
+      const historyLabel = `label ${kept.length} peak${kept.length === 1 ? "" : "s"}`;
+      await useApp.getState().withHistoryBatch(historyLabel, async (token) => {
+        const store = useApp.getState();
+        for (let i = 0; i < kept.length; i++) {
+          const pos = placements[i] ?? points[i];
+          const id = store.addAnnotation(pos.x, pos.y, labels[i], token);
+          store.updateAnnotation(id, { groupId }, token);
+        }
+      });
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : "labeling peaks failed", "danger");
+    }
   }, [active, peaks, fitResult]);
 
   return { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach, labelPeaks };

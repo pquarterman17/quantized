@@ -1,14 +1,41 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CHAR_FRACTION,
   DEFAULT_LABEL_TEMPLATE,
+  TIER_STEP_FRAC,
   placeLabels,
   renderLabelTemplate,
+  type LabelPlacement,
   type LabelSourcePeak,
 } from "./peakLabels";
 
 function peak(center: number, height = 5, fwhm = 0.8, area: number | null = 4): LabelSourcePeak {
   return { center, height, fwhm, area };
+}
+
+/** Recomputes each placement's own axis-aligned box (same formula
+ *  `placeLabels` uses internally) and asserts NO TWO overlap — the actual
+ *  invariant "collision-aware placement" promises (L6 review finding), not
+ *  just "the internal tier numbers differ". */
+function assertNoOverlap(
+  placed: LabelPlacement[],
+  labels: string[],
+  xRange: [number, number],
+  yRange: [number, number],
+): void {
+  const xW = xRange[1] - xRange[0] > 0 ? xRange[1] - xRange[0] : 1;
+  const yW = yRange[1] - yRange[0] > 0 ? yRange[1] - yRange[0] : 1;
+  const halfW = (i: number) => (xW * CHAR_FRACTION * Math.max(1, labels[i].length)) / 2;
+  const yHalf = (TIER_STEP_FRAC * yW) / 2;
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      const dx = Math.abs(placed[i].x - placed[j].x);
+      const dy = Math.abs(placed[i].y - placed[j].y);
+      const overlaps = dx <= halfW(i) + halfW(j) && dy <= yHalf + yHalf;
+      expect(overlaps, `labels ${i} and ${j} overlap at dx=${dx}, dy=${dy}`).toBe(false);
+    }
+  }
 }
 
 describe("renderLabelTemplate", () => {
@@ -131,5 +158,67 @@ describe("placeLabels", () => {
       [0, 1],
     );
     expect(placed).toHaveLength(1);
+  });
+});
+
+describe("placeLabels — L6 review finding: 2-D collision with UNEQUAL apex heights", () => {
+  // Old (buggy) algorithm: tier chosen from X-ONLY proximity, then each
+  // label offset relative to its OWN apex y. Two x-close neighbours whose
+  // apex heights differ by close to one tier step land at the SAME
+  // absolute y despite getting DIFFERENT tier numbers — collision-aware
+  // placement produced an actual collision. This reproduces exactly that
+  // geometry and asserts it no longer collides.
+  it("the specific 'neighbour one tier step taller' case no longer collides", () => {
+    const xRange: [number, number] = [0, 20]; // xUnit = 20
+    const yRange: [number, number] = [0, 100]; // yUnit = 100
+    const yUnit = 100;
+    const step = TIER_STEP_FRAC * yUnit; // one tier step in y
+
+    // A sits low; B sits `step` below A, close in x. Old algorithm: A gets
+    // tier 0 (y = 0 + base). B, x-close to A, gets tier 1 under x-only
+    // logic: y = (0 - step) + base + step = base — IDENTICAL to A's y.
+    const points = [
+      { x: 10, y: 0 }, // A
+      { x: 10.3, y: -step }, // B, one tier step lower, close in x
+    ];
+    const labels = ["5.00", "3.00"];
+
+    const placed = placeLabels(points, labels, xRange, yRange);
+    expect(placed).toHaveLength(2);
+    for (const p of placed) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+    // The old bug: placed[1].y would equal placed[0].y (both === base).
+    expect(placed[1].y).not.toBeCloseTo(placed[0].y, 6);
+    assertNoOverlap(placed, labels, xRange, yRange);
+  });
+
+  it("unequal apex heights, x-close: no two labels overlap (general property)", () => {
+    const xRange: [number, number] = [0, 50];
+    const yRange: [number, number] = [0, 40];
+    const points = [
+      { x: 5, y: 1 },
+      { x: 5.2, y: 8 },
+      { x: 5.4, y: 3 },
+      { x: 5.6, y: 6 },
+      { x: 5.8, y: 0.5 },
+    ];
+    const labels = ["1.0", "2.0", "3.0", "4.0", "5.0"];
+    const placed = placeLabels(points, labels, xRange, yRange);
+    for (const p of placed) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+    assertNoOverlap(placed, labels, xRange, yRange);
+  });
+
+  it("a long label next to short ones gets a wider berth (per-label width, not an average)", () => {
+    const xRange: [number, number] = [0, 50];
+    const yRange: [number, number] = [0, 10];
+    const points = [{ x: 10, y: 5 }, { x: 10.5, y: 5 }];
+    const labels = ["a very long peak label indeed", "x"];
+    const placed = placeLabels(points, labels, xRange, yRange);
+    assertNoOverlap(placed, labels, xRange, yRange);
   });
 });

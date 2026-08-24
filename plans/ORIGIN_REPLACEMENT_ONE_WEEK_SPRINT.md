@@ -210,6 +210,75 @@ Honest gaps, carried forward rather than faked:
   labeling is a follow-up once `DataTable` (or a peaks-specific list) grows
   row selection.
 
+**Status (2026-08-24, round-2 review fixes):** a second review pass found
+seven issues in the beta half above; all are fixed here, red-first, in the
+same branch.
+
+- **CRITICAL — apex y was `height` alone, not `height + bg`.** `Peak`/
+  `FittedPeak.height` is measured ABOVE background (`calc/peaks.py`'s
+  `find_peaks_robust` confirms: a Gaussian pair riding a +500 offset returns
+  `height=30, bg=500` for an apex whose true y is 530), so on any real
+  XRD pattern — which always has a background — every label landed a whole
+  background below the peak it named, typically off-screen. Fixed: apex y is
+  now `height + bg` for both the fitted and detected branches
+  (`usePeaks.ts`'s `labelPeaks`). `Peak` also gained an explicit `bg: number`
+  field in `lib/types.ts` (it arrived over the wire already — `calc/peaks.py`
+  always returned it — but only through the untyped index signature; it is
+  now type-checked at every call site instead of incidental).
+- **Latent pre-existing bug this review surfaced, fixed alongside it:** the
+  DETECTED-peak marker overlay (`usePeaks.ts`'s auto-find effect,
+  `setPeakOverlay`) called `peakOverlayArray` with `height: p.height` and
+  omitted `+ p.bg`, while the FITTED-peak overlay a few lines below always
+  included it. Detected-peak markers have therefore ALWAYS drawn at the
+  wrong height on any backgrounded dataset — floating near the axis instead
+  of sitting on the peak — independent of the Label-peaks feature entirely.
+  Fixed with its own red-first test; this was a bug in existing `main`
+  behavior, not something the beta half introduced.
+- **Error handling.** `labelPeaks` now wraps its work in try/catch, matching
+  the sibling `fitTogether`/`fitEach` actions — a `resolveDataset` rejection
+  (or any other failure) surfaces as a danger toast and creates nothing,
+  instead of an uncaught rejection silently swallowed by the `void` call
+  site in `PeaksPanel.tsx`.
+- **Precision clamp.** The "Decimals" value is now clamped to `[0, 10]`
+  (previously only the low end was guarded) — a value like 999 used to make
+  `toFixed` throw `RangeError` and, before the error-handling fix above,
+  abort the whole run with no feedback.
+- **Nested-batch undo hole.** `withHistoryBatch` folds ANY caller into
+  whichever batch already happens to be in flight — not just a genuinely
+  nested call from the SAME operation — so labeling while e.g.
+  `relink.ts`'s "import as a new version" is mid-flight (a real network
+  round trip, nothing else in the UI disabled meanwhile) would have silently
+  ridden that unrelated batch's one undo entry: a single Ctrl+Z would have
+  reverted the import AND deleted every label. Determined REACHABLE from the
+  UI (the Relink and Peaks panels can both be open at once, and nothing
+  blocks interaction during the import's awaits). Fixed with a cooperative
+  pre-flight guard (`rejectIfHistoryBatchRunning`, same shape as
+  `store/importDatasets.ts`'s `isImportRunning`/`rejectIfImportRunning`),
+  checked both before the template dialog opens and again right before the
+  batch commits (the dialog await is the widest remaining window) — narrows
+  the race rather than closing it with a hard lock, tested directly by
+  pinning the guard (`historySuppressed: true` → zero annotations, dialog
+  never opened).
+- **Blank labels.** A template that renders blank for a peak (e.g. `{area}`
+  over DETECTED peaks, which always have `area: null`) is now skipped rather
+  than creating an invisible blank annotation, matching the manual half's
+  existing guard. If EVERY peak's label comes out blank, nothing is created
+  at all — no annotations, no undo entry.
+- **Placement collisions with unequal apex heights.** The original tiering
+  compared candidate tiers by x only, then offset each label relative to its
+  OWN apex y — two neighbours whose heights happened to differ by about one
+  tier step could land at the exact same absolute y despite getting
+  different tier numbers (every existing placement test used equal-height
+  apexes, so this was untested). `lib/peakLabels.ts`'s `placeLabels` now
+  does genuine 2-D collision checking: each already-placed label owns an
+  axis-aligned box (its own rendered length for width, one tier step for
+  height), and a candidate tier is accepted only once its box clears every
+  box placed so far. `BASE_OFFSET_FRAC`/`TIER_STEP_FRAC`/`CHAR_FRACTION` are
+  now exported so tests can assert the actual no-overlap invariant directly
+  rather than trusting internal tier bookkeeping; new tests cover unequal
+  heights generally and the specific "neighbour one tier step taller" case
+  that reproduced the original bug.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow

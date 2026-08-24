@@ -75,11 +75,13 @@ export interface LabelPlacement {
 // Tuning constants for the placement heuristic below — all expressed as
 // FRACTIONS of the supplied range, so the layout scales with whatever plot
 // the caller is placing labels on rather than being pinned to absolute data
-// units.
-const BASE_OFFSET_FRAC = 0.05; // label sits this far above the apex (fraction of y-range)
-const TIER_STEP_FRAC = 0.055; // additional stagger per collision tier
-const CHAR_FRACTION = 0.014; // x-range fraction "consumed" by one label character
-const MAX_TIER_OFFSET = 8; // aesthetic cap on how far tiers stack; never needed for correctness
+// units. Exported (not just internal) so tests can independently compute a
+// label's box and assert the NO-OVERLAP invariant directly, rather than
+// trusting internal tier bookkeeping (L6 review finding).
+export const BASE_OFFSET_FRAC = 0.05; // label sits this far above the apex (fraction of y-range)
+export const TIER_STEP_FRAC = 0.055; // one tier's vertical box height (fraction of y-range)
+export const CHAR_FRACTION = 0.014; // x-range fraction "consumed" by one label character
+const MAX_TIER_OFFSET = 24; // hard cap on collision-avoidance attempts; prevents an unbounded loop on pathological input, never needed for well-formed input
 
 /** A finite, positive width for a `[lo, hi]` range — falls back to `1` for a
  *  degenerate range (zero/negative width, or non-finite bounds) so every
@@ -99,6 +101,15 @@ function finiteWidth(range: readonly [number, number]): number {
  *  plot's own data ranges (not necessarily the peaks' bounding box), so
  *  placement stays sane even when the peaks being labeled cluster in one
  *  corner of a much wider plot.
+ *
+ *  L6 review finding: an earlier version compared candidate tiers by X ONLY
+ *  and then offset each label relative to its OWN apex y — two neighbours
+ *  whose apex heights happened to differ by about one tier step could land
+ *  at the SAME absolute y despite getting different tier numbers. Placement
+ *  is now genuinely 2-D: each already-placed label owns an axis-aligned box
+ *  (half-width from ITS OWN rendered length, half-height one tier step), and
+ *  a candidate tier is accepted only once its box clears EVERY box placed so
+ *  far — bumping the tier (capped at `MAX_TIER_OFFSET`) until it does.
  *
  *  Returns one `{x, y}` per label, in the SAME ORDER as `points`/`labels`
  *  (result[i] corresponds to points[i]/labels[i]) — collision resolution
@@ -120,36 +131,38 @@ export function placeLabels(
 
   const xUnit = finiteWidth(xRange);
   const yUnit = finiteWidth(yRange);
-  const avgLen = Math.max(
-    1,
-    labels.slice(0, n).reduce((sum, l) => sum + l.length, 0) / n,
-  );
-  const threshold = Math.max(xUnit * CHAR_FRACTION * avgLen, xUnit * 1e-6);
+  const yHalf = (TIER_STEP_FRAC * yUnit) / 2;
 
   // Tier assignment runs on an x-sorted working copy (ties broken by
   // original index for a stable sort) so it always sweeps left-to-right
-  // regardless of the caller's input order; `tierOf[i]` maps back to the
-  // ORIGINAL index so the returned array lines up with `points`/`labels`.
-  const order = points.slice(0, n).map((pt, i) => ({ i, x: pt.x }));
+  // regardless of the caller's input order; `i` maps back to the ORIGINAL
+  // index so the returned array lines up with `points`/`labels`. Each
+  // candidate's own box half-width comes from ITS OWN label length (not an
+  // average across the batch — L6: a long label next to short ones needs a
+  // wider clearance than a short one does).
+  const order = points.slice(0, n).map((pt, i) => ({
+    i,
+    x: pt.x,
+    y: pt.y,
+    halfW: (xUnit * CHAR_FRACTION * Math.max(1, labels[i].length)) / 2,
+  }));
   order.sort((a, b) => a.x - b.x || a.i - b.i);
 
-  const tierOf = new Array<number>(n);
-  const lastXAtTier: number[] = [];
-  for (const pt of order) {
-    let tier = 0;
-    for (; tier < lastXAtTier.length; tier++) {
-      if (pt.x - lastXAtTier[tier] >= threshold) break;
-    }
-    if (tier === lastXAtTier.length) lastXAtTier.push(pt.x);
-    else lastXAtTier[tier] = pt.x;
-    tierOf[pt.i] = tier;
-  }
-
+  const placedBoxes: { x: number; y: number; halfW: number }[] = [];
   const out: LabelPlacement[] = new Array(n);
-  for (let i = 0; i < n; i++) {
-    const pt = points[i];
-    const offsetFrac = BASE_OFFSET_FRAC + Math.min(tierOf[i], MAX_TIER_OFFSET) * TIER_STEP_FRAC;
-    out[i] = { x: pt.x, y: pt.y + offsetFrac * yUnit };
+  for (const pt of order) {
+    let y = pt.y + BASE_OFFSET_FRAC * yUnit;
+    for (let tier = 0; tier <= MAX_TIER_OFFSET; tier++) {
+      y = pt.y + (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yUnit;
+      // `<=` (not `<`): two boxes exactly touching still count as a
+      // collision, so tiers never end up flush against one another.
+      const collides = placedBoxes.some(
+        (b) => Math.abs(pt.x - b.x) <= pt.halfW + b.halfW && Math.abs(y - b.y) <= yHalf + yHalf,
+      );
+      if (!collides) break;
+    }
+    placedBoxes.push({ x: pt.x, y, halfW: pt.halfW });
+    out[pt.i] = { x: pt.x, y };
   }
   return out;
 }

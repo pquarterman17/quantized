@@ -6,6 +6,7 @@ import { fetchBookData } from "../../../lib/api";
 import { askParams } from "../../overlays/ParamDialog";
 import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { usePeaks } from "./usePeaks";
 
@@ -29,8 +30,8 @@ const DATA: DataStruct = {
   metadata: {},
 };
 
-function pk(center: number, height: number, fwhm: number): Peak {
-  return { center, height, fwhm, prominence: 1, localSNR: 10, area: null };
+function pk(center: number, height: number, fwhm: number, bg = 0): Peak {
+  return { center, height, fwhm, prominence: 1, localSNR: 10, area: null, bg };
 }
 
 function fitted(center: number): MultiFitResult {
@@ -67,6 +68,7 @@ const OPTS = { model: "Lorentzian", bgDegree: 1, linkMode: "None", constrain: fa
 beforeEach(() => {
   vi.clearAllMocks();
   usePendingOps.setState({ ops: [] });
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "x.dat", data: DATA }],
     activeId: "d1",
@@ -77,6 +79,7 @@ beforeEach(() => {
     annotations: [],
     history: [],
     future: [],
+    historySuppressed: false,
   });
   vi.mocked(findPeaks).mockResolvedValue({
     peaks: [pk(1, 5, 0.8), pk(3, 6, 0.9)],
@@ -142,6 +145,27 @@ describe("usePeaks find", () => {
 
     expect(findPeaks).not.toHaveBeenCalled();
     expect(result.current.peaks).toHaveLength(0);
+  });
+});
+
+describe("usePeaks find — round-2 review L2: detected-peak marker overlay height+bg", () => {
+  it("draws detected-peak markers at height + bg, not height alone (pre-existing bug this review surfaced)", async () => {
+    // A large background, same repro shape as L1: apex is height+bg=530,
+    // nowhere near height=30 or 0. `overlayFitted` (the FITTED-peak overlay)
+    // already gets this right; the detected-peak overlay never did.
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 30, 0.8, 500), pk(3, 25, 0.9, 500)],
+      background: [],
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    const overlayY = useApp.getState().peakOverlay?.y ?? [];
+    const markerValues = overlayY.filter((v): v is number => v != null);
+    expect(markerValues).toHaveLength(2);
+    for (const v of markerValues) {
+      expect(v).toBeGreaterThan(400); // height+bg (~530/525), not height (~30) or bare bg
+    }
   });
 });
 
@@ -515,5 +539,156 @@ describe("usePeaks labelPeaks — MY RULING 5 (template tokens, unknown tokens, 
     const anns = useApp.getState().annotations as Annotation[];
     const texts = anns.map((a) => a.text).sort();
     expect(texts).toEqual(["peak 1: {phase} 1.0", "peak 2: {phase} 3.0"]);
+  });
+});
+
+describe("usePeaks labelPeaks — round-2 review: L1 CRITICAL apex y = height + bg", () => {
+  it("detected peaks: label lands near the true apex (height + bg), not near height alone or zero", async () => {
+    // find_peaks_robust on a Gaussian riding a +500 DC offset: height=30, bg=500
+    // (review's own repro) — true apex y is 530.
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 30, 0.8, 500), pk(3, 25, 0.9, 500)],
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    for (const a of anns) {
+      expect(a.y).toBeGreaterThan(400); // near height+bg=530/525, nowhere near height (~30) or 0
+    }
+  });
+
+  it("fitted peaks: label lands near the true apex (height + bg) too", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [
+        { center: 1, fwhm: 0.8, height: 30, bg: 500, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+        { center: 3, fwhm: 0.9, height: 25, bg: 500, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+      ],
+      bgCoeffs: [500, 0],
+      R2: 0.99,
+      rmse: 0.5,
+      nPeaks: 2,
+      model: "Lorentzian",
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    for (const a of anns) {
+      expect(a.y).toBeGreaterThan(400);
+    }
+  });
+});
+
+describe("usePeaks labelPeaks — round-2 review: L3 error handling", () => {
+  it("a resolveDataset rejection surfaces as a toast and creates nothing, instead of failing silently", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: vi.fn().mockRejectedValue(new Error("network down")) });
+
+    try {
+      await act(async () => {
+        await result.current.labelPeaks();
+      });
+
+      expect(useApp.getState().annotations).toHaveLength(0);
+      expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
+    } finally {
+      useApp.setState({ resolveDataset: original }); // never leak the broken mock into later tests
+    }
+  });
+});
+
+describe("usePeaks labelPeaks — round-2 review: L4 precision clamp", () => {
+  it("an out-of-range precision (e.g. 999) is clamped to a sane value instead of throwing RangeError", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 999 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2); // clamped, not aborted
+    for (const a of anns) {
+      const decimals = a.text.includes(".") ? a.text.split(".")[1].length : 0;
+      expect(decimals).toBeLessThanOrEqual(10);
+    }
+  });
+});
+
+describe("usePeaks labelPeaks — round-2 review: L5 nested-batch undo hole", () => {
+  it("refuses to run (creates nothing, no dialog) while another history batch is already in flight", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    useApp.setState({ historySuppressed: true }); // simulates e.g. an in-flight "import as new version"
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(askParams).not.toHaveBeenCalled();
+    expect(useApp.getState().annotations).toHaveLength(0);
+  });
+});
+
+describe("usePeaks labelPeaks — round-2 review: L7 blank labels", () => {
+  it("a template that renders blank for every peak (e.g. {area} on detected peaks) creates nothing and toasts", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{area}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2)); // area: null on every detected peak
+
+    const before = useApp.getState().history.length;
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(useApp.getState().annotations).toHaveLength(0);
+    expect(useApp.getState().history.length).toBe(before); // no empty undo entry
+    expect(useToasts.getState().toasts.length).toBeGreaterThan(0);
+  });
+
+  it("skips only the blank-label peaks, keeping the rest", async () => {
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [
+        { center: 1, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: 3, bg: 0 },
+        { center: 3, height: 6, fwhm: 0.9, prominence: 1, localSNR: 10, area: null, bg: 0 },
+      ],
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{area}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].text).toBe("3.00");
+    expect(anns[0].x).toBe(1);
   });
 });
