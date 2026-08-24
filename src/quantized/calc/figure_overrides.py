@@ -25,7 +25,7 @@ from quantized.calc.figure_decor import (
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
-__all__ = ["_apply_overrides", "_validate_overrides"]
+__all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_overrides"]
 
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
@@ -77,6 +77,32 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
     _validate_shapes(ov.get("shapes"))
     _validate_ref_lines(ov.get("ref_lines"))
     _validate_region_shades(ov.get("region_shades"))
+
+
+def apply_axis_shape_overrides(
+    ax: Any, st: Any, ov: Mapping[str, Any], *, lim_keys: tuple[str, ...]
+) -> None:
+    """Spine visibility + explicit axis limits (only ``lim_keys``) + grid
+    on/off -- factored out of ``_apply_overrides`` (fix-round R3) so
+    ``calc.figure_facets`` can apply the SAME spines/x_lim/grid logic to a
+    facet panel without a parallel reimplementation, restricted to
+    ``lim_keys=("x_lim",)`` (no ``y_lim``) -- the subset the screen's own
+    facet grid (``useMultiPanelStage.ts``) actually honors per panel."""
+    spines = ov.get("spines")
+    if spines is not None:
+        for side in ("top", "right", "left", "bottom"):
+            if side in spines:
+                ax.spines[side].set_visible(bool(spines[side]))
+
+    for key in lim_keys:
+        lim = ov.get(key)
+        if lim is not None:
+            lo, hi = lim
+            setter = ax.set_xlim if key == "x_lim" else ax.set_ylim
+            setter(None if lo is None else float(lo), None if hi is None else float(hi))
+
+    if "grid" in ov:
+        ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
 
 
 def _apply_overrides(
@@ -133,23 +159,7 @@ def _apply_overrides(
     if ticks is not None and ticks.get("minor"):
         ax.minorticks_on()
 
-    spines = ov.get("spines")
-    if spines is not None:
-        for side in ("top", "right", "left", "bottom"):
-            if side in spines:
-                ax.spines[side].set_visible(bool(spines[side]))
-
-    for key, setter in (("x_lim", ax.set_xlim), ("y_lim", ax.set_ylim)):
-        lim = ov.get(key)
-        if lim is not None:
-            lo, hi = lim
-            setter(
-                None if lo is None else float(lo),
-                None if hi is None else float(hi),
-            )
-
-    if "grid" in ov:
-        ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
+    apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim", "y_lim"))
 
     # Export-fidelity gap (2026-08-11): region shades paint first (they must
     # sit BEHIND the grid/data -- see figure_decor's zorder doc), then

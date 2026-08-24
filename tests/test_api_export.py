@@ -935,6 +935,32 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert m["image"][:10]  # base64 payload present
 
 
+# ── Fix-round R1: a facet-bound hitmap request must render the SAME grid
+# `/figure` exports (not silently fall back to the flat plot the Figure
+# Builder preview would then mis-describe), but with an honest EMPTY
+# `elements` list -- no per-panel hit-targets yet. ──────────────────────────
+def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets()},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    assert m["width"] > 0 and m["height"] > 0
+    # R1's honest-preview contract: no per-panel hit-targets yet.
+    assert m["elements"] == []
+    assert m["axes"]["x1"] == m["width"] and m["axes"]["y1"] == m["height"]
+    import base64
+    from io import BytesIO as _BytesIO
+
+    from PIL import Image
+
+    png = base64.b64decode(m["image"])
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    with Image.open(_BytesIO(png)) as im:
+        assert im.size == (m["width"], m["height"])
+
+
 def _demo_corner(k: int = 2, n: int = 200) -> dict:
     import numpy as np
 
@@ -1108,40 +1134,6 @@ def test_categorical_facets_shape_mismatch_is_422() -> None:
             "groups": ["A"], "series": ["x"], "values": [[1.0]],
             "facets": [{"label": "a", "groups": ["A", "B"], "series": ["x"], "values": [[1.0]]}],
         },
-    )
-    assert resp.status_code == 422
-
-
-# ── /api/export/facets-figure (gap #21 faceting) ────────────────────────────
-def test_facets_figure_pdf() -> None:
-    resp = client.post(
-        "/api/export/facets-figure",
-        json={
-            "panels": [
-                {"label": "Low", "x": [0, 1, 2], "series": [{"label": "y", "y": [1, 2, 3]}]},
-                {"label": "High", "x": [0, 1, 2], "series": [{"label": "y", "y": [3, 2, 1]}]},
-            ],
-            "fmt": "pdf",
-            "title": "facets",
-            "filename": "facet grid",
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.headers["content-type"] == "application/pdf"
-    assert resp.headers["content-disposition"] == 'attachment; filename="facet_grid.pdf"'
-    assert resp.content[:5] == b"%PDF-"
-
-
-def test_facets_figure_empty_panels_is_422() -> None:
-    resp = client.post("/api/export/facets-figure", json={"panels": []})
-    assert resp.status_code == 422
-
-
-def test_facets_figure_bad_format_is_422() -> None:
-    panels = [{"label": "l", "x": [0, 1], "series": [{"label": "y", "y": [1, 2]}]}]
-    resp = client.post(
-        "/api/export/facets-figure",
-        json={"panels": panels, "fmt": "bmp"},
     )
     assert resp.status_code == 422
 
@@ -1349,6 +1341,53 @@ def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
     )
     assert resp.status_code == 200
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── Fix-round R2: routes/export_page.py used to silently flatten a
+# facet-bound panel (it only ever called `_figure_series(f)`) -- a faceted
+# panel on a page must render through `render_facets_figure`, embedded as a
+# raster grid, the same as `/figure`'s own facet branch. ────────────────────
+def test_figure_page_facet_panel_embeds_as_raster_grid_not_flattened() -> None:
+    from unittest.mock import patch
+
+    import matplotlib.figure
+
+    captured: dict[str, matplotlib.figure.Figure] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured["fig"] = self
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        resp = client.post(
+            "/api/export/figure-page",
+            json={
+                "rows": 1,
+                "cols": 2,
+                "panels": [
+                    {
+                        "figure": {"dataset": _xrd_dataset(), "facets": _xy_facets()},
+                        "row": 0, "col": 0,
+                    },
+                    {
+                        "figure": {"dataset": _xrd_dataset()},
+                        "row": 0, "col": 1,
+                    },
+                ],
+                "fmt": "pdf",
+            },
+        )
+    assert resp.status_code == 200
+    fig = captured["fig"]
+    axes = list(fig.axes)
+    assert len(axes) == 2
+    # The faceted panel embeds a raster image (an AxesImage artist) -- the
+    # small-multiples grid, not a flattened single line plot.
+    image_axes = [ax for ax in axes if len(ax.images) > 0]
+    line_axes = [ax for ax in axes if len(ax.get_lines()) > 0]
+    assert len(image_axes) == 1
+    assert len(line_axes) == 1
 
 
 def test_figure_page_two_panels_one_with_y2_one_without_both_render() -> None:

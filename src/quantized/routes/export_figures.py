@@ -285,6 +285,62 @@ def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
     return spec.model_dump() if spec is not None else None
 
 
+def _render_facets_bytes(
+    req: FigureRequest,
+    *,
+    dpi: int,
+    fmt: str | None = None,
+    title: str | None = None,
+    style: str | None = None,
+) -> bytes:
+    """Render ``req.facets`` to image bytes -- the ONE facet-branch
+    renderer, shared by ``export_figure`` (R2, fix round 3) and
+    ``routes.export_page`` (a faceted page panel, embedded as a raster
+    image -- see that module's own doc), so the two routes can never drift
+    on how a facet-bound panel renders. Reshapes ``req.facets`` into
+    ``render_facets_figure``'s panel dicts, derives axis labels via
+    ``_figure_series`` (C4 -- ``resolved.x_label``/``resolved.y_label``
+    already apply the "explicit override, else derive from the dataset"
+    rule), and forwards scale/tick-format/transparent/overrides the SAME
+    way the flat branch does (C1/C3/R3). ``fmt``/``title``/``style``
+    override ``req``'s own fields when given -- ``export_page`` forces
+    ``fmt="png"`` (a page panel embeds this as a raster regardless of the
+    page's own output format) and passes the PAGE-level ``title``/``style``
+    (the nested request's own ``fmt``/``style``/``dpi``/``filename`` are
+    page-level decisions everywhere else on that route too)."""
+    from quantized.calc.figure_facets import render_facets_figure
+
+    assert req.facets
+    panels: list[dict[str, Any]] = [
+        {
+            "label": f.label,
+            "x": f.x,
+            "series": [{"label": s.label, "y": s.y} for s in f.series],
+        }
+        for f in req.facets
+    ]
+    resolved = _figure_series(req)
+    return render_facets_figure(
+        panels,
+        x_log=req.x_log,
+        y_log=req.y_log,
+        x_scale=req.x_scale,
+        y_scale=req.y_scale,
+        title=title if title is not None else req.title,
+        x_label=resolved.x_label,
+        y_label=resolved.y_label,
+        fmt=fmt or req.fmt,
+        style=style or req.style,
+        width_in=req.width_in,
+        height_in=req.height_in,
+        dpi=dpi,
+        transparent=req.transparent,
+        x_fmt=_tick_fmt(req.x_fmt),
+        y_fmt=_tick_fmt(req.y_fmt),
+        overrides=req.overrides,
+    )
+
+
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
@@ -299,43 +355,7 @@ def export_figure(req: FigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
         if req.facets:
-            # Lazy import: matplotlib is heavy — only pay it when exported.
-            from quantized.calc.figure_facets import render_facets_figure
-
-            panels: list[dict[str, Any]] = [
-                {
-                    "label": f.label,
-                    "x": f.x,
-                    "series": [{"label": s.label, "y": s.y} for s in f.series],
-                }
-                for f in req.facets
-            ]
-            # Reuse `_figure_series` for the SAME auto-derived "label (unit)"
-            # strings (and x_label/y_label override precedence) the flat
-            # path uses -- `resolved.x_label`/`resolved.y_label` already
-            # apply the "req.x_label or derive from the dataset" rule (see
-            # `_figure_series`'s own doc), so a faceted export never loses
-            # the auto-derived axis labels the way a bare `req.x_label or
-            # ""` did.
-            resolved = _figure_series(req)
-            data = render_facets_figure(
-                panels,
-                x_log=req.x_log,
-                y_log=req.y_log,
-                x_scale=req.x_scale,
-                y_scale=req.y_scale,
-                title=req.title,
-                x_label=resolved.x_label,
-                y_label=resolved.y_label,
-                fmt=req.fmt,
-                style=req.style,
-                width_in=req.width_in,
-                height_in=req.height_in,
-                dpi=dpi,
-                transparent=req.transparent,
-                x_fmt=_tick_fmt(req.x_fmt),
-                y_fmt=_tick_fmt(req.y_fmt),
-            )
+            data = _render_facets_bytes(req, dpi=dpi)
         else:
             from quantized.calc.figure import render_figure
 
@@ -383,11 +403,41 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     """Preview render + element hit-map (gap #13): base64 PNG, per-artist
     pixel boxes (title/labels/legend/series/annotations), and the axes rect
     with data limits — the client hit-tests the preview and maps drags back
-    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``)."""
+    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``).
+
+    R1 (fix round 3): a facet-bound request (``req.facets`` set) renders the
+    SAME small-multiples grid ``/figure`` exports (via ``_render_facets_bytes``)
+    instead of silently falling back to the flat single-panel plot -- the
+    Figure Builder preview must show what the export will actually produce.
+    ``elements`` comes back EMPTY and ``axes`` is a synthetic whole-image
+    rect: per-panel interactive hit-targets (dragging an annotation/legend/
+    ref-line INSIDE one specific facet panel) are not implemented yet, so
+    this is an honest, click-through preview rather than one that would
+    mis-target a drag at the wrong panel's data coordinates."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    from quantized.calc.figure import render_figure_map
 
     try:
+        if req.facets:
+            import base64
+
+            from quantized.calc.figure_facets import _dimensions_of_png
+
+            png = _render_facets_bytes(req, dpi=dpi, fmt="png")
+            width, height = _dimensions_of_png(png)
+            return {
+                "image": base64.b64encode(png).decode("ascii"),
+                "width": width,
+                "height": height,
+                "elements": [],
+                "axes": {
+                    "x0": 0.0, "y0": 0.0, "x1": float(width), "y1": float(height),
+                    "xlim": [0.0, 1.0], "ylim": [0.0, 1.0],
+                    "xlog": False, "ylog": False,
+                    "xscale": "linear", "yscale": "linear",
+                },
+            }
+        from quantized.calc.figure import render_figure_map
+
         resolved = _figure_series(req)
         return render_figure_map(
             resolved.x,

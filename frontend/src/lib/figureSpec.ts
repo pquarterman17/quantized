@@ -31,7 +31,7 @@ import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
-import { buildFacetSpecs } from "./figureSpecFacets";
+import { resolveFacetsOrThrow } from "./figureSpecFacets";
 import {
   compactOverrides,
   gateY2Overrides,
@@ -96,7 +96,11 @@ export function buildFigureSpec(
   stem: string,
   o: FigureRenderOpts,
 ): FigureSpec {
-  const st = s();
+  const raw = s();
+  // R7: `raw` is the live singleton, which a refocus-mid-export race can
+  // desync from `ds` -- neutralize facetKey rather than resolve it against
+  // the wrong dataset's channels.
+  const st = raw.activeId === ds.id ? raw : { ...raw, facetKey: null };
   return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, { liveDataset: ds });
 }
 
@@ -121,12 +125,11 @@ function buildFigureSpecForView(
     /** Preserve the valid canonical case where an explicitly selected channel
      * is deliberately used for both X and Y. */
     allowExplicitXAsY?: boolean;
-    /** C2: bound live `Dataset` (absent for frozen) -- facets partition its analysisData view. */
+    /** C2: bound live `Dataset` (absent for frozen), used to prune facets to its analysisData view. */
     liveDataset?: Dataset | null;
   } = {},
 ): FigureSpec {
-  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
-  // pageSetup keeps the preset size + tight_layout behaviour.
+  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
   const ps = st.pageSetup;
   const pageSize = ps ? pageSizeInches(ps) : null;
   const overrides = ps
@@ -149,12 +152,10 @@ function buildFigureSpecForView(
     channelRoles,
     st.seriesOrder,
   ).filter((ch) => !st.hiddenChannels.includes(ch));
-  if (plotted.length === 0) throw new Error("no visible series to export");
 
-  // Legend renames / decoded Origin captions are channel-keyed. Apply them to
-  // a request-local DataStruct label copy so the backend series builder and
-  // legend path both see the same display names without mutating the imported
-  // workbook.
+  // Legend renames / decoded Origin captions are channel-keyed. Apply them to a
+  // request-local DataStruct label copy so the backend series builder and legend
+  // path both see the same display names without mutating the imported workbook.
   const dataset = Object.keys(st.seriesLabels).length
     ? {
         ...data,
@@ -162,14 +163,9 @@ function buildFigureSpecForView(
       }
     : data;
 
-  // F4.4 (export half): a durable facet binding renders the SAME small-
-  // multiples grid Stage shows on screen — see `buildFacetSpecs`'s own doc
-  // (`undefined` = no `facetKey`, or C5's degenerate-partition fallback).
-  // C2: `extras.liveDataset` makes it partition the screen's OWN
-  // `analysisData`-pruned view, not raw `dataset`.
-  const facets = st.facetKey == null
-    ? undefined
-    : buildFacetSpecs(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset);
+  // F4.4: a durable facet binding renders the SAME grid Stage shows on
+  // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
+  const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a

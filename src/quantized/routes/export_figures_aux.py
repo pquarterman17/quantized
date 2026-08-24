@@ -3,11 +3,14 @@
 Split into its own router file (rather than joining
 ``routes/export_figures.py``) purely to keep that file under the 500-line
 god-module ceiling — it grew past 500 once the y2 (secondary-axis) fields
-landed on ``FigureRequest`` (the same reason ``export_facets.py`` and
-``export_page.py`` were split out earlier). These four routes are
-self-contained: no shared helper with ``export_figures.py``'s
-``_figure_series``/``_tick_fmt`` (they don't take a ``dataset`` + channel
-picks, unlike the basic figure/statplot/categorical routes that stayed).
+landed on ``FigureRequest`` (the same reason ``export_page.py`` was split
+out earlier). These four routes are self-contained: no shared helper with
+``export_figures.py``'s ``_figure_series``/``_tick_fmt`` (they don't take a
+``dataset`` + channel picks, unlike the basic figure/statplot/categorical
+routes that stayed). (``routes/export_facets.py`` -- once also named
+here -- was deleted in the fix-round-3 cleanup: a shadow duplicate of
+``export_figures.py``'s ``FigureRequest.facets`` branch with zero frontend
+consumers.)
 
 Wraps ``calc.figure_map`` (gridded 2-D heatmap/contour/surface),
 ``calc.figure_corner`` (posterior/bootstrap pairs plots), ``calc.figure_ternary``

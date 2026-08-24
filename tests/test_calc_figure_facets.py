@@ -152,6 +152,58 @@ def test_transparent_forwards_to_savefig() -> None:
     assert captured_kwargs.get("transparent") is True
 
 
+# ── Fix-round R3: the NARROW override subset the screen's own facet grid
+# honors -- x_lim (explicit wins over the shared-domain default), grid
+# on/off, and spines/box on/off. NOT y_lim (each panel keeps its own
+# y-autoscale), matching `useMultiPanelStage.ts`'s facet `buildOpts` call
+# exactly. ───────────────────────────────────────────────────────────────
+
+
+def test_x_lim_override_applies_to_every_panel() -> None:
+    fig = _rendered_figure(_panels(3), fmt="pdf", overrides={"x_lim": [0.5, 2.5]})
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    for ax in axes:
+        np.testing.assert_allclose(ax.get_xlim(), [0.5, 2.5])
+
+
+def test_y_lim_override_is_not_applied_matching_the_screens_own_facet_grid() -> None:
+    # The screen's facet grid never passes yLim to buildOpts -- each panel
+    # keeps its own independent y-autoscale even with an explicit y_lim
+    # override in flight (unlike x_lim, which the screen DOES apply).
+    panels = [
+        {"label": "small", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1.0, 0.0]}]},
+        {"label": "big", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1000.0, 0.0]}]},
+    ]
+    fig = _rendered_figure(panels, fmt="pdf", overrides={"y_lim": [-5.0, 5.0]})
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert axes[1].get_ylim()[1] > 100  # untouched by the y_lim override
+    assert axes[0].get_ylim()[1] < 100
+
+
+def test_grid_override_turns_on_every_panel_over_a_grid_off_style() -> None:
+    # "aps" has grid_alpha=0 (no grid by default) -- an explicit override
+    # must still turn it on, same as the flat path's own grid override.
+    fig = _rendered_figure(_panels(2), fmt="pdf", style="aps", overrides={"grid": True})
+    for ax in fig.axes:
+        if ax.get_visible():
+            assert any(line.get_visible() for line in ax.get_xgridlines())
+
+
+def test_spines_override_applies_to_every_panel() -> None:
+    spines = {"top": True, "right": True}
+    fig = _rendered_figure(_panels(2), fmt="pdf", overrides={"spines": spines})
+    for ax in fig.axes:
+        if ax.get_visible():
+            assert ax.spines["top"].get_visible()
+            assert ax.spines["right"].get_visible()
+
+
+def test_bad_overrides_raise_value_error() -> None:
+    with pytest.raises(ValueError):
+        render_facets_figure(_panels(1), fmt="pdf", overrides={"x_lim": [1.0]})
+
+
 def test_panel_titles_render_in_svg() -> None:
     out = render_facets_figure(_panels(2), fmt="svg")
     svg = out.decode("utf-8", "ignore")

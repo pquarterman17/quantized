@@ -59,3 +59,27 @@ export function buildFacetSpecs(
     })),
   }));
 }
+
+/** `buildFigureSpecForView`'s single "do we even build facets" gate PLUS its
+ *  "nothing to export" guard, in one place. Omits facets (`undefined`) when
+ *  there's no `facetKey` bound (R7's live-singleton dataset-mismatch race
+ *  is handled UPSTREAM, by the caller nulling `facetKey` before this ever
+ *  runs -- see `buildFigureSpec`'s own doc), or when `buildFacetSpecs`
+ *  itself returns `undefined` (C5's degenerate-partition fallback). Then
+ *  throws "no visible series to export" only when there's neither a flat
+ *  series (`plottedCount`) NOR a facet grid -- R4 lets an all-hidden
+ *  FACETED view through, since the grid needs no flat series at all and the
+ *  screen's own facet grid ignores `hiddenChannels` too. `data`/`xKey`/
+ *  `yKeys`/`liveDataset` mean exactly what `buildFacetSpecs` documents. */
+export function resolveFacetsOrThrow(
+  data: DataStruct,
+  facetKey: number | null,
+  xKey: number | null,
+  yKeys: number[] | null,
+  liveDataset: Dataset | null | undefined,
+  plottedCount: number,
+): FigureFacetSpec[] | undefined {
+  const facets = facetKey == null ? undefined : buildFacetSpecs(data, facetKey, xKey, yKeys, liveDataset);
+  if (plottedCount === 0 && facets === undefined) throw new Error("no visible series to export");
+  return facets;
+}

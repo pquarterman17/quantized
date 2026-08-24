@@ -42,6 +42,14 @@ function axisScaleOf(scale: "linear" | "log" | "reciprocal" | undefined, log: bo
   return scale ?? (log ? "log" : "linear");
 }
 
+/** R1 (fix round 3): for a facet-bound spec, `image` is the SAME
+ *  small-multiples grid `/api/export/figure` would export, but `elements`
+ *  comes back EMPTY and `axes` is a synthetic whole-image rect -- per-panel
+ *  interactive hit-targets (dragging an annotation/legend/ref-line INSIDE
+ *  one specific facet panel) aren't implemented yet, so nothing in the
+ *  preview is draggable for a faceted spec (an honest, click-through
+ *  preview rather than one that would mis-target a drag at the wrong
+ *  panel's data coordinates). */
 export interface FigureHitmap {
   image: string; // base64 PNG
   width: number;
