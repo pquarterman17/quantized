@@ -207,6 +207,187 @@ def test_figure_style_preset_download() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+# ── /api/export/figure facets (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4, export
+# half): a faceted Stage window must export as the SAME small-multiples
+# grid, not a single overlaid plot — the named gap #222 left open (its
+# module doc: "FigureSpec has no transport fields for facetKey"). ─────────
+def _xy_facets() -> list[dict]:
+    return [
+        {
+            "label": "level 0", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "y", "y": [0.0, 1.0, 2.0]}],
+        },
+        {
+            "label": "level 1", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "y", "y": [1.0, 2.0, 3.0]}],
+        },
+    ]
+
+
+def test_figure_facets_renders_grid_not_single_panel() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets(), "filename": "facets1",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+    assert resp.headers["content-disposition"] == 'attachment; filename="facets1.svg"'
+    svg = resp.content.decode("utf-8", "ignore")
+    # Both facet-level titles render — proof this is the small-multiples
+    # grid (calc.figure_facets), not the flat single-panel path, which never
+    # sees these labels at all.
+    assert "level 0" in svg
+    assert "level 1" in svg
+
+
+def test_figure_facets_pdf_and_png_render() -> None:
+    for fmt, magic in (("pdf", b"%PDF-"), ("png", b"\x89PNG\r\n\x1a\n")):
+        resp = client.post(
+            "/api/export/figure",
+            json={"dataset": _xrd_dataset(), "fmt": fmt, "facets": _xy_facets()},
+        )
+        assert resp.status_code == 200
+        assert resp.content[: len(magic)] == magic
+
+
+def test_figure_facets_title_and_labels_apply_figure_wide() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets(),
+            "title": "Faceted title", "x_label": "Time (s)", "y_label": "Signal (V)",
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "Faceted title" in svg
+    assert "Time (s)" in svg
+    assert "Signal (V)" in svg
+
+
+def test_figure_facets_empty_list_falls_back_to_single_panel() -> None:
+    # An empty (not None) facets list is falsy -> today's flat single-panel
+    # path, matching the calc layer's own `if req.facets:` gate (same
+    # contract as StatplotFigureRequest/CategoricalFigureRequest).
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "facets": []},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_facets_null_cells_render_as_gaps() -> None:
+    # The frontend's null-gap wire convention (a non-finite cell) must not
+    # 422 -- calc.figure_facets converts null -> NaN via np.asarray(dtype=float).
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [
+                {
+                    "label": "a", "x": [0.0, None, 2.0],
+                    "series": [{"label": "y", "y": [1.0, 2.0, None]}],
+                },
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_facets_bad_format_is_422_not_500() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "bmp", "facets": _xy_facets()},
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_facets_malformed_panel_is_422_not_500() -> None:
+    # A panel whose series `y` disagrees in length with `x` is a malformed
+    # payload (a frontend bug, not a user-triggerable state) -- must be
+    # refused cleanly (422), never a 500.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [
+                {"label": "a", "x": [0.0, 1.0], "series": [{"label": "y", "y": [1.0, 2.0, 3.0]}]},
+            ],
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_facets_panel_with_no_series_still_renders() -> None:
+    # A facet level with zero series (every channel hidden for that panel)
+    # is not malformed -- an empty axes cell, not a 422.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [{"label": "a", "x": [], "series": []}],
+        },
+    )
+    assert resp.status_code == 200
+
+
+# ── Fix-round C1: the REAL wire shape (`lib/figureContract.ts` marks
+# x_log/y_log "unsupported -- legacy wire fallback; derive x_scale
+# instead", and `buildFigureSpecForView` only ever emits x_scale/y_scale) is
+# x_scale/y_scale with NO x_log/y_log booleans at all -- a log-scaled
+# faceted view must not silently export with linear axes. ──────────────────
+def test_figure_facets_x_scale_log_round_trips_to_log_axes_no_legacy_booleans() -> None:
+    from unittest.mock import patch
+
+    import matplotlib.figure
+
+    captured: dict[str, matplotlib.figure.Figure] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured["fig"] = self
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        resp = client.post(
+            "/api/export/figure",
+            json={
+                "dataset": _xrd_dataset(), "fmt": "pdf", "facets": _xy_facets(),
+                # deliberately no x_log/y_log -- the actual wire shape.
+                "x_scale": "log", "y_scale": "log",
+            },
+        )
+    assert resp.status_code == 200
+    fig = captured["fig"]
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 2
+    for ax in axes:
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+
+
+# ── Fix-round C4: the facet branch used to substitute `req.x_label or ""`
+# instead of deriving "label (unit)" from the dataset like the flat path
+# does -- an unlabeled faceted export must still show the auto-derived
+# axis labels. ───────────────────────────────────────────────────────────
+def test_figure_facets_derives_axis_labels_when_absent() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets()},
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    # _xrd_dataset's metadata names its x column "2Theta"/"deg" and its one
+    # channel "Intensity"/"cps" -- the SAME "label (unit)" derivation
+    # `_figure_series` applies on the flat path.
+    assert "2Theta (deg)" in svg
+    assert "Intensity (cps)" in svg
+
+
 def _demo_map() -> dict:
     import numpy as np
     x = np.linspace(-2.0, 2.0, 16)
@@ -754,6 +935,32 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert m["image"][:10]  # base64 payload present
 
 
+# ── Fix-round R1: a facet-bound hitmap request must render the SAME grid
+# `/figure` exports (not silently fall back to the flat plot the Figure
+# Builder preview would then mis-describe), but with an honest EMPTY
+# `elements` list -- no per-panel hit-targets yet. ──────────────────────────
+def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets()},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    assert m["width"] > 0 and m["height"] > 0
+    # R1's honest-preview contract: no per-panel hit-targets yet.
+    assert m["elements"] == []
+    assert m["axes"]["x1"] == m["width"] and m["axes"]["y1"] == m["height"]
+    import base64
+    from io import BytesIO as _BytesIO
+
+    from PIL import Image
+
+    png = base64.b64decode(m["image"])
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    with Image.open(_BytesIO(png)) as im:
+        assert im.size == (m["width"], m["height"])
+
+
 def _demo_corner(k: int = 2, n: int = 200) -> dict:
     import numpy as np
 
@@ -927,40 +1134,6 @@ def test_categorical_facets_shape_mismatch_is_422() -> None:
             "groups": ["A"], "series": ["x"], "values": [[1.0]],
             "facets": [{"label": "a", "groups": ["A", "B"], "series": ["x"], "values": [[1.0]]}],
         },
-    )
-    assert resp.status_code == 422
-
-
-# ── /api/export/facets-figure (gap #21 faceting) ────────────────────────────
-def test_facets_figure_pdf() -> None:
-    resp = client.post(
-        "/api/export/facets-figure",
-        json={
-            "panels": [
-                {"label": "Low", "x": [0, 1, 2], "series": [{"label": "y", "y": [1, 2, 3]}]},
-                {"label": "High", "x": [0, 1, 2], "series": [{"label": "y", "y": [3, 2, 1]}]},
-            ],
-            "fmt": "pdf",
-            "title": "facets",
-            "filename": "facet grid",
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.headers["content-type"] == "application/pdf"
-    assert resp.headers["content-disposition"] == 'attachment; filename="facet_grid.pdf"'
-    assert resp.content[:5] == b"%PDF-"
-
-
-def test_facets_figure_empty_panels_is_422() -> None:
-    resp = client.post("/api/export/facets-figure", json={"panels": []})
-    assert resp.status_code == 422
-
-
-def test_facets_figure_bad_format_is_422() -> None:
-    panels = [{"label": "l", "x": [0, 1], "series": [{"label": "y", "y": [1, 2]}]}]
-    resp = client.post(
-        "/api/export/facets-figure",
-        json={"panels": panels, "fmt": "bmp"},
     )
     assert resp.status_code == 422
 
@@ -1168,6 +1341,53 @@ def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
     )
     assert resp.status_code == 200
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── Fix-round R2: routes/export_page.py used to silently flatten a
+# facet-bound panel (it only ever called `_figure_series(f)`) -- a faceted
+# panel on a page must render through `render_facets_figure`, embedded as a
+# raster grid, the same as `/figure`'s own facet branch. ────────────────────
+def test_figure_page_facet_panel_embeds_as_raster_grid_not_flattened() -> None:
+    from unittest.mock import patch
+
+    import matplotlib.figure
+
+    captured: dict[str, matplotlib.figure.Figure] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured["fig"] = self
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        resp = client.post(
+            "/api/export/figure-page",
+            json={
+                "rows": 1,
+                "cols": 2,
+                "panels": [
+                    {
+                        "figure": {"dataset": _xrd_dataset(), "facets": _xy_facets()},
+                        "row": 0, "col": 0,
+                    },
+                    {
+                        "figure": {"dataset": _xrd_dataset()},
+                        "row": 0, "col": 1,
+                    },
+                ],
+                "fmt": "pdf",
+            },
+        )
+    assert resp.status_code == 200
+    fig = captured["fig"]
+    axes = list(fig.axes)
+    assert len(axes) == 2
+    # The faceted panel embeds a raster image (an AxesImage artist) -- the
+    # small-multiples grid, not a flattened single line plot.
+    image_axes = [ax for ax in axes if len(ax.images) > 0]
+    line_axes = [ax for ax in axes if len(ax.get_lines()) > 0]
+    assert len(image_axes) == 1
+    assert len(line_axes) == 1
 
 
 def test_figure_page_two_panels_one_with_y2_one_without_both_render() -> None:

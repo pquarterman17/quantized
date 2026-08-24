@@ -170,6 +170,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   y2_fmt: derived("axes.y2.format"),
   y2_step: derived("axes.y2.step"),
   group_col: derived("bindings.group.channel"),
+  facets: derived(
+    "bindings.facet.channel",
+    "F4.4 (export half): the resolved per-panel row partition of bindings.facet.channel, built at render time by lib/figureSpec.ts's buildFacetSpecs -- not a second source of the binding itself.",
+  ),
   fmt: output("output.format"),
   style: output("output.stylePreset"),
   dpi: output("output.dpi"),

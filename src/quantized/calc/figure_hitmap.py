@@ -7,6 +7,14 @@ Split out of ``calc.figure`` purely to stay under the 500-line god-module
 ceiling (mirrors ``figure_break``/``figure_scale``/``figure_overrides``);
 ``figure.render_figure_map`` (``_render_impl(..., collect_map=True)``) is the
 only caller. Pure layer: a live ``Figure``/``Axes`` in -> a plain dict out.
+
+Known limitation (R1, fix round 3): this collector only ever runs against a
+SINGLE ``Axes`` (the flat, non-faceted figure). A faceted request
+(``FigureRequest.facets`` set) never reaches it at all -- ``routes.export_figures
+.export_figure_hitmap`` renders the facet grid image separately (via
+``_render_facets_bytes``) and returns an EMPTY element list rather than
+calling this module, since per-panel interactive hit-targets (which facet
+panel, and where within it) aren't implemented yet.
 """
 
 from __future__ import annotations

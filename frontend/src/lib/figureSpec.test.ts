@@ -7,7 +7,9 @@ import {
   resolveFigureDocumentData,
   viewOverrides,
 } from "./figureSpec";
+import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
+import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
 
@@ -389,14 +391,17 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(spec.filename).toBe("device-stem");
   });
 
-  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: export never breaks on a facet-
-  // bound document -- it just doesn't transport the facet layout, exactly
-  // the same (pre-existing, documented) scope boundary as before this item
-  // (`buildFigureSpecFromDocument`'s own header: "FigureSpec has no
-  // transport fields for mark, facetKey"). This is the "verify the existing
-  // export path against a restored composition" half of F4.4: a restored
-  // facet is no MORE and no LESS exportable than a freshly-built one.
-  it("exports a facet-bound window identically to the same view without a facet binding (documented scope boundary, not a regression)", () => {
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half, closed): this test
+  // used to pin the OLD documented scope boundary -- a facet-bound window
+  // exported byte-identically to the same view without a facet binding,
+  // because FigureSpec had no transport fields for `facetKey` at all (see
+  // `buildFigureSpecFromDocument`'s prior header). That gap is now closed:
+  // a durable facet binding must render as the SAME small-multiples grid
+  // Stage shows on screen, not a silently-dropped, single overlaid plot.
+  // This replaces that pin with the new honest behavior deliberately, not
+  // as an incidental diff -- see `buildFacetSpecs`'s own doc for exactly
+  // what gets resolved onto the wire and why.
+  it("exports a facet-bound window as a resolved facet grid, not identically to the same view without one", () => {
     const withFacet = createFigureDocument({
       id: "faceted-window", name: "Faceted", datasetId: dataset.id, view: richView(), facetKey: 1,
     });
@@ -410,7 +415,97 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
         "device",
         opts,
       );
-    expect(specFor(withFacet)).toEqual(specFor(withoutFacet));
+    const flat = specFor(withoutFacet);
+    const faceted = specFor(withFacet);
+
+    // Absent when there's no facet binding at all (today's byte-identical
+    // behaviour for every non-faceted export is unchanged).
+    expect(flat.facets).toBeUndefined();
+
+    // Present, and resolved into one panel per distinct level of channel 1
+    // ("signal": values 100/200/300 in `data` above, all distinct) -- the
+    // SAME partition `lib/facet.facetPayloads` builds for the on-screen grid.
+    expect(faceted.facets).toHaveLength(3);
+    expect(faceted.facets?.map((f) => f.label)).toEqual(["100", "200", "300"]);
+    expect(faceted.facets?.every((f) => f.series.length === 2)).toBe(true); // yKeys: [1, 2]
+
+    // Every OTHER field is untouched by faceting -- `facets` is additive,
+    // not a replacement for the rest of the wire shape.
+    expect(faceted).toEqual({ ...flat, facets: faceted.facets });
+  });
+
+  // Fix-round C2: an excluded row must drop out of the exported facet
+  // partition -- and, when it was that level's LAST row, the whole panel
+  // must disappear too -- exactly like the screen's own facet grid
+  // (`facetCompositionFromBinding`'s `analysisData`-pruned view). Before
+  // this fix the export partitioned the RAW dataset, so an export could
+  // contain excluded rows the screen never showed, or even carry an extra
+  // panel for a level that's fully excluded on screen.
+  it("partitions facets from the SAME row-excluded view the screen's facet grid uses", () => {
+    const excludedDataset: Dataset = { ...dataset, id: "excluded", excludedRows: [0] }; // drops the row where signal=100
+    const document = createFigureDocument({
+      id: "excluded-facet", name: "Excluded", datasetId: excludedDataset.id, view: richView(), facetKey: 1,
+    });
+
+    const spec = buildFigureSpecFromDocument(document, excludedDataset, "excluded");
+
+    // The screen's own facet grid for the IDENTICAL (dataset, facetKey,
+    // xKey, yKeys) state -- the ground truth this export must never disagree
+    // with.
+    const view = richView();
+    const screenComposition = facetCompositionFromBinding(excludedDataset, 1, view.xKey, view.yKeys);
+    const screenLabels = facetPanelsOf(screenComposition)!.map((p) => p.label);
+
+    expect(screenLabels).toEqual(["200", "300"]); // sanity: the exclusion actually dropped a level
+    expect(spec.facets).toHaveLength(2);
+    expect(spec.facets?.map((f) => f.label)).toEqual(screenLabels);
+  });
+
+  // Fix-round C5: mirrors the SCREEN's own fallback for the identical state
+  // (`facetCompositionFromBinding` returns null when the facet column has no
+  // finite levels, and `useEffectiveComposition` then renders the ordinary
+  // flat plot) -- an export must never refuse outright for a state the
+  // screen itself renders fine. Replaces the prior throw-test, which pinned
+  // the OLD, reversed "fail loudly" behavior.
+  it("falls back to the unfaceted spec when the facet column has no finite levels, mirroring the screen", () => {
+    const allNonFinite: DataStruct = { ...data, values: data.values.map((row) => [NaN, ...row.slice(1)]) };
+    const withFacet = createFigureDocument({
+      id: "degenerate-facet", name: "Degenerate", datasetId: "degenerate", view: richView(), facetKey: 0,
+    });
+    const withoutFacet = createFigureDocument({
+      id: "degenerate-facet", name: "Degenerate", datasetId: "degenerate", view: richView(),
+    });
+    const degenerateDataset: Dataset = { ...dataset, id: "degenerate", data: allNonFinite };
+
+    const faceted = buildFigureSpecFromDocument(withFacet, degenerateDataset, "degenerate");
+    const flat = buildFigureSpecFromDocument(withoutFacet, degenerateDataset, "degenerate");
+
+    expect(faceted.facets).toBeUndefined();
+    expect(faceted).toEqual(flat);
+  });
+
+  // Fix-round R4: the export used to throw "no visible series to export"
+  // whenever every plotted channel was hidden, even for a FACETED view --
+  // but the screen's own facet grid ignores hiddenChannels entirely (it
+  // partitions st.xKey/st.yKeys directly, never the hidden-filtered
+  // `plotted` list), so an all-hidden faceted view still renders fine on
+  // screen. Only a genuinely empty (non-faceted, or degenerate-facet) view
+  // has nothing left to export.
+  it("does not throw for an all-hidden FACETED view, but still throws for an all-hidden flat view", () => {
+    const allHidden = { ...richView(), hiddenChannels: [1, 2] }; // hides every yKey
+    const faceted = createFigureDocument({
+      id: "hidden-faceted", name: "Hidden faceted", datasetId: dataset.id, view: allHidden, facetKey: 1,
+    });
+    const flat = createFigureDocument({
+      id: "hidden-flat", name: "Hidden flat", datasetId: dataset.id, view: allHidden,
+    });
+
+    const spec = buildFigureSpecFromDocument(faceted, dataset, "hidden-faceted");
+    expect(spec.facets).toHaveLength(3);
+    expect(spec.y_keys).toEqual([]); // the flat fields are still empty -- only the grid saves it
+
+    expect(() => buildFigureSpecFromDocument(flat, dataset, "hidden-flat"))
+      .toThrow("no visible series to export");
   });
 
   it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {
@@ -517,6 +612,33 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
         opts,
       ),
     ).toThrow("grouped figures cannot use a secondary Y axis");
+  });
+
+  // Fix-round R7: the live-view FALLBACK (no canonical document to route
+  // through) reads the store's LIVE PlotView singleton -- a refocus-during-
+  // async-export race (exportActive resolves `ds` before an awaited
+  // resolve, during which the user can refocus a different window/dataset)
+  // can leave `st.facetKey` belonging to a dataset other than `ds`. This
+  // mirrors the pre-existing datasetId-mismatch guard the DOCUMENT-routing
+  // branch already has (`canRouteThroughDocument`), applied to the fallback.
+  it("omits facets on the fallback path when the store's active dataset doesn't match ds (refocus race)", () => {
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: null, facetKey: 1, activeId: "some-other-dataset" }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.facets).toBeUndefined();
+  });
+
+  it("still facets on the fallback path when the store's active dataset matches ds", () => {
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: null, facetKey: 1, activeId: dataset.id }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.facets).toHaveLength(3);
   });
 });
 

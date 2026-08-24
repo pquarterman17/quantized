@@ -1,16 +1,21 @@
 """Faceted (small-multiples) publication rendering (calc.figure_facets,
-gap #21 + GUI_INTERACTION #12 slice 4b). Magic-byte / non-trivial-size
-checks only — the split itself (frontend lib/facet.facetPayloads) is
-unit-tested on the row-partitioning logic; this only confirms the
-matplotlib grid renders. `render_stat_facets_figure`/
-`render_categorical_facets_figure` cover the StatStage box/violin/bar
-"facet by" grid; their single-panel drawing is covered (and pixel-format
-tested) in test_calc_figure_statplots.py/test_calc_figure_categorical.py —
-these tests only confirm the GRID composition (panel count, per-facet kind
-fidelity, malformed input)."""
+gap #21 + GUI_INTERACTION #12 slice 4b + FIGURE_AUTHORING_WORKFLOW_PLAN
+F4.4's export half). Magic-byte / non-trivial-size checks only — the split
+itself (frontend lib/facet.facetPayloads) is unit-tested on the row-
+partitioning logic; this only confirms the matplotlib grid renders.
+`render_stat_facets_figure`/`render_categorical_facets_figure` cover the
+StatStage box/violin/bar "facet by" grid; their single-panel drawing is
+covered (and pixel-format tested) in
+test_calc_figure_statplots.py/test_calc_figure_categorical.py — these tests
+only confirm the GRID composition (panel count, per-facet kind fidelity,
+malformed input)."""
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import matplotlib.figure
+import numpy as np
 import pytest
 
 from quantized.calc.figure_facets import (
@@ -20,6 +25,23 @@ from quantized.calc.figure_facets import (
 )
 
 _MAGIC = {"pdf": b"%PDF", "svg": b"<?xml", "png": b"\x89PNG"}
+
+
+def _rendered_figure(*args, **kwargs) -> matplotlib.figure.Figure:
+    """Call `render_facets_figure` and hand back the actual matplotlib
+    `Figure` it built, by intercepting `savefig` right before the function
+    closes it — real figure introspection (axes count/titles/data/sharing),
+    not just a magic-byte check."""
+    captured: dict[str, matplotlib.figure.Figure] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured["fig"] = self
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        render_facets_figure(*args, **kwargs)
+    return captured["fig"]
 
 
 def _panels(n: int) -> list[dict]:
@@ -70,6 +92,118 @@ def test_x_log_and_y_log_do_not_raise() -> None:
     assert out[:4] == b"%PDF"
 
 
+# ── Fix-round C1: the wire shape the frontend ACTUALLY sends is x_scale/
+# y_scale (`lib/figureContract.ts` marks x_log/y_log "unsupported -- legacy
+# wire fallback"), not the legacy booleans -- render_facets_figure must
+# resolve scale the SAME way the flat renderer does
+# (`calc.figure_scale.resolve_axis_scale`), applied to EVERY panel. ────────
+
+
+def test_x_scale_log_applies_log_to_every_panel() -> None:
+    fig = _rendered_figure(_panels(3), fmt="pdf", x_scale="log", y_scale="log")
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    for ax in axes:
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+
+
+def test_x_scale_wins_over_x_log_when_both_given() -> None:
+    # x_scale is the source of truth when present (mirrors
+    # resolve_axis_scale's own contract) -- an explicit "linear" scale must
+    # not be overridden by a stale x_log=True.
+    fig = _rendered_figure(
+        _panels(1), fmt="pdf", x_scale="linear", y_scale="linear", x_log=True, y_log=True,
+    )
+    ax = [a for a in fig.axes if a.get_visible()][0]
+    assert ax.get_xscale() == "linear"
+    assert ax.get_yscale() == "linear"
+
+
+def test_tick_formats_apply_to_every_panel() -> None:
+    from quantized.calc.figure_ticks import _AxisTickFormatter
+
+    fig = _rendered_figure(
+        _panels(2), fmt="pdf",
+        x_fmt={"mode": "sci", "digits": 2}, y_fmt={"mode": "fixed", "digits": 3},
+    )
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 2
+    for ax in axes:
+        assert isinstance(ax.xaxis.get_major_formatter(), _AxisTickFormatter)
+        assert isinstance(ax.yaxis.get_major_formatter(), _AxisTickFormatter)
+
+
+# ── Fix-round C3: `transparent` was silently dropped on the facet path
+# (the flat branch forwards req.transparent to savefig; this one had no
+# such parameter at all). ───────────────────────────────────────────────
+
+
+def test_transparent_forwards_to_savefig() -> None:
+    captured_kwargs: dict[str, object] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured_kwargs.update(kw)
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        render_facets_figure(_panels(2), fmt="png", transparent=True)
+    assert captured_kwargs.get("transparent") is True
+
+
+# ── Fix-round R3: the NARROW override subset the screen's own facet grid
+# honors -- x_lim (explicit wins over the shared-domain default), grid
+# on/off, and spines/box on/off. NOT y_lim (each panel keeps its own
+# y-autoscale), matching `useMultiPanelStage.ts`'s facet `buildOpts` call
+# exactly. ───────────────────────────────────────────────────────────────
+
+
+def test_x_lim_override_applies_to_every_panel() -> None:
+    fig = _rendered_figure(_panels(3), fmt="pdf", overrides={"x_lim": [0.5, 2.5]})
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    for ax in axes:
+        np.testing.assert_allclose(ax.get_xlim(), [0.5, 2.5])
+
+
+def test_y_lim_override_is_not_applied_matching_the_screens_own_facet_grid() -> None:
+    # The screen's facet grid never passes yLim to buildOpts -- each panel
+    # keeps its own independent y-autoscale even with an explicit y_lim
+    # override in flight (unlike x_lim, which the screen DOES apply).
+    panels = [
+        {"label": "small", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1.0, 0.0]}]},
+        {"label": "big", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1000.0, 0.0]}]},
+    ]
+    fig = _rendered_figure(panels, fmt="pdf", overrides={"y_lim": [-5.0, 5.0]})
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert axes[1].get_ylim()[1] > 100  # untouched by the y_lim override
+    assert axes[0].get_ylim()[1] < 100
+
+
+def test_grid_override_turns_on_every_panel_over_a_grid_off_style() -> None:
+    # "aps" has grid_alpha=0 (no grid by default) -- an explicit override
+    # must still turn it on, same as the flat path's own grid override.
+    fig = _rendered_figure(_panels(2), fmt="pdf", style="aps", overrides={"grid": True})
+    for ax in fig.axes:
+        if ax.get_visible():
+            assert any(line.get_visible() for line in ax.get_xgridlines())
+
+
+def test_spines_override_applies_to_every_panel() -> None:
+    spines = {"top": True, "right": True}
+    fig = _rendered_figure(_panels(2), fmt="pdf", overrides={"spines": spines})
+    for ax in fig.axes:
+        if ax.get_visible():
+            assert ax.spines["top"].get_visible()
+            assert ax.spines["right"].get_visible()
+
+
+def test_bad_overrides_raise_value_error() -> None:
+    with pytest.raises(ValueError):
+        render_facets_figure(_panels(1), fmt="pdf", overrides={"x_lim": [1.0]})
+
+
 def test_panel_titles_render_in_svg() -> None:
     out = render_facets_figure(_panels(2), fmt="svg")
     svg = out.decode("utf-8", "ignore")
@@ -91,6 +225,43 @@ def test_named_styles_render() -> None:
     for style in ("aps", "report", "web", "nature", "presentation"):
         out = render_facets_figure(_panels(2), fmt="pdf", style=style)
         assert out[:4] == b"%PDF"
+
+
+# ── F4.4 export half: real matplotlib figure introspection (not just magic
+# bytes) — N facet panels must render N visible axes with the right titles
+# and data, sharing ONE x-domain but each keeping its OWN y-autoscale,
+# matching the Stage screen's facet grid (useMultiPanelStage.ts). ─────────
+
+
+def test_n_panels_renders_n_visible_axes_with_correct_titles_and_data() -> None:
+    fig = _rendered_figure(_panels(3), fmt="pdf")
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    assert [ax.get_title() for ax in axes] == ["level 0", "level 1", "level 2"]
+    for i, ax in enumerate(axes):
+        (line,) = ax.get_lines()
+        np.testing.assert_allclose(line.get_xdata(), [0, 1, 2, 3])
+        np.testing.assert_allclose(line.get_ydata(), [i, i + 1, i, i + 1])
+
+
+def test_panels_share_one_x_domain_but_keep_independent_y_autoscale() -> None:
+    # Mirrors the Stage screen exactly: `lib/facet.sharedXDomain` fixes ONE
+    # x-range across every panel, but `useMultiPanelStage.ts`'s facet branch
+    # never forces a shared y-range — each panel autoscales its own y.
+    panels = [
+        {"label": "small", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1.0, 0.0]}]},
+        {"label": "big", "x": [0.0, 1.0, 2.0], "series": [{"label": "y", "y": [0.0, 1000.0, 0.0]}]},
+    ]
+    fig = _rendered_figure(panels, fmt="pdf")
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 2
+    assert axes[0].get_shared_x_axes().joined(axes[0], axes[1])
+    assert not axes[0].get_shared_y_axes().joined(axes[0], axes[1])
+    # The independent y-autoscale is real, not just unlinked: the "big"
+    # panel's axes actually span its own ~1000-unit range, not the "small"
+    # panel's ~1-unit one.
+    assert axes[1].get_ylim()[1] > 100
+    assert axes[0].get_ylim()[1] < 100
 
 
 # ── render_stat_facets_figure (GUI_INTERACTION #12 slice 4b: box/violin) ────

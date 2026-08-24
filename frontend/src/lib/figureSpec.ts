@@ -31,6 +31,7 @@ import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
+import { resolveFacetsOrThrow } from "./figureSpecFacets";
 import {
   compactOverrides,
   gateY2Overrides,
@@ -95,8 +96,12 @@ export function buildFigureSpec(
   stem: string,
   o: FigureRenderOpts,
 ): FigureSpec {
-  const st = s();
-  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o);
+  const raw = s();
+  // R7: `raw` is the live singleton, which a refocus-mid-export race can
+  // desync from `ds` -- neutralize facetKey rather than resolve it against
+  // the wrong dataset's channels.
+  const st = raw.activeId === ds.id ? raw : { ...raw, facetKey: null };
+  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, { liveDataset: ds });
 }
 
 /** Build the common export transport from a complete PlotView projection. The
@@ -120,10 +125,11 @@ function buildFigureSpecForView(
     /** Preserve the valid canonical case where an explicitly selected channel
      * is deliberately used for both X and Y. */
     allowExplicitXAsY?: boolean;
+    /** C2: bound live `Dataset` (absent for frozen), used to prune facets to its analysisData view. */
+    liveDataset?: Dataset | null;
   } = {},
 ): FigureSpec {
-  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
-  // pageSetup keeps the preset size + tight_layout behaviour.
+  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
   const ps = st.pageSetup;
   const pageSize = ps ? pageSizeInches(ps) : null;
   const overrides = ps
@@ -146,18 +152,20 @@ function buildFigureSpecForView(
     channelRoles,
     st.seriesOrder,
   ).filter((ch) => !st.hiddenChannels.includes(ch));
-  if (plotted.length === 0) throw new Error("no visible series to export");
 
-  // Legend renames / decoded Origin captions are channel-keyed. Apply them to
-  // a request-local DataStruct label copy so the backend series builder and
-  // legend path both see the same display names without mutating the imported
-  // workbook.
+  // Legend renames / decoded Origin captions are channel-keyed. Apply them to a
+  // request-local DataStruct label copy so the backend series builder and legend
+  // path both see the same display names without mutating the imported workbook.
   const dataset = Object.keys(st.seriesLabels).length
     ? {
         ...data,
         labels: data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
       }
     : data;
+
+  // F4.4: a durable facet binding renders the SAME grid Stage shows on
+  // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
+  const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -199,6 +207,7 @@ function buildFigureSpecForView(
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
     ...(extras.groupKey === null || extras.groupKey === undefined ? {} : { group_col: extras.groupKey }),
+    ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
     dpi: o.dpi,
@@ -226,9 +235,12 @@ function buildFigureSpecForView(
 /** Derive an export request directly from the canonical document. Frozen
  * documents render their immutable data snapshot; live documents reject a
  * missing or mismatched dataset instead of exporting an accidental sibling.
- * FigureSpec has no transport fields for `mark`, `facetKey`, or Y/Y2 breaks;
- * those remain intact in the FigureDocument and are never flattened/deleted by
- * this adapter. X breaks do have a renderer field and are emitted. */
+ * FigureSpec has no transport fields for `mark` or Y/Y2 breaks; those remain
+ * intact in the FigureDocument and are never flattened/deleted by this
+ * adapter. X breaks do have a renderer field and are emitted. F4.4 (export
+ * half, closed): `facetKey` now rides the wire too, as a resolved `facets`
+ * panel list built by `buildFigureSpecForView`'s `buildFacetSpecs` call —
+ * see that function's own doc. */
 export function buildFigureSpecFromDocument(
   document: FigureDocument,
   dataset: Dataset | null | undefined,
@@ -262,6 +274,7 @@ export function buildFigureSpecFromDocument(
       publicationOverrides: document.publication?.overrides,
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
+      liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );
 }

@@ -14,7 +14,11 @@ import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
-import { runCopyFigureCommand, runCopyFigureSvgCommand } from "../../lib/copyFigureCommand";
+// Bundle: `copyFigureCommand` (and the whole `figureSpec` transport builder
+// behind it) is click-only — loaded via dynamic import in `copyFigure`/
+// `copyFigureSvg` below, keeping it off the eager pre-paint path. The command
+// itself already awaits a server render before writing to the clipboard, so
+// the extra module-load await changes nothing about gesture context.
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
@@ -100,13 +104,13 @@ export function usePlotStageActions(
   // limits, legend placement and multi-panel layout. This is the default
   // "Copy figure"; `snapshot` below stays as the quick screen grab.
   function copyFigure() {
-    void runCopyFigureCommand(useApp.getState);
+    void import("../../lib/copyFigureCommand").then((m) => m.runCopyFigureCommand(useApp.getState));
   }
 
   // MAIN #35: undefined where the browser won't take SVG, so the menu can
   // simply omit the entry rather than offer one that always fails.
   const copyFigureSvg = clipboardSvgSupported()
-    ? () => void runCopyFigureSvgCommand(useApp.getState)
+    ? () => void import("../../lib/copyFigureCommand").then((m) => m.runCopyFigureSvgCommand(useApp.getState))
     : undefined;
 
   // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick

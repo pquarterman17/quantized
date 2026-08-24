@@ -561,6 +561,151 @@ with parent items P1.3 and P1.5.
       reach into. Because of (2), this item's own sentence ("survive
       save/reopen/**export**") is not yet fully true — hence `[~]`, not `[x]`.
 
+      **2026-08-24 update (Claude): the named EXPORT gap in (2) above is now
+      closed** — a faceted Stage window exports as the SAME small-multiples
+      grid, not a silently-flattened single overlaid plot. `FigureSpec`
+      (`lib/api/figures.ts`) gained a `facets` field: the frontend's own
+      RESOLVED per-panel row partition (`lib/figureSpec.ts`'s new
+      `buildFacetSpecs`, built from the exact `lib/facet.facetPayloads`
+      primitive the on-screen grid already uses), not a bare column index —
+      so backend and frontend can never disagree on level ordering/binning.
+      `routes/export_figures.py`'s `FigureRequest` carries the matching
+      `facets: list[FigureFacet] | None` (thin adapter: validates + passes
+      through, computes nothing); `calc.figure_facets.render_facets_figure`
+      — pre-existing infrastructure from the ORIGIN_GAP_PLAN #21 facet-export
+      work, wired up here for the first time to the main `/figure` route —
+      renders the matplotlib subplot grid, one shared x-domain across panels
+      (mirrors `lib/facet.sharedXDomain`) but each panel's own independent
+      y-autoscale (mirrors `useMultiPanelStage.ts`'s facet branch — changed
+      from that function's prior `sharex=True, sharey=True`, which predates
+      any real caller and never matched the screen). The #222-era pin
+      "exports a facet-bound window identically to the same view without a
+      facet binding" (`lib/figureSpec.test.ts`) has been deliberately
+      REPLACED, not merely updated, with the new honest behavior: `facets`
+      present (and resolved into real panels) for a faceted document, absent
+      for a flat one. Item (1) (SPATIAL/BREAK composition rebuild) remains
+      genuinely open — this slice only closes (2); `F4.4` therefore stays
+      `[~]`.
+
+      **2026-08-24 fix round (Claude): 6 correctness findings against the
+      above closed, 2 accepted as-is.** Closed: (C1) the facet branch only
+      honored the legacy `x_log`/`y_log` booleans, which the frontend never
+      sends (`lib/figureContract.ts` marks them "unsupported — legacy wire
+      fallback"; the real wire shape is `x_scale`/`y_scale`) — a log-scaled
+      faceted view exported with LINEAR axes; `render_facets_figure` now
+      resolves scale via the SAME `calc.figure_scale` helper the flat
+      renderer uses, applied per-panel, and also forwards `x_fmt`/`y_fmt`
+      tick formats the same way. (C2) `buildFacetSpecs` partitioned the RAW
+      dataset instead of the row-excluded/filtered view the screen's own
+      facet grid uses (`analysisData`) — an export could contain excluded
+      rows or an extra panel for a fully-excluded level; it now prunes via
+      the same `droppedRows`/`pruneExcluded` primitives first. (C3)
+      `transparent` was dropped on the facet path; now forwarded to
+      savefig like the flat branch. (C4) auto-derived "label (unit)" axis
+      labels were lost on the facet branch (`req.x_label or ""` instead of
+      deriving from the dataset); now reuses `_figure_series`'s derivation.
+      (C5) `buildFacetSpecs` threw when the facet column had no finite
+      levels, while the screen (`facetCompositionFromBinding` → null)
+      silently falls back to a flat plot for the identical state — a stale
+      facet binding could render on screen but no longer export at all;
+      `buildFacetSpecs` now mirrors the screen and returns `undefined`
+      (flat export) instead. (C6) a stray `TypeError` added to the shared
+      flat+facet `except` tuple (nothing in either branch actually raises
+      it) has been reverted. Accepted, not fixed: (C7) a faceted request
+      ships both the raw dataset AND the resolved panels — the dataset is
+      still needed server-side for C4's label derivation; a future slimming
+      could drop it once labels are resolved another way. (C8, retracted on
+      review) the original finding claimed `lib/figureSpecFacets.ts`'s
+      header cited a nonexistent 500-line `.ts` module-size vitest — that
+      claim was wrong: `architecture.test.ts` DOES enforce a general 500-line
+      `.ts` ceiling (`RSM_CUTS_PLAN #20`, distinct from the `.tsx`-only
+      400-line component convention CLAUDE.md describes as not yet
+      test-enforced), and the file's original justification was accurate.
+      Left materially unchanged rather than inserting a false claim; this
+      also mattered concretely — C2's row-exclusion threading pushed
+      `figureSpec.ts` to 526 lines, which that real test caught, fixed by
+      extracting the pruning logic into `figureSpecFacets.buildFacetSpecs`
+      instead of pinning a new exception.
+
+      **Separately, a pre-existing gap noted while fixing C2:** the FLAT
+      (non-faceted) export path has never honored row exclusion/filtering
+      either — `buildFigureSpecForView` builds `dataset`/`plotted` straight
+      off the raw `Dataset.data`, not `analysisData`'s pruned view. C2 fixed
+      only the facet path, whose whole contract is screen fidelity ("can
+      never disagree with what Stage showed"); the flat path's gap is
+      untouched and remains open — a candidate for its own slice, not
+      silently inherited into facet's fix.
+
+      **2026-08-24 fix round 3 (Claude): 7 more findings, 6 fixed + 1
+      accepted/none-needed.** (R1) `/api/export/figure-hitmap` ignored
+      `req.facets` entirely — a facet-bound document's Figure Builder
+      preview rendered the FLAT plot while export rendered the grid, and
+      any hit-test boxes targeted elements that don't exist. Fixed: the
+      route now renders the SAME grid via the shared `_render_facets_bytes`
+      helper (see R2) and returns an honest EMPTY `elements` list (no
+      per-panel drag targets yet) with a synthetic whole-image `axes` rect
+      — documented on the route and in `figure_hitmap.py`'s own module doc.
+      (R2) `routes/export_page.py` silently flattened a faceted panel (it
+      only ever called `_figure_series(f)`, never looked at `f.facets`).
+      Fixed: the facet-branch logic (panel reshaping, C4's label
+      derivation, C1/C3/R3's scale/tick-format/transparent/overrides
+      forwarding) was extracted into ONE shared helper,
+      `routes.export_figures._render_facets_bytes`, used by both
+      `export_figure` and `export_page` — no third copy. A faceted page
+      panel renders through it forced to PNG and is embedded into its page
+      cell as a raster image (`calc.figure_page.PagePanel` gained an
+      `image: bytes | None` field; `_draw_panel` draws it via `imshow` and
+      hides ticks/spines/axis-linking for that cell, since a raster has no
+      data axes of its own — the page-level panel LETTER still applies).
+      (R3) the facet branch dropped `overrides` entirely, contradicting the
+      screen-fidelity contract. Checked what the screen's own facet grid
+      (`useMultiPanelStage.ts`) actually honors per panel: `xLim` (explicit
+      wins over the shared-x-domain default — matplotlib's own `sharex`
+      autoscale already gives that default for free), `showGrid`, and
+      `axisBox`/spines — but NEVER `yLim` (each panel keeps its own
+      y-autoscale), legend position/title, annotations, ref lines, region
+      shades, or margins (that branch never passes them to `buildOpts` at
+      all). Fixed to match exactly that, via a new
+      `calc.figure_overrides.apply_axis_shape_overrides` helper extracted
+      from `_apply_overrides` (so the flat and facet paths share the same
+      spines/x_lim/grid logic, restricted to `lim_keys=("x_lim",)` for
+      facets) — applying the FULL override set (like the flat path) would
+      have rendered things the screen's facet grid never shows. Found but
+      OUT OF SCOPE: `overrides.grid: false` doesn't actually turn the grid
+      off on EITHER path — a pre-existing matplotlib quirk (`Axes.grid()`
+      forces the grid back on when any style kwarg like `alpha` is passed
+      alongside `visible=False`) in the now-shared grid-toggle code, present
+      since before this fix round; needs its own slice. (R4) export threw
+      "no visible series to export" for an all-hidden faceted view, even
+      though the screen still renders the facet grid fine (the facet
+      partition is built from `st.xKey`/`st.yKeys` directly, never
+      `plotted`, so it ignores `hiddenChannels` same as the screen) — same
+      class as C5. Fixed: `buildFigureSpecForView` now only throws when
+      there is NEITHER a flat series NOR a facet grid; the two "should we
+      even attempt facets" / "is there nothing to export" checks were
+      merged into one `lib/figureSpecFacets.resolveFacetsOrThrow` to keep
+      `figureSpec.ts` under its line ceiling. (R5/R6) `routes/export_facets.py`
+      (`POST /api/export/facets-figure`) was a shadow duplicate of
+      `export_figures.py`'s `FigureRequest.facets` branch: zero frontend
+      consumers (verified — only its own tests referenced it), it never
+      received C1/C3's fixes so the two facet endpoints had already drifted,
+      and the R3 `sharey=False` change made its "sharing scales" docstring
+      false. DELETED (route file, `app.py` registration, and its
+      route-level tests) — its dpi/format/empty-panels coverage was already
+      duplicated (byte-for-byte) by `export_figures.py`'s own facet tests
+      and `test_calc_figure_facets.py`'s renderer-level tests, so nothing
+      unique needed moving. (R7) `buildStageFigureSpec`'s live-view fallback
+      (no canonical document to route through) reads the LIVE `PlotView`
+      singleton — a refocus-during-async-export race (`exportActive`
+      resolves `ds` before an awaited resolve, during which the user can
+      refocus a different dataset) could leave `st.facetKey` belonging to a
+      DIFFERENT dataset than `ds`, faceting on the wrong dataset's channel
+      indices. Fixed with an `allowFacets` guard (`st.activeId === ds.id`)
+      mirroring the pre-existing `datasetId`-mismatch guard the
+      document-routing branch already had — every other field keeps its
+      pre-existing (accepted) exposure to this same race, matching
+      pre-F4.4 behavior; only the NEW facets field gets the new guard.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

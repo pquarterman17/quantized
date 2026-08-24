@@ -119,6 +119,17 @@ class PagePanel:
     y2_scale: str | None = None
     y2_fmt: Mapping[str, Any] | None = None
     y2_step: float | None = None
+    # R2 (fix round 3): raw image bytes (PNG) for a panel that is ALREADY a
+    # complete rendered figure -- a faceted panel, embedded by
+    # `routes.export_page` via `routes.export_figures._render_facets_bytes`
+    # + `calc.figure_facets.render_facets_figure`, since this composer has
+    # no notion of "N sub-panels in one page cell". When set, `_draw_panel`
+    # below draws it via `imshow` and returns immediately -- `x`/`series`
+    # are unused (pass empty placeholders) and every other draw-time field
+    # (title/labels/scale/ticks/overrides) is a no-op, because they're
+    # already baked into the image by the sub-render. The page-level panel
+    # LETTER (`label`/auto-sequence) still applies, same as any other panel.
+    image: bytes | None = None
 
 
 def _rect_sort_key(p: PagePanel) -> tuple[float, float]:
@@ -284,8 +295,12 @@ def _build_page_figure(
     axes: list[Any] = []
     for idx, p in enumerate(ordered):
         sx, sy = share_x[idx], share_y[idx]
-        sharex = axes[sx] if sx is not None else None
-        sharey = axes[sy] if sy is not None else None
+        # R2: an image panel has pixel-index coordinates, not data limits --
+        # never a sharex/sharey source OR target (either side being an
+        # image panel opts the pair out of linking entirely).
+        no_image = p.image is None
+        sharex = axes[sx] if sx is not None and no_image and ordered[sx].image is None else None
+        sharey = axes[sy] if sy is not None and no_image and ordered[sy].image is None else None
         if free_placement:
             assert p.page_rect is not None
             x, y, pw, ph = p.page_rect
@@ -314,7 +329,19 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
     ``Axes.twinx()``) when ``p.y2_mask`` marks at least one channel for the
     secondary axis (GUI_INTERACTION #12 slice 4c) -- mirrors
     ``calc.figure._render_impl``'s own ``has_y2`` dispatch verbatim, so a
-    doubleY panel on a page looks exactly like its single-figure export."""
+    doubleY panel on a page looks exactly like its single-figure export.
+
+    R2 (fix round 3): ``p.image`` (a faceted panel, pre-rendered whole) is
+    drawn via ``imshow`` and returns immediately -- ticks/spines are hidden
+    since a raster has no meaningful data axes of its own."""
+    if p.image is not None:
+        img = plt.imread(BytesIO(p.image), format="png")
+        ax.imshow(img)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        return
     # Rich-text guard (GOTO #5) on every user string; see figure.py.
     series = [(safe_mathtext_label(label), y) for label, y in p.series]
     ov = dict(p.overrides or {})

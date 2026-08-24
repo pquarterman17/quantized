@@ -34,6 +34,30 @@ from quantized.routes._export_common import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+class FigureFacetSeries(BaseModel):
+    label: str
+    y: list[float | None]
+
+
+class FigureFacet(BaseModel):
+    """One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 —
+    the export half of Stage's facet-by-column grid, `store.facetKey` /
+    `lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend
+    already computed each panel's row slice (level ordering + binning,
+    `lib/figureSpec.ts`'s `buildFacetSpecs`) and ships it here verbatim, so
+    this route never re-slices `dataset` itself and can never disagree with
+    what Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s
+    established "resolved facet panel" shape (`routes/export_statplots.py`).
+    `x`/each series' `y` may carry `null` for a non-finite cell (the
+    frontend's null-gap wire convention, same as every DataStruct value);
+    `calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,
+    matplotlib's own gap convention."""
+
+    label: str
+    x: list[float | None]
+    series: list[FigureFacetSeries]
+
+
 class TickFormatSpec(BaseModel):
     """Wire model for the screen's `AxisFormat` (MAIN #24,
     `frontend/src/lib/types.ts`): the tick-label number format for one axis.
@@ -91,6 +115,30 @@ class FigureRequest(BaseModel):
     # per-level series) -- matplotlib's default color cycle takes over,
     # exactly like the screen, which never assigns per-level colors either.
     group_col: int | None = None
+    # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
+    # multiples panel per facet-column level, RESOLVED client-side
+    # (`lib/facet.facetPayloads`) rather than a raw column index -- so this
+    # route never re-derives level ordering/binning and can never disagree
+    # with what Stage showed on screen. None/absent (default) = today's
+    # single-panel behaviour, byte-identical; most other fields on this
+    # request (`overrides`/`series_styles`/`error_spans`/`y2_keys`/...) stay
+    # required by the schema but UNUSED once `facets` is set -- the same
+    # "wire shape stays whole, semantics switch" contract
+    # `StatplotFigureRequest.facets`/`CategoricalFigureRequest.facets`
+    # already use (`routes/export_statplots.py`). `dataset`/`x_key`/`y_keys`
+    # are the one exception: they're still resolved (via `_figure_series`,
+    # discarding its `series`/`x`) purely to derive "label (unit)" axis
+    # labels when `x_label`/`y_label` are absent -- the fix-round C4 finding
+    # (a bare `req.x_label or ""` silently dropped auto-derived labels on
+    # this branch). Renders via `calc.figure_facets.render_facets_figure`:
+    # one shared x-domain across every panel, each panel keeping its own
+    # independent y-autoscale (see that function's own doc for why), and the
+    # SAME axis-scale/tick-format resolution the flat path uses
+    # (`x_scale`/`y_scale` via `calc.figure_scale.resolve_axis_scale`,
+    # `x_fmt`/`y_fmt` via `calc.figure_ticks.apply_tick_formats`) -- the
+    # fix-round C1 finding (this branch previously only honored the legacy
+    # `x_log`/`y_log` booleans, which the frontend never sends).
+    facets: list[FigureFacet] | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -237,49 +285,110 @@ def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
     return spec.model_dump() if spec is not None else None
 
 
+def _render_facets_bytes(
+    req: FigureRequest,
+    *,
+    dpi: int,
+    fmt: str | None = None,
+    title: str | None = None,
+    style: str | None = None,
+) -> bytes:
+    """Render ``req.facets`` to image bytes -- the ONE facet-branch
+    renderer, shared by ``export_figure`` (R2, fix round 3) and
+    ``routes.export_page`` (a faceted page panel, embedded as a raster
+    image -- see that module's own doc), so the two routes can never drift
+    on how a facet-bound panel renders. Reshapes ``req.facets`` into
+    ``render_facets_figure``'s panel dicts, derives axis labels via
+    ``_figure_series`` (C4 -- ``resolved.x_label``/``resolved.y_label``
+    already apply the "explicit override, else derive from the dataset"
+    rule), and forwards scale/tick-format/transparent/overrides the SAME
+    way the flat branch does (C1/C3/R3). ``fmt``/``title``/``style``
+    override ``req``'s own fields when given -- ``export_page`` forces
+    ``fmt="png"`` (a page panel embeds this as a raster regardless of the
+    page's own output format) and passes the PAGE-level ``title``/``style``
+    (the nested request's own ``fmt``/``style``/``dpi``/``filename`` are
+    page-level decisions everywhere else on that route too)."""
+    from quantized.calc.figure_facets import render_facets_figure
+
+    assert req.facets
+    panels: list[dict[str, Any]] = [
+        {
+            "label": f.label,
+            "x": f.x,
+            "series": [{"label": s.label, "y": s.y} for s in f.series],
+        }
+        for f in req.facets
+    ]
+    resolved = _figure_series(req)
+    return render_facets_figure(
+        panels,
+        x_log=req.x_log,
+        y_log=req.y_log,
+        x_scale=req.x_scale,
+        y_scale=req.y_scale,
+        title=title if title is not None else req.title,
+        x_label=resolved.x_label,
+        y_label=resolved.y_label,
+        fmt=fmt or req.fmt,
+        style=style or req.style,
+        width_in=req.width_in,
+        height_in=req.height_in,
+        dpi=dpi,
+        transparent=req.transparent,
+        x_fmt=_tick_fmt(req.x_fmt),
+        y_fmt=_tick_fmt(req.y_fmt),
+        overrides=req.overrides,
+    )
+
+
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
-    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``)."""
+    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``). An
+    optional ``facets`` list (F4.4) renders a faceted xy small-multiples grid
+    instead of the flat single panel -- see ``FigureRequest.facets``'s own
+    doc for the wire contract."""
     if req.fmt not in _FIGURE_MIME:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
-    from quantized.calc.figure import render_figure
-
     try:
-        resolved = _figure_series(req)
-        data = render_figure(
-            resolved.x,
-            resolved.series,
-            title=req.title,
-            x_label=resolved.x_label,
-            y_label=resolved.y_label,
-            x_log=req.x_log,
-            y_log=req.y_log,
-            x_scale=req.x_scale,
-            y_scale=req.y_scale,
-            fmt=req.fmt,
-            style=req.style,
-            series_styles=resolved.styles,
-            error_spans=req.error_spans,
-            width_in=req.width_in,
-            height_in=req.height_in,
-            dpi=dpi,
-            transparent=req.transparent,
-            overrides=req.overrides,
-            x_fmt=_tick_fmt(req.x_fmt),
-            y_fmt=_tick_fmt(req.y_fmt),
-            x_step=req.x_step,
-            y_step=req.y_step,
-            y2_mask=resolved.y2_mask,
-            y2_label=resolved.y2_label,
-            y2_scale=req.y2_scale,
-            y2_fmt=_tick_fmt(req.y2_fmt),
-            y2_step=req.y2_step,
-        )
+        if req.facets:
+            data = _render_facets_bytes(req, dpi=dpi)
+        else:
+            from quantized.calc.figure import render_figure
+
+            resolved = _figure_series(req)
+            data = render_figure(
+                resolved.x,
+                resolved.series,
+                title=req.title,
+                x_label=resolved.x_label,
+                y_label=resolved.y_label,
+                x_log=req.x_log,
+                y_log=req.y_log,
+                x_scale=req.x_scale,
+                y_scale=req.y_scale,
+                fmt=req.fmt,
+                style=req.style,
+                series_styles=resolved.styles,
+                error_spans=req.error_spans,
+                width_in=req.width_in,
+                height_in=req.height_in,
+                dpi=dpi,
+                transparent=req.transparent,
+                overrides=req.overrides,
+                x_fmt=_tick_fmt(req.x_fmt),
+                y_fmt=_tick_fmt(req.y_fmt),
+                x_step=req.x_step,
+                y_step=req.y_step,
+                y2_mask=resolved.y2_mask,
+                y2_label=resolved.y2_label,
+                y2_scale=req.y2_scale,
+                y2_fmt=_tick_fmt(req.y2_fmt),
+                y2_step=req.y2_step,
+            )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
@@ -294,11 +403,41 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     """Preview render + element hit-map (gap #13): base64 PNG, per-artist
     pixel boxes (title/labels/legend/series/annotations), and the axes rect
     with data limits — the client hit-tests the preview and maps drags back
-    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``)."""
+    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``).
+
+    R1 (fix round 3): a facet-bound request (``req.facets`` set) renders the
+    SAME small-multiples grid ``/figure`` exports (via ``_render_facets_bytes``)
+    instead of silently falling back to the flat single-panel plot -- the
+    Figure Builder preview must show what the export will actually produce.
+    ``elements`` comes back EMPTY and ``axes`` is a synthetic whole-image
+    rect: per-panel interactive hit-targets (dragging an annotation/legend/
+    ref-line INSIDE one specific facet panel) are not implemented yet, so
+    this is an honest, click-through preview rather than one that would
+    mis-target a drag at the wrong panel's data coordinates."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    from quantized.calc.figure import render_figure_map
 
     try:
+        if req.facets:
+            import base64
+
+            from quantized.calc.figure_facets import _dimensions_of_png
+
+            png = _render_facets_bytes(req, dpi=dpi, fmt="png")
+            width, height = _dimensions_of_png(png)
+            return {
+                "image": base64.b64encode(png).decode("ascii"),
+                "width": width,
+                "height": height,
+                "elements": [],
+                "axes": {
+                    "x0": 0.0, "y0": 0.0, "x1": float(width), "y1": float(height),
+                    "xlim": [0.0, 1.0], "ylim": [0.0, 1.0],
+                    "xlog": False, "ylog": False,
+                    "xscale": "linear", "yscale": "linear",
+                },
+            }
+        from quantized.calc.figure import render_figure_map
+
         resolved = _figure_series(req)
         return render_figure_map(
             resolved.x,

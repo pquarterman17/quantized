@@ -4,8 +4,11 @@ Split into its own router file (rather than staying in
 ``routes/export_figures.py``) purely to keep that file under the 500-line
 god-module ceiling — it reached 493 lines once JMP_GAP J5's box/strip mark
 fields landed on ``StatplotFigureRequest`` (the same reason
-``export_figures_aux.py``, ``export_facets.py`` and ``export_page.py`` were
-split out earlier).
+``export_figures_aux.py`` and ``export_page.py`` were split out earlier).
+(``routes/export_facets.py``, the standalone ``POST /api/export/facets-figure``
+route this comment used to also name, was deleted in the fix-round-3 cleanup
+(R5/R6) — a shadow duplicate of ``export_figures.py``'s ``FigureRequest.facets``
+branch with zero frontend consumers, which had already drifted from it.)
 
 The cut follows the same seam ``export_figures_aux.py`` used: these routes
 take PRE-AGGREGATED arrays (per-group samples, a category x series matrix),
