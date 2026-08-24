@@ -578,14 +578,103 @@ describe("placeLabels — O3 review finding, round 5: log-axis-aware offsets", (
     expect(withExplicitLinear).toEqual(withDefault);
   });
 
-  it("reciprocal yScale is handled explicitly (transformed space), not silently treated as linear", () => {
+  it("reciprocal yScale is handled explicitly (normalized-position space), not silently treated as linear", () => {
     const linearResult = placeLabels([{ x: 10, y: 10 }], ["10.00"], [0, 60], [1, 100], "linear");
     const reciprocalResult = placeLabels([{ x: 10, y: 10 }], ["10.00"], [0, 60], [1, 100], "reciprocal");
     expect(Number.isFinite(reciprocalResult[0].y)).toBe(true);
     // Different offset formula -> a DIFFERENT result from plain linear
     // (proving it isn't just falling through to the linear path unnoticed).
+    // NOTE (Q1, round 7): "differs from linear" alone does NOT prove the
+    // DIRECTION is correct — a value that differs from linear but still
+    // lands BELOW the apex would pass this exact assertion. That gap is
+    // exactly why round 6's committed version of this test (before Q1) was
+    // too weak to catch anything; direction itself is asserted by the
+    // table-driven describe block below, never by this proxy alone.
     expect(reciprocalResult[0].y).not.toBeCloseTo(linearResult[0].y, 6);
   });
+});
+
+describe("placeLabels — Q1 review finding, round 7: normalized-position (pct) space, direction is unambiguous for every scale", () => {
+  // Same repro range as the coordinator's own probes: yRange [1, 100],
+  // apex 50. `t(v) = (fwd(v) - fwd(lo)) / (fwd(hi) - fwd(lo))` is
+  // monotonically INCREASING in DATA VALUE for every scale kind (log AND
+  // reciprocal, despite `1/v` itself being a DECREASING function of `v` —
+  // see `placeLabels`'s own doc for why the numerator/denominator sign
+  // flip cancels) — this table exists so a FUTURE scale kind can't be
+  // added to `AxisScale` without direction coverage for it here too.
+  const YRANGE: [number, number] = [1, 100];
+  const XRANGE: [number, number] = [0, 60];
+
+  // apex 50 on [1, 100]: re-checking the coordinator's own exact numbers —
+  // this ruling must not move them. Confirmed unchanged from round 6
+  // (empirically verified against the git-HEAD round-6 implementation
+  // before this fix: identical to 13 significant figures) because round
+  // 6's `yDir * yWidthT` was already ALGEBRAICALLY equal to `frac * spanT`
+  // for both increasing and decreasing transforms — the round-6 code
+  // computed the right NUMBER despite a genuinely confusing/backwards
+  // rationale in its own comment; this round replaces the fragile
+  // per-scale sign convention with one that cannot be gotten backwards by
+  // construction, without claiming these two specific numbers were ever
+  // wrong.
+  it("re-check: linear apex 50 on [1,100] stays 54.95 (unmoved by this ruling)", () => {
+    const placed = placeLabels([{ x: 10, y: 50 }], ["50.00"], XRANGE, YRANGE, "linear");
+    expect(placed[0].y).toBeCloseTo(54.95, 6);
+  });
+
+  it("re-check: log apex 50 on [1,100] stays ~62.9463 (unmoved by this ruling)", () => {
+    const placed = placeLabels([{ x: 10, y: 50 }], ["50.00"], XRANGE, YRANGE, "log");
+    expect(placed[0].y).toBeCloseTo(62.94627058970836, 6);
+  });
+
+  // Table-driven: for EACH scale, one apex with genuine pct-space headroom
+  // (label lands ABOVE — the ordinary case) and one apex close enough to
+  // the range's high edge IN PCT SPACE that `BASE_OFFSET_FRAC` (5% of the
+  // range) has no room left, so contract point 2's flip-below mechanism
+  // must engage (this is CORRECT, expected behavior per the contract —
+  // NOT itself a bug; see `placeLabels`'s own contract doc, point 2).
+  // Reciprocal's "near top" apex is deliberately LOWER in raw data terms
+  // than log/linear's (50 vs 90/97) because `1/v` compresses the upper
+  // portion of ANY positive range into a small slice of pct space — e.g.
+  // on [1, 100], apex 50 already sits at pct ≈ 0.99 (only ~1% of
+  // headroom left, well under the 5% offset) even though 50 looks
+  // "roughly central" in plain data terms. That compression is a genuine
+  // property of the transform, not a placement bug.
+  const CASES: {
+    scale: "linear" | "log" | "reciprocal";
+    headroomApex: number;
+    nearTopApex: number;
+  }[] = [
+    { scale: "linear", headroomApex: 50, nearTopApex: 97 },
+    { scale: "log", headroomApex: 50, nearTopApex: 95 },
+    { scale: "reciprocal", headroomApex: 10, nearTopApex: 50 },
+  ];
+
+  for (const { scale, headroomApex, nearTopApex } of CASES) {
+    it(`${scale}: an apex with pct-space headroom places its label strictly ABOVE it`, () => {
+      const placed = placeLabels(
+        [{ x: 10, y: headroomApex }],
+        [`${headroomApex}`],
+        XRANGE,
+        YRANGE,
+        scale,
+      );
+      expect(Number.isFinite(placed[0].y)).toBe(true);
+      expect(placed[0].y).toBeGreaterThan(headroomApex);
+    });
+
+    it(`${scale}: an apex near the top of the range flips strictly BELOW when up would leave [0,1]`, () => {
+      const placed = placeLabels(
+        [{ x: 10, y: nearTopApex }],
+        [`${nearTopApex}`],
+        XRANGE,
+        YRANGE,
+        scale,
+      );
+      expect(Number.isFinite(placed[0].y)).toBe(true);
+      expect(placed[0].y).toBeLessThan(nearTopApex);
+      expect(placed[0].y).toBeGreaterThan(0); // never negative/pole-crossing garbage
+    });
+  }
 });
 
 describe("placeLabels — P1+P2 review finding, round 6: ONE space, root cause (offsets/boxes/bounds all transformed)", () => {

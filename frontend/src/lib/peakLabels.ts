@@ -178,28 +178,45 @@ function yTransform(
  *  kind (`st.yScale` in the store) offsets are computed in — default
  *  `"linear"`.
  *
- *  ONE SPACE, ROOT-CAUSE FIX (P1+P2, round 6): the O3/N1 implementations
- *  computed OFFSETS in transformed space but immediately converted each
- *  candidate back to data space before the collision box height, the range
- *  bounds, and the acceptance tests — all still linear — ever saw it. Two
- *  confirmed consequences of that split: (a) on a `"reciprocal"` scale an
- *  offset could push a candidate ACROSS the `1/v` pole; the sign-flipped
- *  result was still finite, so the (data-space) guard passed and a label
- *  landed BELOW the peak it names; (b) on a `"log"` scale, a fixed
- *  LINEAR-data-unit box height is wildly mismatched to log-spaced tier
- *  offsets near the low end of the range, exhausting all `MAX_STACK_TIERS`
- *  and collapsing a dense low-y cluster that linear mode would have
- *  separated cleanly. THE FIX: transform ONCE at entry, invert ONCE at
- *  exit. Apexes, offsets, tier steps, the collision box height, the range
- *  bounds, and every acceptance test all live in ONE transformed space for
- *  the ENTIRE search — never mixed with linear-space geometry mid-search.
- *  For `"linear"` that transformed space just IS data space (`fwd`/`bwd`
- *  are the identity), so this is not a special case bolted on top; it is
- *  the same code path degenerating to the old linear math. Pole/bounds
- *  safety then falls out naturally: the in-range acceptance test on a
- *  candidate is evaluated ENTIRELY in transformed space, so a candidate
- *  that would cross a pole (for reciprocal, `t <= 0`) is simply never
- *  accepted — never a post-hoc clamp (contract point 4 below still holds).
+ *  ONE SPACE, ROOT-CAUSE FIX (P1+P2, round 6; corrected to NORMALIZED
+ *  POSITION space by Q1, round 7): the O3/N1 implementations computed
+ *  OFFSETS in transformed space but immediately converted each candidate
+ *  back to data space before the collision box height, the range bounds,
+ *  and the acceptance tests — all still linear — ever saw it. Round 6 fixed
+ *  that split by moving everything into raw TRANSFORMED (`t = fwd(v)`)
+ *  space, but that reintroduced a different bug: round 6 added a `yDir`
+ *  sign-flip on the premise that `1/v` is a DECREASING transform, so
+ *  "toward larger data-y" must mean "toward smaller t." That premise is
+ *  true of the raw transform but wrong for what a label's y actually needs
+ *  to track — SCREEN/NORMALIZED position, which is what uPlot itself
+ *  renders (`lib/uplotOpts.ts`'s reciprocal-scale comment: `pct = (fwd(val)
+ *  - fwd(scaleMin)) / (fwd(scaleMax) - fwd(scaleMin))` is affine in `fwd`
+ *  and its numerator/denominator flip sign TOGETHER for a decreasing
+ *  transform, so `pct` "stays correctly monotonic... same left-to-right
+ *  [i.e. low-to-high] ordering as linear/log" even though `1/v` itself
+ *  decreases). Round 6's `yDir` flip inverted an already-correct direction:
+ *  a reciprocal apex at `y:500` on `yRange:[1,100]` landed its label at
+ *  `y:19.41` — positive and finite, so round 6's OWN pole guard passed
+ *  clean, but still BELOW the apex it names, the wrong direction entirely
+ *  (confirmed: apex 50 -> 14.39, apex 20 -> 10.05, both below).
+ *
+ *  THE FIX (Q1, round 7): do ALL geometry in NORMALIZED POSITION `p`, not
+ *  raw transformed `t`. `p = (fwd(v) - fwd(lo)) / (fwd(hi) - fwd(lo))` for
+ *  `[lo, hi] = yRange` — the SAME affine-in-`fwd` quantity uPlot computes to
+ *  place a pixel. `p` is 0 at `yRange[0]`, 1 at `yRange[1]`, and — critically
+ *  — MONOTONICALLY INCREASING IN DATA VALUE FOR EVERY SCALE KIND, reciprocal
+ *  included, for exactly the cancellation reason above. "Above" is therefore
+ *  unambiguously "larger `p`" everywhere, with NO per-scale sign logic that
+ *  could get it backwards — `yDir` is deleted, not patched. A fraction-of-
+ *  range offset (`BASE_OFFSET_FRAC`/`TIER_STEP_FRAC`) is now used DIRECTLY
+ *  as a `p`-space delta (no `*yWidthT` rescale needed — the `p`-space width
+ *  of the whole range is exactly `1` by construction). Pole safety still
+ *  applies and is still an acceptance test, never a post-hoc clamp: a
+ *  candidate `p` extrapolated far enough beyond `[0, 1]` can still
+ *  denormalize to a transformed value on the wrong side of `1/v`'s pole
+ *  (`denormT(p) <= 0`) even though `p` itself is an ordinary finite number —
+ *  `inDomainP` checks the DENORMALIZED value before `bwd` is ever called on
+ *  it (contract point 4 below still holds).
  *
  *  THE CONTRACT (round 5 — the authoritative statement of what this
  *  function promises; earlier doc revisions implied guarantees the code
@@ -240,15 +257,16 @@ function yTransform(
  *      tier tried (may overlap each other there) rather than searching
  *      forever.
  *
- *  BOX GEOMETRY (N2, round 4; now computed in the SAME transformed space as
- *  everything else — P1+P2, round 6): each box is `[x, x+w) × [t, t+boxH)`
- *  — left-aligned extending right (x stays plain linear/data-space; there
- *  is no x-axis scale in this feature), up-from-anchor extending toward
- *  larger transformed-t — matching `lib/uplotOverlays.ts`'s actual draw
- *  geometry (`annotationLayout`/`clampAnnotationLabelX`) in spirit, not a
- *  symmetric centered/half-extent-sum box (which under-counts a wide label
- *  followed by a narrow one). The renderer's small constant pixel offsets
- *  (`+6`/`-2`) have no data-space equivalent without the live
+ *  BOX GEOMETRY (N2, round 4; now computed in the SAME normalized-position
+ *  space as everything else — P1+P2/Q1, rounds 6-7): each box is
+ *  `[x, x+w) × [p, p+boxH)` — left-aligned extending right (x stays plain
+ *  linear/data-space; there is no x-axis scale in this feature), up-from-
+ *  anchor extending toward larger `p` (unambiguously "up" for every scale
+ *  kind — see the FIX note above) — matching `lib/uplotOverlays.ts`'s
+ *  actual draw geometry (`annotationLayout`/`clampAnnotationLabelX`) in
+ *  spirit, not a symmetric centered/half-extent-sum box (which under-counts
+ *  a wide label followed by a narrow one). The renderer's small constant
+ *  pixel offsets (`+6`/`-2`) have no data-space equivalent without the live
  *  pixels-per-data-unit scale this pure function deliberately doesn't take.
  *
  *  Returns one `{x, y}` per label, in the SAME ORDER as `points`/`labels`
@@ -258,11 +276,12 @@ function yTransform(
  *
  *  Degenerate inputs never produce NaN/Infinity: a zero-width or
  *  descending range, every peak sharing one x, a single peak, a range that
- *  doesn't transform for the given `yScale` (falls back to the identity —
- *  i.e. linear — for the WHOLE call, never partially), or an individual
- *  apex outside the scale's own domain (e.g. non-positive on log — clamped
- *  to the range's own transformed floor, still fully in transformed space,
- *  never a linear-space fallback mixed into the same search) all resolve
+ *  doesn't transform for the given `yScale` (falls back to a plain linear
+ *  0..1 normalization over `yRange` for the WHOLE call, never partially),
+ *  or an individual apex outside the scale's own domain (e.g. non-positive
+ *  on log — clamped to `p = 0`, the range's own floor, still fully in
+ *  normalized-position space, never a linear-space fallback mixed into the
+ *  same search) all resolve
  *  to finite behavior.
  */
 export function placeLabels(
@@ -279,29 +298,57 @@ export function placeLabels(
   const yRange = ascending(yRangeIn);
   const xUnit = finiteWidth(xRange);
 
-  // P1+P2: ONE working transform for the ENTIRE call — `fwdT`/`bwdT` are
-  // the real `fwd`/`bwd` only when `yRange` transforms cleanly for
-  // `yScale` (both bounds finite and distinct once transformed);
-  // otherwise identity, so the WHOLE search runs in plain data space for
-  // every point — never a per-point mix of the two. `yDir`: `fwd` is not
-  // always increasing with `v` (log10 is; reciprocal's `1/v` is
-  // DECREASING — larger data-y means SMALLER transformed-t), so "toward
-  // larger DATA y" needs a sign that depends on the transform's own slope.
+  // Q1 (round 7): ONE working NORMALIZED-POSITION space for the ENTIRE
+  // call. `pFwd`/`denormT`/`pBwd` degrade to a plain linear 0..1
+  // normalization over `yRange` when the scale doesn't transform cleanly
+  // for `yScale` (both bounds finite and distinct once transformed via raw
+  // `fwd`) — the WHOLE search then runs in that fallback space, never a
+  // per-point mix. `p = 0` is always `yRange[0]`, `p = 1` is always
+  // `yRange[1]`, for EVERY scale kind — no `yDir` sign logic needed or
+  // possible, since `p` is monotonically increasing in data value by
+  // construction (see the doc above).
   const { fwd, bwd, tMustBePositive } = yTransform(yScale);
-  const yLoRaw = fwd(yRange[0]);
-  const yHiRaw = fwd(yRange[1]);
-  const yTransformable = Number.isFinite(yLoRaw) && Number.isFinite(yHiRaw) && yLoRaw !== yHiRaw;
-  const fwdT = yTransformable ? fwd : (v: number): number => v;
-  const bwdT = yTransformable ? bwd : (t: number): number => t;
-  const yMinT = yTransformable ? Math.min(yLoRaw, yHiRaw) : Math.min(yRange[0], yRange[1]);
-  const yMaxT = yTransformable ? Math.max(yLoRaw, yHiRaw) : Math.max(yRange[0], yRange[1]);
-  const yWidthT = finiteWidth([yMinT, yMaxT]);
-  const yDir = yTransformable && yHiRaw < yLoRaw ? -1 : 1;
-  const boxHT = TIER_STEP_FRAC * yWidthT; // N2 rendered-text "height," now in the SAME units as everything else
-  // A candidate `t` must stay in the transform's own DOMAIN, not merely
-  // `bwdT`-finite — see `yTransform`'s `tMustBePositive` doc for why a bare
-  // finite-check let a pole-crossing candidate through for `reciprocal`.
-  const inDomain = (t: number): boolean => !tMustBePositive || t > 0;
+  const loT = fwd(yRange[0]);
+  const hiT = fwd(yRange[1]);
+  const spanT = hiT - loT;
+  const yTransformable = Number.isFinite(loT) && Number.isFinite(hiT) && spanT !== 0;
+  // `p` is a NORMALIZED position only in the transformable branch (`p = 0`
+  // at `yRange[0]`, `p = 1` at `yRange[1]`, by construction). In the
+  // fallback branch `p` is literally the DATA value itself (identity) —
+  // NOT re-normalized to `[0, 1]` — because a genuinely ZERO-WIDTH `yRange`
+  // (e.g. `[7, 7]`) must reject EVERY offset, landing only the apex's own
+  // position; normalizing a zero-width range to a fake `[0, 1]` would
+  // manufacture headroom that doesn't exist in the real data range (a
+  // regression caught by this file's own M2/O1 zero-width-range tests).
+  // `offsetScale` is where the "fraction of range" tuning constants
+  // (`BASE_OFFSET_FRAC`/`TIER_STEP_FRAC`) get their units: exactly `1` when
+  // transformable (the whole point of normalizing — a fraction IS already
+  // a `p`-space delta), or the range's own (fallback-safe) DATA width
+  // otherwise — matching round 6's `yWidthT`, which served this identical
+  // purpose in the untransformable branch.
+  const yWidth = finiteWidth(yRange);
+  const pFwd = yTransformable
+    ? (v: number): number => (fwd(v) - loT) / spanT
+    : (v: number): number => v;
+  // The DENORMALIZED transformed value a candidate `p` maps to —
+  // `loT + p * spanT` when transformable, otherwise `p` itself (identity,
+  // since `p` already IS the data value in the fallback branch). This is
+  // what a domain check and `bwd` must see, not the normalized `p` alone.
+  const denormT = (p: number): number => (yTransformable ? loT + p * spanT : p);
+  const pBwd = (p: number): number => (yTransformable ? bwd(denormT(p)) : p);
+  // A candidate `p` must denormalize into the transform's own DOMAIN, not
+  // merely `pBwd`-finite — see `yTransform`'s `tMustBePositive` doc for why
+  // a bare finite-check let a pole-crossing candidate through for
+  // `reciprocal`. Vacuously true in the untransformable fallback (plain
+  // linear has no domain restriction).
+  const inDomainP = (p: number): boolean => !yTransformable || !tMustBePositive || denormT(p) > 0;
+  // Acceptance-test bounds: `[0, 1]` when transformable (the definition of
+  // `p`); the RAW `yRange` itself otherwise — a degenerate `[7, 7]` stays
+  // `[7, 7]`, a single POINT, not an artificially widened `[0, 1]`.
+  const pRangeLo = yTransformable ? 0 : yRange[0];
+  const pRangeHi = yTransformable ? 1 : yRange[1];
+  const offsetScale = yTransformable ? 1 : yWidth;
+  const boxHP = TIER_STEP_FRAC * offsetScale;
 
   // Tier assignment runs on an x-sorted working copy (ties broken by
   // original index for a stable sort) so it always sweeps left-to-right
@@ -326,89 +373,93 @@ export function placeLabels(
   // interval edges before comparing, absorbing that rounding regardless of
   // which way it falls, on EITHER axis.
   const xEps = xUnit * 1e-9;
-  const yEpsT = yWidthT * 1e-9;
+  const yEpsP = offsetScale * 1e-9; // matches boxHP's own scale (1, or the fallback data width)
   // N2: true left-aligned/up-from-anchor 1-D interval overlap on each axis
-  // — NOT a symmetric half-extent-sum comparison. Both boxes' `t` are
-  // already in the SAME transformed space (P1+P2) — never compared across
-  // different spaces.
-  const boxesOverlapT = (
-    ax: number, atT: number, aw: number,
-    bx: number, btT: number, bw: number,
+  // — NOT a symmetric half-extent-sum comparison. Both boxes' `p` are
+  // already in the SAME normalized-position space (P1+P2/Q1) — never
+  // compared across different spaces.
+  const boxesOverlapP = (
+    ax: number, apP: number, aw: number,
+    bx: number, bpP: number, bw: number,
   ): boolean =>
     ax + xEps < bx + bw - xEps && bx + xEps < ax + aw - xEps &&
-    atT + yEpsT < btT + boxHT - yEpsT && btT + yEpsT < atT + boxHT - yEpsT;
+    apP + yEpsP < bpP + boxHP - yEpsP && bpP + yEpsP < apP + boxHP - yEpsP;
 
   // Contract points 2/3 talk about `yRange` itself (the visible DATA
   // range) — this check is deliberately DATA-space, independent of scale.
   const inRange = (y: number): boolean => y >= yRange[0] && y <= yRange[1];
-  // P1+P2: the in-range ACCEPTANCE TEST for a candidate tier, evaluated
-  // ENTIRELY in transformed space — this is where pole/bounds safety
-  // "falls out naturally": a candidate whose transformed value would cross
-  // a pole (`inDomain`) or leave `[yMinT, yMaxT]` is rejected HERE, before
-  // `bwdT` is ever called on it, never accepted-then-clamped.
-  const inRangeT = (t: number): boolean => inDomain(t) && t >= yMinT && t <= yMaxT;
+  // P1+P2/Q1: the in-range ACCEPTANCE TEST for a candidate tier, evaluated
+  // ENTIRELY in normalized-position space — this is where pole/bounds
+  // safety "falls out naturally": a candidate whose denormalized value
+  // would cross a pole (`inDomainP`) or leave `[pRangeLo, pRangeHi]` is
+  // rejected HERE, before `pBwd` is ever called on it, never
+  // accepted-then-clamped. `[pRangeLo, pRangeHi]` is `[0, 1]` when
+  // transformable, or the RAW `yRange` in the fallback branch (see
+  // `pRangeLo`/`pRangeHi`'s own doc above for why this must NOT be `[0,1]`
+  // for a degenerate zero-width range).
+  const inRangeP = (p: number): boolean => inDomainP(p) && p >= pRangeLo && p <= pRangeHi;
 
-  const placedBoxesT: { x: number; t: number; w: number }[] = [];
+  const placedBoxesP: { x: number; p: number; w: number }[] = [];
   const out: LabelPlacement[] = new Array(n);
   for (const pt of order) {
     const apexInRange = inRange(pt.y);
-    let apexT = fwdT(pt.y);
+    let apexP = pFwd(pt.y);
     // An INDIVIDUAL apex outside this scale's own domain (e.g. a
     // non-positive value on an otherwise-valid log range) still gets
-    // placed ENTIRELY in transformed space — never a per-point fallback to
-    // linear geometry mixed into the same collision search as its
-    // neighbours (that mixing is the P1+P2 root cause). Clamped to the
-    // domain floor `yMinT`: the nearest representable position, not a
-    // fabricated one.
-    if (!Number.isFinite(apexT)) apexT = yMinT;
+    // placed ENTIRELY in normalized-position space — never a per-point
+    // fallback to linear geometry mixed into the same collision search as
+    // its neighbours (that mixing is the P1+P2 root cause). Clamped to
+    // `p = 0`, the range's own floor: the nearest representable position,
+    // not a fabricated one.
+    if (!Number.isFinite(apexP)) apexP = 0;
 
-    const hasCollisionT = (x: number, t: number, w: number): boolean =>
-      placedBoxesT.some((b) => boxesOverlapT(x, t, w, b.x, b.t, b.w));
+    const hasCollisionP = (x: number, p: number, w: number): boolean =>
+      placedBoxesP.some((b) => boxesOverlapP(x, p, w, b.x, b.p, b.w));
 
-    let chosenT: number | null = null;
+    let chosenP: number | null = null;
 
     if (apexInRange) {
       // CONTRACT 2: the label is guaranteed inside `yRange` too. Up
-      // (toward larger DATA y — `yDir` accounts for a decreasing
-      // transform) preferred; flip to down only when up would leave the
-      // TRANSFORMED range (never merely because a tier is occupied — the
+      // (toward larger `p` — unambiguously "up" for every scale kind, no
+      // sign logic needed) preferred; flip to down only when up would
+      // leave `[0, 1]` (never merely because a tier is occupied — the
       // ordinary capacity search). NO post-hoc clamp (contract 4): the
-      // exhaustion fallback is the apex's OWN transformed position.
-      for (let tier = 0; tier <= MAX_STACK_TIERS && chosenT === null; tier++) {
-        const offT = yDir * (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yWidthT;
-        const upT = apexT + offT;
-        if (inRangeT(upT)) {
-          if (!hasCollisionT(pt.x, upT, pt.w)) chosenT = upT;
+      // exhaustion fallback is the apex's OWN normalized position.
+      for (let tier = 0; tier <= MAX_STACK_TIERS && chosenP === null; tier++) {
+        const offP = (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * offsetScale;
+        const upP = apexP + offP;
+        if (inRangeP(upP)) {
+          if (!hasCollisionP(pt.x, upP, pt.w)) chosenP = upP;
           continue; // in range but occupied — next tier's UP, not down
         }
-        const downT = apexT - offT;
-        if (inRangeT(downT) && !hasCollisionT(pt.x, downT, pt.w)) chosenT = downT;
+        const downP = apexP - offP;
+        if (inRangeP(downP) && !hasCollisionP(pt.x, downP, pt.w)) chosenP = downP;
       }
-      const finalT = chosenT ?? apexT; // exhausted -> the apex itself (trivially in range)
-      out[pt.i] = { x: pt.x, y: bwdT(finalT) };
-      placedBoxesT.push({ x: pt.x, t: finalT, w: pt.w });
+      const finalP = chosenP ?? apexP; // exhausted -> the apex itself (trivially in range)
+      out[pt.i] = { x: pt.x, y: pBwd(finalP) };
+      placedBoxesP.push({ x: pt.x, p: finalP, w: pt.w });
     } else {
       // CONTRACT 3: apex outside `yRange` — placed relative to that apex
       // regardless, MAY be off-screen, and is NEVER pinned to the window
-      // edge (no `[yMinT, yMaxT]` requirement here at all — only collision
+      // edge (no `[0, 1]` requirement here at all — only collision
       // avoidance, per contract 5's "same region" scoping). Still guards
       // against a candidate crossing to the WRONG side of a pole
-      // (`inDomain`) — a bare `bwdT`-finite check is not enough (round 6's
+      // (`inDomainP`) — a bare `pBwd`-finite check is not enough (round 6's
       // own repro: an apex at data-y 500 landed its label at -21.05,
       // finite but on the wrong side of `1/v`'s pole entirely).
-      for (let tier = 0; tier <= MAX_STACK_TIERS && chosenT === null; tier++) {
-        const offT = yDir * (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yWidthT;
-        const upT = apexT + offT;
-        if (inDomain(upT) && Number.isFinite(bwdT(upT)) && !hasCollisionT(pt.x, upT, pt.w)) {
-          chosenT = upT;
+      for (let tier = 0; tier <= MAX_STACK_TIERS && chosenP === null; tier++) {
+        const offP = (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * offsetScale;
+        const upP = apexP + offP;
+        if (inDomainP(upP) && Number.isFinite(pBwd(upP)) && !hasCollisionP(pt.x, upP, pt.w)) {
+          chosenP = upP;
           continue;
         }
-        const downT = apexT - offT;
-        if (inDomain(downT) && Number.isFinite(bwdT(downT)) && !hasCollisionT(pt.x, downT, pt.w)) chosenT = downT;
+        const downP = apexP - offP;
+        if (inDomainP(downP) && Number.isFinite(pBwd(downP)) && !hasCollisionP(pt.x, downP, pt.w)) chosenP = downP;
       }
-      const finalT = chosenT ?? apexT; // exhausted -> the apex's own position, never a boundary clamp
-      out[pt.i] = { x: pt.x, y: bwdT(finalT) };
-      placedBoxesT.push({ x: pt.x, t: finalT, w: pt.w });
+      const finalP = chosenP ?? apexP; // exhausted -> the apex's own position, never a boundary clamp
+      out[pt.i] = { x: pt.x, y: pBwd(finalP) };
+      placedBoxesP.push({ x: pt.x, p: finalP, w: pt.w });
     }
   }
   return out;

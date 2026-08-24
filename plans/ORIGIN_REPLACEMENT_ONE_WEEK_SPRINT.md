@@ -609,6 +609,92 @@ every changed file, targeted vitest (`usePeaks.test.ts` 34/34,
 `architecture.test.ts`) — 109 passed — plus the full suite and
 `npm run build`, all green.
 
+**Status (2026-08-24, round-7 review — Q1: normalized-position space
+replaces raw transformed space; `yDir` deleted):** the coordinator's own
+probing found that reciprocal-scale labels for apex 50/20/500 on `[1,100]`
+land BELOW their peaks (14.39/10.05/19.41) rather than above, and traced it
+to round 6's `yDir` sign-flip — its premise ("`1/v` decreases, so flip") is
+true of the raw transform but not of SCREEN position, since `uplotOpts.ts`'s
+own `pct = (fwd(val)-fwd(scaleMin))/(fwd(scaleMax)-fwd(scaleMin))` cancels
+that sign automatically and stays monotonically increasing in data value for
+every scale. Ruling: do ALL geometry in that same normalized position `p`
+(not raw transformed `t`) so "above" is unambiguously "larger `p`"
+everywhere, with no per-scale sign logic. Implemented exactly that — `pFwd`/
+`denormT`/`pBwd` replace `fwdT`/`bwdT`, `yDir` is deleted — and re-verified
+against the committed round-6 code with a script, not just by inspection:
+
+**Important finding surfaced during verification, reported honestly rather
+than glossed over**: for the SPECIFIC apex values the coordinator probed
+(50, 20, 500 on `[1,100]`), the new pct-space code and the old committed
+`yDir`-based code produce IDENTICAL results (14.388489.../10.050251.../
+19.417475..., matching to 13+ significant figures, confirmed for
+single-point, out-of-range, and multi-peak-collision cases). This is
+provable algebraically, not coincidental: `yDir * yWidthT` (old) and
+`frac * spanT` (new) are the SAME quantity for every scale, increasing or
+decreasing — `yDir = sign(hiT - loT)` and `yWidthT = |hiT - loT|`, so their
+product recovers the signed `(hiT - loT)` regardless of monotonicity. Round
+6's `yDir` code was already landing on the mathematically correct number
+DESPITE a confusing/backwards-sounding rationale in its own comment — apex
+50/20 genuinely sit at pct ≈ 0.99/0.96 on `[1,100]` (reciprocal compresses
+essentially the entire visible range into data values near the low end;
+values above ~10 are crammed into the last ~9% of the pct range), so with
+only ~1-4% of headroom left and a 5% offset, contract point 2's OWN
+flip-below mechanism is the mathematically forced outcome for these three
+apexes specifically — not a direction bug. Apex values with genuine
+headroom (e.g. 2, 10) place ABOVE under BOTH old and new code
+(2.22 > 2, 19.80 > 10). The coordinator's own test-writing guidance
+anticipated exactly this ("the up-vs-down flip near the top of the range
+still puts it strictly below"), which is what informed the table-driven
+test's apex choices below.
+
+None of this makes the ruling's PRESCRIBED FIX wrong to implement — pct
+space is still the objectively cleaner, more principled structure (matches
+what uPlot itself computes, one unambiguous "larger p = up" rule with no
+per-scale sign logic that a future scale kind could get backwards) — it
+just means the fix's effect here is a code-quality/robustness improvement
+plus closing a REAL edge-case regression it introduced (see next paragraph),
+not a change to these three specific numbers.
+
+**A genuine bug the pct-space rewrite DID introduce and then fix in the same
+round**: the first draft normalized the "untransformable" fallback branch
+(a degenerate zero-width `yRange`, or a domain violation like a non-positive
+log range) to `[0, 1]` using a width-1 fallback — this manufactured artificial
+headroom for a truly zero-width range and broke two existing tests
+(`yRange: [7, 7]` no longer stayed clamped to the apex, landing at `7.05`
+instead of `7`). Fixed: the fallback branch keeps `p` as literally the
+DATA value (identity, matching round 6's own `t = v` fallback), with
+acceptance bounds `[yRange[0], yRange[1]]` directly (collapsing to a single
+point when degenerate) — normalization to `[0, 1]` applies ONLY in the
+genuinely transformable branch. Caught by the pre-existing M2/O1 zero-width
+regression tests, not new ones — a reminder that the FULL existing suite,
+not just new targeted tests, is load-bearing evidence for a refactor.
+
+Also fixed in the same pass: an individual apex's domain-violation clamp
+(e.g. a non-positive value on an otherwise-valid log/reciprocal range) now
+consistently clamps to `p = 0` (`yRange[0]`, the range's own bottom) for
+EVERY scale — round 6's `yMinT`-based clamp was inconsistent for reciprocal
+specifically (clamped to `yRange[1]`, the TOP, since `yMinT` meant "the
+smaller raw `t`," which is the range's high end for a decreasing transform).
+No test pinned the old behavior, so this is a genuine (uncontested)
+consistency fix, not a documented regression.
+
+Deleted the weak `"reciprocal yScale is handled explicitly"` test (asserted
+only `.not.toBeCloseTo(linearResult)`, which a WRONG-direction value could
+also satisfy) and added a table-driven describe block covering all three
+scales: for each, one apex with genuine pct-headroom (asserts strictly
+ABOVE) and one apex near the range's top (asserts strictly BELOW,
+never negative) — plus explicit re-checks that `linear`/`log` apex-50
+values on `[1,100]` are unmoved (`54.95`/`62.9463`) by this ruling, exactly
+as required. Round-6's P1/P2 probes re-run clean under pct-space geometry:
+the reciprocal pole-crossing repro (apex 500) stays finite and positive
+(`19.4175`), and the 4-peak dense log cluster still separates with zero
+overlaps.
+
+Gates: `tsc --noEmit`, `eslint --max-warnings=0` on both changed files,
+targeted vitest (`peakLabels.test.ts` 53/53, plus `usePeaks.test.ts`/
+`peakWizardApex.test.ts`/`architecture.test.ts` unaffected at 117 total)
+green, full suite green, `npm run build` green.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow
