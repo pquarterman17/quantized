@@ -285,6 +285,28 @@ def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
     return spec.model_dump() if spec is not None else None
 
 
+def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
+    """Reshape ``req.facets`` into ``calc.figure_facets``' panel-dict shape
+    (``{"label": str, "x": [...], "series": [{"label": str, "y": [...]}]}``)
+    -- the ONE reshape, shared by ``_render_facets_bytes`` (the standalone
+    ``/figure``/``/figure-hitmap`` facet branches) and ``routes.export_page``
+    (a faceted page panel -- F4.4 follow-up, a real vector sub-grid instead
+    of the earlier pre-rendered raster embed), so the two routes can never
+    drift on how a facet-bound panel's wire payload turns into the
+    renderer's input. Kept here (not calc/) because it moves ``req.facets``'
+    pydantic model instances into plain dicts -- exactly the route-layer job
+    the calc/routes split reserves for routes/."""
+    assert req.facets
+    return [
+        {
+            "label": f.label,
+            "x": f.x,
+            "series": [{"label": s.label, "y": s.y} for s in f.series],
+        }
+        for f in req.facets
+    ]
+
+
 def _render_facets_bytes(
     req: FigureRequest,
     *,
@@ -293,35 +315,20 @@ def _render_facets_bytes(
     title: str | None = None,
     style: str | None = None,
 ) -> bytes:
-    """Render ``req.facets`` to image bytes -- the ONE facet-branch
-    renderer, shared by ``export_figure`` (R2, fix round 3) and
-    ``routes.export_page`` (a faceted page panel, embedded as a raster
-    image -- see that module's own doc), so the two routes can never drift
-    on how a facet-bound panel renders. Reshapes ``req.facets`` into
-    ``render_facets_figure``'s panel dicts, derives axis labels via
-    ``_figure_series`` (C4 -- ``resolved.x_label``/``resolved.y_label``
-    already apply the "explicit override, else derive from the dataset"
-    rule), and forwards scale/tick-format/transparent/overrides the SAME
-    way the flat branch does (C1/C3/R3). ``fmt``/``title``/``style``
-    override ``req``'s own fields when given -- ``export_page`` forces
-    ``fmt="png"`` (a page panel embeds this as a raster regardless of the
-    page's own output format) and passes the PAGE-level ``title``/``style``
-    (the nested request's own ``fmt``/``style``/``dpi``/``filename`` are
-    page-level decisions everywhere else on that route too)."""
+    """Render ``req.facets`` to image bytes -- the standalone facet-branch
+    renderer used by ``export_figure``/``export_figure_hitmap`` (R2, fix
+    round 3). Derives axis labels via ``_figure_series`` (C4 --
+    ``resolved.x_label``/``resolved.y_label`` already apply the "explicit
+    override, else derive from the dataset" rule), and forwards scale/tick-
+    format/transparent/overrides the SAME way the flat branch does
+    (C1/C3/R3). ``fmt``/``title``/``style`` override ``req``'s own fields
+    when given -- ``export_figure_hitmap`` forces ``fmt="png"`` (the preview
+    render is always a raster PNG)."""
     from quantized.calc.figure_facets import render_facets_figure
 
-    assert req.facets
-    panels: list[dict[str, Any]] = [
-        {
-            "label": f.label,
-            "x": f.x,
-            "series": [{"label": s.label, "y": s.y} for s in f.series],
-        }
-        for f in req.facets
-    ]
     resolved = _figure_series(req)
     return render_facets_figure(
-        panels,
+        _facet_panels(req),
         x_log=req.x_log,
         y_log=req.y_log,
         x_scale=req.x_scale,

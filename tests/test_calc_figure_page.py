@@ -276,6 +276,190 @@ def test_no_rect_requests_unaffected_by_free_placement_code() -> None:
     assert out[:5] == b"%PDF-"
 
 
+# ── faceted panel as a page cell (F4.4 follow-up, 2026-08-24): TRUE VECTOR
+# sub-grid of real matplotlib Axes instead of a pre-rendered raster embed.
+# `_build_page_figure` returns the built (unsaved, unclosed) Figure, the
+# same introspection seam the free-placement/y2/link tests above already use.
+
+
+def _facet_payload(n: int) -> list[dict[str, Any]]:
+    return [
+        {
+            "label": f"level {i}",
+            "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "y", "y": [float(i), float(i + 1), float(i)]}],
+        }
+        for i in range(n)
+    ]
+
+
+def _facet_panel(row: int, col: int, n: int = 2, **kw: Any) -> PagePanel:
+    return PagePanel(x=[], series=(), row=row, col=col, facets=_facet_payload(n), **kw)
+
+
+def _facet_subs(fig: Any, n: int) -> list[Any]:
+    titles = {f"level {i}" for i in range(n)}
+    return [ax for ax in fig.axes if ax.get_title() in titles]
+
+
+def test_facet_panel_renders_real_vector_sub_axes_not_an_image() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [_facet_panel(0, 0), _panel(0, 1)]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        axes = list(fig.axes)
+        assert all(len(ax.images) == 0 for ax in axes)
+        # _facet_panel's default n=2 -> _grid_shape(2) == (1, 2): 1 invisible
+        # cell-frame axes (the letter anchor) + 2 real facet sub-axes, plus
+        # the 1 sibling flat panel = 4 axes total.
+        assert len(axes) == 4
+        subs = _facet_subs(fig, 2)
+        assert {ax.get_title() for ax in subs} == {"level 0", "level 1"}
+        for ax in subs:
+            assert len(ax.get_lines()) == 1
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_sub_axes_share_x_with_each_other_but_not_sibling_panel() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [_facet_panel(0, 0), _panel(0, 1)]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        subs = _facet_subs(fig, 2)
+        assert subs[0].get_shared_x_axes().joined(subs[0], subs[1])
+        sibling = [ax for ax in fig.axes if ax not in subs and ax.get_lines()][0]
+        assert not subs[0].get_shared_x_axes().joined(subs[0], sibling)
+        assert not subs[0].get_shared_y_axes().joined(subs[0], sibling)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_page_letter_renders_on_the_cell_frame() -> None:
+    panels = [_facet_panel(0, 0), _panel(0, 1)]
+    out = render_figure_page(panels, rows=1, cols=2, fmt="svg")
+    svg = out.decode("utf-8", "ignore")
+    assert "(a)" in svg and "(b)" in svg
+
+
+def test_facet_panel_x_lim_override_applies_to_every_sub_panel() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panel = _facet_panel(0, 0, overrides={"x_lim": [0.5, 1.5]})
+    st = figure_style("default")
+    fig = _build_page_figure(
+        [panel], free_placement=False, w=4.0, h=4.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        subs = _facet_subs(fig, 2)
+        assert len(subs) == 2
+        for ax in subs:
+            np.testing.assert_allclose(ax.get_xlim(), [0.5, 1.5])
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_grid_override_applies_to_every_sub_panel() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panel = _facet_panel(0, 0, overrides={"grid": True})
+    st = figure_style("aps")  # aps preset has grid off by default
+    fig = _build_page_figure(
+        [panel], free_placement=False, w=4.0, h=4.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        subs = _facet_subs(fig, 2)
+        assert len(subs) == 2
+        for ax in subs:
+            assert any(line.get_visible() for line in ax.get_xgridlines())
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_free_placement_axes_within_rect_bounds() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    # page_rect (0.1, 0.1, 0.6, 0.6) top-left origin -> bottom-left bounds
+    # x in [0.1, 0.7], y in [1 - 0.1 - 0.6, 1 - 0.1] = [0.3, 0.9].
+    panel = _facet_panel(0, 0, page_rect=(0.1, 0.1, 0.6, 0.6))
+    st = figure_style("default")
+    fig = _build_page_figure(
+        [panel], free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        subs = _facet_subs(fig, 2)
+        assert len(subs) == 2
+        for ax in subs:
+            pos = ax.get_position()
+            assert pos.x0 >= 0.1 - 1e-6 and pos.x1 <= 0.7 + 1e-6
+            assert pos.y0 >= 0.3 - 1e-6 and pos.y1 <= 0.9 + 1e-6
+        assert all(len(ax.images) == 0 for ax in fig.axes)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_axis_labels_placed_on_bottom_row_and_first_column() -> None:
+    # 3 facets -> _grid_shape(3) == (2, 2): level0 (r0,c0), level1 (r0,c1),
+    # level2 (r1,c0); (r1,c1) hidden. Per-column bottom-most VISIBLE row:
+    # col0 -> level2 (r1); col1 -> level1 (r0, since (r1,c1) is hidden).
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panel = _facet_panel(0, 0, n=3, x_label="Time (s)", y_label="Signal (V)")
+    st = figure_style("default")
+    fig = _build_page_figure(
+        [panel], free_placement=False, w=6.0, h=6.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        by_title = {ax.get_title(): ax for ax in _facet_subs(fig, 3)}
+        assert set(by_title) == {"level 0", "level 1", "level 2"}
+        assert by_title["level 1"].get_xlabel() == "Time (s)"
+        assert by_title["level 2"].get_xlabel() == "Time (s)"
+        assert by_title["level 0"].get_xlabel() == ""
+        assert by_title["level 0"].get_ylabel() == "Signal (V)"
+        assert by_title["level 2"].get_ylabel() == "Signal (V)"
+        assert by_title["level 1"].get_ylabel() == ""
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_empty_facets_list_raises() -> None:
+    panel = _panel(0, 0, facets=[])
+    with pytest.raises(ValueError, match="non-empty"):
+        render_figure_page([panel], rows=1, cols=1)
+
+
 # ── secondary (right) Y axis / twinx (GUI_INTERACTION #12 slice 4c) ────────
 # The page composer's own real Axes.twinx() -- mirrors test_calc_figure_y2.py's
 # render_figure(y2_mask=...) coverage for the single-figure path this reuses

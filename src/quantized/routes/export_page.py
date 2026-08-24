@@ -26,8 +26,8 @@ from quantized.routes._export_common import (
 )
 from quantized.routes.export_figures import (
     FigureRequest,
+    _facet_panels,
     _figure_series,
-    _render_facets_bytes,
     _tick_fmt,
 )
 
@@ -95,13 +95,6 @@ def export_figure_page(req: FigurePageRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     # Lazy import: matplotlib is heavy — only pay it when a page is exported.
     from quantized.calc.figure_page import PagePanel, render_figure_page
-    from quantized.calc.figure_styles import figure_style
-
-    # R2 (fix round 3): a facet-bound panel needs a CONCRETE dpi now (its
-    # sub-render happens before render_figure_page would otherwise resolve
-    # `dpi=None` itself) -- resolve it the SAME way that function does
-    # internally, so a page with no facet panels renders byte-identically.
-    resolved_dpi = dpi if dpi is not None else int(figure_style(req.style).dpi)
 
     try:
         panels = []
@@ -109,23 +102,31 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             f = spec.figure
             panel_title = spec.title if spec.title is not None else f.title
             if f.facets:
-                # R2: render this panel's facet grid through the SAME
-                # helper `/figure`'s facet branch uses (`_render_facets_bytes`)
-                # and embed it as a raster image -- `calc.figure_page` has
-                # no notion of "N sub-panels in one page cell". Forced to
-                # PNG regardless of the page's own `fmt`/`style`/`dpi`
-                # (page-level decisions, same as every other panel field
-                # this route already ignores on the nested request).
-                png = _render_facets_bytes(
-                    f, dpi=resolved_dpi, fmt="png", title=panel_title, style=req.style,
-                )
+                # F4.4 follow-up (2026-08-24): a faceted panel renders as a
+                # REAL VECTOR sub-grid inside its page cell (calc.figure_
+                # page_facets.draw_facet_panel_cell) instead of a pre-
+                # rendered raster embed -- reshape via the SAME helper
+                # `/figure`'s facet branch uses (`_facet_panels`) so this
+                # route can never drift on how a facet panel's wire payload
+                # turns into panel dicts. `_figure_series` still resolves
+                # just the axis labels (C4 -- "explicit override, else
+                # derive from the dataset"); `resolved.x`/`resolved.series`
+                # are discarded, matching the standalone facet branch.
+                resolved = _figure_series(f)
                 panels.append(
                     PagePanel(
-                        x=[], series=(),  # unused -- _draw_panel returns early for an image panel
+                        x=[], series=(),  # unused -- the facet sub-grid draws p.facets instead
                         row=spec.row, col=spec.col,
                         row_span=spec.row_span, col_span=spec.col_span,
+                        title=panel_title,
+                        x_label=resolved.x_label,
+                        y_label=resolved.y_label,
+                        x_log=f.x_log, y_log=f.y_log,
+                        x_scale=f.x_scale, y_scale=f.y_scale,
+                        x_fmt=_tick_fmt(f.x_fmt), y_fmt=_tick_fmt(f.y_fmt),
+                        overrides=f.overrides,
                         label=spec.label, page_rect=spec.page_rect,
-                        image=png,
+                        facets=_facet_panels(f),
                     )
                 )
                 continue
@@ -175,7 +176,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             style=req.style,
             width_in=req.width_in,
             height_in=req.height_in,
-            dpi=resolved_dpi,
+            dpi=dpi,
             label_format=req.label_format,
             label_pos=req.label_pos,
             row_gap=req.row_gap,

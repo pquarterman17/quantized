@@ -1343,11 +1343,16 @@ def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
-# ── Fix-round R2: routes/export_page.py used to silently flatten a
-# facet-bound panel (it only ever called `_figure_series(f)`) -- a faceted
-# panel on a page must render through `render_facets_figure`, embedded as a
-# raster grid, the same as `/figure`'s own facet branch. ────────────────────
-def test_figure_page_facet_panel_embeds_as_raster_grid_not_flattened() -> None:
+# ── F4.4 follow-up (2026-08-24): routes/export_page.py used to render a
+# facet-bound panel by pre-rendering a whole PNG (render_facets_figure at a
+# fixed dpi) and embedding it via imshow -- one raster cell inside an
+# otherwise-vector PDF/SVG page. A faceted page panel now renders as a REAL
+# vector sub-grid of matplotlib Axes inside the cell (calc.figure_page_facets
+# .draw_facet_panel_cell, reusing calc.figure_facets.draw_facet_grid's shared
+# per-panel core) -- no AxesImage anywhere on the page. Replaces
+# test_figure_page_facet_panel_embeds_as_raster_grid_not_flattened, renamed
+# honestly now that the behavior it asserted (raster embed) is gone. ────────
+def test_figure_page_facet_panel_renders_as_vector_sub_grid_not_raster() -> None:
     from unittest.mock import patch
 
     import matplotlib.figure
@@ -1381,13 +1386,27 @@ def test_figure_page_facet_panel_embeds_as_raster_grid_not_flattened() -> None:
     assert resp.status_code == 200
     fig = captured["fig"]
     axes = list(fig.axes)
-    assert len(axes) == 2
-    # The faceted panel embeds a raster image (an AxesImage artist) -- the
-    # small-multiples grid, not a flattened single line plot.
-    image_axes = [ax for ax in axes if len(ax.images) > 0]
-    line_axes = [ax for ax in axes if len(ax.get_lines()) > 0]
-    assert len(image_axes) == 1
-    assert len(line_axes) == 1
+    # No AxesImage anywhere on the page -- the whole page stays true vector.
+    assert all(len(ax.images) == 0 for ax in axes)
+    # _xy_facets() has 2 levels -> calc.figure_facets._grid_shape(2) == (1, 2):
+    # 1 invisible cell-frame axes (the page-letter anchor) + 2 real facet
+    # sub-axes, plus the 1 sibling flat panel = 4 axes total.
+    assert len(axes) == 4
+    facet_subs = [ax for ax in axes if ax.get_title() in ("level 0", "level 1")]
+    assert {ax.get_title() for ax in facet_subs} == {"level 0", "level 1"}
+    for ax in facet_subs:
+        assert len(ax.get_lines()) == 1
+    # The facet sub-grid shares x among ITSELF only -- never with the sibling
+    # flat panel on the same page.
+    assert facet_subs[0].get_shared_x_axes().joined(facet_subs[0], facet_subs[1])
+    sibling_axes = [ax for ax in axes if ax not in facet_subs and ax.get_lines()]
+    assert len(sibling_axes) == 1
+    assert not facet_subs[0].get_shared_x_axes().joined(facet_subs[0], sibling_axes[0])
+    # The page letter still renders for the faceted cell (anchored on the
+    # cell-frame axes, same mechanism every other panel's letter uses).
+    all_texts = [t.get_text() for ax in axes for t in ax.texts]
+    assert "(a)" in all_texts
+    assert "(b)" in all_texts
 
 
 def test_figure_page_two_panels_one_with_y2_one_without_both_render() -> None:

@@ -706,6 +706,43 @@ with parent items P1.3 and P1.5.
       pre-existing (accepted) exposure to this same race, matching
       pre-F4.4 behavior; only the NEW facets field gets the new guard.
 
+      **2026-08-24 F4.4 follow-up (Claude): R2's raster page-panel embed
+      REPLACED with a true vector sub-grid — DONE.** A faceted panel on a
+      Figure Page no longer pre-renders to PNG and embeds via `imshow`
+      (`PagePanel.image` is gone); it draws as a REAL sub-grid of
+      matplotlib Axes inside the page cell, so a PDF/SVG page export with a
+      faceted panel stays fully vector end to end — no raster cell left
+      inside it. The facet drawing loop in `calc.figure_facets.
+      render_facets_figure` was extracted into a shared core,
+      `draw_facet_grid` (draws into caller-provided axes; the standalone
+      renderer still creates its own figure/axes and calls it, byte-
+      identical to before — its introspection tests pass unchanged). A new
+      sibling module, `calc.figure_page_facets.draw_facet_panel_cell`,
+      builds the sub-grid two ways matching `calc.figure_page`'s own grid-
+      vs-free-placement split: `GridSpecFromSubplotSpec` nested in the
+      cell's own `SubplotSpec` for grid placement, a rect-bounded
+      `GridSpec` for `page_rect` free placement. An invisible cell-frame
+      axes spans the whole cell (no ticks/spines) carrying the page-level
+      panel LETTER and the panel's own title, while the real facet
+      sub-axes draw inside it, sharing x among THEMSELVES only (never with
+      sibling page panels — extends the pre-existing image-panel sharex/
+      sharey opt-out). `PagePanel.facets: list[dict] | None` replaces
+      `image: bytes | None`; x_label/y_label place on the sub-grid's
+      bottom-row (per column, honoring a ragged trailing row)/first-column
+      axes. `routes/export_page.py` no longer force-renders to PNG at all
+      for a facet panel — it reshapes `f.facets` via a route-level helper
+      extracted from `routes.export_figures._render_facets_bytes`
+      (`_facet_panels`, now shared by both routes) and lets the composer
+      draw it as part of the whole-page render. New introspection tests
+      (`test_calc_figure_page.py`, `test_api_export.py`) assert no
+      `AxesImage` artists anywhere on a page with a faceted panel, real
+      facet sub-axes with correct titles/data/x-sharing, the page letter
+      still rendering, x_lim/grid overrides flowing through per sub-panel,
+      and free-placement axes positioned within the rect bounds; the old
+      raster-embed test (`test_figure_page_facet_panel_embeds_as_raster_
+      grid_not_flattened`) was replaced (not merely edited) with
+      `test_figure_page_facet_panel_renders_as_vector_sub_grid_not_raster`.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 
