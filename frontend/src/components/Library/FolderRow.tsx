@@ -275,8 +275,18 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       {/* UX-R3: a distinct per-kind glyph, matching WorkbookRow's own
        *  `qzk-workbook-icon` — the tree's items were otherwise "similarly
        *  weighted" with nothing but the caret and indent telling a folder
-       *  apart from a workbook at a glance. */}
-      <span className="qzk-folder-icon" aria-hidden="true" title="Folder">▦</span>
+       *  apart from a workbook at a glance. Tinted with the same
+       *  `folderColorCss` swatch as the caret above (F5 review fix) — a
+       *  folder's Properties color should read consistently across both
+       *  glyphs, not just the caret. */}
+      <span
+        className="qzk-folder-icon"
+        aria-hidden="true"
+        title="Folder"
+        style={folderColorCss ? { color: folderColorCss } : undefined}
+      >
+        ▦
+      </span>
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"

@@ -155,6 +155,50 @@ export function folderPath(folders: FolderNode[], id: string | null): FolderNode
   return path;
 }
 
+/** F1 (UX-R3 fix round, store/importDatasets.ts): the expand-state patch that
+ *  reveals ONE dataset's ancestor chain — its workbook, plus the folder path
+ *  down to that workbook's folder — merged into the existing expand state
+ *  without disturbing anything else. `folderId`/`workbookId` come from the
+ *  caller's own per-dataset membership map; either may be `undefined` (a
+ *  dataset with no folder/workbook membership contributes nothing on that
+ *  axis). `undefined`/unknown ids are a no-op via `folderPath`'s own
+ *  "missing link" handling above.
+ *
+ *  Written for the multi-book Origin import branch: that branch collapses
+ *  every folder/workbook it just created (UX-R3, "too many similarly
+ *  weighted objects" at project scale), but `addDataset` (called once per
+ *  book, before this runs) already left one dataset ACTIVE and SELECTED —
+ *  the last book it processed. libraryPanel.ts's `workbookDisclosurePatch`
+ *  documents the invariant every OTHER activation path upholds ("the active
+ *  dataset's workbook is always disclosed"); collapsing everything post-hoc
+ *  broke it here, leaving an invisible active/selected row. Clearing
+ *  activation instead would satisfy the invariant by blanking the Stage,
+ *  which is worse — so the import reveals just this one chain and leaves
+ *  every sibling folder/workbook collapsed.
+ *
+ *  That caller activates the LAST-processed book, not necessarily Origin's
+ *  own "primary" sheet — reassigning activation to the primary book was
+ *  considered and skipped: `addDataset` also rebinds the focused plot
+ *  window, resets the Stage tab, and clears stale analysis results for the
+ *  SPECIFIC dataset it's given, so patching just `activeId`/`selectedIds`
+ *  afterward would desync those from the newly "active" dataset, and
+ *  reordering the import loop to process the primary book last would also
+ *  reorder planOriginImport's first-appearance folder/workbook ordering —
+ *  both bigger than this fix's scope. */
+export function revealAncestorChain(
+  s: { folders: FolderNode[]; expandedFolders: string[]; expandedWorkbookIds: string[] },
+  folderId: string | undefined,
+  workbookId: string | undefined,
+): { expandedFolders: string[]; expandedWorkbookIds: string[] } {
+  return {
+    expandedFolders: [...new Set([...s.expandedFolders, ...folderPath(s.folders, folderId ?? null).map((f) => f.id)])],
+    expandedWorkbookIds:
+      workbookId != null && !s.expandedWorkbookIds.includes(workbookId)
+        ? [...s.expandedWorkbookIds, workbookId]
+        : s.expandedWorkbookIds,
+  };
+}
+
 /** "Folder › Subfolder" display caption for a dataset's containing folder
  *  (plan #13 sub-item 2 — the breadcrumb caption + "Show in folder" path a
  *  filtered/search/smart-folder result row shows). `undefined` for a

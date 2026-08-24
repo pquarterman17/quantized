@@ -32,6 +32,7 @@ import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
+import { revealAncestorChain } from "../lib/foldertree";
 import { planOriginImport } from "../lib/originFolders";
 import {
   isLazyBookEntry,
@@ -256,21 +257,21 @@ function addFromPayload(
     const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId, targetFolderId ?? null);
     // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a REALISTIC multi-book
     // Origin project (this `books.length > 1` branch) can create dozens of
-    // folders and workbooks in one import. Auto-expanding all of them — the
-    // single-dataset `else` branch below still does exactly that for its ONE
-    // new workbook — is precisely the owner-observed complaint ("the left
-    // browser presents too many similarly weighted objects"): every sheet of
-    // every book spills into view at once, with no path to build up context
-    // gradually. So a multi-book project import lands COLLAPSED at both the
-    // Folder and Workbook layers (`plan.expanded`/`plan.workbooks` are
-    // deliberately NOT merged into expandedFolders/expandedWorkbookIds here);
-    // the tree's ordinary disclosure caret reveals the hierarchy
-    // progressively, one click at a time, from the project folder down. This
-    // creates nothing hidden-with-no-path-back — every row is still present
-    // and still individually expandable/searchable — it only changes the
-    // DEFAULT disclosure depth for a project-scale import. A single-file
-    // import (0 or 1 book) keeps the pre-existing "the sheet I just imported
-    // is immediately visible" auto-expand below, unchanged.
+    // folders/workbooks in one import. Auto-expanding all of them — the
+    // single-dataset `else` branch below still does that for its ONE new
+    // workbook — is precisely the owner-observed complaint ("too many
+    // similarly weighted objects"): every sheet of every book spills into
+    // view at once, no path to build up context gradually. So this branch
+    // lands COLLAPSED at both the Folder and Workbook layers (`plan.folders`/
+    // `plan.workbooks` are deliberately NOT merged into
+    // expandedFolders/expandedWorkbookIds below) — nothing is hidden-with-
+    // no-path-back, every row stays individually expandable/searchable, this
+    // only changes the DEFAULT disclosure depth for a project-scale import.
+    // A single-file import (0/1 book) keeps the pre-existing "just-imported
+    // sheet is immediately visible" auto-expand below, unchanged. F1 (review
+    // fix round) narrows the collapse below: the active/selected dataset's
+    // own ancestor chain is still revealed (see `revealAncestorChain`'s doc,
+    // right after this `set()`, for the full rationale).
     set((s) => ({
       folders: [...s.folders, ...plan.folders],
       workbooks: [...s.workbooks, ...plan.workbooks],
@@ -280,6 +281,11 @@ function addFromPayload(
           : d,
       ),
     }));
+    // F1: reveal only the active dataset's ancestor chain — see `revealAncestorChain`'s doc (lib/foldertree.ts).
+    const activeId = get().activeId;
+    if (activeId) {
+      set((s) => revealAncestorChain(s, plan.folderMembership[activeId], plan.workbookMembership[activeId]));
+    }
   } else {
     delete data.books;
     delete data.book_source;
@@ -299,9 +305,12 @@ function addFromPayload(
     const derived = deriveWorkbooks([dsInput], [], nextWorkbookId);
     set((s) => ({
       workbooks: [...s.workbooks, ...derived.workbooks],
-      // Freshly created workbook starts expanded — same rule (and reason) as
-      // the Origin branch above: the sheet the user just imported must be
-      // visible in the tree, not hidden behind a collapsed disclosure.
+      // A single-file (0/1-book) import creates exactly ONE new workbook, so
+      // it starts expanded unconditionally: the just-imported sheet must be
+      // immediately visible, not behind a collapsed disclosure. UX-R3's
+      // multi-book branch above deliberately does NOT do this for what IT
+      // creates (project scale: auto-expanding every one is the "too many
+      // similarly weighted objects" complaint that branch exists to fix).
       expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])],
       datasets: s.datasets.map((d) => (d.id === id ? { ...d, workbookId: derived.membership[id] } : d)),
     }));

@@ -123,7 +123,7 @@ describe("a workbook created by a SINGLE-FILE import starts expanded (PR C tree 
   });
 });
 
-describe("UX-R3: a multi-book Origin project import lands COLLAPSED", () => {
+describe("UX-R3 + F1: a multi-book Origin project import lands COLLAPSED except the active dataset's own ancestor chain", () => {
   // ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md's UX-R3: "imported projects reveal
   // their hierarchy progressively"; acceptance calls for a realistic
   // multi-book .opju to default to COLLAPSED Folder -> Workbook groups. This
@@ -133,7 +133,16 @@ describe("UX-R3: a multi-book Origin project import lands COLLAPSED", () => {
   // comment on this call site. A workbook/folder the import did NOT create
   // (a pre-existing one) keeps whatever expand state the user already left
   // it in, untouched either way.
-  it("expands neither the folders nor the workbooks it created, and leaves pre-existing expand state alone", async () => {
+  //
+  // F1 (review fix round) narrows the blanket collapse: `addDataset` (called
+  // per book) always leaves ONE dataset active/selected, and
+  // libraryPanel.ts's `workbookDisclosurePatch` invariant says the active
+  // dataset's workbook must always be disclosed — a fully collapsed import
+  // would otherwise land an invisible active/selected row. So the LAST book
+  // processed (whatever `addDataset` actually left active) has its own
+  // workbook + folder path revealed; every sibling folder/workbook this same
+  // import created stays collapsed.
+  it("reveals the active book's own workbook, but not a SIBLING workbook this same import created", async () => {
     useApp.setState({
       workbooks: [{ id: "wb-old", name: "Existing" }],
       folders: [{ id: "f-old", name: "Existing folder", parentId: null, order: 0 }],
@@ -146,15 +155,35 @@ describe("UX-R3: a multi-book Origin project import lands COLLAPSED", () => {
     });
     await useApp.getState().importFiles([fakeFile("Two.opj")]);
     const st = useApp.getState();
-    const createdWorkbooks = st.workbooks.filter((w) => w.id !== "wb-old");
-    const createdFolders = st.folders.filter((f) => f.id !== "f-old");
-    expect(createdWorkbooks.length).toBeGreaterThan(0);
-    expect(createdFolders.length).toBeGreaterThan(0);
-    for (const w of createdWorkbooks) expect(st.expandedWorkbookIds).not.toContain(w.id);
-    for (const f of createdFolders) expect(st.expandedFolders).not.toContain(f.id);
+
+    const activeDs = st.datasets.find((d) => d.id === st.activeId)!;
+    const siblingWorkbook = st.workbooks.find((w) => w.id !== "wb-old" && w.id !== activeDs.workbookId)!;
+    expect(activeDs.workbookId).toBeDefined();
+    expect(st.expandedWorkbookIds).toContain(activeDs.workbookId); // F1: the active book's own workbook
+    expect(st.expandedWorkbookIds).not.toContain(siblingWorkbook.id); // this import's OTHER book stays collapsed
+
     // pre-existing expand state is untouched, not merely "not regressed to empty"
     expect(st.expandedWorkbookIds).toContain("wb-old");
     expect(st.expandedFolders).toContain("f-old");
+  });
+
+  it("reveals the active book's own folder path, but not a SIBLING folder path this same import created", async () => {
+    useApp.setState({ workbooks: [], folders: [], expandedFolders: [], expandedWorkbookIds: [] });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1", ["A"]), book("Book2", ["B"])], // two DISTINCT Project-Explorer folders
+    });
+    await useApp.getState().importFiles([fakeFile("Two.opj")]);
+    const st = useApp.getState();
+
+    const activeDs = st.datasets.find((d) => d.id === st.activeId)!;
+    const projectFolder = st.folders.find((f) => f.parentId === null)!;
+    const folderA = st.folders.find((f) => f.name === "A")!;
+    expect(activeDs.folderId).not.toBe(folderA.id); // sanity: Book2 (last book) is active, lands in "B"
+
+    expect(st.expandedFolders).toContain(projectFolder.id); // the project root — ancestor of the active book
+    expect(st.expandedFolders).toContain(activeDs.folderId); // the active book's own leaf folder ("B")
+    expect(st.expandedFolders).not.toContain(folderA.id); // the sibling book's unrelated folder stays collapsed
   });
 });
 

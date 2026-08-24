@@ -7,11 +7,14 @@
 // store/importWorkbooks.test.ts (the import action that PRODUCES this
 // state); this file pins what the Library UI does with it.
 //
-// Fixture shape mirrors a REALISTIC multi-book .opju as lib/originFolders.ts
-// would organize it: one project folder, one nested Project-Explorer
-// subfolder, two workbooks in that subfolder, one worksheet per workbook —
-// small enough to assert on directly, structurally identical (folder ->
-// subfolder -> workbook -> worksheet) to what a real import produces.
+// F2 (review fix round): the fixture used to hand-clear `activeId`/
+// `selectedIds` after building its own folders/workbooks/datasets by hand —
+// that masked F1 (a real import always leaves a dataset active/selected via
+// `addDataset`, and this fixture was quietly erasing that). It now runs the
+// REAL import path (mocked `uploadFile`, exactly like
+// store/importWorkbooks.test.ts) so activation, folder/workbook membership,
+// and the F1 disclosure patch are all whatever production code actually
+// produces — nothing here is asserted into existence.
 
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,12 +22,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryDetails from "./LibraryDetails";
 import LibraryTree from "./LibraryTree";
 import { useLibraryHierarchyRows, useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
-import type { Dataset, FolderNode } from "../../lib/types";
-import type { WorkbookNode } from "../../lib/workbooks";
+import { uploadFile } from "../../lib/api";
+import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
+vi.mock("../../lib/api", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  uploadFile: vi.fn(),
+  importFile: vi.fn(),
+}));
 
 const noop = () => {};
 
@@ -43,45 +51,52 @@ const workbookRow = (id: string) => document.querySelector(`[data-lib-row="workb
 const worksheetRow = (id: string) => document.querySelector(`[data-ds-id="${id}"]`) as HTMLElement;
 const caretOf = (row: HTMLElement) => row.querySelector(".qzk-group-caret") as HTMLElement;
 
-/** The exact shape a multi-book .opju import lands in AFTER UX-R3
- *  (importDatasets.ts no longer merges the created folders/workbooks into
- *  expandedFolders/expandedWorkbookIds for a `books.length > 1` import). */
-function seedMultiBookImport(): void {
-  const project: FolderNode = { id: "proj", name: "Moke", parentId: null, order: 0 };
-  const sub: FolderNode = { id: "sub", name: "Field sweeps", parentId: "proj", order: 0 };
-  const wb1: WorkbookNode = { id: "wb1", name: "Book1", folderId: "sub", originBook: "Book1" };
-  const wb2: WorkbookNode = { id: "wb2", name: "Book2", folderId: "sub", originBook: "Book2" };
-  // A real import stamps BOTH `folderId` (the Project-Explorer leaf folder,
-  // planOriginImport's folderMembership) and `workbookId` (the book layer) —
-  // subtreeCount (lib/foldertree.ts) reads `folderId` directly, independent
-  // of workbook nesting, so both must be set here for the count assertion
-  // below to exercise the real invariant instead of a fixture artifact.
-  const dataset = (id: string, workbookId: string): Dataset => ({
-    id,
-    name: `${id}.dat`,
-    workbookId,
-    folderId: "sub",
-    data: { time: [0, 1], values: [[1, 2]], labels: ["M"], units: [""], metadata: {} },
+const raw: DataStruct = { time: [0, 1], values: [[1, 2]], labels: ["M"], units: [""], metadata: {} };
+
+/** An Origin book entry, mirroring the real payload shape (routes/parsers.py
+ *  `_build_book`), same helper as store/importWorkbooks.test.ts. */
+const book = (short: string, path?: string[]): DataStruct => ({
+  ...raw,
+  metadata: { origin_book: short, ...(path ? { origin_folder_path: path } : {}) },
+});
+
+const fakeFile = (name: string) => new File(["x"], name);
+
+interface SeededIds {
+  proj: string;
+  sub: string;
+  wb1: string;
+  wb2: string;
+  d1: string;
+  d2: string;
+}
+
+/** Run the REAL multi-book Origin import (a two-workbook project, one nested
+ *  Project-Explorer subfolder — small enough to assert on directly, but
+ *  structurally identical to what a real .opju import produces) and hand
+ *  back the ids production code actually assigned. Nothing about
+ *  activation, membership, or the F1 disclosure patch is asserted into the
+ *  fixture — it all comes from `addFromPayload` (store/importDatasets.ts)
+ *  running for real. */
+async function seedMultiBookImport(): Promise<SeededIds> {
+  vi.mocked(uploadFile).mockResolvedValue({
+    ...raw,
+    books: [book("Book1", ["Field sweeps"]), book("Book2", ["Field sweeps"])],
   });
-  useApp.setState({
-    folders: [project, sub],
-    workbooks: [wb1, wb2],
-    datasets: [dataset("d1", "wb1"), dataset("d2", "wb2")],
-    originFigures: [],
-    editableFigures: [],
-    figureDocs: [],
-    pages: [],
-    reports: [],
-    expandedFolders: [], // UX-R3: collapsed by default, not merged in at import
-    expandedWorkbookIds: [], // UX-R3: collapsed by default, not merged in at import
-    librarySelection: null,
-    workbookLastChild: {},
-    activeId: null,
-    selectedIds: [],
-  });
+  await useApp.getState().importFiles([fakeFile("Moke.opj")]);
+  const st = useApp.getState();
+
+  const proj = st.folders.find((f) => f.parentId === null)!.id;
+  const sub = st.folders.find((f) => f.parentId === proj)!.id;
+  const wb1 = st.workbooks.find((w) => w.originBook === "Book1")!.id;
+  const wb2 = st.workbooks.find((w) => w.originBook === "Book2")!.id;
+  const d1 = st.datasets.find((d) => d.workbookId === wb1)!.id;
+  const d2 = st.datasets.find((d) => d.workbookId === wb2)!.id;
+  return { proj, sub, wb1, wb2, d1, d2 };
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   useApp.setState({
     folders: [],
     workbooks: [],
@@ -97,59 +112,69 @@ beforeEach(() => {
     workbookLastChild: {},
     activeId: null,
     selectedIds: [],
+    history: [],
+    future: [],
   });
 });
 
-describe("UX-R3 — a multi-book Origin import reveals hierarchy progressively", () => {
-  it("shows only the project folder at first — no subfolder, workbook, or worksheet row yet", () => {
-    seedMultiBookImport();
-    render(<TreeHarness />);
-    expect(folderRow("proj")).toBeInTheDocument();
-    expect(folderRow("sub")).not.toBeInTheDocument();
-    expect(workbookRow("wb1")).not.toBeInTheDocument();
-    expect(worksheetRow("d1")).not.toBeInTheDocument();
-    expect(caretOf(folderRow("proj")).textContent).toBe("▸"); // collapsed
+describe("UX-R3 + F1 — a multi-book Origin import reveals hierarchy progressively, but the active row is never hidden", () => {
+  it("addFromPayload leaves the LAST book's dataset active and selected (the behavior F1 must not hide)", async () => {
+    const { d2 } = await seedMultiBookImport();
+    const st = useApp.getState();
+    expect(st.activeId).toBe(d2);
+    expect(st.selectedIds).toEqual([d2]);
   });
 
-  it("the collapsed project folder's count chip already reflects the full subtree (no expand needed to see scale)", () => {
-    seedMultiBookImport();
-    render(<TreeHarness />);
-    expect(folderRow("proj").querySelector(".qzk-group-count")?.textContent).toBe("2");
-  });
-
-  it("expanding one level at a time reveals the subfolder, then the still-collapsed workbook groups, then worksheets", () => {
-    seedMultiBookImport();
+  it("F1: the active dataset's own ancestor chain is expanded by default — its workbook and folder path — while every sibling folder/workbook it did NOT land on stays collapsed", async () => {
+    const { proj, sub, wb1, wb2, d2 } = await seedMultiBookImport();
     render(<TreeHarness />);
 
-    fireEvent.click(caretOf(folderRow("proj")));
-    expect(folderRow("sub")).toBeInTheDocument();
-    expect(workbookRow("wb1")).not.toBeInTheDocument();
+    // The active dataset's ancestor chain: project folder -> subfolder -> its
+    // own workbook, all disclosed without any click.
+    expect(caretOf(folderRow(proj)).textContent).toBe("▾");
+    expect(folderRow(sub)).toBeInTheDocument();
+    expect(caretOf(folderRow(sub)).textContent).toBe("▾");
+    expect(workbookRow(wb2)).toBeInTheDocument();
+    expect(caretOf(workbookRow(wb2)).textContent).toBe("▾");
+    expect(worksheetRow(d2)).toBeInTheDocument();
 
-    fireEvent.click(caretOf(folderRow("sub")));
-    expect(workbookRow("wb1")).toBeInTheDocument();
-    expect(workbookRow("wb2")).toBeInTheDocument();
-    expect(caretOf(workbookRow("wb1")).textContent).toBe("▸"); // workbook group itself still collapsed
-    expect(worksheetRow("d1")).not.toBeInTheDocument();
-
-    fireEvent.click(caretOf(workbookRow("wb1")));
-    expect(worksheetRow("d1")).toBeInTheDocument();
-    expect(worksheetRow("d2")).not.toBeInTheDocument(); // wb2 is a separate, still-collapsed group
+    // The sibling workbook under the SAME already-expanded folder is visible
+    // as a row (the folder disclosure is shared) but its OWN group stays
+    // collapsed — this import did not land on it.
+    expect(workbookRow(wb1)).toBeInTheDocument();
+    expect(caretOf(workbookRow(wb1)).textContent).toBe("▸");
   });
 
-  it("folder and workbook rows carry distinct icons/type labels even while collapsed", () => {
-    seedMultiBookImport();
+  it("the collapsed sibling workbook's worksheet stays hidden until its own caret is clicked, independent of the active branch", async () => {
+    const { wb1, d1, d2 } = await seedMultiBookImport();
     render(<TreeHarness />);
-    expect(folderRow("proj").querySelector('[title="Folder"]')).toBeInTheDocument();
 
-    fireEvent.click(caretOf(folderRow("proj")));
-    fireEvent.click(caretOf(folderRow("sub")));
-    expect(workbookRow("wb1").querySelector('[title="Workbook"]')).toBeInTheDocument();
+    expect(worksheetRow(d1)).not.toBeInTheDocument();
+    expect(worksheetRow(d2)).toBeInTheDocument(); // the active branch, already open
+
+    fireEvent.click(caretOf(workbookRow(wb1)));
+    expect(worksheetRow(d1)).toBeInTheDocument();
+    expect(worksheetRow(d2)).toBeInTheDocument(); // unaffected by the sibling's own toggle
   });
 
-  it("search still finds a worksheet tucked inside a fully collapsed folder -> workbook group", () => {
-    seedMultiBookImport();
-    // Nothing expanded — the collapsed default from seedMultiBookImport.
-    render(<DetailsHarness query="d2" />);
-    expect(screen.getByText("d2.dat")).toBeInTheDocument();
+  it("the project folder's count chip reflects the full subtree", async () => {
+    const { proj } = await seedMultiBookImport();
+    render(<TreeHarness />);
+    expect(folderRow(proj).querySelector(".qzk-group-count")?.textContent).toBe("2");
+  });
+
+  it("folder and workbook rows carry distinct icons/type labels", async () => {
+    const { proj, wb1 } = await seedMultiBookImport();
+    render(<TreeHarness />);
+    expect(folderRow(proj).querySelector('[title="Folder"]')).toBeInTheDocument();
+    expect(workbookRow(wb1).querySelector('[title="Workbook"]')).toBeInTheDocument();
+  });
+
+  it("search still finds a worksheet tucked inside the still-collapsed sibling workbook group", async () => {
+    const { d1 } = await seedMultiBookImport();
+    // Nothing clicked — wb1 (Book1's workbook) stays collapsed per F1.
+    render(<DetailsHarness query="Book1" />);
+    const name = useApp.getState().datasets.find((d) => d.id === d1)!.name;
+    expect(screen.getByText(name)).toBeInTheDocument();
   });
 });

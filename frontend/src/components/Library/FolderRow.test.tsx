@@ -248,6 +248,21 @@ describe("FolderRow — Properties dialog (GUI_INTERACTION_PLAN #13 sub-item 4)"
     const caret = container.querySelector(".qzk-group-caret") as HTMLElement;
     expect(caret.style.color).toBeTruthy();
   });
+
+  it("F5 (review fix round): also tints the folder glyph, matching the caret's colour", () => {
+    const colored = { ...fld("a", null, 0), color: "amber" };
+    const { container } = render(<FolderRow folder={colored} {...baseProps} />);
+    const caret = container.querySelector(".qzk-group-caret") as HTMLElement;
+    const icon = container.querySelector(".qzk-folder-icon") as HTMLElement;
+    expect(icon.style.color).toBeTruthy();
+    expect(icon.style.color).toBe(caret.style.color);
+  });
+
+  it("leaves the glyph untinted (no inline color) when the folder has no colour set", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const icon = container.querySelector(".qzk-folder-icon") as HTMLElement;
+    expect(icon.style.color).toBeFalsy();
+  });
 });
 
 describe("FolderRow — bulk-ops context menu (project-organization plan item 8)", () => {
