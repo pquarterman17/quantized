@@ -30,6 +30,14 @@ vi.mock("../../../lib/api/baseline", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api/baseline")>()),
   baselineALS: vi.fn(),
 }));
+// N4 review finding: spy on the REAL `baselineValueAt` (wrapped, not
+// replaced, so every existing height/marker assertion in this file still
+// gets the true computed value) to count how many times its linear
+// segment.x scan actually runs.
+vi.mock("../../../lib/peakWizardApex", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/peakWizardApex")>();
+  return { ...actual, baselineValueAt: vi.fn(actual.baselineValueAt) };
+});
 
 const DATA: DataStruct = {
   time: [0, 1, 2, 3, 4],
@@ -277,5 +285,27 @@ describe("usePeakWizard — marker placement uses height + bg (+ baseline) (M3 r
     expect(useApp.getState().peakWizardEdit?.markers).toEqual([
       { index: 0, center: 2, height: result.current.candidates[0].height + 10 },
     ]);
+  });
+});
+
+describe("usePeakWizard — round-4 review: N4 excluded candidates skip the expensive baseline scan", () => {
+  it("baselineValueAt runs only for INCLUDED candidates in the hit-test bridge, not excluded ones", async () => {
+    const { baselineValueAt } = await import("../../../lib/peakWizardApex");
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+
+    act(() => result.current.addPeakAt(0));
+    act(() => result.current.addPeakAt(1));
+    act(() => result.current.addPeakAt(2));
+    expect(result.current.candidates).toHaveLength(3);
+
+    vi.mocked(baselineValueAt).mockClear();
+    act(() => result.current.togglePeak(1)); // exclude the middle candidate — re-triggers the bridge effect fresh
+    const excludedCenter = result.current.candidates[1].center;
+
+    const calledCenters = vi.mocked(baselineValueAt).mock.calls.map((args) => args[0]);
+    expect(calledCenters).not.toContain(excludedCenter); // the excluded peak's scan never runs
+    expect(calledCenters).toContain(result.current.candidates[0].center); // the still-included ones do
+    expect(calledCenters).toContain(result.current.candidates[2].center);
   });
 });

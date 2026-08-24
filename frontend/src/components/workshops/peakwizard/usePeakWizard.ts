@@ -41,14 +41,12 @@ export const WIZARD_STEPS = [
 ] as const;
 
 /** A peak candidate on step ②: detected or manually added, toggleable.
- *  `height`/`bg` keep the SAME semantics as `Peak`/`FittedPeak`
- *  (lib/types.ts) — `height` is measured ABOVE `bg`, the apex is
- *  `height + bg` — but here `bg` is relative to `workingY` (the
- *  BASELINE-SUBTRACTED trace `findPeaks` actually runs on, see `workingY`
- *  below), not the plot's own raw coordinates; see `plotApexY`'s doc for
- *  the additional term that maps back onto the plot. A manually added peak
- *  (`addPeakAt`) reads its `height` straight off `workingY` with `bg: 0` —
- *  there is no detector background to separate out for it. */
+ *  `height`/`bg` match `Peak`/`FittedPeak` (lib/types.ts) — apex =
+ *  `height + bg` — but relative to `workingY` (the baseline-subtracted
+ *  trace `findPeaks` runs on), not the plot's raw coordinates; see
+ *  `plotApexY`'s doc for the term that maps back onto the plot. A manually
+ *  added peak (`addPeakAt`) gets `bg: 0` — no detector background to
+ *  separate out for it. */
 export interface CandidatePeak {
   center: number;
   height: number;
@@ -331,27 +329,28 @@ export function usePeakWizard(): PeakWizardState {
   }, [step]);
 
   // Push the current bridge into the store whenever markerEditActive,
-  // candidates, or addPeakAt/removePeak's own identity change (R9: the
-  // latter two are now `useCallback`-memoized on [segment, workingY]/[], not
-  // plain closures — see their definitions above) — so a stale
-  // `segment`/`workingY` closure (e.g. a baseline recompute landing without
-  // the candidate list itself changing) can never leave `addPeakAt` out of
-  // sync with what the manual "+ Add" field in step ② would use, WITHOUT
-  // also re-pushing (and forcing PlotViewport to rebuild the whole uPlot
-  // instance) on every unrelated re-render; a full unmount (wizard closed)
-  // always clears it. M3: the hit-test markers use the SAME `plotApexY`
-  // mapping the overlay draw above uses (also gaining `segment`/`baseline`
-  // as triggers, same reasoning) — a click must land on exactly what is
-  // drawn, never a stale raw-height position next to it.
+  // candidates, or addPeakAt/removePeak's own identity change (R9:
+  // `useCallback`-memoized on [segment, workingY]/[], not plain closures)
+  // — so a stale segment/workingY closure can never desync `addPeakAt`
+  // from the manual "+ Add" field, WITHOUT re-pushing (forcing a full
+  // PlotViewport/uPlot rebuild) on every unrelated re-render; unmount
+  // always clears it. M3: hit-test markers use the SAME `plotApexY`
+  // mapping the overlay draw above uses (also gaining segment/baseline as
+  // triggers) — a click must land on what's actually drawn.
   useEffect(() => {
     setPeakWizardEdit(
       markerEditActive
         ? {
+            // N4: only INCLUDED candidates pay for the linear-scan
+            // baseline lookup below (excluded ones' `height` is never
+            // read); the array itself stays full-length since
+            // `removePeak(index)` depends on ORIGINAL indices.
             markers: visiblePeakMarkers(
-              candidates.map((c) => ({
-                ...c,
-                height: plotApexY(c.height, c.bg, baselineValueAt(c.center, segment?.x ?? [], baseline)),
-              })),
+              candidates.map((c) =>
+                c.included
+                  ? { ...c, height: plotApexY(c.height, c.bg, baselineValueAt(c.center, segment?.x ?? [], baseline)) }
+                  : c,
+              ),
             ),
             addPeakAt,
             removePeak,

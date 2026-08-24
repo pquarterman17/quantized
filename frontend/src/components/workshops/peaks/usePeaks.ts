@@ -353,8 +353,16 @@ export function usePeaks(): PeaksState {
       }
       const st = useApp.getState();
       const { x, y } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
-      const xRange = finiteRange(x);
-      const yRange = finiteRange(y);
+      // N3 review finding: use the LIVE view (xLim/yLim), not the full
+      // data range, when the user has zoomed in — placement was computed
+      // against the FULL data range regardless of zoom, so a small percent-
+      // of-full-range offset could exceed the entire visible window at any
+      // real zoom level; `annotationPlugin` then skips the resulting
+      // off-canvas annotation, so the run reported success while the user
+      // saw nothing. Falls back to the full data range exactly as before
+      // when the axis is on autoscale (`xLim`/`yLim` null).
+      const xRange = st.xLim ?? finiteRange(x);
+      const yRange = st.yLim ?? finiteRange(y);
 
       // L1 CRITICAL (review): a peak's apex y is `height + bg`, NEVER
       // `height` alone — `height` is measured ABOVE background by the

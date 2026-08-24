@@ -80,6 +80,8 @@ beforeEach(() => {
     history: [],
     future: [],
     historySuppressed: false,
+    xLim: null,
+    yLim: null,
   });
   vi.mocked(findPeaks).mockResolvedValue({
     peaks: [pk(1, 5, 0.8), pk(3, 6, 0.9)],
@@ -728,5 +730,66 @@ describe("usePeaks labelPeaks — round-2 review: L7 blank labels", () => {
     expect(anns).toHaveLength(1);
     expect(anns[0].text).toBe("3.00");
     expect(anns[0].x).toBe(1);
+  });
+});
+
+describe("usePeaks labelPeaks — round-4 review: N3 placement uses the LIVE zoom (xLim/yLim), not the full data range", () => {
+  it("with a narrow yLim set, the label lands inside it, not offset by a fraction of the full (much wider) data range", async () => {
+    // The dataset's own y-channel spans a huge range (0-100000) — a 5%
+    // offset of THAT would be ~5000, dwarfing any zoomed-in window and
+    // landing the label off-canvas (annotationPlugin then silently skips
+    // drawing it — the run "succeeds" with nothing visible).
+    const WIDE_DATA: DataStruct = {
+      time: [0, 1, 2, 3, 4, 5],
+      values: [[0], [100000], [50000], [70000], [20000], [0]],
+      labels: ["I"],
+      units: ["cps"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: WIDE_DATA }],
+      activeId: "d1",
+      yLim: [500, 600], // the user has zoomed into a narrow window around the peak
+    });
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 30, 0.8, 500)], // apex = height + bg = 530, inside yLim
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].y).toBeGreaterThanOrEqual(500);
+    expect(anns[0].y).toBeLessThanOrEqual(600); // inside the zoomed yLim, not off in the full 0-100000 range
+  });
+
+  it("falls back to the full data range when xLim/yLim are null (autoscale, unchanged behavior)", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: BACKGROUNDED_DATA }],
+      activeId: "d1",
+      xLim: null,
+      yLim: null,
+    });
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 30, 0.8, 500)],
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].y).toBeGreaterThan(400); // same as the L1 test — autoscale unaffected
   });
 });

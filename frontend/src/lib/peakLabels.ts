@@ -116,39 +116,61 @@ function finiteWidth(range: readonly [number, number]): number {
  *  `points` are the peaks' (x, y) apexes; `labels` are their
  *  ALREADY-RENDERED text (see `renderLabelTemplate`) — only each label's
  *  LENGTH feeds placement, never its content. `xRange`/`yRange` are the
- *  plot's own data ranges (not necessarily the peaks' bounding box), so
- *  placement stays sane even when the peaks being labeled cluster in one
- *  corner of a much wider plot.
+ *  plot's own visible data ranges (not necessarily the peaks' bounding
+ *  box), so placement stays sane even when the peaks being labeled cluster
+ *  in one corner of a much wider plot.
  *
- *  L6 review finding: an earlier version compared candidate tiers by X ONLY
- *  and then offset each label relative to its OWN apex y — two neighbours
- *  whose apex heights happened to differ by about one tier step could land
- *  at the SAME absolute y despite getting different tier numbers. Placement
- *  is now genuinely 2-D: each already-placed label owns an axis-aligned box
- *  (half-width from ITS OWN rendered length, half-height one tier step), and
- *  a candidate tier is accepted only once its box clears EVERY box placed
- *  so far — bumping the tier until it does.
+ *  BOX GEOMETRY (N2 review finding, round 4): approximates
+ *  `lib/uplotOverlays.ts`'s ACTUAL draw geometry
+ *  (`annotationLayout`/`clampAnnotationLabelX`) rather than an arbitrary
+ *  centered box — the renderer left-aligns text AT the anchor (extending
+ *  RIGHT by its full measured width, never split half-and-half around the
+ *  anchor) and draws it UPWARD from the anchor (`ty = py - 2`, glyphs above
+ *  their baseline), never centered vertically either. An earlier symmetric
+ *  half-width-sum test under-counted a wide label followed by a narrow one:
+ *  only the LEADING label's own width determines how far right it reaches,
+ *  never an average of both, so a gap between `(wa+wb)/2` and `wa` used to
+ *  read as clear while visually overlapping. Each box here is therefore
+ *  `[x, x+w) × [y, y+boxH)` — real 1-D interval overlap on each axis, not a
+ *  symmetric extent-sum comparison. (The renderer's small constant pixel
+ *  offsets — `+6` horizontal, `-2` vertical — have no data-space
+ *  equivalent without knowing the live pixels-per-data-unit scale, which
+ *  this pure function deliberately does not take; they're negligible next
+ *  to real label text at any non-trivial zoom, and `CHAR_FRACTION` is
+ *  already a tuned approximation, not a measurement.)
  *
- *  THE HONEST GUARANTEE (M1 review finding, replacing an earlier version of
- *  this doc that implied unconditional no-overlap, which the code could
- *  not actually hold): a fixed plot area cannot hold unlimited
- *  non-overlapping labels. Up to `MAX_STACK_TIERS + 1` labels (currently
- *  10) sharing one dense cluster are guaranteed distinct and
- *  non-overlapping. Beyond that, capacity is genuinely exhausted — the
- *  tier search stops at `MAX_STACK_TIERS` rather than searching forever,
- *  so EXTRA labels deterministically pile onto that last tier (and may
- *  overlap each other there) instead of either overlapping unpredictably
- *  or running off the plot. This is the "least-bad" placement: predictable,
- *  reproducible, and — see M2 next — never off-plot.
+ *  THE HONEST GUARANTEE (M1 review finding): a fixed plot area cannot hold
+ *  unlimited non-overlapping labels. Up to `MAX_STACK_TIERS + 1` labels
+ *  (currently 10) sharing one dense cluster, WITH ROOM ON AT LEAST ONE SIDE
+ *  of their apex, are guaranteed distinct and non-overlapping — see the
+ *  UP-OR-DOWN behavior below for what "room" means. Beyond that, capacity
+ *  is genuinely exhausted — the tier search stops rather than searching
+ *  forever, so EXTRA labels deterministically pile onto the last tier tried
+ *  (and may overlap each other there) instead of either overlapping
+ *  unpredictably or running off the plot. This is the "least-bad"
+ *  placement: predictable, reproducible, and always within `yRange`.
  *
- *  M2 review finding: stacked offsets are bounded to `MAX_STACK_FRAC` of
- *  the y-range above each apex (which is what makes `MAX_STACK_TIERS`
- *  above the no-overlap capacity in the first place) — a label can no
- *  longer climb arbitrarily high and run off the top of the plotted view.
- *  A final clamp to `yRange`'s own upper bound is an additional backstop
- *  for the case an apex itself is already at/above the top of the caller's
- *  own `yRange` (a range that doesn't actually bound its own peaks) — belt
- *  and braces, never relied on for the common case above.
+ *  UP-OR-DOWN (N1 review finding, round 4, CORRECTED RULING replacing round
+ *  3's M2 fix): the round-3 fix clamped an over-tall stack's y onto
+ *  `yRange`'s own top with `if (y > yRange[1]) y = yRange[1]` — but that
+ *  clamp ran AFTER tier resolution and fed the CLAMPED value back into
+ *  future collision checks, so two DIFFERENT apex heights whose
+ *  up-candidates both exceeded the range both collapsed onto the exact
+ *  same clamped y, becoming visually indistinguishable — verified by
+ *  execution, and NOT a hypothetical: since `yRange` is typically the data's
+ *  own range, the TALLEST peak's apex always equals `yRange[1]`, so this
+ *  fired on every real dataset (an XRD Kα1/Kα2 doublet on the strongest
+ *  reflection drew both labels on top of each other — the canonical use
+ *  case of this whole feature). Fixed: UP (`apex + offset`) is still tried
+ *  FIRST at every tier — a label that fits above keeps today's placement.
+ *  Only when the up-candidate would exceed `yRange` (or collides) does the
+ *  search flip to DOWN (`apex - offset`) at that SAME tier, running it
+ *  through the identical collision check against `yRange`'s bottom instead
+ *  — never a post-hoc clamp. If NEITHER direction at ANY tier both fits
+ *  and clears every placed box (capacity and range genuinely exhausted at
+ *  once — rare), the last up-candidate tried is clamped into `yRange` as
+ *  an absolute last resort, same "least-bad, deterministic" spirit as the
+ *  capacity-exhaustion case above.
  *
  *  Returns one `{x, y}` per label, in the SAME ORDER as `points`/`labels`
  *  (result[i] corresponds to points[i]/labels[i]) — collision resolution
@@ -170,62 +192,86 @@ export function placeLabels(
 
   const xUnit = finiteWidth(xRange);
   const yUnit = finiteWidth(yRange);
-  const yHalf = (TIER_STEP_FRAC * yUnit) / 2;
+  const boxH = TIER_STEP_FRAC * yUnit; // N2: rendered text height, extends UPWARD from its own anchor
 
   // Tier assignment runs on an x-sorted working copy (ties broken by
   // original index for a stable sort) so it always sweeps left-to-right
   // regardless of the caller's input order; `i` maps back to the ORIGINAL
   // index so the returned array lines up with `points`/`labels`. Each
-  // candidate's own box half-width comes from ITS OWN label length (not an
-  // average across the batch — L6: a long label next to short ones needs a
-  // wider clearance than a short one does).
+  // candidate's own box width comes from ITS OWN label length (not an
+  // average across the batch — a long label next to short ones needs a
+  // wider clearance than a short one does), and is a FULL width (N2 — see
+  // the doc above), not a half-width to be summed with the other box's.
   const order = points.slice(0, n).map((pt, i) => ({
     i,
     x: pt.x,
     y: pt.y,
-    halfW: (xUnit * CHAR_FRACTION * Math.max(1, labels[i].length)) / 2,
+    w: xUnit * CHAR_FRACTION * Math.max(1, labels[i].length),
   }));
   order.sort((a, b) => a.x - b.x || a.i - b.i);
 
-  // M1 hardening (found while writing this round's OWN capacity test): two
-  // tiers exactly one step apart don't always subtract to EXACTLY one tier
-  // step — `(BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yUnit` for
-  // consecutive integer tiers can differ by 549.999999999995 instead of
-  // 550 from ordinary float rounding, and a naive strict `<` treated that
-  // as a real collision, silently wasting a tier. A relative epsilon
-  // shrinks the collision threshold by a fraction far smaller than any
-  // visual difference but comfortably larger than accumulated float error,
-  // so an intended EXACT-boundary (touching) pair reads as "not colliding"
-  // regardless of which way the rounding fell.
-  const BOUNDARY_EPS = 1e-9;
-  const placedBoxes: { x: number; y: number; halfW: number }[] = [];
+  // Round-3 M1 hardening, still needed: two tiers exactly one step apart
+  // don't always subtract to EXACTLY one tier step —
+  // `(BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yUnit` for consecutive
+  // integer tiers can differ by 549.999999999995 instead of 550 from
+  // ordinary float rounding, and a naive strict `<` treated that as a real
+  // collision, silently wasting a tier. Additive epsilons (scaled to each
+  // axis's own unit, not a relative multiplier — safe regardless of sign)
+  // shrink both interval edges before comparing, absorbing that rounding
+  // regardless of which way it falls, on EITHER axis.
+  const xEps = xUnit * 1e-9;
+  const yEps = yUnit * 1e-9;
+  // N2: true left-aligned/up-from-anchor 1-D interval overlap on each axis
+  // — NOT a symmetric half-extent-sum comparison (see the doc above for
+  // why that under-counts a wide-then-narrow pair).
+  const boxesOverlap = (
+    ax: number, ay: number, aw: number,
+    bx: number, by: number, bw: number,
+  ): boolean =>
+    ax + xEps < bx + bw - xEps && bx + xEps < ax + aw - xEps &&
+    ay + yEps < by + boxH - yEps && by + yEps < ay + boxH - yEps;
+
+  const inRange = (y: number): boolean => y >= yRange[0] && y <= yRange[1];
+
+  const placedBoxes: { x: number; y: number; w: number }[] = [];
   const out: LabelPlacement[] = new Array(n);
   for (const pt of order) {
-    let y = pt.y + BASE_OFFSET_FRAC * yUnit;
-    for (let tier = 0; tier <= MAX_STACK_TIERS; tier++) {
-      y = pt.y + (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yUnit;
-      // M1: strict `<` (with `BOUNDARY_EPS` above) — two boxes exactly ONE
-      // tier step apart (touching, not overlapping) no longer collide. The
-      // earlier `<=` here made every label consume TWO tiers of vertical
-      // room instead of one, roughly halving how many labels a cluster
-      // could hold before capacity (`MAX_STACK_TIERS`) was exhausted.
-      const collides = placedBoxes.some(
-        (b) =>
-          Math.abs(pt.x - b.x) < (pt.halfW + b.halfW) * (1 - BOUNDARY_EPS) &&
-          Math.abs(y - b.y) < (yHalf + yHalf) * (1 - BOUNDARY_EPS),
-      );
-      if (!collides) break;
-      // M1: capacity genuinely exhausted at `tier === MAX_STACK_TIERS` —
-      // stop searching (the loop condition ends it) rather than pushing
-      // the box further up regardless of collisions; `y` stays at this
-      // last-tried tier, deterministically piling onto whatever already
-      // occupies it.
+    let chosen: number | null = null;
+    let lastTried = pt.y + BASE_OFFSET_FRAC * yUnit; // fallback if every tier/direction below is exhausted
+    for (let tier = 0; tier <= MAX_STACK_TIERS && chosen === null; tier++) {
+      const offset = (BASE_OFFSET_FRAC + tier * TIER_STEP_FRAC) * yUnit;
+      const upY = pt.y + offset;
+      // N1: UP is the preferred direction. While it stays IN RANGE, a
+      // collision only advances to the NEXT TIER'S up candidate (never
+      // flips direction merely because a tier is occupied — that's the
+      // ordinary capacity search, unchanged from before) — a label that
+      // fits above keeps today's upward placement.
+      if (inRange(upY)) {
+        lastTried = upY;
+        if (!placedBoxes.some((b) => boxesOverlap(pt.x, upY, pt.w, b.x, b.y, b.w))) {
+          chosen = upY;
+          break;
+        }
+        continue; // in range but occupied — try the NEXT TIER'S up, not down
+      }
+      // N1 CORRECTED RULING: up would exceed `yRange` — NOW flip to DOWN
+      // (this same tier) and run it through the identical collision check,
+      // rather than clamping the up-candidate onto the boundary (which
+      // silently destroyed the collision guarantee above — see the doc).
+      const downY = pt.y - offset;
+      lastTried = downY;
+      if (inRange(downY) && !placedBoxes.some((b) => boxesOverlap(pt.x, downY, pt.w, b.x, b.y, b.w))) {
+        chosen = downY;
+        break;
+      }
     }
-    // M2 backstop: even the capped stack must never exceed the caller's
-    // OWN y-range — covers an apex that is itself already at/above
-    // `yRange`'s top (see the doc above).
-    if (y > yRange[1]) y = yRange[1];
-    placedBoxes.push({ x: pt.x, y, halfW: pt.halfW });
+    // Last-resort fallback: capacity AND range both genuinely exhausted in
+    // both directions at once (rare) — clamp the last candidate tried into
+    // `yRange` so this never produces NaN or a wildly off-range value, same
+    // "least-bad, deterministic" spirit as the capacity-exhaustion pile-up
+    // above.
+    const y = chosen ?? Math.min(yRange[1], Math.max(yRange[0], lastTried));
+    placedBoxes.push({ x: pt.x, y, w: pt.w });
     out[pt.i] = { x: pt.x, y };
   }
   return out;

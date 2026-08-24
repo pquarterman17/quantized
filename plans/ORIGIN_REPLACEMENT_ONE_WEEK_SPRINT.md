@@ -279,9 +279,11 @@ same branch.
   heights generally and the specific "neighbour one tier step taller" case
   that reproduced the original bug.
 
-**Status (2026-08-24, round-3 review fixes — last round):** a third review
+**Status (2026-08-24, round-3 review fixes):** a third review
 pass, two findings reproduced by executing `placeLabels` directly against
-its own test-file box formula. All five fixed here, red-first.
+its own test-file box formula. All five fixed here, red-first. (Not the
+last round after all — see round 4 below, which found a critical bug in
+round 3's own M2 fix.)
 
 - **`placeLabels` violated its OWN no-overlap invariant on dense clusters.**
   Two compounding bugs: the boundary check used `<=`, so a label consumed
@@ -352,6 +354,79 @@ its own test-file box formula. All five fixed here, red-first.
   ceiling) as defense in depth, tested by calling the helper directly with
   an out-of-range value; `usePeaks.ts`'s tighter `[0, 10]` clamp still
   applies on top for the actual dialog.
+
+**Status (2026-08-24, round-4 review fixes):** a fourth review pass, one
+finding CRITICAL and traced to the coordinator's own round-3 ruling, not
+this branch's implementation. All four fixed here, red-first.
+
+- **CRITICAL — the round-3 M2 clamp itself broke the M1 collision
+  guarantee it was meant to preserve.** `if (y > yRange[1]) y = yRange[1]`
+  ran AFTER tier resolution, and the CLAMPED value then fed into every
+  later collision check — so two DIFFERENT apex heights whose up-candidates
+  both exceeded the range both collapsed onto the exact same clamped y,
+  becoming visually indistinguishable. Verified by direct execution:
+  `placeLabels([{x:44.5,y:10000},{x:44.6,y:9800}], ["44.50","44.60"],
+  [20,80], [0,10000])` returned two IDENTICAL y values. Because `yRange` is
+  typically the data's own range, the TALLEST peak's apex always equals
+  `yRange[1]` — so this fired on every real dataset: an XRD Kα1/Kα2 doublet
+  on the strongest reflection drew both labels on top of each other, the
+  canonical use case of this entire feature. Fixed per the corrected
+  ruling: UP (`apex + offset`) is still tried first at every tier — a label
+  that fits above keeps its placement unchanged — but when it would exceed
+  `yRange`, the search now flips to DOWN (`apex - offset`) at that SAME
+  tier and runs it through the identical collision check, instead of
+  clamping onto the boundary. A last-resort fallback (clamp into `yRange`)
+  remains only for the rare case both directions are exhausted at every
+  tier simultaneously. `placeLabels`'s doc now describes the up-or-down
+  behavior; tests cover the exact doublet repro, a cluster sitting AT the
+  very top of the range, and confirm the existing capacity/exhaustion
+  tests still pass unmodified (they use an apex near the range's BOTTOM,
+  so up never needs to flip — down is reachable only near the top).
+- **Collision boxes modeled the wrong geometry.** Boxes were centered on
+  the anchor, but `annotationLayout`/`clampAnnotationLabelX` (the actual
+  renderer) draws text LEFT-ALIGNED from the anchor (extending right) and
+  UPWARD from it — never centered. A symmetric half-width-sum test
+  under-counts a wide label followed by a narrow one: a gap between
+  `(wa+wb)/2` and `wa` read as clear while visually overlapping (only the
+  LEADING label's own width determines how far right it reaches). Fixed:
+  each box is now a true `[x, x+w) × [y, y+boxH)` interval — left-aligned,
+  extending right and up, matching the renderer's own geometry (the
+  renderer's small constant pixel offsets, `+6`/`-2`, have no data-space
+  equivalent without the live pixels-per-data-unit scale this pure
+  function deliberately doesn't take — negligible next to real label text,
+  called out explicitly rather than faked). Tested the specific
+  wide-then-narrow gap that used to slip through.
+- **Zoom made labels invisible.** `xRange`/`yRange` came from the FULL data
+  range, not the live view — zoomed in, a 5%-of-full-range offset could
+  exceed the entire visible window, and `annotationPlugin` silently skips
+  drawing an off-canvas annotation, so the run reported success while the
+  user saw nothing. Fixed: `usePeaks.ts`'s `labelPeaks` now uses the live
+  `xLim`/`yLim` from the store when set, falling back to the full data
+  range exactly as before when the axis is on autoscale (`null`). Tested
+  both: a narrow `yLim` keeps the label inside it; `null` reproduces the
+  prior (full-range) behavior unchanged.
+- **Minor — a wasted linear scan.** `usePeakWizard.ts`'s click-hit-test
+  bridge ran `plotApexY`/`baselineValueAt` (each a linear scan of
+  `segment.x`) over EVERY candidate before `visiblePeakMarkers` filtered
+  out excluded ones internally — on a 200k-point pattern, every peak
+  toggle paid for the excluded peaks' scans too. Fixed: only INCLUDED
+  candidates get the expensive mapping now (the array itself stays
+  full-length, since `removePeak(index)` depends on original indices — this
+  filters the WORK, not the array). Measured rather than assumed further
+  optimization was needed: a Node microbenchmark of the same scan shape (a
+  200k-point `segment.x`, realistic peak counts) measured ~0.58-1.0 ms per
+  peak (~12 ms for 20 peaks, ~29 ms for 50, ~57 ms for 100) — imperceptible
+  at the peak counts a real XRD pattern produces per toggle, so no further
+  optimization (e.g. a binary search over the presumed-sorted `segment.x`)
+  was made; the filter-first fix alone removes the actual waste.
+
+**`placeLabels`'s final guarantee, in one sentence:** it deterministically
+places up to `MAX_STACK_TIERS + 1` (currently 10) labels per dense cluster
+without overlap and always inside the caller's `xRange`/`yRange`, preferring
+the space above each peak's apex and falling back below it only when above
+would leave the visible range, with any further overflow beyond that
+capacity piling predictably (and visibly, not off-plot) onto the last tier
+tried.
 
 ## Non-negotiable operating rules
 

@@ -15,32 +15,37 @@ function peak(center: number, height = 5, fwhm = 0.8, area: number | null = 4): 
   return { center, height, fwhm, area };
 }
 
-/** Recomputes each placement's own axis-aligned box (same formula
- *  `placeLabels` uses internally) and asserts NO TWO overlap — the actual
- *  invariant "collision-aware placement" promises (L6 review finding), not
- *  just "the internal tier numbers differ". Strict `<` with the SAME
- *  relative boundary epsilon `placeLabels` itself uses (M1 review finding,
- *  round 3: exact-tier-step float rounding can land a hair under the true
- *  threshold) — two boxes exactly touching (one tier step apart) are
- *  adjacent, not overlapping, on either side of that rounding. */
+/** Recomputes each placement's own axis-aligned box — LEFT-ALIGNED from the
+ *  anchor extending right, UP-FROM-ANCHOR extending up (N2 review finding,
+ *  round 4: the SAME geometry `placeLabels` uses internally, matching how
+ *  `annotationLayout` actually draws a label — never a symmetric
+ *  centered/half-width-sum box, which under-counts a wide label followed by
+ *  a narrow one) — and asserts NO TWO overlap: the actual invariant
+ *  "collision-aware placement" promises (L6), not just "the internal tier
+ *  numbers differ". Additive per-axis epsilons (M1, round 3: exact-tier-step
+ *  float rounding can land a hair under the true threshold) mean two boxes
+ *  exactly touching are adjacent, not overlapping, on either side of that
+ *  rounding. */
 function assertNoOverlap(
   placed: LabelPlacement[],
   labels: string[],
   xRange: [number, number],
   yRange: [number, number],
 ): void {
-  const EPS = 1e-9;
   const xW = xRange[1] - xRange[0] > 0 ? xRange[1] - xRange[0] : 1;
   const yW = yRange[1] - yRange[0] > 0 ? yRange[1] - yRange[0] : 1;
-  const halfW = (i: number) => (xW * CHAR_FRACTION * Math.max(1, labels[i].length)) / 2;
-  const yHalf = (TIER_STEP_FRAC * yW) / 2;
+  const xEps = xW * 1e-9;
+  const yEps = yW * 1e-9;
+  const w = (i: number) => xW * CHAR_FRACTION * Math.max(1, labels[i].length);
+  const boxH = TIER_STEP_FRAC * yW;
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
-      const dx = Math.abs(placed[i].x - placed[j].x);
-      const dy = Math.abs(placed[i].y - placed[j].y);
+      const ax = placed[i].x, ay = placed[i].y, aw = w(i);
+      const bx = placed[j].x, by = placed[j].y, bw = w(j);
       const overlaps =
-        dx < (halfW(i) + halfW(j)) * (1 - EPS) && dy < (yHalf + yHalf) * (1 - EPS);
-      expect(overlaps, `labels ${i} and ${j} overlap at dx=${dx}, dy=${dy}`).toBe(false);
+        ax + xEps < bx + bw - xEps && bx + xEps < ax + aw - xEps &&
+        ay + yEps < by + boxH - yEps && by + yEps < ay + boxH - yEps;
+      expect(overlaps, `labels ${i} and ${j} overlap`).toBe(false);
     }
   }
 }
@@ -328,5 +333,89 @@ describe("placeLabels — M2 review finding: stacked labels never run off the pl
     for (const p of placed) {
       expect(p.y).toBeLessThanOrEqual(yRange[1]);
     }
+  });
+});
+
+describe("placeLabels — N1 review finding, round 4: up-or-down instead of a hard clamp", () => {
+  // The round-3 M2 fix clamped an over-tall stack's y onto yRange's own
+  // top AFTER tier resolution, then fed that CLAMPED value into later
+  // collision checks — so two DIFFERENT apex heights whose up-candidates
+  // both exceeded the range both collapsed onto the exact same clamped y.
+  // Since yRange is typically the data's own range, the TALLEST peak's
+  // apex always equals yRange[1] — so this fired on every real dataset:
+  // an XRD Kα1/Kα2 doublet on the strongest reflection drew both labels
+  // on top of each other. This is the coordinator's own verified repro.
+  it("the exact doublet repro: two distinct, non-overlapping, in-range labels (not identical)", () => {
+    const placed = placeLabels(
+      [{ x: 44.5, y: 10000 }, { x: 44.6, y: 9800 }],
+      ["44.50", "44.60"],
+      [20, 80],
+      [0, 10000],
+    );
+    expect(placed).toHaveLength(2);
+    for (const p of placed) {
+      expect(Number.isFinite(p.y)).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeLessThanOrEqual(10000);
+    }
+    expect(placed[0].y).not.toBe(placed[1].y); // the exact round-3 bug: both collapsed to 10000
+    assertNoOverlap(placed, ["44.50", "44.60"], [20, 80], [0, 10000]);
+  });
+
+  it("a cluster sitting AT the very top of the range stays in range and non-overlapping", () => {
+    const yRange: [number, number] = [0, 10000];
+    const points = [
+      { x: 10, y: 10000 },
+      { x: 10.05, y: 10000 },
+      { x: 10.1, y: 9950 },
+      { x: 10.15, y: 9900 },
+      { x: 10.2, y: 10000 },
+    ];
+    const labels = points.map((_, i) => `${i}.00`);
+    const placed = placeLabels(points, labels, [0, 20], yRange);
+    for (const p of placed) {
+      expect(Number.isFinite(p.y)).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(yRange[0]);
+      expect(p.y).toBeLessThanOrEqual(yRange[1]);
+    }
+    assertNoOverlap(placed, labels, [0, 20], yRange);
+  });
+
+  it("a label that fits comfortably above its apex still places upward, unchanged (up stays preferred)", () => {
+    const placed = placeLabels([{ x: 5, y: 10 }], ["10.00"], [0, 10], [0, 100]);
+    expect(placed[0].y).toBeGreaterThan(10); // above the apex, not below
+  });
+
+  it("capacity/exhaustion guarantees from M1 still hold unchanged when up never needs to flip (apex far from the top)", () => {
+    // Same fixture as the M1 capacity test — apex near yRange's BOTTOM, so
+    // up never exceeds the range and this exercises the ordinary,
+    // unflipped capacity search end to end.
+    const CAPACITY = MAX_STACK_TIERS + 1;
+    const points = tightCluster(CAPACITY);
+    const labels = points.map((_, i) => `${i}.00`);
+    const placed = placeLabels(points, labels, [0, 20], [0, 10000]);
+    assertNoOverlap(placed, labels, [0, 20], [0, 10000]);
+    expect(new Set(placed.map((p) => p.y.toFixed(6))).size).toBe(CAPACITY);
+  });
+});
+
+describe("placeLabels — N2 review finding, round 4: box geometry matches the renderer", () => {
+  it("a wide label followed by a narrow one, at a gap the OLD symmetric test missed, is now correctly detected as colliding", () => {
+    // xRange width 50, CHAR_FRACTION 0.014: wide label (29 chars) full
+    // width ≈ 20.3, narrow label (1 char) full width ≈ 0.7. The OLD
+    // symmetric half-width-sum threshold was (20.3+0.7)/2 = 10.5; picking
+    // a gap of 15 sits ABOVE that (old test: "clear") but BELOW the wide
+    // label's own full width of 20.3 (true test: "overlaps") — exactly
+    // the gap the review finding describes.
+    const xRange: [number, number] = [0, 50];
+    const yRange: [number, number] = [0, 100];
+    const points = [{ x: 10, y: 5 }, { x: 25, y: 5 }]; // gap = 15
+    const labels = ["a very long peak label indeed", "x"];
+    const placed = placeLabels(points, labels, xRange, yRange);
+    // If the collision had gone undetected, both would land at the SAME
+    // (base) tier — same y. Detecting it means the narrow label was
+    // bumped to a different tier.
+    expect(placed[0].y).not.toBeCloseTo(placed[1].y, 6);
+    assertNoOverlap(placed, labels, xRange, yRange);
   });
 });
