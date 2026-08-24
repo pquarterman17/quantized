@@ -167,10 +167,533 @@ Scouting found double-click-to-edit (pre-filled), drag, right-click Properties
 (Edit text/Pin/Frame/Size/Delete), and save-close-reopen persistence already
 implemented and covered by existing tests against the exact `Annotation` shape
 `addAnnotation` produces; only the discoverable placement entry point and its
-red-first tests were new. The bulk XRD **Label peaks** workflow (selected/all
-fitted peaks, phase/`(hkl)` label templates, collision-aware placement,
-conversion to independently editable annotations) is NOT built — booked as a
-beta follow-up per this section's own sprint-priority note.
+red-first tests were new.
+
+**Status (2026-08-24, beta half):** the bulk XRD **Label
+peaks** workflow is now built, same no-second-model discipline as the manual
+half. A "Label peaks" button in the Peaks workshop (`PeaksPanel.tsx`) —
+labeled "Label all N fitted/detected peaks…" so the source set is never
+ambiguous — prompts (`askParams`, reusing the existing promise-based dialog,
+no new dialog component) for a token template + decimal precision, then
+creates ONE ordinary `Annotation` per peak via the SAME `addAnnotation` +
+`updateAnnotation` store actions the manual half and the Inspector's
+Annotations card already use (no new decoration model; a generated label is
+structurally indistinguishable from a hand-placed one — tested). All labels
+from one run share a single `Annotation.groupId` (bulk-manageable via the
+Object Manager) while staying independently draggable/editable/deletable;
+the whole run folds into ONE `withHistoryBatch` undo entry (N labels, 1 undo
+step, red-first tested) via a new optional `historyToken` param threaded
+through `addAnnotation`/`updateAnnotation` (mirrors `addDataset`'s existing
+pattern). The dataset's `DataStruct` and the peak/fit results are read-only
+inputs — never rewritten by labeling, editing, or deleting a label
+(red-first tested via before/after deep-equality). Collision-aware initial
+placement (`lib/peakLabels.ts`, pure — no React/uPlot/store import, fully
+unit-tested) staggers labels into vertical tiers when neighboring peaks are
+closer in x than a length-derived threshold, and never produces NaN for
+degenerate input (single peak, zero-width range, every peak at one x).
+
+Honest gaps, carried forward rather than faked:
+- **No phase/`(hkl)` label token.** `Peak`/`FittedPeak` carry no
+  crystallographic indexing field anywhere in quantized today, so the token
+  template is deliberately limited to fields that actually exist —
+  `{center}`, `{height}`, `{fwhm}`, `{area}`, `{index}` (1-based), plus
+  literal text (default template: `{center}`). An unknown token — including
+  a future `{phase}`/`{hkl}`— renders literally rather than throwing, so the
+  template mechanism (`renderLabelTemplate`'s token `switch` in
+  `lib/peakLabels.ts`) is ready to gain that token the day a real indexing
+  data source lands; no fabricated crystallography ships in the meantime.
+- **No per-peak selection.** `DataTable` (the peaks list's own primitive)
+  has no row-selection support today, so this lane intentionally did not
+  build one (out of scope per this item's own ruling) — "Label peaks"
+  operates on ALL fitted peaks when a fit result exists, otherwise ALL
+  detected peaks, and says so in the button's own label. Selected-subset
+  labeling is a follow-up once `DataTable` (or a peaks-specific list) grows
+  row selection.
+
+**Status (2026-08-24, round-2 review fixes):** a second review pass found
+seven issues in the beta half above; all are fixed here, red-first, in the
+same branch.
+
+- **CRITICAL — apex y was `height` alone, not `height + bg`.** `Peak`/
+  `FittedPeak.height` is measured ABOVE background (`calc/peaks.py`'s
+  `find_peaks_robust` confirms: a Gaussian pair riding a +500 offset returns
+  `height=30, bg=500` for an apex whose true y is 530), so on any real
+  XRD pattern — which always has a background — every label landed a whole
+  background below the peak it named, typically off-screen. Fixed: apex y is
+  now `height + bg` for both the fitted and detected branches
+  (`usePeaks.ts`'s `labelPeaks`). `Peak` also gained an explicit `bg: number`
+  field in `lib/types.ts` (it arrived over the wire already — `calc/peaks.py`
+  always returned it — but only through the untyped index signature; it is
+  now type-checked at every call site instead of incidental).
+- **Latent pre-existing bug this review surfaced, fixed alongside it:** the
+  DETECTED-peak marker overlay (`usePeaks.ts`'s auto-find effect,
+  `setPeakOverlay`) called `peakOverlayArray` with `height: p.height` and
+  omitted `+ p.bg`, while the FITTED-peak overlay a few lines below always
+  included it. Detected-peak markers have therefore ALWAYS drawn at the
+  wrong height on any backgrounded dataset — floating near the axis instead
+  of sitting on the peak — independent of the Label-peaks feature entirely.
+  Fixed with its own red-first test; this was a bug in existing `main`
+  behavior, not something the beta half introduced.
+- **Error handling.** `labelPeaks` now wraps its work in try/catch, matching
+  the sibling `fitTogether`/`fitEach` actions — a `resolveDataset` rejection
+  (or any other failure) surfaces as a danger toast and creates nothing,
+  instead of an uncaught rejection silently swallowed by the `void` call
+  site in `PeaksPanel.tsx`.
+- **Precision clamp.** The "Decimals" value is now clamped to `[0, 10]`
+  (previously only the low end was guarded) — a value like 999 used to make
+  `toFixed` throw `RangeError` and, before the error-handling fix above,
+  abort the whole run with no feedback.
+- **Nested-batch undo hole.** `withHistoryBatch` folds ANY caller into
+  whichever batch already happens to be in flight — not just a genuinely
+  nested call from the SAME operation — so labeling while e.g.
+  `relink.ts`'s "import as a new version" is mid-flight (a real network
+  round trip, nothing else in the UI disabled meanwhile) would have silently
+  ridden that unrelated batch's one undo entry: a single Ctrl+Z would have
+  reverted the import AND deleted every label. Determined REACHABLE from the
+  UI (the Relink and Peaks panels can both be open at once, and nothing
+  blocks interaction during the import's awaits). Fixed with a cooperative
+  pre-flight guard (`rejectIfHistoryBatchRunning`, same shape as
+  `store/importDatasets.ts`'s `isImportRunning`/`rejectIfImportRunning`),
+  checked both before the template dialog opens and again right before the
+  batch commits (the dialog await is the widest remaining window) — narrows
+  the race rather than closing it with a hard lock, tested directly by
+  pinning the guard (`historySuppressed: true` → zero annotations, dialog
+  never opened).
+- **Blank labels.** A template that renders blank for a peak (e.g. `{area}`
+  over DETECTED peaks, which always have `area: null`) is now skipped rather
+  than creating an invisible blank annotation, matching the manual half's
+  existing guard. If EVERY peak's label comes out blank, nothing is created
+  at all — no annotations, no undo entry.
+- **Placement collisions with unequal apex heights.** The original tiering
+  compared candidate tiers by x only, then offset each label relative to its
+  OWN apex y — two neighbours whose heights happened to differ by about one
+  tier step could land at the exact same absolute y despite getting
+  different tier numbers (every existing placement test used equal-height
+  apexes, so this was untested). `lib/peakLabels.ts`'s `placeLabels` now
+  does genuine 2-D collision checking: each already-placed label owns an
+  axis-aligned box (its own rendered length for width, one tier step for
+  height), and a candidate tier is accepted only once its box clears every
+  box placed so far. `BASE_OFFSET_FRAC`/`TIER_STEP_FRAC`/`CHAR_FRACTION` are
+  now exported so tests can assert the actual no-overlap invariant directly
+  rather than trusting internal tier bookkeeping; new tests cover unequal
+  heights generally and the specific "neighbour one tier step taller" case
+  that reproduced the original bug.
+
+**Status (2026-08-24, round-3 review fixes):** a third review
+pass, two findings reproduced by executing `placeLabels` directly against
+its own test-file box formula. All five fixed here, red-first. (Not the
+last round after all — see round 4 below, which found a critical bug in
+round 3's own M2 fix.)
+
+- **`placeLabels` violated its OWN no-overlap invariant on dense clusters.**
+  Two compounding bugs: the boundary check used `<=`, so a label consumed
+  TWO tiers of vertical room instead of one (roughly halving real capacity);
+  and when the tier search exhausted its cap, the code pushed the box
+  anyway — silently overlapping with no signal that capacity had run out.
+  Fixed the boundary to strict `<` (two boxes exactly one tier step apart —
+  touching, not overlapping — no longer collide), and made the exhaustion
+  case an HONEST, DETERMINISTIC degradation instead of an unstated failure:
+  the tier search stops at a capacity cap (`MAX_STACK_TIERS`, derived from
+  `MAX_STACK_FRAC`) and extra labels pile onto that last tier rather than
+  searching forever or drifting unpredictably. **While implementing the
+  fix, the strict `<` boundary check itself uncovered a SECOND, narrower
+  bug**: two tiers exactly one step apart don't always subtract to exactly
+  one tier step in floating point — observed as low as 549.9999999999995
+  against a 550 threshold — so the new strict check was intermittently
+  wasting a tier to ordinary float rounding. Fixed with a small relative
+  epsilon on the collision threshold (`BOUNDARY_EPS`), verified against the
+  exact failing case before landing. `placeLabels`'s own doc now states the
+  HONEST guarantee — "up to `MAX_STACK_TIERS + 1` (currently 10) labels in
+  one dense cluster never overlap; beyond that, extra labels pile
+  deterministically onto the last tier and may overlap there" — replacing
+  language that implied an unconditional guarantee the code could not
+  actually hold. The exhaustion case itself is now explicitly tested (a
+  15-peak cluster against a 10-label capacity), not left unasserted.
+- **Tier offsets were never clamped to `yRange` — stacked labels could run
+  off-plot.** A 20-peak cluster on a `[0, 10]` y-range reached y≈18.7; even
+  a 6-peak cluster reached apex + 0.6·yRange. Those annotations existed but
+  were only reachable through the Object Manager — the "hidden with no path
+  back" failure mode already rejected in the Library work. Fixed: the same
+  `MAX_STACK_TIERS` cap that gives M1 its honest capacity ALSO bounds the
+  stacked offset to `MAX_STACK_FRAC` (60%) of the y-range above each apex,
+  plus a final backstop clamp to `yRange`'s own top for the edge case where
+  a caller-supplied range doesn't actually bound its own peaks. Tested: a
+  dense cluster (well past capacity) on a small y-range produces labels
+  entirely within `yRange`, and a smaller 6-peak cluster does too.
+- **Same latent bug, a THIRD call site.**
+  `components/workshops/peakwizard/usePeakWizard.ts`'s marker-overlay
+  effect still passed bare `p.height` (no `+ p.bg`) to the marker overlay —
+  and, unlike the other two sites, this one ALSO runs peak detection on a
+  BASELINE-SUBTRACTED trace (`workingY`, the wizard's own step-①
+  subtraction), so `height + bg` alone is only the apex WITHIN that
+  corrected trace, not on the plot (which always shows the raw data with
+  the baseline drawn as a separate reference line, never displaced). Worked
+  the real formula out from the file's own data flow rather than
+  blind-copying `height + bg`: the plot apex is `height + bg +
+  baselineValueAt(center)`, the wizard's own subtracted baseline value at
+  that x (nearest sample in `segment.x`), extracted to a new pure module
+  (`lib/peakWizardApex.ts`) to keep the hook under its 500-line ceiling.
+  `CandidatePeak` gained a `bg` field (`0` for a manually added peak — no
+  detector background to separate out for it). Also fixed the click-hit-test
+  bridge (`peakWizardEdit`'s `markers`) to use the SAME formula — it reads
+  the same raw `candidates` today, so fixing only the visual draw would have
+  left a NEW inconsistency (a click landing next to the marker instead of on
+  it) not present before either fix; this went slightly beyond the literal
+  finding to avoid introducing that regression, and is called out here
+  rather than silently expanded.
+- **Silent abort after the dialog.** `usePeaks.ts`'s `labelPeaks`, after the
+  template dialog resolves, had a bare `if (!ds) return;` with no toast —
+  unlike every other failure path in the same action. A dataset that stops
+  resolving while the dialog was open flipped the "Labeling…" button back
+  with zero feedback. Fixed: toasts the same way the L3 (round-2) path does.
+- **Precision clamp lived only at the call site.** `renderLabelTemplate`
+  (`lib/peakLabels.ts`), an EXPORTED pure helper, still clamped precision at
+  the low end only — a value above 100 threw `RangeError` from `toFixed`
+  regardless of `usePeaks.ts`'s own `[0, 10]` UX clamp, for any OTHER
+  caller. Fixed inside the helper itself (`[0, 100]`, `toFixed`'s own
+  ceiling) as defense in depth, tested by calling the helper directly with
+  an out-of-range value; `usePeaks.ts`'s tighter `[0, 10]` clamp still
+  applies on top for the actual dialog.
+
+**Status (2026-08-24, round-4 review fixes):** a fourth review pass, one
+finding CRITICAL and traced to the coordinator's own round-3 ruling, not
+this branch's implementation. All four fixed here, red-first.
+
+- **CRITICAL — the round-3 M2 clamp itself broke the M1 collision
+  guarantee it was meant to preserve.** `if (y > yRange[1]) y = yRange[1]`
+  ran AFTER tier resolution, and the CLAMPED value then fed into every
+  later collision check — so two DIFFERENT apex heights whose up-candidates
+  both exceeded the range both collapsed onto the exact same clamped y,
+  becoming visually indistinguishable. Verified by direct execution:
+  `placeLabels([{x:44.5,y:10000},{x:44.6,y:9800}], ["44.50","44.60"],
+  [20,80], [0,10000])` returned two IDENTICAL y values. Because `yRange` is
+  typically the data's own range, the TALLEST peak's apex always equals
+  `yRange[1]` — so this fired on every real dataset: an XRD Kα1/Kα2 doublet
+  on the strongest reflection drew both labels on top of each other, the
+  canonical use case of this entire feature. Fixed per the corrected
+  ruling: UP (`apex + offset`) is still tried first at every tier — a label
+  that fits above keeps its placement unchanged — but when it would exceed
+  `yRange`, the search now flips to DOWN (`apex - offset`) at that SAME
+  tier and runs it through the identical collision check, instead of
+  clamping onto the boundary. A last-resort fallback (clamp into `yRange`)
+  remains only for the rare case both directions are exhausted at every
+  tier simultaneously. `placeLabels`'s doc now describes the up-or-down
+  behavior; tests cover the exact doublet repro, a cluster sitting AT the
+  very top of the range, and confirm the existing capacity/exhaustion
+  tests still pass unmodified (they use an apex near the range's BOTTOM,
+  so up never needs to flip — down is reachable only near the top).
+- **Collision boxes modeled the wrong geometry.** Boxes were centered on
+  the anchor, but `annotationLayout`/`clampAnnotationLabelX` (the actual
+  renderer) draws text LEFT-ALIGNED from the anchor (extending right) and
+  UPWARD from it — never centered. A symmetric half-width-sum test
+  under-counts a wide label followed by a narrow one: a gap between
+  `(wa+wb)/2` and `wa` read as clear while visually overlapping (only the
+  LEADING label's own width determines how far right it reaches). Fixed:
+  each box is now a true `[x, x+w) × [y, y+boxH)` interval — left-aligned,
+  extending right and up, matching the renderer's own geometry (the
+  renderer's small constant pixel offsets, `+6`/`-2`, have no data-space
+  equivalent without the live pixels-per-data-unit scale this pure
+  function deliberately doesn't take — negligible next to real label text,
+  called out explicitly rather than faked). Tested the specific
+  wide-then-narrow gap that used to slip through.
+- **Zoom made labels invisible.** `xRange`/`yRange` came from the FULL data
+  range, not the live view — zoomed in, a 5%-of-full-range offset could
+  exceed the entire visible window, and `annotationPlugin` silently skips
+  drawing an off-canvas annotation, so the run reported success while the
+  user saw nothing. Fixed: `usePeaks.ts`'s `labelPeaks` now uses the live
+  `xLim`/`yLim` from the store when set, falling back to the full data
+  range exactly as before when the axis is on autoscale (`null`). Tested
+  both: a narrow `yLim` keeps the label inside it; `null` reproduces the
+  prior (full-range) behavior unchanged.
+- **Minor — a wasted linear scan.** `usePeakWizard.ts`'s click-hit-test
+  bridge ran `plotApexY`/`baselineValueAt` (each a linear scan of
+  `segment.x`) over EVERY candidate before `visiblePeakMarkers` filtered
+  out excluded ones internally — on a 200k-point pattern, every peak
+  toggle paid for the excluded peaks' scans too. Fixed: only INCLUDED
+  candidates get the expensive mapping now (the array itself stays
+  full-length, since `removePeak(index)` depends on original indices — this
+  filters the WORK, not the array). Measured rather than assumed further
+  optimization was needed: a Node microbenchmark of the same scan shape (a
+  200k-point `segment.x`, realistic peak counts) measured ~0.58-1.0 ms per
+  peak (~12 ms for 20 peaks, ~29 ms for 50, ~57 ms for 100) — imperceptible
+  at the peak counts a real XRD pattern produces per toggle, so no further
+  optimization (e.g. a binary search over the presumed-sorted `segment.x`)
+  was made; the filter-first fix alone removes the actual waste.
+
+**Status (2026-08-24, round-5 review — the function's CONTRACT restated):**
+after three straight rounds of one placement fix interacting with another
+(round 3's clamp broke round 4's own guarantee; round 4's fix reopened in a
+new form under round 5's own N3 zoom ruling), the coordinator restated
+`placeLabels`'s CONTRACT rather than issuing another patch, and this round
+implements it exactly:
+
+> A label belongs to its peak — placement anchors to the peak's OWN APEX,
+> never the window edge. Offsets are a fraction of the VISIBLE range,
+> applied relative to each peak's own apex. An apex INSIDE the range: its
+> label is guaranteed inside the range too (try above; flip below only if
+> above would leave it). An apex OUTSIDE the range: its label is placed
+> relative to THAT apex anyway and may be off-screen — never pinned to the
+> window edge, because clamping a durable annotation to a transient zoom
+> edge writes a WRONG permanent coordinate that survives zooming back out.
+> No clamp is ever applied after collision resolution. Collision-freedom is
+> guaranteed only among labels in the same region.
+
+Three findings, one CRITICAL:
+
+- **O1 (the contract itself) — the round-4 fallback clamp (`Math.min(yRange[1],
+  Math.max(yRange[0], lastTried))`, kept for the "both directions exhausted"
+  case) still violated the new contract's point 4** — a leftover of the
+  SAME post-hoc-clamp shape round 4 had just fixed for the ordinary case.
+  Fixed per the exact repro: `placeLabels([{x:10,y:5000},{x:30,y:8000},
+  {x:50,y:60}], ["a","b","c"], [0,60], [0,100])` used to return
+  `[{y:100},{y:100},{y:65}]` (the two off-range apexes collapsed onto the
+  window edge); now returns labels near each apex's OWN position (~5005,
+  ~8005) for the off-range peaks and a range-guaranteed value (~65) for the
+  in-range one. Rewrote the algorithm around the contract directly: an
+  IN-RANGE apex's exhaustion fallback is now the APEX'S OWN position
+  (trivially inside the range by hypothesis, never a boundary value); an
+  OUT-OF-RANGE apex skips the in-range requirement entirely and is placed
+  purely by collision avoidance relative to itself. The round-3 exhaustion
+  test (which asserted excess labels "pile onto the SAME tier" — the OLD
+  mechanism) was updated to assert the new, contract-correct mechanism
+  (excess labels fall to their shared apex) — this is a correction to match
+  restated intended behavior, not a loosening.
+- **O2 — a descending `yRange` collapsed everything onto one y.** `inRange`
+  and the clamp assumed ascending bounds while `finiteWidth` tolerated
+  non-ascending ones silently. REACHABLE: `useApp.ts` sets `yLim:
+  [fig.y_from, fig.y_to]` from an Origin figure apply verbatim (no min/max
+  normalization), so a reversed Origin Y axis produces a descending `yLim`.
+  Fixed: both `xRange` and `yRange` are normalized to ascending at the
+  function's own entry point — a reversed axis is a DISPLAY concern this
+  placement math should never have to reason about. Tested a descending
+  `yRange` (matches the exact repro) and a descending `xRange`, both
+  confirmed to produce results identical to the equivalent ascending call.
+- **O3 — log-axis offsets were wrong, and a log intensity axis is the
+  STANDARD XRD view this feature targets.** Offsets were linear regardless
+  of `st.yScale`: a weak peak's label could land ~2.7 decades above it,
+  while the same linear offset was negligible next to a strong peak on the
+  same log axis. Fixed: `placeLabels` takes the y-scale kind (`yScale:
+  AxisScale = "linear"`) and computes offsets in the TRANSFORMED space
+  (`log10` for `"log"`, `1/v` for `"reciprocal"` — handled explicitly, not
+  silently folded into linear, since it shares log's positive-only domain
+  and "transform, offset, invert" shape), mapping back to data coordinates;
+  `usePeaks.ts` passes `st.yScale` through. A non-positive apex on a
+  log/reciprocal axis falls back to plain linear offset math for that one
+  point rather than propagating `NaN`. **Found and fixed a second bug while
+  implementing this**: `1/v` is a DECREASING transform (larger data-y means
+  SMALLER transformed value) unlike `log10`'s increasing one — the first
+  draft assumed "add a positive offset in transformed space" always meant
+  "move up in data space," which is backwards for reciprocal; a `yDir`
+  sign-flip (does increasing data-y correspond to increasing or decreasing
+  transformed-t for THIS scale kind) fixes it, caught by the reciprocal
+  test itself returning the same value as plain linear before the fix.
+
+**`placeLabels`'s final doc-comment guarantee (verbatim from the source),
+for the coordinator to check against the contract above:**
+
+> A label belongs to its peak — placement anchors to the PEAK'S OWN APEX,
+> never to the window edge.
+>  1. Offsets are a FRACTION OF THE VISIBLE RANGE (so a zoomed-in view gets
+>     visually sensible spacing) but are always applied RELATIVE TO EACH
+>     PEAK'S OWN APEX.
+>  2. An apex INSIDE `yRange`: its label is GUARANTEED inside `yRange` too
+>     — try above the apex; if above would leave the range, flip below
+>     (round 4's mechanism, kept). If every tier in both directions is
+>     exhausted (capacity and range both genuinely full at once — rare) the
+>     fallback is the APEX'S OWN position, trivially inside the range by
+>     hypothesis — never a clamp to the edge.
+>  3. An apex OUTSIDE `yRange`: its label is placed relative to THAT APEX
+>     anyway and may be off-screen. It is NEVER pinned/clamped to the
+>     window edge — a label is a durable annotation carrying an absolute
+>     data position; clamping it to a transient zoom edge would write a
+>     WRONG permanent coordinate that survives zooming back out.
+>     Off-screen-but-correct beats on-screen-but-wrong.
+>  4. NO clamp is ever applied AFTER collision resolution — any bound that
+>     must hold participates IN the search itself (as an acceptance test on
+>     each candidate), never post-processes the chosen result.
+>  5. Collision-freedom is guaranteed only among labels placed in the SAME
+>     REGION (in-range vs. off-range, and — informally — the visible
+>     cluster a peak's apex sits in): up to `MAX_STACK_TIERS + 1` labels
+>     (currently 10) sharing one dense, same-side cluster are guaranteed
+>     distinct/non-overlapping; beyond that, capacity is genuinely
+>     exhausted and extra labels pile deterministically onto the last tier
+>     tried (may overlap each other there) rather than searching forever.
+
+**Status (2026-08-24, round-6 review — geometry unified into ONE space; two
+more reachable bugs fixed):** the coordinator found that round 5's own O3 fix
+still left geometry SPLIT across two spaces — offsets/tiers in transformed
+space, but the collision box height and the range/pole handling still in
+linear data space — plus two independent process/perf findings. Five
+findings, root-caused to one fix (P1+P2):
+
+- **P1+P2 (root cause, CRITICAL) — geometry split across transformed and
+  linear space.** Confirmed repros: on `"reciprocal"`, an apex at `y:500` on
+  `yRange:[1,100]` landed its label at `y:-21.05` (an offset pushed the
+  candidate ACROSS the `1/v` pole; the sign-flipped result was still finite,
+  so the data-space guard passed); on `"log"`, 4 clustered peaks on
+  `yRange:[1,100000]` produced 3 overlapping pairs (a fixed LINEAR-data-unit
+  box height, mismatched to log-spaced offsets near the low end, exhausted
+  all `MAX_STACK_TIERS`) where linear mode separates all 4 cleanly. Fixed by
+  rewriting `placeLabels` around a single rule: transform ONCE at entry
+  (`fwdT`/`bwdT`), invert ONCE at exit. Apexes, offsets, tier steps, the
+  collision box height (`boxHT`), the range bounds (`yMinT`/`yMaxT`), and
+  every acceptance test now live in ONE transformed space for the entire
+  search — never mixed with linear-space geometry mid-search. A second,
+  more subtle bug surfaced while fixing this: a bare `Number.isFinite(bwdT(t))`
+  check is NOT sufficient pole safety for reciprocal, since only `t === 0`
+  itself is non-finite — a sign-flipped, wrong-side-of-the-pole candidate is
+  still finite. Added an explicit `inDomain`/`tMustBePositive` domain check
+  (distinct from mere finiteness), folded into the acceptance test for both
+  the in-range and out-of-range branches — never a post-hoc clamp (contract
+  point 4 still holds). Verified: apex `y:500` now places at a positive,
+  finite y (no longer -21.05); the 4-peak log cluster now separates cleanly
+  (10-tier capacity confirmed to hold on both non-linear scales, not just
+  linear). Test helper `assertNoOverlap` was made scale-aware (transforms
+  both compared points before computing box overlap) so the test suite
+  checks overlap in the SAME space the algorithm now operates in, rather
+  than silently repeating the production bug on the test side.
+- **P3 — the log path silently disabled itself on ordinary data.** With the
+  default autoscaled axis (`yLim: null`), a single non-positive sample (a
+  zero or slightly negative background point — routine in real XRD data)
+  made `finiteRange(y)[0] <= 0`; `placeLabels`'s own `fwd` then returned
+  `NaN`, `yTransformable` went `false`, and the WHOLE batch silently reverted
+  to linear offsets — reintroducing the ~2.7-decade misplacement O3's own
+  test exists to prevent, on the common case, not an edge case. Fixed:
+  `usePeaks.ts`'s `finiteRange` takes a `positiveOnly` flag, used only when
+  `st.yScale` is `"log"`/`"reciprocal"` and `yLim` is unset — matching
+  `lib/uplotOpts.ts`'s own `fullYExtents`/`isPositiveOnlyScale` convention (a
+  log/reciprocal axis can only ever render positive values, so its floor is
+  the smallest POSITIVE sample, not the channel's raw minimum). An explicit
+  `yLim` is trusted as-is (a real log-scaled view can never legitimately hold
+  a non-positive bound). Tested: a 6-point dataset with one negative sample
+  (`-5`) and `yScale: "log"`, `yLim: null` still gets log-spaced offsets (the
+  label lands within one decade of its apex, not thousands of units away).
+- **P4 — the batch guard was in the wrong place.** The second `withHistoryBatch`
+  reentrancy pre-flight check sat BEFORE `await resolveDataset(...)` rather
+  than immediately before `withHistoryBatch` itself — so another batch (e.g.
+  `relink.ts`'s `importChangedAsNewVersion`) starting during that fetch could
+  still ride all the way to `withHistoryBatch` and get folded into the
+  import's single undo entry, exactly what the L5 guard (round 2) exists to
+  prevent. Fixed: moved the check to immediately before the
+  `withHistoryBatch` call, with no `await` between check and call (every
+  step in between — `peakInputs`/`finiteRange`/`placeLabels` — is
+  synchronous). Red-first test: mocked `resolveDataset` to flip
+  `historySuppressed: true` DURING its own await (simulating a batch
+  starting mid-fetch) — 2 annotations were created against the old guard
+  placement; 0 against the fix.
+- **P5 — `baselineValueAt` full-scanned `segment.x` per candidate,** now
+  called from two `usePeakWizard.ts` effects that re-run on every
+  `candidates` change — at this project's 1M-row scale, one include-toggle
+  cost tens of millions of main-thread iterations. Fixed: binary search
+  (`nearestIndexAscending`) over `segment.x`, which is always ascending (a
+  range-cut, order-preserving slice of the plotted x column — `cutRange`
+  filters, never reorders; the wizard's own `span = x[last] - x[0]` already
+  relies on the same precondition). Preserves the original linear scan's
+  exact tie-break (on an equidistant pair, the smaller/earlier index wins),
+  confirmed by a 200-trial fuzz test against a brute-force reference plus
+  explicit duplicate/tie/out-of-range/single-sample cases. **Measured at 1M
+  rows** (round 5 measured ~0.58-1.0 ms/peak at 200k): the OLD linear scan
+  costs ~2.60 ms/peak at 1M rows (520 ms for 200 lookups — consistent with
+  ~5x linear scaling from the 200k figure); the NEW binary search costs
+  ~0.0024 ms/peak at the same scale (0.49 ms for 200 lookups) — roughly a
+  1,000x speedup, reducing an include-toggle on a 1M-row pattern from
+  hundreds of milliseconds to sub-millisecond.
+
+No linear-space geometry remains inside `placeLabels`'s search for a
+non-linear (`"log"`/`"reciprocal"`) scale: apex, offset, tier step, box
+height, range bounds, and every acceptance test are computed in transformed
+`t`-space; `bwdT()` is called exactly once per point, at the moment a final
+placement is assigned. Gates: `tsc --noEmit`, `eslint --max-warnings=0` on
+every changed file, targeted vitest (`usePeaks.test.ts` 34/34,
+`peakLabels.test.ts` 45/45, new `peakWizardApex.test.ts` 12/12,
+`architecture.test.ts`) — 109 passed — plus the full suite and
+`npm run build`, all green.
+
+**Status (2026-08-24, round-7 review — Q1: normalized-position space
+replaces raw transformed space; `yDir` deleted):** the coordinator's own
+probing found that reciprocal-scale labels for apex 50/20/500 on `[1,100]`
+land BELOW their peaks (14.39/10.05/19.41) rather than above, and traced it
+to round 6's `yDir` sign-flip — its premise ("`1/v` decreases, so flip") is
+true of the raw transform but not of SCREEN position, since `uplotOpts.ts`'s
+own `pct = (fwd(val)-fwd(scaleMin))/(fwd(scaleMax)-fwd(scaleMin))` cancels
+that sign automatically and stays monotonically increasing in data value for
+every scale. Ruling: do ALL geometry in that same normalized position `p`
+(not raw transformed `t`) so "above" is unambiguously "larger `p`"
+everywhere, with no per-scale sign logic. Implemented exactly that — `pFwd`/
+`denormT`/`pBwd` replace `fwdT`/`bwdT`, `yDir` is deleted — and re-verified
+against the committed round-6 code with a script, not just by inspection:
+
+**Important finding surfaced during verification, reported honestly rather
+than glossed over**: for the SPECIFIC apex values the coordinator probed
+(50, 20, 500 on `[1,100]`), the new pct-space code and the old committed
+`yDir`-based code produce IDENTICAL results (14.388489.../10.050251.../
+19.417475..., matching to 13+ significant figures, confirmed for
+single-point, out-of-range, and multi-peak-collision cases). This is
+provable algebraically, not coincidental: `yDir * yWidthT` (old) and
+`frac * spanT` (new) are the SAME quantity for every scale, increasing or
+decreasing — `yDir = sign(hiT - loT)` and `yWidthT = |hiT - loT|`, so their
+product recovers the signed `(hiT - loT)` regardless of monotonicity. Round
+6's `yDir` code was already landing on the mathematically correct number
+DESPITE a confusing/backwards-sounding rationale in its own comment — apex
+50/20 genuinely sit at pct ≈ 0.99/0.96 on `[1,100]` (reciprocal compresses
+essentially the entire visible range into data values near the low end;
+values above ~10 are crammed into the last ~9% of the pct range), so with
+only ~1-4% of headroom left and a 5% offset, contract point 2's OWN
+flip-below mechanism is the mathematically forced outcome for these three
+apexes specifically — not a direction bug. Apex values with genuine
+headroom (e.g. 2, 10) place ABOVE under BOTH old and new code
+(2.22 > 2, 19.80 > 10). The coordinator's own test-writing guidance
+anticipated exactly this ("the up-vs-down flip near the top of the range
+still puts it strictly below"), which is what informed the table-driven
+test's apex choices below.
+
+None of this makes the ruling's PRESCRIBED FIX wrong to implement — pct
+space is still the objectively cleaner, more principled structure (matches
+what uPlot itself computes, one unambiguous "larger p = up" rule with no
+per-scale sign logic that a future scale kind could get backwards) — it
+just means the fix's effect here is a code-quality/robustness improvement
+plus closing a REAL edge-case regression it introduced (see next paragraph),
+not a change to these three specific numbers.
+
+**A genuine bug the pct-space rewrite DID introduce and then fix in the same
+round**: the first draft normalized the "untransformable" fallback branch
+(a degenerate zero-width `yRange`, or a domain violation like a non-positive
+log range) to `[0, 1]` using a width-1 fallback — this manufactured artificial
+headroom for a truly zero-width range and broke two existing tests
+(`yRange: [7, 7]` no longer stayed clamped to the apex, landing at `7.05`
+instead of `7`). Fixed: the fallback branch keeps `p` as literally the
+DATA value (identity, matching round 6's own `t = v` fallback), with
+acceptance bounds `[yRange[0], yRange[1]]` directly (collapsing to a single
+point when degenerate) — normalization to `[0, 1]` applies ONLY in the
+genuinely transformable branch. Caught by the pre-existing M2/O1 zero-width
+regression tests, not new ones — a reminder that the FULL existing suite,
+not just new targeted tests, is load-bearing evidence for a refactor.
+
+Also fixed in the same pass: an individual apex's domain-violation clamp
+(e.g. a non-positive value on an otherwise-valid log/reciprocal range) now
+consistently clamps to `p = 0` (`yRange[0]`, the range's own bottom) for
+EVERY scale — round 6's `yMinT`-based clamp was inconsistent for reciprocal
+specifically (clamped to `yRange[1]`, the TOP, since `yMinT` meant "the
+smaller raw `t`," which is the range's high end for a decreasing transform).
+No test pinned the old behavior, so this is a genuine (uncontested)
+consistency fix, not a documented regression.
+
+Deleted the weak `"reciprocal yScale is handled explicitly"` test (asserted
+only `.not.toBeCloseTo(linearResult)`, which a WRONG-direction value could
+also satisfy) and added a table-driven describe block covering all three
+scales: for each, one apex with genuine pct-headroom (asserts strictly
+ABOVE) and one apex near the range's top (asserts strictly BELOW,
+never negative) — plus explicit re-checks that `linear`/`log` apex-50
+values on `[1,100]` are unmoved (`54.95`/`62.9463`) by this ruling, exactly
+as required. Round-6's P1/P2 probes re-run clean under pct-space geometry:
+the reciprocal pole-crossing repro (apex 500) stays finite and positive
+(`19.4175`), and the 4-peak dense log cluster still separates with zero
+overlaps.
+
+Gates: `tsc --noEmit`, `eslint --max-warnings=0` on both changed files,
+targeted vitest (`peakLabels.test.ts` 53/53, plus `usePeaks.test.ts`/
+`peakWizardApex.test.ts`/`architecture.test.ts` unaffected at 117 total)
+green, full suite green, `npm run build` green.
 
 ## Non-negotiable operating rules
 

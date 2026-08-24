@@ -593,7 +593,13 @@ export interface BaselineOverlay {
   y: (number | null)[];
 }
 
-/** One detected peak (from /api/peaks/find). */
+/** One detected peak (from /api/peaks/find). `height` is measured ABOVE
+ *  `bg` (`calc/peaks.py`'s `find_peaks_robust` returns both) — the apex's
+ *  actual y is `height + bg`, never `height` alone (L1/L2 review finding,
+ *  usePeaks.ts's "label peaks"/marker-overlay bug: every backgrounded
+ *  dataset placed labels/markers a whole background below the real peak).
+ *  Declared explicitly (not left to the index signature) so that formula is
+ *  type-checked at every call site, not incidental. */
 export interface Peak {
   center: number;
   height: number;
@@ -601,6 +607,7 @@ export interface Peak {
   prominence: number;
   localSNR: number;
   area: number | null;
+  bg: number;
   [key: string]: unknown;
 }
 
