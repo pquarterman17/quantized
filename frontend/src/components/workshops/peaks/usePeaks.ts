@@ -390,7 +390,13 @@ export function usePeaks(): PeaksState {
 
       const labels = kept.map((r) => r.label);
       const points = kept.map((r) => r.point);
-      const placements = placeLabels(points, labels, xRange, yRange);
+      // O3 review finding: a log intensity axis is the STANDARD XRD view
+      // this feature targets — pass the live `yScale` so offsets are
+      // computed as a sensible visual distance on THAT scale, not always
+      // linear data units (a linear offset near a log axis's top decade is
+      // negligible; the same offset near a weak peak can be several
+      // decades too tall).
+      const placements = placeLabels(points, labels, xRange, yRange, st.yScale);
 
       // RULING 1/2/3: ordinary annotations via addAnnotation +
       // updateAnnotation (never a new decoration model), one shared groupId

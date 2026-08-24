@@ -420,13 +420,104 @@ this branch's implementation. All four fixed here, red-first.
   optimization (e.g. a binary search over the presumed-sorted `segment.x`)
   was made; the filter-first fix alone removes the actual waste.
 
-**`placeLabels`'s final guarantee, in one sentence:** it deterministically
-places up to `MAX_STACK_TIERS + 1` (currently 10) labels per dense cluster
-without overlap and always inside the caller's `xRange`/`yRange`, preferring
-the space above each peak's apex and falling back below it only when above
-would leave the visible range, with any further overflow beyond that
-capacity piling predictably (and visibly, not off-plot) onto the last tier
-tried.
+**Status (2026-08-24, round-5 review — the function's CONTRACT restated):**
+after three straight rounds of one placement fix interacting with another
+(round 3's clamp broke round 4's own guarantee; round 4's fix reopened in a
+new form under round 5's own N3 zoom ruling), the coordinator restated
+`placeLabels`'s CONTRACT rather than issuing another patch, and this round
+implements it exactly:
+
+> A label belongs to its peak — placement anchors to the peak's OWN APEX,
+> never the window edge. Offsets are a fraction of the VISIBLE range,
+> applied relative to each peak's own apex. An apex INSIDE the range: its
+> label is guaranteed inside the range too (try above; flip below only if
+> above would leave it). An apex OUTSIDE the range: its label is placed
+> relative to THAT apex anyway and may be off-screen — never pinned to the
+> window edge, because clamping a durable annotation to a transient zoom
+> edge writes a WRONG permanent coordinate that survives zooming back out.
+> No clamp is ever applied after collision resolution. Collision-freedom is
+> guaranteed only among labels in the same region.
+
+Three findings, one CRITICAL:
+
+- **O1 (the contract itself) — the round-4 fallback clamp (`Math.min(yRange[1],
+  Math.max(yRange[0], lastTried))`, kept for the "both directions exhausted"
+  case) still violated the new contract's point 4** — a leftover of the
+  SAME post-hoc-clamp shape round 4 had just fixed for the ordinary case.
+  Fixed per the exact repro: `placeLabels([{x:10,y:5000},{x:30,y:8000},
+  {x:50,y:60}], ["a","b","c"], [0,60], [0,100])` used to return
+  `[{y:100},{y:100},{y:65}]` (the two off-range apexes collapsed onto the
+  window edge); now returns labels near each apex's OWN position (~5005,
+  ~8005) for the off-range peaks and a range-guaranteed value (~65) for the
+  in-range one. Rewrote the algorithm around the contract directly: an
+  IN-RANGE apex's exhaustion fallback is now the APEX'S OWN position
+  (trivially inside the range by hypothesis, never a boundary value); an
+  OUT-OF-RANGE apex skips the in-range requirement entirely and is placed
+  purely by collision avoidance relative to itself. The round-3 exhaustion
+  test (which asserted excess labels "pile onto the SAME tier" — the OLD
+  mechanism) was updated to assert the new, contract-correct mechanism
+  (excess labels fall to their shared apex) — this is a correction to match
+  restated intended behavior, not a loosening.
+- **O2 — a descending `yRange` collapsed everything onto one y.** `inRange`
+  and the clamp assumed ascending bounds while `finiteWidth` tolerated
+  non-ascending ones silently. REACHABLE: `useApp.ts` sets `yLim:
+  [fig.y_from, fig.y_to]` from an Origin figure apply verbatim (no min/max
+  normalization), so a reversed Origin Y axis produces a descending `yLim`.
+  Fixed: both `xRange` and `yRange` are normalized to ascending at the
+  function's own entry point — a reversed axis is a DISPLAY concern this
+  placement math should never have to reason about. Tested a descending
+  `yRange` (matches the exact repro) and a descending `xRange`, both
+  confirmed to produce results identical to the equivalent ascending call.
+- **O3 — log-axis offsets were wrong, and a log intensity axis is the
+  STANDARD XRD view this feature targets.** Offsets were linear regardless
+  of `st.yScale`: a weak peak's label could land ~2.7 decades above it,
+  while the same linear offset was negligible next to a strong peak on the
+  same log axis. Fixed: `placeLabels` takes the y-scale kind (`yScale:
+  AxisScale = "linear"`) and computes offsets in the TRANSFORMED space
+  (`log10` for `"log"`, `1/v` for `"reciprocal"` — handled explicitly, not
+  silently folded into linear, since it shares log's positive-only domain
+  and "transform, offset, invert" shape), mapping back to data coordinates;
+  `usePeaks.ts` passes `st.yScale` through. A non-positive apex on a
+  log/reciprocal axis falls back to plain linear offset math for that one
+  point rather than propagating `NaN`. **Found and fixed a second bug while
+  implementing this**: `1/v` is a DECREASING transform (larger data-y means
+  SMALLER transformed value) unlike `log10`'s increasing one — the first
+  draft assumed "add a positive offset in transformed space" always meant
+  "move up in data space," which is backwards for reciprocal; a `yDir`
+  sign-flip (does increasing data-y correspond to increasing or decreasing
+  transformed-t for THIS scale kind) fixes it, caught by the reciprocal
+  test itself returning the same value as plain linear before the fix.
+
+**`placeLabels`'s final doc-comment guarantee (verbatim from the source),
+for the coordinator to check against the contract above:**
+
+> A label belongs to its peak — placement anchors to the PEAK'S OWN APEX,
+> never to the window edge.
+>  1. Offsets are a FRACTION OF THE VISIBLE RANGE (so a zoomed-in view gets
+>     visually sensible spacing) but are always applied RELATIVE TO EACH
+>     PEAK'S OWN APEX.
+>  2. An apex INSIDE `yRange`: its label is GUARANTEED inside `yRange` too
+>     — try above the apex; if above would leave the range, flip below
+>     (round 4's mechanism, kept). If every tier in both directions is
+>     exhausted (capacity and range both genuinely full at once — rare) the
+>     fallback is the APEX'S OWN position, trivially inside the range by
+>     hypothesis — never a clamp to the edge.
+>  3. An apex OUTSIDE `yRange`: its label is placed relative to THAT APEX
+>     anyway and may be off-screen. It is NEVER pinned/clamped to the
+>     window edge — a label is a durable annotation carrying an absolute
+>     data position; clamping it to a transient zoom edge would write a
+>     WRONG permanent coordinate that survives zooming back out.
+>     Off-screen-but-correct beats on-screen-but-wrong.
+>  4. NO clamp is ever applied AFTER collision resolution — any bound that
+>     must hold participates IN the search itself (as an acceptance test on
+>     each candidate), never post-processes the chosen result.
+>  5. Collision-freedom is guaranteed only among labels placed in the SAME
+>     REGION (in-range vs. off-range, and — informally — the visible
+>     cluster a peak's apex sits in): up to `MAX_STACK_TIERS + 1` labels
+>     (currently 10) sharing one dense, same-side cluster are guaranteed
+>     distinct/non-overlapping; beyond that, capacity is genuinely
+>     exhausted and extra labels pile deterministically onto the last tier
+>     tried (may overlap each other there) rather than searching forever.
 
 ## Non-negotiable operating rules
 

@@ -82,6 +82,7 @@ beforeEach(() => {
     historySuppressed: false,
     xLim: null,
     yLim: null,
+    yScale: "linear",
   });
   vi.mocked(findPeaks).mockResolvedValue({
     peaks: [pk(1, 5, 0.8), pk(3, 6, 0.9)],
@@ -791,5 +792,34 @@ describe("usePeaks labelPeaks — round-4 review: N3 placement uses the LIVE zoo
     const anns = useApp.getState().annotations;
     expect(anns).toHaveLength(1);
     expect(anns[0].y).toBeGreaterThan(400); // same as the L1 test — autoscale unaffected
+  });
+});
+
+describe("usePeaks labelPeaks — round-5 review: O3 passes the live yScale through to placement", () => {
+  it("on a log-scaled view, a weak peak's label stays a sensible LOG-SPACE distance above it, not a huge linear offset", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: BACKGROUNDED_DATA }],
+      activeId: "d1",
+      yLim: [1, 100000], // a log-relevant range (matches the pure-fn O3 tests)
+      yScale: "log",
+    });
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 10, 0.8, 0)], // apex = 10, a weak peak near the log range's bottom
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].y).toBeGreaterThan(10); // above its own apex
+    // A plain LINEAR 5%-of-range offset would be ~5010 (10 + 0.05*99999) —
+    // the exact bug O3 describes. A log-aware offset stays close to 10.
+    expect(anns[0].y).toBeLessThan(100);
   });
 });

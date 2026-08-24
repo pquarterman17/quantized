@@ -272,9 +272,9 @@ describe("placeLabels — M1 review finding: the honest capacity guarantee", () 
     expect(new Set(placed.map((p) => p.y.toFixed(6))).size).toBe(CAPACITY);
   });
 
-  it("capacity genuinely exhausted (more peaks than the cluster can hold): excess peaks pile deterministically onto the last tier, not off into the unknown", () => {
+  it("capacity genuinely exhausted (more peaks than the cluster can hold): excess peaks deterministically fall back to their OWN apex (round-5 contract point 2 — never a boundary clamp), not off into the unknown", () => {
     const extra = 5;
-    const points = tightCluster(CAPACITY + extra);
+    const points = tightCluster(CAPACITY + extra); // all share apex y = 5, well inside yRange
     const labels = points.map((_, i) => `${i}.00`);
     const xRange: [number, number] = [0, 20];
     const yRange: [number, number] = [0, 10000];
@@ -284,29 +284,31 @@ describe("placeLabels — M1 review finding: the honest capacity guarantee", () 
     for (const p of placed) {
       expect(Number.isFinite(p.x)).toBe(true);
       expect(Number.isFinite(p.y)).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(yRange[0]);
+      expect(p.y).toBeLessThanOrEqual(yRange[1]);
     }
-    // The first CAPACITY labels (sorted by x, which matches this fixture's
-    // input order) still occupy CAPACITY distinct tiers...
+    // The first CAPACITY labels (sorted by x, matching this fixture's input
+    // order) still occupy CAPACITY distinct tiers, all ABOVE the apex —
+    // down never gets reached for them (apex=5 is near yRange's bottom, so
+    // the up direction has all the headroom `MAX_STACK_TIERS` needs).
     const within = placed.slice(0, CAPACITY);
     expect(new Set(within.map((p) => p.y.toFixed(6))).size).toBe(CAPACITY);
-    // ...but every peak from CAPACITY onward piles onto the SAME last tier —
-    // deterministic, not random, and not off-plot (M2 covers that half).
-    const pile = placed.slice(CAPACITY - 1); // last in-capacity slot + all overflow
-    const pileY = pile[0].y;
-    for (const p of pile) expect(p.y).toBeCloseTo(pileY, 9);
+    for (const p of within) expect(p.y).toBeGreaterThan(5);
+    // Every peak from CAPACITY onward is genuinely exhausted in BOTH
+    // directions (up: every tier already occupied; down: apex=5 is too
+    // close to yRange[0]=0 for any tier's down-candidate to stay in range)
+    // — round 5's contract (point 2) says the fallback for an IN-RANGE
+    // apex is the apex's OWN position, deterministically, never a
+    // boundary clamp. So every excess label lands exactly ON its apex.
+    const overflow = placed.slice(CAPACITY);
+    for (const p of overflow) expect(p.y).toBe(5);
     // And — the honest part of the guarantee — this pile DOES overlap
     // (same tight x cluster, identical y): calling this "no overlap" would
     // be false, so the test asserts the overlap explicitly rather than
     // leaving the exhaustion case unasserted.
-    const overlapsSomewhere = (() => {
-      for (let i = 0; i < pile.length; i++) {
-        for (let j = i + 1; j < pile.length; j++) {
-          if (Math.abs(pile[i].x - pile[j].x) < 2 && pile[i].y === pile[j].y) return true;
-        }
-      }
-      return false;
-    })();
-    expect(overlapsSomewhere).toBe(true);
+    expect(overflow.length).toBeGreaterThan(1);
+    expect(Math.abs(overflow[0].x - overflow[1].x)).toBeLessThan(2);
+    expect(overflow[0].y).toBe(overflow[1].y);
   });
 });
 
@@ -417,5 +419,140 @@ describe("placeLabels — N2 review finding, round 4: box geometry matches the r
     // bumped to a different tier.
     expect(placed[0].y).not.toBeCloseTo(placed[1].y, 6);
     assertNoOverlap(placed, labels, xRange, yRange);
+  });
+});
+
+describe("placeLabels — O1 review finding, round 5: the contract — anchor to the APEX, never the window edge", () => {
+  it("the exact repro: two off-range apexes stay distinct and near their OWN apex; only the in-range one is pinned inside yRange", () => {
+    const placed = placeLabels(
+      [{ x: 10, y: 5000 }, { x: 30, y: 8000 }, { x: 50, y: 60 }],
+      ["a", "b", "c"],
+      [0, 60],
+      [0, 100],
+    );
+    expect(placed).toHaveLength(3);
+    for (const p of placed) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+    // The old bug: both off-range apexes (5000, 8000) collapsed onto the
+    // SAME clamped y=100 (the window edge) — not distinct, not near their
+    // own apex, and a WRONG permanent coordinate.
+    expect(placed[0].y).not.toBe(placed[1].y);
+    expect(placed[0].y).not.toBe(100);
+    expect(placed[1].y).not.toBe(100);
+    // Contract point 3: off-range apexes are placed RELATIVE TO THEIR OWN
+    // apex — near 5000 and 8000 respectively, not at the window edge.
+    expect(placed[0].y).toBeGreaterThan(4000);
+    expect(placed[0].y).toBeLessThan(6000);
+    expect(placed[1].y).toBeGreaterThan(7000);
+    expect(placed[1].y).toBeLessThan(9000);
+    // Contract point 2: the ONE in-range apex (60) IS guaranteed inside yRange.
+    expect(placed[2].y).toBeGreaterThanOrEqual(0);
+    expect(placed[2].y).toBeLessThanOrEqual(100);
+  });
+
+  it("an apex outside the range is placed near ITS OWN apex even when that means landing off-screen (never window-edge-pinned)", () => {
+    const placed = placeLabels([{ x: 5, y: 500 }], ["500.00"], [0, 10], [0, 10]);
+    expect(Number.isFinite(placed[0].y)).toBe(true);
+    expect(placed[0].y).toBeGreaterThan(400); // near 500, not clamped to yRange[1]=10
+  });
+
+  it("a wholly exhausted IN-RANGE apex falls back to the apex's OWN position (never a boundary clamp)", () => {
+    // A zero-width range: the apex (7) is trivially "inside" [7, 7], and no
+    // offset in either direction can also stay inside a zero-width range —
+    // the only value that satisfies contract point 2 is the apex itself.
+    const placed = placeLabels([{ x: 7, y: 7 }], ["7.00"], [7, 7], [7, 7]);
+    expect(placed[0].y).toBe(7);
+  });
+});
+
+describe("placeLabels — O2 review finding, round 5: descending ranges are normalized to ascending", () => {
+  it("a descending yRange no longer collapses every label onto one y (the exact repro)", () => {
+    const placed = placeLabels(
+      [{ x: 10, y: 500 }, { x: 30, y: 200 }, { x: 50, y: 900 }],
+      ["a", "b", "c"],
+      [0, 60],
+      [1000, 0], // descending
+    );
+    expect(placed).toHaveLength(3);
+    // The old bug: all three collapsed onto y=0.
+    const ys = new Set(placed.map((p) => p.y));
+    expect(ys.size).toBeGreaterThan(1);
+    for (const p of placed) {
+      expect(Number.isFinite(p.y)).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeLessThanOrEqual(1000);
+    }
+  });
+
+  it("a descending yRange produces the SAME result as the equivalent ascending one", () => {
+    const points = [{ x: 10, y: 500 }, { x: 30, y: 200 }, { x: 50, y: 900 }];
+    const labels = ["a", "b", "c"];
+    const ascendingResult = placeLabels(points, labels, [0, 60], [0, 1000]);
+    const descendingResult = placeLabels(points, labels, [0, 60], [1000, 0]);
+    expect(descendingResult).toEqual(ascendingResult);
+  });
+
+  it("a descending xRange also normalizes (no crash, same box-width math as ascending)", () => {
+    const points = [{ x: 10, y: 5 }, { x: 15, y: 5 }];
+    const labels = ["a", "b"];
+    const ascendingResult = placeLabels(points, labels, [0, 60], [0, 100]);
+    const descendingResult = placeLabels(points, labels, [60, 0], [0, 100]);
+    expect(descendingResult).toEqual(ascendingResult);
+  });
+});
+
+describe("placeLabels — O3 review finding, round 5: log-axis-aware offsets", () => {
+  it("on a log range, a weak peak's label sits a sensible LOG-SPACE distance above it (not ~2.7 decades)", () => {
+    const placed = placeLabels(
+      [{ x: 10, y: 10 }, { x: 30, y: 100000 }],
+      ["a", "b"],
+      [0, 60],
+      [1, 100000],
+      "log",
+    );
+    expect(Number.isFinite(placed[0].y)).toBe(true);
+    expect(placed[0].y).toBeGreaterThan(10); // above its own apex
+    const decadesAbove = Math.log10(placed[0].y) - Math.log10(10);
+    // A sensible visual gap in LOG space (a fraction of a decade), not the
+    // old bug's ~2.7 decades (y≈5010, log10(5010/10)≈2.7).
+    expect(decadesAbove).toBeGreaterThan(0.01);
+    expect(decadesAbove).toBeLessThan(1);
+  });
+
+  it("on a log range, the strong peak's label offset is NOT negligible (a real log-space gap, not a linear +constant lost in the scale)", () => {
+    const placed = placeLabels(
+      [{ x: 10, y: 10 }, { x: 30, y: 100000 }],
+      ["a", "b"],
+      [0, 60],
+      [1, 100000],
+      "log",
+    );
+    const decadesAway = Math.abs(Math.log10(placed[1].y) - Math.log10(100000));
+    expect(decadesAway).toBeGreaterThan(0.01); // a real, visible gap on a log axis
+    expect(placed[1].y).not.toBeCloseTo(100000, -1); // not indistinguishable from the peak itself
+  });
+
+  it("a zero/negative apex on a log axis falls back to linear and stays finite (never NaN/-Infinity)", () => {
+    const placed = placeLabels([{ x: 10, y: 0 }], ["0.00"], [0, 60], [1, 100000], "log");
+    expect(Number.isFinite(placed[0].y)).toBe(true);
+    const placedNeg = placeLabels([{ x: 10, y: -5 }], ["-5.00"], [0, 60], [1, 100000], "log");
+    expect(Number.isFinite(placedNeg[0].y)).toBe(true);
+  });
+
+  it("linear yScale (the default) is unaffected by the log-transform machinery", () => {
+    const withDefault = placeLabels([{ x: 5, y: 50 }], ["50.00"], [0, 10], [0, 100]);
+    const withExplicitLinear = placeLabels([{ x: 5, y: 50 }], ["50.00"], [0, 10], [0, 100], "linear");
+    expect(withExplicitLinear).toEqual(withDefault);
+  });
+
+  it("reciprocal yScale is handled explicitly (transformed space), not silently treated as linear", () => {
+    const linearResult = placeLabels([{ x: 10, y: 10 }], ["10.00"], [0, 60], [1, 100], "linear");
+    const reciprocalResult = placeLabels([{ x: 10, y: 10 }], ["10.00"], [0, 60], [1, 100], "reciprocal");
+    expect(Number.isFinite(reciprocalResult[0].y)).toBe(true);
+    // Different offset formula -> a DIFFERENT result from plain linear
+    // (proving it isn't just falling through to the linear path unnoticed).
+    expect(reciprocalResult[0].y).not.toBeCloseTo(linearResult[0].y, 6);
   });
 });
