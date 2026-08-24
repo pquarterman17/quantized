@@ -97,7 +97,7 @@ export function buildFigureSpec(
   o: FigureRenderOpts,
 ): FigureSpec {
   const st = s();
-  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o);
+  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, { liveDataset: ds });
 }
 
 /** Build the common export transport from a complete PlotView projection. The
@@ -121,6 +121,8 @@ function buildFigureSpecForView(
     /** Preserve the valid canonical case where an explicitly selected channel
      * is deliberately used for both X and Y. */
     allowExplicitXAsY?: boolean;
+    /** C2: bound live `Dataset` (absent for frozen) -- facets partition its analysisData view. */
+    liveDataset?: Dataset | null;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
@@ -160,12 +162,14 @@ function buildFigureSpecForView(
       }
     : data;
 
-  // F4.4 (export half): a durable facet binding renders the SAME
-  // small-multiples grid Stage shows on screen instead of a single
-  // overlaid plot — see `buildFacetSpecs`'s own doc for the resolution
-  // rules. `undefined` (no `facetKey`) omits the field entirely, matching
-  // every other optional field this function builds.
-  const facets = st.facetKey == null ? undefined : buildFacetSpecs(dataset, st.facetKey, st.xKey, st.yKeys);
+  // F4.4 (export half): a durable facet binding renders the SAME small-
+  // multiples grid Stage shows on screen — see `buildFacetSpecs`'s own doc
+  // (`undefined` = no `facetKey`, or C5's degenerate-partition fallback).
+  // C2: `extras.liveDataset` makes it partition the screen's OWN
+  // `analysisData`-pruned view, not raw `dataset`.
+  const facets = st.facetKey == null
+    ? undefined
+    : buildFacetSpecs(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset);
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -274,6 +278,7 @@ export function buildFigureSpecFromDocument(
       publicationOverrides: document.publication?.overrides,
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
+      liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );
 }

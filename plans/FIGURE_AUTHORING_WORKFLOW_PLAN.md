@@ -587,6 +587,48 @@ with parent items P1.3 and P1.5.
       genuinely open — this slice only closes (2); `F4.4` therefore stays
       `[~]`.
 
+      **2026-08-24 fix round (Claude): 6 correctness findings against the
+      above closed, 2 accepted as-is.** Closed: (C1) the facet branch only
+      honored the legacy `x_log`/`y_log` booleans, which the frontend never
+      sends (`lib/figureContract.ts` marks them "unsupported — legacy wire
+      fallback"; the real wire shape is `x_scale`/`y_scale`) — a log-scaled
+      faceted view exported with LINEAR axes; `render_facets_figure` now
+      resolves scale via the SAME `calc.figure_scale` helper the flat
+      renderer uses, applied per-panel, and also forwards `x_fmt`/`y_fmt`
+      tick formats the same way. (C2) `buildFacetSpecs` partitioned the RAW
+      dataset instead of the row-excluded/filtered view the screen's own
+      facet grid uses (`analysisData`) — an export could contain excluded
+      rows or an extra panel for a fully-excluded level; it now prunes via
+      the same `droppedRows`/`pruneExcluded` primitives first. (C3)
+      `transparent` was dropped on the facet path; now forwarded to
+      savefig like the flat branch. (C4) auto-derived "label (unit)" axis
+      labels were lost on the facet branch (`req.x_label or ""` instead of
+      deriving from the dataset); now reuses `_figure_series`'s derivation.
+      (C5) `buildFacetSpecs` threw when the facet column had no finite
+      levels, while the screen (`facetCompositionFromBinding` → null)
+      silently falls back to a flat plot for the identical state — a stale
+      facet binding could render on screen but no longer export at all;
+      `buildFacetSpecs` now mirrors the screen and returns `undefined`
+      (flat export) instead. (C6) a stray `TypeError` added to the shared
+      flat+facet `except` tuple (nothing in either branch actually raises
+      it) has been reverted. Accepted, not fixed: (C7) a faceted request
+      ships both the raw dataset AND the resolved panels — the dataset is
+      still needed server-side for C4's label derivation; a future slimming
+      could drop it once labels are resolved another way. (C8, doc-only)
+      `lib/figureSpecFacets.ts`'s header cited a nonexistent 500-line `.ts`
+      vitest ceiling — corrected to cite CLAUDE.md's source-module
+      convention instead (`architecture.test.ts` enforces a 400-line
+      ceiling on `.tsx` components only).
+
+      **Separately, a pre-existing gap noted while fixing C2:** the FLAT
+      (non-faceted) export path has never honored row exclusion/filtering
+      either — `buildFigureSpecForView` builds `dataset`/`plotted` straight
+      off the raw `Dataset.data`, not `analysisData`'s pruned view. C2 fixed
+      only the facet path, whose whole contract is screen fidelity ("can
+      never disagree with what Stage showed"); the flat path's gap is
+      untouched and remains open — a candidate for its own slice, not
+      silently inherited into facet's fix.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

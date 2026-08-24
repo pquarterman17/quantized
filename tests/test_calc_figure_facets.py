@@ -92,6 +92,66 @@ def test_x_log_and_y_log_do_not_raise() -> None:
     assert out[:4] == b"%PDF"
 
 
+# ── Fix-round C1: the wire shape the frontend ACTUALLY sends is x_scale/
+# y_scale (`lib/figureContract.ts` marks x_log/y_log "unsupported -- legacy
+# wire fallback"), not the legacy booleans -- render_facets_figure must
+# resolve scale the SAME way the flat renderer does
+# (`calc.figure_scale.resolve_axis_scale`), applied to EVERY panel. ────────
+
+
+def test_x_scale_log_applies_log_to_every_panel() -> None:
+    fig = _rendered_figure(_panels(3), fmt="pdf", x_scale="log", y_scale="log")
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    for ax in axes:
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+
+
+def test_x_scale_wins_over_x_log_when_both_given() -> None:
+    # x_scale is the source of truth when present (mirrors
+    # resolve_axis_scale's own contract) -- an explicit "linear" scale must
+    # not be overridden by a stale x_log=True.
+    fig = _rendered_figure(
+        _panels(1), fmt="pdf", x_scale="linear", y_scale="linear", x_log=True, y_log=True,
+    )
+    ax = [a for a in fig.axes if a.get_visible()][0]
+    assert ax.get_xscale() == "linear"
+    assert ax.get_yscale() == "linear"
+
+
+def test_tick_formats_apply_to_every_panel() -> None:
+    from quantized.calc.figure_ticks import _AxisTickFormatter
+
+    fig = _rendered_figure(
+        _panels(2), fmt="pdf",
+        x_fmt={"mode": "sci", "digits": 2}, y_fmt={"mode": "fixed", "digits": 3},
+    )
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 2
+    for ax in axes:
+        assert isinstance(ax.xaxis.get_major_formatter(), _AxisTickFormatter)
+        assert isinstance(ax.yaxis.get_major_formatter(), _AxisTickFormatter)
+
+
+# ── Fix-round C3: `transparent` was silently dropped on the facet path
+# (the flat branch forwards req.transparent to savefig; this one had no
+# such parameter at all). ───────────────────────────────────────────────
+
+
+def test_transparent_forwards_to_savefig() -> None:
+    captured_kwargs: dict[str, object] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured_kwargs.update(kw)
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        render_facets_figure(_panels(2), fmt="png", transparent=True)
+    assert captured_kwargs.get("transparent") is True
+
+
 def test_panel_titles_render_in_svg() -> None:
     out = render_facets_figure(_panels(2), fmt="svg")
     svg = out.decode("utf-8", "ignore")

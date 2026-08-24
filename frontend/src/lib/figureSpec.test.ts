@@ -7,7 +7,9 @@ import {
   resolveFigureDocumentData,
   viewOverrides,
 } from "./figureSpec";
+import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
+import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
 
@@ -432,14 +434,54 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(faceted).toEqual({ ...flat, facets: faceted.facets });
   });
 
-  it("throws rather than silently exporting a flat plot when the facet column has no finite levels", () => {
-    const allNonFinite: DataStruct = { ...data, values: data.values.map((row) => [NaN, ...row.slice(1)]) };
+  // Fix-round C2: an excluded row must drop out of the exported facet
+  // partition -- and, when it was that level's LAST row, the whole panel
+  // must disappear too -- exactly like the screen's own facet grid
+  // (`facetCompositionFromBinding`'s `analysisData`-pruned view). Before
+  // this fix the export partitioned the RAW dataset, so an export could
+  // contain excluded rows the screen never showed, or even carry an extra
+  // panel for a level that's fully excluded on screen.
+  it("partitions facets from the SAME row-excluded view the screen's facet grid uses", () => {
+    const excludedDataset: Dataset = { ...dataset, id: "excluded", excludedRows: [0] }; // drops the row where signal=100
     const document = createFigureDocument({
+      id: "excluded-facet", name: "Excluded", datasetId: excludedDataset.id, view: richView(), facetKey: 1,
+    });
+
+    const spec = buildFigureSpecFromDocument(document, excludedDataset, "excluded");
+
+    // The screen's own facet grid for the IDENTICAL (dataset, facetKey,
+    // xKey, yKeys) state -- the ground truth this export must never disagree
+    // with.
+    const view = richView();
+    const screenComposition = facetCompositionFromBinding(excludedDataset, 1, view.xKey, view.yKeys);
+    const screenLabels = facetPanelsOf(screenComposition)!.map((p) => p.label);
+
+    expect(screenLabels).toEqual(["200", "300"]); // sanity: the exclusion actually dropped a level
+    expect(spec.facets).toHaveLength(2);
+    expect(spec.facets?.map((f) => f.label)).toEqual(screenLabels);
+  });
+
+  // Fix-round C5: mirrors the SCREEN's own fallback for the identical state
+  // (`facetCompositionFromBinding` returns null when the facet column has no
+  // finite levels, and `useEffectiveComposition` then renders the ordinary
+  // flat plot) -- an export must never refuse outright for a state the
+  // screen itself renders fine. Replaces the prior throw-test, which pinned
+  // the OLD, reversed "fail loudly" behavior.
+  it("falls back to the unfaceted spec when the facet column has no finite levels, mirroring the screen", () => {
+    const allNonFinite: DataStruct = { ...data, values: data.values.map((row) => [NaN, ...row.slice(1)]) };
+    const withFacet = createFigureDocument({
       id: "degenerate-facet", name: "Degenerate", datasetId: "degenerate", view: richView(), facetKey: 0,
     });
+    const withoutFacet = createFigureDocument({
+      id: "degenerate-facet", name: "Degenerate", datasetId: "degenerate", view: richView(),
+    });
     const degenerateDataset: Dataset = { ...dataset, id: "degenerate", data: allNonFinite };
-    expect(() => buildFigureSpecFromDocument(document, degenerateDataset, "degenerate"))
-      .toThrow("facet column 0 has no finite levels to export");
+
+    const faceted = buildFigureSpecFromDocument(withFacet, degenerateDataset, "degenerate");
+    const flat = buildFigureSpecFromDocument(withoutFacet, degenerateDataset, "degenerate");
+
+    expect(faceted.facets).toBeUndefined();
+    expect(faceted).toEqual(flat);
   });
 
   it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {

@@ -335,6 +335,59 @@ def test_figure_facets_panel_with_no_series_still_renders() -> None:
     assert resp.status_code == 200
 
 
+# ── Fix-round C1: the REAL wire shape (`lib/figureContract.ts` marks
+# x_log/y_log "unsupported -- legacy wire fallback; derive x_scale
+# instead", and `buildFigureSpecForView` only ever emits x_scale/y_scale) is
+# x_scale/y_scale with NO x_log/y_log booleans at all -- a log-scaled
+# faceted view must not silently export with linear axes. ──────────────────
+def test_figure_facets_x_scale_log_round_trips_to_log_axes_no_legacy_booleans() -> None:
+    from unittest.mock import patch
+
+    import matplotlib.figure
+
+    captured: dict[str, matplotlib.figure.Figure] = {}
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def fake_savefig(self: matplotlib.figure.Figure, *a: object, **kw: object) -> None:
+        captured["fig"] = self
+        real_savefig(self, *a, **kw)
+
+    with patch.object(matplotlib.figure.Figure, "savefig", fake_savefig):
+        resp = client.post(
+            "/api/export/figure",
+            json={
+                "dataset": _xrd_dataset(), "fmt": "pdf", "facets": _xy_facets(),
+                # deliberately no x_log/y_log -- the actual wire shape.
+                "x_scale": "log", "y_scale": "log",
+            },
+        )
+    assert resp.status_code == 200
+    fig = captured["fig"]
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 2
+    for ax in axes:
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+
+
+# ── Fix-round C4: the facet branch used to substitute `req.x_label or ""`
+# instead of deriving "label (unit)" from the dataset like the flat path
+# does -- an unlabeled faceted export must still show the auto-derived
+# axis labels. ───────────────────────────────────────────────────────────
+def test_figure_facets_derives_axis_labels_when_absent() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets()},
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    # _xrd_dataset's metadata names its x column "2Theta"/"deg" and its one
+    # channel "Intensity"/"cps" -- the SAME "label (unit)" derivation
+    # `_figure_series` applies on the flat path.
+    assert "2Theta (deg)" in svg
+    assert "Intensity (cps)" in svg
+
+
 def _demo_map() -> dict:
     import numpy as np
     x = np.linspace(-2.0, 2.0, 16)

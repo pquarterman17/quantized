@@ -120,15 +120,24 @@ class FigureRequest(BaseModel):
     # (`lib/facet.facetPayloads`) rather than a raw column index -- so this
     # route never re-derives level ordering/binning and can never disagree
     # with what Stage showed on screen. None/absent (default) = today's
-    # single-panel behaviour, byte-identical; every other field on this
-    # request (`dataset`/`x_key`/`y_keys`/`overrides`/`series_styles`/...)
-    # stays required by the schema but UNUSED once `facets` is set -- the
-    # same "wire shape stays whole, semantics switch" contract
+    # single-panel behaviour, byte-identical; most other fields on this
+    # request (`overrides`/`series_styles`/`error_spans`/`y2_keys`/...) stay
+    # required by the schema but UNUSED once `facets` is set -- the same
+    # "wire shape stays whole, semantics switch" contract
     # `StatplotFigureRequest.facets`/`CategoricalFigureRequest.facets`
-    # already use (`routes/export_statplots.py`). Renders via
-    # `calc.figure_facets.render_facets_figure`: one shared x-domain across
-    # every panel, each panel keeping its own independent y-autoscale (see
-    # that function's own doc for why).
+    # already use (`routes/export_statplots.py`). `dataset`/`x_key`/`y_keys`
+    # are the one exception: they're still resolved (via `_figure_series`,
+    # discarding its `series`/`x`) purely to derive "label (unit)" axis
+    # labels when `x_label`/`y_label` are absent -- the fix-round C4 finding
+    # (a bare `req.x_label or ""` silently dropped auto-derived labels on
+    # this branch). Renders via `calc.figure_facets.render_facets_figure`:
+    # one shared x-domain across every panel, each panel keeping its own
+    # independent y-autoscale (see that function's own doc for why), and the
+    # SAME axis-scale/tick-format resolution the flat path uses
+    # (`x_scale`/`y_scale` via `calc.figure_scale.resolve_axis_scale`,
+    # `x_fmt`/`y_fmt` via `calc.figure_ticks.apply_tick_formats`) -- the
+    # fix-round C1 finding (this branch previously only honored the legacy
+    # `x_log`/`y_log` booleans, which the frontend never sends).
     facets: list[FigureFacet] | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
@@ -301,18 +310,31 @@ def export_figure(req: FigureRequest) -> Response:
                 }
                 for f in req.facets
             ]
+            # Reuse `_figure_series` for the SAME auto-derived "label (unit)"
+            # strings (and x_label/y_label override precedence) the flat
+            # path uses -- `resolved.x_label`/`resolved.y_label` already
+            # apply the "req.x_label or derive from the dataset" rule (see
+            # `_figure_series`'s own doc), so a faceted export never loses
+            # the auto-derived axis labels the way a bare `req.x_label or
+            # ""` did.
+            resolved = _figure_series(req)
             data = render_facets_figure(
                 panels,
                 x_log=req.x_log,
                 y_log=req.y_log,
+                x_scale=req.x_scale,
+                y_scale=req.y_scale,
                 title=req.title,
-                x_label=req.x_label or "",
-                y_label=req.y_label or "",
+                x_label=resolved.x_label,
+                y_label=resolved.y_label,
                 fmt=req.fmt,
                 style=req.style,
                 width_in=req.width_in,
                 height_in=req.height_in,
                 dpi=dpi,
+                transparent=req.transparent,
+                x_fmt=_tick_fmt(req.x_fmt),
+                y_fmt=_tick_fmt(req.y_fmt),
             )
         else:
             from quantized.calc.figure import render_figure
@@ -347,7 +369,7 @@ def export_figure(req: FigureRequest) -> Response:
                 y2_fmt=_tick_fmt(req.y2_fmt),
                 y2_step=req.y2_step,
             )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,

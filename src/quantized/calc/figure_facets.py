@@ -20,6 +20,7 @@ what's on screen.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from io import BytesIO
 from typing import Any
 
@@ -32,7 +33,9 @@ import numpy as np  # noqa: E402
 
 from quantized.calc.figure import _plot_kwargs  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
+from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
 
 __all__ = [
     "render_facets_figure",
@@ -71,6 +74,15 @@ def render_facets_figure(
     *,
     x_log: bool = False,
     y_log: bool = False,
+    # MAIN #12 (Arrhenius reciprocal axis): the scale source of truth when
+    # set, resolved the SAME way the flat renderer does
+    # (`calc.figure_scale.resolve_axis_scale`) -- `x_log`/`y_log` are the
+    # back-compat fallback for a caller that only sets the boolean. Without
+    # this, a log-scaled faceted view exported with LINEAR axes -- the
+    # frontend (`lib/figureContract.ts`) never sends `x_log`/`y_log` at all,
+    # only `x_scale`/`y_scale`.
+    x_scale: str | None = None,
+    y_scale: str | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -79,6 +91,14 @@ def render_facets_figure(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int = 200,
+    # MAIN_PLAN #35: transparent canvas instead of the preset background --
+    # mirrors the flat renderer's own `transparent` (`calc.figure`).
+    transparent: bool = False,
+    # MAIN #24: tick-label number format, mirroring the screen's xFmt/yFmt
+    # (`useMultiPanelStage.ts` passes them into the facet grid's `buildOpts`
+    # the same as the flat plot) -- see `calc.figure_ticks.apply_tick_formats`.
+    x_fmt: Mapping[str, Any] | None = None,
+    y_fmt: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render one small-multiples panel per facet level.
 
@@ -94,6 +114,12 @@ def render_facets_figure(
     y and lets x vary (``calc.figure_break``'s counterpart). Each panel
     carries its own facet-level title, and unused trailing grid cells (when
     the panel count isn't a perfect rows*cols rectangle) are hidden.
+
+    ``x_scale``/``y_scale`` and ``x_fmt``/``y_fmt`` are applied to EVERY
+    panel's axes via the SAME helpers the flat single-panel renderer uses
+    (:func:`quantized.calc.figure_scale.apply_axis_scale`,
+    :func:`quantized.calc.figure_ticks.apply_tick_formats`) so a faceted
+    export honors the same scale/tick-format choices the flat export does.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -121,6 +147,9 @@ def render_facets_figure(
         "axes.titlesize": st.font_size,
     }
 
+    resolved_x_scale = resolve_axis_scale(x_scale, x_log)
+    resolved_y_scale = resolve_axis_scale(y_scale, y_log)
+
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, axes_grid = plt.subplots(
             rows, cols, figsize=figsize, sharex=True, sharey=False, squeeze=False,
@@ -140,10 +169,9 @@ def render_facets_figure(
                 ax.set_title(
                     safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size
                 )
-                if x_log:
-                    ax.set_xscale("log")
-                if y_log:
-                    ax.set_yscale("log")
+                apply_axis_scale(ax, "x", resolved_x_scale)
+                apply_axis_scale(ax, "y", resolved_y_scale)
+                apply_tick_formats(ax, x_fmt, y_fmt)
                 if not st.box_on:
                     ax.spines["top"].set_visible(False)
                     ax.spines["right"].set_visible(False)
@@ -162,7 +190,7 @@ def render_facets_figure(
                 fig.supylabel(y_label)
             fig.tight_layout()
             buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
+            fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)
             return buf.getvalue()
         finally:
             plt.close(fig)
