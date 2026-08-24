@@ -158,6 +158,20 @@ fork a new figure-decoration state model.
 Do not bury these findings in archived MDI or Origin decoder plans; completion
 must be logged here and cross-referenced from the active Library/Primary plans.
 
+**Status (2026-08-24, Claude Sonnet):** manual half built — a Stage right-click
+"Add text here…" entry (`lib/plotMenu.ts` / `PlotContextMenu.tsx`) places a new
+annotation at the click's DATA coordinates via the SAME `addAnnotation` store
+action and `AnnotationTextDialog` editor the toolbar's existing "Text box" tool
+and the Inspector's Annotations card already use — no second annotation model.
+Scouting found double-click-to-edit (pre-filled), drag, right-click Properties
+(Edit text/Pin/Frame/Size/Delete), and save-close-reopen persistence already
+implemented and covered by existing tests against the exact `Annotation` shape
+`addAnnotation` produces; only the discoverable placement entry point and its
+red-first tests were new. The bulk XRD **Label peaks** workflow (selected/all
+fitted peaks, phase/`(hkl)` label templates, collision-aware placement,
+conversion to independently editable annotations) is NOT built — booked as a
+beta follow-up per this section's own sprint-priority note.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow
@@ -555,6 +569,14 @@ safeguards, not loopholes.
   `## Day-5 retrospective` section below for the full record — what the
   adversarial-review process caught this week, and the two process lessons
   worth keeping into the next frontend-heavy wave.
+- **2026-08-24 — Claude Sonnet:** UX-R6 manual-annotation slice. Added a
+  Stage right-click "Add text here…" context-menu entry (data-anchored
+  click-to-place) as the one genuinely missing piece of the manual-text
+  acceptance list — double-click editing, drag, right-click Properties, and
+  persistence were already implemented and already covered by existing
+  tests. Booked the bulk XRD Label-peaks workflow as a beta follow-up per
+  the section's own sprint-priority note; see the dated status note under
+  UX-R6 above.
 
 ## Day-5 retrospective (QA lane, 2026-08-19)
 

@@ -703,7 +703,6 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/workshops/baseline/useBaseline.test.ts": 1,
   "/components/windows/WindowCanvas.test.tsx": 1,
   "/components/Stage/worksheet/GridViewport.perf.test.tsx": 1,
-  "/components/Stage/useShapeDraw.test.ts": 1,
   "/components/Library/PagesSection.test.tsx": 1,
   "/components/workshops/importwizard/ImportWizardPanel.test.tsx": 3,
   "/components/workshops/importwizard/useImportWizard.test.ts": 1,

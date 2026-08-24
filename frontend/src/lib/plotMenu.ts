@@ -90,6 +90,16 @@ export interface PlotMenuContext {
 
   // ── tools (preserve the pre-existing axes-menu tool activations) ──
   setTool: (tool: "integ" | "fwhm" | "qfit" | "measure") => void;
+
+  /** UX-R6 manual annotation entry point: place a new text annotation at the
+   *  DATA coordinates under the cursor (the caller has already converted the
+   *  click's pixel position via the live uPlot instance). Only offered while
+   *  `zone === "plot"` — see buildPlotMenu below — so the placement is always
+   *  inside the visible plotting rect, never extrapolated into an axis
+   *  gutter. Strengthens the SAME annotation model the toolbar's "Text box"
+   *  tool and the Inspector's Annotations card already write to; no second
+   *  figure-decoration state. */
+  addTextHere: () => void;
 }
 
 /** Palette swatches: the 8 re-themeable `--series-N` tokens + black/white/grey. */
@@ -201,6 +211,14 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     // are defined once in the shared context-action registry so a future
     // Command Palette / Plot Objects tree consumer renders identical labels.
     items.push(...buildMenuItems(curveActions, { series: s, ctx, overridden }));
+    items.push({ separator: true });
+  }
+
+  // UX-R6 manual annotation: an obvious, always-near-the-top entry — offered
+  // only inside the plot body (not an axis gutter, where a data-anchored
+  // placement would land off the visible extents).
+  if (ctx.zone === "plot") {
+    items.push({ label: "Add text here…", run: ctx.addTextHere });
     items.push({ separator: true });
   }
 
