@@ -100,3 +100,40 @@ def test_share_targets_single_panel_never_shares() -> None:
 def test_share_targets_zero_panels() -> None:
     assert share_targets(0, True) == []
     assert share_targets(0, False) == []
+
+
+# ── facet_mask (F4.4 follow-up, fix round 2, V3) ────────────────────────────
+# A faceted panel's "axes" is an invisible cell-frame with no data scale
+# (calc.figure_page_facets) -- it must never be a link source OR target, and
+# the anchor every other (non-facet) panel links to must be the FIRST
+# NON-FACET panel, not unconditionally index 0. Anchoring on index 0
+# regardless of facet status was a placement-order bug: a facet panel FIRST
+# in placement order made every OTHER pair of ordinary panels fail to link
+# too, since the sole anchor (panel 0) was itself disqualified.
+
+
+def test_share_targets_no_mask_is_byte_identical_to_before_facets_existed() -> None:
+    # facet_mask omitted (None) must reproduce today's exact contract.
+    assert share_targets(4, True) == [None, 0, 0, 0]
+    assert share_targets(4, False) == [None, None, None, None]
+
+
+def test_share_targets_facet_first_still_links_the_flat_siblings() -> None:
+    # facet at index 0, two ordinary panels at 1 and 2 -- the anchor must be
+    # index 1 (the first NON-facet panel), not index 0.
+    assert share_targets(3, True, facet_mask=[True, False, False]) == [None, None, 1]
+
+
+def test_share_targets_never_returns_a_facet_index_as_source_or_target() -> None:
+    result = share_targets(4, True, facet_mask=[False, True, False, True])
+    assert result[1] is None  # facet panel: never a target
+    assert result[3] is None  # facet panel: never a target
+    assert 1 not in result and 3 not in result  # facet panels: never an anchor
+
+
+def test_share_targets_all_facet_panels_links_nothing() -> None:
+    assert share_targets(3, True, facet_mask=[True, True, True]) == [None, None, None]
+
+
+def test_share_targets_facet_mask_ignored_when_unlinked() -> None:
+    assert share_targets(3, False, facet_mask=[True, False, False]) == [None, None, None]

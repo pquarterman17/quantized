@@ -33,6 +33,24 @@ from quantized.routes.export_figures import (
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
+# V5 (fix round 2, F4.4 follow-up): the ONLY override keys the facet
+# sub-grid renderer actually consumes -- calc.figure_facets.draw_facet_grid
+# applies x_lim/grid/spines per sub-panel (apply_axis_shape_overrides,
+# lim_keys=("x_lim",)) and nothing else (no y_lim, legend, annotations, ref
+# lines, region shades, or margins -- see calc.figure_facets.
+# render_facets_figure's own `overrides` doc). Routing the FULL nested-
+# figure overrides dict onto PagePanel.overrides would send a facet panel
+# through _validate_panel_overrides, which rejects x_breaks/margins as
+# page-incompatible -- correct for an ORDINARY panel (whose overrides truly
+# apply to a single Axes this composer owns), but wrong for a facet panel:
+# pre-diff, a facet export's overrides went through the standalone path's
+# generic _validate_overrides only, which accepts-and-silently-ignores any
+# key the facet renderer doesn't consume. A well-formed margins/x_breaks
+# override on a facet panel must still 200 (silently unused), matching that
+# pre-existing contract -- only genuinely malformed shapes still 422 (the
+# full dict is still shape-checked below via _validate_overrides).
+_FACET_OVERRIDE_KEYS = ("x_lim", "grid", "spines")
+
 
 class PagePanelSpec(BaseModel):
     """One panel: a single-figure export payload plus its grid placement.
@@ -94,6 +112,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     # Lazy import: matplotlib is heavy — only pay it when a page is exported.
+    from quantized.calc.figure_overrides import _validate_overrides
     from quantized.calc.figure_page import PagePanel, render_figure_page
 
     try:
@@ -113,6 +132,14 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                 # derive from the dataset"); `resolved.x`/`resolved.series`
                 # are discarded, matching the standalone facet branch.
                 resolved = _figure_series(f)
+                # V5 (fix round 2): shape-validate the FULL overrides dict
+                # (a malformed x_lim/legend/etc still 422s) but forward only
+                # the narrow subset the facet renderer actually consumes --
+                # see _FACET_OVERRIDE_KEYS' own doc for why the full dict
+                # can't go straight onto PagePanel.overrides here.
+                full_ov = dict(f.overrides or {})
+                _validate_overrides(full_ov)
+                facet_ov = {k: full_ov[k] for k in _FACET_OVERRIDE_KEYS if k in full_ov}
                 panels.append(
                     PagePanel(
                         x=[], series=(),  # unused -- the facet sub-grid draws p.facets instead
@@ -124,7 +151,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                         x_log=f.x_log, y_log=f.y_log,
                         x_scale=f.x_scale, y_scale=f.y_scale,
                         x_fmt=_tick_fmt(f.x_fmt), y_fmt=_tick_fmt(f.y_fmt),
-                        overrides=f.overrides,
+                        overrides=facet_ov,
                         label=spec.label, page_rect=spec.page_rect,
                         facets=_facet_panels(f),
                     )

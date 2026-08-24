@@ -1409,6 +1409,76 @@ def test_figure_page_facet_panel_renders_as_vector_sub_grid_not_raster() -> None
     assert "(b)" in all_texts
 
 
+# ── V5 (fix round 2): routing the nested figure's overrides STRAIGHT onto
+# PagePanel sent a facet panel through _validate_panel_overrides, which
+# rejects x_breaks/margins as page-incompatible -- correct for an ORDINARY
+# panel, but the facet renderer never looks at those keys at all (the
+# standalone facet path's generic _validate_overrides accepted-and-ignored
+# them). A well-formed margins/x_breaks override on a facet panel must
+# still 200 and render (silently unused), not 422; a genuinely malformed
+# override shape must still 422 (only the CONSUMED subset is narrowed, not
+# validation). ──────────────────────────────────────────────────────────
+def test_figure_page_facet_panel_with_page_incompatible_overrides_still_renders() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1, "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(), "facets": _xy_facets(),
+                        "overrides": {"margins": {"left": 0.2}},
+                    },
+                    "row": 0, "col": 0,
+                },
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_page_facet_panel_x_breaks_override_still_renders() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1, "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(), "facets": _xy_facets(),
+                        "overrides": {"x_breaks": [[0.0, 1.0]]},
+                    },
+                    "row": 0, "col": 0,
+                },
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+
+
+def test_figure_page_facet_panel_malformed_overrides_still_422s() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1, "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(), "facets": _xy_facets(),
+                        "overrides": {"x_lim": [1.0]},  # malformed: needs [lo, hi]
+                    },
+                    "row": 0, "col": 0,
+                },
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 422
+
+
 def test_figure_page_two_panels_one_with_y2_one_without_both_render() -> None:
     # A mixed page (a doubleY panel alongside an ordinary one) must not
     # cross-contaminate — each panel's own y2_mask is independent.

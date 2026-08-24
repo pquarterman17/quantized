@@ -743,6 +743,89 @@ with parent items P1.3 and P1.5.
       grid_not_flattened`) was replaced (not merely edited) with
       `test_figure_page_facet_panel_renders_as_vector_sub_grid_not_raster`.
 
+      **2026-08-24 fix round 2 (Claude): 5 rendering/correctness findings
+      against the above closed, probe-confirmed both ways.** A review pass
+      probed the freshly-landed vector sub-grid against the raster embed it
+      replaced and found real regressions, not just untested edges — each
+      reproduced numerically before the fix and re-verified after.
+      (V1) the cell-frame axes' `set_title` drew literally on top of the
+      top-row facet titles (probe: title bbox Y-range `[578.8, 595.8]`
+      overlapped both top facet titles' `[581.5, 595.8]` — an ordinary Axes
+      has no "reserved space" concept relative to another independent Axes
+      at the same gridspec slot). (V2) the hand-rolled `fig.add_subplot(...,
+      sharex=first)` loop never got matplotlib's automatic interior-tick-
+      label hiding — that lives inside the `subplots()` factory itself, not
+      in `sharex=` alone (probe: a 2x2 grid's row-0 axes showed
+      `['−0.5','0.0',...]` x tick labels that should've been hidden). (V4)
+      the bounded `GridSpec` filled the `page_rect` cell edge-to-edge with
+      the axes' DATA area (zero margin), so tick/axis labels rendered
+      outside the rect — sometimes off-page entirely (probe: 19+ label/tick
+      bboxes with negative or out-of-rect pixel coordinates for a rect
+      abutting the page's top-left corner). (V3) `share_targets` anchored
+      every `link_x`/`link_y` pair unconditionally on placement-order index
+      0 — a facet panel placed FIRST disabled linking for every OTHER
+      (ordinary) panel pair too, since the sole anchor was itself
+      disqualified from sharing (probe: facet at (0,0) + two flat siblings
+      at (0,1)/(0,2) with `link_x=True` → the flat siblings did NOT share
+      x). (V5) routing a facet panel's nested-figure `overrides` straight
+      onto `PagePanel.overrides` sent it through `_validate_panel_overrides`,
+      which rejects `x_breaks`/`margins` as page-incompatible — correct for
+      an ordinary panel, wrong for a facet panel, which pre-diff rendered
+      fine with those keys silently ignored (probe: a facet panel with
+      `overrides={"margins": {...}}` 422'd where it used to 200).
+
+      Fixed: (V1)+(V2) `calc.figure_page_facets.draw_facet_panel_cell`
+      rebuilt on a real `matplotlib.figure.SubFigure` for GRID placement —
+      `fig.add_subfigure(cell_spec)` + its own `.subplots(sharex=True, ...)`
+      gives EXACT standalone parity (both bugs gone, re-probed: title
+      overlap `False`, interior tick labels `[]`), and `.suptitle`/
+      `.supxlabel`/`.supylabel` replace the invisible frame axes' title and
+      the per-axes label placement for that path. (V4) empirically, free
+      (`page_rect`) placement BREAKS with SubFigure: probed a `GridSpec`
+      with explicit `left`/`right`/`bottom`/`top` (a sub-region of the page,
+      not the whole `[0,1]`) under `layout=None` (free placement's page-
+      level layout is always `None`) — a SubFigure's `bbox_relative` stayed
+      pinned at `(0, 0, 1, 1)` (the full figure) regardless of the
+      GridSpec's own margins, before AND after `fig.canvas.draw()`. Root
+      cause: `SubFigure._redo_transform_rel_fig`'s fallback computes
+      position from the parent gridspec's row/col RATIOS alone, ignoring
+      absolute margins entirely — only an ACTIVE constrained-layout pass
+      ever calls it again with a real solved bbox, and free placement can't
+      safely turn constrained layout on page-wide (its ordinary panels rely
+      on `fig.add_axes` placing them at the EXACT literal rect,
+      untouched — `test_free_placement_axes_at_flipped_page_positions`
+      pins this). So free placement fell back to the three targeted fixes
+      per the review ruling instead: a nested title-band `GridSpec` (V1,
+      only when `p.title` is set), `tick_params(labelbottom=False)` on
+      every sub-axis not in the grid's own last row (V2, exact
+      `plt.subplots(sharex=True)` parity), and the sub-grid's `GridSpec`
+      inset from the rect by fixed, probe-tuned margin fractions (V4;
+      `_FREE_MARGIN_LEFT=0.34` / `_BOTTOM=0.26` / `_RIGHT=0.20` / `_TOP=0.18`
+      / `_FREE_TITLE_BAND=0.16` — re-probed zero label pixels outside the
+      rect for rects from 0.35 to 0.9 of the page; a facet grid packed into
+      a much smaller rect, <0.2, can still overflow a few px, the same
+      physical limit any dense multi-panel grid hits at that size). (V3)
+      `calc.figure_page_layout.share_targets` gained an optional
+      `facet_mask` parameter — the link anchor is now the first NON-facet
+      panel (never a facet panel, both as source or target); omitted stays
+      byte-identical to before facets existed. (V5) `routes/export_page.py`
+      now shape-validates the FULL overrides dict via the generic
+      `_validate_overrides` (a malformed shape still 422s) but forwards
+      only `_FACET_OVERRIDE_KEYS = ("x_lim", "grid", "spines")` — the exact
+      subset `draw_facet_grid` consumes — onto `PagePanel.overrides`.
+
+      Test coverage: `test_calc_figure_page_layout.py` gained 5 new
+      `share_targets`/`facet_mask` unit tests (V3); `test_calc_figure_page.py`
+      gained an integration-level V3 regression test (facet-first + two flat
+      siblings + `link_x` → siblings still share), replaced the round-1
+      grid-placement label test with one asserting `SubFigure.supxlabel`/
+      `supylabel` (V1/V2's mechanism) and added a parallel free-placement
+      test keeping the old per-axes bottom-row/first-column assertions
+      (the fallback path still needs them); `test_api_export.py` gained 3
+      V5 tests (margins/x_breaks on a facet panel now 200, a genuinely
+      malformed override still 422s). `test_calc_figure_facets.py` (the
+      untouched standalone facet renderer) stayed green throughout, unedited.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

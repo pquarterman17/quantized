@@ -358,6 +358,38 @@ def test_facet_panel_page_letter_renders_on_the_cell_frame() -> None:
     assert "(a)" in svg and "(b)" in svg
 
 
+def test_facet_panel_first_in_placement_order_does_not_break_flat_siblings_link_x() -> None:
+    # V3 (fix round 2): a facet panel FIRST in placement order used to
+    # disable link_x for EVERY pair, since share_targets anchored
+    # unconditionally on index 0 -- which was itself the disqualified
+    # facet panel. The two ordinary (flat) siblings must still share x with
+    # each other (anchored on the first NON-facet panel instead).
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    facet = _facet_panel(0, 0)
+    flat1 = _panel(0, 1)
+    flat2 = _panel(0, 2)
+    st = figure_style("default")
+    fig = _build_page_figure(
+        [facet, flat1, flat2], free_placement=False, w=9.0, h=3.0, rows=1, cols=3,
+        st=st, label_format="(a)", label_pos="nw", link_x=True,
+    )
+    try:
+        subs = _facet_subs(fig, 2)
+        flat_axes = [ax for ax in fig.axes if ax not in subs and ax.get_lines()]
+        assert len(flat_axes) == 2
+        a, b = flat_axes
+        assert a.get_shared_x_axes().joined(a, b)
+        # Neither flat sibling links to the facet cell's frame axes.
+        frame = [ax for ax in fig.axes if ax not in subs and ax not in flat_axes][0]
+        assert not a.get_shared_x_axes().joined(a, frame)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
 def test_facet_panel_x_lim_override_applies_to_every_sub_panel() -> None:
     from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
@@ -426,10 +458,11 @@ def test_facet_panel_free_placement_axes_within_rect_bounds() -> None:
         plt.close(fig)
 
 
-def test_facet_panel_axis_labels_placed_on_bottom_row_and_first_column() -> None:
-    # 3 facets -> _grid_shape(3) == (2, 2): level0 (r0,c0), level1 (r0,c1),
-    # level2 (r1,c0); (r1,c1) hidden. Per-column bottom-most VISIBLE row:
-    # col0 -> level2 (r1); col1 -> level1 (r0, since (r1,c1) is hidden).
+def test_facet_panel_grid_placement_axis_labels_use_subfigure_supxlabel() -> None:
+    # Grid placement draws the facet sub-grid in a real SubFigure (fix round
+    # 2) -- x_label/y_label place via its OWN supxlabel/supylabel (a cell-
+    # scoped equivalent of the whole-page fig.supxlabel/supylabel), not
+    # per-axes set_xlabel/set_ylabel calls.
     from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
@@ -437,6 +470,40 @@ def test_facet_panel_axis_labels_placed_on_bottom_row_and_first_column() -> None
     st = figure_style("default")
     fig = _build_page_figure(
         [panel], free_placement=False, w=6.0, h=6.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        assert len(fig.subfigs) == 1
+        sf = fig.subfigs[0]
+        assert sf._supxlabel.get_text() == "Time (s)"
+        assert sf._supylabel.get_text() == "Signal (V)"
+        # No per-axes labels duplicating the cell-level ones.
+        for ax in _facet_subs(fig, 3):
+            assert ax.get_xlabel() == ""
+            assert ax.get_ylabel() == ""
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_facet_panel_free_placement_axis_labels_placed_on_bottom_row_and_first_column() -> None:
+    # Free placement has no SubFigure to lean on (fix round 2: SubFigure
+    # breaks there -- see calc.figure_page_facets' module doc), so it keeps
+    # the ragged-aware per-axes bottom-row/first-column placement.
+    # 3 facets -> _grid_shape(3) == (2, 2): level0 (r0,c0), level1 (r0,c1),
+    # level2 (r1,c0); (r1,c1) hidden. Per-column bottom-most VISIBLE row:
+    # col0 -> level2 (r1); col1 -> level1 (r0, since (r1,c1) is hidden).
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panel = _facet_panel(
+        0, 0, n=3, x_label="Time (s)", y_label="Signal (V)",
+        page_rect=(0.05, 0.05, 0.9, 0.9),
+    )
+    st = figure_style("default")
+    fig = _build_page_figure(
+        [panel], free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
     try:

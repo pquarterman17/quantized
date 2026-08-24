@@ -308,19 +308,20 @@ def _build_page_figure(
     )
     fig = plt.figure(figsize=(w, h), layout=engine)
     gs = None if free_placement else fig.add_gridspec(rows, cols, **spacing)
-    share_x = fpl.share_targets(len(ordered), link_x)
-    share_y = fpl.share_targets(len(ordered), link_y)
+    # A faceted panel's sub-grid has its OWN internal x-sharing (see
+    # calc.figure_page_facets) and the cell-frame axes standing in for it
+    # here carries no data of its own -- share_targets' facet_mask keeps it
+    # out of the link graph entirely, as both a source AND a target (V3, fix
+    # round 2: anchoring unconditionally on index 0 regardless of facet
+    # status was a placement-order bug -- see share_targets' own doc).
+    facet_mask = [p.facets is not None for p in ordered]
+    share_x = fpl.share_targets(len(ordered), link_x, facet_mask)
+    share_y = fpl.share_targets(len(ordered), link_y, facet_mask)
     axes: list[Any] = []
     for idx, p in enumerate(ordered):
         sx, sy = share_x[idx], share_y[idx]
-        # A faceted panel's sub-grid has its OWN internal x-sharing (see
-        # calc.figure_page_facets) and the cell-frame axes standing in for
-        # it here carries no data of its own -- never a sharex/sharey
-        # source OR target (either side being a facet panel opts the pair
-        # out of linking entirely).
-        no_facet = p.facets is None
-        sharex = axes[sx] if sx is not None and no_facet and ordered[sx].facets is None else None
-        sharey = axes[sy] if sy is not None and no_facet and ordered[sy].facets is None else None
+        sharex = axes[sx] if sx is not None else None
+        sharey = axes[sy] if sy is not None else None
         if p.facets is not None:
             if free_placement:
                 assert p.page_rect is not None
