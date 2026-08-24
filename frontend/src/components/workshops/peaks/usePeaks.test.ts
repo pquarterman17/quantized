@@ -695,6 +695,39 @@ describe("usePeaks labelPeaks — round-2 review: L5 nested-batch undo hole", ()
   });
 });
 
+describe("usePeaks labelPeaks — round-6 review: P4 the L5 re-check must guard the resolveDataset await window too", () => {
+  it("refuses to run when another history batch starts WHILE resolveDataset is in flight, not just before it", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    // Both pre-flight checks (before the dialog, and right after it) pass
+    // clean — historySuppressed only flips true DURING the resolveDataset
+    // await itself, simulating an import batch (relink.ts's
+    // importChangedAsNewVersion) starting in that exact window.
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({
+      resolveDataset: vi.fn().mockImplementation(async (id: string) => {
+        const ds = await original(id);
+        useApp.setState({ historySuppressed: true });
+        return ds;
+      }),
+    });
+
+    try {
+      await act(async () => {
+        await result.current.labelPeaks();
+      });
+
+      // The batch guard closest to withHistoryBatch must catch this — no
+      // annotation may be created and folded into the import's undo entry.
+      expect(useApp.getState().annotations).toHaveLength(0);
+    } finally {
+      useApp.setState({ resolveDataset: original, historySuppressed: false });
+    }
+  });
+});
+
 describe("usePeaks labelPeaks — round-2 review: L7 blank labels", () => {
   it("a template that renders blank for every peak (e.g. {area} on detected peaks) creates nothing and toasts", async () => {
     vi.mocked(askParams).mockResolvedValue({ template: "{area}", precision: 2 });
@@ -820,6 +853,48 @@ describe("usePeaks labelPeaks — round-5 review: O3 passes the live yScale thro
     expect(anns[0].y).toBeGreaterThan(10); // above its own apex
     // A plain LINEAR 5%-of-range offset would be ~5010 (10 + 0.05*99999) —
     // the exact bug O3 describes. A log-aware offset stays close to 10.
+    expect(anns[0].y).toBeLessThan(100);
+  });
+});
+
+describe("usePeaks labelPeaks — round-6 review: P3 a non-positive sample no longer disables the log transform on autoscale", () => {
+  it("a dataset with one non-positive sample still gets log-spaced offsets on autoscale (yLim: null)", async () => {
+    // A routine XRD case: a slightly negative/zero background sample
+    // alongside real (positive) intensities spanning several decades.
+    const DATA_WITH_NEGATIVE_SAMPLE: DataStruct = {
+      time: [0, 1, 2, 3, 4, 5],
+      values: [[-5], [10], [100], [1000], [10000], [100000]],
+      labels: ["I"],
+      units: ["cps"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA_WITH_NEGATIVE_SAMPLE }],
+      activeId: "d1",
+      yLim: null, // autoscale — finiteRange(y) must do the positive-only filtering itself
+      yScale: "log",
+    });
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [pk(1, 10, 0.8, 0)], // apex = 10, the smallest POSITIVE sample
+      background: [],
+    });
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].y).toBeGreaterThan(10); // above its own apex
+    // If the -5 sample had disabled the log transform (finiteRange(y)[0]
+    // <= 0 -> the range fails to transform -> whole call reverts to
+    // linear), the offset would be ~5000 (5% of a ~100005-wide range) —
+    // the exact bug this finding describes. A log-aware offset, using the
+    // smallest POSITIVE sample (10) as the floor instead of -5, stays
+    // close to the apex.
     expect(anns[0].y).toBeLessThan(100);
   });
 });

@@ -44,12 +44,24 @@ function nextLabelGroupId(): string {
  *  `Math.min(...arr)` (a 100k+-point array blows the call-arity cap — see
  *  useBaseline.ts's own comment on the same hazard). Falls back to `[0, 1]`
  *  when nothing finite is present, so a degenerate/empty channel never
- *  produces a NaN range for `placeLabels`. */
-function finiteRange(values: readonly number[]): [number, number] {
+ *  produces a NaN range for `placeLabels`.
+ *
+ *  `positiveOnly` (P3 review finding, round 6): matches `lib/uplotOpts.ts`'s
+ *  own `fullYExtents`/`isPositiveOnlyScale` convention — a log/reciprocal
+ *  axis can only ever render (and therefore only ever legitimately span)
+ *  POSITIVE values, so its floor must be the SMALLEST POSITIVE sample, not
+ *  the channel's raw minimum. Without this, a single zero or slightly
+ *  negative background sample — routine in real XRD data — made
+ *  `finiteRange(y)[0] <= 0`, and `placeLabels`'s own transform then failed
+ *  to establish a transformed range at all, silently reverting the WHOLE
+ *  batch to linear offsets (the exact ~2.7-decade misplacement
+ *  `peakLabels.test.ts`'s own log tests exist to prevent) — not an edge
+ *  case, the COMMON case for real data. */
+function finiteRange(values: readonly number[], positiveOnly = false): [number, number] {
   let lo = Infinity;
   let hi = -Infinity;
   for (const v of values) {
-    if (Number.isFinite(v)) {
+    if (Number.isFinite(v) && (!positiveOnly || v > 0)) {
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
@@ -316,10 +328,6 @@ export function usePeaks(): PeaksState {
     ]);
     if (!values) return; // cancelled — creates nothing (RULING 7's guard)
 
-    // L5: the dialog await is the widest window another batch could have
-    // started in — re-check right before doing any real work.
-    if (rejectIfHistoryBatchRunning()) return;
-
     // L3: match the sibling fit actions' (fitTogether/fitEach) error-
     // surfacing pattern — every entry point calls this with `void`, so an
     // uncaught rejection here would fail utterly silently (no labels, no
@@ -360,9 +368,14 @@ export function usePeaks(): PeaksState {
       // real zoom level; `annotationPlugin` then skips the resulting
       // off-canvas annotation, so the run reported success while the user
       // saw nothing. Falls back to the full data range exactly as before
-      // when the axis is on autoscale (`xLim`/`yLim` null).
+      // when the axis is on autoscale (`xLim`/`yLim` null) — P3: on a
+      // log/reciprocal axis, that fallback is POSITIVE-only, matching how
+      // the plot's own scale picks its floor (`fullYExtents`,
+      // lib/uplotOpts.ts) — an explicit `yLim` is trusted as-is (a real
+      // log-scaled view can never legitimately hold a non-positive bound).
+      const yNeedsPositive = st.yScale === "log" || st.yScale === "reciprocal";
       const xRange = st.xLim ?? finiteRange(x);
-      const yRange = st.yLim ?? finiteRange(y);
+      const yRange = st.yLim ?? finiteRange(y, yNeedsPositive);
 
       // L1 CRITICAL (review): a peak's apex y is `height + bg`, NEVER
       // `height` alone — `height` is measured ABOVE background by the
@@ -404,6 +417,19 @@ export function usePeaks(): PeaksState {
       // withHistoryBatch.
       const groupId = nextLabelGroupId();
       const historyLabel = `label ${kept.length} peak${kept.length === 1 ? "" : "s"}`;
+      // P4 review finding, round 6: the ONLY re-check that matters is the one
+      // immediately before withHistoryBatch itself, with NO await between
+      // check and call — resolveDataset above is a real async round trip
+      // (#38 deferred edge), and another batch (e.g. relink.ts's
+      // importChangedAsNewVersion) can start at any point during it. A check
+      // placed earlier (e.g. right after the dialog closes, before
+      // resolveDataset) leaves that entire fetch window unguarded: a batch
+      // starting mid-fetch would still make it all the way to
+      // withHistoryBatch and get folded into the import's single undo entry
+      // — exactly what L5 exists to prevent. Every synchronous step between
+      // this check and the call below (peakInputs/finiteRange/placeLabels)
+      // has no await, so this is the last possible moment to catch it.
+      if (rejectIfHistoryBatchRunning()) return;
       await useApp.getState().withHistoryBatch(historyLabel, async (token) => {
         const store = useApp.getState();
         for (let i = 0; i < kept.length; i++) {

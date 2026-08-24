@@ -519,6 +519,96 @@ for the coordinator to check against the contract above:**
 >     exhausted and extra labels pile deterministically onto the last tier
 >     tried (may overlap each other there) rather than searching forever.
 
+**Status (2026-08-24, round-6 review — geometry unified into ONE space; two
+more reachable bugs fixed):** the coordinator found that round 5's own O3 fix
+still left geometry SPLIT across two spaces — offsets/tiers in transformed
+space, but the collision box height and the range/pole handling still in
+linear data space — plus two independent process/perf findings. Five
+findings, root-caused to one fix (P1+P2):
+
+- **P1+P2 (root cause, CRITICAL) — geometry split across transformed and
+  linear space.** Confirmed repros: on `"reciprocal"`, an apex at `y:500` on
+  `yRange:[1,100]` landed its label at `y:-21.05` (an offset pushed the
+  candidate ACROSS the `1/v` pole; the sign-flipped result was still finite,
+  so the data-space guard passed); on `"log"`, 4 clustered peaks on
+  `yRange:[1,100000]` produced 3 overlapping pairs (a fixed LINEAR-data-unit
+  box height, mismatched to log-spaced offsets near the low end, exhausted
+  all `MAX_STACK_TIERS`) where linear mode separates all 4 cleanly. Fixed by
+  rewriting `placeLabels` around a single rule: transform ONCE at entry
+  (`fwdT`/`bwdT`), invert ONCE at exit. Apexes, offsets, tier steps, the
+  collision box height (`boxHT`), the range bounds (`yMinT`/`yMaxT`), and
+  every acceptance test now live in ONE transformed space for the entire
+  search — never mixed with linear-space geometry mid-search. A second,
+  more subtle bug surfaced while fixing this: a bare `Number.isFinite(bwdT(t))`
+  check is NOT sufficient pole safety for reciprocal, since only `t === 0`
+  itself is non-finite — a sign-flipped, wrong-side-of-the-pole candidate is
+  still finite. Added an explicit `inDomain`/`tMustBePositive` domain check
+  (distinct from mere finiteness), folded into the acceptance test for both
+  the in-range and out-of-range branches — never a post-hoc clamp (contract
+  point 4 still holds). Verified: apex `y:500` now places at a positive,
+  finite y (no longer -21.05); the 4-peak log cluster now separates cleanly
+  (10-tier capacity confirmed to hold on both non-linear scales, not just
+  linear). Test helper `assertNoOverlap` was made scale-aware (transforms
+  both compared points before computing box overlap) so the test suite
+  checks overlap in the SAME space the algorithm now operates in, rather
+  than silently repeating the production bug on the test side.
+- **P3 — the log path silently disabled itself on ordinary data.** With the
+  default autoscaled axis (`yLim: null`), a single non-positive sample (a
+  zero or slightly negative background point — routine in real XRD data)
+  made `finiteRange(y)[0] <= 0`; `placeLabels`'s own `fwd` then returned
+  `NaN`, `yTransformable` went `false`, and the WHOLE batch silently reverted
+  to linear offsets — reintroducing the ~2.7-decade misplacement O3's own
+  test exists to prevent, on the common case, not an edge case. Fixed:
+  `usePeaks.ts`'s `finiteRange` takes a `positiveOnly` flag, used only when
+  `st.yScale` is `"log"`/`"reciprocal"` and `yLim` is unset — matching
+  `lib/uplotOpts.ts`'s own `fullYExtents`/`isPositiveOnlyScale` convention (a
+  log/reciprocal axis can only ever render positive values, so its floor is
+  the smallest POSITIVE sample, not the channel's raw minimum). An explicit
+  `yLim` is trusted as-is (a real log-scaled view can never legitimately hold
+  a non-positive bound). Tested: a 6-point dataset with one negative sample
+  (`-5`) and `yScale: "log"`, `yLim: null` still gets log-spaced offsets (the
+  label lands within one decade of its apex, not thousands of units away).
+- **P4 — the batch guard was in the wrong place.** The second `withHistoryBatch`
+  reentrancy pre-flight check sat BEFORE `await resolveDataset(...)` rather
+  than immediately before `withHistoryBatch` itself — so another batch (e.g.
+  `relink.ts`'s `importChangedAsNewVersion`) starting during that fetch could
+  still ride all the way to `withHistoryBatch` and get folded into the
+  import's single undo entry, exactly what the L5 guard (round 2) exists to
+  prevent. Fixed: moved the check to immediately before the
+  `withHistoryBatch` call, with no `await` between check and call (every
+  step in between — `peakInputs`/`finiteRange`/`placeLabels` — is
+  synchronous). Red-first test: mocked `resolveDataset` to flip
+  `historySuppressed: true` DURING its own await (simulating a batch
+  starting mid-fetch) — 2 annotations were created against the old guard
+  placement; 0 against the fix.
+- **P5 — `baselineValueAt` full-scanned `segment.x` per candidate,** now
+  called from two `usePeakWizard.ts` effects that re-run on every
+  `candidates` change — at this project's 1M-row scale, one include-toggle
+  cost tens of millions of main-thread iterations. Fixed: binary search
+  (`nearestIndexAscending`) over `segment.x`, which is always ascending (a
+  range-cut, order-preserving slice of the plotted x column — `cutRange`
+  filters, never reorders; the wizard's own `span = x[last] - x[0]` already
+  relies on the same precondition). Preserves the original linear scan's
+  exact tie-break (on an equidistant pair, the smaller/earlier index wins),
+  confirmed by a 200-trial fuzz test against a brute-force reference plus
+  explicit duplicate/tie/out-of-range/single-sample cases. **Measured at 1M
+  rows** (round 5 measured ~0.58-1.0 ms/peak at 200k): the OLD linear scan
+  costs ~2.60 ms/peak at 1M rows (520 ms for 200 lookups — consistent with
+  ~5x linear scaling from the 200k figure); the NEW binary search costs
+  ~0.0024 ms/peak at the same scale (0.49 ms for 200 lookups) — roughly a
+  1,000x speedup, reducing an include-toggle on a 1M-row pattern from
+  hundreds of milliseconds to sub-millisecond.
+
+No linear-space geometry remains inside `placeLabels`'s search for a
+non-linear (`"log"`/`"reciprocal"`) scale: apex, offset, tier step, box
+height, range bounds, and every acceptance test are computed in transformed
+`t`-space; `bwdT()` is called exactly once per point, at the moment a final
+placement is assigned. Gates: `tsc --noEmit`, `eslint --max-warnings=0` on
+every changed file, targeted vitest (`usePeaks.test.ts` 34/34,
+`peakLabels.test.ts` 45/45, new `peakWizardApex.test.ts` 12/12,
+`architecture.test.ts`) — 109 passed — plus the full suite and
+`npm run build`, all green.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow

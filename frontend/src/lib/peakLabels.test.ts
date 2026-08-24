@@ -15,6 +15,16 @@ function peak(center: number, height = 5, fwhm = 0.8, area: number | null = 4): 
   return { center, height, fwhm, area };
 }
 
+/** Independent re-implementation of the SAME y-transform `placeLabels`
+ *  itself uses (round 6, P1+P2) — kept deliberately separate from
+ *  `peakLabels.ts`'s own `yTransform` so a box-overlap test that reuses the
+ *  PRODUCTION transform could never mask a bug in that transform. */
+function testFwd(yScale: "linear" | "log" | "reciprocal", v: number): number {
+  if (yScale === "log") return v > 0 ? Math.log10(v) : NaN;
+  if (yScale === "reciprocal") return v > 0 ? 1 / v : NaN;
+  return v;
+}
+
 /** Recomputes each placement's own axis-aligned box — LEFT-ALIGNED from the
  *  anchor extending right, UP-FROM-ANCHOR extending up (N2 review finding,
  *  round 4: the SAME geometry `placeLabels` uses internally, matching how
@@ -25,23 +35,44 @@ function peak(center: number, height = 5, fwhm = 0.8, area: number | null = 4): 
  *  numbers differ". Additive per-axis epsilons (M1, round 3: exact-tier-step
  *  float rounding can land a hair under the true threshold) mean two boxes
  *  exactly touching are adjacent, not overlapping, on either side of that
- *  rounding. */
+ *  rounding.
+ *
+ *  P1+P2 (round 6): the Y comparison happens in the SAME transformed space
+ *  `placeLabels` itself now uses for a non-linear `yScale` — a box-height
+ *  comparison done in plain data units would be just as wrong here as it
+ *  was inside the implementation itself (that mismatch WAS the root cause
+ *  round 6 fixed). `yRange` is given in DATA space either way (matching
+ *  `placeLabels`'s own signature); this helper transforms it exactly once,
+ *  the same way `placeLabels` does. */
 function assertNoOverlap(
   placed: LabelPlacement[],
   labels: string[],
   xRange: [number, number],
   yRange: [number, number],
+  yScale: "linear" | "log" | "reciprocal" = "linear",
 ): void {
   const xW = xRange[1] - xRange[0] > 0 ? xRange[1] - xRange[0] : 1;
-  const yW = yRange[1] - yRange[0] > 0 ? yRange[1] - yRange[0] : 1;
+  const yLoT = testFwd(yScale, Math.min(yRange[0], yRange[1]));
+  const yHiT = testFwd(yScale, Math.max(yRange[0], yRange[1]));
+  const yTransformable = Number.isFinite(yLoT) && Number.isFinite(yHiT) && yLoT !== yHiT;
+  const yW = yTransformable
+    ? Math.abs(yHiT - yLoT)
+    : Math.max(yRange[1] - yRange[0], 0) > 0
+      ? yRange[1] - yRange[0]
+      : 1;
+  const toT = (y: number): number => {
+    if (!yTransformable) return y;
+    const t = testFwd(yScale, y);
+    return Number.isFinite(t) ? t : Math.min(yLoT, yHiT);
+  };
   const xEps = xW * 1e-9;
   const yEps = yW * 1e-9;
   const w = (i: number) => xW * CHAR_FRACTION * Math.max(1, labels[i].length);
   const boxH = TIER_STEP_FRAC * yW;
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
-      const ax = placed[i].x, ay = placed[i].y, aw = w(i);
-      const bx = placed[j].x, by = placed[j].y, bw = w(j);
+      const ax = placed[i].x, ay = toT(placed[i].y), aw = w(i);
+      const bx = placed[j].x, by = toT(placed[j].y), bw = w(j);
       const overlaps =
         ax + xEps < bx + bw - xEps && bx + xEps < ax + aw - xEps &&
         ay + yEps < by + boxH - yEps && by + yEps < ay + boxH - yEps;
@@ -554,5 +585,69 @@ describe("placeLabels — O3 review finding, round 5: log-axis-aware offsets", (
     // Different offset formula -> a DIFFERENT result from plain linear
     // (proving it isn't just falling through to the linear path unnoticed).
     expect(reciprocalResult[0].y).not.toBeCloseTo(linearResult[0].y, 6);
+  });
+});
+
+describe("placeLabels — P1+P2 review finding, round 6: ONE space, root cause (offsets/boxes/bounds all transformed)", () => {
+  it("reciprocal: an apex with real headroom places its label ABOVE it (never below/negative)", () => {
+    // apex=10 sits well inside [1,100] in TRANSFORMED (1/v) terms, unlike
+    // apex values very close to the range's compressed high-v edge — there
+    // is genuine room for the preferred UP direction to succeed.
+    const placed = placeLabels([{ x: 10, y: 10 }], ["10.00"], [0, 60], [1, 100], "reciprocal");
+    expect(Number.isFinite(placed[0].y)).toBe(true);
+    expect(placed[0].y).toBeGreaterThan(10); // ABOVE its own apex
+    expect(placed[0].y).toBeGreaterThan(0); // never negative
+  });
+
+  it("reciprocal: the exact round-6 pole-crossing repro (apex=500, out of range) is finite and NEVER negative", () => {
+    // Round-5 code placed this at y=-21.05 — a candidate that crossed the
+    // 1/v pole to the WRONG side, still `Number.isFinite`, so a bare
+    // finite-only guard let it through. This apex is pathologically close
+    // to the pole in transformed terms (1/500 is tiny), so — honestly —
+    // the "prefer above" direction has essentially no room at ANY tier;
+    // the invariant this test actually pins is the one round 6 asks for:
+    // finite, and NEVER negative/pole-crossing garbage.
+    const placed = placeLabels([{ x: 10, y: 500 }], ["500.00"], [0, 60], [1, 100], "reciprocal");
+    expect(Number.isFinite(placed[0].y)).toBe(true);
+    expect(placed[0].y).toBeGreaterThan(0);
+    expect(placed[0].y).not.toBeCloseTo(-21.05, 1); // the exact old bug value
+  });
+
+  it("log: the exact round-6 repro — 4 clustered low-y peaks separate cleanly (not 3 overlapping pairs)", () => {
+    // Round-5 code compared log-spaced offsets against a LINEAR-data-unit
+    // box height — wildly mismatched near the low end of a wide log
+    // range — exhausting capacity and collapsing this exact cluster into
+    // 3 overlapping pairs. Same box height and offsets, ONE space now.
+    const points = [{ x: 10, y: 5 }, { x: 10.5, y: 8 }, { x: 11, y: 20 }, { x: 11.5, y: 60 }];
+    const labels = ["5", "8", "20", "60"];
+    const xRange: [number, number] = [0, 60];
+    const yRange: [number, number] = [1, 100000];
+    const placed = placeLabels(points, labels, xRange, yRange, "log");
+    for (const p of placed) expect(Number.isFinite(p.y)).toBe(true);
+    assertNoOverlap(placed, labels, xRange, yRange, "log");
+    // Every label sits above its own apex (plenty of headroom on this wide
+    // log range for all four) and they stay in ascending apex order.
+    for (let i = 0; i < placed.length; i++) expect(placed[i].y).toBeGreaterThan(points[i].y);
+  });
+
+  it("log: the capacity guarantee (up to MAX_STACK_TIERS + 1 distinct, non-overlapping labels) holds for a dense cluster too, not just linear", () => {
+    const CAPACITY = MAX_STACK_TIERS + 1;
+    const points = Array.from({ length: CAPACITY }, (_, i) => ({ x: 10 + i * 0.01, y: 50 }));
+    const labels = points.map((_, i) => `${i}`);
+    const xRange: [number, number] = [0, 60];
+    const yRange: [number, number] = [1, 100000];
+    const placed = placeLabels(points, labels, xRange, yRange, "log");
+    assertNoOverlap(placed, labels, xRange, yRange, "log");
+    expect(new Set(placed.map((p) => p.y.toFixed(9))).size).toBe(CAPACITY);
+  });
+
+  it("reciprocal: collision avoidance also runs in transformed space (two close peaks stagger, not overlap)", () => {
+    const points = [{ x: 10, y: 3 }, { x: 10.2, y: 3.2 }];
+    const labels = ["3.00", "3.20"];
+    const xRange: [number, number] = [0, 60];
+    const yRange: [number, number] = [1, 100];
+    const placed = placeLabels(points, labels, xRange, yRange, "reciprocal");
+    for (const p of placed) expect(Number.isFinite(p.y)).toBe(true);
+    assertNoOverlap(placed, labels, xRange, yRange, "reciprocal");
   });
 });
