@@ -12,7 +12,7 @@ describe("OriginFidelitySection", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows project coverage, omissions, and retained filtered records", () => {
+  it("shows project coverage, omissions, and retained filtered records once disclosed", () => {
     useApp.setState({
       originFidelity: [
         {
@@ -39,6 +39,11 @@ describe("OriginFidelitySection", () => {
     });
 
     render(<OriginFidelitySection />);
+    // UX-R3: a "low-value technical artifact" group tucks behind disclosure
+    // BY DEFAULT — the group header renders, but its entries do not, until
+    // the user opens it.
+    expect(screen.queryByText(/XMCD · Best effort/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Origin fidelity"));
     fireEvent.click(screen.getByText(/XMCD · Best effort/));
     expect(screen.getByText(/67\/128 graph records editable/)).toBeInTheDocument();
     expect(screen.getByText(/drawn arrows and shapes/)).toBeInTheDocument();
@@ -47,7 +52,7 @@ describe("OriginFidelitySection", () => {
     expect(screen.getByText(/1 workbook thumbnails excluded/)).toBeInTheDocument();
   });
 
-  it("collapses the project manifests from the group header", () => {
+  it("defaults collapsed (UX-R3 tuck-behind-disclosure) but never discards the manifest — one click reveals it", () => {
     useApp.setState({
       originFidelity: [
         {
@@ -68,6 +73,11 @@ describe("OriginFidelitySection", () => {
       ],
     });
     render(<OriginFidelitySection />);
+    // Tucked, not discarded: the header (with its count) is visible; the
+    // per-project summary is one click away, never gone.
+    expect(screen.getByText("Origin fidelity")).toBeInTheDocument();
+    expect(screen.queryByText(/XRD · Best effort/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Origin fidelity"));
     expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Origin fidelity"));
     expect(screen.queryByText(/XRD · Best effort/)).not.toBeInTheDocument();

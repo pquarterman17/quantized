@@ -1277,7 +1277,24 @@ describe("useApp importFiles", () => {
     expect(st.folders.map((f) => f.name)).toEqual(["Moke"]);
     const moke = st.folders[0].id;
     expect(st.datasets.every((d) => d.folderId === moke)).toBe(true);
+    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a multi-book Origin
+    // project import lands COLLAPSED — see importDatasets.ts's comment on
+    // this call site and store/importWorkbooks.test.ts's dedicated
+    // "lands COLLAPSED" coverage. Superseded the pre-UX-R3 "freshly-created
+    // folder auto-reveals" contract for THIS (project-scale) import path
+    // specifically; a single-file import still auto-expands (unchanged).
+    //
+    // F1 (review fix round): the ONE exception is the active dataset's own
+    // ancestor chain — here that's "Moke" itself (both books are flat, no
+    // folder path, so the project folder IS Book2's — the last-processed,
+    // now-active book's — leaf folder) and Book2's own workbook; Book1's
+    // workbook, which this same import also created, stays collapsed.
     expect(st.expandedFolders).toContain(moke);
+    const activeDs = st.datasets.find((d) => d.id === st.activeId)!;
+    expect(activeDs.name).toBe("Moke:Book2");
+    expect(st.expandedWorkbookIds).toContain(activeDs.workbookId);
+    const otherWorkbookId = st.datasets.find((d) => d.id !== st.activeId)!.workbookId;
+    expect(st.expandedWorkbookIds).not.toContain(otherWorkbookId);
   });
 
   it("mirrors the Origin Project Explorer folder tree on import (item 4)", async () => {

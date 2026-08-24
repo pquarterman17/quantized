@@ -8,7 +8,12 @@ import { useApp } from "../../store/useApp";
 
 export default function OriginFidelitySection() {
   const entries = useApp((s) => s.originFidelity);
-  const [collapsed, setCollapsed] = useState(false);
+  // UX-R3: this group is exactly the "low-value technical artifact" case the
+  // spec calls out — decoder diagnostics (internal-filtered graph records,
+  // preview-asset inventory) a reader almost never needs on the common path.
+  // It defaults TUCKED (collapsed) rather than dropped: every manifest is
+  // still here, one click away, never discarded to simplify the view.
+  const [collapsed, setCollapsed] = useState(true);
   if (entries.length === 0) return null;
 
   return (

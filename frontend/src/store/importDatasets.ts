@@ -32,6 +32,7 @@ import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
+import { revealAncestorChain } from "../lib/foldertree";
 import { planOriginImport } from "../lib/originFolders";
 import {
   isLazyBookEntry,
@@ -254,22 +255,37 @@ function addFromPayload(
     const newIdSet = new Set(newIds);
     const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
     const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId, targetFolderId ?? null);
-    set((s) => ({
-      folders: [...s.folders, ...plan.folders],
-      workbooks: [...s.workbooks, ...plan.workbooks],
-      expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
-      // A workbook created by this import starts expanded — the workbook-
-      // layer sibling of `plan.expanded` above, and the tree-mode analogue
-      // of the old flat list where a fresh import's rows were immediately
-      // visible. Collapsed-by-default stays the rule for everything a user
-      // didn't just create (L0.5 disclosure semantics untouched).
-      expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...plan.workbooks.map((w) => w.id)])],
-      datasets: s.datasets.map((d) =>
-        newIdSet.has(d.id)
-          ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
-          : d,
-      ),
-    }));
+    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a multi-book Origin
+    // project can create dozens of folders/workbooks in one import, so this
+    // branch lands COLLAPSED at both layers (`plan.folders`/`plan.workbooks`
+    // deliberately NOT merged into expandedFolders/expandedWorkbookIds) —
+    // the owner-observed "too many similarly weighted objects" complaint.
+    // Nothing is hidden-with-no-path-back; only the DEFAULT disclosure depth
+    // changes. A single-file import (the `else` below) keeps its immediate
+    // auto-expand, unchanged. F1 exception: the active dataset's ancestor
+    // chain IS revealed (`revealAncestorChain`'s doc) — computed INSIDE this
+    // same `set()`, so no subscriber ever observes the forbidden transient.
+    const activeId = get().activeId;
+    set((s) => {
+      const folders = [...s.folders, ...plan.folders];
+      const reveal = activeId
+        ? revealAncestorChain(
+            { ...s, folders },
+            plan.folderMembership[activeId],
+            plan.workbookMembership[activeId],
+          )
+        : {};
+      return {
+        folders,
+        workbooks: [...s.workbooks, ...plan.workbooks],
+        datasets: s.datasets.map((d) =>
+          newIdSet.has(d.id)
+            ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
+            : d,
+        ),
+        ...reveal,
+      };
+    });
   } else {
     delete data.books;
     delete data.book_source;
@@ -289,9 +305,12 @@ function addFromPayload(
     const derived = deriveWorkbooks([dsInput], [], nextWorkbookId);
     set((s) => ({
       workbooks: [...s.workbooks, ...derived.workbooks],
-      // Freshly created workbook starts expanded — same rule (and reason) as
-      // the Origin branch above: the sheet the user just imported must be
-      // visible in the tree, not hidden behind a collapsed disclosure.
+      // A single-file (0/1-book) import creates exactly ONE new workbook, so
+      // it starts expanded unconditionally: the just-imported sheet must be
+      // immediately visible, not behind a collapsed disclosure. UX-R3's
+      // multi-book branch above deliberately does NOT do this for what IT
+      // creates (project scale: auto-expanding every one is the "too many
+      // similarly weighted objects" complaint that branch exists to fix).
       expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])],
       datasets: s.datasets.map((d) => (d.id === id ? { ...d, workbookId: derived.membership[id] } : d)),
     }));

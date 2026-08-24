@@ -88,6 +88,11 @@ content merely to simplify the view.
 Sonnet implementation; cheaper models for fixtures/tests. **Sprint priority:**
 daily-driver critical and part of the owner switch-trigger trial.
 
+**Status note (2026-08-24, implementation-lane hand-back):** Claude-implemented
+Library/Origin-import-IA slice landed on `claude/uxr3-origin-import-ia`
+(scout + implementation + tests below the fold, "UX-R3 completion note").
+ChatGPT-Sol visual acceptance is still open.
+
 ### UX-R4 — Making a plot and worksheet share the workspace is undiscoverable
 
 **Observation/question:** the owner could not tell how to keep a plot and
@@ -152,6 +157,20 @@ UX-R6 strengthens the existing canonical annotation/peak workflows and must not
 fork a new figure-decoration state model.
 Do not bury these findings in archived MDI or Origin decoder plans; completion
 must be logged here and cross-referenced from the active Library/Primary plans.
+
+**Status (2026-08-24, Claude Sonnet):** manual half built — a Stage right-click
+"Add text here…" entry (`lib/plotMenu.ts` / `PlotContextMenu.tsx`) places a new
+annotation at the click's DATA coordinates via the SAME `addAnnotation` store
+action and `AnnotationTextDialog` editor the toolbar's existing "Text box" tool
+and the Inspector's Annotations card already use — no second annotation model.
+Scouting found double-click-to-edit (pre-filled), drag, right-click Properties
+(Edit text/Pin/Frame/Size/Delete), and save-close-reopen persistence already
+implemented and covered by existing tests against the exact `Annotation` shape
+`addAnnotation` produces; only the discoverable placement entry point and its
+red-first tests were new. The bulk XRD **Label peaks** workflow (selected/all
+fitted peaks, phase/`(hkl)` label templates, collision-aware placement,
+conversion to independently editable annotations) is NOT built — booked as a
+beta follow-up per this section's own sprint-priority note.
 
 ## Non-negotiable operating rules
 
@@ -550,6 +569,14 @@ safeguards, not loopholes.
   `## Day-5 retrospective` section below for the full record — what the
   adversarial-review process caught this week, and the two process lessons
   worth keeping into the next frontend-heavy wave.
+- **2026-08-24 — Claude Sonnet:** UX-R6 manual-annotation slice. Added a
+  Stage right-click "Add text here…" context-menu entry (data-anchored
+  click-to-place) as the one genuinely missing piece of the manual-text
+  acceptance list — double-click editing, drag, right-click Properties, and
+  persistence were already implemented and already covered by existing
+  tests. Booked the bulk XRD Label-peaks workflow as a beta follow-up per
+  the section's own sprint-priority note; see the dated status note under
+  UX-R6 above.
 
 ## Day-5 retrospective (QA lane, 2026-08-19)
 
@@ -651,3 +678,120 @@ locally, since this sandbox cannot run Playwright — see below):
    the marginal cost of one CI round is small, but it compounds linearly
    with the number of E2E specs a sprint adds, and this sprint added a lot
    of them.
+
+## UX-R3 completion note (2026-08-24, implementation-lane hand-back)
+
+Scope: UX-R3 only ("Origin project imports are difficult to parse in the
+Library"), on a dedicated worktree/branch (`claude/uxr3-origin-import-ia`),
+current `main` at merge time `200fdb0`. Not a merge — orchestrator review is
+still required before this lands.
+
+**Scout findings — already met vs. gap.** The Library tree
+(`components/Library/**`, `lib/libraryHierarchy.ts`) already had most of the
+acceptance surface built by earlier PR C/D2/L work: `lib/libraryDetails.ts`
+already carries a `TYPE_LABELS` map (Folder/Workbook/Worksheet/Origin
+figure/…) and a `locationOf` breadcrumb column for Details/search; a
+folder's/workbook's count chip (`lib/foldertree.ts`'s `subtreeCount`,
+`WorkbookRow`'s worksheet count) is already computed live and independent of
+expansion state; search (`LibraryDetails` in query mode) already walks the
+full hierarchy regardless of collapse state, so tucked items were never
+actually unreachable; and `OriginFidelitySection.tsx` already existed as a
+disclosure group for decoder diagnostics (the closest concrete match to the
+spec's "note"/"technical artifact" language — no separate Origin "note"
+node kind exists in this codebase's parser/hierarchy). The genuine gaps were
+narrower than the observation text suggested:
+
+1. **The actual default-expand behavior inverted the spec.**
+   `store/importDatasets.ts`'s Origin multi-book branch
+   (`data.books.length > 1`) auto-expanded EVERY folder AND EVERY workbook it
+   created on import — the literal mechanism behind "the left browser
+   presents too many similarly weighted objects at once." A single-file
+   import's one derived workbook auto-expanding (the pre-existing "a fresh
+   import's row is immediately visible" contract, `importWorkbooks.test.ts`)
+   was correctly untouched — see `docs/testing.md`-style reasoning in the
+   PR: a multi-book PROJECT import spills dozens of rows at once, a
+   single-sheet import spills exactly one.
+2. **`OriginFidelitySection` defaulted OPEN**, not tucked — the one existing
+   "technical artifact" disclosure group started expanded (`useState(false)`
+   for its `collapsed` flag), the opposite of "suppress or tuck behind
+   disclosure."
+3. **`FolderRow` carried no type glyph at all** — `WorkbookRow` already had
+   its own icon (`▤`, `title="Workbook"`), but the sibling `FolderRow` had
+   only the disclosure caret, so a folder and a workbook read as visually
+   closer together than the two other artifact kinds (each of which already
+   has a distinct glyph via `ArtifactRow`/`FigureRow`).
+
+**Design rulings (documented per the task brief):**
+
+- **Auto-expand-on-import exception, scoped precisely to the
+  `books.length > 1` branch of `addFromPayload`** (`store/importDatasets.ts`):
+  a multi-book Origin project import no longer merges its created
+  folders/workbooks into `expandedFolders`/`expandedWorkbookIds` — it lands
+  fully collapsed at both the Folder and Workbook layers, so the ordinary
+  disclosure caret reveals Folder → Workbook → Worksheet progressively, one
+  click at a time. The single-dataset `else` branch (ordinary imports: a
+  `.dat`/`.csv`/single-book Origin file) is UNCHANGED — its one new workbook
+  still auto-expands, preserving the existing "the sheet I just imported is
+  immediately visible" contract for the common non-project case. Nothing is
+  hidden with no path back: every created row is present, individually
+  expandable, and still fully searchable while collapsed (pinned by a new
+  test — see below); this only changes the DEFAULT disclosure depth for a
+  project-scale import.
+- **`OriginFidelitySection` now defaults collapsed** (tucked, not deleted —
+  the group header with its count is still visible; every manifest is one
+  click away, exactly the "details-toggle" the task brief named as an
+  acceptable suppression mechanism).
+- **`FolderRow` gained a `▦` "Folder" glyph**, mirroring `WorkbookRow`'s
+  existing icon convention (Unicode glyph + `title`, no emoji, no new CSS
+  needed — matches the un-styled inline convention `WorkbookRow`'s icon
+  already used).
+- Explicitly NOT touched: `lib/libraryHierarchy.ts`'s node kinds,
+  `lib/foldertree.ts`'s count/subtree logic, `LibraryDetails`'s
+  type-label/breadcrumb columns, and the Tree/Tiles/Details view-switcher —
+  all already met the spec as found.
+
+**Files touched:** `frontend/src/store/importDatasets.ts` (collapse ruling),
+`frontend/src/components/Library/OriginFidelitySection.tsx` (default
+collapsed), `frontend/src/components/Library/FolderRow.tsx` (type glyph),
+plus their tests (`store/importWorkbooks.test.ts`,
+`store/useApp.test.ts`, `components/Library/OriginFidelitySection.test.tsx`,
+`components/Library/FolderRow.test.tsx`) and a new integration-style test,
+`components/Library/originImportIA.test.tsx`, exercising the acceptance
+points against the real `LibraryTree`/`LibraryDetails` renderers (collapsed
+by default; progressive one-level-at-a-time disclosure; distinct icons while
+collapsed; a live count chip on a collapsed folder; search finding a
+worksheet nested three levels inside a fully collapsed folder → workbook).
+
+**Red-first evidence:** every store-level assertion changed by this PR was
+verified red against the pre-fix code before the fix landed (confirmed via a
+`git stash` of `importDatasets.ts` alone and re-running
+`importWorkbooks.test.ts`, which failed exactly as expected; `useApp.test.ts`'s
+own multi-book fixture caught the same regression independently on the first
+full-suite run and was updated the same way).
+
+**Gates (all green, foreground, current branch):** `npx tsc --noEmit` clean;
+`npx eslint --max-warnings=0 src` clean; full `npx vitest run` — 555/555 test
+files, 8445/8445 tests; `npm run build` — 888.7 kB eager JS against the
+889.4 kB budget (unchanged budget; no raise needed).
+
+**Left for ChatGPT-Sol / a follow-up:** visual acceptance of the new glyph
+against the design tokens/theme in both light and dark, and a real multi-book
+`.opju` fixture walkthrough (this PR's coverage uses synthetic fixtures
+matching `lib/originFolders.ts`'s documented shape, not a captured `.opju`).
+
+**Review round 2 follow-ups (2026-08-24, orchestrator final pass — booked,
+not blocking merge):**
+
+1. **Multi-book provenance gap (pre-existing, surfaced by this review):** the
+   `books.length > 1` branch of `store/importDatasets.ts`'s `addFromPayload`
+   never stamps `importedAt` or spreads `importRoles(...)` onto the per-book
+   datasets — only the single-file `else` branch does — so book sheets from a
+   project import carry no import timestamp and no inferred error-role
+   bindings. Fix belongs with the import-provenance work (MAIN #33), not this
+   IA slice.
+2. **`OriginFidelitySection` disclosure state is per-mount:** `Library.tsx`
+   unmounts the section while search is active, so a user who deliberately
+   expanded the fidelity group loses that choice after every search (remount
+   resets to the new collapsed default). Lift the flag to the store (like
+   `expandedWorkbookIds`) or keep the component mounted. Pre-existing state
+   loss; the flipped default makes it now always resolve toward hidden.

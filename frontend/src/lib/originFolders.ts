@@ -60,8 +60,6 @@ export interface OriginImportPlan {
   folderMembership: Record<string, string>;
   /** datasetId → workbookId assignments for the imported datasets. */
   workbookMembership: Record<string, string>;
-  /** Folder ids to reveal expanded (project + every folder it creates). */
-  expanded: string[];
 }
 
 function meta(d: Dataset): Record<string, unknown> {
@@ -103,7 +101,6 @@ export function planOriginImport(
   const projectId = genFolderId();
   const folders: FolderNode[] = [{ id: projectId, name: stem || "Project", parentId: parentFolderId, order: 0 }];
   const folderMembership: Record<string, string> = {};
-  const expanded: string[] = [projectId];
 
   // Next child-order counter per parent folder, so folders append in
   // first-appearance order under each parent.
@@ -129,7 +126,6 @@ export function planOriginImport(
       if (id === undefined) {
         id = genFolderId();
         folders.push({ id, name: part, parentId, order: bump(parentId) });
-        expanded.push(id);
         pathCache.set(key, id);
         nextOrder.set(id, 0);
       }
@@ -158,6 +154,5 @@ export function planOriginImport(
     workbooks: derived.workbooks,
     folderMembership,
     workbookMembership: derived.membership,
-    expanded,
   };
 }
