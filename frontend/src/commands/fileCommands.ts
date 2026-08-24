@@ -10,7 +10,6 @@ import { makeDemoDataset } from "../lib/demo";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
 import { exportActive, type StoreGet } from "../lib/exportActive";
-import { runExportFigureCommand } from "../lib/exportFigureCommand";
 import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
@@ -342,7 +341,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
       description: "Export the current plot or composed page to a publication-ready image or vector file.",
       // Body lives in lib/exportFigureCommand (store-size ratchet offset for
       // MAIN_PLAN #16's Append workspace command — see that file's doc).
-      run: () => runExportFigureCommand(s),
+      // Bundle: click-only — dynamic import keeps lib/exportFigureCommand
+      // (and the figureSpec transport builder behind it) off the eager path.
+      run: () => void import("../lib/exportFigureCommand").then((m) => m.runExportFigureCommand(s)),
     },
     {
       id: "export-origin",
