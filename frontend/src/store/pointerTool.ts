@@ -21,6 +21,7 @@
 
 import { clampAnnotationSize } from "../lib/uplotOverlays";
 import type { Annotation, AxisKey, AxisLabelOffsets, AxisLabelStyle, AxisLabelStyles } from "../lib/types";
+import type { HistoryBatchToken } from "./history";
 import type { AppState } from "./useApp";
 
 export interface PointerToolSlice {
@@ -61,10 +62,17 @@ export interface PointerToolSlice {
    *  MAIN #21's page/data anchor toggle) ONCE — the refLine/anchor
    *  "plugin-local live preview, store commits on release" pattern.
    *  `patch.size` (if present) is clamped the same way the plugin's live
-   *  preview already clamps it. No-op for an unknown id. */
+   *  preview already clamps it. No-op for an unknown id.
+   *
+   *  `historyToken`: same `addDataset`/`addAnnotation` forwarding pattern —
+   *  fold this patch into an enclosing `withHistoryBatch`'s one entry (e.g.
+   *  usePeaks' "Label peaks" run patching in each new label's `groupId`
+   *  right after `addAnnotation` creates it). Omitted by every ordinary
+   *  call site, which keep recording their own independent entry. */
   updateAnnotation: (
     id: string,
     patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor" | "frame" | "groupId">>,
+    historyToken?: HistoryBatchToken,
   ) => void;
 }
 
@@ -104,8 +112,8 @@ export function createPointerToolSlice(set: SliceSet, get: SliceGet): PointerToo
     },
     selectedAnnotationId: null,
     setSelectedAnnotationId: (selectedAnnotationId) => set({ selectedAnnotationId }),
-    updateAnnotation: (id, patch) => {
-      get().recordHistory("edit annotation");
+    updateAnnotation: (id, patch, historyToken) => {
+      get().recordHistory("edit annotation", historyToken);
       set((s) => ({
         annotations: s.annotations.map((a) =>
           a.id === id

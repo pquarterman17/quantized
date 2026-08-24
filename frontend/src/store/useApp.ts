@@ -722,7 +722,14 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
   updateRefLine: (id: string, value: number) => void;
-  addAnnotation: (x: number, y: number, text: string) => string;
+  /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
+   *  the caller (e.g. `usePeaks`' "Label peaks" batch) so this add folds
+   *  into that batch's one undo entry instead of pushing its own — same
+   *  pattern as `addDataset`'s own `historyToken` (see its doc). Omitted by
+   *  every ordinary call site (manual "Add text here…", the object menu's
+   *  Duplicate, plotspec apply), which keep recording their own independent
+   *  entry exactly as before. */
+  addAnnotation: (x: number, y: number, text: string, historyToken?: HistoryBatchToken) => string;
   removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
@@ -2073,9 +2080,9 @@ export const useApp = create<AppState>((set, get) => ({
   // Move a reference line to a new value (drag commit). No-op for an unknown id.
   updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },
   // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
-  addAnnotation: (x, y, text) => {
+  addAnnotation: (x, y, text, historyToken) => {
     const id = `ann-${++_annSeq}`;
-    get().recordHistory("add annotation");
+    get().recordHistory("add annotation", historyToken);
     set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
     return id;
   },

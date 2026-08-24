@@ -21,11 +21,41 @@ import { useCallback, useEffect, useState } from "react";
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
 import { selectedFitData } from "../../../lib/fitselection";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
+import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
+import { askParams } from "../../overlays/ParamDialog";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
+import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+
+// Local id sequence for a "Label peaks" run's shared `Annotation.groupId`
+// (MY RULING 2) — same `Date.now().toString(36)` + module-scoped counter
+// shape as every other id generator in the store (e.g. useApp.ts's
+// `nextFigureId`/`_annSeq`), kept local here since group ids for this
+// feature are minted nowhere else.
+let _labelGroupSeq = 0;
+function nextLabelGroupId(): string {
+  return `peak-labels-${Date.now().toString(36)}-${++_labelGroupSeq}`;
+}
+
+/** A finite [lo, hi] from a value array, looping rather than
+ *  `Math.min(...arr)` (a 100k+-point array blows the call-arity cap — see
+ *  useBaseline.ts's own comment on the same hazard). Falls back to `[0, 1]`
+ *  when nothing finite is present, so a degenerate/empty channel never
+ *  produces a NaN range for `placeLabels`. */
+function finiteRange(values: readonly number[]): [number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of values) {
+    if (Number.isFinite(v)) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  }
+  return Number.isFinite(lo) && Number.isFinite(hi) ? [lo, hi] : [0, 1];
+}
 
 export interface PeakFitOptions {
   model: string;
@@ -44,6 +74,15 @@ export interface PeaksState {
   fitError: string | null;
   fitTogether: (opts: PeakFitOptions) => Promise<void>;
   fitEach: (opts: PeakFitOptions) => Promise<void>;
+  /** UX-R6 beta half (plans/ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md) — "Label
+   *  peaks": turn the FITTED peaks (if a fit result exists) or the DETECTED
+   *  ones into ordinary, independently editable annotations (MY RULING 1),
+   *  sharing one `groupId` (RULING 2), folded into ONE undo entry (RULING
+   *  3). Prompts for a token template + decimal precision via `askParams`;
+   *  a cancelled dialog or an empty peak set creates nothing (RULING 7's
+   *  guard). Never mutates the dataset or `fitResult` (RULING 4) — reads
+   *  them only to compute label text and initial placement. */
+  labelPeaks: () => Promise<void>;
 }
 
 /** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
@@ -51,7 +90,7 @@ export interface PeaksState {
  *  filtered rows (#50/#53) don't produce or bias peaks. `fullX` is the same
  *  channel's FULL column, for aligning marker overlays to the full-length plot
  *  x. Falls back to the first channel when nothing is plotted. */
-function peakInputs(
+export function peakInputs(
   ds: Dataset,
   xKey: number | null,
   yKeys: number[] | null,
@@ -221,5 +260,66 @@ export function usePeaks(): PeaksState {
     [active, peaks, overlayFitted],
   );
 
-  return { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach };
+  const labelPeaks = useCallback(async () => {
+    if (!active) return;
+    // RULING 7: FITTED peaks when a fit result exists, otherwise DETECTED —
+    // never both, never a user-driven selection (no row-selection exists on
+    // DataTable today; booked as a follow-up in the UX-R6 status note).
+    const source: { center: number; height: number; fwhm: number; area: number | null }[] =
+      fitResult && fitResult.peaks.length > 0 ? fitResult.peaks : peaks;
+    if (source.length === 0) {
+      toast("Find (or fit) peaks before labeling.", "danger");
+      return;
+    }
+
+    const values = await askParams("Label peaks", [
+      {
+        key: "template",
+        label: "Template",
+        type: "text",
+        default: DEFAULT_LABEL_TEMPLATE,
+        hint: "{center} {height} {fwhm} {area} {index} — unknown tokens pass through literally",
+      },
+      { key: "precision", label: "Decimals", type: "number", default: 2 },
+    ]);
+    if (!values) return; // cancelled — creates nothing (RULING 7's guard)
+
+    const template =
+      typeof values.template === "string" && values.template.trim().length > 0
+        ? values.template
+        : DEFAULT_LABEL_TEMPLATE;
+    const precisionRaw = Number(values.precision);
+    const precision = Number.isFinite(precisionRaw) ? Math.max(0, Math.round(precisionRaw)) : 2;
+
+    // #38 deferred edge: resolve the active dataset's full data (a no-op if
+    // it isn't pending) before reading the plotted x/y ranges placement is
+    // based on — never the RAW dataset in a way that could be mutated; this
+    // is a READ ONLY lookup (RULING 4).
+    const ds = await useApp.getState().resolveDataset(active.id);
+    if (!ds) return;
+    const st = useApp.getState();
+    const { x, y } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+    const xRange = finiteRange(x);
+    const yRange = finiteRange(y);
+
+    const labels = source.map((p, i) => renderLabelTemplate(template, p, i, precision));
+    const points = source.map((p) => ({ x: p.center, y: p.height }));
+    const placements = placeLabels(points, labels, xRange, yRange);
+
+    // RULING 1/2/3: ordinary annotations via addAnnotation + updateAnnotation
+    // (never a new decoration model), one shared groupId for the run, the
+    // whole batch folded into ONE undo entry via withHistoryBatch.
+    const groupId = nextLabelGroupId();
+    const historyLabel = `label ${source.length} peak${source.length === 1 ? "" : "s"}`;
+    await useApp.getState().withHistoryBatch(historyLabel, async (token) => {
+      const store = useApp.getState();
+      for (let i = 0; i < source.length; i++) {
+        const pos = placements[i] ?? points[i];
+        const id = store.addAnnotation(pos.x, pos.y, labels[i], token);
+        store.updateAnnotation(id, { groupId }, token);
+      }
+    });
+  }, [active, peaks, fitResult]);
+
+  return { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach, labelPeaks };
 }

@@ -21,8 +21,19 @@ export default function PeaksPanel() {
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
-  const { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach } =
-    usePeaks();
+  const [labeling, setLabeling] = useState(false);
+  const {
+    active,
+    peaks,
+    busy,
+    error,
+    fitResult,
+    fitting,
+    fitError,
+    fitTogether,
+    fitEach,
+    labelPeaks,
+  } = usePeaks();
 
   const close = () => {
     setPeakOverlay(null); // remove the markers when the panel closes
@@ -44,6 +55,17 @@ export default function PeaksPanel() {
       toast(e instanceof Error ? e.message : "report failed", "danger");
     } finally {
       setReporting(false);
+    }
+  };
+
+  const labelSource = fitResult && fitResult.peaks.length > 0 ? fitResult.peaks : peaks;
+  const labelKind = fitResult && fitResult.peaks.length > 0 ? "fitted" : "detected";
+  const runLabelPeaks = async () => {
+    setLabeling(true);
+    try {
+      await labelPeaks();
+    } finally {
+      setLabeling(false);
     }
   };
 
@@ -118,6 +140,19 @@ export default function PeaksPanel() {
               {reporting ? "Reporting…" : "→ Report"}
             </Button>
           </div>
+        </div>
+      )}
+
+      {active && !busy && labelSource.length > 0 && (
+        <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+          <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
+            Turns {labelKind} peaks into ordinary, editable annotations.
+          </div>
+          <Button size="sm" disabled={labeling} onClick={() => void runLabelPeaks()}>
+            {labeling
+              ? "Labeling…"
+              : `Label all ${labelSource.length} ${labelKind} peak${labelSource.length === 1 ? "" : "s"}…`}
+          </Button>
         </div>
       )}
     </ToolWindow>

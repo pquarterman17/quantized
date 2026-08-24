@@ -167,10 +167,48 @@ Scouting found double-click-to-edit (pre-filled), drag, right-click Properties
 (Edit text/Pin/Frame/Size/Delete), and save-close-reopen persistence already
 implemented and covered by existing tests against the exact `Annotation` shape
 `addAnnotation` produces; only the discoverable placement entry point and its
-red-first tests were new. The bulk XRD **Label peaks** workflow (selected/all
-fitted peaks, phase/`(hkl)` label templates, collision-aware placement,
-conversion to independently editable annotations) is NOT built — booked as a
-beta follow-up per this section's own sprint-priority note.
+red-first tests were new.
+
+**Status (2026-08-24, beta half):** the bulk XRD **Label
+peaks** workflow is now built, same no-second-model discipline as the manual
+half. A "Label peaks" button in the Peaks workshop (`PeaksPanel.tsx`) —
+labeled "Label all N fitted/detected peaks…" so the source set is never
+ambiguous — prompts (`askParams`, reusing the existing promise-based dialog,
+no new dialog component) for a token template + decimal precision, then
+creates ONE ordinary `Annotation` per peak via the SAME `addAnnotation` +
+`updateAnnotation` store actions the manual half and the Inspector's
+Annotations card already use (no new decoration model; a generated label is
+structurally indistinguishable from a hand-placed one — tested). All labels
+from one run share a single `Annotation.groupId` (bulk-manageable via the
+Object Manager) while staying independently draggable/editable/deletable;
+the whole run folds into ONE `withHistoryBatch` undo entry (N labels, 1 undo
+step, red-first tested) via a new optional `historyToken` param threaded
+through `addAnnotation`/`updateAnnotation` (mirrors `addDataset`'s existing
+pattern). The dataset's `DataStruct` and the peak/fit results are read-only
+inputs — never rewritten by labeling, editing, or deleting a label
+(red-first tested via before/after deep-equality). Collision-aware initial
+placement (`lib/peakLabels.ts`, pure — no React/uPlot/store import, fully
+unit-tested) staggers labels into vertical tiers when neighboring peaks are
+closer in x than a length-derived threshold, and never produces NaN for
+degenerate input (single peak, zero-width range, every peak at one x).
+
+Honest gaps, carried forward rather than faked:
+- **No phase/`(hkl)` label token.** `Peak`/`FittedPeak` carry no
+  crystallographic indexing field anywhere in quantized today, so the token
+  template is deliberately limited to fields that actually exist —
+  `{center}`, `{height}`, `{fwhm}`, `{area}`, `{index}` (1-based), plus
+  literal text (default template: `{center}`). An unknown token — including
+  a future `{phase}`/`{hkl}`— renders literally rather than throwing, so the
+  template mechanism (`renderLabelTemplate`'s token `switch` in
+  `lib/peakLabels.ts`) is ready to gain that token the day a real indexing
+  data source lands; no fabricated crystallography ships in the meantime.
+- **No per-peak selection.** `DataTable` (the peaks list's own primitive)
+  has no row-selection support today, so this lane intentionally did not
+  build one (out of scope per this item's own ruling) — "Label peaks"
+  operates on ALL fitted peaks when a fit result exists, otherwise ALL
+  detected peaks, and says so in the button's own label. Selected-subset
+  labeling is a follow-up once `DataTable` (or a peaks-specific list) grows
+  row selection.
 
 ## Non-negotiable operating rules
 

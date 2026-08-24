@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { fetchBookData } from "../../../lib/api";
-import type { DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
+import { askParams } from "../../overlays/ParamDialog";
+import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { usePeaks } from "./usePeaks";
@@ -15,6 +16,9 @@ vi.mock("../../../lib/api/peaks", () => ({
   findPeaks: vi.fn(),
   fitMultiPeak: vi.fn(),
   fitPeak: vi.fn(),
+}));
+vi.mock("../../overlays/ParamDialog", () => ({
+  askParams: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -70,6 +74,9 @@ beforeEach(() => {
     yKeys: null,
     seriesOrder: null,
     peakOverlay: null,
+    annotations: [],
+    history: [],
+    future: [],
   });
   vi.mocked(findPeaks).mockResolvedValue({
     peaks: [pk(1, 5, 0.8), pk(3, 6, 0.9)],
@@ -332,5 +339,181 @@ describe("usePeaks fitEach — per-peak progress + cancel (P0.4 feedback/cancel 
     expect(result.current.fitResult?.peaks[0].center).toBe(1.0);
     expect(result.current.fitError).toBeNull(); // a deliberate cancel is not a failure
     expect(usePendingOps.getState().ops).toHaveLength(0); // op cleaned up in `finally`
+  });
+});
+
+function fitted2(c1: number, c2: number): MultiFitResult {
+  return {
+    peaks: [
+      { center: c1, fwhm: 0.8, height: 5, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+      { center: c2, fwhm: 0.9, height: 6, bg: 1, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+    ],
+    bgCoeffs: [1, 0],
+    R2: 0.999,
+    rmse: 0.01,
+    nPeaks: 2,
+    model: "Lorentzian",
+  };
+}
+
+describe("usePeaks labelPeaks — RULING 7 (fitted-over-detected scope + empty guard)", () => {
+  it("does nothing when there are no peaks to label — no dialog, no annotations", async () => {
+    vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.busy).toBe(false));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(askParams).not.toHaveBeenCalled();
+    expect(useApp.getState().annotations).toHaveLength(0);
+  });
+
+  it("labels the FITTED peaks (not the detected ones) once a fit result exists", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted2(1.05, 3.05)); // deliberately != detected [1, 3]
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    expect(anns.map((a) => a.x).sort()).toEqual([1.05, 3.05]);
+    expect(anns.map((a) => a.text).sort()).toEqual(["1.05", "3.05"]);
+  });
+
+  it("falls back to the DETECTED peaks when there is no fit result", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    expect(anns.map((a) => a.x).sort()).toEqual([1, 3]);
+  });
+
+  it("a cancelled dialog creates zero annotations and no history entry", async () => {
+    vi.mocked(askParams).mockResolvedValue(null);
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    const before = useApp.getState().history.length;
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(useApp.getState().annotations).toHaveLength(0);
+    expect(useApp.getState().history.length).toBe(before);
+  });
+});
+
+describe("usePeaks labelPeaks — MY RULING 1/2 (ordinary annotations, shared group identity)", () => {
+  it("creates ordinary Annotation objects (no extra shape) sharing ONE groupId; editing one leaves the rest untouched", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    // Indistinguishable in SHAPE from a manually created annotation (MY RULING 1):
+    // same keys as a plain addAnnotation() call, plus the optional groupId.
+    const manualId = useApp.getState().addAnnotation(9, 9, "manual");
+    const manual = useApp.getState().annotations.find((a) => a.id === manualId)!;
+    for (const a of anns) {
+      expect(Object.keys(a).sort()).toEqual(Object.keys({ ...manual, groupId: "x" }).sort());
+    }
+    const groupId = anns[0].groupId;
+    expect(typeof groupId).toBe("string");
+    expect(groupId).toBeTruthy();
+    expect(anns[1].groupId).toBe(groupId);
+
+    // Independent editability: patching one label never touches the other.
+    const other = anns[1];
+    useApp.getState().updateAnnotation(anns[0].id, { text: "edited by hand" });
+    const after = useApp.getState().annotations.find((a) => a.id === other.id)!;
+    expect(after).toEqual(other);
+  });
+
+  it("folds the whole run into exactly ONE undo entry — undo removes every label, redo restores them", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    const before = useApp.getState().history.length;
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(useApp.getState().annotations).toHaveLength(2); // N labels...
+    expect(useApp.getState().history.length - before).toBe(1); // ...but ONE undo entry
+
+    useApp.getState().undo();
+    expect(useApp.getState().annotations).toHaveLength(0);
+
+    useApp.getState().redo();
+    expect(useApp.getState().annotations).toHaveLength(2);
+  });
+});
+
+describe("usePeaks labelPeaks — MY RULING 4 (never mutates sources)", () => {
+  it("never rewrites the dataset's DataStruct or the fit result — before labeling, and after editing/deleting a label", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted2(1.05, 3.05));
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+
+    const dataBefore = JSON.stringify(useApp.getState().datasets[0].data);
+    const fitBefore = JSON.stringify(result.current.fitResult);
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    expect(JSON.stringify(useApp.getState().datasets[0].data)).toBe(dataBefore);
+    expect(JSON.stringify(result.current.fitResult)).toBe(fitBefore);
+
+    const anns = useApp.getState().annotations;
+    useApp.getState().updateAnnotation(anns[0].id, { text: "moved" });
+    useApp.getState().removeAnnotation(anns[1].id);
+
+    expect(JSON.stringify(useApp.getState().datasets[0].data)).toBe(dataBefore);
+    expect(JSON.stringify(result.current.fitResult)).toBe(fitBefore);
+  });
+});
+
+describe("usePeaks labelPeaks — MY RULING 5 (template tokens, unknown tokens, precision)", () => {
+  it("renders a custom template, an unknown token literally, and honors precision", async () => {
+    vi.mocked(askParams).mockResolvedValue({
+      template: "peak {index}: {phase} {center}",
+      precision: 1,
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks();
+    });
+
+    const anns = useApp.getState().annotations as Annotation[];
+    const texts = anns.map((a) => a.text).sort();
+    expect(texts).toEqual(["peak 1: {phase} 1.0", "peak 2: {phase} 3.0"]);
   });
 });
