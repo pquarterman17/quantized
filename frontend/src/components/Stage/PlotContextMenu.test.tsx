@@ -1,11 +1,20 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import PlotContextMenu from "./PlotContextMenu";
 import type { PlotPayload } from "../../lib/plotdata";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
 import type { PlotStageActions } from "./usePlotStageActions";
+
+vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../store/annotationTextDialog")>()),
+  askAnnotationText: vi.fn(),
+}));
+
+const mockAskAnnotationText = vi.mocked(askAnnotationText);
 
 // A minimal fake uPlot: the plot rect is [100,100]→[500,400] and posToVal /
 // valToPos are identity, so a click at client (300,250) probes localX=200
@@ -44,6 +53,8 @@ const actions: PlotStageActions = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  mockAskAnnotationText.mockResolvedValue(null);
   useApp.setState({
     seriesStyles: {},
     seriesLabels: {},
@@ -54,6 +65,10 @@ beforeEach(() => {
     legendPos: "ne",
     xScale: "linear",
     yScale: "linear",
+    annotations: [],
+    selectedAnnotationId: null,
+    history: [],
+    future: [],
   });
 });
 
@@ -116,5 +131,51 @@ describe("PlotContextMenu", () => {
   it("'Move earlier (draw under)' is disabled for the first channel in draw order", () => {
     open();
     expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toBeDisabled();
+  });
+});
+
+// UX-R6 manual annotation: "Add text here…" places a NEW annotation at the
+// right-click's DATA position (not a second decoration model — the same
+// `addAnnotation` store action the Inspector's Annotations card and the
+// toolbar's "Text box" tool already write to).
+describe("PlotContextMenu — 'Add text here…' (UX-R6 manual annotation)", () => {
+  it("creates exactly one annotation at the clicked DATA position, with one undo entry", async () => {
+    mockAskAnnotationText.mockResolvedValue("Tc onset");
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    // fakePlot's rect is [100,100]→[500,400] and posToVal is identity, so a
+    // click at client (300,250) is data (200, 150) — see the module doc.
+    expect(mockAskAnnotationText).toHaveBeenCalledWith("Add text", "");
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(1));
+    const ann = useApp.getState().annotations[0];
+    expect(ann).toMatchObject({ x: 200, y: 150, text: "Tc onset" });
+    expect(useApp.getState().selectedAnnotationId).toBe(ann.id);
+    // ONE undo entry for this one gesture (the setGroupKey precedent) — not
+    // a create-then-separate-edit double entry.
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().history[0]?.label).toBe("add annotation");
+  });
+
+  it("closes the menu immediately (single-shot) without waiting for the dialog", () => {
+    const onClose = open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("creates NO annotation and records no undo entry when the dialog is cancelled", async () => {
+    mockAskAnnotationText.mockResolvedValue(null);
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    // askAnnotationText is called SYNCHRONOUSLY inside the click handler —
+    // no waitFor needed for the call itself (weak-wait ratchet,
+    // architecture.test.ts: wait on RESOLVED STATE, not the mock call).
+    // Flush the resolved-null `.then()` microtask, then assert on state.
+    expect(mockAskAnnotationText).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
 import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plotMenu";
 import type { MarkerShape } from "../../lib/types";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
@@ -150,6 +151,26 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     };
     const y2ScaleEff = st.y2Scale ?? st.yScale;
 
+    // UX-R6 manual annotation: convert the right-click's CLIENT position to
+    // DATA coordinates once, at menu-open time, through the SAME
+    // `rect`/`posToVal` conversion `hitTest` above already uses — so the
+    // annotation lands exactly under the cursor, not wherever the plot has
+    // scrolled/zoomed to by the time the dialog resolves. Dialog-first,
+    // create-on-non-null-resolve (the useShapeDraw "Text box" tool's Bug 4
+    // fix): a cancelled dialog must leave behind no orphaned blank
+    // annotation and no undo entry.
+    const addTextHere = () => {
+      if (!u || !u.over) return;
+      const rect = u.over.getBoundingClientRect();
+      const dataX = u.posToVal(x - rect.left, "x");
+      const dataY = u.posToVal(y - rect.top, "y");
+      void askAnnotationText("Add text", "").then((v) => {
+        if (v == null) return;
+        const id = st.addAnnotation(dataX, dataY, v);
+        st.setSelectedAnnotationId(id);
+      });
+    };
+
     return buildPlotMenu({
       series,
       zone,
@@ -193,6 +214,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       savePng: actions.savePng,
       copyData: actions.copyData,
       setTool: st.setPlotTool,
+      addTextHere,
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor
     // moves. The store snapshot is captured at open time — correct because a
