@@ -52,6 +52,11 @@ def _validate_panel_overrides(n: int, p: PagePanel) -> None:
     _validate_overrides(ov)
     if p.y2_mask is not None and len(p.y2_mask) != len(p.series):
         raise ValueError(f"panel {n}: y2_mask must have the same length as series")
+    # F4.4 follow-up: a facet panel's own render (calc.figure_page_facets)
+    # divides the page cell by the panel count -- mirrors render_facets_
+    # figure's own "panels must be non-empty" guard on the standalone path.
+    if p.facets is not None and not p.facets:
+        raise ValueError(f"panel {n}: facets must be non-empty")
 
 
 def _validate_page(rows: int, cols: int, panels: Sequence[PagePanel]) -> None:

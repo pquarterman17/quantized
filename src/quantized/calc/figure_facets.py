@@ -42,6 +42,7 @@ from quantized.calc.figure_styles import figure_style  # noqa: E402
 from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
 
 __all__ = [
+    "draw_facet_grid",
     "render_facets_figure",
     "render_stat_facets_figure",
     "render_categorical_facets_figure",
@@ -82,6 +83,68 @@ def _new_grid_figure(n: int, figsize: tuple[float, float]) -> tuple[Any, list[An
     for j in range(n, len(flat)):
         flat[j].set_visible(False)
     return fig, flat[:n]
+
+
+def draw_facet_grid(
+    axes: list[Any],
+    panels: list[dict[str, Any]],
+    *,
+    st: Any,
+    resolved_x_scale: str,
+    resolved_y_scale: str,
+    x_fmt: Mapping[str, Any] | None = None,
+    y_fmt: Mapping[str, Any] | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> None:
+    """The shared per-panel facet drawing core (F4.4 follow-up): draws
+    ``panels`` INTO caller-provided ``axes`` -- line plot, facet-level title
+    (``safe_mathtext_label``), axis scale (``apply_axis_scale``), tick
+    formats (``apply_tick_formats``), spines/box, grid, the R3 override
+    subset (``apply_axis_shape_overrides``, ``x_lim`` only -- see this
+    module's ``overrides`` doc on ``render_facets_figure``), legend, and
+    hides any trailing cells in ``axes`` past ``len(panels)``.
+
+    Extracted out of ``render_facets_figure`` so the SAME per-panel body
+    draws a faceted panel embedded as a real vector sub-grid inside one cell
+    of a figure page (``calc.figure_page_facets.draw_facet_panel_cell``),
+    not just a standalone facet figure. The caller owns EVERYTHING outside
+    the per-panel loop: creating the figure/axes (and any sharex/sharey
+    wiring -- this function assumes ``axes`` are already linked/unlinked as
+    the caller wants), the figure- or cell-level title/x_label/y_label,
+    layout, and savefig/close. ``axes`` must have length >= ``len(panels)``;
+    entries past that are hidden (``set_visible(False)``), matching
+    ``render_facets_figure``'s own trailing-cell convention.
+    """
+    ov = dict(overrides or {})
+    n = len(panels)
+    for i, panel in enumerate(panels):
+        ax = axes[i]
+        x = np.asarray(panel.get("x", []), dtype=float)
+        series = panel.get("series", [])
+        for si, s in enumerate(series):
+            kw = _plot_kwargs(st.line_width, st.marker_size, None)
+            ax.plot(
+                x, np.asarray(s.get("y", []), dtype=float),
+                label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
+            )
+        ax.set_title(safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size)
+        apply_axis_scale(ax, "x", resolved_x_scale)
+        apply_axis_scale(ax, "y", resolved_y_scale)
+        apply_tick_formats(ax, x_fmt, y_fmt)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        if st.grid_alpha > 0:
+            ax.grid(True, alpha=st.grid_alpha)
+        # R3: explicit overrides win over the style-based box/grid above --
+        # same ordering as the flat renderer's own draw_series_axes ->
+        # _apply_overrides sequence. x_lim ONLY (no y_lim -- see
+        # render_facets_figure's own `overrides` doc).
+        apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
+        if len(series) > 1:
+            ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
+    for j in range(n, len(axes)):
+        axes[j].set_visible(False)
 
 
 def render_facets_figure(
@@ -187,36 +250,11 @@ def render_facets_figure(
         )
         try:
             flat = [ax for row in axes_grid for ax in row]
-            for i, panel in enumerate(panels):
-                ax = flat[i]
-                x = np.asarray(panel.get("x", []), dtype=float)
-                series = panel.get("series", [])
-                for si, s in enumerate(series):
-                    kw = _plot_kwargs(st.line_width, st.marker_size, None)
-                    ax.plot(
-                        x, np.asarray(s.get("y", []), dtype=float),
-                        label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
-                    )
-                ax.set_title(
-                    safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size
-                )
-                apply_axis_scale(ax, "x", resolved_x_scale)
-                apply_axis_scale(ax, "y", resolved_y_scale)
-                apply_tick_formats(ax, x_fmt, y_fmt)
-                if not st.box_on:
-                    ax.spines["top"].set_visible(False)
-                    ax.spines["right"].set_visible(False)
-                if st.grid_alpha > 0:
-                    ax.grid(True, alpha=st.grid_alpha)
-                # R3: explicit overrides win over the style-based box/grid
-                # above -- same ordering as the flat renderer's own
-                # draw_series_axes -> _apply_overrides sequence. x_lim ONLY
-                # (no y_lim -- see this function's own `overrides` doc).
-                apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
-                if len(series) > 1:
-                    ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
-            for j in range(n, len(flat)):
-                flat[j].set_visible(False)
+            draw_facet_grid(
+                flat, panels, st=st,
+                resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
+                x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
+            )
 
             if title:
                 fig.suptitle(title)

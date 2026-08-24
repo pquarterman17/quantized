@@ -31,6 +31,15 @@ coordinates instead of the ``rows``/``cols`` gridspec; ``rows``/``cols`` are
 then accepted but unused. Mixing panels with and without a ``page_rect`` is
 rejected. Unlike the grid path, overlapping rects are ALLOWED (Origin layers
 can legitimately overlap).
+
+FACETED PANELS (F4.4 follow-up, 2026-08-24): a panel whose ``PagePanel.facets``
+is set draws as a REAL VECTOR sub-grid of matplotlib Axes inside its cell --
+``calc.figure_page_facets.draw_facet_panel_cell``, a sibling module (kept
+separate to stay under this module's own 500-line ceiling) that reuses
+``calc.figure_facets.draw_facet_grid``'s shared per-panel drawing core, so a
+faceted cell renders identically to the standalone facet export, just inside
+one page cell instead of its own figure. No raster embed anywhere on the
+page: PDF/SVG page exports stay true vector even with a faceted panel.
 """
 
 from __future__ import annotations
@@ -51,6 +60,11 @@ from numpy.typing import ArrayLike  # noqa: E402
 from quantized.calc import figure_page_layout as fpl  # noqa: E402
 from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
+from quantized.calc.figure_page_facets import (  # noqa: E402
+    begin_grid_cell_fallback,
+    draw_facet_panel_cell,
+    finish_grid_cell_fallback,
+)
 from quantized.calc.figure_page_panel_labels import (  # noqa: E402
     _LABEL_TEMPLATES,
     _place_label,
@@ -119,17 +133,25 @@ class PagePanel:
     y2_scale: str | None = None
     y2_fmt: Mapping[str, Any] | None = None
     y2_step: float | None = None
-    # R2 (fix round 3): raw image bytes (PNG) for a panel that is ALREADY a
-    # complete rendered figure -- a faceted panel, embedded by
-    # `routes.export_page` via `routes.export_figures._render_facets_bytes`
-    # + `calc.figure_facets.render_facets_figure`, since this composer has
-    # no notion of "N sub-panels in one page cell". When set, `_draw_panel`
-    # below draws it via `imshow` and returns immediately -- `x`/`series`
-    # are unused (pass empty placeholders) and every other draw-time field
-    # (title/labels/scale/ticks/overrides) is a no-op, because they're
-    # already baked into the image by the sub-render. The page-level panel
-    # LETTER (`label`/auto-sequence) still applies, same as any other panel.
-    image: bytes | None = None
+    # F4.4 follow-up (2026-08-24): a faceted panel's RESOLVED small-multiples
+    # data -- the same reshaped panel-dict list `calc.figure_facets.
+    # render_facets_figure` takes (`routes.export_figures._facet_panels`
+    # builds it from the wire `FigureFacet` list, shared by both the
+    # standalone `/figure` facet branch and `routes.export_page`). When set,
+    # the panel is drawn as a REAL VECTOR sub-grid of matplotlib Axes inside
+    # this cell -- `calc.figure_page_facets.draw_facet_panel_cell`, reusing
+    # `calc.figure_facets.draw_facet_grid`'s shared per-panel core -- instead
+    # of the ordinary single-Axes `_draw_panel` path below. `x`/`series` are
+    # unused (pass empty placeholders); `x_scale`/`y_scale`/`x_log`/`y_log`/
+    # `x_fmt`/`y_fmt`/`overrides` (x_lim/grid) apply to EVERY sub-panel, same
+    # as the standalone facet renderer; `title` becomes the CELL's own
+    # (centered) title on the invisible cell-frame axes; `x_label`/`y_label`
+    # place on the sub-grid's bottom-row/first-column axes (see
+    # `calc.figure_page_facets`'s own doc for why). The page-level panel
+    # LETTER (`label`/auto-sequence) still applies, anchored on that same
+    # cell-frame axes -- same mechanism every other panel's letter uses.
+    # Replaces the pre-round PNG/`imshow` raster embed (R2, fix round 3).
+    facets: list[dict[str, Any]] | None = None
 
 
 def _rect_sort_key(p: PagePanel) -> tuple[float, float]:
@@ -290,23 +312,54 @@ def _build_page_figure(
     )
     fig = plt.figure(figsize=(w, h), layout=engine)
     gs = None if free_placement else fig.add_gridspec(rows, cols, **spacing)
-    share_x = fpl.share_targets(len(ordered), link_x)
-    share_y = fpl.share_targets(len(ordered), link_y)
+    # A faceted panel's sub-grid has its OWN internal x-sharing (see
+    # calc.figure_page_facets) and the cell-frame axes standing in for it
+    # here carries no data of its own -- share_targets' facet_mask keeps it
+    # out of the link graph entirely, as both a source AND a target (V3, fix
+    # round 2: anchoring unconditionally on index 0 regardless of facet
+    # status was a placement-order bug -- see share_targets' own doc).
+    facet_mask = [p.facets is not None for p in ordered]
+    share_x = fpl.share_targets(len(ordered), link_x, facet_mask)
+    share_y = fpl.share_targets(len(ordered), link_y, facet_mask)
+    # W1 (fix round 3): a grid-placement facet cell's SubFigure position
+    # solve only honors true cell geometry (wspace/margins) under
+    # "constrained" layout -- see calc.figure_page_facets' module doc.
+    # Under "tight"/"none", the cell is instead resolved through a
+    # DEFERRED variant of the free-placement fallback: a throwaway axes
+    # stands in during this loop (so placement order / sharex-sharey
+    # indices are unaffected), and once every OTHER panel is also drawn,
+    # one draw pass settles its true position -- see the deferred-handling
+    # block after this loop.
+    use_grid_subfigure = not free_placement and resize_mode == "constrained"
+    deferred: list[tuple[Any, PagePanel, str]] = []
     axes: list[Any] = []
     for idx, p in enumerate(ordered):
         sx, sy = share_x[idx], share_y[idx]
-        # R2: an image panel has pixel-index coordinates, not data limits --
-        # never a sharex/sharey source OR target (either side being an
-        # image panel opts the pair out of linking entirely).
-        no_image = p.image is None
-        sharex = axes[sx] if sx is not None and no_image and ordered[sx].image is None else None
-        sharey = axes[sy] if sy is not None and no_image and ordered[sy].image is None else None
-        if free_placement:
+        sharex = axes[sx] if sx is not None else None
+        sharey = axes[sy] if sy is not None else None
+        text = p.label if p.label is not None else panel_label(idx, label_format)
+        if p.facets is not None and not free_placement and not use_grid_subfigure:
+            assert gs is not None
+            cell_spec = gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span]
+            throwaway = begin_grid_cell_fallback(fig, cell_spec)
+            axes.append(throwaway)
+            deferred.append((throwaway, p, safe_mathtext_label(text)))
+            continue
+        if p.facets is not None:
+            if free_placement:
+                assert p.page_rect is not None
+                ax = draw_facet_panel_cell(fig, p, st, rect=p.page_rect)
+            else:
+                assert gs is not None
+                cell_spec = gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span]
+                ax = draw_facet_panel_cell(fig, p, st, cell_spec=cell_spec)
+        elif free_placement:
             assert p.page_rect is not None
             x, y, pw, ph = p.page_rect
             # y-flip: page_rect is top-left origin; matplotlib axes rects
             # are bottom-left origin.
             ax = fig.add_axes((x, 1 - y - ph, pw, ph), sharex=sharex, sharey=sharey)
+            _draw_panel(fig, ax, p, st)
         else:
             assert gs is not None
             ax = fig.add_subplot(
@@ -314,10 +367,26 @@ def _build_page_figure(
                 sharex=sharex,
                 sharey=sharey,
             )
+            _draw_panel(fig, ax, p, st)
         axes.append(ax)
-        _draw_panel(fig, ax, p, st)
-        text = p.label if p.label is not None else panel_label(idx, label_format)
         _place_label(ax, safe_mathtext_label(text), label_pos, st)
+    if deferred:
+        # Every other page panel is now drawn -- ONE draw pass settles
+        # "tight"'s whitespace-trimming solve (empirically confirmed
+        # necessary: an early read is stale under "tight", though already
+        # correct under "none" -- see module doc) before reading any
+        # throwaway's final position.
+        fig.canvas.draw()
+        for throwaway, p, text in deferred:
+            frame_ax = finish_grid_cell_fallback(fig, p, st, throwaway)
+            _place_label(frame_ax, text, label_pos, st)
+        if resize_mode == "tight":
+            # Freeze positions: prevent tight_layout from re-running at
+            # the caller's final savefig against a now-different axes set
+            # (the throwaway gone, the facet's real sub-grid present but
+            # built from a plain, unmanaged GridSpec tight_layout has no
+            # business touching) and silently perturbing everything again.
+            fig.set_layout_engine(None)
     if align_labels:
         fig.align_labels()
     return fig
@@ -331,17 +400,10 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
     ``calc.figure._render_impl``'s own ``has_y2`` dispatch verbatim, so a
     doubleY panel on a page looks exactly like its single-figure export.
 
-    R2 (fix round 3): ``p.image`` (a faceted panel, pre-rendered whole) is
-    drawn via ``imshow`` and returns immediately -- ticks/spines are hidden
-    since a raster has no meaningful data axes of its own."""
-    if p.image is not None:
-        img = plt.imread(BytesIO(p.image), format="png")
-        ax.imshow(img)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-        return
+    Never called for a faceted panel (``p.facets is not None``) -- that
+    branch is handled entirely by ``calc.figure_page_facets.
+    draw_facet_panel_cell`` in ``_build_page_figure``'s own loop above,
+    which draws a real vector sub-grid instead of a single Axes."""
     # Rich-text guard (GOTO #5) on every user string; see figure.py.
     series = [(safe_mathtext_label(label), y) for label, y in p.series]
     ov = dict(p.overrides or {})

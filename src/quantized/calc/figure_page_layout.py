@@ -39,6 +39,8 @@ Three small, independently testable concerns:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 __all__ = ["LAYOUT_RESIZE_MODES", "layout_engine_kwargs", "share_targets", "validate_layout"]
 
 LAYOUT_RESIZE_MODES = ("constrained", "tight", "none")
@@ -83,15 +85,35 @@ def layout_engine_kwargs(
     return engine, spacing
 
 
-def share_targets(n: int, link: bool) -> list[int | None]:
+def share_targets(
+    n: int, link: bool, facet_mask: Sequence[bool] | None = None
+) -> list[int | None]:
     """For each of ``n`` panels in placement order, the index of the
     earlier panel it should matplotlib ``sharex``/``sharey`` with, or
     ``None`` (no sharing). ``link=False`` -> every panel independent
     (today's behaviour, byte-identical). ``link=True`` -> every panel after
-    the first shares with panel 0 -- matplotlib's shared-axis autoscale
+    the ANCHOR shares with the anchor -- matplotlib's shared-axis autoscale
     then unions every member's data range onto one set of limits, which is
     exactly "shared axes" (panels become visually comparable), the page's
-    "link all" core."""
+    "link all" core.
+
+    ``facet_mask`` (F4.4 follow-up, fix round 2, V3): ``facet_mask[i] is
+    True`` marks panel ``i`` as a faceted panel (``calc.figure_page_facets``)
+    -- its "axes" is an invisible cell-frame with no data scale, so it must
+    NEVER be a link source or target. The anchor every other panel links to
+    is the FIRST NON-facet panel (``None`` omitted, or an all-``False``
+    mask, keeps today's unconditional "anchor on index 0" -- byte-identical
+    when no panel is a facet). Anchoring on a bare index 0 REGARDLESS of
+    facet status was a latent placement-order bug (present since the
+    predecessor raster-image-panel version of this opt-out too, just never
+    covered by a test): a facet panel placed FIRST made every OTHER pair of
+    ordinary panels fail to link as well, since the sole anchor (panel 0)
+    was itself disqualified from being anyone's sharex/sharey source.
+    Every panel is a facet panel -> nothing to anchor on -> no links at all."""
     if not link or n <= 1:
         return [None] * n
-    return [None] + [0] * (n - 1)
+    mask = list(facet_mask) if facet_mask is not None else [False] * n
+    anchor = next((i for i in range(n) if not mask[i]), None)
+    if anchor is None:
+        return [None] * n
+    return [None if mask[i] or i == anchor else anchor for i in range(n)]
