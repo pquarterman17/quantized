@@ -826,6 +826,82 @@ with parent items P1.3 and P1.5.
       malformed override still 422s). `test_calc_figure_facets.py` (the
       untouched standalone facet renderer) stayed green throughout, unedited.
 
+      **2026-08-24 fix round 3 (Claude): 1 more correctness finding closed
+      (W1), 1 dead-parameter cleanup (W2).** A further verification pass
+      probe-confirmed round 2's grid-placement `SubFigure` fix was itself
+      incomplete: it only honors the true cell geometry under the page's
+      DEFAULT `"constrained"` layout engine. (W1) probe: a 1x2 page, facet
+      at (0,0), flat sibling at (0,1), `col_gap=0.3`, `resize_mode="none"`
+      or `"tight"` — `SubFigure.bbox_relative` stayed pinned at
+      `(0.0, 0.0, 0.5, 1.0)` IDENTICALLY whether `col_gap` was set or not,
+      while the flat sibling's own (ordinary `add_subplot`) position DID
+      shift to honor the gap — the facet cell rendered oversized/offset
+      relative to its sibling and never left room for the requested gap
+      (re-probed against the actual facet sub-axes, not just the
+      SubFigure's own bbox: outermost sub-axes `x1=0.900` under `"none"` /
+      `0.983` under `"tight"`, both FAR past where the flat sibling's own
+      `x0` (`0.563` / `0.617`) starts — i.e. deep inside the gap band and
+      the sibling's own cell). Root cause: `SubFigure._redo_transform_
+      rel_fig`'s ratio-only fallback ignores a gridspec's `wspace`/`hspace`
+      AND its default rc subplot margins entirely; an ordinary
+      `add_subplot` position comes from `GridSpec.get_grid_positions()`,
+      which incorporates both — round 2's "exact ~0.5 split" check happened
+      to hold with NO gap/margins in play, which masked this.
+
+      Fixed: grid placement now uses `SubFigure` ONLY when `resize_mode ==
+      "constrained"`; `"tight"`/`"none"` route through a DEFERRED variant of
+      the same inset-`GridSpec` fallback free placement already uses
+      (`calc.figure_page_facets.begin_grid_cell_fallback`/`finish_grid_
+      cell_fallback`) — a throwaway placeholder `Axes` stands in at the
+      cell's `SubplotSpec` during `_build_page_figure`'s normal panel loop
+      (so placement order / sharex-sharey indices / letters are
+      unaffected), and once every OTHER page panel is also drawn, ONE
+      `fig.canvas.draw()` settles it before its real position is read off
+      and it's removed. That "wait for every other panel" ordering was
+      verified empirically, not assumed: under `"none"` an early read
+      (before later panels are added) ALREADY matches the final one
+      (identical bounds — `"none"` has no active layout engine to keep
+      refining anything); under `"tight"` it does NOT — `tight_layout`'s
+      whitespace-trimming pass keeps adjusting the throwaway's position as
+      MORE axes (with real tick labels) are added after it, so an early
+      read would freeze a stale, wrong rect. `"tight"`'s layout engine is
+      then explicitly disabled (`fig.set_layout_engine(None)`) once the
+      deferred rect is captured, so the page's final `savefig` doesn't
+      re-run `tight_layout` against a now-different axes set (the
+      throwaway gone, the facet's real sub-grid built from a plain,
+      unmanaged `GridSpec` `tight_layout` has no business touching) and
+      silently perturb everything again. Re-probed post-fix: facet cell
+      under `"none"`/`col_gap=0.3` now matches an ordinary panel in the
+      same slot EXACTLY (`x0`/`x1` within `1e-6`); under `"tight"` (whose
+      whitespace-trimming is inherently CONTENT-dependent — an empty
+      throwaway can't perfectly predict the real facet content's tick-
+      label footprint, a documented approximation matching
+      `layout_engine_kwargs`' own pre-existing "tight ignores an explicit
+      gap" tradeoff) the facet's outermost sub-axes stays fully inside its
+      own cell-frame and never crosses into the sibling's — verified via a
+      new invariant test comparing facet sub-axes bounds against the
+      cell-frame axes' own bounds (an ORDINARY `add_subplot`, always
+      correctly positioned by matplotlib's normal solve regardless of
+      which mechanism draws the facet content inside it — a more robust
+      ground truth than re-deriving the expected rect by hand). Module doc
+      corrected: the round-2 claim ("verified empirically... across all
+      three page layout engines") was checked WITHOUT a `col_gap`, which
+      masked exactly this bug — the doc now states the `"constrained"`-only
+      scope plainly. Red-first: 3 new `test_calc_figure_page.py` test
+      functions (5 parametrized cases total), all confirmed failing
+      pre-fix (`git stash` back to the round-2 source) — 2 parametrized
+      `col_gap`-band-intrusion cases (`none`/`tight`, outermost sub-axes
+      `x1` deep past the sibling's `x0`), 1 exact-match case (`"none"`), 2
+      parametrized sub-axes-within-frame cases (`none`/`tight`, sub-axes
+      `x1` far exceeding the frame's own `x1`) — all 5 pass post-fix.
+
+      (W2) `routes.export_figures._render_facets_bytes`'s `title`/`style`
+      override params were dead: `routes/export_page.py` stopped calling
+      this function entirely in fix round 1 (it renders facet cells
+      through the page composer now), and neither remaining caller
+      (`export_figure`, `export_figure_hitmap`) ever passed them. Dropped;
+      `fmt` stays (the hitmap route still forces it to `"png"`).
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

@@ -25,29 +25,59 @@ raster embed never had this problem -- the image's own baked-in margins
 were part of the pixels, confined by ``imshow`` scaling into the rect by
 construction).
 
-``SubFigure`` (``fig.add_subfigure``) fixes (V1)/(V2) for free -- calling
-its own ``.subplots(sharex=True, ...)`` gives EXACT standalone parity
-(automatic interior-tick-label hiding), and ``.suptitle`` reserves real
-space above the grid instead of drawing over it. Verified empirically
-(2026-08-24) for GRID placement (nested in the page's own ``fig.
-add_gridspec`` cell) across all three page layout engines (``constrained``
-/ ``tight`` / ``none``): a SubFigure's own positioning code
-(``SubFigure._redo_transform_rel_fig``) computes its bbox from the PARENT
-gridspec's row/col RATIOS alone when no layout engine actively re-solves it
--- for a plain multi-cell ``add_gridspec`` with no explicit margins, that
-ratio calc already lands on the correct cell bounds (confirmed: exact ~0.5
-split for a 1x2 page grid under ``layout=None``/``"tight"``/``"constrained"``
-alike), and ``"constrained"`` (the page's own default) refines it further
-via the real constrained-layout solve.
+``SubFigure`` (``fig.add_subfigure``) fixes (V1)/(V2) for grid placement --
+calling its own ``.subplots(sharex=True, ...)`` gives EXACT standalone
+parity (automatic interior-tick-label hiding), and ``.suptitle`` reserves
+real space above the grid instead of drawing over it. **BUT this only works
+under ``"constrained"`` layout (fix round 3, W1)** -- a prior round's
+"verified across all three layout engines" claim was checked WITHOUT a
+``col_gap``/``row_gap``, and was wrong: probed a 1x2 page grid, facet at
+(0,0), flat sibling at (0,1), ``col_gap=0.3`` -- under ``"none"``/``"tight"``
+the SubFigure's ``bbox_relative`` stayed pinned at ``(0.0, 0.0, 0.5, 1.0)``
+IDENTICALLY whether ``col_gap`` was set or not, while the flat sibling's own
+position (an ordinary ``add_subplot``) DID shift to honor the gap -- the
+facet cell renders oversized/offset relative to its sibling and the
+requested gap never appears beside it. Root cause: ``SubFigure.
+_redo_transform_rel_fig``'s ratio-only fallback (see the free-placement
+paragraph below) ignores a gridspec's ``wspace``/``hspace`` AND its default
+rc subplot margins entirely -- an ordinary ``add_subplot`` position comes
+from ``GridSpec.get_grid_positions()``, which DOES incorporate both; the
+earlier "~0.5 split matches" check happened to hold with NO gap/margins in
+play, which masked this.
 
-Free (``page_rect``) placement is a DIFFERENT story, and SubFigure BREAKS
-there: probed with a ``GridSpec`` whose ``left``/``right``/``bottom``/``top``
-carve out a sub-region of the page (not the whole [0,1] figure) under
-``layout=None`` (free placement's page-level layout is ALWAYS ``None`` --
-see ``calc.figure_page._build_page_figure``, which needs literal, un-
-adjusted ``page_rect`` coordinates for its ORDINARY panels too), a
-SubFigure's ``bbox_relative`` stayed pinned at ``(0, 0, 1, 1)`` -- the FULL
-figure -- regardless of the GridSpec's own margins, both before AND after
+Given that, grid placement uses SubFigure ONLY when ``resize_mode ==
+"constrained"``; ``"tight"``/``"none"`` use a DEFERRED variant of the same
+inset-``GridSpec`` fallback free placement uses (``begin_grid_cell_
+fallback``/``finish_grid_cell_fallback`` below) -- a throwaway placeholder
+``Axes`` stands in at the cell's ``SubplotSpec`` during the page's normal
+panel loop (so its EVENTUAL, real ``get_position()`` reflects whatever
+``wspace``/margins an ORDINARY panel in that same slot would get -- exactly
+the geometry an ordinary sibling panel gets, since it comes from the SAME
+``GridSpec.get_grid_positions()`` call), and once every OTHER page panel is
+also drawn, one ``fig.canvas.draw()`` settles it, its position is read off,
+and it's removed. The "once every OTHER panel is also drawn" ordering
+requirement is NOT paranoia -- probed empirically: for ``"none"`` an early
+read (before later panels are added) already matches the final one
+(identical bounds), but for ``"tight"`` it does NOT -- ``tight_layout``'s
+whitespace-trimming pass keeps refining the throwaway's position as MORE
+axes (with real tick labels) are added after it, so reading early under
+``"tight"`` would freeze a stale, wrong rect. ``"tight"``'s active layout
+engine is then explicitly disabled (``fig.set_layout_engine(None)``) once
+the deferred rect is captured, so the LATER final ``savefig`` doesn't
+re-run ``tight_layout`` against a now-different axes set (the throwaway
+gone, the facet's real sub-grid present but built from a plain, unmanaged
+``GridSpec`` that ``tight_layout`` has no business touching) and silently
+perturb everything again.
+
+Free (``page_rect``) placement is a DIFFERENT story from grid placement,
+and SubFigure BREAKS there outright (not just under some engines): probed
+with a ``GridSpec`` whose ``left``/``right``/``bottom``/``top`` carve out a
+sub-region of the page (not the whole [0,1] figure) under ``layout=None``
+(free placement's page-level layout is ALWAYS ``None`` -- see ``calc.
+figure_page._build_page_figure``, which needs literal, un-adjusted
+``page_rect`` coordinates for its ORDINARY panels too), a SubFigure's
+``bbox_relative`` stayed pinned at ``(0, 0, 1, 1)`` -- the FULL figure --
+regardless of the GridSpec's own margins, both before AND after
 ``fig.canvas.draw()``. Root cause: ``_redo_transform_rel_fig``'s ratio-only
 fallback IGNORES a GridSpec's absolute ``left``/``right``/``bottom``/``top``
 entirely; only an ACTIVE constrained-layout pass ever calls it again with a
@@ -56,13 +86,16 @@ layout page-wide (its ordinary, non-faceted panels rely on ``fig.add_axes``
 placing them at the EXACT literal rect, untouched by any layout engine --
 ``test_free_placement_axes_at_flipped_page_positions`` pins this), free
 placement keeps the three TARGETED fixes instead (matching the fallback
-plan): (V1) a nested 2-row ``GridSpec`` (title band / grid) only when
+plan, and the SAME fallback the grid path's ``"tight"``/``"none"`` branch
+now reuses): (V1) a nested 2-row ``GridSpec`` (title band / grid) only when
 ``p.title`` is set; (V2) ``tick_params(labelbottom=False)`` on every
 sub-axis not in the grid's own LAST row (exact ``plt.subplots(sharex=True)``
 parity -- a ragged trailing row then shows no x tick labels on the row
 above it either, same as the standalone renderer); (V4) the sub-grid's
-``GridSpec`` is inset from the ``page_rect`` by fixed margin fractions
-(below), reserving room for tick/axis labels. The margins are a heuristic
+``GridSpec`` is inset from the KNOWN cell rect (the literal ``page_rect``
+for free placement; the throwaway's settled ``get_position()`` for the
+grid ``"tight"``/``"none"`` fallback) by fixed margin fractions (below),
+reserving room for tick/axis labels. The margins are a heuristic
 approximation (matplotlib's own auto-margin machinery needs an active
 layout engine, which this path can't use) -- probe-tuned empirically
 against rects from 0.35 to 0.9 of the page (zero label pixels outside the
@@ -109,7 +142,11 @@ if TYPE_CHECKING:
     from quantized.calc.figure_page import PagePanel
     from quantized.calc.figure_styles import FigureStyle
 
-__all__ = ["draw_facet_panel_cell"]
+__all__ = [
+    "begin_grid_cell_fallback",
+    "draw_facet_panel_cell",
+    "finish_grid_cell_fallback",
+]
 
 # Free-placement fallback margins (fraction of the page_rect's own width /
 # height) -- see the module doc's "Free placement ... keeps the three
@@ -182,15 +219,32 @@ def _draw_free_cell(
     rows: int, cols: int, resolved_x_scale: str, resolved_y_scale: str,
     x_label: str, y_label: str,
 ) -> Any:
-    """Free (``page_rect``) placement fallback -- SubFigure breaks here (see
-    module doc), so the sub-grid is a hand-rolled, inset ``GridSpec`` with
-    the three targeted V1/V2/V4 fixes applied directly."""
-    assert p.facets is not None
+    """Free (``page_rect``) placement -- thin wrapper: convert the
+    top-left-origin ``page_rect`` to bottom-left-origin figure-fraction
+    bounds (same conversion ``figure_page``'s own free-placement branch
+    applies to an ordinary panel's ``fig.add_axes``) and hand off to the
+    shared inset-fallback core (``_draw_inset_cell``)."""
     x, y, w, h = rect
-    # y-flip: page_rect is top-left origin; matplotlib figure fractions are
-    # bottom-left origin -- same conversion figure_page's own free-placement
-    # branch applies to an ordinary panel's fig.add_axes.
     left, bottom, width, height = x, 1 - y - h, w, h
+    return _draw_inset_cell(
+        fig, p, st, left, bottom, width, height, n, rows, cols,
+        resolved_x_scale, resolved_y_scale, x_label, y_label,
+    )
+
+
+def _draw_inset_cell(
+    fig: Any, p: PagePanel, st: FigureStyle, left: float, bottom: float, width: float,
+    height: float, n: int, rows: int, cols: int, resolved_x_scale: str, resolved_y_scale: str,
+    x_label: str, y_label: str,
+) -> Any:
+    """The shared inset-``GridSpec`` fallback core (V1/V2/V4) -- draws a
+    facet sub-grid inset from an ALREADY-KNOWN bottom-left-origin
+    figure-fraction cell rect. Two callers: free placement (``_draw_free_
+    cell``, the rect IS the ``page_rect``, known upfront) and the grid
+    ``"tight"``/``"none"`` fallback (``finish_grid_cell_fallback``, the
+    rect is a throwaway placeholder axes' SETTLED ``get_position()`` --
+    see module doc for why that has to be deferred)."""
+    assert p.facets is not None
     frame_ax = _frame_axes(fig, rect=(left, bottom, width, height))
 
     inset_left = left + _FREE_MARGIN_LEFT * width
@@ -256,6 +310,22 @@ def _draw_free_cell(
     return frame_ax
 
 
+def _facet_geometry(p: PagePanel) -> tuple[int, int, int, str, str, str, str]:
+    """``(n, rows, cols, resolved_x_scale, resolved_y_scale, x_label,
+    y_label)`` -- the geometry/scale/label prep every drawing path needs,
+    factored out so ``draw_facet_panel_cell`` and ``finish_grid_cell_
+    fallback`` (which resolves this AFTER the deferred draw pass, not at
+    the same call site) don't duplicate it."""
+    assert p.facets
+    n = len(p.facets)
+    rows, cols = _grid_shape(n)
+    resolved_x_scale = resolve_axis_scale(p.x_scale, p.x_log)
+    resolved_y_scale = resolve_axis_scale(p.y_scale, p.y_log)
+    x_label = safe_mathtext_label(p.x_label)
+    y_label = safe_mathtext_label(p.y_label)
+    return n, rows, cols, resolved_x_scale, resolved_y_scale, x_label, y_label
+
+
 def draw_facet_panel_cell(
     fig: Any,
     p: PagePanel,
@@ -272,19 +342,15 @@ def draw_facet_panel_cell(
     carries no data scale of its own).
 
     Exactly one of ``cell_spec`` (a gridspec ``SubplotSpec`` -- the grid-
-    placement path, dispatches to a real ``SubFigure``) / ``rect`` (a
-    ``page_rect`` tuple -- the free-placement path, dispatches to the
-    hand-rolled fallback) is given, matching ``_build_page_figure``'s own
-    branch. See the module doc for why the two paths use different
-    mechanisms.
+    placement path under ``"constrained"`` layout, dispatches to a real
+    ``SubFigure``) / ``rect`` (a ``page_rect`` tuple -- the free-placement
+    path, dispatches to the hand-rolled fallback) is given, matching
+    ``_build_page_figure``'s own branch. Grid placement under ``"tight"``/
+    ``"none"`` does NOT go through this function at all -- SubFigure's
+    position solve doesn't work there (see module doc); use
+    ``begin_grid_cell_fallback``/``finish_grid_cell_fallback`` instead.
     """
-    assert p.facets
-    n = len(p.facets)
-    rows, cols = _grid_shape(n)
-    resolved_x_scale = resolve_axis_scale(p.x_scale, p.x_log)
-    resolved_y_scale = resolve_axis_scale(p.y_scale, p.y_log)
-    x_label = safe_mathtext_label(p.x_label)
-    y_label = safe_mathtext_label(p.y_label)
+    n, rows, cols, resolved_x_scale, resolved_y_scale, x_label, y_label = _facet_geometry(p)
 
     if cell_spec is not None:
         return _draw_grid_cell(
@@ -294,5 +360,42 @@ def draw_facet_panel_cell(
     assert rect is not None
     return _draw_free_cell(
         fig, p, st, rect, n, rows, cols,
+        resolved_x_scale, resolved_y_scale, x_label, y_label,
+    )
+
+
+def begin_grid_cell_fallback(fig: Any, cell_spec: Any) -> Any:
+    """Grid placement under ``"tight"``/``"none"`` resize_mode (W1, fix
+    round 3): a throwaway placeholder ``Axes`` at ``cell_spec``, added so
+    its EVENTUAL ``get_position()`` (read by ``finish_grid_cell_fallback``,
+    once every other page panel is also drawn) reflects whatever spacing
+    an ORDINARY panel in this same slot would get -- it comes from the
+    exact same ``GridSpec.get_grid_positions()`` call an ordinary
+    ``add_subplot`` position does, honoring ``wspace``/``hspace``/margins
+    that ``SubFigure``'s own position solve ignores outside constrained
+    layout (see module doc). The caller (``calc.figure_page.
+    _build_page_figure``) must keep drawing every OTHER page panel, then
+    force ONE draw pass (``fig.canvas.draw()``) before calling
+    ``finish_grid_cell_fallback`` -- reading the position any earlier can
+    be stale under ``"tight"`` (empirically confirmed: an early read does
+    NOT match the final one there, unlike ``"none"``, where it already
+    does -- see module doc)."""
+    return fig.add_subplot(cell_spec)
+
+
+def finish_grid_cell_fallback(fig: Any, p: PagePanel, st: FigureStyle, throwaway: Any) -> Any:
+    """Companion to ``begin_grid_cell_fallback``: read the throwaway's now-
+    SETTLED position (caller must have already forced a draw pass with
+    every other page panel present), remove it, and draw the real facet
+    fallback content (the same inset-``GridSpec`` core free placement uses)
+    at that rect. Returns the new cell-frame axes -- same contract as
+    ``draw_facet_panel_cell``'s return (the caller places the page letter
+    on it, etc.)."""
+    n, rows, cols, resolved_x_scale, resolved_y_scale, x_label, y_label = _facet_geometry(p)
+    pos = throwaway.get_position()
+    left, bottom, width, height = pos.x0, pos.y0, pos.width, pos.height
+    throwaway.remove()
+    return _draw_inset_cell(
+        fig, p, st, left, bottom, width, height, n, rows, cols,
         resolved_x_scale, resolved_y_scale, x_label, y_label,
     )

@@ -60,7 +60,11 @@ from numpy.typing import ArrayLike  # noqa: E402
 from quantized.calc import figure_page_layout as fpl  # noqa: E402
 from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_page_facets import draw_facet_panel_cell  # noqa: E402
+from quantized.calc.figure_page_facets import (  # noqa: E402
+    begin_grid_cell_fallback,
+    draw_facet_panel_cell,
+    finish_grid_cell_fallback,
+)
 from quantized.calc.figure_page_panel_labels import (  # noqa: E402
     _LABEL_TEMPLATES,
     _place_label,
@@ -317,11 +321,30 @@ def _build_page_figure(
     facet_mask = [p.facets is not None for p in ordered]
     share_x = fpl.share_targets(len(ordered), link_x, facet_mask)
     share_y = fpl.share_targets(len(ordered), link_y, facet_mask)
+    # W1 (fix round 3): a grid-placement facet cell's SubFigure position
+    # solve only honors true cell geometry (wspace/margins) under
+    # "constrained" layout -- see calc.figure_page_facets' module doc.
+    # Under "tight"/"none", the cell is instead resolved through a
+    # DEFERRED variant of the free-placement fallback: a throwaway axes
+    # stands in during this loop (so placement order / sharex-sharey
+    # indices are unaffected), and once every OTHER panel is also drawn,
+    # one draw pass settles its true position -- see the deferred-handling
+    # block after this loop.
+    use_grid_subfigure = not free_placement and resize_mode == "constrained"
+    deferred: list[tuple[Any, PagePanel, str]] = []
     axes: list[Any] = []
     for idx, p in enumerate(ordered):
         sx, sy = share_x[idx], share_y[idx]
         sharex = axes[sx] if sx is not None else None
         sharey = axes[sy] if sy is not None else None
+        text = p.label if p.label is not None else panel_label(idx, label_format)
+        if p.facets is not None and not free_placement and not use_grid_subfigure:
+            assert gs is not None
+            cell_spec = gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span]
+            throwaway = begin_grid_cell_fallback(fig, cell_spec)
+            axes.append(throwaway)
+            deferred.append((throwaway, p, safe_mathtext_label(text)))
+            continue
         if p.facets is not None:
             if free_placement:
                 assert p.page_rect is not None
@@ -346,8 +369,24 @@ def _build_page_figure(
             )
             _draw_panel(fig, ax, p, st)
         axes.append(ax)
-        text = p.label if p.label is not None else panel_label(idx, label_format)
         _place_label(ax, safe_mathtext_label(text), label_pos, st)
+    if deferred:
+        # Every other page panel is now drawn -- ONE draw pass settles
+        # "tight"'s whitespace-trimming solve (empirically confirmed
+        # necessary: an early read is stale under "tight", though already
+        # correct under "none" -- see module doc) before reading any
+        # throwaway's final position.
+        fig.canvas.draw()
+        for throwaway, p, text in deferred:
+            frame_ax = finish_grid_cell_fallback(fig, p, st, throwaway)
+            _place_label(frame_ax, text, label_pos, st)
+        if resize_mode == "tight":
+            # Freeze positions: prevent tight_layout from re-running at
+            # the caller's final savefig against a now-different axes set
+            # (the throwaway gone, the facet's real sub-grid present but
+            # built from a plain, unmanaged GridSpec tight_layout has no
+            # business touching) and silently perturbing everything again.
+            fig.set_layout_engine(None)
     if align_labels:
         fig.align_labels()
     return fig

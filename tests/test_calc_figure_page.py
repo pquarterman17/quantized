@@ -527,6 +527,147 @@ def test_facet_panel_empty_facets_list_raises() -> None:
         render_figure_page([panel], rows=1, cols=1)
 
 
+# ── W1 (fix round 3): grid-placement SubFigure only honors true cell
+# geometry under "constrained" layout -- under "tight"/"none" the facet
+# cell must fall back to the SAME deferred inset-GridSpec machinery free
+# placement uses (begin_grid_cell_fallback/finish_grid_cell_fallback), so
+# it sits at the SAME cell bounds an ordinary panel in that slot would get
+# and never bleeds into the col_gap band beside it. ──────────────────────
+
+
+def _control_ordinary_panel_x_range(
+    resize_mode: str, col_gap: float | None
+) -> tuple[float, float]:
+    """The x=[x0, x1] an ORDINARY (non-facet) panel gets in slot (0, 0) of
+    an otherwise-identical 1x2 page -- the ground truth a facet cell in the
+    same slot must match (or, under "tight", stay a reasonable
+    approximation of -- see the "tight" test's own note)."""
+    import matplotlib.pyplot as plt
+
+    c0 = _panel(0, 0)
+    c1 = _panel(0, 1)
+    st = _figure_style_default()
+    fig = _build_page_figure_helper(
+        [c0, c1], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=col_gap, resize_mode=resize_mode,
+    )
+    fig.canvas.draw()
+    pos = [ax for ax in fig.axes if ax.get_lines()][0].get_position()
+    x0, x1 = pos.x0, pos.x1
+    plt.close(fig)
+    return x0, x1
+
+
+def _figure_style_default() -> Any:
+    from quantized.calc.figure_styles import figure_style
+
+    return figure_style("default")
+
+
+def _build_page_figure_helper(*args: Any, **kw: Any) -> Any:
+    from quantized.calc.figure_page import _build_page_figure
+
+    return _build_page_figure(*args, **kw)
+
+
+@pytest.mark.parametrize("resize_mode", ["none", "tight"])
+def test_facet_panel_grid_col_gap_does_not_enter_gap_band(resize_mode: str) -> None:
+    # Probe (pre-fix, round 3): SubFigure's bbox_relative under "none"/
+    # "tight" was IDENTICAL whether col_gap was set or not (0.0, 0.0, 0.5,
+    # 1.0) -- ignoring the gap entirely -- while the flat sibling honored
+    # it, so the facet cell rendered oversized and bled into the gap band.
+    import matplotlib.pyplot as plt
+
+    facet = _facet_panel(0, 0)
+    flat = _panel(0, 1)
+    st = _figure_style_default()
+    fig = _build_page_figure_helper(
+        [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=0.3, resize_mode=resize_mode,
+    )
+    try:
+        fig.canvas.draw()
+        subs = _facet_subs(fig, 2)
+        assert len(subs) == 2
+        flat_ax = [ax for ax in fig.axes if ax.get_lines() and ax not in subs][0]
+        gap_start = flat_ax.get_position().x0
+        outermost_x1 = max(ax.get_position().x1 for ax in subs)
+        assert outermost_x1 < gap_start - 1e-6, (
+            f"facet outermost sub-axes x1={outermost_x1} entered the gap "
+            f"band (flat sibling starts at x0={gap_start})"
+        )
+        # No AxesImage anywhere and no leftover SubFigure under this mode.
+        assert all(len(ax.images) == 0 for ax in fig.axes)
+        assert not fig.subfigs
+    finally:
+        plt.close(fig)
+
+
+def test_facet_panel_grid_none_layout_cell_frame_matches_ordinary_panel_exactly() -> None:
+    # "none" has no active layout engine at all -- the throwaway's position
+    # is stable the moment it's created (probed: identical read early vs
+    # late), so the facet cell's frame rect must match an ordinary panel's
+    # own position in the SAME slot exactly.
+    import matplotlib.pyplot as plt
+
+    control_x0, control_x1 = _control_ordinary_panel_x_range("none", 0.3)
+
+    facet = _facet_panel(0, 0)
+    flat = _panel(0, 1)
+    st = _figure_style_default()
+    fig = _build_page_figure_helper(
+        [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=0.3, resize_mode="none",
+    )
+    try:
+        fig.canvas.draw()
+        subs = _facet_subs(fig, 2)
+        frame_ax = [ax for ax in fig.axes if ax not in subs and not ax.get_lines()][0]
+        pos = frame_ax.get_position()
+        assert pos.x0 == pytest.approx(control_x0, abs=1e-6)
+        assert pos.x1 == pytest.approx(control_x1, abs=1e-6)
+    finally:
+        plt.close(fig)
+
+
+@pytest.mark.parametrize("resize_mode", ["none", "tight"])
+def test_facet_panel_grid_sub_axes_stay_within_the_cell_frame(resize_mode: str) -> None:
+    # The cell-frame axes is an ORDINARY fig.add_subplot(cell_spec) -- it is
+    # ALWAYS positioned correctly by matplotlib's normal gridspec solve
+    # (wspace/margins honored), independent of whichever mechanism draws
+    # the facet CONTENT inside it. So it's the ground truth for "does the
+    # facet's own sub-grid content stay inside its own cell": pre-fix,
+    # SubFigure's broken ratio-only position solve let the facet's real
+    # sub-axes spill FAR outside the (correctly-positioned) frame -- e.g.
+    # probed x1=0.90 ("none") / 0.98 ("tight") against a frame that only
+    # extends to about x1=0.46/0.62 -- while the fallback path builds the
+    # sub-grid INSET from that exact frame rect by construction.
+    import matplotlib.pyplot as plt
+
+    facet = _facet_panel(0, 0)
+    flat = _panel(0, 1)
+    st = _figure_style_default()
+    fig = _build_page_figure_helper(
+        [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=0.3, resize_mode=resize_mode,
+    )
+    try:
+        fig.canvas.draw()
+        subs = _facet_subs(fig, 2)
+        frame_ax = [ax for ax in fig.axes if ax not in subs and not ax.get_lines()][0]
+        frame_pos = frame_ax.get_position()
+        for ax in subs:
+            pos = ax.get_position()
+            assert pos.x0 >= frame_pos.x0 - 1e-6
+            assert pos.x1 <= frame_pos.x1 + 1e-6
+    finally:
+        plt.close(fig)
+
+
 # ── secondary (right) Y axis / twinx (GUI_INTERACTION #12 slice 4c) ────────
 # The page composer's own real Axes.twinx() -- mirrors test_calc_figure_y2.py's
 # render_figure(y2_mask=...) coverage for the single-figure path this reuses

@@ -307,23 +307,18 @@ def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
     ]
 
 
-def _render_facets_bytes(
-    req: FigureRequest,
-    *,
-    dpi: int,
-    fmt: str | None = None,
-    title: str | None = None,
-    style: str | None = None,
-) -> bytes:
+def _render_facets_bytes(req: FigureRequest, *, dpi: int, fmt: str | None = None) -> bytes:
     """Render ``req.facets`` to image bytes -- the standalone facet-branch
     renderer used by ``export_figure``/``export_figure_hitmap`` (R2, fix
     round 3). Derives axis labels via ``_figure_series`` (C4 --
     ``resolved.x_label``/``resolved.y_label`` already apply the "explicit
     override, else derive from the dataset" rule), and forwards scale/tick-
     format/transparent/overrides the SAME way the flat branch does
-    (C1/C3/R3). ``fmt``/``title``/``style`` override ``req``'s own fields
-    when given -- ``export_figure_hitmap`` forces ``fmt="png"`` (the preview
-    render is always a raster PNG)."""
+    (C1/C3/R3). ``fmt`` overrides ``req.fmt`` when given -- ``export_figure_
+    hitmap`` forces ``fmt="png"`` (the preview render is always a raster
+    PNG). (``title``/``style`` override params were dropped in fix round 3,
+    W2 -- dead since ``routes.export_page`` stopped calling this function
+    at all in fix round 1, and neither remaining caller ever passed them.)"""
     from quantized.calc.figure_facets import render_facets_figure
 
     resolved = _figure_series(req)
@@ -333,11 +328,11 @@ def _render_facets_bytes(
         y_log=req.y_log,
         x_scale=req.x_scale,
         y_scale=req.y_scale,
-        title=title if title is not None else req.title,
+        title=req.title,
         x_label=resolved.x_label,
         y_label=resolved.y_label,
         fmt=fmt or req.fmt,
-        style=style or req.style,
+        style=req.style,
         width_in=req.width_in,
         height_in=req.height_in,
         dpi=dpi,
