@@ -342,7 +342,15 @@ export function usePeaks(): PeaksState {
       // placement is based on — never the RAW dataset in a way that could
       // be mutated; this is a READ ONLY lookup (RULING 4).
       const ds = await useApp.getState().resolveDataset(active.id);
-      if (!ds) return;
+      // M4 review finding: this used to be a bare silent return — unlike
+      // every other failure path in this action (the L3 try/catch below,
+      // the empty-source/blank-template guards), a dataset that stops
+      // resolving while the dialog was open flipped the button back from
+      // "Labeling…" with zero feedback. Toast, same as the rest.
+      if (!ds) {
+        toast("Could not load the dataset to label — try again.", "danger");
+        return;
+      }
       const st = useApp.getState();
       const { x, y } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
       const xRange = finiteRange(x);

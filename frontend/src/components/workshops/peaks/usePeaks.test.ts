@@ -542,8 +542,23 @@ describe("usePeaks labelPeaks — MY RULING 5 (template tokens, unknown tokens, 
   });
 });
 
+// A dataset whose own y-channel actually spans the backgrounded peaks'
+// apex (~500-530) — round 2's L1 tests originally reused the tiny (~1-6)
+// default `DATA` fixture while mocking a peak apex around 530, a mismatch
+// the M2 y-range backstop (round 3) now correctly clamps against; a
+// REALISTIC yRange (matching what the plotted channel actually contains)
+// is what these tests need to isolate the height+bg formula itself.
+const BACKGROUNDED_DATA: DataStruct = {
+  time: [0, 1, 2, 3, 4, 5],
+  values: [[500], [530], [502], [525], [503], [500]],
+  labels: ["I"],
+  units: ["cps"],
+  metadata: {},
+};
+
 describe("usePeaks labelPeaks — round-2 review: L1 CRITICAL apex y = height + bg", () => {
   it("detected peaks: label lands near the true apex (height + bg), not near height alone or zero", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x.dat", data: BACKGROUNDED_DATA }], activeId: "d1" });
     // find_peaks_robust on a Gaussian riding a +500 DC offset: height=30, bg=500
     // (review's own repro) — true apex y is 530.
     vi.mocked(findPeaks).mockResolvedValue({
@@ -566,6 +581,7 @@ describe("usePeaks labelPeaks — round-2 review: L1 CRITICAL apex y = height + 
   });
 
   it("fitted peaks: label lands near the true apex (height + bg) too", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x.dat", data: BACKGROUNDED_DATA }], activeId: "d1" });
     vi.mocked(fitMultiPeak).mockResolvedValue({
       peaks: [
         { center: 1, fwhm: 0.8, height: 30, bg: 500, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
@@ -614,6 +630,28 @@ describe("usePeaks labelPeaks — round-2 review: L3 error handling", () => {
       expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
     } finally {
       useApp.setState({ resolveDataset: original }); // never leak the broken mock into later tests
+    }
+  });
+});
+
+describe("usePeaks labelPeaks — round-3 review: M4 silent abort after the dialog", () => {
+  it("a resolveDataset that resolves to nothing (dataset vanished mid-dialog) toasts instead of returning silently", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: vi.fn().mockResolvedValue(undefined) });
+
+    try {
+      await act(async () => {
+        await result.current.labelPeaks();
+      });
+
+      expect(useApp.getState().annotations).toHaveLength(0);
+      expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
+    } finally {
+      useApp.setState({ resolveDataset: original });
     }
   });
 });

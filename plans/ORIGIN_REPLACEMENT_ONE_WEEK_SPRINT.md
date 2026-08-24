@@ -279,6 +279,80 @@ same branch.
   heights generally and the specific "neighbour one tier step taller" case
   that reproduced the original bug.
 
+**Status (2026-08-24, round-3 review fixes — last round):** a third review
+pass, two findings reproduced by executing `placeLabels` directly against
+its own test-file box formula. All five fixed here, red-first.
+
+- **`placeLabels` violated its OWN no-overlap invariant on dense clusters.**
+  Two compounding bugs: the boundary check used `<=`, so a label consumed
+  TWO tiers of vertical room instead of one (roughly halving real capacity);
+  and when the tier search exhausted its cap, the code pushed the box
+  anyway — silently overlapping with no signal that capacity had run out.
+  Fixed the boundary to strict `<` (two boxes exactly one tier step apart —
+  touching, not overlapping — no longer collide), and made the exhaustion
+  case an HONEST, DETERMINISTIC degradation instead of an unstated failure:
+  the tier search stops at a capacity cap (`MAX_STACK_TIERS`, derived from
+  `MAX_STACK_FRAC`) and extra labels pile onto that last tier rather than
+  searching forever or drifting unpredictably. **While implementing the
+  fix, the strict `<` boundary check itself uncovered a SECOND, narrower
+  bug**: two tiers exactly one step apart don't always subtract to exactly
+  one tier step in floating point — observed as low as 549.9999999999995
+  against a 550 threshold — so the new strict check was intermittently
+  wasting a tier to ordinary float rounding. Fixed with a small relative
+  epsilon on the collision threshold (`BOUNDARY_EPS`), verified against the
+  exact failing case before landing. `placeLabels`'s own doc now states the
+  HONEST guarantee — "up to `MAX_STACK_TIERS + 1` (currently 10) labels in
+  one dense cluster never overlap; beyond that, extra labels pile
+  deterministically onto the last tier and may overlap there" — replacing
+  language that implied an unconditional guarantee the code could not
+  actually hold. The exhaustion case itself is now explicitly tested (a
+  15-peak cluster against a 10-label capacity), not left unasserted.
+- **Tier offsets were never clamped to `yRange` — stacked labels could run
+  off-plot.** A 20-peak cluster on a `[0, 10]` y-range reached y≈18.7; even
+  a 6-peak cluster reached apex + 0.6·yRange. Those annotations existed but
+  were only reachable through the Object Manager — the "hidden with no path
+  back" failure mode already rejected in the Library work. Fixed: the same
+  `MAX_STACK_TIERS` cap that gives M1 its honest capacity ALSO bounds the
+  stacked offset to `MAX_STACK_FRAC` (60%) of the y-range above each apex,
+  plus a final backstop clamp to `yRange`'s own top for the edge case where
+  a caller-supplied range doesn't actually bound its own peaks. Tested: a
+  dense cluster (well past capacity) on a small y-range produces labels
+  entirely within `yRange`, and a smaller 6-peak cluster does too.
+- **Same latent bug, a THIRD call site.**
+  `components/workshops/peakwizard/usePeakWizard.ts`'s marker-overlay
+  effect still passed bare `p.height` (no `+ p.bg`) to the marker overlay —
+  and, unlike the other two sites, this one ALSO runs peak detection on a
+  BASELINE-SUBTRACTED trace (`workingY`, the wizard's own step-①
+  subtraction), so `height + bg` alone is only the apex WITHIN that
+  corrected trace, not on the plot (which always shows the raw data with
+  the baseline drawn as a separate reference line, never displaced). Worked
+  the real formula out from the file's own data flow rather than
+  blind-copying `height + bg`: the plot apex is `height + bg +
+  baselineValueAt(center)`, the wizard's own subtracted baseline value at
+  that x (nearest sample in `segment.x`), extracted to a new pure module
+  (`lib/peakWizardApex.ts`) to keep the hook under its 500-line ceiling.
+  `CandidatePeak` gained a `bg` field (`0` for a manually added peak — no
+  detector background to separate out for it). Also fixed the click-hit-test
+  bridge (`peakWizardEdit`'s `markers`) to use the SAME formula — it reads
+  the same raw `candidates` today, so fixing only the visual draw would have
+  left a NEW inconsistency (a click landing next to the marker instead of on
+  it) not present before either fix; this went slightly beyond the literal
+  finding to avoid introducing that regression, and is called out here
+  rather than silently expanded.
+- **Silent abort after the dialog.** `usePeaks.ts`'s `labelPeaks`, after the
+  template dialog resolves, had a bare `if (!ds) return;` with no toast —
+  unlike every other failure path in the same action. A dataset that stops
+  resolving while the dialog was open flipped the "Labeling…" button back
+  with zero feedback. Fixed: toasts the same way the L3 (round-2) path does.
+- **Precision clamp lived only at the call site.** `renderLabelTemplate`
+  (`lib/peakLabels.ts`), an EXPORTED pure helper, still clamped precision at
+  the low end only — a value above 100 threw `RangeError` from `toFixed`
+  regardless of `usePeaks.ts`'s own `[0, 10]` UX clamp, for any OTHER
+  caller. Fixed inside the helper itself (`[0, 100]`, `toFixed`'s own
+  ceiling) as defense in depth, tested by calling the helper directly with
+  an out-of-range value; `usePeaks.ts`'s tighter `[0, 10]` clamp still
+  applies on top for the actual dialog.
+
 ## Non-negotiable operating rules
 
 - Freeze new feature requests for seven days. Bugs that block a sprint workflow

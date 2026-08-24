@@ -26,6 +26,7 @@ import {
 } from "../../../lib/peakwizard";
 import { selectedFitData } from "../../../lib/fitselection";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
+import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import type { Dataset, MultiFitResult, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -39,10 +40,19 @@ export const WIZARD_STEPS = [
   "Report",
 ] as const;
 
-/** A peak candidate on step ②: detected or manually added, toggleable. */
+/** A peak candidate on step ②: detected or manually added, toggleable.
+ *  `height`/`bg` keep the SAME semantics as `Peak`/`FittedPeak`
+ *  (lib/types.ts) — `height` is measured ABOVE `bg`, the apex is
+ *  `height + bg` — but here `bg` is relative to `workingY` (the
+ *  BASELINE-SUBTRACTED trace `findPeaks` actually runs on, see `workingY`
+ *  below), not the plot's own raw coordinates; see `plotApexY`'s doc for
+ *  the additional term that maps back onto the plot. A manually added peak
+ *  (`addPeakAt`) reads its `height` straight off `workingY` with `bg: 0` —
+ *  there is no detector background to separate out for it. */
 export interface CandidatePeak {
   center: number;
   height: number;
+  bg: number;
   fwhm: number;
   included: boolean;
   manual: boolean;
@@ -224,6 +234,7 @@ export function usePeakWizard(): PeakWizardState {
       const found: CandidatePeak[] = res.peaks.map((p: Peak) => ({
         center: p.center,
         height: p.height,
+        bg: p.bg,
         fwhm: p.fwhm,
         included: true,
         manual: false,
@@ -238,7 +249,10 @@ export function usePeakWizard(): PeakWizardState {
     }
   }, [active, segment, workingY, recipe.find]);
 
-  // Keep the marker overlay in sync with the included candidates.
+  // Keep the marker overlay in sync with the included candidates. M3
+  // review finding (same latent bug as usePeaks.ts's L1/L2, third call
+  // site): a raw `p.height` is NOT the plot apex — see
+  // lib/peakWizardApex.ts's doc; `plotApexY`/`baselineValueAt` map it back.
   useEffect(() => {
     if (!active || candidates.length === 0) return;
     const included = candidates.filter((c) => c.included);
@@ -246,10 +260,13 @@ export function usePeakWizard(): PeakWizardState {
       datasetId: active.id,
       y: peakOverlayArray(
         fullPlottedX(active.data, xKey),
-        included.map((p) => ({ center: p.center, height: p.height })),
+        included.map((p) => ({
+          center: p.center,
+          height: plotApexY(p.height, p.bg, baselineValueAt(p.center, segment?.x ?? [], baseline)),
+        })),
       ),
     });
-  }, [active, candidates, setPeakOverlay, xKey]);
+  }, [active, candidates, setPeakOverlay, xKey, segment, baseline]);
 
   const togglePeak = (i: number) =>
     setCandidates((cs) => cs.map((c, j) => (j === i ? { ...c, included: !c.included } : c)));
@@ -276,6 +293,7 @@ export function usePeakWizard(): PeakWizardState {
         {
           center,
           height: workingY[nearest],
+          bg: 0, // no detector background to separate out for a manual point
           fwhm: span / 50 || 1,
           included: true,
           manual: true,
@@ -321,14 +339,26 @@ export function usePeakWizard(): PeakWizardState {
   // sync with what the manual "+ Add" field in step ② would use, WITHOUT
   // also re-pushing (and forcing PlotViewport to rebuild the whole uPlot
   // instance) on every unrelated re-render; a full unmount (wizard closed)
-  // always clears it.
+  // always clears it. M3: the hit-test markers use the SAME `plotApexY`
+  // mapping the overlay draw above uses (also gaining `segment`/`baseline`
+  // as triggers, same reasoning) — a click must land on exactly what is
+  // drawn, never a stale raw-height position next to it.
   useEffect(() => {
     setPeakWizardEdit(
       markerEditActive
-        ? { markers: visiblePeakMarkers(candidates), addPeakAt, removePeak }
+        ? {
+            markers: visiblePeakMarkers(
+              candidates.map((c) => ({
+                ...c,
+                height: plotApexY(c.height, c.bg, baselineValueAt(c.center, segment?.x ?? [], baseline)),
+              })),
+            ),
+            addPeakAt,
+            removePeak,
+          }
         : null,
     );
-  }, [markerEditActive, candidates, addPeakAt, removePeak, setPeakWizardEdit]);
+  }, [markerEditActive, candidates, addPeakAt, removePeak, setPeakWizardEdit, segment, baseline]);
   useEffect(() => () => setPeakWizardEdit(null), [setPeakWizardEdit]);
 
   // ④ Simultaneous fit of the included candidates.

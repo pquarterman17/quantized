@@ -221,3 +221,61 @@ describe("usePeakWizard — plotted-channel selection (audit P1 #1)", () => {
     expect(body.y).toEqual([10, 50, 20, 5]); // counts channel, not values[0]
   });
 });
+
+describe("usePeakWizard — marker placement uses height + bg (+ baseline) (M3 review, round 3)", () => {
+  it("places the marker at height + bg (no baseline correction: method 'none')", async () => {
+    const { findPeaks } = await import("../../../lib/api/peaks");
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [{ center: 2, height: 30, fwhm: 0.5, prominence: 1, localSNR: 5, area: null, bg: 500 }],
+      background: [],
+    });
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    await act(async () => {
+      await result.current.runFind();
+    });
+
+    expect(result.current.candidates[0]).toMatchObject({ height: 30, bg: 500 }); // state keeps RAW detection values
+    const overlayY = useApp.getState().peakOverlay?.y ?? [];
+    const overlayVals = overlayY.filter((v): v is number => v != null);
+    expect(overlayVals).toEqual([530]); // but the DRAWN marker is height + bg
+    expect(useApp.getState().peakWizardEdit?.markers).toEqual([{ index: 0, center: 2, height: 530 }]);
+  });
+
+  it("also folds in the wizard's OWN baseline value at that x — mapping the corrected trace back onto the raw plot", async () => {
+    const { findPeaks } = await import("../../../lib/api/peaks");
+    const { baselineALS } = await import("../../../lib/api/baseline");
+    vi.mocked(baselineALS).mockResolvedValue({ baseline: [10, 10, 10, 10, 10] });
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [{ center: 2, height: 30, fwhm: 0.5, prominence: 1, localSNR: 5, area: null, bg: 5 }],
+      background: [],
+    });
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    await waitFor(() => expect(result.current.baselineBusy).toBe(false));
+    act(() => result.current.setStep(1));
+    await act(async () => {
+      await result.current.runFind();
+    });
+
+    const overlayY = useApp.getState().peakOverlay?.y ?? [];
+    const overlayVals = overlayY.filter((v): v is number => v != null);
+    expect(overlayVals).toEqual([45]); // height(30) + bg(5) + baseline-at-x(10)
+    expect(useApp.getState().peakWizardEdit?.markers).toEqual([{ index: 0, center: 2, height: 45 }]);
+  });
+
+  it("a manually added peak needs no bg correction (bg: 0) — only the baseline term applies", async () => {
+    const { baselineALS } = await import("../../../lib/api/baseline");
+    vi.mocked(baselineALS).mockResolvedValue({ baseline: [10, 10, 10, 10, 10] });
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    await waitFor(() => expect(result.current.baselineBusy).toBe(false));
+    act(() => result.current.setStep(1));
+
+    act(() => result.current.addPeakAt(2)); // nearest sample at x=2 is workingY=4-10=-6 (baseline-subtracted)
+    expect(result.current.candidates[0]).toMatchObject({ bg: 0 });
+    expect(useApp.getState().peakWizardEdit?.markers).toEqual([
+      { index: 0, center: 2, height: result.current.candidates[0].height + 10 },
+    ]);
+  });
+});
