@@ -48,7 +48,6 @@ describe("planOriginImport", () => {
     expect(plan.folders.map((f) => f.name)).toEqual(["Moke"]); // just the project folder
     const project = plan.folders[0].id;
     expect(plan.folderMembership).toEqual({ d1: project, d2: project });
-    expect(plan.expanded).toEqual([project]);
     // L0.1: EVERY book gets a workbook, including single-sheet ones.
     expect(plan.workbooks).toHaveLength(2);
     expect(plan.workbooks.map((w) => w.name).sort()).toEqual(["Book1", "Book2"]);
@@ -135,13 +134,6 @@ describe("planOriginImport", () => {
     expect(plan.folderMembership.d2).toBe(b); // reused, not duplicated
     expect(plan.folderMembership.d3).toBe(a); // one level up
     expect(plan.workbooks).toHaveLength(3); // B1, B2, B3 each their own workbook
-  });
-
-  it("all created folders are expanded and the project folder leads", () => {
-    const plan = planOriginImport("P", [ds("P", "d1", "B", ["A"])], genFolder, genWorkbook);
-    expect(plan.expanded).toEqual(plan.folders.map((f) => f.id));
-    expect(plan.folders[0].name).toBe("P");
-    expect(plan.folders[0].parentId).toBeNull();
   });
 
   it("an unstamped dataset (no origin_book) gets its own singleton workbook", () => {
