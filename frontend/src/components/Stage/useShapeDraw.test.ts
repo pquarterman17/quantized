@@ -116,7 +116,9 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     useApp.setState({ drawShapeKind: "textbox" });
     const { result } = renderHook(() => useShapeDraw());
     act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
-    await waitFor(() => expect(mockAskAnnotationText).toHaveBeenCalled());
+    // askAnnotationText is called SYNCHRONOUSLY inside onDrawCommit — a bare
+    // expect suffices (weak-wait ratchet: never waitFor a mock call).
+    expect(mockAskAnnotationText).toHaveBeenCalled();
     // Flush the resolved-null .then() microtask.
     await act(async () => {
       await Promise.resolve();
@@ -137,11 +139,9 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     useApp.setState({ drawShapeKind: "textbox" });
     const historyBefore = useApp.getState().history.length;
     const { result } = renderHook(() => useShapeDraw());
-    // askAnnotationText is called SYNCHRONOUSLY inside onDrawCommit — no
-    // waitFor needed for the call itself (weak-wait ratchet,
-    // architecture.test.ts: wait on RESOLVED STATE, not the mock call).
-    // Flush the resolved-blank `.then()` microtask, then assert on state.
     act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
+    // askAnnotationText is called SYNCHRONOUSLY inside onDrawCommit — a bare
+    // expect suffices (weak-wait ratchet: never waitFor a mock call).
     expect(mockAskAnnotationText).toHaveBeenCalled();
     await act(async () => {
       await Promise.resolve();
@@ -157,6 +157,8 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     const historyBefore = useApp.getState().history.length;
     const { result } = renderHook(() => useShapeDraw());
     act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
+    // askAnnotationText is called SYNCHRONOUSLY inside onDrawCommit — a bare
+    // expect suffices (weak-wait ratchet: never waitFor a mock call).
     expect(mockAskAnnotationText).toHaveBeenCalled();
     await act(async () => {
       await Promise.resolve();
