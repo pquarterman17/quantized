@@ -125,6 +125,46 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
     expect(useApp.getState().shapes).toEqual([]);
     expect(useApp.getState().selectedAnnotationId).toBeNull();
   });
+
+  // B3: the Bug-4 fix's own comment already promised "gate addAnnotation on
+  // non-empty text", but the pre-fix code only checked `v == null` — an
+  // empty-string or whitespace-only "Done" slipped through and created a
+  // framed, empty annotation (a comment/code mismatch, latent since Bug 4
+  // landed). Blank text must now be treated exactly like Cancel: same as
+  // PlotContextMenu's "Add text here…" (also fixed under B3).
+  it("B3: creates NO annotation when the dialog resolves an empty string", async () => {
+    mockAskAnnotationText.mockResolvedValue("");
+    useApp.setState({ drawShapeKind: "textbox" });
+    const historyBefore = useApp.getState().history.length;
+    const { result } = renderHook(() => useShapeDraw());
+    // askAnnotationText is called SYNCHRONOUSLY inside onDrawCommit — no
+    // waitFor needed for the call itself (weak-wait ratchet,
+    // architecture.test.ts: wait on RESOLVED STATE, not the mock call).
+    // Flush the resolved-blank `.then()` microtask, then assert on state.
+    act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
+    expect(mockAskAnnotationText).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
+    expect(useApp.getState().history.length).toBe(historyBefore);
+  });
+
+  it("B3: creates NO annotation when the dialog resolves whitespace-only text", async () => {
+    mockAskAnnotationText.mockResolvedValue("   ");
+    useApp.setState({ drawShapeKind: "textbox" });
+    const historyBefore = useApp.getState().history.length;
+    const { result } = renderHook(() => useShapeDraw());
+    act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
+    expect(mockAskAnnotationText).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
+    expect(useApp.getState().history.length).toBe(historyBefore);
+  });
 });
 
 describe("useShapeDraw — Escape cancels the mode", () => {

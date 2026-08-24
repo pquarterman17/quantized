@@ -36,6 +36,30 @@ function fakePlot(): uPlot {
   } as unknown as uPlot;
 }
 
+// B2: same fake plot, but posToVal carries a MUTABLE shift so a test can
+// simulate the live plot re-ranging (store/liveWindowDocument.ts) WHILE the
+// menu sits open — i.e. after the initial render/hit-test but before the
+// "Add text here…" item is clicked. `shift` starts at 0, so the conversion
+// at open time is identical to fakePlot()'s (data (200, 150)).
+function fakePlotWithMutableScale(): { plot: uPlot; scale: { shift: number } } {
+  const scale = { shift: 0 };
+  const plot = {
+    over: {
+      getBoundingClientRect: () => ({ left: 100, top: 100, right: 500, bottom: 400, width: 400, height: 300 }),
+    },
+    data: [
+      [0, 100, 200, 300, 400],
+      [10, 20, 150, 40, 50],
+      [10, 20, 300, 40, 50],
+    ],
+    series: [{}, { scale: "y" }, { scale: "y" }],
+    scales: { x: { min: 0, max: 400 }, y: { min: 0, max: 300 } },
+    posToVal: (px: number) => px + scale.shift,
+    valToPos: (v: number) => v,
+  } as unknown as uPlot;
+  return { plot, scale };
+}
+
 const payload = {
   series: [
     { label: "A", unit: "" },
@@ -69,6 +93,7 @@ beforeEach(() => {
     selectedAnnotationId: null,
     history: [],
     future: [],
+    plotTool: "pointer",
   });
 });
 
@@ -177,5 +202,93 @@ describe("PlotContextMenu — 'Add text here…' (UX-R6 manual annotation)", () 
     expect(useApp.getState().annotations).toEqual([]);
     expect(useApp.getState().history).toEqual([]);
     expect(useApp.getState().selectedAnnotationId).toBeNull();
+  });
+
+  // B1 (ruling): a successful create must flip the active plot tool to
+  // "pointer" (MAIN #27's "immediately selected + directly manipulable"
+  // contract — useAnnotationEdit.ts / SelectionMiniToolbar.tsx both hide the
+  // selection under any non-pointer tool), but a CANCELLED dialog must leave
+  // the user's active tool untouched.
+  it("B1: flips the plot tool to pointer after a successful create", async () => {
+    mockAskAnnotationText.mockResolvedValue("Tc onset");
+    useApp.setState({ plotTool: "zoom" });
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(1));
+    expect(useApp.getState().plotTool).toBe("pointer");
+  });
+
+  it("B1: leaves the plot tool unchanged when the dialog is cancelled", async () => {
+    mockAskAnnotationText.mockResolvedValue(null);
+    useApp.setState({ plotTool: "zoom" });
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().plotTool).toBe("zoom");
+  });
+
+  // B3: an empty or whitespace-only "Done" must be treated exactly like
+  // Cancel — no annotation, no undo entry, no selection, no tool flip — the
+  // same guard AnnotationsCard.tsx already applies (`text.trim()`).
+  it("B3: an empty-string 'Done' creates no annotation and no undo entry", async () => {
+    mockAskAnnotationText.mockResolvedValue("");
+    useApp.setState({ plotTool: "zoom" });
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
+    expect(useApp.getState().plotTool).toBe("zoom");
+  });
+
+  it("B3: a whitespace-only 'Done' creates no annotation and no undo entry", async () => {
+    mockAskAnnotationText.mockResolvedValue("   ");
+    useApp.setState({ plotTool: "zoom" });
+    open();
+    fireEvent.click(screen.getByText("Add text here…"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
+    expect(useApp.getState().plotTool).toBe("zoom");
+  });
+
+  // B2: the pixel→data conversion must be computed ONCE at menu-open time
+  // (inside the same useMemo that already builds the hit-test), not
+  // recomputed at menu-ITEM-click time — otherwise a live-updating/
+  // re-autoscaling plot (store/liveWindowDocument.ts) that re-ranges WHILE
+  // the menu is open makes the same pixel map to a different data point.
+  it("B2: pins the pixel→data conversion at menu-open time, not item-click time", async () => {
+    mockAskAnnotationText.mockResolvedValue("pinned");
+    const { plot, scale } = fakePlotWithMutableScale();
+    render(
+      <PlotContextMenu
+        x={300}
+        y={250}
+        plotRef={{ current: plot }}
+        payload={payload}
+        plotted={[0, 1]}
+        hidden={[false, false]}
+        actions={actions}
+        onClose={vi.fn()}
+      />,
+    );
+    // The plot re-ranges WHILE the menu sits open (autoscale/live-window) —
+    // AFTER the menu built its items, BEFORE the user picks "Add text here…".
+    scale.shift = 1000;
+    fireEvent.click(screen.getByText("Add text here…"));
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(1));
+    const ann = useApp.getState().annotations[0];
+    // Must land at the ORIGINAL open-time coordinates (200, 150 — same as
+    // the other "Add text here…" tests), NOT the re-ranged (1200, 1150).
+    expect(ann).toMatchObject({ x: 200, y: 150 });
   });
 });
