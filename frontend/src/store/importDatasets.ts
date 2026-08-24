@@ -255,37 +255,37 @@ function addFromPayload(
     const newIdSet = new Set(newIds);
     const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
     const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId, targetFolderId ?? null);
-    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a REALISTIC multi-book
-    // Origin project (this `books.length > 1` branch) can create dozens of
-    // folders/workbooks in one import. Auto-expanding all of them — the
-    // single-dataset `else` branch below still does that for its ONE new
-    // workbook — is precisely the owner-observed complaint ("too many
-    // similarly weighted objects"): every sheet of every book spills into
-    // view at once, no path to build up context gradually. So this branch
-    // lands COLLAPSED at both the Folder and Workbook layers (`plan.folders`/
-    // `plan.workbooks` are deliberately NOT merged into
-    // expandedFolders/expandedWorkbookIds below) — nothing is hidden-with-
-    // no-path-back, every row stays individually expandable/searchable, this
-    // only changes the DEFAULT disclosure depth for a project-scale import.
-    // A single-file import (0/1 book) keeps the pre-existing "just-imported
-    // sheet is immediately visible" auto-expand below, unchanged. F1 (review
-    // fix round) narrows the collapse below: the active/selected dataset's
-    // own ancestor chain is still revealed (see `revealAncestorChain`'s doc,
-    // right after this `set()`, for the full rationale).
-    set((s) => ({
-      folders: [...s.folders, ...plan.folders],
-      workbooks: [...s.workbooks, ...plan.workbooks],
-      datasets: s.datasets.map((d) =>
-        newIdSet.has(d.id)
-          ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
-          : d,
-      ),
-    }));
-    // F1: reveal only the active dataset's ancestor chain — see `revealAncestorChain`'s doc (lib/foldertree.ts).
+    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a multi-book Origin
+    // project can create dozens of folders/workbooks in one import, so this
+    // branch lands COLLAPSED at both layers (`plan.folders`/`plan.workbooks`
+    // deliberately NOT merged into expandedFolders/expandedWorkbookIds) —
+    // the owner-observed "too many similarly weighted objects" complaint.
+    // Nothing is hidden-with-no-path-back; only the DEFAULT disclosure depth
+    // changes. A single-file import (the `else` below) keeps its immediate
+    // auto-expand, unchanged. F1 exception: the active dataset's ancestor
+    // chain IS revealed (`revealAncestorChain`'s doc) — computed INSIDE this
+    // same `set()`, so no subscriber ever observes the forbidden transient.
     const activeId = get().activeId;
-    if (activeId) {
-      set((s) => revealAncestorChain(s, plan.folderMembership[activeId], plan.workbookMembership[activeId]));
-    }
+    set((s) => {
+      const folders = [...s.folders, ...plan.folders];
+      const reveal = activeId
+        ? revealAncestorChain(
+            { ...s, folders },
+            plan.folderMembership[activeId],
+            plan.workbookMembership[activeId],
+          )
+        : {};
+      return {
+        folders,
+        workbooks: [...s.workbooks, ...plan.workbooks],
+        datasets: s.datasets.map((d) =>
+          newIdSet.has(d.id)
+            ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }
+            : d,
+        ),
+        ...reveal,
+      };
+    });
   } else {
     delete data.books;
     delete data.book_source;

@@ -88,7 +88,7 @@ content merely to simplify the view.
 Sonnet implementation; cheaper models for fixtures/tests. **Sprint priority:**
 daily-driver critical and part of the owner switch-trigger trial.
 
-**Status note (2026-08-24, Claude Sonnet implementation):** Claude-implemented
+**Status note (2026-08-24, implementation-lane hand-back):** Claude-implemented
 Library/Origin-import-IA slice landed on `claude/uxr3-origin-import-ia`
 (scout + implementation + tests below the fold, "UX-R3 completion note").
 ChatGPT-Sol visual acceptance is still open.
@@ -657,7 +657,7 @@ locally, since this sandbox cannot run Playwright — see below):
    with the number of E2E specs a sprint adds, and this sprint added a lot
    of them.
 
-## UX-R3 completion note (2026-08-24, Claude Sonnet implementation)
+## UX-R3 completion note (2026-08-24, implementation-lane hand-back)
 
 Scope: UX-R3 only ("Origin project imports are difficult to parse in the
 Library"), on a dedicated worktree/branch (`claude/uxr3-origin-import-ia`),
@@ -756,3 +756,20 @@ files, 8445/8445 tests; `npm run build` — 888.7 kB eager JS against the
 against the design tokens/theme in both light and dark, and a real multi-book
 `.opju` fixture walkthrough (this PR's coverage uses synthetic fixtures
 matching `lib/originFolders.ts`'s documented shape, not a captured `.opju`).
+
+**Review round 2 follow-ups (2026-08-24, orchestrator final pass — booked,
+not blocking merge):**
+
+1. **Multi-book provenance gap (pre-existing, surfaced by this review):** the
+   `books.length > 1` branch of `store/importDatasets.ts`'s `addFromPayload`
+   never stamps `importedAt` or spreads `importRoles(...)` onto the per-book
+   datasets — only the single-file `else` branch does — so book sheets from a
+   project import carry no import timestamp and no inferred error-role
+   bindings. Fix belongs with the import-provenance work (MAIN #33), not this
+   IA slice.
+2. **`OriginFidelitySection` disclosure state is per-mount:** `Library.tsx`
+   unmounts the section while search is active, so a user who deliberately
+   expanded the fidelity group loses that choice after every search (remount
+   resets to the new collapsed default). Lift the flag to the store (like
+   `expandedWorkbookIds`) or keep the component mounted. Pre-existing state
+   loss; the flipped default makes it now always resolve toward hidden.
