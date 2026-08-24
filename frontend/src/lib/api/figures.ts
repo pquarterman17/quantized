@@ -25,6 +25,21 @@ import type { FigureHitmap } from "../previewmap";
 import type { AxisFormat, AxisScale, DataStruct } from "../types";
 import type { ErrorPair } from "../api";
 
+/** One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 --
+ *  `FigureSpec.facets`'s own doc has the full contract). Mirrors
+ *  `StatplotFacetSpec`/`CategoricalFacetSpec`'s "resolved facet panel"
+ *  shape below. */
+export interface FigureFacetSeries {
+  label: string;
+  y: (number | null)[];
+}
+
+export interface FigureFacetSpec {
+  label: string;
+  x: (number | null)[];
+  series: FigureFacetSeries[];
+}
+
 export interface FigureSpec {
   dataset: DataStruct;
   x_key?: number | string;
@@ -65,6 +80,21 @@ export interface FigureSpec {
    *  series lands on the primary axis (`buildXY` never assigns `axis: 1`),
    *  so combining this with `y2_keys` is rejected by the backend (422). */
   group_col?: number;
+  /** FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
+   *  multiples panel per facet-column level -- present only when the source
+   *  document/view carries a durable `facetKey` binding (`lib/figureSpec.ts`'s
+   *  `buildFacetSpecs`, called from `buildFigureSpecForView`). RESOLVED here,
+   *  not a bare column index: the same `label`/`x`/per-series `y` arrays
+   *  `lib/facet.facetPayloads` already computed for the on-screen grid, so
+   *  backend and frontend can never disagree on level ordering/binning.
+   *  Renders the SAME faceted grid Stage shows (shared x-domain, independent
+   *  per-panel y-autoscale, panel title = facet level label) instead of a
+   *  single overlaid plot -- see `calc.figure_facets.render_facets_figure`.
+   *  Mirrors `StatplotFigureSpec.facets`/`CategoricalFigureSpec.facets`'s
+   *  established shape: every other field on this spec stays present but
+   *  UNUSED server-side once `facets` is set (`x_key`/`y_keys`/`overrides`/
+   *  `series_styles`/... are not applied to the facet-grid render path). */
+  facets?: FigureFacetSpec[] | null;
   fmt?: string;
   style?: string;
   dpi?: number;

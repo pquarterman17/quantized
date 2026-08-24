@@ -207,6 +207,134 @@ def test_figure_style_preset_download() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+# ── /api/export/figure facets (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4, export
+# half): a faceted Stage window must export as the SAME small-multiples
+# grid, not a single overlaid plot — the named gap #222 left open (its
+# module doc: "FigureSpec has no transport fields for facetKey"). ─────────
+def _xy_facets() -> list[dict]:
+    return [
+        {
+            "label": "level 0", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "y", "y": [0.0, 1.0, 2.0]}],
+        },
+        {
+            "label": "level 1", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "y", "y": [1.0, 2.0, 3.0]}],
+        },
+    ]
+
+
+def test_figure_facets_renders_grid_not_single_panel() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets(), "filename": "facets1",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+    assert resp.headers["content-disposition"] == 'attachment; filename="facets1.svg"'
+    svg = resp.content.decode("utf-8", "ignore")
+    # Both facet-level titles render — proof this is the small-multiples
+    # grid (calc.figure_facets), not the flat single-panel path, which never
+    # sees these labels at all.
+    assert "level 0" in svg
+    assert "level 1" in svg
+
+
+def test_figure_facets_pdf_and_png_render() -> None:
+    for fmt, magic in (("pdf", b"%PDF-"), ("png", b"\x89PNG\r\n\x1a\n")):
+        resp = client.post(
+            "/api/export/figure",
+            json={"dataset": _xrd_dataset(), "fmt": fmt, "facets": _xy_facets()},
+        )
+        assert resp.status_code == 200
+        assert resp.content[: len(magic)] == magic
+
+
+def test_figure_facets_title_and_labels_apply_figure_wide() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets(),
+            "title": "Faceted title", "x_label": "Time (s)", "y_label": "Signal (V)",
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "Faceted title" in svg
+    assert "Time (s)" in svg
+    assert "Signal (V)" in svg
+
+
+def test_figure_facets_empty_list_falls_back_to_single_panel() -> None:
+    # An empty (not None) facets list is falsy -> today's flat single-panel
+    # path, matching the calc layer's own `if req.facets:` gate (same
+    # contract as StatplotFigureRequest/CategoricalFigureRequest).
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "facets": []},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_facets_null_cells_render_as_gaps() -> None:
+    # The frontend's null-gap wire convention (a non-finite cell) must not
+    # 422 -- calc.figure_facets converts null -> NaN via np.asarray(dtype=float).
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [
+                {
+                    "label": "a", "x": [0.0, None, 2.0],
+                    "series": [{"label": "y", "y": [1.0, 2.0, None]}],
+                },
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_facets_bad_format_is_422_not_500() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "bmp", "facets": _xy_facets()},
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_facets_malformed_panel_is_422_not_500() -> None:
+    # A panel whose series `y` disagrees in length with `x` is a malformed
+    # payload (a frontend bug, not a user-triggerable state) -- must be
+    # refused cleanly (422), never a 500.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [
+                {"label": "a", "x": [0.0, 1.0], "series": [{"label": "y", "y": [1.0, 2.0, 3.0]}]},
+            ],
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_facets_panel_with_no_series_still_renders() -> None:
+    # A facet level with zero series (every channel hidden for that panel)
+    # is not malformed -- an empty axes cell, not a 422.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(), "fmt": "pdf",
+            "facets": [{"label": "a", "x": [], "series": []}],
+        },
+    )
+    assert resp.status_code == 200
+
+
 def _demo_map() -> dict:
     import numpy as np
     x = np.linspace(-2.0, 2.0, 16)

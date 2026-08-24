@@ -31,6 +31,7 @@ import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
+import { buildFacetSpecs } from "./figureSpecFacets";
 import {
   compactOverrides,
   gateY2Overrides,
@@ -159,6 +160,13 @@ function buildFigureSpecForView(
       }
     : data;
 
+  // F4.4 (export half): a durable facet binding renders the SAME
+  // small-multiples grid Stage shows on screen instead of a single
+  // overlaid plot — see `buildFacetSpecs`'s own doc for the resolution
+  // rules. `undefined` (no `facetKey`) omits the field entirely, matching
+  // every other optional field this function builds.
+  const facets = st.facetKey == null ? undefined : buildFacetSpecs(dataset, st.facetKey, st.xKey, st.yKeys);
+
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
   // subset marker, not a replacement), plus that subset in display order, so
@@ -199,6 +207,7 @@ function buildFigureSpecForView(
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
     ...(extras.groupKey === null || extras.groupKey === undefined ? {} : { group_col: extras.groupKey }),
+    ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
     dpi: o.dpi,
@@ -226,9 +235,12 @@ function buildFigureSpecForView(
 /** Derive an export request directly from the canonical document. Frozen
  * documents render their immutable data snapshot; live documents reject a
  * missing or mismatched dataset instead of exporting an accidental sibling.
- * FigureSpec has no transport fields for `mark`, `facetKey`, or Y/Y2 breaks;
- * those remain intact in the FigureDocument and are never flattened/deleted by
- * this adapter. X breaks do have a renderer field and are emitted. */
+ * FigureSpec has no transport fields for `mark` or Y/Y2 breaks; those remain
+ * intact in the FigureDocument and are never flattened/deleted by this
+ * adapter. X breaks do have a renderer field and are emitted. F4.4 (export
+ * half, closed): `facetKey` now rides the wire too, as a resolved `facets`
+ * panel list built by `buildFigureSpecForView`'s `buildFacetSpecs` call —
+ * see that function's own doc. */
 export function buildFigureSpecFromDocument(
   document: FigureDocument,
   dataset: Dataset | null | undefined,

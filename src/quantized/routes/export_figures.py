@@ -34,6 +34,30 @@ from quantized.routes._export_common import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+class FigureFacetSeries(BaseModel):
+    label: str
+    y: list[float | None]
+
+
+class FigureFacet(BaseModel):
+    """One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 —
+    the export half of Stage's facet-by-column grid, `store.facetKey` /
+    `lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend
+    already computed each panel's row slice (level ordering + binning,
+    `lib/figureSpec.ts`'s `buildFacetSpecs`) and ships it here verbatim, so
+    this route never re-slices `dataset` itself and can never disagree with
+    what Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s
+    established "resolved facet panel" shape (`routes/export_statplots.py`).
+    `x`/each series' `y` may carry `null` for a non-finite cell (the
+    frontend's null-gap wire convention, same as every DataStruct value);
+    `calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,
+    matplotlib's own gap convention."""
+
+    label: str
+    x: list[float | None]
+    series: list[FigureFacetSeries]
+
+
 class TickFormatSpec(BaseModel):
     """Wire model for the screen's `AxisFormat` (MAIN #24,
     `frontend/src/lib/types.ts`): the tick-label number format for one axis.
@@ -91,6 +115,21 @@ class FigureRequest(BaseModel):
     # per-level series) -- matplotlib's default color cycle takes over,
     # exactly like the screen, which never assigns per-level colors either.
     group_col: int | None = None
+    # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
+    # multiples panel per facet-column level, RESOLVED client-side
+    # (`lib/facet.facetPayloads`) rather than a raw column index -- so this
+    # route never re-derives level ordering/binning and can never disagree
+    # with what Stage showed on screen. None/absent (default) = today's
+    # single-panel behaviour, byte-identical; every other field on this
+    # request (`dataset`/`x_key`/`y_keys`/`overrides`/`series_styles`/...)
+    # stays required by the schema but UNUSED once `facets` is set -- the
+    # same "wire shape stays whole, semantics switch" contract
+    # `StatplotFigureRequest.facets`/`CategoricalFigureRequest.facets`
+    # already use (`routes/export_statplots.py`). Renders via
+    # `calc.figure_facets.render_facets_figure`: one shared x-domain across
+    # every panel, each panel keeping its own independent y-autoscale (see
+    # that function's own doc for why).
+    facets: list[FigureFacet] | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -240,47 +279,75 @@ def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
-    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``)."""
+    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``). An
+    optional ``facets`` list (F4.4) renders a faceted xy small-multiples grid
+    instead of the flat single panel -- see ``FigureRequest.facets``'s own
+    doc for the wire contract."""
     if req.fmt not in _FIGURE_MIME:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
-    from quantized.calc.figure import render_figure
-
     try:
-        resolved = _figure_series(req)
-        data = render_figure(
-            resolved.x,
-            resolved.series,
-            title=req.title,
-            x_label=resolved.x_label,
-            y_label=resolved.y_label,
-            x_log=req.x_log,
-            y_log=req.y_log,
-            x_scale=req.x_scale,
-            y_scale=req.y_scale,
-            fmt=req.fmt,
-            style=req.style,
-            series_styles=resolved.styles,
-            error_spans=req.error_spans,
-            width_in=req.width_in,
-            height_in=req.height_in,
-            dpi=dpi,
-            transparent=req.transparent,
-            overrides=req.overrides,
-            x_fmt=_tick_fmt(req.x_fmt),
-            y_fmt=_tick_fmt(req.y_fmt),
-            x_step=req.x_step,
-            y_step=req.y_step,
-            y2_mask=resolved.y2_mask,
-            y2_label=resolved.y2_label,
-            y2_scale=req.y2_scale,
-            y2_fmt=_tick_fmt(req.y2_fmt),
-            y2_step=req.y2_step,
-        )
-    except (ValueError, KeyError, IndexError) as exc:
+        if req.facets:
+            # Lazy import: matplotlib is heavy — only pay it when exported.
+            from quantized.calc.figure_facets import render_facets_figure
+
+            panels: list[dict[str, Any]] = [
+                {
+                    "label": f.label,
+                    "x": f.x,
+                    "series": [{"label": s.label, "y": s.y} for s in f.series],
+                }
+                for f in req.facets
+            ]
+            data = render_facets_figure(
+                panels,
+                x_log=req.x_log,
+                y_log=req.y_log,
+                title=req.title,
+                x_label=req.x_label or "",
+                y_label=req.y_label or "",
+                fmt=req.fmt,
+                style=req.style,
+                width_in=req.width_in,
+                height_in=req.height_in,
+                dpi=dpi,
+            )
+        else:
+            from quantized.calc.figure import render_figure
+
+            resolved = _figure_series(req)
+            data = render_figure(
+                resolved.x,
+                resolved.series,
+                title=req.title,
+                x_label=resolved.x_label,
+                y_label=resolved.y_label,
+                x_log=req.x_log,
+                y_log=req.y_log,
+                x_scale=req.x_scale,
+                y_scale=req.y_scale,
+                fmt=req.fmt,
+                style=req.style,
+                series_styles=resolved.styles,
+                error_spans=req.error_spans,
+                width_in=req.width_in,
+                height_in=req.height_in,
+                dpi=dpi,
+                transparent=req.transparent,
+                overrides=req.overrides,
+                x_fmt=_tick_fmt(req.x_fmt),
+                y_fmt=_tick_fmt(req.y_fmt),
+                x_step=req.x_step,
+                y_step=req.y_step,
+                y2_mask=resolved.y2_mask,
+                y2_label=resolved.y2_label,
+                y2_scale=req.y2_scale,
+                y2_fmt=_tick_fmt(req.y2_fmt),
+                y2_step=req.y2_step,
+            )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,

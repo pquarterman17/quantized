@@ -561,6 +561,32 @@ with parent items P1.3 and P1.5.
       reach into. Because of (2), this item's own sentence ("survive
       save/reopen/**export**") is not yet fully true — hence `[~]`, not `[x]`.
 
+      **2026-08-24 update (Claude): the named EXPORT gap in (2) above is now
+      closed** — a faceted Stage window exports as the SAME small-multiples
+      grid, not a silently-flattened single overlaid plot. `FigureSpec`
+      (`lib/api/figures.ts`) gained a `facets` field: the frontend's own
+      RESOLVED per-panel row partition (`lib/figureSpec.ts`'s new
+      `buildFacetSpecs`, built from the exact `lib/facet.facetPayloads`
+      primitive the on-screen grid already uses), not a bare column index —
+      so backend and frontend can never disagree on level ordering/binning.
+      `routes/export_figures.py`'s `FigureRequest` carries the matching
+      `facets: list[FigureFacet] | None` (thin adapter: validates + passes
+      through, computes nothing); `calc.figure_facets.render_facets_figure`
+      — pre-existing infrastructure from the ORIGIN_GAP_PLAN #21 facet-export
+      work, wired up here for the first time to the main `/figure` route —
+      renders the matplotlib subplot grid, one shared x-domain across panels
+      (mirrors `lib/facet.sharedXDomain`) but each panel's own independent
+      y-autoscale (mirrors `useMultiPanelStage.ts`'s facet branch — changed
+      from that function's prior `sharex=True, sharey=True`, which predates
+      any real caller and never matched the screen). The #222-era pin
+      "exports a facet-bound window identically to the same view without a
+      facet binding" (`lib/figureSpec.test.ts`) has been deliberately
+      REPLACED, not merely updated, with the new honest behavior: `facets`
+      present (and resolved into real panels) for a faceted document, absent
+      for a flat one. Item (1) (SPATIAL/BREAK composition rebuild) remains
+      genuinely open — this slice only closes (2); `F4.4` therefore stays
+      `[~]`.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

@@ -85,8 +85,13 @@ def render_facets_figure(
     Each ``panels[i]`` is ``{"label": str, "x": [...], "series": [{"label":
     str, "y": [...]}]}`` — a pre-split slice of data for one categorical
     level (see the frontend's ``lib/facet.facetPayloads``). Panels tile into
-    as-square-as-possible rows/columns and share x/y scales (``sharex`` /
-    ``sharey``) so magnitudes stay comparable across levels; each panel
+    as-square-as-possible rows/columns and share ONE x-domain (``sharex``) so
+    the x axis means the same thing in every panel — the same contract
+    ``lib/facet.sharedXDomain`` + `MultiPanelStage`'s screen render use — but
+    each panel keeps its OWN independent y-autoscale (``sharey=False``): the
+    interactive facet grid (``useMultiPanelStage.ts``) never forces one
+    y-range across panels either, unlike a real axis-break grid, which shares
+    y and lets x vary (``calc.figure_break``'s counterpart). Each panel
     carries its own facet-level title, and unused trailing grid cells (when
     the panel count isn't a perfect rows*cols rectangle) are hidden.
     """
@@ -118,7 +123,7 @@ def render_facets_figure(
 
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, axes_grid = plt.subplots(
-            rows, cols, figsize=figsize, sharex=True, sharey=True, squeeze=False,
+            rows, cols, figsize=figsize, sharex=True, sharey=False, squeeze=False,
         )
         try:
             flat = [ax for row in axes_grid for ax in row]

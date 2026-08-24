@@ -389,14 +389,17 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(spec.filename).toBe("device-stem");
   });
 
-  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: export never breaks on a facet-
-  // bound document -- it just doesn't transport the facet layout, exactly
-  // the same (pre-existing, documented) scope boundary as before this item
-  // (`buildFigureSpecFromDocument`'s own header: "FigureSpec has no
-  // transport fields for mark, facetKey"). This is the "verify the existing
-  // export path against a restored composition" half of F4.4: a restored
-  // facet is no MORE and no LESS exportable than a freshly-built one.
-  it("exports a facet-bound window identically to the same view without a facet binding (documented scope boundary, not a regression)", () => {
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half, closed): this test
+  // used to pin the OLD documented scope boundary -- a facet-bound window
+  // exported byte-identically to the same view without a facet binding,
+  // because FigureSpec had no transport fields for `facetKey` at all (see
+  // `buildFigureSpecFromDocument`'s prior header). That gap is now closed:
+  // a durable facet binding must render as the SAME small-multiples grid
+  // Stage shows on screen, not a silently-dropped, single overlaid plot.
+  // This replaces that pin with the new honest behavior deliberately, not
+  // as an incidental diff -- see `buildFacetSpecs`'s own doc for exactly
+  // what gets resolved onto the wire and why.
+  it("exports a facet-bound window as a resolved facet grid, not identically to the same view without one", () => {
     const withFacet = createFigureDocument({
       id: "faceted-window", name: "Faceted", datasetId: dataset.id, view: richView(), facetKey: 1,
     });
@@ -410,7 +413,33 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
         "device",
         opts,
       );
-    expect(specFor(withFacet)).toEqual(specFor(withoutFacet));
+    const flat = specFor(withoutFacet);
+    const faceted = specFor(withFacet);
+
+    // Absent when there's no facet binding at all (today's byte-identical
+    // behaviour for every non-faceted export is unchanged).
+    expect(flat.facets).toBeUndefined();
+
+    // Present, and resolved into one panel per distinct level of channel 1
+    // ("signal": values 100/200/300 in `data` above, all distinct) -- the
+    // SAME partition `lib/facet.facetPayloads` builds for the on-screen grid.
+    expect(faceted.facets).toHaveLength(3);
+    expect(faceted.facets?.map((f) => f.label)).toEqual(["100", "200", "300"]);
+    expect(faceted.facets?.every((f) => f.series.length === 2)).toBe(true); // yKeys: [1, 2]
+
+    // Every OTHER field is untouched by faceting -- `facets` is additive,
+    // not a replacement for the rest of the wire shape.
+    expect(faceted).toEqual({ ...flat, facets: faceted.facets });
+  });
+
+  it("throws rather than silently exporting a flat plot when the facet column has no finite levels", () => {
+    const allNonFinite: DataStruct = { ...data, values: data.values.map((row) => [NaN, ...row.slice(1)]) };
+    const document = createFigureDocument({
+      id: "degenerate-facet", name: "Degenerate", datasetId: "degenerate", view: richView(), facetKey: 0,
+    });
+    const degenerateDataset: Dataset = { ...dataset, id: "degenerate", data: allNonFinite };
+    expect(() => buildFigureSpecFromDocument(document, degenerateDataset, "degenerate"))
+      .toThrow("facet column 0 has no finite levels to export");
   });
 
   it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {
