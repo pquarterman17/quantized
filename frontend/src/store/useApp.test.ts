@@ -1277,7 +1277,13 @@ describe("useApp importFiles", () => {
     expect(st.folders.map((f) => f.name)).toEqual(["Moke"]);
     const moke = st.folders[0].id;
     expect(st.datasets.every((d) => d.folderId === moke)).toBe(true);
-    expect(st.expandedFolders).toContain(moke);
+    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a multi-book Origin
+    // project import lands COLLAPSED — see importDatasets.ts's comment on
+    // this call site and store/importWorkbooks.test.ts's dedicated
+    // "lands COLLAPSED" coverage. Superseded the pre-UX-R3 "freshly-created
+    // folder auto-reveals" contract for THIS (project-scale) import path
+    // specifically; a single-file import still auto-expands (unchanged).
+    expect(st.expandedFolders).not.toContain(moke);
   });
 
   it("mirrors the Origin Project Explorer folder tree on import (item 4)", async () => {

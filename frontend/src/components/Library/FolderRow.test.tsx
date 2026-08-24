@@ -476,3 +476,14 @@ describe("FolderRow — keyboard-reachable context menu (GUI_INTERACTION #8)", (
     expect(screen.getByText("Properties…")).toBeInTheDocument();
   });
 });
+
+describe("FolderRow — UX-R3 distinct type glyph", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [] });
+  });
+
+  it("carries its own folder icon, distinct from a workbook row's icon", () => {
+    render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    expect(screen.getByTitle("Folder")).toBeInTheDocument();
+  });
+});

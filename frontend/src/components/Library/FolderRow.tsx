@@ -272,6 +272,11 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       >
         {expanded ? "▾" : "▸"}
       </span>
+      {/* UX-R3: a distinct per-kind glyph, matching WorkbookRow's own
+       *  `qzk-workbook-icon` — the tree's items were otherwise "similarly
+       *  weighted" with nothing but the caret and indent telling a folder
+       *  apart from a workbook at a glance. */}
+      <span className="qzk-folder-icon" aria-hidden="true" title="Folder">▦</span>
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"

@@ -254,16 +254,26 @@ function addFromPayload(
     const newIdSet = new Set(newIds);
     const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
     const plan = planOriginImport(stem, projectDatasets, nextFolderId, nextWorkbookId, targetFolderId ?? null);
+    // UX-R3 (ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md): a REALISTIC multi-book
+    // Origin project (this `books.length > 1` branch) can create dozens of
+    // folders and workbooks in one import. Auto-expanding all of them — the
+    // single-dataset `else` branch below still does exactly that for its ONE
+    // new workbook — is precisely the owner-observed complaint ("the left
+    // browser presents too many similarly weighted objects"): every sheet of
+    // every book spills into view at once, with no path to build up context
+    // gradually. So a multi-book project import lands COLLAPSED at both the
+    // Folder and Workbook layers (`plan.expanded`/`plan.workbooks` are
+    // deliberately NOT merged into expandedFolders/expandedWorkbookIds here);
+    // the tree's ordinary disclosure caret reveals the hierarchy
+    // progressively, one click at a time, from the project folder down. This
+    // creates nothing hidden-with-no-path-back — every row is still present
+    // and still individually expandable/searchable — it only changes the
+    // DEFAULT disclosure depth for a project-scale import. A single-file
+    // import (0 or 1 book) keeps the pre-existing "the sheet I just imported
+    // is immediately visible" auto-expand below, unchanged.
     set((s) => ({
       folders: [...s.folders, ...plan.folders],
       workbooks: [...s.workbooks, ...plan.workbooks],
-      expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
-      // A workbook created by this import starts expanded — the workbook-
-      // layer sibling of `plan.expanded` above, and the tree-mode analogue
-      // of the old flat list where a fresh import's rows were immediately
-      // visible. Collapsed-by-default stays the rule for everything a user
-      // didn't just create (L0.5 disclosure semantics untouched).
-      expandedWorkbookIds: [...new Set([...s.expandedWorkbookIds, ...plan.workbooks.map((w) => w.id)])],
       datasets: s.datasets.map((d) =>
         newIdSet.has(d.id)
           ? { ...d, folderId: plan.folderMembership[d.id], workbookId: plan.workbookMembership[d.id] }

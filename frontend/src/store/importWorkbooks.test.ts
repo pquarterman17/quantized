@@ -107,23 +107,38 @@ describe("single-file import creates one workbook (L0.2)", () => {
   });
 });
 
-describe("a workbook created by an import starts expanded (PR C tree disclosure)", () => {
+describe("a workbook created by a SINGLE-FILE import starts expanded (PR C tree disclosure)", () => {
   // The tree-mode analogue of the flat list's "a fresh import's row is
   // immediately visible": with expandedWorkbookIds starting [], a collapsed
   // fresh workbook would hide the just-imported sheet behind its disclosure
   // arrow (the E2E-suite regression this pins). Only workbooks the import
-  // CREATES expand — pre-existing ones keep their user-set state.
+  // CREATES expand — pre-existing ones keep their user-set state. UX-R3
+  // narrows this to ordinary (0/1-book) imports only — see the multi-book
+  // describe block below for the project-scale exception.
   it("single-file import expands the derived workbook", async () => {
     await useApp.getState().importPaths(["/data/scan.dat"]);
     const st = useApp.getState();
     expect(st.workbooks).toHaveLength(1);
     expect(st.expandedWorkbookIds).toContain(st.workbooks[0].id);
   });
+});
 
-  it("Origin multi-book import expands every workbook it created, and only those", async () => {
+describe("UX-R3: a multi-book Origin project import lands COLLAPSED", () => {
+  // ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md's UX-R3: "imported projects reveal
+  // their hierarchy progressively"; acceptance calls for a realistic
+  // multi-book .opju to default to COLLAPSED Folder -> Workbook groups. This
+  // supersedes the pre-UX-R3 contract (auto-expand every created
+  // folder/workbook), which is exactly the reported "too many similarly
+  // weighted objects" complaint at project scale — see importDatasets.ts's
+  // comment on this call site. A workbook/folder the import did NOT create
+  // (a pre-existing one) keeps whatever expand state the user already left
+  // it in, untouched either way.
+  it("expands neither the folders nor the workbooks it created, and leaves pre-existing expand state alone", async () => {
     useApp.setState({
       workbooks: [{ id: "wb-old", name: "Existing" }],
-      expandedWorkbookIds: [], // user had collapsed the pre-existing book
+      folders: [{ id: "f-old", name: "Existing folder", parentId: null, order: 0 }],
+      expandedFolders: ["f-old"], // user had this pre-existing folder open
+      expandedWorkbookIds: ["wb-old"], // and this pre-existing workbook open
     });
     vi.mocked(uploadFile).mockResolvedValue({
       ...raw,
@@ -131,10 +146,15 @@ describe("a workbook created by an import starts expanded (PR C tree disclosure)
     });
     await useApp.getState().importFiles([fakeFile("Two.opj")]);
     const st = useApp.getState();
-    const created = st.workbooks.filter((w) => w.id !== "wb-old");
-    expect(created.length).toBeGreaterThan(0);
-    for (const w of created) expect(st.expandedWorkbookIds).toContain(w.id);
-    expect(st.expandedWorkbookIds).not.toContain("wb-old");
+    const createdWorkbooks = st.workbooks.filter((w) => w.id !== "wb-old");
+    const createdFolders = st.folders.filter((f) => f.id !== "f-old");
+    expect(createdWorkbooks.length).toBeGreaterThan(0);
+    expect(createdFolders.length).toBeGreaterThan(0);
+    for (const w of createdWorkbooks) expect(st.expandedWorkbookIds).not.toContain(w.id);
+    for (const f of createdFolders) expect(st.expandedFolders).not.toContain(f.id);
+    // pre-existing expand state is untouched, not merely "not regressed to empty"
+    expect(st.expandedWorkbookIds).toContain("wb-old");
+    expect(st.expandedFolders).toContain("f-old");
   });
 });
 
