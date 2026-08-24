@@ -16,6 +16,7 @@ import type { MarkerShape } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
+import { createAnnotationFromDialog } from "./annotationShapeActions";
 import type { PlotStageActions } from "./usePlotStageActions";
 
 // A right-click further than this (px) from every curve shows axis/plot entries
@@ -37,7 +38,10 @@ interface Props {
 }
 
 /** Hit-test the cursor against the live plot: the nearest visible curve (within
- *  HIT_PX) and which axis zone the cursor sits in. */
+ *  HIT_PX), which axis zone the cursor sits in, and the cursor's own DATA
+ *  coordinates (computed here, ONCE, alongside the same rect/posToVal this
+ *  function already needs — see `dataX`/`dataY`'s doc comment at the call
+ *  site for why nothing may redo this conversion later). */
 function hitTest(
   u: uPlot | null,
   x: number,
@@ -45,8 +49,8 @@ function hitTest(
   plotted: number[],
   hidden: boolean[] | undefined,
   hasY2: boolean,
-): { series: number | null; idx: number | null; zone: AxisZone } {
-  if (!u || !u.over) return { series: null, idx: null, zone: "outside" };
+): { series: number | null; idx: number | null; zone: AxisZone; dataX: number | null; dataY: number | null } {
+  if (!u || !u.over) return { series: null, idx: null, zone: "outside", dataX: null, dataY: null };
   const rect = u.over.getBoundingClientRect();
   const zone = axisZoneAt(
     x,
@@ -56,9 +60,11 @@ function hitTest(
   );
   const localX = x - rect.left;
   const localY = y - rect.top;
+  const dataX = u.posToVal(localX, "x");
+  const dataY = u.posToVal(localY, "y");
   const xData = (u.data[0] ?? []) as (number | null)[];
-  const idx = nearestIndex(xData, u.posToVal(localX, "x"));
-  if (idx == null) return { series: null, idx: null, zone };
+  const idx = nearestIndex(xData, dataX);
+  if (idx == null) return { series: null, idx: null, zone, dataX, dataY };
   // Pixel-y of each visible display-series at the probe index (through its own
   // scale, so primary + secondary series compare fairly). Hidden → null.
   const seriesPy: (number | null)[] = plotted.map((_, i) => {
@@ -69,7 +75,7 @@ function hitTest(
     const scale = u.series[i + 1]?.scale ?? "y";
     return u.valToPos(yv, scale, false);
   });
-  return { series: pickNearestSeries(localY, seriesPy, HIT_PX), idx, zone };
+  return { series: pickNearestSeries(localY, seriesPy, HIT_PX), idx, zone, dataX, dataY };
 }
 
 export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidden, actions, onClose }: Props) {
@@ -79,7 +85,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     const st = useApp.getState();
     const u = plotRef.current;
     const hasY2 = (st.y2Keys?.length ?? 0) > 0;
-    const { series: nearIdx, zone } = hitTest(u, x, y, plotted, hidden, hasY2);
+    const { series: nearIdx, zone, dataX, dataY } = hitTest(u, x, y, plotted, hidden, hasY2);
 
     // Resolve the hit-tested series into the menu-spec shape.
     let series: MenuSeries | null = null;
@@ -150,6 +156,25 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     };
     const y2ScaleEff = st.y2Scale ?? st.yScale;
 
+    // UX-R6 manual annotation: `dataX`/`dataY` were already converted from the
+    // right-click's CLIENT position ABOVE, inside `hitTest`, at menu-open
+    // time — closed over here, NOT recomputed at menu-ITEM-click time. The
+    // menu is deliberately non-reactive (this whole `items` block is a
+    // store snapshot captured at open time), so redoing the pixel->data
+    // conversion later would let a live-updating/re-autoscaling plot
+    // (store/liveWindowDocument.ts) re-range while the menu sits open and
+    // map the SAME pixel to a DIFFERENT data point (B2) — exactly the drift
+    // this snapshot approach exists to prevent. Dialog-first, create-on-
+    // non-blank-resolve, tool-flip-on-successful-create-only (B1's ruling:
+    // a right-click + cancelled dialog must not change the active tool,
+    // unlike useShapeDraw's draw-commit, where the flip is part of the
+    // gesture itself) — all via the shared helper (B4) so this sequence
+    // lives in exactly one place alongside useShapeDraw's textbox path.
+    const addTextHere = () => {
+      if (dataX == null || dataY == null) return;
+      void createAnnotationFromDialog({ x: dataX, y: dataY, title: "Add text", flipToPointer: true });
+    };
+
     return buildPlotMenu({
       series,
       zone,
@@ -193,6 +218,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       savePng: actions.savePng,
       copyData: actions.copyData,
       setTool: st.setPlotTool,
+      addTextHere,
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor
     // moves. The store snapshot is captured at open time — correct because a

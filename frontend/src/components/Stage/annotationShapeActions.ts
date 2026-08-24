@@ -17,6 +17,7 @@
 import { clampAnnotationSize, MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from "../../lib/uplotOverlays";
 import type { ShapeAnchorConversion } from "../../lib/uplotShapes";
 import type { ContextAction } from "../../lib/contextActions";
+import type { Annotation } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { askAnnotationText } from "../../store/annotationTextDialog";
 
@@ -57,6 +58,55 @@ function bumpAnnotationSize(id: string, delta: number): void {
   useApp
     .getState()
     .updateAnnotation(id, { size: clampAnnotationSize((a?.size ?? DEFAULT_ANNOTATION_SIZE) + delta) });
+}
+
+export interface CreateAnnotationFromDialogOptions {
+  /** Data-coordinate placement (already converted by the caller — see
+   *  PlotContextMenu's hitTest / useShapeDraw's onDrawCommit args). */
+  x: number;
+  y: number;
+  /** Dialog header (e.g. "Add text", "Text box"). */
+  title: string;
+  /** Seed text for the dialog. Defaults to "" — every current call site
+   *  creates fresh, unlike the "Edit text…" entry above. */
+  initial?: string;
+  /** Optional frame patch applied to the new annotation right after create
+   *  (the "Text box" tool's default backing rect — PlotContextMenu's plain
+   *  "Add text here…" entry passes none, so the label rides with no
+   *  frame). */
+  frame?: Annotation["frame"];
+  /** Flip the active plot tool to "pointer" once the annotation is created,
+   *  so it is immediately selected + directly manipulable (MAIN #27).
+   *  Applied ONLY on a successful, non-blank create — never on cancel, and
+   *  never on a blank "Done" (the B3 empty-text guard below runs first).
+   *  Omit when the caller already flips the tool as part of the gesture
+   *  itself — useShapeDraw's draw-commit flips to pointer synchronously
+   *  BEFORE the dialog even opens, so it must NOT also flip here. */
+  flipToPointer?: boolean;
+}
+
+/** Open the shared annotation-text dialog, then create the annotation from
+ *  its DATA position — the ONE place PlotContextMenu's "Add text here…" and
+ *  useShapeDraw's "Text box" commit both create a manually-placed
+ *  annotation, so the dialog -> guard -> create -> select sequence (and its
+ *  bug fixes: B1's tool-flip timing, B3's blank-text guard) lives once.
+ *
+ *  Resolves the new annotation's id, or null when the dialog was cancelled
+ *  or committed blank (matching AnnotationsCard.tsx's `text.trim()` guard —
+ *  a blank "Done" creates nothing, same as Cancel: no annotation, no undo
+ *  entry, no tool flip). */
+export function createAnnotationFromDialog(opts: CreateAnnotationFromDialogOptions): Promise<string | null> {
+  const { x, y, title, initial = "", frame, flipToPointer } = opts;
+  return askAnnotationText(title, initial).then((v) => {
+    const text = v?.trim() ?? "";
+    if (!text) return null;
+    const s = useApp.getState();
+    const id = s.addAnnotation(x, y, text);
+    if (frame) s.updateAnnotation(id, { frame });
+    s.setSelectedAnnotationId(id);
+    if (flipToPointer) s.setPlotTool("pointer");
+    return id;
+  });
 }
 
 export const annotationEditActions: ContextAction<AnnotationActionTarget>[] = [

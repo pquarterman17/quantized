@@ -16,7 +16,7 @@ import { useEffect, useMemo } from "react";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { askAnnotationText } from "../../store/annotationTextDialog";
+import { createAnnotationFromDialog } from "./annotationShapeActions";
 
 export type DrawShapeKind = Shape["kind"] | "textbox";
 
@@ -45,10 +45,7 @@ export function useShapeDraw(): ShapeDrawResult {
   const drawShapeKind = useApp((s) => s.drawShapeKind);
   const setDrawShapeKind = useApp((s) => s.setDrawShapeKind);
   const addShape = useApp((s) => s.addShape);
-  const addAnnotation = useApp((s) => s.addAnnotation);
-  const updateAnnotation = useApp((s) => s.updateAnnotation);
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
-  const setSelectedAnnotationId = useApp((s) => s.setSelectedAnnotationId);
   const setPlotTool = useApp((s) => s.setPlotTool);
 
   // Status-line hint while a mode is active; Escape cancels it (mirrors
@@ -77,34 +74,28 @@ export function useShapeDraw(): ShapeDrawResult {
         setPlotTool("pointer");
         if (kind === "textbox") {
           // Bug 4 fix: create the annotation ONLY after the dialog resolves
-          // non-null (matches the guarded pattern AnnotationsCard.tsx already
-          // uses — gate addAnnotation on non-empty text). The previous
-          // synchronous addAnnotation(x1,y1,"") committed a REAL annotation
-          // before the dialog even opened, so cancelling left an orphaned
-          // blank dot behind (drawn unconditionally, listed in
-          // AnnotationsCard, and persisted to .dwk).
-          void askAnnotationText("Text box", "").then((v) => {
-            if (v == null) return;
-            const id = addAnnotation(x1, y1, v);
-            updateAnnotation(id, { frame: DEFAULT_TEXTBOX_FRAME });
-            setSelectedAnnotationId(id);
-          });
+          // non-BLANK (B3: matches the guarded pattern AnnotationsCard.tsx
+          // already uses — gate addAnnotation on non-empty TRIMMED text, not
+          // just non-null, so an empty "Done" is treated the same as
+          // Cancel). The previous synchronous addAnnotation(x1,y1,"")
+          // committed a REAL annotation before the dialog even opened, so
+          // cancelling left an orphaned blank dot behind (drawn
+          // unconditionally, listed in AnnotationsCard, and persisted to
+          // .dwk). Shared with PlotContextMenu's "Add text here…" (B4) via
+          // createAnnotationFromDialog — `flipToPointer` is omitted here
+          // because the tool was ALREADY flipped to "pointer" above,
+          // synchronously, as part of the draw-commit gesture itself (B1's
+          // ruling: unlike a right-click's cancellable menu pick, committing
+          // a drag-drawn text box IS the commit — the tool flip isn't
+          // conditioned on the dialog outcome).
+          void createAnnotationFromDialog({ x: x1, y: y1, title: "Text box", frame: DEFAULT_TEXTBOX_FRAME });
           return;
         }
         const id = addShape({ kind, x1, y1, x2, y2 });
         setSelectedShapeId(id);
       },
     };
-  }, [
-    drawShapeKind,
-    addShape,
-    addAnnotation,
-    updateAnnotation,
-    setSelectedShapeId,
-    setSelectedAnnotationId,
-    setPlotTool,
-    setDrawShapeKind,
-  ]);
+  }, [drawShapeKind, addShape, setSelectedShapeId, setPlotTool, setDrawShapeKind]);
 
   return { shapeDraw };
 }

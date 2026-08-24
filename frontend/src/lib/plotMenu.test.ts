@@ -67,6 +67,7 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     savePng: vi.fn(),
     copyData: vi.fn(),
     setTool: vi.fn(),
+    addTextHere: vi.fn(),
     ...over,
   };
 }
@@ -130,6 +131,30 @@ describe("buildPlotMenu — sections by cursor context", () => {
   it("plot zone with y2 offers the Y2 axis submenu", () => {
     const items = buildPlotMenu(makeCtx({ hasY2: true }));
     expect(find(items, "Y2 axis")).toBeTruthy();
+  });
+});
+
+// UX-R6 manual annotation: an obvious context-menu entry point, offered only
+// where a data-anchored placement makes sense (inside the plot body).
+describe("buildPlotMenu — 'Add text here…' (UX-R6 manual annotation entry)", () => {
+  it("offers the entry in the plot zone and dispatches ctx.addTextHere", () => {
+    const ctx = makeCtx({ zone: "plot" });
+    const items = buildPlotMenu(ctx);
+    const item = find(items, "Add text here…")!;
+    expect(item).toBeTruthy();
+    if ("run" in item) item.run();
+    expect(ctx.addTextHere).toHaveBeenCalledTimes(1);
+  });
+
+  it("is absent from the X/Y/Y2 axis gutter zones (no sane data placement there)", () => {
+    expect(find(buildPlotMenu(makeCtx({ zone: "x" })), "Add text here…")).toBeUndefined();
+    expect(find(buildPlotMenu(makeCtx({ zone: "y" })), "Add text here…")).toBeUndefined();
+    expect(find(buildPlotMenu(makeCtx({ zone: "y2", hasY2: true })), "Add text here…")).toBeUndefined();
+  });
+
+  it("still appears when a series is also hit-tested (comes after the series block)", () => {
+    const items = buildPlotMenu(makeCtx({ series: series() }));
+    expect(find(items, "Add text here…")).toBeTruthy();
   });
 });
 
