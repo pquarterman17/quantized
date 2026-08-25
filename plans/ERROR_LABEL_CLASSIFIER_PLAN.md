@@ -72,6 +72,11 @@ they never consume each other's input:
   candidate rather than a mutation of the confirmed one
 - the bare-`d` delta convention (`provisional`)
 - explicit `x`/`y` axis prefixes (`confirmed`)
+- a single-letter quantity prefix from an explicit allowlist,
+  `CONFIRMED_QUANTITY_PREFIXES = ["i"]`, glued to a token (`confirmed`, base
+  kept). See "the `Ierr` special case" below — this is deliberately a domain
+  special case, not a general rule, and it is a separate generation rule from
+  the `x`/`y` axis prefixes, which mean something structural.
 
 Generation constraints that exist to keep obviously-wrong candidates out of
 the pool entirely:
@@ -163,9 +168,50 @@ while breaking a class nobody had written a case for.
    no caller changes.
 2. Port the current suite plus all seven rounds' probes as the starting
    corpus — they all pass or the port is wrong.
-3. Delete the `ierr` hard-code: `Ierr` beside `I` passes on evidence, and
-   `["2theta","Intensity","Ierr"]` binds positionally as it does today.
+3. Delete the old atomic `ierr` token; replace it with the
+   `CONFIRMED_QUANTITY_PREFIXES` generation rule above. `Ierr` beside a literal
+   `I` passes on evidence; `["2theta","Intensity","Ierr"]` reaches positional
+   pairing via SELECT step 2, because the prefix rule gives it a confirmed
+   candidate with base `i`.
 4. Re-run the seven rounds' probes as a single acceptance sweep.
+
+### The `Ierr` special case
+
+There is **no label-intrinsic signal** separating `Ierr` from `Kerr`: both are
+a single segment, single-letter base, glued `err`. Any rule that binds one and
+not the other is a domain special case, and pretending otherwise is how this
+file accumulated seven rounds of patches.
+
+`Ierr` must keep binding: `origin/main` binds it today through the plain
+`endsWith("err")` match, so dropping it is a silent loss of error bars on XRD
+data — the worst failure mode named below. The allowlist rule is a *smaller*
+special case than the old `ierr` token (it keeps the base, so pairing still
+runs through the ordinary mechanism), but it is still one. Requirements:
+
+- a named module-level constant, never an inline literal;
+- a comment naming `k`/`Kerr` as the deliberate exclusion and stating that no
+  label-intrinsic rule distinguishes them;
+- a single test asserting **both halves together** — `Ierr` beside `Intensity`
+  binds, `Kerr` beside `Field`/`Phase` does not — so the pair cannot drift.
+
+Rejected alternative: extending SELECT's evidence rule to prefix-match a
+single-letter base against sibling labels (so `i` finds `Intensity`). It binds
+`Terr` to whichever of `Time`/`Temp` comes first — a silent wrong binding,
+which is worse than no binding.
+
+### SELECT, stated precisely
+
+Step 1 scans **every** candidate in ranked order looking for sibling evidence.
+It is not "check the top-ranked candidate, then fall back". `MStdErr` beside
+`M` ranks `confirmed(err, "mstd")` first, finds no `Mstd` sibling, and must
+continue to `composed-provisional(std, "m")`, which has evidence.
+
+The run-of-segments rule generates a candidate for **every** matching run
+length, not just the longest. Ranking, not generation, picks between them —
+cutting options off early is the failure mode being removed.
+
+Ranking's final tiebreak is lexical on `(base, token, side)`; `base` alone is
+not total, since two candidates can share a base with different tokens.
 
 ## Known accepted behaviours
 
