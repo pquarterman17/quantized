@@ -48,75 +48,67 @@ play, which masked this.
 Given that, grid placement uses SubFigure ONLY when ``resize_mode ==
 "constrained"``; ``"tight"``/``"none"`` use a DEFERRED variant of the same
 inset-``GridSpec`` fallback free placement uses (``begin_grid_cell_
-fallback``/``finish_grid_cell_fallback`` below) -- a throwaway placeholder
-``Axes`` stands in at the cell's ``SubplotSpec`` during the page's normal
-panel loop (so its EVENTUAL, real ``get_position()`` reflects whatever
-``wspace``/margins an ORDINARY panel in that same slot would get -- exactly
-the geometry an ordinary sibling panel gets, since it comes from the SAME
-``GridSpec.get_grid_positions()`` call), and once every OTHER page panel is
-also drawn, one ``fig.canvas.draw()`` settles it, its position is read off,
-and it's removed. The "once every OTHER panel is also drawn" ordering
-requirement is NOT paranoia -- probed empirically: for ``"none"`` an early
-read (before later panels are added) already matches the final one
-(identical bounds), but for ``"tight"`` it does NOT -- ``tight_layout``'s
-whitespace-trimming pass keeps refining the throwaway's position as MORE
-axes (with real tick labels) are added after it, so reading early under
-``"tight"`` would freeze a stale, wrong rect. ``"tight"``'s active layout
-engine is then explicitly disabled (``fig.set_layout_engine(None)``) once
-the deferred rect is captured, so the LATER final ``savefig`` doesn't
-re-run ``tight_layout`` against a now-different axes set (the throwaway
-gone, the facet's real sub-grid present but built from a plain, unmanaged
-``GridSpec`` that ``tight_layout`` has no business touching) and silently
-perturb everything again.
+fallback``/``finish_grid_cell_fallback`` below) -- a throwaway ``Axes``
+stands in at the cell's ``SubplotSpec`` during the page's normal panel
+loop, and once every OTHER page panel is also drawn, one
+``fig.canvas.draw()`` settles its position, which is read off and the
+throwaway removed; the real facet sub-grid is then drawn INSET from that
+settled rect (the same core the free-placement fallback below uses). The
+"once every OTHER panel is also drawn" ordering requirement is NOT
+paranoia -- probed empirically: for ``"none"`` an early read (before later
+panels are added) already matches the final one (identical bounds), but
+for ``"tight"`` it does NOT -- ``tight_layout``'s whitespace-trimming pass
+keeps refining the throwaway's position as MORE axes are added after it,
+so reading early under ``"tight"`` would freeze a stale, wrong rect.
+``"tight"``'s active layout engine is then explicitly disabled
+(``fig.set_layout_engine(None)``) once the deferred rect is captured, so
+the LATER final ``savefig`` doesn't re-run ``tight_layout`` against a
+now-different axes set (the throwaway gone, the facet's real sub-grid
+present but built from a plain, unmanaged ``GridSpec`` that
+``tight_layout`` has no business touching) and silently perturb
+everything again.
 
-**Fix round 4 (2026-08-25): the "tight" gap is CLOSED (measured), not just
-bounded -- the throwaway is no longer EMPTY.** Round 3's empty throwaway
-predicted a footprint unrelated to the real content (a CONSTANT ``~0.0144``
-x1 residual regardless of facet content, probed across 1/2/4/6/9 facets). A
-literal two-pass (embed the real multi-Axes sub-grid, its OWN unmanaged
-``GridSpec``, before the settle draw) was tried and REJECTED: ``matplotlib.
-_tight_layout.get_tight_layout_figure`` groups every gridspec-backed Axes
-by its OWN gridspec's ``(rows, cols)`` and requires each to divide the
-page-wide max evenly (a ``divmod`` check) -- a facet sub-grid's shape
-routinely fails that against a differently-shaped page grid (probed: 6
-facets = 2x3 inside a 1x2 page grid), so the call returns ``{}`` -- NO
-adjustment for the ENTIRE page, silently un-fixing every other panel too.
-Fixed instead: the throwaway stays a SINGLE proxy Axes on the page's own
-``gs`` (the ``divmod`` check trivially passes) but is no longer empty
-(``_populate_proxy_content``).
+OWNERSHIP RULE -- the throwaway carries NO facet content (no title,
+tick labels, or data) at all. Verified against the ``"constrained"``/
+SubFigure oracle: a facet cell's own internal decorations never affect its
+outer cell size there (probed: SubFigure's ``bbox_relative`` is identical
+with a title vs. without, and for short vs. very long tick labels; a plain
+DECORATION-FREE ``Axes.get_position()`` at the SAME ``cell_spec`` coincides
+EXACTLY, bit-for-bit, with the SubFigure's own ``bbox_relative``). So the
+throwaway is literally ``_frame_axes(fig, cell_spec=cell_spec)`` -- the
+SAME decoration-free axes every OTHER placement path already uses for its
+page-letter anchor -- and it does NOT reflect what an ordinary, content-
+bearing panel in that slot would get (a real tick-labelled panel's own
+position differs -- e.g. under ``"tight"`` a decoration-free throwaway's
+``x0`` is ``~0.017`` where a default-ticked ``add_subplot()`` gives
+``~0.052``); ``_draw_inset_cell``'s fixed internal fractions
+(``_FREE_MARGIN_*``/``_FREE_TITLE_BAND`` below) are the SOLE reservation
+for title/tick-label space, on every placement path alike. A literal
+two-pass that embeds the real multi-Axes sub-grid (its own, separate,
+unmanaged ``GridSpec``) before the settle draw does NOT work as an
+alternative: ``matplotlib._tight_layout.get_tight_layout_figure`` groups
+every gridspec-backed Axes by its OWN gridspec's ``(rows, cols)`` and
+requires each to divide the page-wide max evenly (a ``divmod`` check) -- a
+facet sub-grid's shape routinely fails that against a differently-shaped
+page grid (e.g. 6 facets = 2x3 inside a 1x2 page grid), and the call then
+returns ``{}`` -- NO adjustment for the ENTIRE page, silently breaking
+every other panel's position too.
 
-**Fix round 5 (2026-08-25, crash fix): round 4's FIRST cut plotted raw
-concatenated x/y arrays (``all_x`` once/LEVEL, ``all_y`` once/SERIES/level)
--- with >1 series/level those lengths diverge and ``Axes.plot`` raised
-``ValueError`` (multi-series facets are ORDINARY, not an edge case).** A
-footprint depends on axis RANGE/tick FORMAT, never line count -- so
-``_facet_data_range`` returns just ``(xmin, xmax, ymin, ymax)`` (non-finite
-dropped) and the proxy plots a 2-point segment instead (degenerate cases:
-the two functions' own docstrings). MEASURED with the range-segment proxy,
-across the round-4 matrix PLUS multi-series/ragged/non-finite cases: still
-MACHINE-PRECISION (bit-identical) -- the crash fix did not reopen the gap.
-Numbers: ``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log; coverage:
-``test_facet_panel_multi_series_per_level_renders_and_matches`` in
-``tests/test_calc_figure_page.py``.
-
-**Fix round 6 (2026-08-25): rounds 4/5's whole content-modeling proxy
-(``_facet_data_range``/``_populate_proxy_content``) is GONE -- their
-"machine-precision match" claim measured the proxy's own plotted range
-against itself (true by construction, proving nothing about REALITY), and
-that same content-modeling caused a REAL geometry defect a construction-
-level check couldn't see: a title cost the sub-grid 23-27% of its height
-(measured) instead of the analytic 16%, because tight_layout reserved
-title space OUTSIDE the settled cell for the proxy's OWN ``set_title``
-call, while ``_draw_inset_cell`` ALSO reserves title space INSIDE that
-same cell -- double-reserved. (Their content-modeling also had its own
-crash: the wire contract allows null gaps -- facet ``x``/series ``y`` are
-``list[float | None]`` -- and a per-element ``float(v)`` in
-``_facet_data_range`` raised ``TypeError`` on ``None``; moot now, since
-that function no longer exists.) See ``begin_grid_cell_fallback``'s own
-docstring for the OWNERSHIP RULE that replaced all of it (a decoration-
-free throwaway, content-independent by construction) and
-``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log for the full
-before/after measurements.
+MEASURED ACCURACY: the settled ``"tight"``/``"none"`` cell rect is
+compared against the REAL ``"constrained"``/SubFigure rendering of the
+SAME facet payload (the honest oracle -- no proxy involved at all) across
+a case matrix spanning facet count, titles, grid shapes, gaps, and cell
+position. Because the throwaway is content-independent, this deviation
+does NOT vary with facet content -- only with grid shape/gaps -- and is
+matplotlib's own inherent ``tight_layout``/rc-default-vs-``constrained``-
+layout baseline difference (confirmed: an ORDINARY, also decoration-free,
+panel in the same slot shows the SAME-sized deviation from the oracle, not
+something a facet-specific fix could close further). Measured worst case:
+``~0.0667`` for ``"tight"``, ``~0.1204`` for ``"none"`` (both a fraction of
+the page) -- see ``tests/test_calc_figure_page.py``'s
+``_TIGHT_ORACLE_TOL``/``_NONE_ORACLE_TOL`` and
+``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log for the round-by-round
+history that arrived at this design.
 
 Free (``page_rect``) placement is a DIFFERENT story from grid placement,
 and SubFigure BREAKS there outright (not just under some engines): probed
@@ -414,35 +406,24 @@ def draw_facet_panel_cell(
 
 
 def begin_grid_cell_fallback(fig: Any, cell_spec: Any) -> Any:
-    """Grid placement under ``"tight"``/``"none"`` resize_mode (W1, fix
-    round 3): a throwaway placeholder ``Axes`` at ``cell_spec``, added so
-    its EVENTUAL ``get_position()`` (read by ``finish_grid_cell_fallback``,
-    once every other page panel is also drawn) reflects whatever spacing
-    an ORDINARY panel in this same slot would get -- it comes from the
-    exact same ``GridSpec.get_grid_positions()`` call an ordinary
-    ``add_subplot`` position does, honoring ``wspace``/``hspace``/margins
-    that ``SubFigure``'s own position solve ignores outside constrained
-    layout (see module doc). The caller (``calc.figure_page.
-    _build_page_figure``) must keep drawing every OTHER page panel, then
-    force ONE draw pass (``fig.canvas.draw()``) before calling
-    ``finish_grid_cell_fallback`` -- reading the position any earlier can
-    be stale under ``"tight"`` (empirically confirmed: an early read does
-    NOT match the final one there, unlike ``"none"``, where it already
-    does -- see module doc).
-
-    **Fix round 6 (2026-08-25): decoration-free, per the module doc's
-    OWNERSHIP RULE -- ``_frame_axes`` (no ticks/spines/title/data), not a
-    content-modeling proxy.** Rounds 4/5 plotted the facet's own data/
-    title onto the throwaway so ``"tight"`` would see a "realistic"
-    footprint -- but that made the OUTER cell shrink for a title tight_
-    layout thought it needed AND ``_draw_inset_cell`` also reserves its own
-    internal title band for -- double-reserved, so real content lost the
-    difference twice over. Verified against the ``"constrained"``/
-    SubFigure oracle (which never lets a facet's own internal content
-    affect its outer cell size at all -- see module doc): the correct
-    external footprint for this cell is content-INDEPENDENT, so the
-    throwaway carries none, and ``_draw_inset_cell``'s fixed internal
-    fractions are the SOLE reservation for title/tick-label space."""
+    """Grid placement under ``"tight"``/``"none"`` resize_mode: a
+    decoration-free throwaway ``Axes`` at ``cell_spec`` (``_frame_axes``,
+    no ticks/spines/title/data -- see the module doc's OWNERSHIP RULE for
+    why content-free is correct here), added so its EVENTUAL
+    ``get_position()`` (read by ``finish_grid_cell_fallback``, once every
+    other page panel is also drawn) reflects the geometry ``GridSpec.
+    get_grid_positions()`` assigns this cell -- honoring ``wspace``/
+    ``hspace``/margins that ``SubFigure``'s own position solve ignores
+    outside constrained layout, but NOT reflecting the tick-label/title
+    footprint an ordinary, content-bearing panel in that slot would need
+    (that footprint is drawn INSET from the settled rect instead, by
+    ``finish_grid_cell_fallback`` -> ``_draw_inset_cell``, never by this
+    throwaway). The caller (``calc.figure_page._build_page_figure``) must
+    keep drawing every OTHER page panel, then force ONE draw pass
+    (``fig.canvas.draw()``) before calling ``finish_grid_cell_fallback`` --
+    reading the position any earlier can be stale under ``"tight"``
+    (empirically confirmed: an early read does NOT match the final one
+    there, unlike ``"none"``, where it already does -- see module doc)."""
     return _frame_axes(fig, cell_spec=cell_spec)
 
 

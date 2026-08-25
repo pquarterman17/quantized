@@ -1090,17 +1090,19 @@ with parent items P1.3 and P1.5.
       (24 cases: 1/2/4/6/9 facets × with/without title × 1x1/1x2/2x2/3x3
       grids × zero/moderate gaps × corner/center cell positions) asserts
       `"tight"`/`"none"` land within a stated tolerance of it. MEASURED:
-      the worst-case deviation is content-INDEPENDENT (~`0.0625` for
-      `"tight"`, ~`0.2161` for `"none"`, both a fraction of the page) and
+      the worst-case deviation is content-INDEPENDENT (~`0.0667` for
+      `"tight"`, ~`0.1204` for `"none"`, both a fraction of the page) and
       driven entirely by grid shape/gaps — cross-checked against an
       ORDINARY (also decoration-free) panel in the same slot, which shows
       the SAME-sized deviation from the oracle, confirming this is
       matplotlib's own inherent `tight_layout`/rc-default-vs-
       `constrained`-layout baseline difference, not a facet-specific
-      defect. Tolerances pinned with headroom: `_TIGHT_ORACLE_TOL=0.10`,
-      `_NONE_ORACLE_TOL=0.25`. **This is the honest, no-longer-bit-
-      identical number — the round-4/5 `<1e-9` claim is retired**, since
-      it measured the proxy against itself, not reality.
+      defect. Tolerances pinned at 1.5x headroom over the measured worst
+      case: `_TIGHT_ORACLE_TOL≈0.100`, `_NONE_ORACLE_TOL≈0.181`. **This is
+      the honest, no-longer-bit-identical number — the round-4/5 `<1e-9`
+      claim is retired**, since it measured the proxy against itself, not
+      reality. (Round 7 found this broad tolerance is too loose to be a
+      regression guard by itself — see below.)
 
       Also added: `test_facet_panel_grid_fallback_frame_is_content_
       independent` (the REAL F2 regression guard, confirmed red against
@@ -1113,6 +1115,56 @@ with parent items P1.3 and P1.5.
       the round-5 double-counting code). `test_facet_panel_null_gap_
       values_render_and_match` covers F1 with nulls in both x and y, under
       both `"tight"` and `"none"`.
+
+      **2026-08-25 fix round 7 (Claude): the round-6 fix was right but
+      UNTESTED — a review pass found the new oracle test couldn't
+      distinguish the fix from what it replaced.**
+
+      H1 (test gap): reverting `begin_grid_cell_fallback` to a plain
+      `return fig.add_subplot(cell_spec)` (round 6's OWN predecessor) and
+      running `pytest -k facet` gave **135 passed, 0 failed** — every case
+      in the round-6 oracle matrix passed unchanged against BOTH
+      implementations, because `_TIGHT_ORACLE_TOL`/`_NONE_ORACLE_TOL`
+      (0.10/0.25) were 4-10x wider than the ~0.024-0.047 deviation the
+      reverted code actually produces. Added
+      `test_facet_panel_grid_fallback_tight_frame_x0_discriminates_
+      decoration_free`: a single, tight assertion on the ONE coordinate
+      where the two designs differ most (a 9x6in 1x2 page under `"tight"`
+      — frame x0 = `0.0167` fixed vs. `0.0519` reverted, against a
+      `"constrained"`-oracle x0 of `0.0046`; `_X0_DISCRIMINATOR_MARGIN
+      =0.02` sits strictly between the two |diff| values, `0.0120` and
+      `0.0473`). Confirmed RED by actually performing the revert and
+      re-running the full `-k facet` suite: **1 failed, 135 passed** — the
+      new test caught it, nothing else did (both numbers match the
+      pre-fix report exactly). Confirmed GREEN again after restoring the
+      fix (136 passed).
+
+      H2 (stated numbers were wrong): re-measuring the SAME round-6 case
+      matrix gives worst-case oracle deviations of **0.0667 (`"tight"`,
+      from the `n=4, title, col_gap=0.3, 1x2` case)** and **0.1204
+      (`"none"`, from the `n=1, no title, no gap, 1x2` case)** — not the
+      `~0.0625`/`~0.2161` the round-6 report, test comment, and this log
+      previously stated (all three corrected above). Tolerances are now
+      derived explicitly (`_ORACLE_HEADROOM = 1.5`; `_TIGHT_ORACLE_TOL =
+      _TIGHT_ORACLE_WORST_MEASURED * _ORACLE_HEADROOM ≈ 0.100`;
+      `_NONE_ORACLE_TOL ≈ 0.181`) instead of hand-picked round numbers.
+
+      H3 (stale docs): three test comments still named `_facet_data_range`
+      (deleted in round 6) — corrected to attribute null/non-finite
+      handling to `figure_facets.draw_facet_grid`'s own conversion, which
+      the real content always went through and this branch never touched.
+      `begin_grid_cell_fallback`'s own docstring still claimed the
+      throwaway "reflects whatever spacing an ORDINARY panel in this same
+      slot would get" — false under `"tight"` since round 6 (`0.0167` vs.
+      an ordinary panel's `0.0519`) and contradicted by its own round-6
+      paragraph; corrected. The module docstring's rounds 4/5/6 narrative
+      (~49 lines, including two paragraphs documenting functions round 6
+      deleted and a "machine-precision" claim a later paragraph retracted)
+      is rewritten as present-tense documentation of the code as it now
+      stands (what the fallback does, the OWNERSHIP RULE and why
+      decoration-free is correct, the measured oracle bounds) — the
+      round-by-round story stays here, in this log, not in the module
+      header. Net effect: `figure_page_facets.py` 464 → 445 lines.
 
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
