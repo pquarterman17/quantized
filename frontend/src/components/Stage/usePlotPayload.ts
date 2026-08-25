@@ -27,6 +27,7 @@ import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
   defaultDecimateWidthHint,
+  errorBindingsApplyToPlotted,
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, groupSplitChannelMap } from "../../lib/plotGroupSplit";
@@ -318,13 +319,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       decimationRequestEligible({
         defaultTrace: p.defaultTrace,
         hasErrorBars: errorBars.size > 0,
-        // G4 review round (P1 fix): a rich document is the errorSpans SOURCE
-        // whenever `useDocumentErrors` is true (see that flag's own doc, and
-        // the `errorSpans` useMemo below) -- `useDocumentErrors` already
-        // implies `p.documentErrors` is non-empty, so this mirrors the
-        // dataset branch's own "any roles at all disqualify decimation"
-        // rule rather than trying to pre-filter to currently-plotted columns.
-        hasErrorSpans: useDocumentErrors || !!active.errorRoles?.length,
+        // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
+        hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? p.documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
         hasColorByColumns: colorByColumns.size > 0,
         hasGroupSplit: groupCol !== null,
       });
@@ -383,6 +379,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.selection,
     p.excludedDisplay,
     useDocumentErrors,
+    p.documentErrors,
+    plotted,
     groupCol,
     groupCodes,
   ]);

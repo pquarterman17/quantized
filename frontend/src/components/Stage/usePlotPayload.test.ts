@@ -397,3 +397,52 @@ describe("usePlotPayload — G4 review round: decimation gate honors document er
     expect(decimateWidth).not.toBeNull();
   });
 });
+
+
+// M1 (provenance-disclosure round 4, L2 regression, RED-FIRST): the
+// decimation gate used to key `hasErrorSpans` off mere `errorRoles`
+// PRESENCE (`!!active.errorRoles?.length`) rather than whether any binding
+// actually applies to the PLOTTED channels. FU-1 (this same lane) started
+// stamping real `errorRoles` from Origin designations, so any Origin book
+// with an error column anywhere -- even one never plotted here -- lost
+// server-side decimation entirely. Fails before the fix (decimateWidth was
+// null even though channel 2, the error's target, is never plotted).
+function bigDatasetWithUnplottedErrorRole(): Dataset {
+  const n = 20_000;
+  return {
+    id: "big-unplotted-err",
+    name: "big-unplotted-err",
+    data: {
+      time: Array.from({ length: n }, (_, i) => i),
+      values: Array.from({ length: n }, (_, i) => [Math.sin(i), Math.cos(i), 0.1]),
+      labels: ["signal", "other", "other_err"],
+      units: ["", "", ""],
+      metadata: {},
+    },
+    // Targets channel 1 ("other"), which the test below never plots.
+    errorRoles: [{ channel: 2, target: 1, axis: "y", side: "both" }],
+  };
+}
+
+describe("usePlotPayload — M1: decimation gate honors WHAT IS PLOTTED, not mere errorRoles presence", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("big-unplotted-err", false));
+  });
+
+  it("a Y-error binding on a channel that is not plotted does not block server decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigDatasetWithUnplottedErrorRole(), yKeys: [0] }),
+    });
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1);
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).not.toBeNull();
+  });
+
+  it("control: the SAME binding, once its target channel IS plotted, correctly blocks decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigDatasetWithUnplottedErrorRole(), yKeys: [0, 1] }),
+    });
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).toBeNull();
+  });
+});

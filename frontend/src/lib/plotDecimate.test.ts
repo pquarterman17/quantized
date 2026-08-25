@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
+import type { ErrorBinding } from "./errorRoles";
 import {
   DECIMATE_MIN_POINTS,
   bucketsForWidth,
@@ -10,6 +11,8 @@ import {
   decimationEligible,
   decimationRequestEligible,
   defaultDecimateWidthHint,
+  errorBindingsApplyToPlotted,
+  hasErrorMapEntries,
   shouldDecimate,
   shouldRefetchWindow,
   visibleRowRange,
@@ -94,6 +97,93 @@ describe("decimationEligible", () => {
 describe("defaultDecimateWidthHint", () => {
   it("reads window.innerWidth in a DOM environment", () => {
     expect(defaultDecimateWidthHint()).toBe(window.innerWidth);
+  });
+});
+
+// M1 (provenance-disclosure round 4, L2 regression): the shared predicate
+// EVERY hasErrorSpans/hasErrorBars call site now routes through. FU-1 (this
+// same lane) started stamping `Dataset.errorRoles` from real Origin
+// designations; before this fix, `decimationRequestEligible`'s callers keyed
+// `hasErrorSpans` off mere role PRESENCE, so any Origin book with an error
+// designation ANYWHERE lost server-side decimation entirely -- even when the
+// plotted channels never touch it. This is the test that would have caught
+// that: `errorBindingsApplyToPlotted` must answer "does this apply to what's
+// actually plotted", not "are there any roles at all".
+describe("errorBindingsApplyToPlotted (M1)", () => {
+  const yErr = (channel: number, target: number): ErrorBinding => ({
+    channel,
+    target,
+    axis: "y",
+    side: "both",
+  });
+  const xErr = (channel: number): ErrorBinding => ({ channel, target: -1, axis: "x", side: "both" });
+
+  it("no bindings, or nothing plotted: never applies", () => {
+    expect(errorBindingsApplyToPlotted(undefined, [0, 1], { xErrorRenders: true })).toBe(false);
+    expect(errorBindingsApplyToPlotted([], [0, 1], { xErrorRenders: true })).toBe(false);
+    expect(errorBindingsApplyToPlotted([yErr(1, 0)], [], { xErrorRenders: true })).toBe(false);
+  });
+
+  // The regression's OWN reproduction: the old code did `!!ds.errorRoles?.length`
+  // -- true here (there IS a binding) -- so a genuinely unrelated Y-error cost
+  // this dataset its decimation for every OTHER, unrelated plot of it.
+  it("a Y-error binding on a channel that is NOT plotted (hidden/unplotted): does not apply -- stays eligible", () => {
+    // Channel 0 is plotted; the Y-error targets channel 5, which is not.
+    const roles: ErrorBinding[] = [yErr(6, 5)];
+    const plotted = [0];
+    // What every call site computed BEFORE this fix (useMultiPanelStage.ts's
+    // two sites, usePlotPayload.ts's one): mere presence.
+    const oldHasErrorSpans = !!roles?.length;
+    expect(oldHasErrorSpans).toBe(true); // this is exactly the bug -- disables decimation for an unrelated dataset
+    expect(errorBindingsApplyToPlotted(roles, plotted, { xErrorRenders: true })).toBe(false);
+    // decimationRequestEligible itself flips as a direct result.
+    const base = { hasErrorBars: false, hasColorByColumns: false } as const;
+    expect(decimationRequestEligible({ ...base, hasErrorSpans: oldHasErrorSpans })).toBe(false); // old: wrongly ineligible
+    expect(
+      decimationRequestEligible({
+        ...base,
+        hasErrorSpans: errorBindingsApplyToPlotted(roles, plotted, { xErrorRenders: true }),
+      }),
+    ).toBe(true); // new: correctly eligible
+  });
+
+  it("a Y-error binding whose target IS plotted: applies -- not eligible", () => {
+    expect(errorBindingsApplyToPlotted([yErr(1, 0)], [0, 2], { xErrorRenders: true })).toBe(true);
+    // Order/position in `plotted` doesn't matter, only membership.
+    expect(errorBindingsApplyToPlotted([yErr(1, 0)], [2, 0], { xErrorRenders: false })).toBe(true);
+  });
+
+  // The X-error nuance: `useMultiPanelStage.ts`'s panel render path draws
+  // ONLY the legacy Y-only errorBars (lib/errorbars.originErrKeys explicitly
+  // excludes X-error, "the plugin draws vertical whiskers only") -- no
+  // errorSpansPlugin wired there at all, so an X-error-only book draws
+  // NOTHING and must stay eligible for that path (xErrorRenders: false) --
+  // restoring the pre-lane behavior for it.
+  it("an X-error-only book stays eligible on a render path that never draws X-error (xErrorRenders: false)", () => {
+    expect(errorBindingsApplyToPlotted([xErr(0)], [1, 2], { xErrorRenders: false })).toBe(false);
+  });
+
+  // The main single-plot Stage (usePlotPayload.ts) DOES draw X-error via
+  // errorSpansPlugin (buildErrorSpans emits it against every plotted
+  // column) -- decimating there would misalign that row-keyed magnitude
+  // array exactly as plotDecimate.ts's own doc warns, so it correctly stays
+  // INELIGIBLE (xErrorRenders: true) even though nothing is Y-bound.
+  it("an X-error-only book is NOT eligible on a render path that draws X-error (xErrorRenders: true)", () => {
+    expect(errorBindingsApplyToPlotted([xErr(0)], [1, 2], { xErrorRenders: true })).toBe(true);
+  });
+
+  it("an unrelated Y column plus an X-error: xErrorRenders alone decides, regardless of the Y side", () => {
+    const bindings = [xErr(0), yErr(4, 9)]; // Y-error targets an unplotted channel
+    expect(errorBindingsApplyToPlotted(bindings, [1], { xErrorRenders: false })).toBe(false);
+    expect(errorBindingsApplyToPlotted(bindings, [1], { xErrorRenders: true })).toBe(true);
+  });
+});
+
+describe("hasErrorMapEntries", () => {
+  it("false for undefined or an empty map; true once something is keyed", () => {
+    expect(hasErrorMapEntries(undefined)).toBe(false);
+    expect(hasErrorMapEntries(new Map())).toBe(false);
+    expect(hasErrorMapEntries(new Map([[1, "x"]]))).toBe(true);
   });
 });
 

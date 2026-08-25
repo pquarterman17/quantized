@@ -29,6 +29,7 @@
 //    `decimationEligible`'s doc for why error-bar series are excluded instead
 //    of gathered independently).
 
+import type { ErrorBinding } from "./errorRoles";
 import type uPlot from "uplot";
 
 function seriesBucketIndices(
@@ -162,6 +163,64 @@ export function shouldDecimate(totalPoints: number, widthPx: number): boolean {
 
 export function bucketsForWidth(widthPx: number): number {
   return Math.max(1, Math.round(widthPx * DECIMATE_BUCKETS_PER_PX));
+}
+
+// ── M1 (provenance-disclosure round 4, L2 regression) ──────────────────────
+// `decimationEligible`/`decimationRequestEligible` both take a plain
+// `hasErrorSpans`/`hasErrorBars` boolean rather than the bindings/plotted
+// data itself, so every call site used to compute that boolean inline —
+// three of the four collapsed it to mere PRESENCE (`!!ds.errorRoles?.length`),
+// not whether any binding actually applies to what the user has plotted.
+// That was survivable while `Dataset.errorRoles` was rarely populated for an
+// Origin import; FU-1 (this same lane) now stamps it from real designations,
+// so the imprecision became a real, common regression: any Origin book with
+// EITHER a Y-error OR an X-error designation anywhere lost server-side
+// decimation entirely, even when the plotted channels don't involve it at
+// all. These two helpers are the ONE shared predicate every call site now
+// routes through (`store/importDatasets.ts`'s FU-1 doesn't call these; this
+// is the plot-render side of the same provenance fix).
+
+/** Does any error binding in `bindings` actually apply to the channels about
+ *  to be plotted? Two shapes of "applies":
+ *   - a Y (or asymmetric Y+/Y-) binding: its `target` channel is in `plotted`.
+ *   - an X binding (`target === -1`, applies to the x axis, not one specific
+ *     channel): only when `xErrorRenders` says this render path actually
+ *     DRAWS an x-error span at all.
+ *
+ *  `xErrorRenders` is NOT a global constant — it depends on which render path
+ *  the caller feeds: the main single-plot Stage (`usePlotPayload.ts`) builds
+ *  BOTH `errorSpans` (`lib/errorbars.buildErrorSpans`, which legitimately
+ *  emits an X binding against every plotted column) and draws it via
+ *  `errorSpansPlugin` — so there `xErrorRenders: true`, and disabling
+ *  decimation for an X-error-bound dataset is CORRECT (a decimated row set
+ *  would misalign those position-keyed magnitude arrays, the exact hazard
+ *  `decimationEligible`'s own doc warns about). MultiPanelStage's
+ *  panel/background render path (`useMultiPanelStage.ts`) builds ONLY the
+ *  legacy Y-only `errorBars` (`lib/errorbars.buildErrorColumns`/`originErrKeys`,
+ *  which deliberately excludes X-error — "the plugin draws vertical whiskers
+ *  only") and never wires an errorSpans plugin at all — so there
+ *  `xErrorRenders: false`: an X-error-only book draws NOTHING in that path,
+ *  and forcing it ineligible would only cost decimation for no rendering
+ *  benefit. Pre-fetch-safe: only needs the dataset's own bindings + the
+ *  already-resolved plotted-channel list, no network round trip. */
+export function errorBindingsApplyToPlotted(
+  bindings: readonly ErrorBinding[] | undefined,
+  plotted: readonly number[],
+  opts: { xErrorRenders: boolean },
+): boolean {
+  if (!bindings || bindings.length === 0 || plotted.length === 0) return false;
+  return bindings.some((b) => (b.axis === "x" ? opts.xErrorRenders : plotted.includes(b.target)));
+}
+
+/** Post-fetch precision case: `PlotViewport.tsx` already holds the REAL
+ *  computed `errorBars`/`errorSpans` Map (built by `buildErrorColumns`/
+ *  `buildErrorSpans` against the exact plotted set, asymmetric pairs and
+ *  document-authoritative overrides already resolved) — no approximation
+ *  needed, just "is it non-empty". Factored in here so every
+ *  hasErrorBars/hasErrorSpans call site reads through this one module
+ *  instead of repeating `!!(m && m.size > 0)` inline. */
+export function hasErrorMapEntries(map: ReadonlyMap<unknown, unknown> | undefined): boolean {
+  return !!map && map.size > 0;
 }
 
 /** Structural eligibility for decimation — independent of size/density

@@ -34,7 +34,7 @@ import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotda
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
-  defaultDecimateWidthHint,
+  defaultDecimateWidthHint, errorBindingsApplyToPlotted,
 } from "../../lib/plotDecimate";
 import {
   breakPanelWidths,
@@ -287,7 +287,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       decimationRequestEligible({
         defaultTrace,
         hasErrorBars: Object.keys(errKeys).length > 0,
-        hasErrorSpans: !!active.errorRoles?.length,
+        hasErrorSpans: errorBindingsApplyToPlotted(active.errorRoles, plotted, { xErrorRenders: false }), // M1: legacy Y-only bars here, no X-error rendering
         hasColorByColumns: false,
       })
         ? defaultDecimateWidthHint()
@@ -353,7 +353,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           decimationRequestEligible({
             defaultTrace,
             hasErrorBars: Object.keys(p.errKeys ?? {}).length > 0,
-            hasErrorSpans: !!ds.errorRoles?.length,
+            hasErrorSpans: errorBindingsApplyToPlotted(ds.errorRoles, plottedChannels, { xErrorRenders: false }),
             hasColorByColumns: false,
           })
             ? defaultDecimateWidthHint()
