@@ -368,21 +368,60 @@ describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
     expect(onEditText).not.toHaveBeenCalled();
   });
 
-  it("right-clicking a facet panel's title names the panel and offers no text edit", () => {
+  it("right-clicking a facet panel's title names the panel, offers no text edit, and Properties is disabled (G3)", () => {
     render(
       <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     fireEvent.contextMenu(elAt("title", 1));
     expect(screen.getByText("Panel 2 title")).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Edit text…" })).not.toBeInTheDocument();
+    // FU-facet-hitmap fix round 2 (G3): the header correctly names the
+    // panel, but Properties… must NOT be an enabled action that silently
+    // hands the click to the whole-figure Text & fonts group underneath.
+    expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
   });
 
-  it("click-selects a facet element by its plain id, same as the flat path", () => {
+  it("click-selects a facet series element by its plain id, same as the flat path", () => {
     const onSelect = vi.fn();
     render(
       <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     fireEvent.click(elAt("series:0", 1));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+  });
+
+  // FU-facet-hitmap fix round 2 (G3): the double-click path already guarded
+  // against silently editing the whole-figure title (`isTextEditable`); the
+  // single-click and keyboard-select paths must be guarded the SAME way —
+  // routing "title" through `onSelect` opens the flat path's Text & fonts
+  // group (the whole-figure suptitle control), which is exactly as wrong
+  // for a facet panel's own label as the double-click edit was.
+  it("single-clicking a facet panel's title does NOT focus the whole-figure Text & fonts group", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.click(elAt("title", 1));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("Enter/Space on a focused facet panel's title also does NOT select it", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.keyDown(elAt("title", 1), { key: "Enter" });
+    fireEvent.keyDown(elAt("title", 1), { key: " " });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("a facet panel's SERIES element (not a text element) still click-selects and Enter-selects normally", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.keyDown(elAt("series:0", 1), { key: "Enter" });
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
   });
 });

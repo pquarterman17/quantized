@@ -995,6 +995,59 @@ def test_figure_hitmap_facets_returns_per_panel_axes_and_elements() -> None:
         assert im.size == (m["width"], m["height"])
 
 
+# ── FU-facet-hitmap fix round 2 (G1): a series line's `get_window_extent` is
+# the transform of its FULL data extent, unclipped to the axes' current view
+# -- a zoomed `x_lim` override (exactly what a Stage box-zoom sets) put most
+# of a line's raw data far outside the narrowed view, ballooning the reported
+# pixel box to several times the image width and spilling across every
+# sibling panel's own hit-region -- the moment box-zoom is used, per-panel
+# targeting (the entire point of this lane) broke. `test_..._per_panel_axes_
+# and_elements` above only ever exercised the no-override case, where the
+# bug is invisible (a line's natural data range already fits the default
+# view) -- this is the override-bearing case that catches it. ───────────────
+def test_figure_hitmap_facets_series_boxes_clip_to_own_panel_under_zoom() -> None:
+    n = 4
+    facets = [
+        {
+            "label": f"level {i}", "x": list(range(10)),
+            "series": [{"label": "y", "y": [float(v) for v in range(10)]}],
+        }
+        for i in range(n)
+    ]
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(), "dpi": 100, "facets": facets,
+            "overrides": {"x_lim": [4.0, 5.0]},
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    panels = {p["panel"]: p for p in m["panels"]}
+    assert len(panels) == n
+    series_boxes = [e for e in m["elements"] if e["id"] == "series:0"]
+    assert len(series_boxes) == n  # every panel's line still visible in [4,5]
+    for e in series_boxes:
+        p = panels[e["panel"]]
+        # The box must stay INSIDE its own panel's axes rect -- never
+        # extend past it (the exact regression: boxes several times the
+        # image width, reaching every other panel).
+        assert p["x0"] - 1e-6 <= e["x0"] < e["x1"] <= p["x1"] + 1e-6
+        assert p["y0"] - 1e-6 <= e["y0"] < e["y1"] <= p["y1"] + 1e-6
+    # No two panels' series boxes overlap -- the actual per-panel-targeting
+    # property this lane exists to guarantee.
+    for a in series_boxes:
+        for b in series_boxes:
+            if a["panel"] == b["panel"]:
+                continue
+            overlap_x = a["x0"] < b["x1"] and b["x0"] < a["x1"]
+            overlap_y = a["y0"] < b["y1"] and b["y0"] < a["y1"]
+            assert not (overlap_x and overlap_y), (a["panel"], b["panel"])
+    # Titles are UNAFFECTED by the zoom (a text glyph's bbox, not a
+    # data-space transform) -- still one per panel, never dropped.
+    assert len([e for e in m["elements"] if e["id"] == "title"]) == n
+
+
 def _demo_corner(k: int = 2, n: int = 200) -> dict:
     import numpy as np
 

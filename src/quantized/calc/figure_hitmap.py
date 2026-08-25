@@ -176,6 +176,27 @@ def collect_map(
     }
 
 
+def _clip_box(box: dict[str, float], to: dict[str, float]) -> dict[str, float] | None:
+    """``box`` intersected with ``to`` (both ``{"x0","y0","x1","y1"}`` image-
+    pixel rects); ``None`` when the intersection is empty. Fix round 2
+    (G1): a facet series line's ``get_window_extent`` is the transform of
+    its FULL data extent, unclipped to the axes' current view limits -- a
+    zoomed ``x_lim`` override (a box-zoom on Stage, or this route's own
+    ``overrides``) can put most of a line's raw data far outside the
+    narrowed view, so the reported pixel box balloons to several times the
+    image width and spills across every sibling panel's own hit-region.
+    Clipping the reported box to the panel's own bounds is the fix -- see
+    ``collect_facet_map``'s call sites for which bounds each element kind
+    clips against."""
+    x0 = max(box["x0"], to["x0"])
+    y0 = max(box["y0"], to["y0"])
+    x1 = min(box["x1"], to["x1"])
+    y1 = min(box["y1"], to["y1"])
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
+
+
 def collect_facet_map(
     fig: Any,
     panels: Sequence[tuple[Any, Sequence[Any]]],
@@ -205,6 +226,22 @@ def collect_facet_map(
     re-deriving it from the request, so it can never drift from what the
     image actually shows.
 
+    Fix round 2 (G1): EVERY reported element box is clipped so it can never
+    extend past this panel into a sibling's -- a click that lands inside
+    two panels' boxes at once is exactly the mistargeting this whole lane
+    exists to prevent. A series line clips to this panel's own axes rect
+    (``axes_px`` -- see :func:`_clip_box`'s own doc for why an unclipped
+    box can balloon under a zoomed ``x_lim``); dropped entirely (not
+    emitted) when the clip is empty (the panel's current view shows none of
+    that line at all). A facet title is DIFFERENT: it lives in the title
+    margin ABOVE the axes rect by construction (a rendered text glyph's
+    bbox, never a data-space transform, so it never overshoots the way a
+    line does) -- clipping it to ``axes_px`` would clip away its entire
+    vertical extent and wrongly drop every title. Its horizontal span is
+    still clipped to ``axes_px``'s x-range (guards an unusually wide facet
+    label from bleeding into a neighbouring COLUMN's title) while its own
+    vertical span is left untouched.
+
     Deliberately narrower than ``collect_map``'s flat-path element set: a
     faceted render never draws a legend/annotation/reference-line/shape
     INTO a panel today (``figure_facets.render_facets_figure``'s own
@@ -220,13 +257,23 @@ def collect_facet_map(
     panel_infos: list[dict[str, Any]] = []
 
     for panel_index, (ax, series_artists) in enumerate(panels):
+        axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
+
         if ax.get_title():
             try:
                 bbox = _artist_window_extent(ax.title, renderer)
                 if bbox.width > 0 and bbox.height > 0:
-                    elements.append(
-                        {"id": "title", "panel": panel_index, **_bbox_to_pixels(bbox, height)}
-                    )
+                    title_box = _bbox_to_pixels(bbox, height)
+                    # Horizontal-only clip -- see the docstring above for why
+                    # the vertical span is deliberately left alone.
+                    clipped_x0 = max(title_box["x0"], axes_px["x0"])
+                    clipped_x1 = min(title_box["x1"], axes_px["x1"])
+                    if clipped_x1 > clipped_x0:
+                        elements.append({
+                            "id": "title", "panel": panel_index,
+                            "x0": clipped_x0, "y0": title_box["y0"],
+                            "x1": clipped_x1, "y1": title_box["y1"],
+                        })
             except (RuntimeError, AttributeError):
                 pass
         for i, artist in enumerate(series_artists):
@@ -236,11 +283,11 @@ def collect_facet_map(
                 continue
             if bbox.width <= 0 or bbox.height <= 0:
                 continue
-            elements.append(
-                {"id": f"series:{i}", "panel": panel_index, **_bbox_to_pixels(bbox, height)}
-            )
+            clipped = _clip_box(_bbox_to_pixels(bbox, height), axes_px)
+            if clipped is None:
+                continue
+            elements.append({"id": f"series:{i}", "panel": panel_index, **clipped})
 
-        axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
         panel_infos.append({
             "panel": panel_index,
             "label": ax.get_title(),

@@ -23,6 +23,17 @@ const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
  *  `lib/previewmap.ts`), so a faceted "title"/"series:N" hitbox stays
  *  click-to-select only, same as before this element set existed. */
 const isTextEditable = (e: HitElement) => TEXT_ELEMENTS.has(e.id) && e.panel === undefined;
+/** FU-facet-hitmap fix round 2 (G3): whether ANY entry point (click,
+ *  Enter/Space, the context menu's Properties…) has a sound target to route
+ *  this element to. A facet panel's own title/xlabel/ylabel (`panel !==
+ *  undefined`) has no per-panel edit target yet — `groupForElement("title")`
+ *  resolves to "Text & fonts", the FLAT path's whole-figure suptitle
+ *  control, so routing a facet panel's own label through it would silently
+ *  treat that panel's label as the figure's title. Every selection entry
+ *  point shares this ONE gate (not just the double-click path
+ *  `isTextEditable` already guarded) so a panel title is never routed to
+ *  the wrong object — it does nothing instead of guessing. */
+const hasSoundTarget = (e: HitElement) => !(TEXT_ELEMENTS.has(e.id) && e.panel !== undefined);
 /** A React key unique across panels — two different facet panels each draw
  *  their own "title" and "series:0" (FU-facet-hitmap), so `id` alone would
  *  collide. The flat path has no `panel` and keeps its original `id` key. */
@@ -140,7 +151,14 @@ export default function PreviewOverlay({
   };
   const menuItems = (id: string, panel?: number): ContextMenuItem[] => {
     const seriesEditable = id.startsWith("series:") && canonicalSeries;
-    const group = groupForElement(id);
+    // FU-facet-hitmap fix round 2 (G3): a facet panel's own title has no
+    // sound Properties… target either — same gate as `hasSoundTarget`,
+    // inlined here since this function only has `id`/`panel`, not the full
+    // `HitElement`. Without it the menu HEADER correctly said "Panel 2
+    // title" while the enabled Properties… action still opened the whole
+    // figure's Text & fonts panel underneath it.
+    const panelTextElement = TEXT_ELEMENTS.has(id) && panel !== undefined;
+    const group = panelTextElement ? null : groupForElement(id);
     const textEditable = TEXT_ELEMENTS.has(id) && panel === undefined;
     return [
       { header: elementName(id, panel) },
@@ -171,7 +189,9 @@ export default function PreviewOverlay({
           onPointerLeave={() => setHover(null)}
           onFocus={() => setHover(key)}
           onBlur={() => setHover((current) => (current === key ? null : current))}
-          onClick={() => onSelect(e.id)}
+          onClick={() => {
+            if (hasSoundTarget(e)) onSelect(e.id);
+          }}
           onDoubleClick={() => {
             if (isTextEditable(e)) startTextEdit(e.id);
           }}
@@ -185,7 +205,7 @@ export default function PreviewOverlay({
           onKeyDown={(ev) => {
             if (ev.key === "Enter" || ev.key === " ") {
               ev.preventDefault();
-              onSelect(e.id);
+              if (hasSoundTarget(e)) onSelect(e.id);
               return;
             }
             // Retrospective-audit P1 fix: a focused hitbox owns Delete and

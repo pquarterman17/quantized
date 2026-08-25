@@ -100,10 +100,20 @@ export function dragPreviewElement(
       // SAME panel's axes (the press origin and the drop point are assumed
       // to land in the same panel; a drag that crosses panel boundaries has
       // no sound single-panel interpretation and is dropped rather than
-      // guessed).
+      // guessed). Fix round 2 (G2): that guard must actually be CHECKED, not
+      // just asserted in this comment — `axesAt` returning non-null for both
+      // points is not enough on its own (each can resolve to a DIFFERENT
+      // panel); `startAxes !== endAxes` catches that. `axesAt` returns the
+      // literal element from `hitmap.panels` (or the flat path's single
+      // `hitmap.axes`, always the same object), so reference equality IS
+      // "same panel" — no ID comparison needed. Without this, a data-anchor
+      // shape dragged with its press origin in one panel and its drop point
+      // in another computes a delta between two UNRELATED data domains
+      // (e.g. panel 0's ylim [0,10] against panel 1's ylim [100,200] can
+      // produce a delta near +145) and flings the shape off-figure.
       const startAxes = axesAt(hitmap, startPx, startPy);
       const endAxes = axesAt(hitmap, px, py);
-      if (!startAxes || !endAxes) return;
+      if (!startAxes || !endAxes || startAxes !== endAxes) return;
       [dx, dy] = deltaXY(pxToData(startAxes, startPx, startPy), pxToData(endAxes, px, py));
     }
     const patch = translateShape(shape, dx, dy);
