@@ -7,7 +7,7 @@
 // pixels (the hook diffs them into a translation delta, or maps the drop
 // point alone to a figure-fraction / data coordinate).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { isContextMenuKeyEvent } from "../../../lib/contextActions";
 import { groupForElement, type FigureHitmap, type HitElement } from "../../../lib/previewmap";
@@ -23,17 +23,29 @@ const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
  *  `lib/previewmap.ts`), so a faceted "title"/"series:N" hitbox stays
  *  click-to-select only, same as before this element set existed. */
 const isTextEditable = (e: HitElement) => TEXT_ELEMENTS.has(e.id) && e.panel === undefined;
+/** Ids with genuinely no PER-PANEL target yet (fix round 4, P1, extends
+ *  round 2's G3 text-only set to the per-panel LEGEND too): a facet
+ *  panel's own title/xlabel/ylabel has no per-panel label override, and
+ *  its own legend (drawn whenever that panel has more than one series —
+ *  `draw_facet_grid`) has no per-panel position/title override either —
+ *  same "the artist is real, but there's nothing to route a click into
+ *  yet" situation for all four. `panel === undefined` (the flat path, or
+ *  J2's whole-figure title/xlabel/ylabel elements) is NEVER gated — those
+ *  route to the real whole-figure config fields. */
+const PANEL_GATED_IDS = new Set(["title", "xlabel", "ylabel", "legend"]);
+const isPanelGated = (id: string, panel: number | undefined) => PANEL_GATED_IDS.has(id) && panel !== undefined;
 /** FU-facet-hitmap fix round 2 (G3): whether ANY entry point (click,
  *  Enter/Space, the context menu's Properties…) has a sound target to route
- *  this element to. A facet panel's own title/xlabel/ylabel (`panel !==
- *  undefined`) has no per-panel edit target yet — `groupForElement("title")`
- *  resolves to "Text & fonts", the FLAT path's whole-figure suptitle
- *  control, so routing a facet panel's own label through it would silently
- *  treat that panel's label as the figure's title. Every selection entry
- *  point shares this ONE gate (not just the double-click path
- *  `isTextEditable` already guarded) so a panel title is never routed to
- *  the wrong object — it does nothing instead of guessing. */
-const hasSoundTarget = (e: HitElement) => !(TEXT_ELEMENTS.has(e.id) && e.panel !== undefined);
+ *  this element to. A facet panel's own title/xlabel/ylabel/legend
+ *  (`isPanelGated`) has no per-panel edit target yet — `groupForElement
+ *  ("title")` resolves to "Text & fonts", the FLAT path's whole-figure
+ *  suptitle control, so routing a facet panel's own label (or legend)
+ *  through it would silently treat that panel's own artist as the whole
+ *  figure's. Every selection entry point shares this ONE gate (not just
+ *  the double-click path `isTextEditable` already guarded) so a
+ *  panel-scoped artist is never routed to the wrong object — it does
+ *  nothing instead of guessing. */
+const hasSoundTarget = (e: HitElement) => !isPanelGated(e.id, e.panel);
 /** A React key unique across panels — two different facet panels each draw
  *  their own "title" and "series:0" (FU-facet-hitmap), so `id` alone would
  *  collide. The flat path has no `panel` and keeps its original `id` key. */
@@ -71,6 +83,10 @@ const elementName = (id: string, panel?: number) => {
  *  own doc for why that edit isn't wired. */
 const elementTitle = (id: string, canonicalSeriesEditable: boolean, panel?: number) => {
   const name = elementName(id, panel);
+  // Fix round 4 (P1): a gated legend must NOT advertise "drag to move" --
+  // checked BEFORE the DRAGGABLE branch below, which is true for "legend"
+  // regardless of panel.
+  if (isPanelGated(id, panel)) return name;
   if (TEXT_ELEMENTS.has(id) && panel === undefined) {
     return `${name} \u2014 double-click to edit; right-click for properties`;
   }
@@ -152,14 +168,6 @@ export default function PreviewOverlay({
     return [(clientX - rect.left) * scale, (clientY - rect.top) * scale];
   };
 
-  /** Opening a second text edit while one is unsaved commits the first
-   *  (its input never blurs, so it would otherwise be silently discarded).
-   *  Compares the (id, panel) PAIR (J1) -- re-opening the SAME element is a
-   *  no-op, not a spurious commit-then-reopen. */
-  const startTextEdit = (id: string, panel?: number) => {
-    if (editing && (editing.id !== id || editing.panel !== panel)) onEditText(editing.id, editing.value);
-    setEditing({ id, panel, value: textOf(id) });
-  };
   // J1: the element `editing` refers to, re-resolved against the CURRENT
   // `map` every render (id AND panel must both match -- a bare id match
   // would let a stale flat "title" edit snap onto a facet response's
@@ -169,16 +177,43 @@ export default function PreviewOverlay({
   const editingElement = editing
     ? (map.elements.find((e) => e.id === editing.id && e.panel === editing.panel) ?? null)
     : null;
+  // Fix round 4 (P2): when the edited element stops resolving, `editing`
+  // ITSELF must clear, not just the rendered input -- leaving it set was a
+  // ghost: the NEXT `startTextEdit` on a completely different element would
+  // still see a truthy (stale) `editing` and silently re-commit its long-
+  // vanished value via `onEditText`, reapplying an edit the user watched
+  // disappear. Runs after the map that made it unresolvable has already
+  // rendered (the input already isn't showing), so this is strictly
+  // cleanup, never a visible flicker.
+  useEffect(() => {
+    if (editing && !editingElement) setEditing(null);
+  }, [editing, editingElement]);
+  /** Opening a second text edit while one is unsaved commits the first
+   *  (its input never blurs, so it would otherwise be silently discarded).
+   *  Compares the (id, panel) PAIR (J1) -- re-opening the SAME element is a
+   *  no-op, not a spurious commit-then-reopen. Gates on `editingElement`,
+   *  NOT the bare `editing` state (P2) -- the previous edit is committed
+   *  only when its element still genuinely resolves; the `useEffect` above
+   *  is what actually clears `editing` once it doesn't, so in practice this
+   *  condition is defense-in-depth against the same-tick case, not the
+   *  primary fix. */
+  const startTextEdit = (id: string, panel?: number) => {
+    if (editingElement && (editing!.id !== id || editing!.panel !== panel)) {
+      onEditText(editing!.id, editing!.value);
+    }
+    setEditing({ id, panel, value: textOf(id) });
+  };
   const menuItems = (id: string, panel?: number): ContextMenuItem[] => {
     const seriesEditable = id.startsWith("series:") && canonicalSeries;
-    // FU-facet-hitmap fix round 2 (G3): a facet panel's own title has no
-    // sound Properties… target either — same gate as `hasSoundTarget`,
-    // inlined here since this function only has `id`/`panel`, not the full
+    // FU-facet-hitmap fix round 2 (G3), extended round 4 (P1) to the
+    // per-panel LEGEND: a gated element has no sound Properties… target
+    // either — same `isPanelGated` gate `hasSoundTarget` uses, inlined
+    // here since this function only has `id`/`panel`, not the full
     // `HitElement`. Without it the menu HEADER correctly said "Panel 2
-    // title" while the enabled Properties… action still opened the whole
-    // figure's Text & fonts panel underneath it.
-    const panelTextElement = TEXT_ELEMENTS.has(id) && panel !== undefined;
-    const group = panelTextElement ? null : groupForElement(id);
+    // title" (or "Panel 2 legend") while the enabled Properties… action
+    // still opened the whole figure's Text & fonts (or Legend) panel
+    // underneath it.
+    const group = isPanelGated(id, panel) ? null : groupForElement(id);
     const textEditable = TEXT_ELEMENTS.has(id) && panel === undefined;
     return [
       { header: elementName(id, panel) },
@@ -252,7 +287,10 @@ export default function PreviewOverlay({
             }
           }}
           onPointerDown={(ev) => {
-            if (ev.button !== 0 || !DRAGGABLE(e.id)) return;
+            // Fix round 4 (P1): a gated legend (DRAGGABLE(id) is true for
+            // "legend" regardless of panel) must not START a drag either --
+            // there is no per-panel position override to commit it into.
+            if (ev.button !== 0 || !DRAGGABLE(e.id) || !interactive) return;
             dragRef.current = { key, id: e.id, startX: ev.clientX, startY: ev.clientY };
             // optional-chained: jsdom has no pointer capture
             (ev.target as Element).setPointerCapture?.(ev.pointerId);
@@ -278,7 +316,7 @@ export default function PreviewOverlay({
             position: "absolute",
             ...pct(e),
             zIndex: hitboxZIndex(map.elements, e, index),
-            cursor: DRAGGABLE(e.id) ? "move" : interactive ? "pointer" : "default",
+            cursor: DRAGGABLE(e.id) && interactive ? "move" : interactive ? "pointer" : "default",
             outline:
               hover === key ? "1.5px solid var(--accent)" : "1px solid transparent",
             borderRadius: 2,

@@ -502,6 +502,44 @@ describe("PreviewOverlay — editing survives a hitmap change without crashing (
     );
     expect(screen.getByDisplayValue("Figure title")).toBeInTheDocument();
   });
+
+  // Fix round 4 (P2): once an edited element stops resolving (the input
+  // already correctly stops rendering, J1), `editing` itself must clear --
+  // otherwise a LATER edit on a completely different element ghost-commits
+  // the vanished one's stale value through `onEditText` when it opens.
+  it("does NOT ghost-commit a vanished edit's stale value when a later, different element is edited (P2)", () => {
+    const onEditText = vi.fn();
+    const textOf = (id: string) => (id === "xlabel" ? "Old X" : "Old Title");
+    const { rerender } = render(
+      <PreviewOverlay src="data:image/png;base64," map={FLAT_WITH_LABELS} textOf={textOf} onSelect={vi.fn()} onEditText={onEditText} onDragEnd={vi.fn()} />,
+    );
+    // Start editing "xlabel" and change its draft value -- if this ever
+    // ghost-commits, it must NOT be this ("Edited X"), never mind the
+    // original "Old X".
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="xlabel"]')!);
+    fireEvent.change(screen.getByDisplayValue("Old X"), { target: { value: "Edited X" } });
+
+    // "xlabel" vanishes from the next hitmap (e.g. the label was cleared) --
+    // the input correctly stops rendering (J1); `editing` must clear too.
+    const WITHOUT_XLABEL: FigureHitmap = {
+      ...FLAT_WITH_LABELS,
+      elements: FLAT_WITH_LABELS.elements.filter((e) => e.id !== "xlabel"),
+    };
+    rerender(
+      <PreviewOverlay src="data:image/png;base64," map={WITHOUT_XLABEL} textOf={textOf} onSelect={vi.fn()} onEditText={onEditText} onDragEnd={vi.fn()} />,
+    );
+    expect(screen.queryByDisplayValue("Edited X")).not.toBeInTheDocument();
+
+    // Now edit a DIFFERENT, still-real element ("title"). Opening it must
+    // NOT have silently fired onEditText("xlabel", "Edited X") first.
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="title"]')!);
+    expect(onEditText).not.toHaveBeenCalled();
+
+    // Committing THIS edit fires onEditText with its OWN value only.
+    fireEvent.change(screen.getByDisplayValue("Old Title"), { target: { value: "New Title" } });
+    fireEvent.keyDown(screen.getByDisplayValue("New Title"), { key: "Enter" });
+    expect(onEditText).toHaveBeenCalledExactlyOnceWith("title", "New Title");
+  });
 });
 
 // FU-facet-hitmap fix round 3 (J3): a GATED hitbox (no click/select/edit
@@ -563,5 +601,74 @@ describe("PreviewOverlay — gated hitboxes drop interactive affordances (J3)", 
     const title = j3El("title", 0);
     fireEvent.pointerEnter(title);
     expect(title.style.outline).toContain("var(--accent)");
+  });
+});
+
+// FU-facet-hitmap fix round 4 (P1): a facet panel's own LEGEND is real and
+// hit-testable (draw_facet_grid draws one whenever a panel has more than
+// one series), but stays fully INERT -- no per-panel position/title
+// override exists yet. Gated the SAME way J3 gates a panel title: no
+// tabstop/role/pointer cursor, no drag start, Properties unavailable.
+describe("PreviewOverlay — a gated facet panel legend stays inert (P1)", () => {
+  const FACET_MAP_LEGEND: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "legend", panel: 0, x0: 200, y0: 60, x1: 280, y1: 120 },
+      { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
+    ],
+    panels: [
+      { panel: 0, label: "level 0", x0: 0, y0: 0, x1: 300, y1: 400, xlim: [0, 10], ylim: [0, 10], xlog: false, ylog: false },
+    ],
+  };
+  const legendEl = () => document.querySelector<HTMLElement>('[data-element="legend"][data-panel="0"]')!;
+
+  it("has no tabIndex, no button role, and a default (non-pointer, non-move) cursor", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_LEGEND} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const legend = legendEl();
+    expect(legend).not.toHaveAttribute("tabindex");
+    expect(legend).not.toHaveAttribute("role");
+    expect(legend.style.cursor).toBe("default");
+  });
+
+  it("does not start a drag -- a full pointerdown/move/up sequence never calls onDragEnd", () => {
+    const onDragEnd = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_LEGEND} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={onDragEnd} />,
+    );
+    const legend = legendEl();
+    fireEvent.pointerDown(legend, { clientX: 240, clientY: 90 });
+    fireEvent.pointerMove(legend, { clientX: 260, clientY: 100 });
+    fireEvent.pointerUp(legend, { clientX: 260, clientY: 100 });
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it("click does not select it, and the context menu offers no Properties action", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_LEGEND} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.click(legendEl());
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.contextMenu(legendEl());
+    expect(screen.getByText("Panel 1 legend")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
+  });
+
+  it("the flat path's own legend is completely unaffected -- draggable, selectable, real Properties…", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const legend = el("legend");
+    expect(legend).toHaveAttribute("tabindex", "0");
+    expect(legend).toHaveAttribute("role", "button");
+    expect(legend.style.cursor).toBe("move");
+    fireEvent.click(legend);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("legend");
   });
 });

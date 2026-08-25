@@ -193,11 +193,17 @@ def render_facets_figure_map(
     ``FigureHitmap`` doc, ``PreviewOverlay.tsx``'s ``isTextEditable``) makes
     them editable on a faceted preview for free, no new client-side case
     needed. Deliberately narrower than the flat path's PER-PANEL element
-    set: a faceted render never draws a legend/annotation/reference-line/
-    shape INTO a panel today (see ``figure_facets.render_facets_figure``'s
-    own ``overrides`` doc -- the interactive facet grid doesn't offer them
-    either), so there is nothing to harvest for those ids yet; wiring
-    per-panel drag-edit for them is future work, not silently faked here.
+    set in two DIFFERENT ways (fix round 4, P1): a faceted render never
+    draws an annotation/reference-line/shape INTO a panel at all (see
+    ``figure_facets.render_facets_figure``'s own ``overrides`` doc -- the
+    interactive facet grid doesn't offer them either), so there is nothing
+    to harvest for those ids. The per-panel LEGEND is real, though --
+    ``draw_facet_grid`` draws one whenever a panel has more than one
+    series -- and IS harvested (see ``collect_facet_map``'s own doc for
+    exactly how); it's just INERT (no per-panel position/title override
+    exists to commit a drag/edit into yet), not absent. Wiring per-panel
+    drag-edit for the legend, or drawing an annotation/reference-line/shape
+    into a panel at all, is future work, not silently faked here.
     """
     from quantized.calc.figure_hitmap import collect_facet_map
 

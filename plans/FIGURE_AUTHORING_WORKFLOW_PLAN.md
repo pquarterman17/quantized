@@ -939,30 +939,120 @@ with parent items P1.3 and P1.5.
       sites now resolve through `axesAt` first.
 
       **Wired vs still deferred (scope ruling honored, not silently
-      dropped):** WIRED — per-panel hit-testing (distinct, non-overlapping
-      pixel rects; real elements now exist instead of `[]`) and panel-aware
-      pixel→data coordinate mapping (`panelAt`/`axesAt`, exercised by both a
-      focused `previewmap.test.ts` suite and the existing
-      `test_api_export.py` facet-hitmap test, rewritten for the new
-      contract). `PreviewOverlay.tsx` was also fixed for two real bugs a
-      non-empty, repeated-id facet element list would otherwise have
-      introduced (probe-confirmed via `git stash` on `PreviewOverlay.tsx`
-      alone, both reproduced pre-fix): a React duplicate-`key` collision
-      (two panels each draw their own `"title"`/`"series:0"` — hover/drag
-      state now keys on `panel:id`, not bare `id`), and a double-click on a
-      facet panel's title silently committing into the WHOLE FIGURE's title
-      field via the pre-existing flat-path text-edit wiring (`isTextEditable`
-      now gates that path to `panel === undefined`). NOT wired — full
-      drag-EDIT semantics for a faceted preview: facets don't draw a
-      legend/annotation/reference-line/shape into a panel at ALL today (see
-      `render_facets_figure`'s own `overrides` doc — the interactive facet
-      grid doesn't offer them either), so there is nothing draggable to
-      resolve yet; a faceted panel's own title element is click-to-select
-      only (no per-panel facet-label inline editor). Moving an annotation
-      BETWEEN panels, per-panel legend placement, and per-panel
-      annotation/ref-line/shape support generally remain genuinely open —
-      each needs its own facet-aware config model before there's anything
-      correct to drag-map onto, which is larger than this lane's scope.
+      dropped) — updated through fix round 4, see that entry below for the
+      full history:** WIRED — per-panel hit-testing (distinct, non-
+      overlapping pixel rects, EVERY box clipped to its own panel so a
+      zoomed `x_lim` can never balloon one across a sibling's — round 2's
+      G1) and panel-aware pixel→data coordinate mapping (`panelAt`/
+      `axesAt`, exercised by a focused `previewmap.test.ts` suite, the
+      `test_api_export.py` facet-hitmap tests, and a same-panel guard on
+      the shape-drag branch — round 2's G2). Every real, drawn artist is
+      now harvested and hit-testable: each panel's facet title, series
+      lines (padded to a real target when degenerate — round 3's J4),
+      the whole FIGURE's own title/x-label/y-label (round 3's J2), and
+      each panel's own legend when it has more than one series (round 4's
+      P1) — the docs used to claim the legend didn't exist; it does, it's
+      just INERT (see below). `PreviewOverlay.tsx` gates every entry point
+      (click, Enter/Space, double-click, the context menu's Properties…)
+      the SAME way for anything with no per-panel edit target yet — a
+      panel's own title/x-label/y-label/legend — so none of them is ever
+      silently routed to the whole-figure's config field, and a gated
+      hitbox no longer presents interactive affordances (tabstop/role/
+      pointer cursor) it can't act on (round 2's G3, round 3's J3). NOT
+      wired — per-panel drag-EDIT: facets never draw an annotation/
+      reference-line/shape into a panel at all (`render_facets_figure`'s
+      own `overrides` doc — the interactive facet grid doesn't offer them
+      either), so there is nothing draggable to resolve for those; the
+      per-panel legend and a panel's own title are real and hit-testable
+      but have no per-panel position/override model to commit a drag or
+      edit into yet, so they stay click-to-select-only (title) or fully
+      inert (legend). Moving an annotation BETWEEN panels, per-panel
+      legend placement, and per-panel annotation/ref-line/shape support
+      generally remain genuinely open — each needs its own facet-aware
+      config model before there's anything correct to drag-map onto,
+      which is larger than this lane's scope.
+
+      **2026-08-25 fix round 2 (Claude): G1 (defeated the feature under a
+      box-zoom) + G2 (cross-panel shape-drag guard) + G3 (dead-end click
+      routing).** G1: a facet series line's `get_window_extent` transforms
+      its FULL data extent, unclipped to the axes' current view — a zoomed
+      `x_lim` override (exactly what a Stage box-zoom sets) ballooned the
+      reported box to several times the image width, spilling across every
+      sibling panel and defeating per-panel targeting entirely. Fixed in
+      `calc.figure_hitmap.collect_facet_map`: every series box clips to its
+      own panel's axes rect, dropped only if the clip is empty; a facet
+      title clips only horizontally (it lives above the axes by
+      construction and never overshoots the way a line does — clipping it
+      the same way would wrongly drop every title). G2:
+      `previewDrag.ts`'s data-anchored shape drag resolved the press origin
+      and drop point against POTENTIALLY DIFFERENT panels' axes with no
+      equality guard, despite a comment promising a cross-panel drag is
+      "dropped rather than guessed" — fixed with an actual `startAxes !==
+      endAxes` check (reference equality: `axesAt` returns the literal
+      element from `hitmap.panels`, or the flat path's single shared
+      `axes`). G3: the single-click and context-menu Properties… paths
+      still routed a facet panel's own title through the flat id-based
+      `groupForElement` lookup, silently opening the whole-figure Text &
+      fonts panel — closed with one shared `hasSoundTarget` gate applied to
+      every entry point. All three came with red-first evidence (`git
+      stash` back to the pre-fix source, confirmed failing with the exact
+      numbers/behavior described, then restored).
+
+      **2026-08-25 fix round 3 (Claude): J1 (a real crash) + J2 (an
+      honesty gap matching G3's own shape) + J3 (dead affordances) + J4
+      (degenerate series dropped instead of padded).** J1:
+      `PreviewOverlay.tsx`'s `editing` state was the one piece of
+      per-element state left keyed on bare `id` — a faceted hitmap
+      arriving while the editor was open on `xlabel`/`ylabel` either threw
+      (`TypeError: Cannot read properties of undefined`) or silently
+      repositioned the editor over a DIFFERENT panel's same-id box; fixed
+      by keying `editing` on `(id, panel)` like every other per-element
+      state, with a total (non-throwing) lookup. J2: `collect_facet_map`
+      never harvested `fig.suptitle`/`supxlabel`/`supylabel`, so the whole
+      figure's own title/axis labels — real artists, drawn exactly like
+      the flat path's — had no hit target on a faceted preview; now
+      harvested with the SAME ids the flat path uses and no `panel` key,
+      so all the existing panel-undefined-means-whole-figure handling
+      makes them editable for free. J3: a gated hitbox (no sound target)
+      still presented `tabIndex`/`role="button"`/pointer cursor as if it
+      were actionable — dropped for gated elements, the hover outline
+      stays. J4: a degenerate series box (a facet level with a single data
+      row, or a constant-valued channel) was dropped instead of padded to
+      `_HIT_PAD` the way `add_decor` already pads a reference line/shape —
+      extracted the shared `_pad_degenerate` helper and reused it here.
+
+      **2026-08-25 fix round 4 (Claude): P1 (the SAME J2/G3 honesty-and-
+      routing failure, found in the one remaining real artist) + P2 (a
+      ghost-commit left by the J1 fix) + P3 (the flat-path twin of J4).**
+      P1: `draw_facet_grid` calls `ax.legend(...)` on every panel with more
+      than one series — a real, rendered artist — but `collect_facet_map`
+      never harvested it, and four docstrings plus this plan's own entry
+      asserted facets "never draw a legend/annotation/reference-line/shape
+      into a panel" — true for the other three, false for the legend.
+      Fixed: the per-panel legend is now harvested (clipped to its panel's
+      axes rect, like a series line), and `PreviewOverlay.tsx`'s
+      `hasSoundTarget` gate (G3/J3's own mechanism) now covers it too — a
+      per-panel legend is real and hit-testable, but stays fully INERT (no
+      per-panel position/title override exists yet to commit a drag into),
+      never silently routed to the whole-figure legend config the way a
+      panel title used to be routed to the whole-figure title. All four
+      docstrings (`calc.figure_hitmap`, `calc.figure_facets_map` x2,
+      `lib/previewmap.ts`) and this entry corrected. P2: when `editing`'s
+      element stopped resolving (J1's fix), the INPUT correctly stopped
+      rendering, but the `editing` STATE itself was left set — the next
+      `startTextEdit` on a different element would still fire
+      `onEditText(<stale id>, <stale value>)` on blur/Enter, silently
+      re-committing an edit the user watched disappear. Fixed: `editing`
+      clears itself (not just the rendered input) the moment its element
+      stops resolving. P3: `collect_map`'s flat-path `add()` still dropped
+      a zero-height series box outright — the exact gap J4 had just closed
+      for facets, using the `_pad_degenerate` helper this lane already
+      extracted — so a FLAT figure of a constant-valued channel had a
+      title hitbox but no clickable series line. Applied the same padding
+      to the flat path too (checked first, as asked: the only behavior
+      change is that a previously-invisible degenerate series now gets a
+      small real hit target, exactly J4's own justification). All three
+      came with red-first evidence, restored after confirming.
 
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.

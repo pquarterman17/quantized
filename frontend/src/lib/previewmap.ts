@@ -65,16 +65,22 @@ function axisScaleOf(scale: "linear" | "log" | "reciprocal" | undefined, log: bo
  *  would export, and `panels` now carries ONE real `PanelAxesInfo` per
  *  panel -- the flat single-``axes`` field is absent instead (there is no
  *  single meaningful axes rect for a multi-panel grid). `elements` carries
- *  each panel's facet title + series lines, each tagged with its `panel`
- *  index. Use `axesAt`/`panelAt` below to resolve a click/drag to the
- *  CONTAINING panel before converting pixels to data coordinates -- never
- *  read `panels[0]` (or the old `axes`) directly for a point that might
- *  land in a different panel. Full drag-EDIT semantics for a faceted
- *  preview (moving an annotation between panels, etc.) are still NOT wired
- *  -- facets don't draw a legend/annotation/reference-line/shape into a
- *  panel at all yet (see `calc.figure_facets.render_facets_figure`'s own
- *  `overrides` doc), so there is nothing draggable to resolve today; only
- *  hit-testing and coordinate mapping are guaranteed panel-correct. */
+ *  each panel's facet title, series lines, and legend (when that panel has
+ *  more than one series), each tagged with its `panel` index, plus the
+ *  whole FIGURE's own title/xlabel/ylabel with NO `panel` key (fix round 3,
+ *  J2 -- same ids/shape a flat response's title/xlabel/ylabel already use).
+ *  Use `axesAt`/`panelAt` below to resolve a click/drag to the CONTAINING
+ *  panel before converting pixels to data coordinates -- never read
+ *  `panels[0]` (or the old `axes`) directly for a point that might land in
+ *  a different panel. Full drag-EDIT semantics for a faceted preview
+ *  (moving an annotation between panels, positioning a per-panel legend,
+ *  etc.) are still NOT wired -- facets never draw an annotation/reference-
+ *  line/shape into a panel at all (see `calc.figure_facets
+ *  .render_facets_figure`'s own `overrides` doc), so there is nothing
+ *  draggable to resolve for those; a per-panel LEGEND is real and hit-
+ *  testable (fix round 4, P1) but stays INERT -- no per-panel position/
+ *  title override exists yet to commit a drag into. Only hit-testing and
+ *  coordinate mapping are guaranteed panel-correct today. */
 export interface FigureHitmap {
   image: string; // base64 PNG
   width: number;

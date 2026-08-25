@@ -114,7 +114,15 @@ def collect_map(
     reciprocal axis as ``"function"`` (matplotlib's generic custom-scale
     name), not ``"reciprocal"`` -- the client's ``lib/previewmap.ts`` needs
     the real name to invert a preview pixel drag back to data coordinates
-    (``pxToData``)."""
+    (``pxToData``). Fix round 4 (P3): a series line's box is harvested via
+    ``add_series`` (below), not the plain ``add`` every other element uses
+    -- a genuinely degenerate (zero-width or zero-height) box, e.g. a
+    constant-valued channel or a single-point series, is padded to
+    ``_HIT_PAD`` instead of being silently dropped. Applies
+    ``collect_facet_map``'s J4 fix (round 3) to the flat path too, via the
+    same shared ``_pad_degenerate`` helper -- a flat figure of a constant-
+    valued channel used to have a ``title`` hitbox and no clickable series
+    line at all."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
@@ -130,6 +138,27 @@ def collect_map(
         if bbox.width <= 0 or bbox.height <= 0:
             return
         elements.append({"id": el_id, **_bbox_to_pixels(bbox, height)})
+
+    def add_series(el_id: str, artist: Any) -> None:
+        """``add`` for a SERIES line specifically (fix round 4, P3): a
+        genuinely degenerate (zero-width or zero-height) box is padded to
+        ``_HIT_PAD``, not dropped -- the exact gap ``collect_facet_map``'s
+        J4 fix closed for facets (a constant-valued channel, or a single-
+        point series, drew a real line the user could see but had NO
+        series hit target at all -- only ``title``/``legend``/etc., if
+        present). Only a genuinely INVALID (non-finite) extent is skipped;
+        padding a NaN/inf box would manufacture a meaningless hit target.
+        Title/x-label/y-label/legend/annotations stay on plain ``add``
+        above -- they don't degenerate the way a series line does (see
+        ``add_decor``'s own doc for the ONE exception that already did:
+        reference lines/shapes, which are decor, not series)."""
+        try:
+            bbox = _artist_window_extent(artist, renderer)
+        except (RuntimeError, AttributeError):
+            return
+        if not all(math.isfinite(v) for v in (bbox.x0, bbox.y0, bbox.x1, bbox.y1)):
+            return
+        elements.append({"id": el_id, **_pad_degenerate(_bbox_to_pixels(bbox, height))})
 
     def add_decor(el_id: str, artist: Any) -> None:
         """``add`` for a decor object, whose bbox is legitimately degenerate.
@@ -158,7 +187,7 @@ def collect_map(
     if ax.get_legend() is not None:
         add("legend", ax.get_legend())
     for i, artist in enumerate(series_artists):
-        add(f"series:{i}", artist)
+        add_series(f"series:{i}", artist)
     for i, txt in enumerate(ax.texts):
         add(f"ann:{i}", txt)
     # Decor objects identify themselves by matplotlib ``gid`` rather than by
@@ -280,13 +309,22 @@ def collect_facet_map(
     vertical span is left untouched.
 
     Deliberately narrower than ``collect_map``'s flat-path element set in
-    ONE remaining respect: a faceted render never draws a legend/
-    annotation/reference-line/shape INTO a panel today
-    (``figure_facets.render_facets_figure``'s own ``overrides`` doc), so
-    there is nothing to harvest for those ids -- they genuinely don't
-    exist, this isn't an unharvested-but-real gap the way the whole-figure
-    title/labels used to be (fix round 3, J2) before this function started
-    accepting ``title_artist``/``xlabel_artist``/``ylabel_artist``."""
+    two respects, for TWO DIFFERENT reasons -- fix round 4 (P1) drew the
+    line precisely because the previous wording conflated them: a faceted
+    render never draws an annotation/reference-line/shape INTO a panel at
+    all (``figure_facets.render_facets_figure``'s own ``overrides`` doc),
+    so those ids genuinely don't exist to harvest, the same as ANN/refline/
+    shape always have. The per-panel LEGEND is different -- ``draw_facet_
+    grid`` DOES draw a real ``ax.legend(...)`` whenever a panel has more
+    than one series, so it IS harvested here (clipped to the panel's axes
+    rect like a series line), just with no per-panel position/title
+    override to commit a drag/edit into yet -- the client gates it INERT
+    (``PreviewOverlay.tsx``'s ``hasSoundTarget``, same treatment as a
+    per-panel title) rather than leaving it unharvested and undiscoverable.
+    Whole-FIGURE title/labels went through the identical correction one
+    round earlier (J2, fix round 3) -- an unharvested-but-real artist is a
+    docs bug, not a scope decision, and gets fixed the same way every
+    time it's found."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
@@ -335,6 +373,28 @@ def collect_facet_map(
                             "x0": clipped_x0, "y0": title_box["y0"],
                             "x1": clipped_x1, "y1": title_box["y1"],
                         })
+            except (RuntimeError, AttributeError):
+                pass
+        # Fix round 4 (P1): draw_facet_grid draws a REAL per-panel legend
+        # (`ax.legend(...)`) whenever a panel has more than one series --
+        # harvest it, clipped to this panel's own axes rect exactly like a
+        # series line (a legend is placed WITHIN the axes by matplotlib's
+        # own "best"-location layout, not the title's above-axes margin, so
+        # the same full x+y clip applies, not the title's x-only one).
+        # Inert by design (P1's own ruling): facets support no per-panel
+        # legend position/title override at all (`render_facets_figure`'s
+        # `overrides` doc), so there is nothing to commit a drag/edit INTO
+        # yet -- the client gates it the same way it gates a per-panel
+        # title (`PreviewOverlay.tsx`'s `hasSoundTarget`), not by leaving
+        # it unharvested and pretending it isn't there.
+        legend = ax.get_legend()
+        if legend is not None:
+            try:
+                bbox = _artist_window_extent(legend, renderer)
+                if bbox.width > 0 and bbox.height > 0:
+                    clipped = _clip_box(_bbox_to_pixels(bbox, height), axes_px)
+                    if clipped is not None:
+                        elements.append({"id": "legend", "panel": panel_index, **clipped})
             except (RuntimeError, AttributeError):
                 pass
         for i, artist in enumerate(series_artists):

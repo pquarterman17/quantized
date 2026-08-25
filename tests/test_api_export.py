@@ -940,6 +940,47 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert isinstance(m["axes"], dict)
 
 
+# ── FU-facet-hitmap fix round 4 (P3): the flat path's own `add()` still
+# dropped a zero-height series box outright -- the exact gap round 3's J4
+# closed for facets, using the SAME `_pad_degenerate` helper reused here. ───
+def test_figure_hitmap_flat_pads_degenerate_series_constant_and_single_row() -> None:
+    ds_constant = {
+        "time": [0.0, 1.0, 2.0, 3.0],
+        "values": [[2.0], [2.0], [2.0], [2.0]],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": ds_constant, "dpi": 100, "title": "T"},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    ids = {e["id"] for e in m["elements"]}
+    assert "series:0" in ids  # previously dropped entirely -- only "title" survived
+    series = next(e for e in m["elements"] if e["id"] == "series:0")
+    assert series["y1"] - series["y0"] >= 5.9  # padded to (at least) _HIT_PAD
+    assert series["x1"] - series["x0"] > 20  # x wasn't degenerate -- real width
+
+    ds_single = {
+        "time": [5.0],
+        "values": [[3.0]],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp2 = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": ds_single, "dpi": 100, "title": "T"},
+    )
+    assert resp2.status_code == 200
+    m2 = resp2.json()
+    series2 = next(e for e in m2["elements"] if e["id"] == "series:0")
+    assert series2["x1"] - series2["x0"] >= 5.9
+    assert series2["y1"] - series2["y0"] >= 5.9
+
+
 # ── FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
 # hitmap request now returns REAL per-panel geometry -- one `panels` entry
 # per facet panel (pixel rect + data limits + facet label) and `elements`
@@ -1054,6 +1095,43 @@ def test_figure_hitmap_facets_series_boxes_clip_to_own_panel_under_zoom() -> Non
     # Titles are UNAFFECTED by the zoom (a text glyph's bbox, not a
     # data-space transform) -- still one per panel, never dropped.
     assert len([e for e in m["elements"] if e["id"] == "title"]) == n
+
+
+# ── FU-facet-hitmap fix round 4 (P1): draw_facet_grid draws a REAL per-panel
+# legend whenever that panel has more than one series -- it must be hit-
+# testable (clipped to its own panel, like a series line), even though it
+# stays inert client-side (no per-panel legend position/title override
+# exists yet). ────────────────────────────────────────────────────────────────
+def test_figure_hitmap_facets_harvests_per_panel_legend_when_multi_series() -> None:
+    facets = [
+        {
+            "label": "level 0", "x": [0.0, 1.0, 2.0],
+            "series": [
+                {"label": "a", "y": [0.0, 1.0, 2.0]},
+                {"label": "b", "y": [2.0, 1.0, 0.0]},
+            ],
+        },
+        {
+            "label": "level 1", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "a", "y": [1.0, 2.0, 3.0]}],  # single series -> no legend
+        },
+    ]
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "dpi": 100, "facets": facets},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    legends = [e for e in m["elements"] if e["id"] == "legend"]
+    assert len(legends) == 1  # only panel 0 has >1 series
+    lg = legends[0]
+    assert lg["panel"] == 0
+    panels = {p["panel"]: p for p in m["panels"]}
+    p0 = panels[0]
+    # Clipped inside its own panel's axes rect -- same treatment as a
+    # series line, never a title's above-axes exemption.
+    assert p0["x0"] - 1e-6 <= lg["x0"] < lg["x1"] <= p0["x1"] + 1e-6
+    assert p0["y0"] - 1e-6 <= lg["y0"] < lg["y1"] <= p0["y1"] + 1e-6
 
 
 # ── FU-facet-hitmap fix round 3 (J2): the whole FIGURE's own title/x-label/
