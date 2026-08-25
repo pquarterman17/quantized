@@ -168,7 +168,6 @@ export interface ImportSlice extends ErrorRolesActions {
   importPaths: (paths: string[], opts?: ImportPathsOptions) => Promise<string[]>;
 }
 
-
 /** Basename without directory — the display name for a path import. */
 export function pathBasename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -192,10 +191,9 @@ function addFromPayload(
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
   // MAIN #33 provenance: what this import DECIDED, recorded on the dataset
-  // rather than inferred later. The original file is never written to, so
-  // this is the only place the decisions can survive. ONE timestamp per
-  // import call — every dataset this call creates, including every book of
-  // a multi-book Origin project below, shares this same `importedAt`.
+  // (the file is never written to). ONE timestamp per import call — every
+  // dataset this call creates, incl. every book of a multi-book project
+  // below, shares this same `importedAt`.
   const importedAt = new Date().toISOString();
   const figures = data.figures;
   const fidelity = data.origin_fidelity;
@@ -205,15 +203,15 @@ function addFromPayload(
   if (data.books && data.books.length > 1) {
     // Origin project: import every workbook as its own dataset. Per
     // ORIGIN_FILE_DECODE_PLAN #38, `book` is one of three shapes: the PRIMARY
-    // book's no-data marker (its real time/values are at the top-level `data`
-    // instead), another book's lazy preview (small preview time/values now,
-    // full data fetched on first activation — `pending` records how), or —
-    // only under the `full_books` escape hatch, never requested here — a full
-    // inline DataStruct.
+    // book's no-data marker (real time/values at the top-level `data`
+    // instead), another book's lazy preview (preview now, full data fetched
+    // on first activation — `pending` records how), or — only under the
+    // `full_books` escape hatch, never requested here — a full inline DataStruct.
     const bookSource = data.book_source;
-    // FU-1 provenance fix: every book below now gets `importedAt`. Error
-    // roles too — but NEVER from the label guesser (`importRoles`, used by
-    // the single-file `else` branch below): see `originBookErrorRoles`'s doc.
+    // FU-1: every book gets `importedAt` + designation-derived error roles
+    // (never the label guess) — see `originBookErrorRoles`'s doc. `?? {}`
+    // here: unlike the single-file branch below, this NEVER falls back to
+    // the label guess even when a book has no usable designation info.
     for (const book of data.books) {
       const meta = (book.metadata ?? {}) as Record<string, unknown>;
       const short = String(meta.origin_book ?? "Book");
@@ -221,7 +219,7 @@ function addFromPayload(
       const label = long && long !== short ? `${short} — ${long}` : short;
       const id = nextDatasetId();
       const name = `${stem}:${label}`;
-      const roles = originBookErrorRoles(book.metadata, book.labels);
+      const roles = originBookErrorRoles(book) ?? {};
       if (isPrimaryBookMarker(book)) {
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
@@ -285,8 +283,14 @@ function addFromPayload(
     delete data.books;
     delete data.book_source;
     const id = nextDatasetId();
+    // L1: a single-book `.opj`/`.opju` import (books.length <= 1, probably
+    // the MORE common file) took this branch and used ONLY the label guess —
+    // the same harm E1 fixed for the multi-book branch above. Prefer Origin's
+    // designations here too; a genuinely non-Origin file (`null`) is unchanged.
     const dsInput: Dataset = {
-      id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
+      id, name: origin.name, data, ...src,
+      ...(originBookErrorRoles(data) ?? importRoles(data)),
+      importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
     get().addDataset(dsInput, historyToken);

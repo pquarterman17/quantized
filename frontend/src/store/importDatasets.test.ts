@@ -430,6 +430,64 @@ describe("multi-book Origin import provenance (FU-1)", () => {
   });
 });
 
+// Round 3 (L1): a ONE-workbook `.opj`/`.opju` never gets a `books[]` array at
+// all (the backend only emits it for `len(books) > 1`) -- so it takes THIS
+// single-file `else` branch, not the multi-book one above. Before this fix
+// that branch called ONLY the label guesser (`importRoles`), so the exact
+// harm E1 fixed for multi-book projects was still live for what is probably
+// the MORE common Origin file.
+describe("single-book Origin import provenance (FU-1 round 3, L1)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  /** A single-book `.opj`-shaped payload: no `books[]` (so it takes the
+   *  `else` branch), but `data.metadata` itself carries the SAME Origin
+   *  designation metadata a real single-workbook project decodes. */
+  const originPayload = (labels: string[], b: string, c: string, d: string) => ({
+    time: [0, 1],
+    values: [[10, 1, 2], [20, 3, 4]],
+    labels,
+    units: labels.map(() => ""),
+    metadata: {
+      origin_book: "Sheet1",
+      origin_column_names: ["B", "C", "D"],
+      column_designations: { A: "X", B: b, C: c, D: d },
+    },
+  });
+
+  it("does NOT bind a genuine 'Depth' measurement column as an error role", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(originPayload(["Refl", "Depth", "Temp"], "Y", "Y", "Y"));
+    await useApp.getState().importFiles(files("OneBook.opj"));
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.errorRoles).toBeUndefined();
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("derives error roles from a genuine Y-error designation, leaving a plain Depth column beside it unbound", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(
+      originPayload(["Refl", "Refl_err", "Depth"], "Y", "Y-error", "Y"),
+    );
+    await useApp.getState().importFiles(files("OneBook.opj"));
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("a genuinely non-Origin file (no designation metadata) still uses the label guess, unchanged", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      time: [0, 1],
+      values: [[1, 10], [2, 20]],
+      labels: ["R", "dR"],
+      units: ["", ""],
+      metadata: {},
+    });
+    await useApp.getState().importFiles(files("plain.csv"));
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+});
+
 describe("import busy state (pendingOps, P3.4 slice 1)", () => {
   it("registers a pendingOps op while a single-file import is in flight, then clears it", async () => {
     let resolve!: (v: ReturnType<typeof payload>) => void;
