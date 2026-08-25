@@ -51,6 +51,21 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
       onSelect?.(index, modsFrom(e));
       return;
     }
+    // Delete/Backspace: CONSUMED, deliberately without doing anything. A peak
+    // row has no delete semantics of its own, but useGlobalShortcuts.ts's
+    // window listener removes the selected DATASET(s) on this key whenever no
+    // closer handler called preventDefault() and the target isn't a text
+    // field. A focused <tr> is neither, so without this the keystroke reached
+    // that handler and silently destroyed data — the exact failure its own
+    // header documents ("trouble hitting delete of the box and I ended up
+    // deleting the dataset") and the protocol it prescribes for any component
+    // with its own focused selection. This table newly makes a row focusable
+    // AND visibly selected, so it must opt in. preventDefault() is also what
+    // stops Backspace triggering the browser's Back navigation.
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      return;
+    }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     const dir = e.key === "ArrowDown" ? 1 : -1;
@@ -88,7 +103,12 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
             <tr
               key={i}
               aria-selected={interactive ? isSelected : undefined}
-              tabIndex={interactive ? (i === focusIndex ? 0 : -1) : -1}
+              // No tabIndex AT ALL when inert: tabIndex={-1} is not a tab stop
+              // but IS click-focusable, and the inert branch attaches no
+              // onKeyDown — so a click followed by ArrowDown reached
+              // useGlobalShortcuts.ts's prev/next-dataset navigation, switched
+              // the active dataset, and wiped the user's peaks/fitResult.
+              tabIndex={interactive ? (i === focusIndex ? 0 : -1) : undefined}
               onFocus={interactive ? () => setRovingIndex(i) : undefined}
               // Design tokens only (CLAUDE.md) — same visual contract as
               // LibraryDetails' `.qzk-details-table tbody tr.selected`
