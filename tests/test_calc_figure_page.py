@@ -668,6 +668,379 @@ def test_facet_panel_grid_sub_axes_stay_within_the_cell_frame(resize_mode: str) 
         plt.close(fig)
 
 
+# ── the "tight"/"none" grid-fallback throwaway is a DECORATION-FREE
+# placeholder axes (`figure_page_facets._frame_axes` -- no ticks/spines/
+# title/data), not a proxy that models the facet's own content. Verified
+# against the "constrained"/SubFigure oracle: a facet cell's own internal
+# decorations never affect its outer cell size there, so the throwaway
+# carries none, and `_draw_inset_cell`'s fixed internal fractions
+# (`_FREE_MARGIN_*`/`_FREE_TITLE_BAND`) are the SOLE reservation for
+# title/tick-label space on every placement path. Earlier designs tried:
+# an EMPTY throwaway (its residual vs. an ordinary panel was constant
+# regardless of facet content -- never measuring reality); a CONTENT-
+# MODELING proxy that plotted the facet's own data/title onto the
+# throwaway (crashed on multi-series facets, and separately on the wire
+# contract's `list[float | None]` null gaps -- AND double-reserved title
+# space: `tight_layout` reserved it OUTSIDE the cell for the proxy's own
+# `set_title` call while `_draw_inset_cell` ALSO reserves it INSIDE that
+# same cell, costing real content 23-27% of its height instead of the
+# correct 16%). See `figure_page_facets`'s module doc for the full
+# rationale and `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md`'s F4 log for the
+# round-by-round history that arrived here (null/non-finite facet-data
+# handling itself lives in `figure_facets.draw_facet_grid`, which the real
+# sub-grid always went through -- the deleted content-modeling proxy was
+# the only thing that ever duplicated that conversion, unsafely).
+#
+# `_facet_geometry_probe`'s oracle comparison below is the test-side
+# counterpart: the "constrained"/SubFigure rendering of the SAME facet
+# payload needs no proxy at all (a real layout-engine solve against the
+# REAL content), so it's the honest ground truth -- replacing an earlier
+# construction-level test that built its "ordinary panel" control from the
+# SAME data a since-deleted proxy itself plotted (true by construction,
+# so it could not have caught the double-count above). MEASURED (a case
+# matrix spanning 1/2/4/6/9 facets, with/without a title, 1x1/1x2/2x2/3x3
+# grids, zero/moderate gaps, corner and center cell positions): worst-case
+# deviation from the oracle is content-INDEPENDENT (the throwaway carries
+# none, so it can't vary with it) and driven entirely by grid shape/gaps
+# -- `0.0667` for "tight", `0.1204` for "none" (both a fraction of the
+# page). Cross-checked against an ordinary (also decoration-free) panel in
+# the same slot: it shows the SAME-sized deviation from the oracle,
+# confirming this is matplotlib's OWN inherent tight_layout/rc-default-vs-
+# constrained-layout baseline difference, not a facet-specific defect.
+#
+# That broad bound is too LOOSE to be a regression guard for the
+# ownership-rule fix by itself: it also passes for a REVERTED throwaway
+# (confirmed by reverting `begin_grid_cell_fallback` to a plain
+# `return fig.add_subplot(cell_spec)` and re-running `pytest -k facet` --
+# 135 passed, 0 failed, every case below passes unchanged against BOTH
+# implementations, since the ~0.047 the revert adds is still under
+# `_TIGHT_ORACLE_TOL`). The actual regression guard is the discriminating
+# test right after it, on the one coordinate where the two differ most.
+# ─────────────────────────────────────────────────────────────────────
+
+_ORACLE_HEADROOM = 1.5  # over the measured worst case -- for an rcParams/
+# matplotlib-version nudge, not flakiness (this geometry is deterministic).
+_TIGHT_ORACLE_WORST_MEASURED = 0.0667
+_NONE_ORACLE_WORST_MEASURED = 0.1204
+_TIGHT_ORACLE_TOL = _TIGHT_ORACLE_WORST_MEASURED * _ORACLE_HEADROOM  # ~0.100
+_NONE_ORACLE_TOL = _NONE_ORACLE_WORST_MEASURED * _ORACLE_HEADROOM  # ~0.181
+
+# The discriminator (see test below): strictly between the fixed code's
+# |diff|=0.0120 and the reverted code's |diff|=0.0473 on the same case.
+_X0_DISCRIMINATOR_MARGIN = 0.02
+
+
+def _facet_geometry_probe(
+    payload: list[dict[str, Any]],
+    resize_mode: str,
+    *,
+    title: str = "",
+    col_gap: float | None = 0.3,
+    row_gap: float | None = None,
+    rows: int = 1,
+    cols: int = 2,
+    row: int = 0,
+    col: int = 0,
+) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float]]:
+    """Build a page with one faceted panel (from ``payload``) at
+    ``(row, col)`` plus an ordinary flat sibling in every OTHER cell,
+    render under ``resize_mode``, and return ``(frame_rect, sub_bbox)`` --
+    both ``(x0, x1, y0, y1)`` -- the settled cell-frame rect and the union
+    bbox of the REAL facet sub-axes drawn inside it. Used as both the
+    oracle (``resize_mode="constrained"``, no proxy involved at all -- a
+    real SubFigure solve against the real content) and the fallback under
+    test ("tight"/"none")."""
+    import matplotlib.pyplot as plt
+
+    facet = PagePanel(x=[], series=(), row=row, col=col, facets=payload, title=title)
+    others = [
+        _panel(r, c)
+        for r in range(rows)
+        for c in range(cols)
+        if not (r == row and c == col)
+    ]
+    st = _figure_style_default()
+    fig = _build_page_figure_helper(
+        [facet, *others], free_placement=False, w=9.0, h=6.0, rows=rows, cols=cols,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=col_gap, row_gap=row_gap, resize_mode=resize_mode,
+    )
+    try:
+        fig.canvas.draw()
+        subs = _facet_subs(fig, len(payload))
+        frame_ax = [ax for ax in fig.axes if ax not in subs and not ax.get_lines()][0]
+        fpos = frame_ax.get_position()
+        frame_rect = (fpos.x0, fpos.x1, fpos.y0, fpos.y1)
+        xs = [ax.get_position().x0 for ax in subs] + [ax.get_position().x1 for ax in subs]
+        ys = [ax.get_position().y0 for ax in subs] + [ax.get_position().y1 for ax in subs]
+        sub_bbox = (min(xs), max(xs), min(ys), max(ys))
+        return frame_rect, sub_bbox
+    finally:
+        plt.close(fig)
+
+
+def _assert_fallback_frame_matches_oracle(
+    payload: list[dict[str, Any]], resize_mode: str, *, tol: float, **kw: Any
+) -> None:
+    """Broad coverage: the fallback's cell frame, compared against the REAL
+    ``"constrained"``/SubFigure rendering of the SAME payload (see
+    ``_facet_geometry_probe``'s doc) -- the honest oracle, replacing an
+    earlier construction-level comparison that proved nothing. NOT the
+    headline regression guard by itself (see the module comment above and
+    the discriminating test right below) -- ``tol`` here is loose enough to
+    also pass for a reverted, non-decoration-free throwaway. Also exercises
+    the full render, so a payload that once crashed the fallback is
+    covered here too."""
+    oracle_frame, _ = _facet_geometry_probe(payload, "constrained", **kw)
+    got_frame, _ = _facet_geometry_probe(payload, resize_mode, **kw)
+    for label, o, g in zip(("x0", "x1", "y0", "y1"), oracle_frame, got_frame, strict=True):
+        assert abs(o - g) <= tol, (
+            f"{resize_mode} {label}={g:.4f} vs constrained-oracle {label}={o:.4f} "
+            f"(|diff|={abs(o - g):.4f} > tol={tol})"
+        )
+
+
+def test_facet_panel_grid_fallback_tight_frame_x0_discriminates_decoration_free() -> None:
+    # H1 (round 7): the headline regression guard for the ownership-rule
+    # fix. The broad oracle-tolerance test below is NOT sufficient by
+    # itself -- confirmed by reverting `begin_grid_cell_fallback` to
+    # `return fig.add_subplot(cell_spec)` (an ordinary, default-ticked
+    # throwaway, i.e. what this branch replaced) and re-running
+    # `pytest -k facet`: 135 passed, 0 failed, including every case of the
+    # broad matrix below, unchanged. This test is the actual discriminator
+    # -- the ONE geometry where the two designs differ most: on a 9x6in
+    # 1x2 page under "tight", the decoration-free throwaway's frame x0 is
+    # `0.0167` (measured, this branch) against a `"constrained"`-oracle x0
+    # of `0.0046` (|diff|=0.0120); the REVERTED, ordinary throwaway instead
+    # gives x0=`0.0519` (|diff|=0.0473). `_X0_DISCRIMINATOR_MARGIN` sits
+    # strictly between the two -- confirmed RED by actually performing
+    # that revert and re-running this test (it failed with
+    # |diff|=0.0473 > margin=0.02, as expected).
+    oracle_frame, _ = _facet_geometry_probe(_facet_payload(1), "constrained")
+    tight_frame, _ = _facet_geometry_probe(_facet_payload(1), "tight")
+    diff = abs(oracle_frame[0] - tight_frame[0])
+    assert diff <= _X0_DISCRIMINATOR_MARGIN, (
+        f"tight frame x0={tight_frame[0]:.4f} vs constrained-oracle "
+        f"x0={oracle_frame[0]:.4f} (|diff|={diff:.4f} > "
+        f"margin={_X0_DISCRIMINATOR_MARGIN}) -- did begin_grid_cell_fallback "
+        f"stop returning a decoration-free throwaway?"
+    )
+
+
+@pytest.mark.parametrize(
+    "resize_mode,tol", [("tight", _TIGHT_ORACLE_TOL), ("none", _NONE_ORACLE_TOL)]
+)
+@pytest.mark.parametrize(
+    "n,title,col_gap,row_gap,rows,cols,row,col",
+    [
+        (1, "", None, None, 1, 2, 0, 0),
+        (2, "", None, None, 1, 2, 0, 0),
+        (4, "", None, None, 1, 2, 0, 0),
+        (6, "", None, None, 1, 2, 0, 0),
+        (9, "", None, None, 1, 2, 0, 0),
+        (2, "Facet Title", None, None, 1, 2, 0, 0),
+        (4, "Facet Title", 0.3, None, 1, 2, 0, 0),
+        (4, "Facet Title", 0.3, 0.3, 2, 2, 0, 0),
+        (9, "", 0.3, 0.3, 2, 2, 0, 0),
+        (2, "", None, None, 2, 2, 1, 1),
+        (4, "Facet Title", 0.2, 0.2, 3, 3, 1, 1),
+        (1, "Facet Title", 0.0, 0.0, 1, 1, 0, 0),
+    ],
+)
+def test_facet_panel_grid_fallback_frame_matches_constrained_oracle(
+    resize_mode: str,
+    tol: float,
+    n: int,
+    title: str,
+    col_gap: float | None,
+    row_gap: float | None,
+    rows: int,
+    cols: int,
+    row: int,
+    col: int,
+) -> None:
+    _assert_fallback_frame_matches_oracle(
+        _facet_payload(n), resize_mode, tol=tol, title=title,
+        col_gap=col_gap, row_gap=row_gap, rows=rows, cols=cols, row=row, col=col,
+    )
+
+
+def test_facet_panel_grid_fallback_frame_is_content_independent() -> None:
+    # Construction-level check (F3 permits keeping one, but it's not the
+    # headline evidence above): the ownership rule says the throwaway
+    # carries NO facet content, so the settled frame must be IDENTICAL
+    # regardless of facet count/title/data magnitude -- only grid shape/
+    # gaps can move it. This is a REAL invariant now (not tautological
+    # like the round-4/5 test it replaces): it directly encodes the
+    # ownership rule, so a regression that reintroduces content-modeling
+    # on the proxy (reopening the F2 double-count) fails it immediately.
+    huge_payload = [
+        {"label": "level 0", "x": [1.0e8, 2.0e8], "series": [{"label": "s", "y": [1.0e9, 2.0e9]}]},
+    ]
+    for resize_mode in ("tight", "none"):
+        baseline, _ = _facet_geometry_probe(_facet_payload(2), resize_mode)
+        for variant_payload, kw in [
+            (_facet_payload(9), {}),
+            (_facet_payload(2), {"title": "A Rather Long Facet Title"}),
+            (huge_payload, {}),
+        ]:
+            variant, _ = _facet_geometry_probe(variant_payload, resize_mode, **kw)
+            assert variant == pytest.approx(baseline, abs=1e-9)
+
+
+def test_facet_panel_grid_fallback_subgrid_fills_expected_fraction_of_cell() -> None:
+    # F3: "assert the drawn sub-grid actually FILLS its settled cell (no
+    # large unexplained band)." With the ownership rule (inset owns ALL
+    # internal spacing), the sub-grid's own bbox, as a fraction of the
+    # WHATEVER frame it's given, must equal EXACTLY the analytic fraction
+    # the fixed _FREE_MARGIN_*/_FREE_TITLE_BAND constants predict -- a pure
+    # geometric identity, pinned tight. NOTE this checks `_draw_inset_cell`
+    # is internally self-consistent, not F2's double-count directly: that
+    # bug shrank the OUTER frame itself (title space reserved twice, once
+    # externally by tight_layout, once again internally here), and this
+    # ratio is unconditionally satisfied regardless of what frame it's
+    # handed (confirmed: this test still PASSED red-first against the
+    # round-5 double-counting code -- it measures internal math, not the
+    # frame's own correctness). The actual F2 regression guard is
+    # `test_facet_panel_grid_fallback_frame_is_content_independent` above
+    # (confirmed RED against round-5: title/data changed the frame by up
+    # to 0.024, min tolerance is 1e-9) -- this test is kept anyway because
+    # F3 asked for it explicitly and it does verify the split itself is
+    # exactly the stated 16% title cost, not some other fraction.
+    from quantized.calc.figure_page_facets import (
+        _FREE_MARGIN_BOTTOM,
+        _FREE_MARGIN_LEFT,
+        _FREE_MARGIN_RIGHT,
+        _FREE_MARGIN_TOP,
+        _FREE_TITLE_BAND,
+    )
+
+    expected_w = 1 - _FREE_MARGIN_LEFT - _FREE_MARGIN_RIGHT
+    expected_h_notitle = 1 - _FREE_MARGIN_TOP - _FREE_MARGIN_BOTTOM
+    expected_h_title = expected_h_notitle * (1 - _FREE_TITLE_BAND)
+
+    for resize_mode in ("tight", "none"):
+        for n in (2, 4):
+            for title, expected_h in (("", expected_h_notitle), ("Facet Title", expected_h_title)):
+                frame, sub = _facet_geometry_probe(_facet_payload(n), resize_mode, title=title)
+                frame_w, frame_h = frame[1] - frame[0], frame[3] - frame[2]
+                sub_w, sub_h = sub[1] - sub[0], sub[3] - sub[2]
+                assert sub_w / frame_w == pytest.approx(expected_w, abs=1e-6)
+                assert sub_h / frame_h == pytest.approx(expected_h, abs=1e-6)
+
+
+def _multi_series_payload(
+    n_levels: int, n_series: int, *, ragged: bool = False
+) -> list[dict[str, Any]]:
+    """``n_levels`` facet levels, each carrying ``n_series`` channels --
+    the ordinary multi-channel-per-facet case round 4's own case matrix
+    never covered (every prior fixture used exactly 1 series/level).
+    ``ragged=True`` gives level ``i`` an x array of length ``3 + (i % 2)``
+    (a facet payload need not have uniform per-level lengths)."""
+    payload = []
+    for i in range(n_levels):
+        xlen = 3 + (i % 2 if ragged else 0)
+        x = [float(v) for v in range(xlen)]
+        series = [
+            {"label": f"s{j}", "y": [float(i + j + v) for v in range(xlen)]}
+            for j in range(n_series)
+        ]
+        payload.append({"label": f"level {i}", "x": x, "series": series})
+    return payload
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_multi_series_per_level_renders_and_matches(resize_mode: str) -> None:
+    # Red-first (round 5): pre-fix, this raised ValueError("x and y must
+    # have same first dimension, but have shapes (12,) and (24,)") for
+    # every resize_mode -- begin_grid_cell_fallback's proxy plotted
+    # all_x (once/level) against all_y (once/series/level), which diverge
+    # the moment n_series > 1. 4 levels x 2 series reproduces it exactly.
+    payload = _multi_series_payload(n_levels=4, n_series=2)
+    tol = _TIGHT_ORACLE_TOL if resize_mode == "tight" else _NONE_ORACLE_TOL
+    _assert_fallback_frame_matches_oracle(payload, resize_mode, tol=tol)
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_ragged_levels_render_and_match(resize_mode: str) -> None:
+    # Different x length per level (a facet payload is never required to
+    # be a uniform rectangle) -- covers the same all_x/all_y length-
+    # divergence class of bug from a different angle (per-LEVEL x length
+    # varying, not just per-series y count).
+    payload = _multi_series_payload(n_levels=4, n_series=2, ragged=True)
+    tol = _TIGHT_ORACLE_TOL if resize_mode == "tight" else _NONE_ORACLE_TOL
+    _assert_fallback_frame_matches_oracle(payload, resize_mode, tol=tol)
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_nonfinite_series_values_render_and_match(resize_mode: str) -> None:
+    # A level whose series carries NaN/Inf -- draw_facet_grid's own
+    # np.asarray(..., dtype=float)/autoscale (the real per-panel drawing
+    # core, unchanged by this branch) already drops non-finite values
+    # from the view; this exercises that through the fallback path and
+    # confirms the settled frame geometry is unaffected.
+    payload = _multi_series_payload(n_levels=4, n_series=2)
+    payload[0]["series"][0]["y"][0] = float("nan")
+    payload[0]["series"][0]["y"][-1] = float("inf")
+    tol = _TIGHT_ORACLE_TOL if resize_mode == "tight" else _NONE_ORACLE_TOL
+    _assert_fallback_frame_matches_oracle(payload, resize_mode, tol=tol)
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_null_gap_values_render_and_match(resize_mode: str) -> None:
+    # The wire contract allows null gaps -- facet `x`/series `y` are
+    # `list[float | None]` (`(number|null)[]` on the frontend). A prior
+    # design's throwaway converted facet data with a per-element float(v)
+    # and raised TypeError on None; the current throwaway never touches
+    # facet data at all (see figure_page_facets's module doc), and the
+    # real content always went through draw_facet_grid's own
+    # np.asarray(..., dtype=float) conversion (None -> nan), which was
+    # never affected. Nulls in BOTH x and y, matching the original report.
+    payload = [
+        {
+            "label": "level 0", "x": [0.0, None, 2.0],
+            "series": [{"label": "s", "y": [0.0, 1.0, None]}],
+        },
+        {
+            "label": "level 1", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "s", "y": [3.0, 4.0, 5.0]}],
+        },
+    ]
+    tol = _TIGHT_ORACLE_TOL if resize_mode == "tight" else _NONE_ORACLE_TOL
+    _assert_fallback_frame_matches_oracle(payload, resize_mode, tol=tol)
+
+
+def test_facet_panel_all_nonfinite_data_renders_without_crashing() -> None:
+    # Fully degenerate: every value in every level/series is non-finite --
+    # the real sub-panels' own autoscale (draw_facet_grid) falls back to
+    # matplotlib's own [0, 1] default. Only a render-succeeds check --
+    # there's no "real content" footprint to compare against here by
+    # construction.
+    payload = [
+        {
+            "label": "level0",
+            "x": [float("nan"), float("inf")],
+            "series": [{"label": "s", "y": [float("nan"), float("-inf")]}],
+        }
+    ]
+    for resize_mode in ("tight", "none"):
+        facet = PagePanel(x=[], series=(), row=0, col=0, facets=payload)
+        flat = _panel(0, 1)
+        st = _figure_style_default()
+        fig = _build_page_figure_helper(
+            [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+            st=st, label_format="(a)", label_pos="nw",
+            col_gap=0.3, resize_mode=resize_mode,
+        )
+        try:
+            fig.canvas.draw()
+        finally:
+            import matplotlib.pyplot as plt
+
+            plt.close(fig)
+
+
+
 # ── secondary (right) Y axis / twinx (GUI_INTERACTION #12 slice 4c) ────────
 # The page composer's own real Axes.twinx() -- mirrors test_calc_figure_y2.py's
 # render_figure(y2_mask=...) coverage for the single-figure path this reuses
