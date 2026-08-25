@@ -902,6 +902,125 @@ with parent items P1.3 and P1.5.
       (`export_figure`, `export_figure_hitmap`) ever passed them. Dropped;
       `fmt` stays (the hitmap route still forces it to `"png"`).
 
+      **2026-08-25 fix round 4 (Claude): closed the `"tight"` approximation
+      round 3 documented (not just bounded it).** Round 3's throwaway was
+      EMPTY, so its default `0..1` ticks predicted a footprint unrelated to
+      the real facet content — probed: the residual against an ordinary
+      panel in the same 1x2/`col_gap=0.3` slot was a CONSTANT `~0.0144`
+      (`x1`) across every case tried (1/2/4/6/9 facets, long tick labels,
+      a cell title, with/without `col_gap`/`row_gap`) — i.e. it wasn't
+      measuring the real content at all, just an artifact of the empty
+      proxy's own default ticks differing from whatever the control
+      happened to show. A literal two-pass (embed the real multi-axes
+      sub-grid itself before the settle draw) was tried and REJECTED:
+      probed directly against `matplotlib._tight_layout.
+      get_tight_layout_figure` — `_auto_adjust_subplotpars` groups every
+      gridspec-backed Axes in `fig.axes` by its OWN gridspec's `(rows,
+      cols)` and requires each to be an exact divisor of the page-wide max
+      (a `divmod` check); a facet sub-grid's shape (e.g. 6 facets → 2x3)
+      routinely fails that check against a differently-shaped page grid
+      (e.g. 1x2 — 3 does not divide 2), and `get_tight_layout_figure`
+      returns `{}` (a "not compatible with tight_layout" warning) —
+      **no adjustment AT ALL for the entire page**, silently un-fixing
+      every other panel's position too (probed: a flat sibling's position
+      changed between the settle draw and a second draw with the real
+      sub-grid present, even though nothing about the *sibling* changed).
+
+      Fixed instead: `begin_grid_cell_fallback`'s throwaway is still a
+      SINGLE proxy Axes on the page's own `gs` (same `cell_spec`, so the
+      `divmod` compatibility check trivially passes, same as any ordinary
+      panel) — but it's no longer empty. `_populate_proxy_content` (first
+      cut) plotted the UNION of every facet level's own x/y data into it
+      and applied the SAME scale / tick-format / `x_lim` override / title
+      `draw_facet_grid` applies to the real sub-panels, so `tight_layout`'s
+      whitespace-trim solve sees a footprint like the real content's.
+      MEASURED post-fix, across the full case matrix above (1/2/4/6/9
+      facets × long/short tick labels × with/without a cell title × with/
+      without `col_gap`/`row_gap`, plus a log x-scale case and an `x_lim`-
+      override case): the facet cell's frame now matches an ordinary panel
+      carrying that SAME combined data/title to **machine precision
+      (`<1e-9`, bit-identical in every case tried)** — not merely bounded,
+      genuinely closed. (An unrelated/differently-shaped ordinary panel's
+      rect legitimately still differs under `"tight"` — its whitespace-trim
+      is content-dependent by design, so matching UNRELATED content exactly
+      would be the wrong invariant to chase; that's what the round-3 "none"
+      exact-match test checks instead, since `"none"` has no active layout
+      engine and is content-independent.) `"none"` re-verified unaffected
+      (still exact to `1e-6`) and `"constrained"` untouched (never calls
+      this fallback). New test:
+      `test_facet_panel_grid_tight_layout_cell_frame_matches_equivalent_
+      ordinary_panel` (parametrized `n=1,2,4,6,9`), comparing the facet
+      cell's frame against an ordinary panel built from the SAME
+      `_facet_payload(n)` data, pinned at `abs=1e-6` (matching the round-3
+      `"none"` test's own tolerance, well inside the measured `<1e-9`).
+
+      **2026-08-25 fix round 5 (Claude): round 4's proxy CRASHED on
+      multi-series facets — fixed by plotting a RANGE segment, not the raw
+      data.** `_populate_proxy_content`'s first cut built `all_x` by
+      extending once per LEVEL but `all_y` once per SERIES per level — with
+      ≥2 series per facet level those lengths diverge and
+      `proxy.plot(all_x, all_y)` raised `ValueError` (confirmed: 4 levels ×
+      2 series → shapes `(12,)` vs `(24,)`, under BOTH `"none"` and
+      `"tight"`). Multi-channel-per-facet (several series plotted within
+      one categorical level) is the ORDINARY case, not an edge case, so
+      round 4's own case matrix (every fixture used exactly 1 series/level)
+      never surfaced it — a coverage hole, not just a bug.
+
+      Root fix: the proxy only ever needs to estimate a FOOTPRINT
+      (tick-label widths, title height), which depends on axis RANGE and
+      tick FORMAT, never on how many lines are drawn or their per-level
+      lengths. `_facet_data_range(p)` now computes `(xmin, xmax, ymin,
+      ymax)` across every level/series (non-finite values dropped via
+      `np.isfinite`, so a NaN/Inf-carrying series can't poison the range),
+      returning `None` when nothing finite exists at all; `_populate_proxy_
+      content` plots a single 2-point segment spanning that range instead
+      of the raw concatenation — identical autoscale result for the
+      1-series-per-level cases already covered, but immune to series count
+      or ragged per-level lengths. Degenerate cases handled explicitly: no
+      finite data anywhere skips the plot call entirely (the proxy keeps
+      matplotlib's own default `[0, 1]` view — the real all-NaN/empty
+      sub-panels default to the exact same thing, so the proxy still
+      matches); a single finite point still autoscales fine (two identical-
+      coordinate points hit the same default-margin path a real one-point
+      series would); a non-positive bound under `"log"`/`"reciprocal"` is
+      NOT special-cased — `apply_axis_scale` runs after the plot call
+      (the same plot-then-scale order `draw_facet_grid` itself uses), so
+      matplotlib silently excludes it from the log view rather than
+      raising, exactly like the real content would.
+
+      Red-first: reproduced the exact reported `ValueError` in isolation
+      (bare `Axes.plot` with the old `all_x`/`all_y` construction), then
+      temporarily restored that old logic in `figure_page_facets.py` and
+      ran the new regression tests against it — all 6 parametrized cases
+      of `test_facet_panel_multi_series_per_level_renders_and_matches` /
+      `test_facet_panel_ragged_levels_render_and_match` /
+      `test_facet_panel_nonfinite_series_values_render_and_match` failed
+      with that same `ValueError: ... shapes (12,) and (24,)` (only the
+      single-series `test_facet_panel_all_nonfinite_data_renders_without_
+      crashing` case passed, as expected — it doesn't exercise the
+      multi-series divergence). Restored the fix; all 7 new tests + the 20
+      pre-existing facet tests pass green.
+
+      New coverage (round-5 gap): `test_facet_panel_multi_series_per_level_
+      renders_and_matches` (≥2 series/level, parametrized `"tight"`/
+      `"none"`, asserts render succeeds AND the cell-frame match still
+      holds), `test_facet_panel_ragged_levels_render_and_match` (different
+      x length per level), `test_facet_panel_nonfinite_series_values_
+      render_and_match` (NaN/Inf inside a series), and
+      `test_facet_panel_all_nonfinite_data_renders_without_crashing` (the
+      fully-degenerate no-finite-data-anywhere case, render-only — there's
+      no "real content" footprint to compare against by construction).
+
+      RE-MEASURED with the range-segment proxy: across the round-4 case
+      matrix PLUS the new multi-series/ragged/non-finite cases (19 distinct
+      payload shapes × 3 gap combinations × `"tight"`, plus a `"none"`
+      sanity sweep), the facet cell's frame still matches an ordinary panel
+      carrying the SAME combined data range/title to **machine precision
+      (bit-identical — the measured worst-case deviation was exactly `0.0`
+      in every case tried, at or below float64 rounding)** — the crash fix
+      did not reopen the round-4 gap; the `<1e-9` headline claim stands
+      unchanged under the corrected proxy.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

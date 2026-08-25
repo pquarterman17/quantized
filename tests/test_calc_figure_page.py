@@ -668,6 +668,201 @@ def test_facet_panel_grid_sub_axes_stay_within_the_cell_frame(resize_mode: str) 
         plt.close(fig)
 
 
+# ── fix round 4 (2026-08-25): the "tight" throwaway is no longer left empty
+# -- begin_grid_cell_fallback now plots a 2-point segment spanning the
+# union RANGE (min/max, every level, every series, non-finite values
+# ignored) of the facet's own x/y data (+ its scale/tick-format/x_lim
+# override/title) into it, so tight_layout's whitespace-trim solve sees a
+# footprint like the REAL content instead of an empty axes' default 0..1
+# ticks. MEASURED: this closes the "tight" gap to machine precision (0.0,
+# bit-identical, well under the 1e-6 pinned below) against an ordinary
+# panel carrying that SAME combined data range/title -- the honest ground
+# truth "tight" can be checked against, since (unlike "none") its
+# whitespace-trim IS legitimately content-dependent, so it cannot match an
+# UNRELATED ordinary panel's rect the way the "none" test above does.
+# Pre-fix (round 3), the empty throwaway's residual against an unrelated
+# ordinary panel in this same 1x2/col_gap=0.3 slot was a CONSTANT ~0.0144
+# (x1) regardless of what the facet content actually was -- i.e. it wasn't
+# even measuring the real content at all.
+#
+# Fix round 5 (2026-08-25, crash fix): round 4's FIRST attempt plotted the
+# raw concatenated x/y arrays (``all_x`` extended once per LEVEL, ``all_y``
+# once per SERIES per level) -- with >1 series per level those lengths
+# diverge and ``Axes.plot`` raised ``ValueError`` for every multi-channel
+# facet panel under "tight"/"none" (multi-series facets -- several
+# channels plotted per categorical level -- are the ORDINARY case, not an
+# edge case). Fixed by plotting only the RANGE (min/max), which is all the
+# footprint estimate ever depended on -- see
+# ``figure_page_facets._facet_data_range``'s own doc. The tests below
+# cover exactly what let the round-4 bug through: >=2 series per level,
+# ragged levels (different x lengths per level), and non-finite values in
+# a series, under BOTH "tight" and "none". ──────────────────────────────
+
+
+def _equivalent_range_ordinary_panel(
+    row: int, col: int, payload: list[dict[str, Any]], **kw: Any
+) -> PagePanel:
+    """An ordinary (non-faceted) panel carrying a 2-point segment spanning
+    the union RANGE (min/max x, min/max y, every level, every series, non-
+    finite ignored) of a facet ``payload`` -- exactly what
+    ``figure_page_facets._facet_data_range`` computes and
+    ``_populate_proxy_content`` now plots into the "tight"/"none" fallback
+    throwaway. The "ordinary panel in the same slot" a fixed facet cell is
+    checked against below: same combined data range (plus, via ``**kw``,
+    the same title/etc.), so its tick-label footprint approximates what
+    ``draw_facet_grid``'s real sub-panels need at their own outer (bottom-
+    row/left-column) edges -- independent of series COUNT or per-level
+    length, unlike the raw-concatenation approach round 4 first tried."""
+    xs = [float(v) for level in payload for v in level.get("x", [])]
+    ys = [
+        float(v)
+        for level in payload
+        for s in level.get("series", [])
+        for v in s.get("y", [])
+    ]
+    xs_f = [v for v in xs if v == v and abs(v) != float("inf")]
+    ys_f = [v for v in ys if v == v and abs(v) != float("inf")]
+    return PagePanel(
+        x=[min(xs_f), max(xs_f)], series=[("y", [min(ys_f), max(ys_f)])],
+        row=row, col=col, **kw,
+    )
+
+
+def _assert_facet_frame_matches_control(
+    facet_payload: list[dict[str, Any]], n: int, resize_mode: str, *, abs_tol: float = 1e-6
+) -> None:
+    """Shared assertion: a facet panel built from ``facet_payload`` (page
+    slot (0,0), a flat sibling at (0,1), col_gap=0.3) must render without
+    error under ``resize_mode`` and its cell-frame rect must match
+    ``_equivalent_range_ordinary_panel``'s own rect in the SAME slot to
+    ``abs_tol``."""
+    import matplotlib.pyplot as plt
+
+    control = _equivalent_range_ordinary_panel(0, 0, facet_payload, title="Facet Title")
+    flat = _panel(0, 1)
+    st = _figure_style_default()
+    control_fig = _build_page_figure_helper(
+        [control, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=0.3, resize_mode=resize_mode,
+    )
+    control_fig.canvas.draw()
+    control_pos = [ax for ax in control_fig.axes if ax.get_lines()][0].get_position()
+    plt.close(control_fig)
+
+    facet = PagePanel(
+        x=[], series=(), row=0, col=0, facets=facet_payload, title="Facet Title"
+    )
+    fig = _build_page_figure_helper(
+        [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+        st=st, label_format="(a)", label_pos="nw",
+        col_gap=0.3, resize_mode=resize_mode,
+    )
+    try:
+        fig.canvas.draw()
+        subs = _facet_subs(fig, n)
+        frame_ax = [ax for ax in fig.axes if ax not in subs and not ax.get_lines()][0]
+        pos = frame_ax.get_position()
+        assert pos.x0 == pytest.approx(control_pos.x0, abs=abs_tol)
+        assert pos.x1 == pytest.approx(control_pos.x1, abs=abs_tol)
+        assert pos.y0 == pytest.approx(control_pos.y0, abs=abs_tol)
+        assert pos.y1 == pytest.approx(control_pos.y1, abs=abs_tol)
+    finally:
+        plt.close(fig)
+
+
+@pytest.mark.parametrize("n", [1, 2, 4, 6, 9])
+def test_facet_panel_grid_tight_layout_cell_frame_matches_equivalent_ordinary_panel(
+    n: int,
+) -> None:
+    _assert_facet_frame_matches_control(_facet_payload(n), n, "tight")
+
+
+def _multi_series_payload(
+    n_levels: int, n_series: int, *, ragged: bool = False
+) -> list[dict[str, Any]]:
+    """``n_levels`` facet levels, each carrying ``n_series`` channels --
+    the ordinary multi-channel-per-facet case round 4's own case matrix
+    never covered (every prior fixture used exactly 1 series/level).
+    ``ragged=True`` gives level ``i`` an x array of length ``3 + (i % 2)``
+    (a facet payload need not have uniform per-level lengths)."""
+    payload = []
+    for i in range(n_levels):
+        xlen = 3 + (i % 2 if ragged else 0)
+        x = [float(v) for v in range(xlen)]
+        series = [
+            {"label": f"s{j}", "y": [float(i + j + v) for v in range(xlen)]}
+            for j in range(n_series)
+        ]
+        payload.append({"label": f"level{i}", "x": x, "series": series})
+    return payload
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_multi_series_per_level_renders_and_matches(resize_mode: str) -> None:
+    # Red-first (round 5): pre-fix, this raised ValueError("x and y must
+    # have same first dimension, but have shapes (12,) and (24,)") for
+    # every resize_mode -- begin_grid_cell_fallback's proxy plotted
+    # all_x (once/level) against all_y (once/series/level), which diverge
+    # the moment n_series > 1. 4 levels x 2 series reproduces it exactly.
+    payload = _multi_series_payload(n_levels=4, n_series=2)
+    _assert_facet_frame_matches_control(payload, 4, resize_mode)
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_ragged_levels_render_and_match(resize_mode: str) -> None:
+    # Different x length per level (a facet payload is never required to
+    # be a uniform rectangle) -- covers the same all_x/all_y length-
+    # divergence class of bug from a different angle (per-LEVEL x length
+    # varying, not just per-series y count).
+    payload = _multi_series_payload(n_levels=4, n_series=2, ragged=True)
+    _assert_facet_frame_matches_control(payload, 4, resize_mode)
+
+
+@pytest.mark.parametrize("resize_mode", ["tight", "none"])
+def test_facet_panel_nonfinite_series_values_render_and_match(resize_mode: str) -> None:
+    # A level whose series carries NaN/Inf -- _facet_data_range must drop
+    # non-finite values before taking min/max (a raw np.min/max over an
+    # array containing NaN silently propagates NaN into the "range",
+    # which set_xlim/set_ylim would then reject or mis-render).
+    payload = _multi_series_payload(n_levels=4, n_series=2)
+    payload[0]["series"][0]["y"][0] = float("nan")
+    payload[0]["series"][0]["y"][-1] = float("inf")
+    _assert_facet_frame_matches_control(payload, 4, resize_mode)
+
+
+def test_facet_panel_all_nonfinite_data_renders_without_crashing() -> None:
+    # Fully degenerate: every value in every level/series is non-finite --
+    # _facet_data_range returns None and _populate_proxy_content leaves the
+    # proxy un-plotted (matplotlib's own default [0, 1] view) rather than
+    # crashing on an empty post-filter array. Only a render-succeeds check
+    # -- there's no "real content" footprint to compare against here, by
+    # construction (draw_facet_grid's real sub-panels hit the same
+    # all-NaN data and matplotlib's same default in response).
+    payload = [
+        {
+            "label": "level0",
+            "x": [float("nan"), float("inf")],
+            "series": [{"label": "s", "y": [float("nan"), float("-inf")]}],
+        }
+    ]
+    for resize_mode in ("tight", "none"):
+        facet = PagePanel(x=[], series=(), row=0, col=0, facets=payload)
+        flat = _panel(0, 1)
+        st = _figure_style_default()
+        fig = _build_page_figure_helper(
+            [facet, flat], free_placement=False, w=9.0, h=3.0, rows=1, cols=2,
+            st=st, label_format="(a)", label_pos="nw",
+            col_gap=0.3, resize_mode=resize_mode,
+        )
+        try:
+            fig.canvas.draw()
+        finally:
+            import matplotlib.pyplot as plt
+
+            plt.close(fig)
+
+
 # ── secondary (right) Y axis / twinx (GUI_INTERACTION #12 slice 4c) ────────
 # The page composer's own real Axes.twinx() -- mirrors test_calc_figure_y2.py's
 # render_figure(y2_mask=...) coverage for the single-figure path this reuses

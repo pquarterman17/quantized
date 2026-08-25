@@ -69,6 +69,36 @@ gone, the facet's real sub-grid present but built from a plain, unmanaged
 ``GridSpec`` that ``tight_layout`` has no business touching) and silently
 perturb everything again.
 
+**Fix round 4 (2026-08-25): the "tight" gap is CLOSED (measured), not just
+bounded -- the throwaway is no longer EMPTY.** Round 3's empty throwaway
+predicted a footprint unrelated to the real content (a CONSTANT ``~0.0144``
+x1 residual regardless of facet content, probed across 1/2/4/6/9 facets). A
+literal two-pass (embed the real multi-Axes sub-grid, its OWN unmanaged
+``GridSpec``, before the settle draw) was tried and REJECTED: ``matplotlib.
+_tight_layout.get_tight_layout_figure`` groups every gridspec-backed Axes
+by its OWN gridspec's ``(rows, cols)`` and requires each to divide the
+page-wide max evenly (a ``divmod`` check) -- a facet sub-grid's shape
+routinely fails that against a differently-shaped page grid (probed: 6
+facets = 2x3 inside a 1x2 page grid), so the call returns ``{}`` -- NO
+adjustment for the ENTIRE page, silently un-fixing every other panel too.
+Fixed instead: the throwaway stays a SINGLE proxy Axes on the page's own
+``gs`` (the ``divmod`` check trivially passes) but is no longer empty
+(``_populate_proxy_content``).
+
+**Fix round 5 (2026-08-25, crash fix): round 4's FIRST cut plotted raw
+concatenated x/y arrays (``all_x`` once/LEVEL, ``all_y`` once/SERIES/level)
+-- with >1 series/level those lengths diverge and ``Axes.plot`` raised
+``ValueError`` (multi-series facets are ORDINARY, not an edge case).** A
+footprint depends on axis RANGE/tick FORMAT, never line count -- so
+``_facet_data_range`` returns just ``(xmin, xmax, ymin, ymax)`` (non-finite
+dropped) and the proxy plots a 2-point segment instead (degenerate cases:
+the two functions' own docstrings). MEASURED with the range-segment proxy,
+across the round-4 matrix PLUS multi-series/ragged/non-finite cases: still
+MACHINE-PRECISION (bit-identical) -- the crash fix did not reopen the gap.
+Numbers: ``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log; coverage:
+``test_facet_panel_multi_series_per_level_renders_and_matches`` in
+``tests/test_calc_figure_page.py``.
+
 Free (``page_rect``) placement is a DIFFERENT story from grid placement,
 and SubFigure BREAKS there outright (not just under some engines): probed
 with a ``GridSpec`` whose ``left``/``right``/``bottom``/``top`` carve out a
@@ -132,11 +162,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from matplotlib.gridspec import GridSpec
 
 from quantized.calc.figure_facets import _grid_shape, draw_facet_grid
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_scale import resolve_axis_scale
+from quantized.calc.figure_overrides import apply_axis_shape_overrides
+from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_ticks import apply_tick_formats
 
 if TYPE_CHECKING:
     from quantized.calc.figure_page import PagePanel
@@ -364,7 +397,64 @@ def draw_facet_panel_cell(
     )
 
 
-def begin_grid_cell_fallback(fig: Any, cell_spec: Any) -> Any:
+def _facet_data_range(p: PagePanel) -> tuple[float, float, float, float] | None:
+    """``(xmin, xmax, ymin, ymax)`` -- union RANGE across every level's x
+    and every series' y, non-finite ignored. ``None`` if nothing finite
+    exists (see module doc's fix-round-5 note)."""
+    assert p.facets
+    xs = [float(v) for level in p.facets for v in level.get("x", [])]
+    ys = [
+        float(v)
+        for level in p.facets
+        for s in level.get("series", [])
+        for v in s.get("y", [])
+    ]
+    x_finite = np.asarray(xs, dtype=float)
+    x_finite = x_finite[np.isfinite(x_finite)]
+    y_finite = np.asarray(ys, dtype=float)
+    y_finite = y_finite[np.isfinite(y_finite)]
+    if x_finite.size == 0 or y_finite.size == 0:
+        return None
+    return (
+        float(x_finite.min()), float(x_finite.max()),
+        float(y_finite.min()), float(y_finite.max()),
+    )
+
+
+def _populate_proxy_content(proxy: Any, p: PagePanel, st: FigureStyle) -> None:
+    """Plot a 2-point segment spanning ``_facet_data_range(p)`` into the
+    throwaway ``proxy`` (not empty, not the real per-series data -- see
+    module doc's fix-round-4/5 notes) and apply the SAME scale / tick-
+    format / x_lim override / title ``draw_facet_grid`` applies for real.
+
+    Degenerate cases: a single finite point still autoscales (two identical
+    points hit the same default-margin path a real one-point series would).
+    No finite data (``_facet_data_range`` -> ``None``) skips the plot call,
+    leaving the proxy's default ``[0, 1]`` view -- matching what the real
+    all-NaN/empty sub-panels also default to. A non-positive ``"log"``/
+    ``"reciprocal"`` bound isn't special-cased: ``apply_axis_scale`` runs
+    AFTER the plot call (``draw_facet_grid``'s own order), so matplotlib
+    silently excludes it rather than raising, same as the real content."""
+    assert p.facets
+    rng = _facet_data_range(p)
+    if rng is not None:
+        x0, x1, y0, y1 = rng
+        proxy.plot([x0, x1], [y0, y1])
+    resolved_x_scale = resolve_axis_scale(p.x_scale, p.x_log)
+    resolved_y_scale = resolve_axis_scale(p.y_scale, p.y_log)
+    apply_axis_scale(proxy, "x", resolved_x_scale)
+    apply_axis_scale(proxy, "y", resolved_y_scale)
+    apply_tick_formats(proxy, p.x_fmt, p.y_fmt)
+    # x_lim ONLY, same restricted override subset draw_facet_grid applies to
+    # every real sub-panel (see its own doc) -- a narrowed range can change
+    # the rendered tick labels' digit count/width, so it belongs in the
+    # footprint estimate too.
+    apply_axis_shape_overrides(proxy, st, dict(p.overrides or {}), lim_keys=("x_lim",))
+    if p.title:
+        proxy.set_title(safe_mathtext_label(p.title))
+
+
+def begin_grid_cell_fallback(fig: Any, cell_spec: Any, p: PagePanel, st: FigureStyle) -> Any:
     """Grid placement under ``"tight"``/``"none"`` resize_mode (W1, fix
     round 3): a throwaway placeholder ``Axes`` at ``cell_spec``, added so
     its EVENTUAL ``get_position()`` (read by ``finish_grid_cell_fallback``,
@@ -379,8 +469,17 @@ def begin_grid_cell_fallback(fig: Any, cell_spec: Any) -> Any:
     ``finish_grid_cell_fallback`` -- reading the position any earlier can
     be stale under ``"tight"`` (empirically confirmed: an early read does
     NOT match the final one there, unlike ``"none"``, where it already
-    does -- see module doc)."""
-    return fig.add_subplot(cell_spec)
+    does -- see module doc).
+
+    **Fix rounds 4/5 (2026-08-25):** the throwaway is no longer left empty
+    -- ``_populate_proxy_content`` plots a 2-point RANGE segment (not the
+    real per-series data, which crashes on multi-series facets) spanning
+    the facet's own data extent, so ``"tight"``'s whitespace-trim sees a
+    real-content-like footprint. See the module doc for why (a single proxy
+    Axes, not the real sub-grid)."""
+    proxy = fig.add_subplot(cell_spec)
+    _populate_proxy_content(proxy, p, st)
+    return proxy
 
 
 def finish_grid_cell_fallback(fig: Any, p: PagePanel, st: FigureStyle, throwaway: Any) -> Any:
