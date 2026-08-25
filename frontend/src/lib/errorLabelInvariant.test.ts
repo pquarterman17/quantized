@@ -132,4 +132,62 @@ describe("absolute ranking pins (a consistently-wrong ranking survives a before/
     expect(classifyErrorLabelInLabels(["2theta", "Intensity", "Ierr"], 2)?.base).toBe("i");
     expect(classifyErrorLabelInLabels(["M", "MStdErr"], 1)?.base).toBe("m");
   });
+
+  // The four pins above exercise "confirmed beats provisional" (Ierr, against
+  // its own duplicate glued reading) and "longer token wins" (MStdErr,
+  // M_std_err) -- but ERROR_TOKENS already happens to list "stderr" before
+  // "err", so a ranking that used TABLE POSITION instead of actual length
+  // would get MStdErr right BY ACCIDENT (see the discrimination experiment
+  // below). The four pins in this block each isolate one ranking key on a
+  // label where the token table's ORDER does not already imply the right
+  // answer, so a positional stand-in cannot pass by coincidence.
+
+  it('confirmed beats provisional even when the provisional\'s token is longer -- "Mstd_err"', () => {
+    // "mstd" (one segment -- lowercase, no internal capital) does not split
+    // the way "M_std"/"MStd" does, so the run rule only ever peels "err" off
+    // the end, CONFIRMED. The full flat string "mstderr" also happens to end
+    // in the token "stderr" (crossing what were "mstd"+"err"), which is a
+    // strictly LONGER token -- but only reachable by an unaligned glued
+    // match, PROVISIONAL. A ranking that checked token length before
+    // confirmed-status would pick the provisional "stderr" reading; the
+    // correct top pick is the shorter, confirmed one.
+    const ranked = rankCandidates(generateCandidates("Mstd_err"));
+    expect(ranked[0]).toMatchObject({ token: "err", base: "mstd", confirmed: true });
+  });
+
+  it('longer token wins even when the table lists it AFTER the shorter one -- "Sdev_X_err"', () => {
+    // ERROR_TOKENS order is [stderr, sigma, error, err, unc, sdev, std, sd,
+    // se] -- "err" (index 3) sits BEFORE "sdev" (index 5), the opposite of
+    // their length order. Both "sdev" (leading segment) and "err" (trailing
+    // segment) are confirmed, whole-segment matches here, so this is a pure
+    // rule-2 decision: the correct top pick is "sdev" (length 4), not "err"
+    // (length 3) -- a ranking keyed on table position instead of length
+    // would get this backwards.
+    const ranked = rankCandidates(generateCandidates("Sdev_X_err"));
+    expect(ranked[0]).toMatchObject({ token: "sdev", base: "xerr", confirmed: true });
+  });
+
+  it('longer base wins between two same-token confirmed candidates -- "X_err"', () => {
+    // "X_err" generates TWO confirmed candidates with the identical token
+    // "err": the ordinary run-rule reading (base "x", from the segment
+    // boundary at the underscore) and the explicit-axis-prefix reading
+    // (base "", by that rule's own definition -- the axis character is
+    // consumed, not kept). Confirmed-status and token length both tie, so
+    // this is a pure rule-3 decision, and it is also the more useful answer:
+    // preferring the longer ("x") base reads this as "column X's error", not
+    // a bare x-axis marker with no name at all.
+    const ranked = rankCandidates(generateCandidates("X_err"));
+    expect(ranked[0]).toMatchObject({ token: "err", base: "x", axis: null, confirmed: true });
+  });
+
+  it('the lexical tiebreak decides between two same-length confirmed candidates -- "Err_Mid_Unc"', () => {
+    // Leading segment "err" and trailing segment "unc" are both confirmed,
+    // both length 3 -- and because both readings consume the SAME total
+    // three segments, their bases ("midunc" and "errmid") are also both
+    // length 6, so rules 1-3 all tie. The final lexical tiebreak (comparing
+    // the base strings) decides it: "errmid" < "midunc", so the "unc"
+    // reading (base "errmid") wins.
+    const ranked = rankCandidates(generateCandidates("Err_Mid_Unc"));
+    expect(ranked[0]).toMatchObject({ token: "unc", base: "errmid", confirmed: true });
+  });
 });
