@@ -122,11 +122,29 @@ def collect_map(
     ``collect_facet_map``'s J4 fix (round 3) to the flat path too, via the
     same shared ``_pad_degenerate`` helper -- a flat figure of a constant-
     valued channel used to have a ``title`` hitbox and no clickable series
-    line at all."""
+    line at all.
+
+    Fix round 5 (V1): ``add_series`` also CLIPS to the axes rect now, via
+    the same ``_clip_box`` ``collect_facet_map``'s G1 fix (round 2) uses --
+    a series line's ``get_window_extent`` is the transform of its FULL data
+    extent, unclipped to the axes' current view; a zoomed ``x_lim``
+    override (an ordinary Stage box-zoom) put most of a line's raw data far
+    outside the narrowed view, so the reported box could balloon to
+    several times the IMAGE width and paint over unrelated UI outside the
+    preview entirely (the sticky Export/Apply row, in the Figure Builder --
+    G1 was never actually facet-specific, just first NOTICED there because
+    a faceted grid has sibling panels for an oversized box to visibly
+    invade). Dropped entirely (not emitted) when the clip is empty, same as
+    the facet path."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     width, height = fig.canvas.get_width_height()
+    # Computed HERE (fix round 5, V1), not after the harvest loop below --
+    # `add_series` needs it to clip against. Numerically identical to
+    # computing it after: the renderer/canvas state this reads from doesn't
+    # change while harvesting other artists' (already-drawn) extents.
+    axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
 
     elements: list[dict[str, Any]] = []
 
@@ -140,25 +158,35 @@ def collect_map(
         elements.append({"id": el_id, **_bbox_to_pixels(bbox, height)})
 
     def add_series(el_id: str, artist: Any) -> None:
-        """``add`` for a SERIES line specifically (fix round 4, P3): a
-        genuinely degenerate (zero-width or zero-height) box is padded to
-        ``_HIT_PAD``, not dropped -- the exact gap ``collect_facet_map``'s
+        """``add`` for a SERIES line specifically: a genuinely degenerate
+        (zero-width or zero-height) box is padded to ``_HIT_PAD``, not
+        dropped (fix round 4, P3) -- the exact gap ``collect_facet_map``'s
         J4 fix closed for facets (a constant-valued channel, or a single-
         point series, drew a real line the user could see but had NO
         series hit target at all -- only ``title``/``legend``/etc., if
-        present). Only a genuinely INVALID (non-finite) extent is skipped;
-        padding a NaN/inf box would manufacture a meaningless hit target.
-        Title/x-label/y-label/legend/annotations stay on plain ``add``
-        above -- they don't degenerate the way a series line does (see
-        ``add_decor``'s own doc for the ONE exception that already did:
-        reference lines/shapes, which are decor, not series)."""
+        present). Then CLIPPED to the axes rect (fix round 5, V1), same as
+        the facet path's own series clip -- see :func:`_clip_box`'s and
+        this function's own module-level doc for why an unclipped box can
+        balloon under a zoomed ``x_lim``; dropped entirely when the clip is
+        empty. Only a genuinely INVALID (non-finite) extent is skipped
+        before either step; padding/clipping a NaN/inf box would
+        manufacture a meaningless hit target. Title/x-label/y-label/
+        legend/annotations stay on plain ``add`` above -- they don't
+        degenerate OR balloon the way a series line does (see
+        ``add_decor``'s own doc for the ONE exception that already
+        degenerates: reference lines/shapes, which are decor, not
+        series)."""
         try:
             bbox = _artist_window_extent(artist, renderer)
         except (RuntimeError, AttributeError):
             return
         if not all(math.isfinite(v) for v in (bbox.x0, bbox.y0, bbox.x1, bbox.y1)):
             return
-        elements.append({"id": el_id, **_pad_degenerate(_bbox_to_pixels(bbox, height))})
+        padded = _pad_degenerate(_bbox_to_pixels(bbox, height))
+        clipped = _clip_box(padded, axes_px)
+        if clipped is None:
+            return
+        elements.append({"id": el_id, **clipped})
 
     def add_decor(el_id: str, artist: Any) -> None:
         """``add`` for a decor object, whose bbox is legitimately degenerate.
@@ -205,7 +233,8 @@ def collect_map(
         if isinstance(gid, str) and gid.startswith(("refline:", "shape:")):
             add_decor(gid, artist)
 
-    axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
+    # `axes_px` was already computed above (fix round 5, V1) so `add_series`
+    # could clip against it -- reused here verbatim, not recomputed.
     buf = BytesIO()
     fig.savefig(buf, format="png")
     return {

@@ -33,18 +33,35 @@ const isTextEditable = (e: HitElement) => TEXT_ELEMENTS.has(e.id) && e.panel ===
  *  J2's whole-figure title/xlabel/ylabel elements) is NEVER gated — those
  *  route to the real whole-figure config fields. */
 const PANEL_GATED_IDS = new Set(["title", "xlabel", "ylabel", "legend"]);
-const isPanelGated = (id: string, panel: number | undefined) => PANEL_GATED_IDS.has(id) && panel !== undefined;
+/** Fix round 5 (V2): a facet panel's own SERIES line joins the gate too --
+ *  same class as P1's legend, not a new one. `groupForElement("series:N")`
+ *  is already null (per-series styling has no single N->channel mapping --
+ *  see that function's own doc), so routing it to "Properties…" only ever
+ *  opened the generic Series group -- but a style edit made THERE is
+ *  INERT on the facet render path: `draw_facet_grid` hard-codes
+ *  `_plot_kwargs(..., None)` and neither `export_figure_hitmap`'s facet
+ *  branch nor `_render_facets_bytes` forwards `series_styles` at all, so a
+ *  colour/width change re-renders byte-identical with no sign it did
+ *  nothing. Forwarding `series_styles` through the facet render path would
+ *  be the OTHER honest fix (make the edit real) but is a materially larger
+ *  change (backend render-path wiring, not just this file); gating is the
+ *  smaller one, so `series:N` is inert here the same way a panel title is
+ *  -- see this file's own header for the deferral note this joins. */
+const isPanelGated = (id: string, panel: number | undefined) =>
+  panel !== undefined && (PANEL_GATED_IDS.has(id) || id.startsWith("series:"));
 /** FU-facet-hitmap fix round 2 (G3): whether ANY entry point (click,
  *  Enter/Space, the context menu's Properties…) has a sound target to route
- *  this element to. A facet panel's own title/xlabel/ylabel/legend
+ *  this element to. A facet panel's own title/xlabel/ylabel/legend/series
  *  (`isPanelGated`) has no per-panel edit target yet — `groupForElement
  *  ("title")` resolves to "Text & fonts", the FLAT path's whole-figure
  *  suptitle control, so routing a facet panel's own label (or legend)
  *  through it would silently treat that panel's own artist as the whole
- *  figure's. Every selection entry point shares this ONE gate (not just
- *  the double-click path `isTextEditable` already guarded) so a
- *  panel-scoped artist is never routed to the wrong object — it does
- *  nothing instead of guessing. */
+ *  figure's; a facet series routed to the generic Series group would look
+ *  editable there while the edit is actually inert on the render path
+ *  (V2). Every selection entry point shares this ONE gate (not just the
+ *  double-click path `isTextEditable` already guarded) so a panel-scoped
+ *  artist is never routed to the wrong OR inert object — it does nothing
+ *  instead of guessing. */
 const hasSoundTarget = (e: HitElement) => !isPanelGated(e.id, e.panel);
 /** A React key unique across panels — two different facet panels each draw
  *  their own "title" and "series:0" (FU-facet-hitmap), so `id` alone would
@@ -204,22 +221,23 @@ export default function PreviewOverlay({
     setEditing({ id, panel, value: textOf(id) });
   };
   const menuItems = (id: string, panel?: number): ContextMenuItem[] => {
-    const seriesEditable = id.startsWith("series:") && canonicalSeries;
-    // FU-facet-hitmap fix round 2 (G3), extended round 4 (P1) to the
-    // per-panel LEGEND: a gated element has no sound Properties… target
-    // either — same `isPanelGated` gate `hasSoundTarget` uses, inlined
-    // here since this function only has `id`/`panel`, not the full
-    // `HitElement`. Without it the menu HEADER correctly said "Panel 2
-    // title" (or "Panel 2 legend") while the enabled Properties… action
-    // still opened the whole figure's Text & fonts (or Legend) panel
-    // underneath it.
-    const group = isPanelGated(id, panel) ? null : groupForElement(id);
+    // FU-facet-hitmap fix round 2 (G3), extended round 4 (P1, legend) and
+    // round 5 (V2, series): a gated element has no sound Properties…
+    // target either — same `isPanelGated` gate `hasSoundTarget` uses,
+    // inlined here since this function only has `id`/`panel`, not the
+    // full `HitElement`. Without it the menu HEADER correctly said "Panel
+    // 2 title" (or "…legend", "…series") while the enabled Properties…
+    // action still opened the whole figure's Text & fonts (or Legend, or
+    // the generically-inert Series) panel underneath it.
+    const gated = isPanelGated(id, panel);
+    const seriesEditable = !gated && id.startsWith("series:") && canonicalSeries;
+    const group = gated ? null : groupForElement(id);
     const textEditable = TEXT_ELEMENTS.has(id) && panel === undefined;
     return [
       { header: elementName(id, panel) },
       group || seriesEditable
         ? { label: "Properties…", run: () => onSelect(id) }
-        : id.startsWith("series:")
+        : !gated && id.startsWith("series:")
           ? { label: "Series properties — edit on Stage", disabled: true, run: () => {} }
           : { label: "Properties unavailable", disabled: true, run: () => {} },
       ...(textEditable ? [{ label: "Edit text…", run: () => startTextEdit(id, panel) }] : []),

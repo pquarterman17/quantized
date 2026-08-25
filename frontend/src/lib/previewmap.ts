@@ -79,7 +79,15 @@ function axisScaleOf(scale: "linear" | "log" | "reciprocal" | undefined, log: bo
  *  .render_facets_figure`'s own `overrides` doc), so there is nothing
  *  draggable to resolve for those; a per-panel LEGEND is real and hit-
  *  testable (fix round 4, P1) but stays INERT -- no per-panel position/
- *  title override exists yet to commit a drag into. Only hit-testing and
+ *  title override exists yet to commit a drag into. A panel's own SERIES
+ *  line is likewise gated INERT client-side (fix round 5, V2) even though
+ *  it's the most "obviously editable-looking" element on screen: opening
+ *  its Properties… would only ever reach the generic Series group, and a
+ *  style edit made there is a no-op on the facet render path today
+ *  (`calc.figure_facets.draw_facet_grid` hard-codes plain line kwargs and
+ *  neither the hitmap route nor the standalone facet export forwards
+ *  `series_styles`) -- routing to a control that LOOKS like it worked but
+ *  didn't would be worse than not routing at all. Only hit-testing and
  *  coordinate mapping are guaranteed panel-correct today. */
 export interface FigureHitmap {
   image: string; // base64 PNG

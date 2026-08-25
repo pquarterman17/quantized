@@ -382,13 +382,21 @@ describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
     expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
   });
 
-  it("click-selects a facet series element by its plain id, same as the flat path", () => {
+  // Superseded by fix round 5 (V2): a facet series element used to
+  // click-select like the flat path (per-series controls resolving
+  // generically to the Series group), but the style edit that opened is
+  // INERT on the facet render path (`draw_facet_grid` ignores
+  // `series_styles` entirely) -- gated the same way a panel title is.
+  // See the dedicated "gated facet panel series line stays inert (V2)"
+  // describe block below for full coverage; this one just pins the
+  // updated behavior at its original call site.
+  it("does NOT click-select a facet series element -- gated, unlike the flat path (V2)", () => {
     const onSelect = vi.fn();
     render(
       <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     fireEvent.click(elAt("series:0", 1));
-    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   // FU-facet-hitmap fix round 2 (G3): the double-click path already guarded
@@ -416,13 +424,14 @@ describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("a facet panel's SERIES element (not a text element) still click-selects and Enter-selects normally", () => {
+  // Superseded by V2, same as the click test above.
+  it("Enter on a focused facet panel's SERIES element also does NOT select it (V2)", () => {
     const onSelect = vi.fn();
     render(
       <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     fireEvent.keyDown(elAt("series:0", 1), { key: "Enter" });
-    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
 
@@ -542,17 +551,21 @@ describe("PreviewOverlay — editing survives a hitmap change without crashing (
   });
 });
 
-// FU-facet-hitmap fix round 3 (J3): a GATED hitbox (no click/select/edit
-// target -- a facet panel's own title) must not present as an interactive
-// control: no tabstop, no button role, no pointer cursor. An ACTIONABLE
-// hitbox (a facet panel's series line, or a flat/whole-figure text element)
-// keeps every affordance exactly as before.
+// FU-facet-hitmap fix round 3 (J3), extended round 5 (V2): a GATED hitbox
+// (no click/select/edit target -- a facet panel's own title/legend/series
+// line) must not present as an interactive control: no tabstop, no button
+// role, no pointer cursor. An ACTIONABLE hitbox (the whole-figure's own
+// title/xlabel/ylabel -- `panel` absent, J2) keeps every affordance exactly
+// as before. As of V2, EVERY panel-scoped element kind is gated -- there is
+// no remaining "actionable, panel-scoped" example, so the contrast case
+// below uses the whole-figure title a facet response also carries.
 describe("PreviewOverlay — gated hitboxes drop interactive affordances (J3)", () => {
   const FACET_MAP_J3: FigureHitmap = {
     image: "",
     width: 600,
     height: 400,
     elements: [
+      { id: "title", x0: 250, y0: 10, x1: 350, y1: 30 }, // whole-figure (J2) -- no `panel`
       { id: "title", panel: 0, x0: 10, y0: 10, x1: 100, y1: 30 },
       { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
     ],
@@ -574,15 +587,24 @@ describe("PreviewOverlay — gated hitboxes drop interactive affordances (J3)", 
     expect(title.style.cursor).toBe("default");
   });
 
-  it("an actionable facet series hitbox keeps its tabstop, button role, and pointer cursor", () => {
+  it("a gated facet panel SERIES line drops the same affordances (V2)", () => {
     render(
       <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_J3} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
     );
     const series = j3El("series:0", 0);
-    expect(series).toHaveAttribute("tabindex", "0");
-    expect(series).toHaveAttribute("role", "button");
-    expect(series).toHaveAttribute("aria-label");
-    expect(series.style.cursor).toBe("pointer");
+    expect(series).not.toHaveAttribute("tabindex");
+    expect(series).not.toHaveAttribute("role");
+    expect(series.style.cursor).toBe("default");
+  });
+
+  it("the WHOLE-FIGURE title (panel absent, J2) alongside it stays fully actionable -- tabstop, button role, pointer cursor", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_J3} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const wholeFigureTitle = document.querySelector<HTMLElement>('[data-element="title"]:not([data-panel])')!;
+    expect(wholeFigureTitle).toHaveAttribute("tabindex", "0");
+    expect(wholeFigureTitle).toHaveAttribute("role", "button");
+    expect(wholeFigureTitle).toHaveAttribute("aria-label");
   });
 
   it("the flat path's own elements are unaffected -- every affordance stays exactly as before", () => {
@@ -670,5 +692,86 @@ describe("PreviewOverlay — a gated facet panel legend stays inert (P1)", () =>
     expect(legend.style.cursor).toBe("move");
     fireEvent.click(legend);
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("legend");
+  });
+});
+
+// FU-facet-hitmap fix round 5 (V2): a facet panel's own SERIES line
+// routed "Properties…" to the generic Series group, but a style edit made
+// there is INERT on the facet render path today (draw_facet_grid ignores
+// series_styles entirely) -- gated the SAME way P1 gated the legend.
+describe("PreviewOverlay — a gated facet panel series line stays inert (V2)", () => {
+  const FACET_MAP_SERIES: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
+      { id: "title", panel: 0, x0: 10, y0: 10, x1: 100, y1: 30 },
+    ],
+    panels: [
+      { panel: 0, label: "level 0", x0: 0, y0: 0, x1: 300, y1: 400, xlim: [0, 10], ylim: [0, 10], xlog: false, ylog: false },
+    ],
+  };
+  const seriesEl = () => document.querySelector<HTMLElement>('[data-element="series:0"][data-panel="0"]')!;
+
+  it("has no tabIndex, no button role, and a default cursor", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_SERIES} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const series = seriesEl();
+    expect(series).not.toHaveAttribute("tabindex");
+    expect(series).not.toHaveAttribute("role");
+    expect(series.style.cursor).toBe("default");
+  });
+
+  it("click does not select it, even with canonicalSeries enabled", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay
+        src="data:image/png;base64,"
+        map={FACET_MAP_SERIES}
+        textOf={() => ""}
+        onSelect={onSelect}
+        onEditText={vi.fn()}
+        onDragEnd={vi.fn()}
+        canonicalSeries
+      />,
+    );
+    fireEvent.click(seriesEl());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("the context menu offers 'Properties unavailable', not a live (but actually inert) Properties… action", () => {
+    render(
+      <PreviewOverlay
+        src="data:image/png;base64,"
+        map={FACET_MAP_SERIES}
+        textOf={() => ""}
+        onSelect={vi.fn()}
+        onEditText={vi.fn()}
+        onDragEnd={vi.fn()}
+        canonicalSeries
+      />,
+    );
+    fireEvent.contextMenu(seriesEl());
+    expect(screen.getByText("Panel 1 series")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Properties…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Series properties — edit on Stage" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Properties unavailable" })).toBeDisabled();
+  });
+
+  it("the flat path's own series line is completely unaffected -- selectable, real Properties… once canonicalSeries is on", () => {
+    const onSelect = vi.fn();
+    const seriesMap = { ...MAP, elements: [...MAP.elements, { id: "series:0", x0: 1, y0: 1, x1: 2, y1: 2 }] };
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={seriesMap} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} canonicalSeries />,
+    );
+    const series = el("series:0");
+    expect(series).toHaveAttribute("tabindex", "0");
+    expect(series).toHaveAttribute("role", "button");
+    fireEvent.contextMenu(series);
+    expect(screen.getByRole("menuitem", { name: "Properties…" })).toBeInTheDocument();
+    fireEvent.click(series);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
   });
 });

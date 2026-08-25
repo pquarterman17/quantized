@@ -940,6 +940,44 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert isinstance(m["axes"], dict)
 
 
+# ── FU-facet-hitmap fix round 5 (V1): the FLAT path's series hit box was
+# NEVER clipped to the axes rect -- exactly the G1 defect fixed for facets
+# in round 2, just never applied here. A zoomed `x_lim` override (an
+# ordinary Stage box-zoom) balloons the reported box to several times the
+# IMAGE width, painting over unrelated UI outside the preview (the sticky
+# Export/Apply row in the Figure Builder) and swallowing background clicks
+# as a false "Series" selection. Reachable in normal use via any box-zoom. ──
+def test_figure_hitmap_flat_series_box_clips_to_axes_rect_under_zoom() -> None:
+    # x spans 0..9 (mirrors the coordinator's own probe) so the zoomed
+    # [4,5] window still shows PART of the line -- a dataset whose x range
+    # never reaches the zoom window (e.g. `_xrd_dataset()`'s ~10.0-10.06)
+    # would clip the box to EMPTY and drop it entirely, which is a
+    # different (also-correct) case, not this one.
+    ds = {
+        "time": [float(v) for v in range(10)],
+        "values": [[float(v)] for v in range(10)],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": ds, "dpi": 100,
+            "overrides": {"x_lim": [4.0, 5.0]},
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    ax = m["axes"]
+    series = next(e for e in m["elements"] if e["id"] == "series:0")
+    # The box must stay INSIDE the axes rect -- never extend past it (the
+    # exact regression: a box ~8x the image width).
+    assert ax["x0"] - 1e-6 <= series["x0"] < series["x1"] <= ax["x1"] + 1e-6
+    assert ax["y0"] - 1e-6 <= series["y0"] < series["y1"] <= ax["y1"] + 1e-6
+    assert series["x1"] - series["x0"] <= ax["x1"] - ax["x0"] + 1e-6
+
+
 # ── FU-facet-hitmap fix round 4 (P3): the flat path's own `add()` still
 # dropped a zero-height series box outright -- the exact gap round 3's J4
 # closed for facets, using the SAME `_pad_degenerate` helper reused here. ───
