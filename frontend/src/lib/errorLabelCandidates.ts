@@ -209,11 +209,19 @@ export function generateCandidates(label: string, tokens: readonly string[] = ER
     }
   }
 
-  // Rule: the bare leading "d" delta convention (dR, dQ, dSA) -- provisional,
-  // needs sibling evidence (a false positive here silently turns a real
-  // measurement into whiskers, e.g. bare "Depth"/"Dose"/"Density"/"Delay").
-  if (/^d[a-z0-9]/.test(flat)) {
-    candidates.push({ token: "d", base: flat.slice(1), side, axis: null, confirmed: false });
+  // Rule: the bare leading "d" delta convention (dR, dQ, dSA, dR2) --
+  // CONFIRMED, but ONLY when "d" is its own genuine leading SEGMENT (a
+  // capital letter, digit, space, or underscore immediately follows it in
+  // the ORIGINAL label, forcing a real segment boundary there). This is
+  // what tells "dR" apart from "Depth"/"Dose"/"Density"/"Delay": all five
+  // are "d" + more letters, but only "dR" has a genuine boundary right
+  // after the "d" -- "Depth" never splits into a "d" segment at all
+  // (segmentsOf("Depth") is one whole segment, "depth"), so the rule
+  // never fires for it. A false positive here would silently turn a real
+  // measurement into whiskers, which is exactly what over-matching bare
+  // "Depth"/"Dose" as this convention used to do.
+  if (segments.length > 1 && segments[0] === "d") {
+    candidates.push({ token: "d", base: flatten(segments.slice(1)), side, axis: null, confirmed: true });
   }
 
   // Rule: an explicit x/y axis prefix (confirmed) -- "xerr"/"yerr" say
@@ -246,8 +254,11 @@ export function generateCandidates(label: string, tokens: readonly string[] = ER
  *  is eligible to serve as somebody else's sibling-evidence target -- a
  *  label with its own CONFIRMED reading is disqualified from being
  *  "ordinary data" for that purpose. Deliberately narrower than "has any
- *  candidate at all": a column like `Dose` has only a PROVISIONAL bare-d
- *  candidate, and must stay eligible as `Dose_err`'s sibling. */
+ *  candidate at all": a label whose only reading is PROVISIONAL (a glued
+ *  substring match, not aligned to a real segment boundary) still counts
+ *  as ordinary data and stays eligible -- only a confirmed self-reading is
+ *  strong enough evidence to disqualify a column from being someone
+ *  else's target. */
 export function hasConfirmedCandidate(label: string, tokens: readonly string[] = ERROR_TOKENS): boolean {
   return generateCandidates(label, tokens).some((c) => c.confirmed);
 }

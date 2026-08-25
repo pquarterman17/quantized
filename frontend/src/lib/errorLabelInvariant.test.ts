@@ -55,14 +55,13 @@ describe("token-list independence (structural invariant)", () => {
   });
 
   it("the legitimate exception actually changes in the expected direction", () => {
-    // "Dose" already has a candidate before injection -- the bare-"d" delta
-    // convention fires for any "d" + letter/digit start, provisional, base
-    // "ose" (the same reason "Depth"/"Density"/"Delay" all carry one; none
-    // of those are near "ose", so none of them move). Injecting "ose" as a
-    // token adds a SECOND provisional candidate (token "ose", base "d"),
-    // and its longer token wins the ranking -- the base flips from "ose"
-    // to "d", not null-to-non-null.
-    expect(classifyErrorLabel("Dose", ERROR_TOKENS)?.base).toBe("ose");
+    // "Dose" is one whole segment ("dose") -- the bare-"d" delta convention
+    // needs "d" to be its OWN leading segment (as in "dR"), which "Dose"
+    // never has, so it carries zero candidates by default, same as
+    // "Depth"/"Density"/"Delay". Injecting "ose" as a token adds exactly
+    // one candidate this label didn't have: a glued match at the edge of
+    // its one segment (token "ose", base "d") -- null flips to non-null.
+    expect(classifyErrorLabel("Dose", ERROR_TOKENS)).toBeNull();
     expect(classifyErrorLabel("Dose", INJECTED_TOKENS)?.base).toBe("d");
   });
 

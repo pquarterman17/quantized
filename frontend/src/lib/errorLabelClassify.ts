@@ -69,8 +69,10 @@ function toResult(c: Candidate): ClassifiedLabel {
  *  Sibling eligibility uses `hasConfirmedCandidate` (context-free, no
  *  evidence) rather than the full recursive classification, so this never
  *  has to resolve a cycle between two labels each trying to use the other
- *  as evidence -- and so that a label whose ONLY reading is provisional
- *  (`Dose`'s bare-d candidate) stays eligible as `Dose_err`'s sibling. */
+ *  as evidence -- and so a label whose only reading of ITSELF is
+ *  provisional (a glued substring match, not a real segment boundary)
+ *  still counts as ordinary data and stays eligible as somebody else's
+ *  sibling. */
 export function selectCandidate(
   candidates: readonly Candidate[],
   labels: readonly string[],
@@ -115,13 +117,15 @@ export function classifyErrorLabelInLabels(
  *  siblings to offer evidence, this returns the TOP-RANKED candidate
  *  overall (confirmed, or provisional if nothing confirmed exists) rather
  *  than running the strict evidence-gated SELECT above -- `classifyErrorLabel
- *  ("dR")` must still read as `{ base: "r" }` even though `dR`'s only
- *  candidate (the bare-d convention) is provisional and there is no sibling
- *  "R" in a one-element label list. This laxer fallback is deliberately
- *  NOT used for `isErrorLike`/pairing decisions -- those always go through
- *  the strict, evidence-gated `classifyErrorLabelInLabels`, or a bare
- *  "Depth"/"Dose"/"Density" would round-trip back into being misclassified
- *  via this wrapper's own provisional fallback. */
+ *  ("Rerr")` must still read as `{ base: "r" }` even though `Rerr`'s only
+ *  candidate (a glued "err" at the edge, since "rerr" is one whole segment,
+ *  not "err") is provisional and there is no sibling "R" in a one-element
+ *  label list. This laxer fallback is deliberately NOT used for
+ *  pairing-target-exclusion decisions -- those always go through the
+ *  strict, evidence-gated `classifyErrorLabelInLabels` instead, or a bare
+ *  "Depth"/"Density"/"Delay" (all zero-candidate, so unaffected either way)
+ *  or a genuinely provisional-only column would round-trip back into being
+ *  misclassified via this wrapper's own top-ranked-regardless fallback. */
 export function classifyErrorLabel(
   label: string,
   tokens: readonly string[] = ERROR_TOKENS,
