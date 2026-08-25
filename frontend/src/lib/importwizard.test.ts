@@ -226,6 +226,21 @@ describe("suggestErrorBindings (P1.6 item 2 — 'no guess can silently attach')"
     const bindings = suggestErrorBindings(cs);
     expect(bindings.find((b) => b.channel === 1)).toEqual({ channel: 1, target: 0, axis: "y", side: "both" });
   });
+
+  it("a following CATEGORICAL column (not a plausible numeric target) does not itself trigger demotion", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "T", unit: "", role: "y" },
+      { index: 1, name: "err", unit: "", role: "error" },
+      { index: 2, name: "Sample", unit: "", role: "categorical" },
+    ];
+    // `err`'s only positional pairing (rule 3) is `T`; nothing name-driven
+    // is available (bare "err" has no base to match). `finalChannelOrder`
+    // moves `Sample` after every numeric column regardless of its raw
+    // position, but a categorical (text) column is never something error
+    // bars could sensibly attach to -- it must not count as "something
+    // plausible follows" and demote an otherwise-unambiguous suggestion.
+    expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
 });
 
 describe("errorRoleChannels / seedErrorRows / confirmedErrorBindings", () => {
