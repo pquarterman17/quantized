@@ -64,14 +64,20 @@ function normSeg(s: string): string {
  *  stripped) flat label exactly -- segmentation only inserts cut points, it
  *  never drops or reorders characters. Splits on whitespace/underscore
  *  first (`M_std_err` -> `M`,`std`,`err`), then on camelCase boundaries
- *  within each resulting word (`MStdErr` -> `M`,`Std`,`Err`), so both
- *  spellings of the same intent segment identically. */
+ *  within each resulting word (`MStdErr` -> `M`,`Std`,`Err`), then on a
+ *  letter-to-digit boundary (`err1` -> `err`,`1`; a trailing instrument
+ *  channel index must not hide "err" sitting on an otherwise-whole segment
+ *  boundary) -- but never a digit-to-letter boundary, so `2theta` stays one
+ *  piece. So both spellings of the same intent segment identically. */
 export function segmentsOf(label: string): string[] {
   const words = label.trim().split(/[\s_]+/).filter(Boolean);
   const out: string[] = [];
   for (const word of words) {
     const camel = word.split(/(?=[A-Z])/).filter(Boolean);
-    for (const piece of camel) out.push(normSeg(piece));
+    for (const piece of camel) {
+      const digitSplit = piece.split(/(?<=[a-zA-Z])(?=[0-9])/).filter(Boolean);
+      for (const sub of digitSplit) out.push(normSeg(sub));
+    }
   }
   return out;
 }
