@@ -510,3 +510,33 @@
 .qz-table tr:hover:not([aria-selected="true"]) td {
   background: var(--surface-3);
 }
+/* Roving-tabindex focus indicator (peaks-workshop review finding): PeakTable
+ * gives rows a roving tabindex + ArrowUp/ArrowDown navigation, but without
+ * this rule a plain arrow press moves focus with nothing visible changing
+ * on screen — a keyboard user can't see which row Enter/Shift+Arrow would
+ * act on. Matches the LibraryDetails convention verbatim (shell.css's
+ * `.qzk-details-table tbody tr:focus-visible`): same tokens, same offset,
+ * so the two selectable-table surfaces agree.
+ */
+.qz-table tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Inert-table hover suppression (peaks-workshop review finding): PeaksPanel
+ * renders a PeakTable with `onSelect` omitted to make it deliberately inert
+ * (no handlers, no aria-selected, no tab stop — see PeakTable.tsx's module
+ * header), but it sits beside a pixel-identical INTERACTIVE PeakTable and,
+ * absent this rule, the general hover rule above still lights it up on
+ * hover (its rows carry no aria-selected at all, so that rule's :not()
+ * is trivially true) — a click on it is then a silent, unexplained no-op.
+ * Scoped to PeakTable's own `data-inert` marker (set only when `onSelect`
+ * is absent) so every OTHER read-only `.qz-table` consumer (DataTable,
+ * PreviewTable, ModelScanSection, ReportPanel, steps.tsx, TextFormatHelp,
+ * ErrorRolesEditor) keeps hovering exactly as before — only an inert table
+ * sitting next to its own interactive twin loses the hover. Same
+ * specificity as the rule above; placed after it so cascade order (not a
+ * specificity fight) decides which one wins for a `data-inert` table.
+ */
+.qz-table[data-inert] tr:hover td {
+  background: transparent;
+}

@@ -9,7 +9,9 @@
 // "Label peaks" at a time) — it renders fully inert, matching the read-only
 // DataTable it replaced: no `aria-selected`, no highlight, no tab stop, no
 // click/keyboard handler at all. A row must never look selected while the
-// action that would use it ignores it.
+// action that would use it ignores it. It also carries `data-inert` in that
+// case (review follow-up) so components.css can suppress the hover it would
+// otherwise share with its interactive twin sitting right beside it.
 //
 // Roving tabindex (K2 review finding): exactly ONE row is a Tab stop at a
 // time — the LibraryDetails.tsx convention (`tabIndex={key === rovingKey ?
@@ -71,7 +73,7 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
   const onRowClick = (index: number) => (e: MouseEvent<HTMLTableRowElement>) => onSelect?.(index, modsFrom(e));
 
   return (
-    <table className="qz-table" aria-label={ariaLabel}>
+    <table className="qz-table" aria-label={ariaLabel} data-inert={interactive ? undefined : true}>
       <thead>
         <tr>
           {columns.map((c, i) => (

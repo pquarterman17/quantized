@@ -181,3 +181,51 @@ describe("PeakTable — N2 (red-first): the selected-row highlight must survive 
     expect(css).toMatch(/\.qz-table\s+tr:hover:not\(\[aria-selected="true"\]\)\s+td\s*\{/);
   });
 });
+
+// Review finding: a roving tabindex + ArrowUp/ArrowDown navigation with no
+// visible focus indicator means a keyboard user moving focus sees nothing
+// change on screen — they can't tell which row Enter/Shift+Arrow would act
+// on. No jsdom :focus-visible simulation is practical here (same evidence-
+// standard note as N2 above), so this pins the exact rule components.css
+// must carry, matching the LibraryDetails convention (shell.css's
+// `.qzk-details-table tbody tr:focus-visible`) token-for-token.
+describe("PeakTable — review: roving rows need a visible :focus-visible outline", () => {
+  it("components.css gives .qz-table rows a focus-visible outline matching LibraryDetails", () => {
+    const cssPath = resolve(process.cwd(), "src/styles/components.css");
+    const css = readFileSync(cssPath, "utf8");
+    expect(css).toMatch(
+      /\.qz-table\s+tr:focus-visible\s*\{\s*outline:\s*2px solid var\(--accent\);\s*outline-offset:\s*-2px;\s*\}/,
+    );
+  });
+});
+
+// Review finding: PeaksPanel renders the detected-peaks table with `onSelect`
+// omitted, making it deliberately inert (K1 above) — but it sits beside a
+// pixel-identical INTERACTIVE PeakTable, and the general hover rule (N2's
+// rule, which only excludes `aria-selected="true"` rows) still lights it up
+// on hover because an inert row carries no aria-selected at all. A click on
+// it is then a silent, unexplained no-op that looks identical to a working
+// one. The fix must not touch the general hover rule (other read-only
+// .qz-table consumers must keep hovering) — it must be scoped to a marker
+// PeakTable itself sets only when inert.
+describe("PeakTable — review: an inert table must not hover like its interactive twin", () => {
+  it("the inert table (onSelect omitted) carries a data-inert marker", () => {
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set()} />);
+    expect(screen.getByRole("table")).toHaveAttribute("data-inert");
+  });
+
+  it("the interactive table (onSelect provided) carries no data-inert marker", () => {
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set()} onSelect={vi.fn()} />);
+    expect(screen.getByRole("table")).not.toHaveAttribute("data-inert");
+  });
+
+  it("components.css scopes hover suppression to [data-inert] without touching the general hover rule", () => {
+    const cssPath = resolve(process.cwd(), "src/styles/components.css");
+    const css = readFileSync(cssPath, "utf8");
+    // Must not weaken/re-scope the existing rule — it still owns the
+    // aria-selected exclusion for every other .qz-table consumer.
+    expect(css).toMatch(/\.qz-table\s+tr:hover:not\(\[aria-selected="true"\]\)\s+td\s*\{\s*background:\s*var\(--surface-3\);\s*\}/);
+    // The new rule suppresses hover ONLY for a table marked data-inert.
+    expect(css).toMatch(/\.qz-table\[data-inert\]\s+tr:hover\s+td\s*\{\s*background:\s*transparent;\s*\}/);
+  });
+});
