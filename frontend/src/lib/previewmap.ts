@@ -12,6 +12,14 @@ export interface HitElement {
   y0: number;
   x1: number;
   y1: number;
+  /** FU-facet-hitmap: which panel (an index into `FigureHitmap.panels`)
+   *  this element belongs to. Present ONLY on a faceted response's
+   *  elements — absent (undefined) for the flat path, where an id is
+   *  already unique across the whole `elements` list. A faceted element's
+   *  `id` is NOT unique on its own (every panel has its own "title" and
+   *  "series:0") -- pair it with `panel` (e.g. as a React key, or before
+   *  acting on a click) whenever more than one panel might be present. */
+  panel?: number;
 }
 
 export interface AxesInfo {
@@ -33,6 +41,16 @@ export interface AxesInfo {
   yscale?: "linear" | "log" | "reciprocal";
 }
 
+/** One facet panel's axes geometry (FU-facet-hitmap): everything `AxesInfo`
+ *  carries for a SINGLE panel, plus which panel this is (`panels` array
+ *  index) and its rendered facet-level label (`ax.get_title()` on the
+ *  backend — already sanitized, so it matches what the image shows
+ *  verbatim). `FigureHitmap.panels` carries one of these per panel. */
+export interface PanelAxesInfo extends AxesInfo {
+  panel: number;
+  label: string;
+}
+
 /** Resolve the effective axis scale for `pxToData`'s inversion: the new
  *  `xscale`/`yscale` field wins when present; else the old `xlog`/`ylog`
  *  boolean maps to "log"/"linear" (mirrors `lib/plotview.ts`'s
@@ -42,20 +60,32 @@ function axisScaleOf(scale: "linear" | "log" | "reciprocal" | undefined, log: bo
   return scale ?? (log ? "log" : "linear");
 }
 
-/** R1 (fix round 3): for a facet-bound spec, `image` is the SAME
- *  small-multiples grid `/api/export/figure` would export, but `elements`
- *  comes back EMPTY and `axes` is a synthetic whole-image rect -- per-panel
- *  interactive hit-targets (dragging an annotation/legend/ref-line INSIDE
- *  one specific facet panel) aren't implemented yet, so nothing in the
- *  preview is draggable for a faceted spec (an honest, click-through
- *  preview rather than one that would mis-target a drag at the wrong
- *  panel's data coordinates). */
+/** FU-facet-hitmap (closes the former R1/fix-round-3 gap): for a facet-bound
+ *  spec, `image` is the SAME small-multiples grid `/api/export/figure`
+ *  would export, and `panels` now carries ONE real `PanelAxesInfo` per
+ *  panel -- the flat single-``axes`` field is absent instead (there is no
+ *  single meaningful axes rect for a multi-panel grid). `elements` carries
+ *  each panel's facet title + series lines, each tagged with its `panel`
+ *  index. Use `axesAt`/`panelAt` below to resolve a click/drag to the
+ *  CONTAINING panel before converting pixels to data coordinates -- never
+ *  read `panels[0]` (or the old `axes`) directly for a point that might
+ *  land in a different panel. Full drag-EDIT semantics for a faceted
+ *  preview (moving an annotation between panels, etc.) are still NOT wired
+ *  -- facets don't draw a legend/annotation/reference-line/shape into a
+ *  panel at all yet (see `calc.figure_facets.render_facets_figure`'s own
+ *  `overrides` doc), so there is nothing draggable to resolve today; only
+ *  hit-testing and coordinate mapping are guaranteed panel-correct. */
 export interface FigureHitmap {
   image: string; // base64 PNG
   width: number;
   height: number;
   elements: HitElement[];
-  axes: AxesInfo;
+  /** The flat (non-facet) path's single axes rect. Absent on a faceted
+   *  response -- see `panels` instead. */
+  axes?: AxesInfo;
+  /** FU-facet-hitmap: one entry per facet panel. Absent on the flat path
+   *  -- see `axes` instead. Exactly one of `axes`/`panels` is ever set. */
+  panels?: PanelAxesInfo[];
 }
 
 /** The element under (px, py) — the SMALLEST hit box wins, so a series line
@@ -107,6 +137,37 @@ export function pxToData(axes: AxesInfo, px: number, py: number): { x: number; y
     x: lerpAxis(fx, axes.xlim, axisScaleOf(axes.xscale, axes.xlog)),
     y: lerpAxis(fy, axes.ylim, axisScaleOf(axes.yscale, axes.ylog)),
   };
+}
+
+/** FU-facet-hitmap: which facet panel's axes rect CONTAINS (px, py) — the
+ *  first step a faceted click/drag must take, before any pixel->data
+ *  conversion, so a point in panel 3 is never interpreted against panel
+ *  0's axes. Returns null for the flat path (`panels` absent/empty) or a
+ *  point that lands in no panel's rect (the grid's gutters/margins, or the
+ *  hidden trailing cells past the panel count). Panel rects don't overlap
+ *  (`_grid_shape`'s row/col tiling), so at most one ever matches. */
+export function panelAt(
+  panels: readonly PanelAxesInfo[] | undefined,
+  px: number,
+  py: number,
+): PanelAxesInfo | null {
+  if (!panels) return null;
+  for (const p of panels) {
+    if (px >= p.x0 && px <= p.x1 && py >= p.y0 && py <= p.y1) return p;
+  }
+  return null;
+}
+
+/** The `AxesInfo` a pixel->data conversion at (px, py) must use: the
+ *  CONTAINING facet panel's axes when `hitmap.panels` is set (`panelAt`
+ *  above — resolved BEFORE converting, per-panel, never the flat path's
+ *  `axes` nor panel 0 by default), else the flat path's own single
+ *  `hitmap.axes`. Null when neither applies (a faceted point outside every
+ *  panel, or a malformed/axes-less hitmap) — callers must treat that as
+ *  "no target" rather than guessing an axes to fall back to. */
+export function axesAt(hitmap: FigureHitmap, px: number, py: number): AxesInfo | null {
+  if (hitmap.panels) return panelAt(hitmap.panels, px, py);
+  return hitmap.axes ?? null;
 }
 
 /** Image pixels -> figure fraction (matplotlib transFigure coords: origin

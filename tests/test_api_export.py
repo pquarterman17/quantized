@@ -933,13 +933,19 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert ax["xlim"][0] < 2 < ax["xlim"][1]
     assert ax["xlog"] is False
     assert m["image"][:10]  # base64 payload present
+    # FU-facet-hitmap (flat-path-unchanged evidence): the flat response's key
+    # set is EXACTLY what it was before per-panel geometry existed -- no
+    # `panels` key leaking in, `axes` still the single dict.
+    assert set(m.keys()) == {"image", "width", "height", "elements", "axes"}
+    assert isinstance(m["axes"], dict)
 
 
-# ── Fix-round R1: a facet-bound hitmap request must render the SAME grid
-# `/figure` exports (not silently fall back to the flat plot the Figure
-# Builder preview would then mis-describe), but with an honest EMPTY
-# `elements` list -- no per-panel hit-targets yet. ──────────────────────────
-def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
+# ── FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
+# hitmap request now returns REAL per-panel geometry -- one `panels` entry
+# per facet panel (pixel rect + data limits + facet label) and `elements`
+# tagged with a `panel` index -- instead of `elements: []` + a synthetic
+# whole-image `axes` rect. ───────────────────────────────────────────────────
+def test_figure_hitmap_facets_returns_per_panel_axes_and_elements() -> None:
     resp = client.post(
         "/api/export/figure-hitmap",
         json={"dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets()},
@@ -947,9 +953,37 @@ def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
     assert resp.status_code == 200
     m = resp.json()
     assert m["width"] > 0 and m["height"] > 0
-    # R1's honest-preview contract: no per-panel hit-targets yet.
-    assert m["elements"] == []
-    assert m["axes"]["x1"] == m["width"] and m["axes"]["y1"] == m["height"]
+    # No single-`axes` field for a faceted response -- `panels` replaces it.
+    assert "axes" not in m
+    panels = m["panels"]
+    assert len(panels) == len(_xy_facets()) == 2
+    labels = {p["label"] for p in panels}
+    assert labels == {"level 0", "level 1"}
+    # Distinct, NON-OVERLAPPING pixel rects (2 panels -> side-by-side columns,
+    # `_grid_shape(2)` = 1 row x 2 cols): panel 0 must end at or before where
+    # panel 1 begins in x.
+    p0, p1 = sorted(panels, key=lambda p: p["panel"])
+    assert p0["x1"] <= p1["x0"]
+    assert (p0["x0"], p0["y0"], p0["x1"], p0["y1"]) != (p1["x0"], p1["y0"], p1["x1"], p1["y1"])
+    # Distinct DATA limits -- panel 0's y is [0,1,2], panel 1's is [1,2,3]
+    # (`_xy_facets()`), each panel keeping its own independent y-autoscale
+    # (`render_facets_figure`'s own doc), so a point mapped through panel 0's
+    # ylim would give a VISIBLY different (wrong) answer for a click that
+    # landed in panel 1.
+    assert p0["ylim"] != p1["ylim"]
+    assert p0["ylim"][1] < p1["ylim"][1]
+    for p in panels:
+        assert p["xscale"] == "linear" and p["yscale"] == "linear"
+    # `elements` are real, non-empty, and each carries its panel index.
+    assert m["elements"] != []
+    panel_indices = {e["panel"] for e in m["elements"]}
+    assert panel_indices == {0, 1}
+    ids = {e["id"] for e in m["elements"]}
+    assert {"title", "series:0"} <= ids
+    for e in m["elements"]:  # boxes are inside the image, top-left origin
+        assert 0 <= e["x0"] < e["x1"] <= m["width"] + 1
+        assert -1 <= e["y0"] < e["y1"] <= m["height"] + 1
+
     import base64
     from io import BytesIO as _BytesIO
 

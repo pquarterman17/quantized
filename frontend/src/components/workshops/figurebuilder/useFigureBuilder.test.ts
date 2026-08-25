@@ -422,7 +422,9 @@ describe("useFigureBuilder", () => {
     expect(result.current.overrides.annotations).toHaveLength(1);
 
     // Drag must reach it too, not silently no-op against that same empty list.
-    const axes = result.current.hitmap!.axes;
+    // Flat (non-facet) path -- `axes` is always present there (FU-facet-hitmap
+    // made it optional only because a faceted response carries `panels` instead).
+    const axes = result.current.hitmap!.axes!;
     const expected = pxToData(axes, 350, 150);
     act(() => result.current.dragElement("ann:0", 350, 150));
     const draft = useApp.getState().figurePublicationSession!.draft;

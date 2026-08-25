@@ -902,6 +902,68 @@ with parent items P1.3 and P1.5.
       (`export_figure`, `export_figure_hitmap`) ever passed them. Dropped;
       `fmt` stays (the hitmap route still forces it to `"png"`).
 
+      **2026-08-25 FU-facet-hitmap (Claude): closes the R1 "elements: [] +
+      synthetic whole-image axes" preview gap — per-panel hit-targets now
+      exist.** `calc.figure_facets.draw_facet_grid` now returns its drawn
+      per-panel series artists (`list[list[Any]]`, one list per panel, mirroring
+      `calc.figure.draw_series_axes`'s own per-series return); a new sibling
+      module `calc.figure_facets_map` (split out to stay under the 500-line
+      ceiling) shares the figure-building core (`_facet_grid`, factored out
+      of `render_facets_figure` VERBATIM — the standalone bytes-only export
+      is unchanged, `test_calc_figure_facets.py` passes unedited) and adds
+      `render_facets_figure_map`: image + real per-panel geometry. A new
+      `calc.figure_hitmap.collect_facet_map` (facet-grid analogue of the
+      existing flat-path `collect_map`) harvests, per panel: its axes pixel
+      rect + data limits + rendered facet-label text, plus hit elements
+      (facet title, each series line) tagged with a `panel` index.
+      `routes.export_figures.export_figure_hitmap`'s facet branch now calls
+      this instead of returning the synthetic rect; the flat branch is
+      byte-for-byte unchanged (verified: `set(m.keys())` still exactly
+      `{"image","width","height","elements","axes"}`, `axes` still a single
+      dict). **Response-shape decision:** a faceted response replaces the
+      flat path's single `axes` dict with a `panels` list (one entry per
+      panel) and omits `axes` entirely — chosen over reusing the `axes` key
+      at two different types (dict vs list) across the two response shapes,
+      which would force every consumer to type-narrow on which path it got;
+      `elements` stays the same list shape with an additive optional `panel`
+      index (unset for the flat path, exactly the "any consumer that ignores
+      the new field keeps working" bar). `frontend/src/lib/previewmap.ts`:
+      `FigureHitmap.axes` is now optional, `panels?: PanelAxesInfo[]` added,
+      and new `panelAt`/`axesAt` helpers resolve a pixel point to its
+      CONTAINING panel's axes before any pixel→data conversion — the
+      required fix, since a click in panel 3 must produce panel 3's data
+      values, never panel 0's (a dedicated `previewmap.test.ts` case picks
+      two panels with deliberately non-overlapping data ranges so a
+      wrong-panel resolution would give a visibly, unmistakably wrong
+      answer). `previewDrag.ts`'s three `pxToData(hitmap.axes, …)` call
+      sites now resolve through `axesAt` first.
+
+      **Wired vs still deferred (scope ruling honored, not silently
+      dropped):** WIRED — per-panel hit-testing (distinct, non-overlapping
+      pixel rects; real elements now exist instead of `[]`) and panel-aware
+      pixel→data coordinate mapping (`panelAt`/`axesAt`, exercised by both a
+      focused `previewmap.test.ts` suite and the existing
+      `test_api_export.py` facet-hitmap test, rewritten for the new
+      contract). `PreviewOverlay.tsx` was also fixed for two real bugs a
+      non-empty, repeated-id facet element list would otherwise have
+      introduced (probe-confirmed via `git stash` on `PreviewOverlay.tsx`
+      alone, both reproduced pre-fix): a React duplicate-`key` collision
+      (two panels each draw their own `"title"`/`"series:0"` — hover/drag
+      state now keys on `panel:id`, not bare `id`), and a double-click on a
+      facet panel's title silently committing into the WHOLE FIGURE's title
+      field via the pre-existing flat-path text-edit wiring (`isTextEditable`
+      now gates that path to `panel === undefined`). NOT wired — full
+      drag-EDIT semantics for a faceted preview: facets don't draw a
+      legend/annotation/reference-line/shape into a panel at ALL today (see
+      `render_facets_figure`'s own `overrides` doc — the interactive facet
+      grid doesn't offer them either), so there is nothing draggable to
+      resolve yet; a faceted panel's own title element is click-to-select
+      only (no per-panel facet-label inline editor). Moving an annotation
+      BETWEEN panels, per-panel legend placement, and per-panel
+      annotation/ref-line/shape support generally remain genuinely open —
+      each needs its own facet-aware config model before there's anything
+      correct to drag-map onto, which is larger than this lane's scope.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

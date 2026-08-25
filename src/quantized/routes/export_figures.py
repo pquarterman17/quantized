@@ -407,37 +407,45 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     with data limits — the client hit-tests the preview and maps drags back
     to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``).
 
-    R1 (fix round 3): a facet-bound request (``req.facets`` set) renders the
-    SAME small-multiples grid ``/figure`` exports (via ``_render_facets_bytes``)
-    instead of silently falling back to the flat single-panel plot -- the
-    Figure Builder preview must show what the export will actually produce.
-    ``elements`` comes back EMPTY and ``axes`` is a synthetic whole-image
-    rect: per-panel interactive hit-targets (dragging an annotation/legend/
-    ref-line INSIDE one specific facet panel) are not implemented yet, so
-    this is an honest, click-through preview rather than one that would
-    mis-target a drag at the wrong panel's data coordinates."""
+    FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
+    request (``req.facets`` set) renders the SAME small-multiples grid
+    ``/figure`` exports (via ``calc.figure_facets_map.render_facets_figure_map``,
+    sharing ``_render_facets_bytes``'s own ``_figure_series``-derived label
+    resolution below) and now returns REAL per-panel geometry: ``panels``
+    (one axes entry per panel -- pixel rect + data limits + facet label,
+    replacing the flat path's single ``axes`` dict, which is absent here)
+    and ``elements`` tagged with a ``panel`` index (each panel's facet title
+    + series lines). See ``calc.figure_hitmap.collect_facet_map`` for
+    exactly what is/isn't harvested and why (facets don't draw a legend/
+    annotation/reference-line/shape into a panel today, so there's nothing
+    to harvest for those ids yet -- full per-panel drag-edit is still future
+    work, not silently faked here). The flat (non-facet) response below is
+    UNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``
+    key at all."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
 
     try:
         if req.facets:
-            import base64
+            from quantized.calc.figure_facets_map import render_facets_figure_map
 
-            from quantized.calc.figure_facets import _dimensions_of_png
-
-            png = _render_facets_bytes(req, dpi=dpi, fmt="png")
-            width, height = _dimensions_of_png(png)
-            return {
-                "image": base64.b64encode(png).decode("ascii"),
-                "width": width,
-                "height": height,
-                "elements": [],
-                "axes": {
-                    "x0": 0.0, "y0": 0.0, "x1": float(width), "y1": float(height),
-                    "xlim": [0.0, 1.0], "ylim": [0.0, 1.0],
-                    "xlog": False, "ylog": False,
-                    "xscale": "linear", "yscale": "linear",
-                },
-            }
+            resolved = _figure_series(req)
+            return render_facets_figure_map(
+                _facet_panels(req),
+                x_log=req.x_log,
+                y_log=req.y_log,
+                x_scale=req.x_scale,
+                y_scale=req.y_scale,
+                title=req.title,
+                x_label=resolved.x_label,
+                y_label=resolved.y_label,
+                style=req.style,
+                width_in=req.width_in,
+                height_in=req.height_in,
+                dpi=dpi,
+                x_fmt=_tick_fmt(req.x_fmt),
+                y_fmt=_tick_fmt(req.y_fmt),
+                overrides=req.overrides,
+            )
         from quantized.calc.figure import render_figure_map
 
         resolved = _figure_series(req)

@@ -8,13 +8,22 @@ ceiling (mirrors ``figure_break``/``figure_scale``/``figure_overrides``);
 ``figure.render_figure_map`` (``_render_impl(..., collect_map=True)``) is the
 only caller. Pure layer: a live ``Figure``/``Axes`` in -> a plain dict out.
 
-Known limitation (R1, fix round 3): this collector only ever runs against a
-SINGLE ``Axes`` (the flat, non-faceted figure). A faceted request
-(``FigureRequest.facets`` set) never reaches it at all -- ``routes.export_figures
-.export_figure_hitmap`` renders the facet grid image separately (via
-``_render_facets_bytes``) and returns an EMPTY element list rather than
-calling this module, since per-panel interactive hit-targets (which facet
-panel, and where within it) aren't implemented yet.
+``collect_facet_map`` (FU-facet-hitmap) is the facet-grid analogue of
+``collect_map``: instead of one ``Axes``, it harvests EVERY panel of a
+small-multiples grid -- each panel's axes pixel rect + data limits + facet
+label, plus per-panel hit elements tagged with that panel's index -- so
+``routes.export_figures.export_figure_hitmap``'s facet branch and the
+client (``lib/previewmap.ts``) can resolve a preview click to the
+CONTAINING panel before converting pixels to THAT panel's data coordinates.
+``calc.figure_facets.render_facets_figure_map`` is its only caller.
+
+Former known limitation (R1, fix round 3; closed by FU-facet-hitmap): this
+collector used to only ever run against a SINGLE ``Axes`` (the flat,
+non-faceted figure) -- a faceted request never reached it at all, and
+``export_figure_hitmap`` returned an EMPTY element list + a synthetic
+whole-image ``axes`` rect. See ``collect_facet_map`` below for the facet
+path; ``collect_map`` itself is UNCHANGED, still the flat-path-only
+collector.
 """
 
 from __future__ import annotations
@@ -24,7 +33,7 @@ from collections.abc import Sequence
 from io import BytesIO
 from typing import Any
 
-__all__ = ["collect_map"]
+__all__ = ["collect_map", "collect_facet_map"]
 
 #: Half-thickness, in image pixels, of a decor object's hit box along an axis
 #: it is degenerate on. 3 px each side = a 6 px target, matching the tolerance
@@ -164,4 +173,92 @@ def collect_map(
             "xscale": x_scale,
             "yscale": y_scale,
         },
+    }
+
+
+def collect_facet_map(
+    fig: Any,
+    panels: Sequence[tuple[Any, Sequence[Any]]],
+    *,
+    dpi: int,
+    x_scale: str,
+    y_scale: str,
+) -> dict[str, Any]:
+    """Draw at ``dpi`` and harvest EVERY panel's pixel geometry (FU-facet-
+    hitmap). ``panels`` is ``(ax, series_artists)`` per panel, in panel
+    order -- ``series_artists`` is ``figure_facets.draw_facet_grid``'s own
+    return value (one artist per series, in that panel's order), exactly
+    the ``series_artists``-not-``ax.lines`` reasoning ``collect_map`` above
+    already documents (a colour-mapped series has no ``ax.lines`` entry --
+    facets don't support ``color_by`` today, but this stays consistent with
+    the flat collector rather than silently relying on that).
+
+    Returns ``{"image", "width", "height", "elements", "panels"}`` --
+    ``elements`` items carry an extra ``"panel"`` index (the ``panels``
+    list position) alongside the flat shape's ``"id"``/pixel-box keys, and
+    ``"panels"`` replaces the flat response's single ``"axes"`` dict with
+    ONE entry per panel: ``{"panel", "label", "x0", "y0", "x1", "y1",
+    "xlim", "ylim", "xlog", "ylog", "xscale", "yscale"}`` -- same axes-rect
+    shape ``collect_map`` uses, plus ``"panel"``/``"label"``. A panel's
+    ``"label"`` is its rendered title text (``ax.get_title()``, already
+    ``safe_mathtext_label``-sanitized by ``draw_facet_grid``) rather than
+    re-deriving it from the request, so it can never drift from what the
+    image actually shows.
+
+    Deliberately narrower than ``collect_map``'s flat-path element set: a
+    faceted render never draws a legend/annotation/reference-line/shape
+    INTO a panel today (``figure_facets.render_facets_figure``'s own
+    ``overrides`` doc), so only each panel's title and series lines are
+    real, hit-testable artists -- there is nothing to harvest for the other
+    ids yet."""
+    fig.set_dpi(dpi)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    width, height = fig.canvas.get_width_height()
+
+    elements: list[dict[str, Any]] = []
+    panel_infos: list[dict[str, Any]] = []
+
+    for panel_index, (ax, series_artists) in enumerate(panels):
+        if ax.get_title():
+            try:
+                bbox = _artist_window_extent(ax.title, renderer)
+                if bbox.width > 0 and bbox.height > 0:
+                    elements.append(
+                        {"id": "title", "panel": panel_index, **_bbox_to_pixels(bbox, height)}
+                    )
+            except (RuntimeError, AttributeError):
+                pass
+        for i, artist in enumerate(series_artists):
+            try:
+                bbox = _artist_window_extent(artist, renderer)
+            except (RuntimeError, AttributeError):
+                continue
+            if bbox.width <= 0 or bbox.height <= 0:
+                continue
+            elements.append(
+                {"id": f"series:{i}", "panel": panel_index, **_bbox_to_pixels(bbox, height)}
+            )
+
+        axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
+        panel_infos.append({
+            "panel": panel_index,
+            "label": ax.get_title(),
+            **axes_px,
+            "xlim": [float(v) for v in ax.get_xlim()],
+            "ylim": [float(v) for v in ax.get_ylim()],
+            "xlog": x_scale == "log",
+            "ylog": y_scale == "log",
+            "xscale": x_scale,
+            "yscale": y_scale,
+        })
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    return {
+        "image": base64.b64encode(buf.getvalue()).decode("ascii"),
+        "width": int(width),
+        "height": int(height),
+        "elements": elements,
+        "panels": panel_infos,
     }

@@ -311,3 +311,78 @@ describe("PreviewOverlay", () => {
     expect(onSelect).toHaveBeenCalledWith("legend");
   });
 });
+
+// FU-facet-hitmap: a faceted hitmap's `elements` repeat ids across panels
+// (every panel draws its own "title"/"series:0") -- these guard the two
+// real risks that repetition introduces: a React key collision, and
+// double-click silently mis-committing a facet panel's own label into the
+// whole-figure title field.
+describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
+  const FACET_MAP: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "title", panel: 0, x0: 10, y0: 10, x1: 100, y1: 30 },
+      { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
+      { id: "title", panel: 1, x0: 310, y0: 10, x1: 400, y1: 30 },
+      { id: "series:0", panel: 1, x0: 310, y0: 40, x1: 590, y1: 200 },
+    ],
+    panels: [
+      { panel: 0, label: "level 0", x0: 0, y0: 0, x1: 300, y1: 400, xlim: [0, 10], ylim: [0, 10], xlog: false, ylog: false },
+      { panel: 1, label: "level 1", x0: 300, y0: 0, x1: 600, y1: 400, xlim: [100, 200], ylim: [100, 200], xlog: false, ylog: false },
+    ],
+  };
+
+  const elAt = (id: string, panel: number) =>
+    document.querySelector<HTMLElement>(`[data-element="${id}"][data-panel="${panel}"]`)!;
+
+  it("renders one hitbox per panel for a repeated id, not a collapsed/collided one", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    expect(document.querySelectorAll('[data-element="title"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-element="series:0"]')).toHaveLength(2);
+    expect(elAt("title", 0)).toBeInTheDocument();
+    expect(elAt("title", 1)).toBeInTheDocument();
+    expect(elAt("title", 0)).not.toBe(elAt("title", 1));
+  });
+
+  it("hovering one panel's title does not also outline the other panel's title", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.pointerEnter(elAt("title", 0));
+    expect(elAt("title", 0).style.outline).toContain("var(--accent)");
+    expect(elAt("title", 1).style.outline).not.toContain("var(--accent)");
+  });
+
+  it("double-clicking a facet panel's title does NOT open the whole-figure title editor", () => {
+    const onEditText = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => "figure title"} onSelect={vi.fn()} onEditText={onEditText} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.doubleClick(elAt("title", 1));
+    expect(screen.queryByDisplayValue("figure title")).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Enter" });
+    expect(onEditText).not.toHaveBeenCalled();
+  });
+
+  it("right-clicking a facet panel's title names the panel and offers no text edit", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.contextMenu(elAt("title", 1));
+    expect(screen.getByText("Panel 2 title")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Edit text…" })).not.toBeInTheDocument();
+  });
+
+  it("click-selects a facet element by its plain id, same as the flat path", () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP} textOf={() => ""} onSelect={onSelect} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.click(elAt("series:0", 1));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
+  });
+});

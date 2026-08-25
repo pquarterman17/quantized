@@ -8,7 +8,7 @@
 import { refLineIdForHit } from "./canonicalRefLines";
 import { shapeIdForHit, translateShape } from "./canonicalShapes";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import { pxToCanvasFraction, pxToData, pxToFigureFraction, type FigureHitmap } from "../../../lib/previewmap";
+import { axesAt, pxToCanvasFraction, pxToData, pxToFigureFraction, type FigureHitmap } from "../../../lib/previewmap";
 import type { RefLine, Shape } from "../../../lib/types";
 
 /** b minus a, both `{x, y}` points -> `[dx, dy]` — shared by the F2.4e shape
@@ -58,14 +58,23 @@ export function dragPreviewElement(
     const lineId = refLineIdForHit(refLines, Number(id.slice("refline:".length)));
     const line = refLines.find((candidate) => candidate.id === lineId);
     if (!line) return;
-    const { x, y } = pxToData(hitmap.axes, px, py);
+    // FU-facet-hitmap: resolve the CONTAINING facet panel's axes first (a
+    // no-op for the flat path, which has no `panels`) — a reference line
+    // isn't drawn into a facet panel today, so this is unreachable there in
+    // practice, but stays panel-correct rather than silently reading the
+    // flat path's `axes` (undefined on a faceted response) or panel 0.
+    const axes = axesAt(hitmap, px, py);
+    if (!axes) return;
+    const { x, y } = pxToData(axes, px, py);
     const next = line.axis === "x" ? x : y;
     if (Number.isFinite(next)) setRefLineValue(line.id, next);
   } else if (id.startsWith("ann:")) {
     const i = Number(id.slice(4));
     const anns = activeOverrides.annotations ?? [];
     if (!Number.isInteger(i) || i >= anns.length) return;
-    const { x, y } = pxToData(hitmap.axes, px, py);
+    const axes = axesAt(hitmap, px, py);
+    if (!axes) return;
+    const { x, y } = pxToData(axes, px, py);
     setActiveOverrides({
       ...activeOverrides,
       annotations: anns.map((a, j) => (j === i ? { ...a, x, y } : a)),
@@ -78,9 +87,25 @@ export function dragPreviewElement(
     const shapeId = shapeIdForHit(shapes, Number(id.slice("shape:".length)));
     const shape = shapes.find((candidate) => candidate.id === shapeId);
     if (!shape || startPx === undefined || startPy === undefined) return;
-    const [dx, dy] = shape.anchor === "page"
-      ? deltaXY(pxToCanvasFraction(hitmap.width, hitmap.height, startPx, startPy), pxToCanvasFraction(hitmap.width, hitmap.height, px, py))
-      : deltaXY(pxToData(hitmap.axes, startPx, startPy), pxToData(hitmap.axes, px, py));
+    let dx: number;
+    let dy: number;
+    if (shape.anchor === "page") {
+      [dx, dy] = deltaXY(
+        pxToCanvasFraction(hitmap.width, hitmap.height, startPx, startPy),
+        pxToCanvasFraction(hitmap.width, hitmap.height, px, py),
+      );
+    } else {
+      // FU-facet-hitmap: same panel-first resolution as the ref-line/
+      // annotation branches above — both endpoints must resolve against the
+      // SAME panel's axes (the press origin and the drop point are assumed
+      // to land in the same panel; a drag that crosses panel boundaries has
+      // no sound single-panel interpretation and is dropped rather than
+      // guessed).
+      const startAxes = axesAt(hitmap, startPx, startPy);
+      const endAxes = axesAt(hitmap, px, py);
+      if (!startAxes || !endAxes) return;
+      [dx, dy] = deltaXY(pxToData(startAxes, startPx, startPy), pxToData(endAxes, px, py));
+    }
     const patch = translateShape(shape, dx, dy);
     if (patch) setShapeStyle(shape.id, patch);
   }
