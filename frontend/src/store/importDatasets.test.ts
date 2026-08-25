@@ -258,6 +258,113 @@ describe("import roles and provenance (MAIN #33)", () => {
   });
 });
 
+// FU-1 (provenance-disclosure follow-ups): the multi-book Origin branch used
+// to stamp NEITHER `importedAt` NOR `errorRoles` on any book it created — a
+// project import's book-sheet datasets landed with a blank "imported" column
+// in Details and no automatic error-role inference, even though the SAME
+// file imported as a single book got both (the `else` branch a few lines
+// down in importDatasets.ts). Covers all three `books[]` shapes
+// (ORIGIN_FILE_DECODE_PLAN #38): the primary-book marker, a lazy preview
+// book, and a full inline book.
+describe("multi-book Origin import provenance (FU-1)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  const primaryMarker = (labels: string[], id: string, bookName: string) => ({
+    lazy: false as const,
+    primary: true as const,
+    id,
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+    rows: 2,
+    cols: labels.length,
+  });
+
+  const lazyEntry = (labels: string[], id: string, bookName: string) => ({
+    lazy: true as const,
+    id,
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+    rows: 2,
+    cols: labels.length,
+    // The preview series is deliberately DIFFERENT data than the real book
+    // would carry — proves inference reads `book.labels` (real), not
+    // something derived from this preview.
+    preview: { time: [0, 1], values: [[0, 0], [0, 0]] },
+  });
+
+  const fullInlineBook = (labels: string[], bookName: string) => ({
+    time: [0, 1],
+    values: [[5, 0.1], [6, 0.2]],
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+  });
+
+  /** One project payload exercising all three `books[]` shapes at once,
+   *  every book's error column named so `R`/`dR` (base-name, unambiguous)
+   *  infers the same binding regardless of shape. */
+  function multiBookPayload() {
+    return {
+      time: [0, 1],
+      values: [
+        [10, 1],
+        [20, 2],
+      ],
+      labels: ["ignored0", "ignored1"],
+      units: ["", ""],
+      metadata: {},
+      book_source: { kind: "upload" as const, token: "tok123" },
+      books: [
+        primaryMarker(["R", "dR"], "b0", "Primary"),
+        lazyEntry(["R", "dR"], "b1", "Lazy"),
+        fullInlineBook(["R", "dR"], "Full"),
+      ],
+    };
+  }
+
+  const expectedRoleBinding = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+
+  it("stamps importedAt on every book dataset, one shared timestamp per import call", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(3);
+    for (const d of ds) {
+      expect(d.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+    // Same import call -> same instant, not one Date.now() per book.
+    expect(new Set(ds.map((d) => d.importedAt)).size).toBe(1);
+  });
+
+  it("infers error roles for the primary-book shape, off the correct per-dataset labels", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const primary = useApp.getState().datasets.find((d) => d.name === "Multi:Primary")!;
+    expect(primary.errorRoles).toEqual(expectedRoleBinding);
+  });
+
+  it("infers error roles for a full inline book", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const full = useApp.getState().datasets.find((d) => d.name === "Multi:Full")!;
+    expect(full.errorRoles).toEqual(expectedRoleBinding);
+  });
+
+  it("infers error roles for a lazy book from its real (non-preview) labels, and keeps its pending ref", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const lazy = useApp.getState().datasets.find((d) => d.name === "Multi:Lazy")!;
+    expect(lazy.errorRoles).toEqual(expectedRoleBinding);
+    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 2 });
+  });
+});
+
 describe("import busy state (pendingOps, P3.4 slice 1)", () => {
   it("registers a pendingOps op while a single-file import is in flight, then clears it", async () => {
     let resolve!: (v: ReturnType<typeof payload>) => void;

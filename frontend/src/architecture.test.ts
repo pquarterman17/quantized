@@ -812,6 +812,11 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   expandedWorkbookIds: "Library tree workbook disclosure state; persisted view state (PR E2), not an undoable edit",
   librarySelection: "Library tree folder/workbook selection; persisted view state (PR E2), not an undoable edit",
   workbookLastChild: "L0.6 remembered workbook child per workbook id; persisted view state (PR E2), not an undoable edit",
+  // FU-2 (provenance-disclosure follow-ups): OriginFidelitySection's own
+  // disclosure flag, same class as libraryPanelWidth/revealTarget above —
+  // UI-only, session-local, and (unlike expandedWorkbookIds/librarySelection/
+  // workbookLastChild) deliberately NOT persisted into `.dwk` either.
+  originFidelitySectionExpanded: "Origin fidelity group disclosure; UI state, session-only, not .dwk-persisted, not an undoable edit",
 
   // originImport slice: ephemeral seeds
   originWorksheetSeed: "pending worksheet from Origin import; consumed on apply, not persistent",

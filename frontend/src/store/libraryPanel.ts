@@ -58,6 +58,22 @@
 //     `openLibraryNode` (the single open dispatcher every row funnels
 //     through) so every open path — tree, reused DatasetRow/FigureRow,
 //     the new light artifact rows — records the same way.
+//
+// FU-2 (provenance-disclosure follow-ups): `originFidelitySectionExpanded` —
+// OriginFidelitySection's own disclosure flag, following the SAME
+// `expandedFolders`/`expandedWorkbookIds` convention: a plain field + one
+// toggle action. It used to be a per-mount `useState` inside that component,
+// which Library.tsx unmounts whenever search is active
+// (`{!searchActive && <OriginFidelitySection />}`) — so a deliberate expand
+// was silently lost on every search, and since the default is collapsed, the
+// loss always resolved toward hidden. Lifting it here (read/written like
+// `expandedWorkbookIds`) survives the unmount/remount because the STORE, not
+// the component instance, now owns it. Deliberately SESSION-ONLY, unlike
+// `expandedWorkbookIds`/`librarySelection`/`workbookLastChild` above: it is
+// NOT added to lib/workspace.ts's parseWorkspace/serializeWorkspace, so it
+// does not round-trip through `.dwk` and always starts collapsed in a fresh
+// session — a decoder-diagnostics disclosure toggle isn't project data worth
+// persisting to disk, just worth surviving one session's searches.
 
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import type { AppState } from "./useApp";
@@ -109,6 +125,13 @@ export interface LibraryPanelSlice {
    *  Persisted into the .dwk by PR E2. */
   workbookLastChild: Record<string, string>;
   setWorkbookLastChild: (workbookId: string, childKey: string) => void;
+  /** FU-2 — OriginFidelitySection's collapsed/expanded disclosure, moved out
+   *  of that component's own `useState` so it survives Library.tsx unmounting
+   *  the section during search (see the module doc above). Session-only:
+   *  NOT persisted into `.dwk` — always starts collapsed (`false`) in a fresh
+   *  session, matching the component's old default. */
+  originFidelitySectionExpanded: boolean;
+  toggleOriginFidelitySectionExpanded: () => void;
 }
 
 /** PR C: the active dataset's workbook is always disclosed — activation
@@ -167,5 +190,8 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     workbookLastChild: {},
     setWorkbookLastChild: (workbookId, childKey) =>
       set((s) => ({ workbookLastChild: { ...s.workbookLastChild, [workbookId]: childKey } })),
+    originFidelitySectionExpanded: false,
+    toggleOriginFidelitySectionExpanded: () =>
+      set((s) => ({ originFidelitySectionExpanded: !s.originFidelitySectionExpanded })),
   };
 }

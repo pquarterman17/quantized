@@ -55,6 +55,7 @@ beforeEach(() => {
     activeId: null,
     selectedIds: [],
     librarySelection: null,
+    originFidelitySectionExpanded: false,
   });
 });
 
@@ -401,5 +402,62 @@ describe("Library — Tree / Details renderer continuity (PR D)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(filter).toHaveValue("beta");
     expect(screen.getByText("beta.csv")).toBeInTheDocument();
+  });
+});
+
+// FU-2 (provenance-disclosure follow-ups): OriginFidelitySection used to hold
+// its collapsed flag in a per-mount useState, and Library.tsx unmounts the
+// section whenever search is active (`{!searchActive && <OriginFidelitySection />}`)
+// — so a deliberate expand was lost on every search, and since the section
+// defaults collapsed, the loss always resolved toward hidden. The flag now
+// lives in the store (store/libraryPanel.ts's `originFidelitySectionExpanded`)
+// so it survives the unmount/remount.
+describe("Library — OriginFidelitySection disclosure survives search (FU-2)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [dsWith("a")],
+      folders: [],
+      workbooks: [],
+      activeId: null,
+      selectedIds: [],
+      originFidelity: [
+        {
+          id: "fidelity-a",
+          stem: "XRD",
+          siblingIds: ["a"],
+          manifest: {
+            version: 1,
+            container: "opj",
+            status: "best_effort",
+            graph_records_total: 1,
+            graph_records_actionable: 1,
+            graph_records_filtered: 0,
+            omissions: [],
+            filtered_figures: [],
+          },
+        },
+      ],
+    });
+  });
+
+  it("expanding the section, then activating and clearing search, leaves it expanded", async () => {
+    render(<Library />);
+
+    // Expand it — the per-project fidelity summary becomes visible.
+    fireEvent.click(screen.getByText("Origin fidelity"));
+    expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
+
+    // Activate search: Library.tsx unmounts OriginFidelitySection entirely
+    // while a query is active.
+    const filter = screen.getByPlaceholderText(/Filter/);
+    fireEvent.change(filter, { target: { value: "xrd" } });
+    await screen.findByLabelText("Library details table");
+    expect(screen.queryByText("Origin fidelity")).not.toBeInTheDocument();
+
+    // Clear search: the section remounts. It must come back EXPANDED, not
+    // reset to its collapsed default.
+    fireEvent.change(filter, { target: { value: "" } });
+    expect(screen.getByText("Origin fidelity")).toBeInTheDocument();
+    expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
   });
 });
