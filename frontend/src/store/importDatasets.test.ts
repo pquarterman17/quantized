@@ -266,65 +266,93 @@ describe("import roles and provenance (MAIN #33)", () => {
 // down in importDatasets.ts). Covers all three `books[]` shapes
 // (ORIGIN_FILE_DECODE_PLAN #38): the primary-book marker, a lazy preview
 // book, and a full inline book.
+//
+// Round 2 (E1): error roles for an Origin book come ONLY from that book's
+// authoritative `column_designations` metadata (lib/originBookRoles.ts),
+// never the label-name guesser (`inferErrorBindings`) — a guess misreads a
+// genuine "Depth" measurement column as an error series. So these fixtures
+// carry realistic Origin metadata (`column_designations` + the matching
+// `origin_column_names` channel order, exactly as `io/origin_project/
+// opj.py`'s `_build_book` emits) instead of relying on error-shaped labels.
 describe("multi-book Origin import provenance (FU-1)", () => {
   const files = (...names: string[]) => names.map((n) => new File(["x"], n));
 
-  const primaryMarker = (labels: string[], id: string, bookName: string) => ({
+  /** Origin metadata for a book with 3 value columns short-named B/C/D
+   *  (A is reserved for the X column, as Origin books do) — `designations`
+   *  supplies each of B/C/D's plot-designation string. */
+  const originMeta = (bookName: string, designations: [string, string, string]) => ({
+    origin_book: bookName,
+    origin_column_names: ["B", "C", "D"],
+    column_designations: { A: "X", B: designations[0], C: designations[1], D: designations[2] },
+  });
+
+  const primaryMarker = (labels: string[], id: string, metadata: Record<string, unknown>) => ({
     lazy: false as const,
     primary: true as const,
     id,
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
     rows: 2,
     cols: labels.length,
   });
 
-  const lazyEntry = (labels: string[], id: string, bookName: string) => ({
+  const lazyEntry = (labels: string[], id: string, metadata: Record<string, unknown>) => ({
     lazy: true as const,
     id,
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
     rows: 2,
     cols: labels.length,
-    // The preview series is deliberately DIFFERENT data than the real book
-    // would carry — proves inference reads `book.labels` (real), not
-    // something derived from this preview.
-    preview: { time: [0, 1], values: [[0, 0], [0, 0]] },
+    // Structurally SMALLER than the real book (2 columns vs 3 real ones) —
+    // a realistic decimated preview, and proof the dataset's `data` field
+    // really is this preview (not the real book) while `labels`/`metadata`
+    // (what role inference and the Library tree read) are the book's own.
+    preview: { time: [0, 1], values: [[0], [0]] },
   });
 
-  const fullInlineBook = (labels: string[], bookName: string) => ({
+  const fullInlineBook = (labels: string[], metadata: Record<string, unknown>) => ({
     time: [0, 1],
-    values: [[5, 0.1], [6, 0.2]],
+    values: [[5, 0.1, 9], [6, 0.2, 8]],
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
   });
 
-  /** One project payload exercising all three `books[]` shapes at once,
-   *  every book's error column named so `R`/`dR` (base-name, unambiguous)
-   *  infers the same binding regardless of shape. */
+  // "Trap": every column genuinely IS a measurement ("Refl"/"Depth"/"Temp"),
+  // none an error — the exact shape `classifyErrorLabel`'s bare-`d` rule
+  // misreads (it would bind "Depth" as a Y-error for "Refl"). Origin's own
+  // designations say all three are "Y" (plain value columns): NO roles.
+  const trapLabels = ["Refl", "Depth", "Temp"];
+  const trapMeta = (bookName: string) => originMeta(bookName, ["Y", "Y", "Y"]);
+
+  // "Designated": a genuine Y-error column, immediately after the Y column
+  // it belongs to, with another plain "Depth" Y column after THAT — proves
+  // both that a real designation produces the right binding AND that the
+  // plain "Depth" column next to it stays unbound.
+  const designatedLabels = ["Refl", "Refl_err", "Depth"];
+  const designatedMeta = (bookName: string) => originMeta(bookName, ["Y", "Y-error", "Y"]);
+  const expectedDesignatedRoles = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+
   function multiBookPayload() {
     return {
       time: [0, 1],
       values: [
-        [10, 1],
-        [20, 2],
+        [10, 1, 2],
+        [20, 3, 4],
       ],
-      labels: ["ignored0", "ignored1"],
-      units: ["", ""],
+      labels: ["ignored0", "ignored1", "ignored2"],
+      units: ["", "", ""],
       metadata: {},
       book_source: { kind: "upload" as const, token: "tok123" },
       books: [
-        primaryMarker(["R", "dR"], "b0", "Primary"),
-        lazyEntry(["R", "dR"], "b1", "Lazy"),
-        fullInlineBook(["R", "dR"], "Full"),
+        primaryMarker(trapLabels, "b0", trapMeta("Trap")),
+        lazyEntry(designatedLabels, "b1", designatedMeta("Lazy")),
+        fullInlineBook(designatedLabels, designatedMeta("Full")),
       ],
     };
   }
-
-  const expectedRoleBinding = [{ channel: 1, target: 0, axis: "y", side: "both" }];
 
   it("stamps importedAt on every book dataset, one shared timestamp per import call", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
@@ -339,29 +367,66 @@ describe("multi-book Origin import provenance (FU-1)", () => {
     expect(new Set(ds.map((d) => d.importedAt)).size).toBe(1);
   });
 
-  it("infers error roles for the primary-book shape, off the correct per-dataset labels", async () => {
+  it("E1: does NOT bind a genuine 'Depth' measurement column as an error role, on any shape", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
     await useApp.getState().importFiles(files("Multi.opj"));
 
-    const primary = useApp.getState().datasets.find((d) => d.name === "Multi:Primary")!;
-    expect(primary.errorRoles).toEqual(expectedRoleBinding);
+    const trap = useApp.getState().datasets.find((d) => d.name === "Multi:Trap")!;
+    expect(trap.errorRoles).toBeUndefined();
   });
 
-  it("infers error roles for a full inline book", async () => {
+  it("E1: derives error roles from genuine Y-error designations (primary-book shape), leaving the plain Depth column beside it unbound", async () => {
+    // A single-book payload would take the `else` branch, not this one —
+    // pair the primary marker with a second (trap) book to force the
+    // multi-book branch under test.
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        primaryMarker(designatedLabels, "b0", designatedMeta("Primary")),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap2")),
+      ],
+    });
+    await useApp.getState().importFiles(files("Two.opj"));
+
+    const primary = useApp.getState().datasets.find((d) => d.name === "Two:Primary")!;
+    expect(primary.errorRoles).toEqual(expectedDesignatedRoles);
+  });
+
+  it("E1: derives error roles from genuine Y-error designations for a full inline book", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
     await useApp.getState().importFiles(files("Multi.opj"));
 
     const full = useApp.getState().datasets.find((d) => d.name === "Multi:Full")!;
-    expect(full.errorRoles).toEqual(expectedRoleBinding);
+    expect(full.errorRoles).toEqual(expectedDesignatedRoles);
   });
 
-  it("infers error roles for a lazy book from its real (non-preview) labels, and keeps its pending ref", async () => {
+  it("E1: derives error roles from genuine Y-error designations for a lazy book, and keeps its pending ref", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
     await useApp.getState().importFiles(files("Multi.opj"));
 
     const lazy = useApp.getState().datasets.find((d) => d.name === "Multi:Lazy")!;
-    expect(lazy.errorRoles).toEqual(expectedRoleBinding);
-    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 2 });
+    expect(lazy.errorRoles).toEqual(expectedDesignatedRoles);
+    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 3 });
+    // The dataset's `data` really is the (structurally smaller) preview —
+    // roles/labels/metadata come from the book's real, separate fields.
+    expect(lazy.data.values).toEqual([[0], [0]]);
+  });
+
+  it("E1: a book with NO usable designation metadata (structurally missing) gets importedAt but no guessed roles", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        // Error-shaped LABELS ("R"/"dR") but no column_designations/
+        // origin_column_names at all — must NOT fall back to the guesser.
+        primaryMarker(["R", "dR"], "b0", { origin_book: "NoDesig" }),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap3")),
+      ],
+    });
+    await useApp.getState().importFiles(files("NoDesig.opj"));
+
+    const ds = useApp.getState().datasets.find((d) => d.name === "NoDesig:NoDesig")!;
+    expect(ds.errorRoles).toBeUndefined();
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
 

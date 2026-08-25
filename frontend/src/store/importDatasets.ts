@@ -33,6 +33,7 @@ import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { revealAncestorChain } from "../lib/foldertree";
+import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
 import {
   isLazyBookEntry,
@@ -210,15 +211,9 @@ function addFromPayload(
     // only under the `full_books` escape hatch, never requested here — a full
     // inline DataStruct.
     const bookSource = data.book_source;
-    // FU-1 provenance fix: every book below now gets `importedAt` + inferred
-    // error roles, matching the single-file `else` branch further down.
-    // `bookData` is always exactly what that dataset's `data` field carries,
-    // so `importRoles` infers off THIS book's own labels. For the lazy shape,
-    // `book.labels`/`book.units` are ALSO the real, full-book values (only
-    // `time`/`values` are a downsampled preview — LazyBookEntry's own doc),
-    // and `inferErrorBindings` reads `.labels` alone, so inferring from them
-    // here is not a preview-degraded guess: it's the same result the eventual
-    // full-data fetch would produce.
+    // FU-1 provenance fix: every book below now gets `importedAt`. Error
+    // roles too — but NEVER from the label guesser (`importRoles`, used by
+    // the single-file `else` branch below): see `originBookErrorRoles`'s doc.
     for (const book of data.books) {
       const meta = (book.metadata ?? {}) as Record<string, unknown>;
       const short = String(meta.origin_book ?? "Book");
@@ -226,9 +221,10 @@ function addFromPayload(
       const label = long && long !== short ? `${short} — ${long}` : short;
       const id = nextDatasetId();
       const name = `${stem}:${label}`;
+      const roles = originBookErrorRoles(book.metadata, book.labels);
       if (isPrimaryBookMarker(book)) {
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
-        get().addDataset({ id, name, data: bookData, ...src, ...importRoles(bookData), importedAt }, historyToken);
+        get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
         const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({
@@ -239,11 +235,11 @@ function addFromPayload(
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
-          ...importRoles(bookData),
+          ...roles,
           importedAt,
         }, historyToken);
       } else {
-        get().addDataset({ id, name, data: book, ...src, ...importRoles(book), importedAt }, historyToken);
+        get().addDataset({ id, name, data: book, ...src, ...roles, importedAt }, historyToken);
       }
       newIds.push(id);
     }
@@ -496,3 +492,4 @@ function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
   const roles = inferErrorBindings(data);
   return roles.length ? { errorRoles: roles } : {};
 }
+
