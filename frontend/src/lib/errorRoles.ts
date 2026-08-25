@@ -18,9 +18,15 @@
 //     never mutate the underlying X/Y data.
 
 import type { DataStruct } from "./types";
+import { classifyErrorLabel, classifyErrorLabelInLabels, type ErrorSide } from "./errorLabelClassify";
+import { flatNorm } from "./errorLabelCandidates";
 
-/** Which side of an asymmetric pair a column supplies. */
-export type ErrorSide = "both" | "+" | "-";
+export type { ErrorSide };
+// Re-exported for callers that used to reach into this module for the
+// single-string classifier -- the generation/ranking/selection now live in
+// `errorLabelCandidates.ts` / `errorLabelClassify.ts` (see
+// plans/ERROR_LABEL_CLASSIFIER_PLAN.md), but the signature is unchanged.
+export { classifyErrorLabel };
 
 export interface ErrorBinding {
   /** Channel index holding the error values. */
@@ -29,66 +35,6 @@ export interface ErrorBinding {
   target: number;
   axis: "x" | "y";
   side: ErrorSide;
-}
-
-/** Suffixes that mark an asymmetric half, checked before the base names so
- *  `err+` is not first matched as `err`. */
-const PLUS = ["+", "up", "hi", "high", "upper"];
-const MINUS = ["-", "dn", "down", "lo", "low", "lower"];
-
-/** Tokens that mark a column as an uncertainty. Ordered longest-first so
- *  `stderr` is not shadowed by `err`. */
-const ERROR_TOKENS = ["stderr", "sigma", "error", "err", "unc", "sdev", "std", "sd", "se"];
-
-function norm(label: string): string {
-  return label.trim().toLowerCase().replace(/[\s_]+/g, "");
-}
-
-/** Does this label look like an uncertainty column, and for which axis/side?
- *
- *  Returns null for anything that does not clearly read as an error column —
- *  a false positive here silently turns a real measurement into whiskers. */
-export function classifyErrorLabel(
-  label: string,
-): { axis: "x" | "y" | null; side: ErrorSide; base: string } | null {
-  const n = norm(label);
-  if (!n) return null;
-
-  let side: ErrorSide = "both";
-  let body = n;
-  for (const suffix of PLUS) {
-    if (body.endsWith(suffix) && body.length > suffix.length) {
-      side = "+";
-      body = body.slice(0, -suffix.length);
-      break;
-    }
-  }
-  if (side === "both") {
-    for (const suffix of MINUS) {
-      if (body.endsWith(suffix) && body.length > suffix.length) {
-        side = "-";
-        body = body.slice(0, -suffix.length);
-        break;
-      }
-    }
-  }
-
-  // Explicit axis prefix — "xerr"/"yerr" say which axis outright.
-  let axis: "x" | "y" | null = null;
-  if (body.startsWith("x")) axis = "x";
-  else if (body.startsWith("y")) axis = "y";
-
-  const token = ERROR_TOKENS.find((t) => body === t || body.endsWith(t) || body.startsWith(t));
-  if (!token) {
-    // A bare leading "d" is the instrument convention for a delta column
-    // (dR, dQ, dSA) — only treat it as an error when a base name remains.
-    if (/^d[a-z0-9]/.test(body)) {
-      return { axis, side, base: body.slice(1) };
-    }
-    return null;
-  }
-  const base = body.replace(token, "").replace(/^[xy]/, "");
-  return { axis, side, base };
 }
 
 /** Infer bindings from column LABELS ALONE, pairing each error column with
@@ -107,7 +53,15 @@ export function classifyErrorLabel(
  *  column names, before any DataStruct exists — `inferErrorBindings` below
  *  is a thin `data.labels` wrapper over this. */
 export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBinding[] {
-  const classified = labels.map((l) => classifyErrorLabel(l));
+  // The REAL, evidence-gated decision for every channel, computed once up
+  // front (`classifyErrorLabelInLabels` only ever consults OTHER labels'
+  // context-free `hasConfirmedCandidate`, never another label's `classified`
+  // result, so this has no circular dependency). `isError` -- used below to
+  // keep a channel that IS an error column from also being treated as
+  // somebody else's target -- is the FINAL result, not the context-free
+  // approximation: `dR` beside `R` is only confirmed via sibling evidence,
+  // and still must not itself be eligible as a third column's target.
+  const classified = labels.map((_, i) => classifyErrorLabelInLabels(labels, i));
   const isError = classified.map((c) => c !== null);
   const bindings: ErrorBinding[] = [];
 
@@ -118,7 +72,7 @@ export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBi
     // 1. base-name match against a NON-error column
     let target = -2;
     if (info.base) {
-      const idx = labels.findIndex((l, i) => !isError[i] && norm(l) === info.base);
+      const idx = labels.findIndex((l, i) => !isError[i] && flatNorm(l) === info.base);
       if (idx >= 0) target = idx;
     }
     // 2. explicit x prefix
