@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import PeakTable from "./PeakTable";
@@ -143,8 +143,39 @@ describe("PeakTable — K1 (red-first): a non-governing table (onSelect omitted)
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
     for (const r of rows) {
       expect(r).not.toHaveAttribute("aria-selected");
-      expect(r.tabIndex).toBe(-1);
+      // The ATTRIBUTE must be absent, not merely -1: a jsdom <tr> with no
+      // tabindex already reports .tabIndex === -1, so the old assertion
+      // passed either way. tabindex="-1" is click-focusable, and the inert
+      // branch attaches no onKeyDown, which let a click + ArrowDown fall
+      // through to the global prev/next-dataset shortcut and wipe the fit.
+      expect(r).not.toHaveAttribute("tabindex");
     }
+  });
+
+  it("Delete on a focused row is consumed, never reaching the global dataset-removal shortcut", () => {
+    const onSelect = vi.fn();
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set()} onSelect={onSelect} />);
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+    for (const key of ["Delete", "Backspace"]) {
+      const ev = createEvent.keyDown(row, { key, bubbles: true, cancelable: true });
+      fireEvent(row, ev);
+      // preventDefault is the protocol useGlobalShortcuts.ts keys off to know
+      // a closer handler owned the keystroke (its `!e.defaultPrevented` gate).
+      expect(ev.defaultPrevented).toBe(true);
+    }
+    // ...and it must not be mistaken for a selection gesture.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("an inert row is not click-focusable, so a following arrow key cannot reach the global shortcut", () => {
+    render(<PeakTable ariaLabel="test peaks" columns={COLUMNS} rows={ROWS} selected={new Set()} />);
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+    row.focus();
+    // With no tabindex attribute the <tr> cannot take focus, so an arrow key
+    // never originates here and the global prev/next-dataset handler keeps
+    // its normal background-click behavior instead of firing from a row that
+    // looked interactive.
+    expect(document.activeElement).not.toBe(row);
   });
 
   it("a click on an inert row does nothing (no handler attached)", () => {
