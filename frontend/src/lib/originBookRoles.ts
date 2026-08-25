@@ -26,9 +26,24 @@
 //
 // No usable designation info on a book (columnmeta finds no
 // `origin_column_names` array at all) means NO roles for that book, not a
-// guess — signalled by returning `null` rather than `{}`, so a caller that
-// wants to fall back to the label guesser for a genuinely non-Origin payload
-// can tell "nothing to say" apart from "said: no error columns here".
+// guess — signalled by returning `null` rather than `{ errorRoles: [] }`, so
+// a caller that wants to fall back to the label guesser for a genuinely
+// non-Origin payload can tell "nothing to say" apart from "said: no error
+// columns here".
+//
+// Round 5 (O1): that second state -- designations WERE read and produced
+// zero error columns -- is stamped as `{ errorRoles: [] }`, not `{}`.
+// Several OTHER call sites across the codebase (lib/quickFigureMappingActions.ts,
+// lib/quickPlotTemplates.ts x2, lib/plotRecipe.ts, lib/plotRecipeMatch.ts --
+// none owned by this module) read `dataset.errorRoles ?? inferErrorBindings(
+// dataset.data)`: omitting the field left THEM unable to tell "never
+// determined" from "determined: none", so they re-ran the label guesser --
+// and its Depth-misclassification bug -- on exactly the Origin datasets this
+// module exists to protect. `[]` is not nullish, so every `??` consumer
+// above stops falling back with NO change on their side, and every
+// `!!errorRoles?.length`/`.length` check this codebase already uses
+// (ErrorRolesCard, decimation, `hasRichErrorBindings`, `errKeysFromBindings`)
+// still reads it as "no errors" exactly like `undefined` did.
 
 import { columnMetaList } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
@@ -44,12 +59,14 @@ import type { DataStruct } from "./types";
  *
  *  Returns `null` when the payload carries no usable designation info at
  *  all (a genuinely non-Origin file) — the caller's cue to fall back to the
- *  label guesser instead. Returns `{}` (deliberately no `errorRoles` key,
- *  matching `errorRoles.ts`'s `importRoles`) when designations exist but
- *  none is an error column — that is Origin's own answer, never a guess. */
+ *  label guesser instead. Returns `{ errorRoles: [] }` (round 5: NOT `{}`
+ *  — see the module doc's O1 note) when designations exist but none is an
+ *  error column — that is Origin's own answer, never a guess, and it must
+ *  survive as a distinguishable value so a `?? inferErrorBindings(...)`
+ *  reader elsewhere never mistakes it for "not yet determined". */
 export function originBookErrorRoles(
   ds: Pick<DataStruct, "metadata">,
-): { errorRoles?: ErrorBinding[] } | null {
+): { errorRoles: ErrorBinding[] } | null {
   const list = columnMetaList(ds);
   if (list.length === 0) return null;
 
@@ -72,5 +89,5 @@ export function originBookErrorRoles(
       roles.push({ channel: i, target: -1, axis: "x", side: "both" });
     }
   }
-  return roles.length ? { errorRoles: roles } : {};
+  return { errorRoles: roles }; // possibly [] -- see the O1 note above
 }

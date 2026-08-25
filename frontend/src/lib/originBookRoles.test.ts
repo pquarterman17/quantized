@@ -1,9 +1,12 @@
-// FU-1 (E1/L3/L4): `originBookErrorRoles` derives error roles from an Origin
-// book's own authoritative `column_designations` metadata — read through
-// `lib/columnmeta.ts`'s shared alignment, never a label-name guess. See the
-// module doc for why the guess is unsafe on Origin data (a genuine "Depth"
-// column reads as an error series) and why `null` (not `{}`) signals "no
-// usable designation info at all" to a caller that wants to fall back.
+// FU-1 (E1/L3/L4/O1): `originBookErrorRoles` derives error roles from an
+// Origin book's own authoritative `column_designations` metadata — read
+// through `lib/columnmeta.ts`'s shared alignment, never a label-name guess.
+// See the module doc for why the guess is unsafe on Origin data (a genuine
+// "Depth" column reads as an error series), why `null` signals "no usable
+// designation info at all" to a caller that wants to fall back, and why
+// designations-with-zero-error-columns is `{ errorRoles: [] }` rather than
+// `{}` (round 5, O1) -- other `dataset.errorRoles ?? inferErrorBindings(...)`
+// readers must be able to tell that apart from "never determined".
 
 import { describe, expect, it } from "vitest";
 
@@ -21,9 +24,12 @@ const meta = (b: string, c: string, d: string, extra: Record<string, unknown> = 
 
 describe("originBookErrorRoles", () => {
   it("does NOT bind a genuine 'Depth' measurement column, even though its name would trip the label guesser", () => {
-    // Every column plainly designated Y -- none is an error.
+    // Every column plainly designated Y -- none is an error. O1: `[]`, not
+    // `{}` -- this dataset WAS checked and has no error columns, which must
+    // stay distinguishable from "never checked" for the five other readers
+    // that do `dataset.errorRoles ?? inferErrorBindings(...)`.
     const roles = originBookErrorRoles(meta("Y", "Y", "Y"));
-    expect(roles).toEqual({});
+    expect(roles).toEqual({ errorRoles: [] });
   });
 
   it("binds a genuine Y-error designation to the nearest preceding Y column", () => {
@@ -38,12 +44,12 @@ describe("originBookErrorRoles", () => {
 
   it("leaves a Y-error with no preceding Y column unbound (nothing defensible to pair it with)", () => {
     const roles = originBookErrorRoles(meta("Y-error", "Y", "Y"));
-    expect(roles).toEqual({});
+    expect(roles).toEqual({ errorRoles: [] });
   });
 
   it("L4: skips an X-error binding when the designated X column was not recovered (synthetic row-index axis)", () => {
     const roles = originBookErrorRoles(meta("X-error", "Y", "Y", { x_column_recovered: false }));
-    expect(roles).toEqual({});
+    expect(roles).toEqual({ errorRoles: [] });
   });
 
   it("still binds X-error when x_column_recovered is true (or absent — the common, pre-existing case)", () => {
@@ -59,5 +65,12 @@ describe("originBookErrorRoles", () => {
 
   it("returns null for a plain non-Origin dataset (no Origin metadata at all)", () => {
     expect(originBookErrorRoles({ metadata: {} })).toBeNull();
+  });
+
+  // O1 (round 5): the distinguishable-empty-array marker is not nullish, so
+  // it must never trip a `??` fallback anywhere it flows.
+  it("O1: `{ errorRoles: [] }` is not nullish -- a `?? inferErrorBindings(...)` reader never falls back on it", () => {
+    const roles = originBookErrorRoles(meta("Y", "Y", "Y"));
+    expect(roles?.errorRoles ?? "FELL BACK").toEqual([]);
   });
 });

@@ -372,7 +372,11 @@ describe("multi-book Origin import provenance (FU-1)", () => {
     await useApp.getState().importFiles(files("Multi.opj"));
 
     const trap = useApp.getState().datasets.find((d) => d.name === "Multi:Trap")!;
-    expect(trap.errorRoles).toBeUndefined();
+    // O1 (round 5): designations WERE read (real column_designations on this
+    // book) and produced zero error columns -- `[]`, not `undefined`, so a
+    // `dataset.errorRoles ?? inferErrorBindings(...)` reader elsewhere can
+    // never mistake this for "never determined" and re-guess Depth as error.
+    expect(trap.errorRoles).toEqual([]);
   });
 
   it("E1: derives error roles from genuine Y-error designations (primary-book shape), leaving the plain Depth column beside it unbound", async () => {
@@ -459,7 +463,9 @@ describe("single-book Origin import provenance (FU-1 round 3, L1)", () => {
     await useApp.getState().importFiles(files("OneBook.opj"));
 
     const ds = useApp.getState().datasets[0];
-    expect(ds.errorRoles).toBeUndefined();
+    // O1 (round 5): same distinguishable-empty-array marker on the
+    // single-file import path.
+    expect(ds.errorRoles).toEqual([]);
     expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
