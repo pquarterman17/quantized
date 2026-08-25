@@ -15,6 +15,11 @@ label, plus per-panel hit elements tagged with that panel's index -- so
 ``routes.export_figures.export_figure_hitmap``'s facet branch and the
 client (``lib/previewmap.ts``) can resolve a preview click to the
 CONTAINING panel before converting pixels to THAT panel's data coordinates.
+It also harvests the whole FIGURE's own title/x-label/y-label (fix round 3,
+J2) with the SAME ids ``collect_map`` uses and no ``panel`` key -- real
+artists (``fig.suptitle``/``supxlabel``/``supylabel``) that a faceted
+render draws exactly like the flat one, so leaving them unharvested would
+make them visible but not editable on a faceted preview alone.
 ``calc.figure_facets.render_facets_figure_map`` is its only caller.
 
 Former known limitation (R1, fix round 3; closed by FU-facet-hitmap): this
@@ -29,6 +34,7 @@ collector.
 from __future__ import annotations
 
 import base64
+import math
 from collections.abc import Sequence
 from io import BytesIO
 from typing import Any
@@ -41,6 +47,24 @@ __all__ = ["collect_map", "collect_facet_map"]
 #: (``lib/uplotOverlays.ts``'s ``pickRefLine`` default ``tol = 6``), so the
 #: preview and the live plot are equally forgiving to click.
 _HIT_PAD = 3.0
+
+
+def _pad_degenerate(box: dict[str, float]) -> dict[str, float]:
+    """Grow any axis ``box`` is thinner than ``2 * _HIT_PAD`` on to exactly
+    that width, centered on its own midpoint; a no-op on an axis already
+    thicker than that. Shared by ``add_decor`` below (a reference line/shape,
+    legitimately zero-width or zero-height) and ``collect_facet_map``'s
+    facet series-line harvest (fix round 3, J4): a facet level with a
+    single data ROW, or a constant-valued channel, draws a ``Line2D`` whose
+    window extent is genuinely zero-width or zero-height on one axis -- the
+    exact same degenerate-bbox situation, just for a series instead of a
+    decor object. Returns a NEW dict; ``box`` itself is untouched."""
+    out = dict(box)
+    for lo, hi in (("x0", "x1"), ("y0", "y1")):
+        if out[hi] - out[lo] < 2 * _HIT_PAD:
+            mid = (out[lo] + out[hi]) / 2
+            out[lo], out[hi] = mid - _HIT_PAD, mid + _HIT_PAD
+    return out
 
 
 def _bbox_to_pixels(bbox: Any, height: float) -> dict[str, float]:
@@ -122,11 +146,7 @@ def collect_map(
             bbox = _artist_window_extent(artist, renderer)
         except (RuntimeError, AttributeError):
             return
-        box = _bbox_to_pixels(bbox, height)
-        for lo, hi in (("x0", "x1"), ("y0", "y1")):
-            if box[hi] - box[lo] < 2 * _HIT_PAD:
-                mid = (box[lo] + box[hi]) / 2
-                box[lo], box[hi] = mid - _HIT_PAD, mid + _HIT_PAD
+        box = _pad_degenerate(_bbox_to_pixels(bbox, height))
         elements.append({"id": el_id, **box})
 
     if ax.get_title():
@@ -204,6 +224,9 @@ def collect_facet_map(
     dpi: int,
     x_scale: str,
     y_scale: str,
+    title_artist: Any | None = None,
+    xlabel_artist: Any | None = None,
+    ylabel_artist: Any | None = None,
 ) -> dict[str, Any]:
     """Draw at ``dpi`` and harvest EVERY panel's pixel geometry (FU-facet-
     hitmap). ``panels`` is ``(ax, series_artists)`` per panel, in panel
@@ -213,10 +236,18 @@ def collect_facet_map(
     already documents (a colour-mapped series has no ``ax.lines`` entry --
     facets don't support ``color_by`` today, but this stays consistent with
     the flat collector rather than silently relying on that).
+    ``title_artist``/``xlabel_artist``/``ylabel_artist`` (fix round 3, J2)
+    are the whole-FIGURE'S OWN ``fig.suptitle``/``supxlabel``/``supylabel``
+    ``Text`` instances (``calc.figure_facets_map._BuiltFacetGrid``'s own
+    fields) -- ``None`` when that string was empty and nothing was drawn.
 
     Returns ``{"image", "width", "height", "elements", "panels"}`` --
     ``elements`` items carry an extra ``"panel"`` index (the ``panels``
-    list position) alongside the flat shape's ``"id"``/pixel-box keys, and
+    list position) alongside the flat shape's ``"id"``/pixel-box keys
+    EXCEPT for the whole-figure title/x-label/y-label elements below, which
+    carry NO ``"panel"`` key at all -- exactly the flat path's own shape,
+    so the client's existing "``panel`` absent means the flat/whole-figure
+    element" handling (``lib/previewmap.ts``) applies to them for free.
     ``"panels"`` replaces the flat response's single ``"axes"`` dict with
     ONE entry per panel: ``{"panel", "label", "x0", "y0", "x1", "y1",
     "xlim", "ylim", "xlog", "ylog", "xscale", "yscale"}`` -- same axes-rect
@@ -226,28 +257,36 @@ def collect_facet_map(
     re-deriving it from the request, so it can never drift from what the
     image actually shows.
 
-    Fix round 2 (G1): EVERY reported element box is clipped so it can never
-    extend past this panel into a sibling's -- a click that lands inside
-    two panels' boxes at once is exactly the mistargeting this whole lane
-    exists to prevent. A series line clips to this panel's own axes rect
-    (``axes_px`` -- see :func:`_clip_box`'s own doc for why an unclipped
-    box can balloon under a zoomed ``x_lim``); dropped entirely (not
-    emitted) when the clip is empty (the panel's current view shows none of
-    that line at all). A facet title is DIFFERENT: it lives in the title
-    margin ABOVE the axes rect by construction (a rendered text glyph's
-    bbox, never a data-space transform, so it never overshoots the way a
-    line does) -- clipping it to ``axes_px`` would clip away its entire
-    vertical extent and wrongly drop every title. Its horizontal span is
+    Fix round 2 (G1): EVERY per-panel element box is clipped so it can
+    never extend past this panel into a sibling's -- a click that lands
+    inside two panels' boxes at once is exactly the mistargeting this whole
+    lane exists to prevent. A series line clips to this panel's own axes
+    rect (``axes_px`` -- see :func:`_clip_box`'s own doc for why an
+    unclipped box can balloon under a zoomed ``x_lim``); fix round 3 (J4)
+    pads a genuinely degenerate (zero-width or zero-height) series box to
+    ``_HIT_PAD`` FIRST, same as ``add_decor``'s own decor objects, so a
+    facet level with a single data row or a constant-valued channel still
+    gets a real hit target instead of silently having none while its
+    siblings do -- dropped entirely only when the clip is empty (the
+    panel's current view shows none of that line at all) or the extent is
+    non-finite (no data / a transform failure). A per-panel title is
+    DIFFERENT from a series line: it lives in the title margin ABOVE the
+    axes rect by construction (a rendered text glyph's bbox, never a
+    data-space transform, so it never overshoots the way a line does) --
+    clipping it to ``axes_px`` the same way would clip away its entire
+    vertical extent and wrongly drop every one. Its horizontal span is
     still clipped to ``axes_px``'s x-range (guards an unusually wide facet
     label from bleeding into a neighbouring COLUMN's title) while its own
     vertical span is left untouched.
 
-    Deliberately narrower than ``collect_map``'s flat-path element set: a
-    faceted render never draws a legend/annotation/reference-line/shape
-    INTO a panel today (``figure_facets.render_facets_figure``'s own
-    ``overrides`` doc), so only each panel's title and series lines are
-    real, hit-testable artists -- there is nothing to harvest for the other
-    ids yet."""
+    Deliberately narrower than ``collect_map``'s flat-path element set in
+    ONE remaining respect: a faceted render never draws a legend/
+    annotation/reference-line/shape INTO a panel today
+    (``figure_facets.render_facets_figure``'s own ``overrides`` doc), so
+    there is nothing to harvest for those ids -- they genuinely don't
+    exist, this isn't an unharvested-but-real gap the way the whole-figure
+    title/labels used to be (fix round 3, J2) before this function started
+    accepting ``title_artist``/``xlabel_artist``/``ylabel_artist``."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
@@ -255,6 +294,28 @@ def collect_facet_map(
 
     elements: list[dict[str, Any]] = []
     panel_infos: list[dict[str, Any]] = []
+
+    def _add_whole_figure(el_id: str, artist: Any | None) -> None:
+        """Harvest a whole-FIGURE text artist (J2) with the SAME id the
+        flat path uses and NO ``panel`` key. ``None`` (the string was
+        empty, nothing drawn) is a silent no-op; a genuinely empty/zero-
+        size rendered bbox is dropped, mirroring ``collect_map``'s own
+        ``add()`` guard -- unlike J4's series-line fix, a real title/label
+        string never renders degenerate in practice, so there is no
+        padding case to handle here."""
+        if artist is None:
+            return
+        try:
+            bbox = _artist_window_extent(artist, renderer)
+        except (RuntimeError, AttributeError):
+            return
+        if bbox.width <= 0 or bbox.height <= 0:
+            return
+        elements.append({"id": el_id, **_bbox_to_pixels(bbox, height)})
+
+    _add_whole_figure("title", title_artist)
+    _add_whole_figure("xlabel", xlabel_artist)
+    _add_whole_figure("ylabel", ylabel_artist)
 
     for panel_index, (ax, series_artists) in enumerate(panels):
         axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
@@ -281,9 +342,20 @@ def collect_facet_map(
                 bbox = _artist_window_extent(artist, renderer)
             except (RuntimeError, AttributeError):
                 continue
-            if bbox.width <= 0 or bbox.height <= 0:
+            # Fix round 3 (J4): a genuinely degenerate box (a facet level
+            # with a single data ROW, or a constant-valued channel -- zero
+            # WIDTH or zero HEIGHT, same situation `add_decor` above already
+            # solves) is padded to `_HIT_PAD`, not dropped -- that sibling
+            # panels' series stay clickable while this one silently has no
+            # hit target at all is exactly the kind of per-panel gap this
+            # lane exists to close. Only a genuinely INVALID extent (a
+            # non-finite bbox -- no data at all, or a transform failure)
+            # is skipped; `_pad_degenerate` on a non-finite box would just
+            # manufacture a meaningless hit target.
+            if not all(math.isfinite(v) for v in (bbox.x0, bbox.y0, bbox.x1, bbox.y1)):
                 continue
-            clipped = _clip_box(_bbox_to_pixels(bbox, height), axes_px)
+            padded = _pad_degenerate(_bbox_to_pixels(bbox, height))
+            clipped = _clip_box(padded, axes_px)
             if clipped is None:
                 continue
             elements.append({"id": f"series:{i}", "panel": panel_index, **clipped})

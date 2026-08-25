@@ -51,11 +51,18 @@ class _BuiltFacetGrid:
     artists -- everything a caller needs either to ``savefig`` directly
     (``figure_facets.render_facets_figure``) or to harvest pixel geometry
     before saving (``render_facets_figure_map`` below, via
-    ``figure_hitmap.collect_facet_map``)."""
+    ``figure_hitmap.collect_facet_map``). ``title_artist``/``xlabel_artist``/
+    ``ylabel_artist`` (fix round 3, J2) are the real ``Text`` instances
+    ``fig.suptitle``/``supxlabel``/``supylabel`` return -- ``None`` when the
+    corresponding string was empty and the call was skipped entirely (same
+    "absent = not drawn" contract as the flat renderer's own title/labels)."""
 
     fig: Any
     axes: list[Any]
     panel_artists: list[list[Any]]
+    title_artist: Any | None = None
+    xlabel_artist: Any | None = None
+    ylabel_artist: Any | None = None
 
 
 @contextmanager
@@ -131,14 +138,17 @@ def _facet_grid(
                 x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
             )
 
-            if title:
-                fig.suptitle(title)
-            if x_label:
-                fig.supxlabel(x_label)
-            if y_label:
-                fig.supylabel(y_label)
+            # J2: capture the real Text artists `fig.suptitle`/`supxlabel`/
+            # `supylabel` return -- `render_facets_figure_map` harvests them
+            # as real hit targets (`collect_facet_map`'s own doc).
+            title_artist = fig.suptitle(title) if title else None
+            xlabel_artist = fig.supxlabel(x_label) if x_label else None
+            ylabel_artist = fig.supylabel(y_label) if y_label else None
             fig.tight_layout()
-            yield _BuiltFacetGrid(fig=fig, axes=flat[:n], panel_artists=panel_artists)
+            yield _BuiltFacetGrid(
+                fig=fig, axes=flat[:n], panel_artists=panel_artists,
+                title_artist=title_artist, xlabel_artist=xlabel_artist, ylabel_artist=ylabel_artist,
+            )
         finally:
             plt.close(fig)
 
@@ -163,24 +173,31 @@ def render_facets_figure_map(
 ) -> dict[str, Any]:
     """Render the facet grid AND its per-panel element hit-map
     (FU-facet-hitmap): base64 PNG + one axes entry per panel (pixel rect +
-    data limits + facet label) + per-panel hit elements (facet title, each
-    series line), tagged with their panel index -- the facet-grid analogue
-    of :func:`quantized.calc.figure.render_figure_map`. Always an opaque PNG
-    at ``dpi`` (no ``fmt``/``transparent`` -- the preview render is never
-    anything else, mirroring ``render_figure_map``'s own contract); every
-    other parameter mirrors :func:`quantized.calc.figure_facets
-    .render_facets_figure`'s own doc.
+    data limits + facet label) + hit elements, tagged with their panel index
+    -- the facet-grid analogue of :func:`quantized.calc.figure.render_figure_map`.
+    Always an opaque PNG at ``dpi`` (no ``fmt``/``transparent`` -- the
+    preview render is never anything else, mirroring ``render_figure_map``'s
+    own contract); every other parameter mirrors
+    :func:`quantized.calc.figure_facets.render_facets_figure`'s own doc.
 
     The client (``lib/previewmap.ts``) resolves a click/drag to the
     CONTAINING panel from its axes rect FIRST, then maps that panel's pixels
     to ITS OWN data coordinates -- panel 0's axes must never be used to
-    interpret a click that landed in panel 3. Deliberately narrower than the
-    flat path's element set: a faceted render never draws a legend/
-    annotation/reference-line/shape INTO a panel today (see
-    ``figure_facets.render_facets_figure``'s own ``overrides`` doc -- the
-    interactive facet grid doesn't offer them either), so there is nothing
-    to harvest for those ids yet; wiring per-panel drag-edit for them is
-    future work, not silently faked here.
+    interpret a click that landed in panel 3. Fix round 3 (J2): the whole
+    FIGURE's own title/x_label/y_label (``fig.suptitle``/``supxlabel``/
+    ``supylabel``) are real artists too, drawn whenever the corresponding
+    string is non-empty -- they are harvested with the SAME ids the flat
+    path uses (``"title"``/``"xlabel"``/``"ylabel"``, no ``panel`` key,
+    exactly matching a flat element), so the client's existing
+    panel-undefined-means-whole-figure handling (``lib/previewmap.ts``'s
+    ``FigureHitmap`` doc, ``PreviewOverlay.tsx``'s ``isTextEditable``) makes
+    them editable on a faceted preview for free, no new client-side case
+    needed. Deliberately narrower than the flat path's PER-PANEL element
+    set: a faceted render never draws a legend/annotation/reference-line/
+    shape INTO a panel today (see ``figure_facets.render_facets_figure``'s
+    own ``overrides`` doc -- the interactive facet grid doesn't offer them
+    either), so there is nothing to harvest for those ids yet; wiring
+    per-panel drag-edit for them is future work, not silently faked here.
     """
     from quantized.calc.figure_hitmap import collect_facet_map
 
@@ -196,4 +213,7 @@ def render_facets_figure_map(
             built.fig,
             list(zip(built.axes, built.panel_artists, strict=True)),
             dpi=dpi, x_scale=resolved_x_scale, y_scale=resolved_y_scale,
+            title_artist=built.title_artist,
+            xlabel_artist=built.xlabel_artist,
+            ylabel_artist=built.ylabel_artist,
         )

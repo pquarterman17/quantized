@@ -122,7 +122,16 @@ export default function PreviewOverlay({
   // before this element set existed and stay that way (see `isTextEditable`
   // and this file's own header for what's deferred).
   const [hover, setHover] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  // FU-facet-hitmap fix round 3 (J1): `panel` joins `id` here — every other
+  // per-element piece of state in this file already keys on the (id, panel)
+  // pair (`elementKey`/`dragRef`/`dragPos`/`menu`), but `editing` was
+  // missed, and a bare `map.elements.find((e) => e.id === editing.id)!`
+  // both mispositioned the editor (a stale flat "title" edit would silently
+  // snap onto a NEW facet response's panel-0 "title" box, since `find`
+  // returns the first id match regardless of panel) and could throw outright
+  // (an id with no match at all in the new `map.elements` — e.g. a "xlabel"
+  // edit open when the next debounced render arrives with no x_label set).
+  const [editing, setEditing] = useState<{ id: string; panel?: number; value: string } | null>(null);
   const [dragPos, setDragPos] = useState<{ key: string; dx: number; dy: number } | null>(null);
   const [menu, setMenu] = useState<{ id: string; panel?: number; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -144,11 +153,22 @@ export default function PreviewOverlay({
   };
 
   /** Opening a second text edit while one is unsaved commits the first
-   *  (its input never blurs, so it would otherwise be silently discarded). */
-  const startTextEdit = (id: string) => {
-    if (editing && editing.id !== id) onEditText(editing.id, editing.value);
-    setEditing({ id, value: textOf(id) });
+   *  (its input never blurs, so it would otherwise be silently discarded).
+   *  Compares the (id, panel) PAIR (J1) -- re-opening the SAME element is a
+   *  no-op, not a spurious commit-then-reopen. */
+  const startTextEdit = (id: string, panel?: number) => {
+    if (editing && (editing.id !== id || editing.panel !== panel)) onEditText(editing.id, editing.value);
+    setEditing({ id, panel, value: textOf(id) });
   };
+  // J1: the element `editing` refers to, re-resolved against the CURRENT
+  // `map` every render (id AND panel must both match -- a bare id match
+  // would let a stale flat "title" edit snap onto a facet response's
+  // panel-0 "title" box). `null` when the element no longer exists in this
+  // map (e.g. the hitmap changed shape mid-edit) -- the editor input below
+  // simply doesn't render rather than dereferencing a missing box.
+  const editingElement = editing
+    ? (map.elements.find((e) => e.id === editing.id && e.panel === editing.panel) ?? null)
+    : null;
   const menuItems = (id: string, panel?: number): ContextMenuItem[] => {
     const seriesEditable = id.startsWith("series:") && canonicalSeries;
     // FU-facet-hitmap fix round 2 (G3): a facet panel's own title has no
@@ -167,7 +187,7 @@ export default function PreviewOverlay({
         : id.startsWith("series:")
           ? { label: "Series properties — edit on Stage", disabled: true, run: () => {} }
           : { label: "Properties unavailable", disabled: true, run: () => {} },
-      ...(textEditable ? [{ label: "Edit text…", run: () => startTextEdit(id) }] : []),
+      ...(textEditable ? [{ label: "Edit text…", run: () => startTextEdit(id, panel) }] : []),
     ];
   };
 
@@ -176,24 +196,31 @@ export default function PreviewOverlay({
       <img src={src} alt="figure preview" style={{ width: "100%", display: "block" }} />
       {map.elements.map((e, index) => {
         const key = elementKey(e);
+        // FU-facet-hitmap fix round 3 (J3): a gated element (a facet
+        // panel's own title -- no click/select/edit target, see
+        // `hasSoundTarget`'s own doc) must not PRESENT as an interactive
+        // control either -- no tabstop, no button role, no pointer cursor.
+        // Right-click (the informative, fully-inert "Properties
+        // unavailable" menu) and the plain hover outline stay either way;
+        // neither implies "this is clickable" the way a tabbable button
+        // does.
+        const interactive = hasSoundTarget(e);
         return (
         <div
           key={key}
           data-element={e.id}
           data-panel={e.panel}
           title={elementTitle(e.id, canonicalSeries, e.panel)}
-          tabIndex={0}
-          role="button"
-          aria-label={elementTitle(e.id, canonicalSeries, e.panel)}
+          {...(interactive ? { tabIndex: 0, role: "button", "aria-label": elementTitle(e.id, canonicalSeries, e.panel) } : {})}
           onPointerEnter={() => setHover(key)}
           onPointerLeave={() => setHover(null)}
           onFocus={() => setHover(key)}
           onBlur={() => setHover((current) => (current === key ? null : current))}
           onClick={() => {
-            if (hasSoundTarget(e)) onSelect(e.id);
+            if (interactive) onSelect(e.id);
           }}
           onDoubleClick={() => {
-            if (isTextEditable(e)) startTextEdit(e.id);
+            if (isTextEditable(e)) startTextEdit(e.id, e.panel);
           }}
           onContextMenu={(ev) => {
             ev.preventDefault();
@@ -205,7 +232,7 @@ export default function PreviewOverlay({
           onKeyDown={(ev) => {
             if (ev.key === "Enter" || ev.key === " ") {
               ev.preventDefault();
-              if (hasSoundTarget(e)) onSelect(e.id);
+              if (interactive) onSelect(e.id);
               return;
             }
             // Retrospective-audit P1 fix: a focused hitbox owns Delete and
@@ -251,7 +278,7 @@ export default function PreviewOverlay({
             position: "absolute",
             ...pct(e),
             zIndex: hitboxZIndex(map.elements, e, index),
-            cursor: DRAGGABLE(e.id) ? "move" : "pointer",
+            cursor: DRAGGABLE(e.id) ? "move" : interactive ? "pointer" : "default",
             outline:
               hover === key ? "1.5px solid var(--accent)" : "1px solid transparent",
             borderRadius: 2,
@@ -271,7 +298,7 @@ export default function PreviewOverlay({
           onClose={() => setMenu(null)}
         />
       )}
-      {editing && (
+      {editing && editingElement && (
         <input
           className="qz-input"
           autoFocus
@@ -290,7 +317,7 @@ export default function PreviewOverlay({
           }}
           style={{
             position: "absolute",
-            ...pct(map.elements.find((e) => e.id === editing.id)!),
+            ...pct(editingElement),
             minWidth: 120,
             // Above every hitbox (hitboxZIndex tops out at map.elements.length)
             // so the edited element's own invisible hitbox can't swallow

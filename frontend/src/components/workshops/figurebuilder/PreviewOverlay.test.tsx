@@ -425,3 +425,143 @@ describe("PreviewOverlay — facet elements (FU-facet-hitmap)", () => {
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("series:0");
   });
 });
+
+
+// FU-facet-hitmap fix round 3 (J1): `editing` must resolve against the
+// CURRENT `map` by (id, panel) BOTH -- a bare id lookup either threw
+// (element genuinely absent from the new map) or silently snapped onto
+// the WRONG panel's box (id present, but under a different panel).
+describe("PreviewOverlay — editing survives a hitmap change without crashing (J1)", () => {
+  const FLAT_WITH_LABELS: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "title", x0: 250, y0: 10, x1: 350, y1: 30 },
+      { id: "xlabel", x0: 250, y0: 370, x1: 350, y1: 390 },
+    ],
+    axes: { x0: 60, y0: 40, x1: 580, y1: 360, xlim: [0, 10], ylim: [0, 100], xlog: false, ylog: false },
+  };
+  const FACETED: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "title", panel: 0, x0: 10, y0: 10, x1: 100, y1: 30 },
+      { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
+    ],
+    panels: [
+      { panel: 0, label: "level 0", x0: 0, y0: 0, x1: 300, y1: 400, xlim: [0, 10], ylim: [0, 10], xlog: false, ylog: false },
+    ],
+  };
+
+  it("does NOT throw when the edited element (xlabel) is entirely absent from a new (faceted) hitmap", () => {
+    const { rerender } = render(
+      <PreviewOverlay src="data:image/png;base64," map={FLAT_WITH_LABELS} textOf={() => "X axis"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="xlabel"]')!);
+    expect(screen.getByDisplayValue("X axis")).toBeInTheDocument();
+    expect(() =>
+      rerender(
+        <PreviewOverlay src="data:image/png;base64," map={FACETED} textOf={() => "X axis"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+      ),
+    ).not.toThrow();
+    // Ignored, not thrown: the stale editor simply stops rendering.
+    expect(screen.queryByDisplayValue("X axis")).not.toBeInTheDocument();
+  });
+
+  it("does NOT silently reposition a stale flat 'title' edit over a facet panel's own title box", () => {
+    const { rerender } = render(
+      <PreviewOverlay src="data:image/png;base64," map={FLAT_WITH_LABELS} textOf={() => "Figure title"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="title"]')!);
+    expect(screen.getByDisplayValue("Figure title")).toBeInTheDocument();
+    // FACETED DOES contain a "title" element -- panel 0's own category
+    // label -- with the SAME id as the stale flat edit. Before the fix, a
+    // bare-id `find` would match it and reposition the (still-open,
+    // whole-figure) editor over panel 0's box instead of recognizing this
+    // is a DIFFERENT element (panel undefined vs panel 0).
+    rerender(
+      <PreviewOverlay src="data:image/png;base64," map={FACETED} textOf={() => "Figure title"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    expect(screen.queryByDisplayValue("Figure title")).not.toBeInTheDocument();
+  });
+
+  it("keeps editing open, correctly positioned, when the SAME (id, panel) element persists across a rerender", () => {
+    const { rerender } = render(
+      <PreviewOverlay src="data:image/png;base64," map={FLAT_WITH_LABELS} textOf={() => "Figure title"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-element="title"]')!);
+    expect(screen.getByDisplayValue("Figure title")).toBeInTheDocument();
+    // A fresh map object, same shape (still id "title", panel undefined) --
+    // an ordinary debounced-preview re-render, not a hitmap SHAPE change --
+    // must not close the editor.
+    const FLAT_WITH_LABELS_2: FigureHitmap = { ...FLAT_WITH_LABELS, elements: [...FLAT_WITH_LABELS.elements] };
+    rerender(
+      <PreviewOverlay src="data:image/png;base64," map={FLAT_WITH_LABELS_2} textOf={() => "Figure title"} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    expect(screen.getByDisplayValue("Figure title")).toBeInTheDocument();
+  });
+});
+
+// FU-facet-hitmap fix round 3 (J3): a GATED hitbox (no click/select/edit
+// target -- a facet panel's own title) must not present as an interactive
+// control: no tabstop, no button role, no pointer cursor. An ACTIONABLE
+// hitbox (a facet panel's series line, or a flat/whole-figure text element)
+// keeps every affordance exactly as before.
+describe("PreviewOverlay — gated hitboxes drop interactive affordances (J3)", () => {
+  const FACET_MAP_J3: FigureHitmap = {
+    image: "",
+    width: 600,
+    height: 400,
+    elements: [
+      { id: "title", panel: 0, x0: 10, y0: 10, x1: 100, y1: 30 },
+      { id: "series:0", panel: 0, x0: 10, y0: 40, x1: 290, y1: 200 },
+    ],
+    panels: [
+      { panel: 0, label: "level 0", x0: 0, y0: 0, x1: 300, y1: 400, xlim: [0, 10], ylim: [0, 10], xlog: false, ylog: false },
+    ],
+  };
+  const j3El = (id: string, panel: number) =>
+    document.querySelector<HTMLElement>(`[data-element="${id}"][data-panel="${panel}"]`)!;
+
+  it("a gated facet panel title has no tabIndex, no button role, and a default (non-pointer) cursor", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_J3} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const title = j3El("title", 0);
+    expect(title).not.toHaveAttribute("tabindex");
+    expect(title).not.toHaveAttribute("role");
+    expect(title).not.toHaveAttribute("aria-label");
+    expect(title.style.cursor).toBe("default");
+  });
+
+  it("an actionable facet series hitbox keeps its tabstop, button role, and pointer cursor", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_J3} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const series = j3El("series:0", 0);
+    expect(series).toHaveAttribute("tabindex", "0");
+    expect(series).toHaveAttribute("role", "button");
+    expect(series).toHaveAttribute("aria-label");
+    expect(series.style.cursor).toBe("pointer");
+  });
+
+  it("the flat path's own elements are unaffected -- every affordance stays exactly as before", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={MAP} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const title = el("title");
+    expect(title).toHaveAttribute("tabindex", "0");
+    expect(title).toHaveAttribute("role", "button");
+  });
+
+  it("hover still outlines a gated element -- only the tabstop/role/cursor affordances are dropped", () => {
+    render(
+      <PreviewOverlay src="data:image/png;base64," map={FACET_MAP_J3} textOf={() => ""} onSelect={vi.fn()} onEditText={vi.fn()} onDragEnd={vi.fn()} />,
+    );
+    const title = j3El("title", 0);
+    fireEvent.pointerEnter(title);
+    expect(title.style.outline).toContain("var(--accent)");
+  });
+});
