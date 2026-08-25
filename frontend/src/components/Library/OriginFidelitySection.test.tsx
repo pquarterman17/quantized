@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useApp } from "../../store/useApp";
 import OriginFidelitySection from "./OriginFidelitySection";
 
-beforeEach(() => useApp.setState({ originFidelity: [] }));
+beforeEach(() =>
+  // FU-2: the disclosure flag now lives in the store (store/libraryPanel.ts),
+  // not per-mount useState, so it must be reset between tests like any other
+  // shared store field — otherwise a later test inherits an earlier test's
+  // expanded/collapsed state.
+  useApp.setState({ originFidelity: [], originFidelitySectionExpanded: false }),
+);
 
 describe("OriginFidelitySection", () => {
   it("renders nothing without an Origin fidelity manifest", () => {

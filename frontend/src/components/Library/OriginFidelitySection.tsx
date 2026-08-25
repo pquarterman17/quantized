@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import {
   originFidelityLabel,
   originFidelityStatusLabel,
@@ -13,12 +11,22 @@ export default function OriginFidelitySection() {
   // preview-asset inventory) a reader almost never needs on the common path.
   // It defaults TUCKED (collapsed) rather than dropped: every manifest is
   // still here, one click away, never discarded to simplify the view.
-  const [collapsed, setCollapsed] = useState(true);
+  //
+  // FU-2: this used to be a per-mount `useState`, which Library.tsx silently
+  // reset every time it unmounted this section during search
+  // (`{!searchActive && <OriginFidelitySection />}`) — a user's deliberate
+  // expand was lost on the very next search. Lives in the store instead
+  // (store/libraryPanel.ts's `originFidelitySectionExpanded`, same
+  // session-only convention as `expandedWorkbookIds`) so it survives that
+  // unmount/remount; still starts collapsed in a fresh session.
+  const expanded = useApp((s) => s.originFidelitySectionExpanded);
+  const toggleExpanded = useApp((s) => s.toggleOriginFidelitySectionExpanded);
+  const collapsed = !expanded;
   if (entries.length === 0) return null;
 
   return (
     <div className="qzk-lib-group" aria-label="Origin import fidelity">
-      <button className="qzk-group-head" onClick={() => setCollapsed((c) => !c)}>
+      <button className="qzk-group-head" onClick={toggleExpanded}>
         <span className="qzk-group-caret">{collapsed ? "▸" : "▾"}</span>
         <span className="qzk-group-name">Origin fidelity</span>
         <span className="qzk-group-count">{entries.length}</span>

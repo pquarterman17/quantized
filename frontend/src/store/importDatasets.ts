@@ -190,9 +190,7 @@ function addFromPayload(
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
-  // MAIN #33 provenance: what this import DECIDED, recorded on the dataset
-  // rather than inferred later. The original file is never written to, so
-  // this is the only place the decisions can survive.
+  // MAIN #33 provenance: recorded on the dataset -- one timestamp per import call.
   const importedAt = new Date().toISOString();
   const figures = data.figures;
   const fidelity = data.origin_fidelity;
@@ -208,7 +206,7 @@ function addFromPayload(
     // only under the `full_books` escape hatch, never requested here — a full
     // inline DataStruct.
     const bookSource = data.book_source;
-    for (const book of data.books) {
+    for (const book of data.books) { // FU-1: every book gets importedAt (used to be dropped)
       const meta = (book.metadata ?? {}) as Record<string, unknown>;
       const short = String(meta.origin_book ?? "Book");
       const long = String(meta.origin_book_long ?? "");
@@ -226,6 +224,7 @@ function addFromPayload(
             metadata: book.metadata,
           },
           ...src,
+          importedAt,
         }, historyToken);
       } else if (isLazyBookEntry(book)) {
         get().addDataset({
@@ -242,9 +241,10 @@ function addFromPayload(
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
+          importedAt,
         }, historyToken);
       } else {
-        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src }, historyToken);
+        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src, importedAt }, historyToken);
       }
       newIds.push(id);
     }
