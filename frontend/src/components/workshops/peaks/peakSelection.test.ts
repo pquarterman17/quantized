@@ -168,3 +168,19 @@ describe("usePeakTableSelection — K1 (review round 2): `governs` clears a sele
     expect(result.current.selected).toEqual(new Set([1]));
   });
 });
+
+describe("usePeakTableSelection — N3 (red-first): an unstable empty `source` must not crash the panel", () => {
+  it("a caller that mints a FRESH [] every render (e.g. `fitResult?.peaks ?? []` written inline) does not throw 'Too many re-renders'", () => {
+    // The render-phase reset (RULING 2) compares `source` by REFERENCE. A
+    // caller who passes a brand-new `[]` literal on every call — the exact
+    // inline form PeaksPanel.tsx's own NO_FITTED_PEAKS constant exists to
+    // avoid — sees `source !== prevSource` on EVERY render, since a fresh
+    // literal never equals the last one even though both are empty. Each
+    // reset schedules a render-phase state update, which re-invokes this
+    // same callback, which mints ANOTHER fresh `[]`... React caps this at a
+    // fixed retry count and throws "Too many re-renders", taking the whole
+    // panel down with it — not a "spurious reset", a crash.
+    const { rerender } = renderHook(() => usePeakTableSelection([]));
+    expect(() => rerender()).not.toThrow();
+  });
+});

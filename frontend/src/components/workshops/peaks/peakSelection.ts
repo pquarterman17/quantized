@@ -50,6 +50,16 @@ import { useCallback, useRef, useState } from "react";
 export interface SelectMods {
   shift: boolean;
   ctrlOrMeta: boolean;
+  /** N1 review finding — ONLY meaningful when `shift` is true and no anchor
+   *  exists yet (`anchorRef.current === null` below): seeds the anchor at
+   *  this index instead of self-anchoring on the target. A mouse shift-click
+   *  never needs this (a plain click always precedes it in real use, which
+   *  already seeds the anchor via the non-shift branches below) — but a
+   *  KEYBOARD-only Shift+Arrow sequence has no such preceding click, and is
+   *  inherently ITERATIVE (each press must extend from the SAME starting
+   *  row, not wherever the previous press just navigated to). Pass the row
+   *  the roving focus was on BEFORE this arrow press (PeakTable.tsx). */
+  anchorHint?: number;
 }
 
 export interface PeakTableSelection {
@@ -61,9 +71,23 @@ export interface PeakTableSelection {
 
 /** `source` is whatever array currently backs the table's rows (`peaks` or
  *  `fitResult.peaks`) — pass the SAME array reference the table renders
- *  from, and pass a stable empty-array constant when there's nothing yet
- *  (a fresh `[]` literal on every render would spuriously reset on every
- *  keystroke elsewhere in the panel).
+ *  from, and PREFER a stable empty-array constant when there's nothing yet.
+ *
+ *  N3 review finding — the real consequence of skipping that, spelled out:
+ *  a fresh `[]` literal minted inline on every render (`fitResult?.peaks ??
+ *  []`, the tempting form) is NEVER `Object.is`-equal to the previous one,
+ *  so the render-phase reset below fires on EVERY render. Each reset is a
+ *  render-phase `setState`, which makes React immediately re-invoke this
+ *  same component to reconcile it — and that re-invocation calls the
+ *  caller's expression AGAIN, minting ANOTHER fresh `[]`, forever. This is
+ *  not a "spurious reset" (a merely wasted render) — React caps the retry
+ *  count and throws "Too many re-renders. React limits the number of
+ *  renders to prevent an infinite loop.", taking the whole panel down.
+ *  `sourceChanged` below tolerates exactly this one degenerate case (empty
+ *  -> a DIFFERENT empty) as a defense-in-depth backstop, so getting this
+ *  wrong no longer crashes — but a genuinely stable reference (e.g.
+ *  PeaksPanel.tsx's `NO_FITTED_PEAKS`) is still the right pattern: it's
+ *  the only form that also avoids the wasted extra render pass.
  *
  *  `governs` (K1 review finding — the two peak tables are mutually
  *  exclusive as a LABELING source: "Label peaks" only ever reads ONE of
@@ -89,7 +113,14 @@ export function usePeakTableSelection(source: readonly unknown[], governs = true
   // event handlers, so mutating it can't make the render itself impure.
   const anchorRef = useRef<number | null>(null);
 
-  const sourceChanged = source !== prevSource;
+  // N3 backstop: an EMPTY source that changed reference but not content
+  // (both `.length === 0`) never counts as a change — see the header doc
+  // above for why an unstable `fitResult?.peaks ?? []`-style caller would
+  // otherwise crash the whole panel with "Too many re-renders". Harmless
+  // for correctness: an empty table can hold no selection to begin with, so
+  // there is nothing this could ever wrongly fail to reset.
+  const bothEmpty = source.length === 0 && prevSource.length === 0;
+  const sourceChanged = source !== prevSource && !bothEmpty;
   // Reset on LOSING governance (true -> false), not on gaining it: a table
   // that just regained governance already had its selection cleared the
   // moment it lost governance, so there is nothing left to resurrect — and
@@ -105,12 +136,25 @@ export function usePeakTableSelection(source: readonly unknown[], governs = true
 
   const select = useCallback((index: number, mods: SelectMods) => {
     if (mods.shift) {
-      const anchor = anchorRef.current ?? index;
+      // N1 fix: seed the anchor from `anchorHint` the FIRST time a shift
+      // extension happens with none set yet — WRITING it (not just reading
+      // a fallback), so it survives to the NEXT call. Without this write, a
+      // keyboard-only Shift+Arrow sequence (no preceding plain click ever
+      // sets `anchorRef`) self-anchored on the DESTINATION every single
+      // press — each press replaced the selection with just the one
+      // navigated-to row instead of growing a range, since there was never
+      // a remembered starting point to grow FROM. Falls back to `index`
+      // (self-anchor) when no hint is given, matching the pre-existing
+      // mouse contract (a shift-click with no prior click selects just
+      // itself — see the test of that name).
+      if (anchorRef.current == null) anchorRef.current = mods.anchorHint ?? index;
+      const anchor = anchorRef.current;
       const [lo, hi] = anchor <= index ? [anchor, index] : [index, anchor];
       const range = new Set<number>();
       for (let i = lo; i <= hi; i++) range.add(i);
       setSelected(range);
-      // Anchor unchanged — matches store/useApp.ts's `selectRange` contract.
+      // Anchor otherwise unchanged by further shift-extends — matches
+      // store/useApp.ts's `selectRange` contract.
     } else if (mods.ctrlOrMeta) {
       setSelected((prev) => {
         const next = new Set(prev);

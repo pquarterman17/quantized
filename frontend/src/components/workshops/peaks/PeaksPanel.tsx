@@ -19,10 +19,12 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
 // Stable empty-array reference (peak-selection RULING 2) — `fitResult?.peaks
-// ?? []` would mint a NEW [] every render while fitResult is null, and
-// usePeakTableSelection resets its selection whenever its `source` argument
-// changes REFERENCE; a fresh literal each render would fight that reset on
-// every keystroke elsewhere in the panel instead of only on a real re-fit.
+// ?? []` written inline here would mint a NEW [] every render while
+// fitResult is null. usePeakTableSelection now TOLERATES that specific
+// empty-vs-empty case (its own `bothEmpty` backstop, N3 review finding) so
+// it no longer crashes — but a fresh literal here would still cost an extra
+// wasted render pass on every keystroke elsewhere in the panel, which this
+// stable constant avoids entirely. Prefer it; don't rely on the backstop.
 const NO_FITTED_PEAKS: FittedPeak[] = [];
 
 export default function PeaksPanel() {

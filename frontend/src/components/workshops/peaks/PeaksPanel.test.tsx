@@ -164,6 +164,33 @@ describe("PeaksPanel — peak row selection (RULING 1/3)", () => {
     expect(screen.getByRole("button", { name: "Label 3 selected detected peaks…" })).toBeInTheDocument();
   });
 
+  it("N1 (red-first): keyboard-only Shift+ArrowDown extends a range across TWO consecutive presses", async () => {
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [
+        { center: 1, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null, bg: 0 },
+        { center: 2, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null, bg: 0 },
+        { center: 3, height: 6, fwhm: 0.9, prominence: 1, localSNR: 10, area: null, bg: 0 },
+      ],
+      background: [],
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 3 detected peaks…" });
+    const table = screen.getByRole("table", { name: /detected peaks/i });
+    const rows = within(table).getAllByRole("row").slice(1);
+
+    // NO plain click first — a keyboard-only user who tabs in and starts
+    // extending immediately must still get a growing range, not just
+    // whatever single row the roving focus currently sits on.
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: "ArrowDown", shiftKey: true });
+    // The roving stop has moved to rows[1] — the second press must fire
+    // from THERE (real keyboard use: the browser's focus IS on rows[1] now).
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowDown", shiftKey: true });
+
+    expect(rows.map((r) => r.getAttribute("aria-selected"))).toEqual(["true", "true", "true"]);
+    expect(screen.getByRole("button", { name: "Label 3 selected detected peaks…" })).toBeInTheDocument();
+  });
+
   it("a keyboard Enter on a focused row selects it (keyboard reachable)", async () => {
     render(<PeaksPanel />);
     await screen.findByRole("button", { name: "Label all 2 detected peaks…" });

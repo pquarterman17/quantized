@@ -58,7 +58,12 @@ export default function PeakTable({ ariaLabel, columns, rows, selected, onSelect
     // shift-click) — falls out of the same navigation step, not a separate
     // gesture: navigation and selection stay independent otherwise (a bare
     // arrow moves focus only, matching LibraryDetails.tsx's convention).
-    if (e.shiftKey) onSelect?.(next, { shift: true, ctrlOrMeta: false });
+    // `anchorHint: index` (N1 fix) — `index` is the row this press STARTED
+    // from (the roving position before this move), which is exactly what a
+    // keyboard-only sequence with no preceding click needs as its anchor;
+    // `select`'s shift branch only consumes it once (the first press of a
+    // sequence), so passing it on every press is harmless.
+    if (e.shiftKey) onSelect?.(next, { shift: true, ctrlOrMeta: false, anchorHint: index });
     setRovingIndex(next);
     (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
   };
