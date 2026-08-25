@@ -7,14 +7,23 @@
 import { useState } from "react";
 
 import PeakFitControls from "./PeakFitControls";
+import PeakTable from "./PeakTable";
+import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
-import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import type { FittedPeak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+
+// Stable empty-array reference (peak-selection RULING 2) — `fitResult?.peaks
+// ?? []` would mint a NEW [] every render while fitResult is null, and
+// usePeakTableSelection resets its selection whenever its `source` argument
+// changes REFERENCE; a fresh literal each render would fight that reset on
+// every keystroke elsewhere in the panel instead of only on a real re-fit.
+const NO_FITTED_PEAKS: FittedPeak[] = [];
 
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
@@ -58,12 +67,30 @@ export default function PeaksPanel() {
     }
   };
 
-  const labelSource = fitResult && fitResult.peaks.length > 0 ? fitResult.peaks : peaks;
-  const labelKind = fitResult && fitResult.peaks.length > 0 ? "fitted" : "detected";
+  const hasFit = fitResult != null && fitResult.peaks.length > 0;
+  const labelSource = hasFit ? fitResult.peaks : peaks;
+  const labelKind = hasFit ? "fitted" : "detected";
+
+  // Peak-selection follow-up (RULINGS 1-3): one selection per table, each
+  // scoped to the array that currently backs it — see peakSelection.ts's
+  // header for why RULING 2's reset is keyed on THIS array's reference, and
+  // NO_FITTED_PEAKS's comment for why the fallback must be a stable const.
+  const detectedSelection = usePeakTableSelection(peaks);
+  const fittedSelection = usePeakTableSelection(fitResult?.peaks ?? NO_FITTED_PEAKS);
+  // The selection that governs "Label peaks" is whichever table matches the
+  // CURRENT labelKind — the same fitted-over-detected choice `labelSource`
+  // already makes, so the button always acts on the table it's naming.
+  const activeSelection = hasFit ? fittedSelection.selected : detectedSelection.selected;
+  const selectedCount = activeSelection.size;
+
   const runLabelPeaks = async () => {
     setLabeling(true);
     try {
-      await labelPeaks();
+      // RULING 3: an existing selection narrows to just those peaks; an
+      // empty selection (the default) keeps labeling every peak in
+      // `labelSource` — `labelPeaks` itself treats a zero-size Set the same
+      // as `undefined`, so passing it unconditionally is safe either way.
+      await labelPeaks(activeSelection);
     } finally {
       setLabeling(false);
     }
@@ -106,7 +133,13 @@ export default function PeaksPanel() {
         </div>
       )}
       {rows.length > 0 && (
-        <DataTable columns={["#", "center", "height", "FWHM", "SNR"]} rows={rows} />
+        <PeakTable
+          ariaLabel="detected peaks"
+          columns={["#", "center", "height", "FWHM", "SNR"]}
+          rows={rows}
+          selected={detectedSelection.selected}
+          onSelect={detectedSelection.select}
+        />
       )}
 
       {active && (
@@ -131,9 +164,12 @@ export default function PeaksPanel() {
             {fitResult.R2 == null ? "independent fits" : `R² = ${fmtNum(fitResult.R2)}`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
           </div>
-          <DataTable
+          <PeakTable
+            ariaLabel="fitted peaks"
             columns={["#", "center", "height", "FWHM", "area"]}
             rows={fitRows}
+            selected={fittedSelection.selected}
+            onSelect={fittedSelection.select}
           />
           <div style={{ marginTop: 8 }}>
             <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
@@ -151,7 +187,12 @@ export default function PeaksPanel() {
           <Button size="sm" disabled={labeling} onClick={() => void runLabelPeaks()}>
             {labeling
               ? "Labeling…"
-              : `Label all ${labelSource.length} ${labelKind} peak${labelSource.length === 1 ? "" : "s"}…`}
+              // RULING 3: name the SELECTED count when a selection exists;
+              // otherwise keep the established "all N ..." default text
+              // unchanged (never silently switch defaults).
+              : selectedCount > 0
+                ? `Label ${selectedCount} selected ${labelKind} peak${selectedCount === 1 ? "" : "s"}…`
+                : `Label all ${labelSource.length} ${labelKind} peak${labelSource.length === 1 ? "" : "s"}…`}
           </Button>
         </div>
       )}

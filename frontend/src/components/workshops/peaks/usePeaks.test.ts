@@ -430,6 +430,54 @@ describe("usePeaks labelPeaks — RULING 7 (fitted-over-detected scope + empty g
     expect(anns.map((a) => a.x).sort()).toEqual([1, 3]);
   });
 
+  it("RULING 3 (red-first): a selection restricts labeling to only the selected detected peaks", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      // Select only index 0 (center=1) of the two detected peaks — index 1
+      // (center=3) must NOT be labeled.
+      await result.current.labelPeaks(new Set([0]));
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].x).toBe(1);
+  });
+
+  it("RULING 3 (red-first): a selection restricts labeling to only the selected FITTED peaks", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted2(1.05, 3.05));
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+
+    await act(async () => {
+      // Select only index 1 (center=3.05) of the two fitted peaks.
+      await result.current.labelPeaks(new Set([1]));
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1);
+    expect(anns[0].x).toBe(3.05);
+  });
+
+  it("RULING 3: an empty selection (Set with size 0) still labels ALL peaks — the no-selection default", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.labelPeaks(new Set());
+    });
+
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+  });
+
   it("a cancelled dialog creates zero annotations and no history entry", async () => {
     vi.mocked(askParams).mockResolvedValue(null);
     const { result } = renderHook(() => usePeaks());
