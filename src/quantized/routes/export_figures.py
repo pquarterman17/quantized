@@ -414,12 +414,18 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     resolution below) and now returns REAL per-panel geometry: ``panels``
     (one axes entry per panel -- pixel rect + data limits + facet label,
     replacing the flat path's single ``axes`` dict, which is absent here)
-    and ``elements`` tagged with a ``panel`` index (each panel's facet title
-    + series lines). See ``calc.figure_hitmap.collect_facet_map`` for
-    exactly what is/isn't harvested and why (facets don't draw a legend/
-    annotation/reference-line/shape into a panel today, so there's nothing
-    to harvest for those ids yet -- full per-panel drag-edit is still future
-    work, not silently faked here). The flat (non-facet) response below is
+    and ``elements`` tagged with a ``panel`` index (each panel's facet
+    title, series lines, and -- since fix round 4 -- its legend, when that
+    panel drew one). The whole-figure ``title``/``xlabel``/``ylabel`` are
+    ALSO harvested (fix round 3), emitted with the flat path's own ids and
+    no ``panel`` key, so they stay editable exactly as on a flat preview.
+    See ``calc.figure_hitmap.collect_facet_map`` for exactly what is/isn't
+    harvested and why (facets genuinely draw no annotation/reference-line/
+    shape into a panel today, so there is nothing to harvest for those ids;
+    a panel's series line and legend ARE harvested but gated client-side,
+    since per-panel style edits aren't wired through the facet render path
+    -- full per-panel drag-edit is still future work, not silently faked
+    here). The flat (non-facet) response below is
     UNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``
     key at all."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
