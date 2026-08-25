@@ -243,7 +243,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
       ...serializeComputedColumnsExtras(d),
-      ...(d.errorRoles?.length ? { errorRoles: d.errorRoles } : {}),
+      ...(d.errorRoles !== undefined ? { errorRoles: d.errorRoles } : {}), // O1 exception: `[]` is meaningful -- lib/originBookRoles.ts
       ...(d.importedAt ? { importedAt: d.importedAt } : {}),
       ...(d.channelRoles && Object.keys(d.channelRoles).length ? { channelRoles: d.channelRoles } : {}),
       ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),

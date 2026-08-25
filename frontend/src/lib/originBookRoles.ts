@@ -43,7 +43,22 @@
 // above stops falling back with NO change on their side, and every
 // `!!errorRoles?.length`/`.length` check this codebase already uses
 // (ErrorRolesCard, decimation, `hasRichErrorBindings`, `errKeysFromBindings`)
-// still reads it as "no errors" exactly like `undefined` did.
+// still reads it as "no errors" exactly like `undefined` did. Preserved
+// through a `.dwk` round trip too -- lib/workspace.ts's `serializeWorkspace`
+// and lib/workspaceDatasetParse.ts's `parseWorkspaceDataset` both special-
+// case `errorRoles` to keep an explicit `[]` distinct from an absent field
+// (every other optional Dataset array field there still omits when empty).
+//
+// Q2 (documentation, round 6): this whole module -- reading designations
+// instead of guessing, AND the `[]` marker above -- is a workaround for a
+// broken classifier, not a fix to it. The real bug is
+// `classifyErrorLabel`'s bare-`d` rule (./errorRoles.ts) misreading a
+// "Depth"-style column as an error series; that misclassification is
+// booked separately as its own fix (it also affects non-Origin, single-book
+// imports on the label-guess path, which nothing here changes). Once THAT
+// is fixed, this module's reason for existing narrows to "Origin's own
+// designations are more authoritative than a name guess", which is still
+// worth keeping, but the guesser-avoidance urgency goes away.
 
 import { columnMetaList } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
