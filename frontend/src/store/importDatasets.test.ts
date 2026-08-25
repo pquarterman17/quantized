@@ -258,6 +258,87 @@ describe("import roles and provenance (MAIN #33)", () => {
   });
 });
 
+// FU-1 (provenance-disclosure follow-ups): the multi-book Origin branch used
+// to stamp NO `importedAt` on any book it created — a project import's
+// book-sheet datasets landed with a blank "imported" column in Details, even
+// though the SAME file imported as a single book got one (the `else` branch
+// tested above). Covers all three `books[]` shapes (ORIGIN_FILE_DECODE_PLAN
+// #38): the primary-book marker, a lazy preview book, and a full inline book.
+describe("multi-book Origin import provenance (FU-1)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  const primaryMarker = (labels: string[], id: string, bookName: string) => ({
+    lazy: false as const,
+    primary: true as const,
+    id,
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+    rows: 2,
+    cols: labels.length,
+  });
+
+  const lazyEntry = (labels: string[], id: string, bookName: string) => ({
+    lazy: true as const,
+    id,
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+    rows: 2,
+    cols: labels.length,
+    preview: { time: [0, 1], values: [[0, 0], [0, 0]] },
+  });
+
+  const fullInlineBook = (labels: string[], bookName: string) => ({
+    time: [0, 1],
+    values: [[5, 0.1], [6, 0.2]],
+    labels,
+    units: labels.map(() => ""),
+    metadata: { origin_book: bookName },
+  });
+
+  function multiBookPayload() {
+    return {
+      time: [0, 1],
+      values: [
+        [10, 1],
+        [20, 2],
+      ],
+      labels: ["ignored0", "ignored1"],
+      units: ["", ""],
+      metadata: {},
+      book_source: { kind: "upload" as const, token: "tok123" },
+      books: [
+        primaryMarker(["R", "M"], "b0", "Primary"),
+        lazyEntry(["R", "M"], "b1", "Lazy"),
+        fullInlineBook(["R", "M"], "Full"),
+      ],
+    };
+  }
+
+  it("stamps importedAt on every book dataset, one shared timestamp per import call", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(3);
+    for (const d of ds) {
+      expect(d.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+    // Same import call -> same instant, not one Date.now() per book.
+    expect(new Set(ds.map((d) => d.importedAt)).size).toBe(1);
+  });
+
+  it("keeps the lazy book's pending ref alongside its importedAt stamp", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const lazy = useApp.getState().datasets.find((d) => d.name === "Multi:Lazy")!;
+    expect(lazy.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 2 });
+  });
+});
+
 describe("import busy state (pendingOps, P3.4 slice 1)", () => {
   it("registers a pendingOps op while a single-file import is in flight, then clears it", async () => {
     let resolve!: (v: ReturnType<typeof payload>) => void;
