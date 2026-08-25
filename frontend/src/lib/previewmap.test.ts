@@ -3,12 +3,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  axesAt,
   groupForElement,
   hitAt,
+  panelAt,
   pxToCanvasFraction,
   pxToData,
   pxToFigureFraction,
   type AxesInfo,
+  type FigureHitmap,
+  type PanelAxesInfo,
 } from "./previewmap";
 
 const AXES: AxesInfo = {
@@ -32,6 +36,86 @@ describe("hitAt", () => {
     expect(hitAt(els, 440, 90)?.id).toBe("legend");
     expect(hitAt(els, 200, 200)?.id).toBe("series:0");
     expect(hitAt(els, 700, 90)).toBeNull();
+  });
+});
+
+// FU-facet-hitmap: two side-by-side panels with DELIBERATELY different data
+// limits (panel 0: [0,10]; panel 1: [100,200]) so a point resolved against
+// the wrong panel gives a visibly, unmistakably wrong answer -- the
+// regression this guards against.
+const PANEL_0: PanelAxesInfo = {
+  panel: 0,
+  label: "level 0",
+  x0: 0, y0: 0, x1: 300, y1: 400,
+  xlim: [0, 10], ylim: [0, 10],
+  xlog: false, ylog: false,
+};
+const PANEL_1: PanelAxesInfo = {
+  panel: 1,
+  label: "level 1",
+  x0: 300, y0: 0, x1: 600, y1: 400,
+  xlim: [100, 200], ylim: [100, 200],
+  xlog: false, ylog: false,
+};
+const FACET_MAP: FigureHitmap = {
+  image: "",
+  width: 600,
+  height: 400,
+  elements: [],
+  panels: [PANEL_0, PANEL_1],
+};
+const FLAT_MAP: FigureHitmap = {
+  image: "",
+  width: 600,
+  height: 400,
+  elements: [],
+  axes: AXES,
+};
+
+describe("panelAt", () => {
+  it("finds the containing panel, not just the first one", () => {
+    expect(panelAt(FACET_MAP.panels, 150, 200)?.panel).toBe(0);
+    expect(panelAt(FACET_MAP.panels, 450, 200)?.panel).toBe(1);
+  });
+
+  it("returns null outside every panel rect and when panels is absent", () => {
+    expect(panelAt(FACET_MAP.panels, 900, 200)).toBeNull();
+    expect(panelAt(undefined, 150, 200)).toBeNull();
+  });
+});
+
+describe("axesAt", () => {
+  it("a point inside panel N resolves to panel N's data limits, never panel 0's", () => {
+    // Panel 1's own axes -> this point maps into panel 1's [100,200] range.
+    const axes1 = axesAt(FACET_MAP, 450, 200);
+    expect(axes1).not.toBeNull();
+    expect(axes1).toEqual(PANEL_1);
+    const p1 = pxToData(axes1!, 450, 200);
+    expect(p1.x).toBeGreaterThan(100);
+    expect(p1.x).toBeLessThan(200);
+
+    // The REGRESSION this guards: resolving the SAME point against panel
+    // 0's axes (the old single-`axes` behavior) gives a visibly different,
+    // WRONG answer -- outside panel 0's [0,10] range entirely.
+    const wrongIfPanel0 = pxToData(PANEL_0, 450, 200);
+    expect(wrongIfPanel0.x).not.toBeCloseTo(p1.x, 0);
+  });
+
+  it("panel 0 still resolves to panel 0, not panel 1", () => {
+    const axes0 = axesAt(FACET_MAP, 150, 200);
+    expect(axes0).toEqual(PANEL_0);
+    const p0 = pxToData(axes0!, 150, 200);
+    expect(p0.x).toBeGreaterThan(0);
+    expect(p0.x).toBeLessThan(10);
+  });
+
+  it("falls back to the flat path's single `axes` when `panels` is absent", () => {
+    expect(axesAt(FLAT_MAP, 300, 200)).toEqual(AXES);
+  });
+
+  it("is null for a faceted point outside every panel and for an axes-less hitmap", () => {
+    expect(axesAt(FACET_MAP, 900, 200)).toBeNull();
+    expect(axesAt({ ...FLAT_MAP, axes: undefined }, 300, 200)).toBeNull();
   });
 });
 

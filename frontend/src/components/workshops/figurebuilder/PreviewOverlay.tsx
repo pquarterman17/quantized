@@ -7,13 +7,66 @@
 // pixels (the hook diffs them into a translation delta, or maps the drop
 // point alone to a figure-fraction / data coordinate).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { isContextMenuKeyEvent } from "../../../lib/contextActions";
 import { groupForElement, type FigureHitmap, type HitElement } from "../../../lib/previewmap";
 import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 
 const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
+/** FU-facet-hitmap: only the FLAT path's title/xlabel/ylabel are editable
+ *  inline (`element.panel === undefined`) — a facet panel's own "title"
+ *  element is that PANEL's facet-level label, not the figure's title
+ *  config field; committing an edit there through `onEditText("title", …)`
+ *  would silently overwrite the whole figure's title instead. Per-panel
+ *  facet-label editing isn't wired yet (see `FigureHitmap`'s own doc in
+ *  `lib/previewmap.ts`), so a faceted "title"/"series:N" hitbox stays
+ *  click-to-select only, same as before this element set existed. */
+const isTextEditable = (e: HitElement) => TEXT_ELEMENTS.has(e.id) && e.panel === undefined;
+/** Ids with genuinely no PER-PANEL target yet (fix round 4, P1, extends
+ *  round 2's G3 text-only set to the per-panel LEGEND too): a facet
+ *  panel's own title/xlabel/ylabel has no per-panel label override, and
+ *  its own legend (drawn whenever that panel has more than one series —
+ *  `draw_facet_grid`) has no per-panel position/title override either —
+ *  same "the artist is real, but there's nothing to route a click into
+ *  yet" situation for all four. `panel === undefined` (the flat path, or
+ *  J2's whole-figure title/xlabel/ylabel elements) is NEVER gated — those
+ *  route to the real whole-figure config fields. */
+const PANEL_GATED_IDS = new Set(["title", "xlabel", "ylabel", "legend"]);
+/** Fix round 5 (V2): a facet panel's own SERIES line joins the gate too --
+ *  same class as P1's legend, not a new one. `groupForElement("series:N")`
+ *  is already null (per-series styling has no single N->channel mapping --
+ *  see that function's own doc), so routing it to "Properties…" only ever
+ *  opened the generic Series group -- but a style edit made THERE is
+ *  INERT on the facet render path: `draw_facet_grid` hard-codes
+ *  `_plot_kwargs(..., None)` and neither `export_figure_hitmap`'s facet
+ *  branch nor `_render_facets_bytes` forwards `series_styles` at all, so a
+ *  colour/width change re-renders byte-identical with no sign it did
+ *  nothing. Forwarding `series_styles` through the facet render path would
+ *  be the OTHER honest fix (make the edit real) but is a materially larger
+ *  change (backend render-path wiring, not just this file); gating is the
+ *  smaller one, so `series:N` is inert here the same way a panel title is
+ *  -- see this file's own header for the deferral note this joins. */
+const isPanelGated = (id: string, panel: number | undefined) =>
+  panel !== undefined && (PANEL_GATED_IDS.has(id) || id.startsWith("series:"));
+/** FU-facet-hitmap fix round 2 (G3): whether ANY entry point (click,
+ *  Enter/Space, the context menu's Properties…) has a sound target to route
+ *  this element to. A facet panel's own title/xlabel/ylabel/legend/series
+ *  (`isPanelGated`) has no per-panel edit target yet — `groupForElement
+ *  ("title")` resolves to "Text & fonts", the FLAT path's whole-figure
+ *  suptitle control, so routing a facet panel's own label (or legend)
+ *  through it would silently treat that panel's own artist as the whole
+ *  figure's; a facet series routed to the generic Series group would look
+ *  editable there while the edit is actually inert on the render path
+ *  (V2). Every selection entry point shares this ONE gate (not just the
+ *  double-click path `isTextEditable` already guarded) so a panel-scoped
+ *  artist is never routed to the wrong OR inert object — it does nothing
+ *  instead of guessing. */
+const hasSoundTarget = (e: HitElement) => !isPanelGated(e.id, e.panel);
+/** A React key unique across panels — two different facet panels each draw
+ *  their own "title" and "series:0" (FU-facet-hitmap), so `id` alone would
+ *  collide. The flat path has no `panel` and keeps its original `id` key. */
+const elementKey = (e: HitElement) => (e.panel === undefined ? e.id : `${e.panel}:${e.id}`);
 // F2.4d: reference lines join the draggable set — the Stage canvas has
 // always supported dragging one, and the preview now has the hit target
 // (F2.4c) and the panel (F2.3d) to make it round-trip.
@@ -22,22 +75,38 @@ const TEXT_ELEMENTS = new Set(["title", "xlabel", "ylabel"]);
 // the Stage's own shape drag already has.
 const DRAGGABLE = (id: string) =>
   id === "legend" || id.startsWith("ann:") || id.startsWith("refline:") || id.startsWith("shape:");
-const elementName = (id: string) => {
-  if (id.startsWith("ann:")) return "Annotation";
-  if (id.startsWith("series:")) return "Series";
-  // F2.4c: without these the generic fallback below renders the raw element
-  // id, so the new decor hitboxes would have read "Refline:0" / "Shape:2".
-  if (id.startsWith("refline:")) return "Reference line";
-  if (id.startsWith("shape:")) return "Shape";
-  return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
+const elementName = (id: string, panel?: number) => {
+  const base = (() => {
+    if (id.startsWith("ann:")) return "Annotation";
+    if (id.startsWith("series:")) return "Series";
+    // F2.4c: without these the generic fallback below renders the raw
+    // element id, so the new decor hitboxes would have read "Refline:0" /
+    // "Shape:2".
+    if (id.startsWith("refline:")) return "Reference line";
+    if (id.startsWith("shape:")) return "Shape";
+    return id === "xlabel" ? "X axis label" : id === "ylabel" ? "Y axis label" : id[0].toUpperCase() + id.slice(1);
+  })();
+  // FU-facet-hitmap: disambiguate which panel this is \u2014 every panel draws
+  // its own "title"/"series:N", so the bare name alone ("Title") would be
+  // ambiguous the moment more than one panel is on screen.
+  return panel === undefined ? base : `Panel ${panel + 1} ${base.toLowerCase()}`;
 };
 /** F2.3b: a "series:N" hitbox becomes reachable once the canonical draft has
  *  per-series controls to open (`canonicalSeriesEditable`) -- legacy/detached
  *  sessions with nothing to edit keep the original "edited on Stage" wording
- *  unchanged, so every EXISTING PreviewOverlay caller/test is byte-identical. */
-const elementTitle = (id: string, canonicalSeriesEditable: boolean) => {
-  const name = elementName(id);
-  if (TEXT_ELEMENTS.has(id)) return `${name} \u2014 double-click to edit; right-click for properties`;
+ *  unchanged, so every EXISTING PreviewOverlay caller/test is byte-identical.
+ *  `panel` (FU-facet-hitmap, undefined for the flat path) suppresses the
+ *  "double-click to edit" hint for a facet element -- see `isTextEditable`'s
+ *  own doc for why that edit isn't wired. */
+const elementTitle = (id: string, canonicalSeriesEditable: boolean, panel?: number) => {
+  const name = elementName(id, panel);
+  // Fix round 4 (P1): a gated legend must NOT advertise "drag to move" --
+  // checked BEFORE the DRAGGABLE branch below, which is true for "legend"
+  // regardless of panel.
+  if (isPanelGated(id, panel)) return name;
+  if (TEXT_ELEMENTS.has(id) && panel === undefined) {
+    return `${name} \u2014 double-click to edit; right-click for properties`;
+  }
   if (DRAGGABLE(id)) return `${name} \u2014 drag to move; right-click for properties`;
   if (id.startsWith("series:")) {
     return canonicalSeriesEditable
@@ -77,12 +146,29 @@ export default function PreviewOverlay({
    *  "properties are edited on Stage" hitbox exactly as before. */
   canonicalSeries?: boolean;
 }) {
+  // Hover/drag/context-menu tracking keys on `elementKey`, NOT the bare
+  // `id` (FU-facet-hitmap) — two different facet panels each draw their own
+  // "title"/"series:0", so keying on `id` alone would highlight/drag every
+  // panel's matching element at once instead of just the one under the
+  // pointer. `onSelect`/`onEditText`/`onDragEnd` (the caller's callbacks)
+  // still receive the plain `id`, unchanged — those weren't panel-aware
+  // before this element set existed and stay that way (see `isTextEditable`
+  // and this file's own header for what's deferred).
   const [hover, setHover] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
-  const [dragPos, setDragPos] = useState<{ id: string; dx: number; dy: number } | null>(null);
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // FU-facet-hitmap fix round 3 (J1): `panel` joins `id` here — every other
+  // per-element piece of state in this file already keys on the (id, panel)
+  // pair (`elementKey`/`dragRef`/`dragPos`/`menu`), but `editing` was
+  // missed, and a bare `map.elements.find((e) => e.id === editing.id)!`
+  // both mispositioned the editor (a stale flat "title" edit would silently
+  // snap onto a NEW facet response's panel-0 "title" box, since `find`
+  // returns the first id match regardless of panel) and could throw outright
+  // (an id with no match at all in the new `map.elements` — e.g. a "xlabel"
+  // edit open when the next debounced render arrives with no x_label set).
+  const [editing, setEditing] = useState<{ id: string; panel?: number; value: string } | null>(null);
+  const [dragPos, setDragPos] = useState<{ key: string; dx: number; dy: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; panel?: number; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
+  const dragRef = useRef<{ key: string; id: string; startX: number; startY: number } | null>(null);
 
   const pct = (e: HitElement) => ({
     left: `${(e.x0 / map.width) * 100}%`,
@@ -99,56 +185,107 @@ export default function PreviewOverlay({
     return [(clientX - rect.left) * scale, (clientY - rect.top) * scale];
   };
 
+  // J1: the element `editing` refers to, re-resolved against the CURRENT
+  // `map` every render (id AND panel must both match -- a bare id match
+  // would let a stale flat "title" edit snap onto a facet response's
+  // panel-0 "title" box). `null` when the element no longer exists in this
+  // map (e.g. the hitmap changed shape mid-edit) -- the editor input below
+  // simply doesn't render rather than dereferencing a missing box.
+  const editingElement = editing
+    ? (map.elements.find((e) => e.id === editing.id && e.panel === editing.panel) ?? null)
+    : null;
+  // Fix round 4 (P2): when the edited element stops resolving, `editing`
+  // ITSELF must clear, not just the rendered input -- leaving it set was a
+  // ghost: the NEXT `startTextEdit` on a completely different element would
+  // still see a truthy (stale) `editing` and silently re-commit its long-
+  // vanished value via `onEditText`, reapplying an edit the user watched
+  // disappear. Runs after the map that made it unresolvable has already
+  // rendered (the input already isn't showing), so this is strictly
+  // cleanup, never a visible flicker.
+  useEffect(() => {
+    if (editing && !editingElement) setEditing(null);
+  }, [editing, editingElement]);
   /** Opening a second text edit while one is unsaved commits the first
-   *  (its input never blurs, so it would otherwise be silently discarded). */
-  const startTextEdit = (id: string) => {
-    if (editing && editing.id !== id) onEditText(editing.id, editing.value);
-    setEditing({ id, value: textOf(id) });
+   *  (its input never blurs, so it would otherwise be silently discarded).
+   *  Compares the (id, panel) PAIR (J1) -- re-opening the SAME element is a
+   *  no-op, not a spurious commit-then-reopen. Gates on `editingElement`,
+   *  NOT the bare `editing` state (P2) -- the previous edit is committed
+   *  only when its element still genuinely resolves; the `useEffect` above
+   *  is what actually clears `editing` once it doesn't, so in practice this
+   *  condition is defense-in-depth against the same-tick case, not the
+   *  primary fix. */
+  const startTextEdit = (id: string, panel?: number) => {
+    if (editingElement && (editing!.id !== id || editing!.panel !== panel)) {
+      onEditText(editing!.id, editing!.value);
+    }
+    setEditing({ id, panel, value: textOf(id) });
   };
-  const menuItems = (id: string): ContextMenuItem[] => {
-    const seriesEditable = id.startsWith("series:") && canonicalSeries;
-    const group = groupForElement(id);
+  const menuItems = (id: string, panel?: number): ContextMenuItem[] => {
+    // FU-facet-hitmap fix round 2 (G3), extended round 4 (P1, legend) and
+    // round 5 (V2, series): a gated element has no sound Properties…
+    // target either — same `isPanelGated` gate `hasSoundTarget` uses,
+    // inlined here since this function only has `id`/`panel`, not the
+    // full `HitElement`. Without it the menu HEADER correctly said "Panel
+    // 2 title" (or "…legend", "…series") while the enabled Properties…
+    // action still opened the whole figure's Text & fonts (or Legend, or
+    // the generically-inert Series) panel underneath it.
+    const gated = isPanelGated(id, panel);
+    const seriesEditable = !gated && id.startsWith("series:") && canonicalSeries;
+    const group = gated ? null : groupForElement(id);
+    const textEditable = TEXT_ELEMENTS.has(id) && panel === undefined;
     return [
-      { header: elementName(id) },
+      { header: elementName(id, panel) },
       group || seriesEditable
         ? { label: "Properties…", run: () => onSelect(id) }
-        : id.startsWith("series:")
+        : !gated && id.startsWith("series:")
           ? { label: "Series properties — edit on Stage", disabled: true, run: () => {} }
           : { label: "Properties unavailable", disabled: true, run: () => {} },
-      ...(TEXT_ELEMENTS.has(id) ? [{ label: "Edit text…", run: () => startTextEdit(id) }] : []),
+      ...(textEditable ? [{ label: "Edit text…", run: () => startTextEdit(id, panel) }] : []),
     ];
   };
 
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
       <img src={src} alt="figure preview" style={{ width: "100%", display: "block" }} />
-      {map.elements.map((e, index) => (
+      {map.elements.map((e, index) => {
+        const key = elementKey(e);
+        // FU-facet-hitmap fix round 3 (J3): a gated element (a facet
+        // panel's own title -- no click/select/edit target, see
+        // `hasSoundTarget`'s own doc) must not PRESENT as an interactive
+        // control either -- no tabstop, no button role, no pointer cursor.
+        // Right-click (the informative, fully-inert "Properties
+        // unavailable" menu) and the plain hover outline stay either way;
+        // neither implies "this is clickable" the way a tabbable button
+        // does.
+        const interactive = hasSoundTarget(e);
+        return (
         <div
-          key={e.id}
+          key={key}
           data-element={e.id}
-          title={elementTitle(e.id, canonicalSeries)}
-          tabIndex={0}
-          role="button"
-          aria-label={elementTitle(e.id, canonicalSeries)}
-          onPointerEnter={() => setHover(e.id)}
+          data-panel={e.panel}
+          title={elementTitle(e.id, canonicalSeries, e.panel)}
+          {...(interactive ? { tabIndex: 0, role: "button", "aria-label": elementTitle(e.id, canonicalSeries, e.panel) } : {})}
+          onPointerEnter={() => setHover(key)}
           onPointerLeave={() => setHover(null)}
-          onFocus={() => setHover(e.id)}
-          onBlur={() => setHover((current) => (current === e.id ? null : current))}
-          onClick={() => onSelect(e.id)}
+          onFocus={() => setHover(key)}
+          onBlur={() => setHover((current) => (current === key ? null : current))}
+          onClick={() => {
+            if (interactive) onSelect(e.id);
+          }}
           onDoubleClick={() => {
-            if (TEXT_ELEMENTS.has(e.id)) startTextEdit(e.id);
+            if (isTextEditable(e)) startTextEdit(e.id, e.panel);
           }}
           onContextMenu={(ev) => {
             ev.preventDefault();
             ev.stopPropagation();
             dragRef.current = null;
             setDragPos(null);
-            setMenu({ id: e.id, x: ev.clientX, y: ev.clientY });
+            setMenu({ id: e.id, panel: e.panel, x: ev.clientX, y: ev.clientY });
           }}
           onKeyDown={(ev) => {
             if (ev.key === "Enter" || ev.key === " ") {
               ev.preventDefault();
-              onSelect(e.id);
+              if (interactive) onSelect(e.id);
               return;
             }
             // Retrospective-audit P1 fix: a focused hitbox owns Delete and
@@ -164,25 +301,28 @@ export default function PreviewOverlay({
             if (isContextMenuKeyEvent(ev)) {
               ev.preventDefault();
               const r = ev.currentTarget.getBoundingClientRect();
-              setMenu({ id: e.id, x: r.left + r.width / 2, y: r.top + r.height / 2 });
+              setMenu({ id: e.id, panel: e.panel, x: r.left + r.width / 2, y: r.top + r.height / 2 });
             }
           }}
           onPointerDown={(ev) => {
-            if (ev.button !== 0 || !DRAGGABLE(e.id)) return;
-            dragRef.current = { id: e.id, startX: ev.clientX, startY: ev.clientY };
+            // Fix round 4 (P1): a gated legend (DRAGGABLE(id) is true for
+            // "legend" regardless of panel) must not START a drag either --
+            // there is no per-panel position override to commit it into.
+            if (ev.button !== 0 || !DRAGGABLE(e.id) || !interactive) return;
+            dragRef.current = { key, id: e.id, startX: ev.clientX, startY: ev.clientY };
             // optional-chained: jsdom has no pointer capture
             (ev.target as Element).setPointerCapture?.(ev.pointerId);
           }}
           onPointerMove={(ev) => {
             const d = dragRef.current;
-            if (!d || d.id !== e.id) return;
-            setDragPos({ id: e.id, dx: ev.clientX - d.startX, dy: ev.clientY - d.startY });
+            if (!d || d.key !== key) return;
+            setDragPos({ key, dx: ev.clientX - d.startX, dy: ev.clientY - d.startY });
           }}
           onPointerUp={(ev) => {
             const d = dragRef.current;
             dragRef.current = null;
             setDragPos(null);
-            if (!d || d.id !== e.id) return;
+            if (!d || d.key !== key) return;
             const moved =
               Math.abs(ev.clientX - d.startX) + Math.abs(ev.clientY - d.startY) > 3;
             if (!moved) return; // a plain click — selection already handled
@@ -194,26 +334,27 @@ export default function PreviewOverlay({
             position: "absolute",
             ...pct(e),
             zIndex: hitboxZIndex(map.elements, e, index),
-            cursor: DRAGGABLE(e.id) ? "move" : "pointer",
+            cursor: DRAGGABLE(e.id) && interactive ? "move" : interactive ? "pointer" : "default",
             outline:
-              hover === e.id ? "1.5px solid var(--accent)" : "1px solid transparent",
+              hover === key ? "1.5px solid var(--accent)" : "1px solid transparent",
             borderRadius: 2,
             transform:
-              dragPos?.id === e.id
+              dragPos?.key === key
                 ? `translate(${dragPos.dx}px, ${dragPos.dy}px)`
                 : undefined,
           }}
         />
-      ))}
+        );
+      })}
       {menu && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          items={menuItems(menu.id)}
+          items={menuItems(menu.id, menu.panel)}
           onClose={() => setMenu(null)}
         />
       )}
-      {editing && (
+      {editing && editingElement && (
         <input
           className="qz-input"
           autoFocus
@@ -232,7 +373,7 @@ export default function PreviewOverlay({
           }}
           style={{
             position: "absolute",
-            ...pct(map.elements.find((e) => e.id === editing.id)!),
+            ...pct(editingElement),
             minWidth: 120,
             // Above every hitbox (hitboxZIndex tops out at map.elements.length)
             // so the edited element's own invisible hitbox can't swallow

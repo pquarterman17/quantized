@@ -902,6 +902,205 @@ with parent items P1.3 and P1.5.
       (`export_figure`, `export_figure_hitmap`) ever passed them. Dropped;
       `fmt` stays (the hitmap route still forces it to `"png"`).
 
+      **2026-08-25 FU-facet-hitmap (Claude): closes the R1 "elements: [] +
+      synthetic whole-image axes" preview gap — per-panel hit-targets now
+      exist.** `calc.figure_facets.draw_facet_grid` now returns its drawn
+      per-panel series artists (`list[list[Any]]`, one list per panel, mirroring
+      `calc.figure.draw_series_axes`'s own per-series return); a new sibling
+      module `calc.figure_facets_map` (split out to stay under the 500-line
+      ceiling) shares the figure-building core (`_facet_grid`, factored out
+      of `render_facets_figure` VERBATIM — the standalone bytes-only export
+      is unchanged, `test_calc_figure_facets.py` passes unedited) and adds
+      `render_facets_figure_map`: image + real per-panel geometry. A new
+      `calc.figure_hitmap.collect_facet_map` (facet-grid analogue of the
+      existing flat-path `collect_map`) harvests, per panel: its axes pixel
+      rect + data limits + rendered facet-label text, plus hit elements
+      (facet title, each series line) tagged with a `panel` index.
+      `routes.export_figures.export_figure_hitmap`'s facet branch now calls
+      this instead of returning the synthetic rect; the flat branch is
+      byte-for-byte unchanged (verified: `set(m.keys())` still exactly
+      `{"image","width","height","elements","axes"}`, `axes` still a single
+      dict). **Response-shape decision:** a faceted response replaces the
+      flat path's single `axes` dict with a `panels` list (one entry per
+      panel) and omits `axes` entirely — chosen over reusing the `axes` key
+      at two different types (dict vs list) across the two response shapes,
+      which would force every consumer to type-narrow on which path it got;
+      `elements` stays the same list shape with an additive optional `panel`
+      index (unset for the flat path, exactly the "any consumer that ignores
+      the new field keeps working" bar). `frontend/src/lib/previewmap.ts`:
+      `FigureHitmap.axes` is now optional, `panels?: PanelAxesInfo[]` added,
+      and new `panelAt`/`axesAt` helpers resolve a pixel point to its
+      CONTAINING panel's axes before any pixel→data conversion — the
+      required fix, since a click in panel 3 must produce panel 3's data
+      values, never panel 0's (a dedicated `previewmap.test.ts` case picks
+      two panels with deliberately non-overlapping data ranges so a
+      wrong-panel resolution would give a visibly, unmistakably wrong
+      answer). `previewDrag.ts`'s three `pxToData(hitmap.axes, …)` call
+      sites now resolve through `axesAt` first.
+
+      **Wired vs still deferred (scope ruling honored, not silently
+      dropped) — updated through fix round 5, see the entries below for
+      the full history:** WIRED — per-panel hit-testing (distinct, non-
+      overlapping pixel rects, EVERY box clipped to its own panel so a
+      zoomed `x_lim` can never balloon one across a sibling's — round 2's
+      G1, and round 5's V1 for the flat path's own long-standing twin of
+      that same defect) and panel-aware pixel→data coordinate mapping
+      (`panelAt`/`axesAt`, exercised by a focused `previewmap.test.ts`
+      suite, the `test_api_export.py` facet-hitmap tests, and a same-panel
+      guard on the shape-drag branch — round 2's G2). Every real, drawn
+      artist is now harvested and hit-testable: each panel's facet title,
+      series lines (padded to a real target when degenerate — round 3's
+      J4, and round 5's P3 for the flat path's own twin), the whole
+      FIGURE's own title/x-label/y-label (round 3's J2), and each panel's
+      own legend when it has more than one series (round 4's P1) — the
+      docs used to claim the legend didn't exist; it does, it's just
+      INERT (see below). `PreviewOverlay.tsx` gates every entry point
+      (click, Enter/Space, double-click, the context menu's Properties…)
+      the SAME way for anything with no per-panel edit target yet — a
+      panel's own title/x-label/y-label/legend/SERIES line (round 5's V2
+      added the series line to this set) — so none of them is ever
+      silently routed to the whole-figure's config field OR a control
+      that looks live but is actually inert, and a gated hitbox no longer
+      presents interactive affordances (tabstop/role/pointer cursor) it
+      can't act on (round 2's G3, round 3's J3). NOT wired — per-panel
+      drag/style-EDIT: facets never draw an annotation/reference-line/
+      shape into a panel at all (`render_facets_figure`'s own `overrides`
+      doc — the interactive facet grid doesn't offer them either), so
+      there is nothing draggable to resolve for those; the per-panel
+      legend, a panel's own title, and a panel's own series line are real
+      and hit-testable but have no per-panel position/override model (nor,
+      for series, any `series_styles` forwarding through the facet render
+      path at all — `draw_facet_grid` hard-codes plain line kwargs) to
+      commit a drag or edit into yet, so they stay click-to-select-only
+      (title) or fully inert (legend, series). Moving an annotation
+      BETWEEN panels, per-panel legend placement, per-panel series style
+      forwarding, and per-panel annotation/ref-line/shape support
+      generally remain genuinely open — each needs its own facet-aware
+      config model (or, for series styles, backend render-path wiring)
+      before there's anything correct to drag-map or style-edit onto,
+      which is larger than this lane's scope.
+
+      **2026-08-25 fix round 2 (Claude): G1 (defeated the feature under a
+      box-zoom) + G2 (cross-panel shape-drag guard) + G3 (dead-end click
+      routing).** G1: a facet series line's `get_window_extent` transforms
+      its FULL data extent, unclipped to the axes' current view — a zoomed
+      `x_lim` override (exactly what a Stage box-zoom sets) ballooned the
+      reported box to several times the image width, spilling across every
+      sibling panel and defeating per-panel targeting entirely. Fixed in
+      `calc.figure_hitmap.collect_facet_map`: every series box clips to its
+      own panel's axes rect, dropped only if the clip is empty; a facet
+      title clips only horizontally (it lives above the axes by
+      construction and never overshoots the way a line does — clipping it
+      the same way would wrongly drop every title). G2:
+      `previewDrag.ts`'s data-anchored shape drag resolved the press origin
+      and drop point against POTENTIALLY DIFFERENT panels' axes with no
+      equality guard, despite a comment promising a cross-panel drag is
+      "dropped rather than guessed" — fixed with an actual `startAxes !==
+      endAxes` check (reference equality: `axesAt` returns the literal
+      element from `hitmap.panels`, or the flat path's single shared
+      `axes`). G3: the single-click and context-menu Properties… paths
+      still routed a facet panel's own title through the flat id-based
+      `groupForElement` lookup, silently opening the whole-figure Text &
+      fonts panel — closed with one shared `hasSoundTarget` gate applied to
+      every entry point. All three came with red-first evidence (`git
+      stash` back to the pre-fix source, confirmed failing with the exact
+      numbers/behavior described, then restored).
+
+      **2026-08-25 fix round 3 (Claude): J1 (a real crash) + J2 (an
+      honesty gap matching G3's own shape) + J3 (dead affordances) + J4
+      (degenerate series dropped instead of padded).** J1:
+      `PreviewOverlay.tsx`'s `editing` state was the one piece of
+      per-element state left keyed on bare `id` — a faceted hitmap
+      arriving while the editor was open on `xlabel`/`ylabel` either threw
+      (`TypeError: Cannot read properties of undefined`) or silently
+      repositioned the editor over a DIFFERENT panel's same-id box; fixed
+      by keying `editing` on `(id, panel)` like every other per-element
+      state, with a total (non-throwing) lookup. J2: `collect_facet_map`
+      never harvested `fig.suptitle`/`supxlabel`/`supylabel`, so the whole
+      figure's own title/axis labels — real artists, drawn exactly like
+      the flat path's — had no hit target on a faceted preview; now
+      harvested with the SAME ids the flat path uses and no `panel` key,
+      so all the existing panel-undefined-means-whole-figure handling
+      makes them editable for free. J3: a gated hitbox (no sound target)
+      still presented `tabIndex`/`role="button"`/pointer cursor as if it
+      were actionable — dropped for gated elements, the hover outline
+      stays. J4: a degenerate series box (a facet level with a single data
+      row, or a constant-valued channel) was dropped instead of padded to
+      `_HIT_PAD` the way `add_decor` already pads a reference line/shape —
+      extracted the shared `_pad_degenerate` helper and reused it here.
+
+      **2026-08-25 fix round 4 (Claude): P1 (the SAME J2/G3 honesty-and-
+      routing failure, found in the one remaining real artist) + P2 (a
+      ghost-commit left by the J1 fix) + P3 (the flat-path twin of J4).**
+      P1: `draw_facet_grid` calls `ax.legend(...)` on every panel with more
+      than one series — a real, rendered artist — but `collect_facet_map`
+      never harvested it, and four docstrings plus this plan's own entry
+      asserted facets "never draw a legend/annotation/reference-line/shape
+      into a panel" — true for the other three, false for the legend.
+      Fixed: the per-panel legend is now harvested (clipped to its panel's
+      axes rect, like a series line), and `PreviewOverlay.tsx`'s
+      `hasSoundTarget` gate (G3/J3's own mechanism) now covers it too — a
+      per-panel legend is real and hit-testable, but stays fully INERT (no
+      per-panel position/title override exists yet to commit a drag into),
+      never silently routed to the whole-figure legend config the way a
+      panel title used to be routed to the whole-figure title. All four
+      docstrings (`calc.figure_hitmap`, `calc.figure_facets_map` x2,
+      `lib/previewmap.ts`) and this entry corrected. P2: when `editing`'s
+      element stopped resolving (J1's fix), the INPUT correctly stopped
+      rendering, but the `editing` STATE itself was left set — the next
+      `startTextEdit` on a different element would still fire
+      `onEditText(<stale id>, <stale value>)` on blur/Enter, silently
+      re-committing an edit the user watched disappear. Fixed: `editing`
+      clears itself (not just the rendered input) the moment its element
+      stops resolving. P3: `collect_map`'s flat-path `add()` still dropped
+      a zero-height series box outright — the exact gap J4 had just closed
+      for facets, using the `_pad_degenerate` helper this lane already
+      extracted — so a FLAT figure of a constant-valued channel had a
+      title hitbox but no clickable series line. Applied the same padding
+      to the flat path too (checked first, as asked: the only behavior
+      change is that a previously-invisible degenerate series now gets a
+      small real hit target, exactly J4's own justification). All three
+      came with red-first evidence, restored after confirming.
+
+      **2026-08-25 fix round 5 (Claude): V1 (a live, pre-existing bug on
+      the FLAT path, reachable through an everyday gesture) + V2 (the
+      SAME inert-control class as P1, found in the one element type P1
+      didn't reach).** V1: the flat path's own series hit box was NEVER
+      clipped to the axes rect at all — the exact G1 defect fixed for
+      facets in round 2, just never applied to `collect_map`, the sibling
+      this whole lane started from. A zoomed `x_lim` override (an
+      ORDINARY Stage box-zoom, not an edge case) balloons the reported box
+      to several times the image width (probed: ~8x); with no
+      `overflow: hidden` on the preview cell and an earlier DOM sibling
+      holding the sticky Export/Apply row, that invisible box could paint
+      over real UI outside the preview and swallow clicks as a false
+      "Series" selection — reachable in normal Figure Builder use, not
+      only in a faceted one. Fixed by reusing the exact same `_clip_box`
+      helper in a new `add_series` (computing `axes_px` earlier in
+      `collect_map` so the harvest loop can clip against it, then reusing
+      it — not recomputing — for the response's own `axes` field); added
+      `overflow: hidden` to the preview cell in `FigureBuilderView.tsx` as
+      the belt-and-braces measure requested (the clip is the real fix; the
+      overflow rule only bounds a hypothetical FUTURE regression to the
+      preview cell itself, never the rest of the UI). V2: `PANEL_GATED_IDS`
+      omitted `series:N`, so a facet panel's series hitbox stayed fully
+      interactive and routed "Properties…" to the generic Series group —
+      but a style edit made there is INERT on the facet render path
+      (`draw_facet_grid` hard-codes plain line kwargs; neither
+      `export_figure_hitmap`'s facet branch nor `_render_facets_bytes`
+      forwards `series_styles` at all), so a colour/width change would
+      re-render byte-identical with no sign it did nothing — worse than
+      not routing there at all, since it LOOKS like it worked. Chose the
+      smaller of the two honest fixes: gated `series:N` the same way a
+      panel's title/legend already are (`isPanelGated` now matches any
+      `series:` id too), rather than the materially larger alternative of
+      wiring `series_styles` through the facet render path end to end.
+      Every docstring/deferral note that lists what's gated-vs-wired
+      updated to include per-panel series styling alongside the title/
+      legend/annotation/ref-line/shape items already there. Both came with
+      red-first evidence (`git stash` back to the pre-fix source, V1's
+      probe reproduced the reported ~8x overshoot exactly, V2's gating
+      tests reproduced the wrong routing), then restored.
       **2026-08-25 fix round 4 (Claude): closed the `"tight"` approximation
       round 3 documented (not just bounded it).** Round 3's throwaway was
       EMPTY, so its default `0..1` ticks predicted a footprint unrelated to

@@ -308,6 +308,15 @@ export default function FigureBuilderView() {
               borderRadius: 6,
               minHeight: 280,
               padding: 8,
+              // Fix round 5 (V1), belt-and-braces: the backend clips every
+              // hitmap box to its own axes rect now (the real fix), but an
+              // absolutely-positioned hitbox that somehow still overshot
+              // its `<img>` (a future regression, a browser quirk) would
+              // otherwise paint over this cell's siblings -- the sticky
+              // Export/Apply row above, or the settings column beside it --
+              // and swallow their clicks. `overflow: hidden` bounds any
+              // stray box to THIS cell at worst, never the rest of the UI.
+              overflow: "hidden",
             }}
           >
             {f.error ? (

@@ -933,13 +933,98 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert ax["xlim"][0] < 2 < ax["xlim"][1]
     assert ax["xlog"] is False
     assert m["image"][:10]  # base64 payload present
+    # FU-facet-hitmap (flat-path-unchanged evidence): the flat response's key
+    # set is EXACTLY what it was before per-panel geometry existed -- no
+    # `panels` key leaking in, `axes` still the single dict.
+    assert set(m.keys()) == {"image", "width", "height", "elements", "axes"}
+    assert isinstance(m["axes"], dict)
 
 
-# ── Fix-round R1: a facet-bound hitmap request must render the SAME grid
-# `/figure` exports (not silently fall back to the flat plot the Figure
-# Builder preview would then mis-describe), but with an honest EMPTY
-# `elements` list -- no per-panel hit-targets yet. ──────────────────────────
-def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
+# ── FU-facet-hitmap fix round 5 (V1): the FLAT path's series hit box was
+# NEVER clipped to the axes rect -- exactly the G1 defect fixed for facets
+# in round 2, just never applied here. A zoomed `x_lim` override (an
+# ordinary Stage box-zoom) balloons the reported box to several times the
+# IMAGE width, painting over unrelated UI outside the preview (the sticky
+# Export/Apply row in the Figure Builder) and swallowing background clicks
+# as a false "Series" selection. Reachable in normal use via any box-zoom. ──
+def test_figure_hitmap_flat_series_box_clips_to_axes_rect_under_zoom() -> None:
+    # x spans 0..9 (mirrors the coordinator's own probe) so the zoomed
+    # [4,5] window still shows PART of the line -- a dataset whose x range
+    # never reaches the zoom window (e.g. `_xrd_dataset()`'s ~10.0-10.06)
+    # would clip the box to EMPTY and drop it entirely, which is a
+    # different (also-correct) case, not this one.
+    ds = {
+        "time": [float(v) for v in range(10)],
+        "values": [[float(v)] for v in range(10)],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": ds, "dpi": 100,
+            "overrides": {"x_lim": [4.0, 5.0]},
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    ax = m["axes"]
+    series = next(e for e in m["elements"] if e["id"] == "series:0")
+    # The box must stay INSIDE the axes rect -- never extend past it (the
+    # exact regression: a box ~8x the image width).
+    assert ax["x0"] - 1e-6 <= series["x0"] < series["x1"] <= ax["x1"] + 1e-6
+    assert ax["y0"] - 1e-6 <= series["y0"] < series["y1"] <= ax["y1"] + 1e-6
+    assert series["x1"] - series["x0"] <= ax["x1"] - ax["x0"] + 1e-6
+
+
+# ── FU-facet-hitmap fix round 4 (P3): the flat path's own `add()` still
+# dropped a zero-height series box outright -- the exact gap round 3's J4
+# closed for facets, using the SAME `_pad_degenerate` helper reused here. ───
+def test_figure_hitmap_flat_pads_degenerate_series_constant_and_single_row() -> None:
+    ds_constant = {
+        "time": [0.0, 1.0, 2.0, 3.0],
+        "values": [[2.0], [2.0], [2.0], [2.0]],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": ds_constant, "dpi": 100, "title": "T"},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    ids = {e["id"] for e in m["elements"]}
+    assert "series:0" in ids  # previously dropped entirely -- only "title" survived
+    series = next(e for e in m["elements"] if e["id"] == "series:0")
+    assert series["y1"] - series["y0"] >= 5.9  # padded to (at least) _HIT_PAD
+    assert series["x1"] - series["x0"] > 20  # x wasn't degenerate -- real width
+
+    ds_single = {
+        "time": [5.0],
+        "values": [[3.0]],
+        "labels": ["a"],
+        "units": ["V"],
+        "metadata": {},
+    }
+    resp2 = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": ds_single, "dpi": 100, "title": "T"},
+    )
+    assert resp2.status_code == 200
+    m2 = resp2.json()
+    series2 = next(e for e in m2["elements"] if e["id"] == "series:0")
+    assert series2["x1"] - series2["x0"] >= 5.9
+    assert series2["y1"] - series2["y0"] >= 5.9
+
+
+# ── FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
+# hitmap request now returns REAL per-panel geometry -- one `panels` entry
+# per facet panel (pixel rect + data limits + facet label) and `elements`
+# tagged with a `panel` index -- instead of `elements: []` + a synthetic
+# whole-image `axes` rect. ───────────────────────────────────────────────────
+def test_figure_hitmap_facets_returns_per_panel_axes_and_elements() -> None:
     resp = client.post(
         "/api/export/figure-hitmap",
         json={"dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets()},
@@ -947,9 +1032,45 @@ def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
     assert resp.status_code == 200
     m = resp.json()
     assert m["width"] > 0 and m["height"] > 0
-    # R1's honest-preview contract: no per-panel hit-targets yet.
-    assert m["elements"] == []
-    assert m["axes"]["x1"] == m["width"] and m["axes"]["y1"] == m["height"]
+    # No single-`axes` field for a faceted response -- `panels` replaces it.
+    assert "axes" not in m
+    panels = m["panels"]
+    assert len(panels) == len(_xy_facets()) == 2
+    labels = {p["label"] for p in panels}
+    assert labels == {"level 0", "level 1"}
+    # Distinct, NON-OVERLAPPING pixel rects (2 panels -> side-by-side columns,
+    # `_grid_shape(2)` = 1 row x 2 cols): panel 0 must end at or before where
+    # panel 1 begins in x.
+    p0, p1 = sorted(panels, key=lambda p: p["panel"])
+    assert p0["x1"] <= p1["x0"]
+    assert (p0["x0"], p0["y0"], p0["x1"], p0["y1"]) != (p1["x0"], p1["y0"], p1["x1"], p1["y1"])
+    # Distinct DATA limits -- panel 0's y is [0,1,2], panel 1's is [1,2,3]
+    # (`_xy_facets()`), each panel keeping its own independent y-autoscale
+    # (`render_facets_figure`'s own doc), so a point mapped through panel 0's
+    # ylim would give a VISIBLY different (wrong) answer for a click that
+    # landed in panel 1.
+    assert p0["ylim"] != p1["ylim"]
+    assert p0["ylim"][1] < p1["ylim"][1]
+    for p in panels:
+        assert p["xscale"] == "linear" and p["yscale"] == "linear"
+    # `elements` are real and non-empty. Per-panel elements (a "panel" key
+    # present) cover both panels; `_xrd_dataset()` auto-derives non-empty
+    # x/y labels the SAME way the flat path does (no `x_label`/`y_label` on
+    # this request), so the response ALSO carries the whole-figure "xlabel"/
+    # "ylabel" elements (J2, fix round 3) -- no "panel" key on those, unlike
+    # every per-panel element.
+    assert m["elements"] != []
+    per_panel = [e for e in m["elements"] if "panel" in e]
+    panel_indices = {e["panel"] for e in per_panel}
+    assert panel_indices == {0, 1}
+    ids = {e["id"] for e in per_panel}
+    assert {"title", "series:0"} <= ids
+    whole_figure_ids = {e["id"] for e in m["elements"] if "panel" not in e}
+    assert whole_figure_ids == {"xlabel", "ylabel"}  # title unset -> omitted (J2)
+    for e in m["elements"]:  # boxes are inside the image, top-left origin
+        assert 0 <= e["x0"] < e["x1"] <= m["width"] + 1
+        assert -1 <= e["y0"] < e["y1"] <= m["height"] + 1
+
     import base64
     from io import BytesIO as _BytesIO
 
@@ -959,6 +1080,175 @@ def test_figure_hitmap_facets_renders_grid_with_empty_elements() -> None:
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     with Image.open(_BytesIO(png)) as im:
         assert im.size == (m["width"], m["height"])
+
+
+# ── FU-facet-hitmap fix round 2 (G1): a series line's `get_window_extent` is
+# the transform of its FULL data extent, unclipped to the axes' current view
+# -- a zoomed `x_lim` override (exactly what a Stage box-zoom sets) put most
+# of a line's raw data far outside the narrowed view, ballooning the reported
+# pixel box to several times the image width and spilling across every
+# sibling panel's own hit-region -- the moment box-zoom is used, per-panel
+# targeting (the entire point of this lane) broke. `test_..._per_panel_axes_
+# and_elements` above only ever exercised the no-override case, where the
+# bug is invisible (a line's natural data range already fits the default
+# view) -- this is the override-bearing case that catches it. ───────────────
+def test_figure_hitmap_facets_series_boxes_clip_to_own_panel_under_zoom() -> None:
+    n = 4
+    facets = [
+        {
+            "label": f"level {i}", "x": list(range(10)),
+            "series": [{"label": "y", "y": [float(v) for v in range(10)]}],
+        }
+        for i in range(n)
+    ]
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(), "dpi": 100, "facets": facets,
+            "overrides": {"x_lim": [4.0, 5.0]},
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    panels = {p["panel"]: p for p in m["panels"]}
+    assert len(panels) == n
+    series_boxes = [e for e in m["elements"] if e["id"] == "series:0"]
+    assert len(series_boxes) == n  # every panel's line still visible in [4,5]
+    for e in series_boxes:
+        p = panels[e["panel"]]
+        # The box must stay INSIDE its own panel's axes rect -- never
+        # extend past it (the exact regression: boxes several times the
+        # image width, reaching every other panel).
+        assert p["x0"] - 1e-6 <= e["x0"] < e["x1"] <= p["x1"] + 1e-6
+        assert p["y0"] - 1e-6 <= e["y0"] < e["y1"] <= p["y1"] + 1e-6
+    # No two panels' series boxes overlap -- the actual per-panel-targeting
+    # property this lane exists to guarantee.
+    for a in series_boxes:
+        for b in series_boxes:
+            if a["panel"] == b["panel"]:
+                continue
+            overlap_x = a["x0"] < b["x1"] and b["x0"] < a["x1"]
+            overlap_y = a["y0"] < b["y1"] and b["y0"] < a["y1"]
+            assert not (overlap_x and overlap_y), (a["panel"], b["panel"])
+    # Titles are UNAFFECTED by the zoom (a text glyph's bbox, not a
+    # data-space transform) -- still one per panel, never dropped.
+    assert len([e for e in m["elements"] if e["id"] == "title"]) == n
+
+
+# ── FU-facet-hitmap fix round 4 (P1): draw_facet_grid draws a REAL per-panel
+# legend whenever that panel has more than one series -- it must be hit-
+# testable (clipped to its own panel, like a series line), even though it
+# stays inert client-side (no per-panel legend position/title override
+# exists yet). ────────────────────────────────────────────────────────────────
+def test_figure_hitmap_facets_harvests_per_panel_legend_when_multi_series() -> None:
+    facets = [
+        {
+            "label": "level 0", "x": [0.0, 1.0, 2.0],
+            "series": [
+                {"label": "a", "y": [0.0, 1.0, 2.0]},
+                {"label": "b", "y": [2.0, 1.0, 0.0]},
+            ],
+        },
+        {
+            "label": "level 1", "x": [0.0, 1.0, 2.0],
+            "series": [{"label": "a", "y": [1.0, 2.0, 3.0]}],  # single series -> no legend
+        },
+    ]
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "dpi": 100, "facets": facets},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    legends = [e for e in m["elements"] if e["id"] == "legend"]
+    assert len(legends) == 1  # only panel 0 has >1 series
+    lg = legends[0]
+    assert lg["panel"] == 0
+    panels = {p["panel"]: p for p in m["panels"]}
+    p0 = panels[0]
+    # Clipped inside its own panel's axes rect -- same treatment as a
+    # series line, never a title's above-axes exemption.
+    assert p0["x0"] - 1e-6 <= lg["x0"] < lg["x1"] <= p0["x1"] + 1e-6
+    assert p0["y0"] - 1e-6 <= lg["y0"] < lg["y1"] <= p0["y1"] + 1e-6
+
+
+# ── FU-facet-hitmap fix round 3 (J2): the whole FIGURE's own title/x-label/
+# y-label (fig.suptitle/supxlabel/supylabel) are real artists on a faceted
+# render, exactly like the flat path -- they must be harvested with hit
+# targets too, not just each panel's own category label. ────────────────────
+def test_figure_hitmap_facets_harvests_whole_figure_title_and_labels() -> None:
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets(),
+            "title": "Whole figure title", "x_label": "Shared X", "y_label": "Shared Y",
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    # Exactly ONE whole-figure element per kind -- no "panel" key at all
+    # (the SAME shape a flat response's title/xlabel/ylabel already has),
+    # distinct from the per-panel "title" category-label elements (which DO
+    # carry "panel").
+    for el_id in ("title", "xlabel", "ylabel"):
+        whole_figure = [e for e in m["elements"] if e["id"] == el_id and "panel" not in e]
+        assert len(whole_figure) == 1, el_id
+    panel_titles = [e for e in m["elements"] if e["id"] == "title" and "panel" in e]
+    assert len(panel_titles) == len(_xy_facets())
+
+
+def test_figure_hitmap_facets_omits_whole_figure_labels_when_unset() -> None:
+    # `title` defaults to "" (never auto-derived, unlike x_label/y_label) --
+    # already exercises the "unset -> omitted" case on its own. x_label/
+    # y_label need an EXPLICIT "" to bypass `_figure_series`'s auto-derive
+    # (same override-vs-derive contract the flat path uses) and reach the
+    # true nothing-drawn case -- `_add_whole_figure` must not manufacture a
+    # hit target for any of the three (mirrors `fig.suptitle`/etc. never
+    # being called at all).
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(), "dpi": 100, "facets": _xy_facets(),
+            "x_label": "", "y_label": "",
+        },
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    whole_figure_ids = {"title", "xlabel", "ylabel"}
+    assert [e for e in m["elements"] if e["id"] in whole_figure_ids and "panel" not in e] == []
+
+
+# ── FU-facet-hitmap fix round 3 (J4): a degenerate series extent (a facet
+# level with a single data row, or a constant-valued channel) is PADDED to
+# a real hit target, not silently dropped, while its normal siblings still
+# get their own. ─────────────────────────────────────────────────────────────
+def test_figure_hitmap_facets_pads_degenerate_series_single_row_and_constant() -> None:
+    xs = [0.0, 1.0, 2.0, 3.0]
+    facets = [
+        {"label": "single row", "x": [5.0], "series": [{"label": "y", "y": [3.0]}]},
+        {"label": "constant", "x": xs, "series": [{"label": "y", "y": [2.0] * 4}]},
+        {"label": "normal", "x": xs, "series": [{"label": "y", "y": [0.0, 1.0, 2.0, 3.0]}]},
+    ]
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "dpi": 100, "facets": facets},
+    )
+    assert resp.status_code == 200
+    m = resp.json()
+    boxes = {e["panel"]: e for e in m["elements"] if e["id"] == "series:0"}
+    assert set(boxes) == {0, 1, 2}  # every panel has a hit target, none dropped
+    single_row, constant, normal = boxes[0], boxes[1], boxes[2]
+    # Padded to (at least) the 6px _HIT_PAD target on BOTH axes for the
+    # single-row panel (degenerate on x AND y).
+    assert single_row["x1"] - single_row["x0"] >= 5.9
+    assert single_row["y1"] - single_row["y0"] >= 5.9
+    # Constant-value panel: only the Y axis is degenerate (padded); X keeps
+    # its real, non-degenerate width.
+    assert constant["y1"] - constant["y0"] >= 5.9
+    assert constant["x1"] - constant["x0"] > 20
+    # Normal panel: neither axis needed padding.
+    assert normal["x1"] - normal["x0"] > 20
+    assert normal["y1"] - normal["y0"] > 20
 
 
 def _demo_corner(k: int = 2, n: int = 200) -> dict:
