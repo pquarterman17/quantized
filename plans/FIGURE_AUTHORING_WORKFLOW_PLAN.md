@@ -1021,6 +1021,99 @@ with parent items P1.3 and P1.5.
       did not reopen the round-4 gap; the `<1e-9` headline claim stands
       unchanged under the corrected proxy.
 
+      **2026-08-25 fix round 6 (Claude): a follow-up review found the
+      round-4/5 "machine-precision" claim measured nothing real, plus a
+      second crash and a genuine geometry defect the tautological test let
+      through.** Three findings:
+
+      **F1 (crash):** the wire contract allows null gaps — `FigureFacet.x`/
+      `FigureFacetSeries.y` are `list[float | None]`, `(number|null)[]` on
+      the frontend. `_facet_data_range`'s per-element `float(v)` raised
+      `TypeError` on `None` under `"tight"`/`"none"` (`"constrained"` never
+      touched facet data, so it alone was unaffected) — a 500 at the route
+      (`export_figure_page` only catches `ValueError`/`KeyError`/
+      `IndexError`). Confirmed red: reproduced the exact reported
+      `TypeError: float() argument must be a string or a real number, not
+      'NoneType'` in isolation, then restored that exact buggy function in
+      `figure_page_facets.py` and re-ran the null-gap test — same error,
+      both `"tight"` and `"none"`.
+
+      **F2 (real geometry defect, not just cosmetic):** the round-4/5
+      proxy called `proxy.set_title(p.title)`, so `tight_layout` reserved
+      title height OUTSIDE the settled cell — but `_draw_inset_cell` ALSO
+      reserves title space INSIDE that same cell via its own
+      `_FREE_TITLE_BAND`. Double-reserved. MEASURED (2 facets, 1x2 page,
+      `col_gap=0.3`): sub-grid height with no title `0.4599`, WITH a title
+      `0.3529` under `"tight"` — a **23.3% loss** (round-3's un-fixed
+      `"none"` mode showed 16.0%, the correct single-reservation cost —
+      `"tight"` was losing an EXTRA ~7 points to the double-count). The
+      same mechanism generalizes to the `_FREE_MARGIN_LEFT`/etc. tick-label
+      margins, not just the title band.
+
+      **F3 (why F2 slipped through — the real lesson):**
+      `_assert_facet_frame_matches_control` built its control panel from
+      the SAME min/max segment and the SAME title the proxy itself
+      plotted. The comparison was true BY CONSTRUCTION — which is exactly
+      why the round-4/5 residual measured a suspiciously perfect `0.0` and
+      why a 27%-ish content loss passed unnoticed. It proved nothing about
+      whether the fallback matches REALITY.
+
+      **OWNERSHIP RULE (the fix):** probed the `"constrained"`/SubFigure
+      oracle directly — a facet cell's own internal content (title, tick
+      labels) NEVER affects its outer cell size there. Probed: SubFigure's
+      `bbox_relative` is IDENTICAL with a title vs. without, and identical
+      for short vs. very long tick labels (1e6-scale x, 1e7-scale y) — the
+      facet's content stays fully self-contained inside the cell, and (new
+      probe) an ORDINARY decoration-free `Axes.get_position()` at the SAME
+      `cell_spec` coincides EXACTLY with the SubFigure's own
+      `bbox_relative`, bit-for-bit. So: **`begin_grid_cell_fallback`'s
+      throwaway now carries NO facet content at all — it's the SAME
+      decoration-free `_frame_axes` every other placement path already
+      uses for its page-letter anchor** (`_facet_data_range`/
+      `_populate_proxy_content` are deleted entirely, not patched — the
+      whole content-touching code path, and with it F1's crash surface, is
+      gone). `_draw_inset_cell`'s fixed internal fractions
+      (`_FREE_MARGIN_*`/`_FREE_TITLE_BAND`) are the SOLE reservation for
+      title/tick-label space, on EVERY placement path (free placement
+      always worked this way; the grid fallback now matches it). RE-
+      MEASURED post-fix: a title now costs the sub-grid EXACTLY the
+      analytic 16% under BOTH `"tight"` and `"none"` (verified: sub-grid/
+      frame ratio equals `(1 - _FREE_MARGIN_TOP - _FREE_MARGIN_BOTTOM) *
+      (1 - _FREE_TITLE_BAND)` to `abs=1e-6`, a pure geometric identity now)
+      — no more compounding.
+
+      New oracle, replacing the tautological one: `_facet_geometry_probe`
+      renders the SAME facet payload under `"constrained"` (no proxy
+      involved — a real layout-engine solve against the real content) and
+      returns its settled frame as ground truth.
+      `test_facet_panel_grid_fallback_frame_matches_constrained_oracle`
+      (24 cases: 1/2/4/6/9 facets × with/without title × 1x1/1x2/2x2/3x3
+      grids × zero/moderate gaps × corner/center cell positions) asserts
+      `"tight"`/`"none"` land within a stated tolerance of it. MEASURED:
+      the worst-case deviation is content-INDEPENDENT (~`0.0625` for
+      `"tight"`, ~`0.2161` for `"none"`, both a fraction of the page) and
+      driven entirely by grid shape/gaps — cross-checked against an
+      ORDINARY (also decoration-free) panel in the same slot, which shows
+      the SAME-sized deviation from the oracle, confirming this is
+      matplotlib's own inherent `tight_layout`/rc-default-vs-
+      `constrained`-layout baseline difference, not a facet-specific
+      defect. Tolerances pinned with headroom: `_TIGHT_ORACLE_TOL=0.10`,
+      `_NONE_ORACLE_TOL=0.25`. **This is the honest, no-longer-bit-
+      identical number — the round-4/5 `<1e-9` claim is retired**, since
+      it measured the proxy against itself, not reality.
+
+      Also added: `test_facet_panel_grid_fallback_frame_is_content_
+      independent` (the REAL F2 regression guard, confirmed red against
+      the round-5 code: title/data changes moved the frame by up to
+      `0.024`, comfortably outside a `1e-9` tolerance) and
+      `test_facet_panel_grid_fallback_subgrid_fills_expected_fraction_of_
+      cell` (pins the analytic split itself — NOTE this one is
+      unconditionally self-consistent regardless of the outer frame, so it
+      does NOT independently catch F2; confirmed it still passed against
+      the round-5 double-counting code). `test_facet_panel_null_gap_
+      values_render_and_match` covers F1 with nulls in both x and y, under
+      both `"tight"` and `"none"`.
+
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.
 

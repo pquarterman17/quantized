@@ -341,7 +341,7 @@ def _build_page_figure(
         if p.facets is not None and not free_placement and not use_grid_subfigure:
             assert gs is not None
             cell_spec = gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span]
-            throwaway = begin_grid_cell_fallback(fig, cell_spec, p, st)
+            throwaway = begin_grid_cell_fallback(fig, cell_spec)
             axes.append(throwaway)
             deferred.append((throwaway, p, safe_mathtext_label(text)))
             continue

@@ -99,6 +99,25 @@ Numbers: ``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log; coverage:
 ``test_facet_panel_multi_series_per_level_renders_and_matches`` in
 ``tests/test_calc_figure_page.py``.
 
+**Fix round 6 (2026-08-25): rounds 4/5's whole content-modeling proxy
+(``_facet_data_range``/``_populate_proxy_content``) is GONE -- their
+"machine-precision match" claim measured the proxy's own plotted range
+against itself (true by construction, proving nothing about REALITY), and
+that same content-modeling caused a REAL geometry defect a construction-
+level check couldn't see: a title cost the sub-grid 23-27% of its height
+(measured) instead of the analytic 16%, because tight_layout reserved
+title space OUTSIDE the settled cell for the proxy's OWN ``set_title``
+call, while ``_draw_inset_cell`` ALSO reserves title space INSIDE that
+same cell -- double-reserved. (Their content-modeling also had its own
+crash: the wire contract allows null gaps -- facet ``x``/series ``y`` are
+``list[float | None]`` -- and a per-element ``float(v)`` in
+``_facet_data_range`` raised ``TypeError`` on ``None``; moot now, since
+that function no longer exists.) See ``begin_grid_cell_fallback``'s own
+docstring for the OWNERSHIP RULE that replaced all of it (a decoration-
+free throwaway, content-independent by construction) and
+``plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md``'s F4 log for the full
+before/after measurements.
+
 Free (``page_rect``) placement is a DIFFERENT story from grid placement,
 and SubFigure BREAKS there outright (not just under some engines): probed
 with a ``GridSpec`` whose ``left``/``right``/``bottom``/``top`` carve out a
@@ -162,14 +181,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 from matplotlib.gridspec import GridSpec
 
 from quantized.calc.figure_facets import _grid_shape, draw_facet_grid
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_overrides import apply_axis_shape_overrides
-from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
-from quantized.calc.figure_ticks import apply_tick_formats
+from quantized.calc.figure_scale import resolve_axis_scale
 
 if TYPE_CHECKING:
     from quantized.calc.figure_page import PagePanel
@@ -397,64 +413,7 @@ def draw_facet_panel_cell(
     )
 
 
-def _facet_data_range(p: PagePanel) -> tuple[float, float, float, float] | None:
-    """``(xmin, xmax, ymin, ymax)`` -- union RANGE across every level's x
-    and every series' y, non-finite ignored. ``None`` if nothing finite
-    exists (see module doc's fix-round-5 note)."""
-    assert p.facets
-    xs = [float(v) for level in p.facets for v in level.get("x", [])]
-    ys = [
-        float(v)
-        for level in p.facets
-        for s in level.get("series", [])
-        for v in s.get("y", [])
-    ]
-    x_finite = np.asarray(xs, dtype=float)
-    x_finite = x_finite[np.isfinite(x_finite)]
-    y_finite = np.asarray(ys, dtype=float)
-    y_finite = y_finite[np.isfinite(y_finite)]
-    if x_finite.size == 0 or y_finite.size == 0:
-        return None
-    return (
-        float(x_finite.min()), float(x_finite.max()),
-        float(y_finite.min()), float(y_finite.max()),
-    )
-
-
-def _populate_proxy_content(proxy: Any, p: PagePanel, st: FigureStyle) -> None:
-    """Plot a 2-point segment spanning ``_facet_data_range(p)`` into the
-    throwaway ``proxy`` (not empty, not the real per-series data -- see
-    module doc's fix-round-4/5 notes) and apply the SAME scale / tick-
-    format / x_lim override / title ``draw_facet_grid`` applies for real.
-
-    Degenerate cases: a single finite point still autoscales (two identical
-    points hit the same default-margin path a real one-point series would).
-    No finite data (``_facet_data_range`` -> ``None``) skips the plot call,
-    leaving the proxy's default ``[0, 1]`` view -- matching what the real
-    all-NaN/empty sub-panels also default to. A non-positive ``"log"``/
-    ``"reciprocal"`` bound isn't special-cased: ``apply_axis_scale`` runs
-    AFTER the plot call (``draw_facet_grid``'s own order), so matplotlib
-    silently excludes it rather than raising, same as the real content."""
-    assert p.facets
-    rng = _facet_data_range(p)
-    if rng is not None:
-        x0, x1, y0, y1 = rng
-        proxy.plot([x0, x1], [y0, y1])
-    resolved_x_scale = resolve_axis_scale(p.x_scale, p.x_log)
-    resolved_y_scale = resolve_axis_scale(p.y_scale, p.y_log)
-    apply_axis_scale(proxy, "x", resolved_x_scale)
-    apply_axis_scale(proxy, "y", resolved_y_scale)
-    apply_tick_formats(proxy, p.x_fmt, p.y_fmt)
-    # x_lim ONLY, same restricted override subset draw_facet_grid applies to
-    # every real sub-panel (see its own doc) -- a narrowed range can change
-    # the rendered tick labels' digit count/width, so it belongs in the
-    # footprint estimate too.
-    apply_axis_shape_overrides(proxy, st, dict(p.overrides or {}), lim_keys=("x_lim",))
-    if p.title:
-        proxy.set_title(safe_mathtext_label(p.title))
-
-
-def begin_grid_cell_fallback(fig: Any, cell_spec: Any, p: PagePanel, st: FigureStyle) -> Any:
+def begin_grid_cell_fallback(fig: Any, cell_spec: Any) -> Any:
     """Grid placement under ``"tight"``/``"none"`` resize_mode (W1, fix
     round 3): a throwaway placeholder ``Axes`` at ``cell_spec``, added so
     its EVENTUAL ``get_position()`` (read by ``finish_grid_cell_fallback``,
@@ -471,15 +430,20 @@ def begin_grid_cell_fallback(fig: Any, cell_spec: Any, p: PagePanel, st: FigureS
     NOT match the final one there, unlike ``"none"``, where it already
     does -- see module doc).
 
-    **Fix rounds 4/5 (2026-08-25):** the throwaway is no longer left empty
-    -- ``_populate_proxy_content`` plots a 2-point RANGE segment (not the
-    real per-series data, which crashes on multi-series facets) spanning
-    the facet's own data extent, so ``"tight"``'s whitespace-trim sees a
-    real-content-like footprint. See the module doc for why (a single proxy
-    Axes, not the real sub-grid)."""
-    proxy = fig.add_subplot(cell_spec)
-    _populate_proxy_content(proxy, p, st)
-    return proxy
+    **Fix round 6 (2026-08-25): decoration-free, per the module doc's
+    OWNERSHIP RULE -- ``_frame_axes`` (no ticks/spines/title/data), not a
+    content-modeling proxy.** Rounds 4/5 plotted the facet's own data/
+    title onto the throwaway so ``"tight"`` would see a "realistic"
+    footprint -- but that made the OUTER cell shrink for a title tight_
+    layout thought it needed AND ``_draw_inset_cell`` also reserves its own
+    internal title band for -- double-reserved, so real content lost the
+    difference twice over. Verified against the ``"constrained"``/
+    SubFigure oracle (which never lets a facet's own internal content
+    affect its outer cell size at all -- see module doc): the correct
+    external footprint for this cell is content-INDEPENDENT, so the
+    throwaway carries none, and ``_draw_inset_cell``'s fixed internal
+    fractions are the SOLE reservation for title/tick-label space."""
+    return _frame_axes(fig, cell_spec=cell_spec)
 
 
 def finish_grid_cell_fallback(fig: Any, p: PagePanel, st: FigureStyle, throwaway: Any) -> Any:
