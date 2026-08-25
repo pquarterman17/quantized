@@ -8,7 +8,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
+import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { askParams } from "../../overlays/ParamDialog";
 import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
@@ -255,5 +255,114 @@ describe("PeaksPanel — peak row selection (RULING 1/3)", () => {
     await screen.findByRole("button", { name: "Label all 1 detected peak…" });
     // A stale index-0 selection must NOT survive onto the new (unrelated) peak.
     expect(screen.queryByText(/selected detected/)).not.toBeInTheDocument();
+  });
+
+  it("K1 direction 1 (red-first): once a fit exists, the DETECTED table's stale selection is cleared AND the table stops presenting as selectable", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [
+        { center: 1.1, fwhm: 0.8, height: 5, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+        { center: 3.1, fwhm: 0.9, height: 6, bg: 1, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+      ],
+      bgCoeffs: [1, 0],
+      R2: 0.99,
+      rmse: 0.02,
+      nPeaks: 2,
+      model: "Lorentzian",
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    const detectedTable = screen.getByRole("table", { name: /detected peaks/i });
+    const detectedRows = within(detectedTable).getAllByRole("row").slice(1);
+    fireEvent.click(detectedRows[0]);
+    expect(screen.getByRole("button", { name: "Label 1 selected detected peak…" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("table", { name: /fitted peaks/i });
+
+    // The stale selection must be gone — no attribute at all (RULING: "no
+    // aria-selected"), not merely "false".
+    const detectedRowsAfter = within(screen.getByRole("table", { name: /detected peaks/i })).getAllByRole("row").slice(1);
+    expect(detectedRowsAfter[0]).not.toHaveAttribute("aria-selected");
+
+    // Clicking the (now non-governing) detected table must be a total no-op —
+    // it must never present a highlighted row the Label action then ignores.
+    fireEvent.click(detectedRowsAfter[1]);
+    expect(detectedRowsAfter[1]).not.toHaveAttribute("aria-selected");
+    expect(screen.getByRole("button", { name: "Label all 2 fitted peaks…" })).toBeInTheDocument();
+
+    // Label must act on the FITTED centers, uninfluenced by the ignored detected clicks.
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "Label all 2 fitted peaks…" }));
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(2));
+    expect(useApp.getState().annotations.map((a) => a.x).sort((a, b) => a - b)).toEqual([1.1, 3.1]);
+  });
+
+  it("K1 direction 2 (red-first, mirror case): a detected selection made before a fit does NOT resurrect once the fit yields zero peaks", async () => {
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    const table = screen.getByRole("table", { name: /detected peaks/i });
+    const rows = within(table).getAllByRole("row").slice(1);
+    fireEvent.click(rows[0]); // select detected peak 0 BEFORE any fit exists
+    expect(screen.getByRole("button", { name: "Label 1 selected detected peak…" })).toBeInTheDocument();
+
+    // A successful fit takes governance away from the detected table.
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [
+        { center: 1.1, fwhm: 0.8, height: 5, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+        { center: 3.1, fwhm: 0.9, height: 6, bg: 1, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+      ],
+      bgCoeffs: [1, 0],
+      R2: 0.99,
+      rmse: 0.02,
+      nPeaks: 2,
+      model: "Lorentzian",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    // Now a SEPARATE fit run (fitEach) fails on every peak — fitResult.peaks
+    // becomes an empty array, hasFit flips back to false, and the DETECTED
+    // table regains governance.
+    vi.mocked(fitPeak).mockResolvedValue({
+      success: false,
+      reason: "window-too-narrow",
+      center: 0,
+      fwhm: 0,
+      height: 0,
+      bg: 0,
+      eta: null,
+      area: 0,
+      params: [],
+      model: "Lorentzian",
+      window: [0, 0],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Fit each" }));
+
+    // The pre-fit detected selection must NOT resurrect — "all", not "1 selected".
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    expect(screen.queryByText(/selected detected/)).not.toBeInTheDocument();
+  });
+
+  it("the FITTED table stays selectable while it governs", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [
+        { center: 1.1, fwhm: 0.8, height: 5, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+        { center: 3.1, fwhm: 0.9, height: 6, bg: 1, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+      ],
+      bgCoeffs: [1, 0],
+      R2: 0.99,
+      rmse: 0.02,
+      nPeaks: 2,
+      model: "Lorentzian",
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    const fittedTable = await screen.findByRole("table", { name: /fitted peaks/i });
+    const fittedRows = within(fittedTable).getAllByRole("row").slice(1);
+
+    fireEvent.click(fittedRows[0]);
+    expect(fittedRows[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Label 1 selected fitted peak…" })).toBeInTheDocument();
   });
 });

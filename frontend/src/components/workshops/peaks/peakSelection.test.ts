@@ -120,3 +120,51 @@ describe("usePeakTableSelection — RULING 2 (reset when the underlying result c
     expect(result.current.selected).toEqual(new Set([1]));
   });
 });
+
+describe("usePeakTableSelection — K1 (review round 2): `governs` clears a selection that loses governance, and never resurrects it", () => {
+  it("losing governance (true -> false) clears the selection", () => {
+    const source = [{}, {}, {}];
+    const { result, rerender } = renderHook(
+      ({ source, governs }) => usePeakTableSelection(source, governs),
+      { initialProps: { source, governs: true } },
+    );
+    act(() => result.current.select(1, { shift: false, ctrlOrMeta: false }));
+    expect(result.current.selected).toEqual(new Set([1]));
+
+    rerender({ source, governs: false }); // e.g. a fit just appeared elsewhere
+    expect(result.current.selected).toEqual(new Set());
+  });
+
+  it("red-first repro of the K1 mirror case: regaining governance does NOT resurrect the pre-loss selection", () => {
+    const source = [{}, {}, {}];
+    const { result, rerender } = renderHook(
+      ({ source, governs }) => usePeakTableSelection(source, governs),
+      { initialProps: { source, governs: true } },
+    );
+    act(() => result.current.select(0, { shift: false, ctrlOrMeta: false }));
+    expect(result.current.selected).toEqual(new Set([0]));
+
+    rerender({ source, governs: false }); // loses governance — cleared
+    expect(result.current.selected).toEqual(new Set());
+    rerender({ source, governs: true }); // regains governance — must STAY empty
+    expect(result.current.selected).toEqual(new Set());
+  });
+
+  it("gaining governance for the FIRST time (initial render already governs) never clears a legitimately-made selection", () => {
+    const source = [{}, {}, {}];
+    const { result, rerender } = renderHook(
+      ({ source, governs }) => usePeakTableSelection(source, governs),
+      { initialProps: { source, governs: true } },
+    );
+    act(() => result.current.select(2, { shift: false, ctrlOrMeta: false }));
+    rerender({ source, governs: true }); // re-render with governs unchanged (still true)
+    expect(result.current.selected).toEqual(new Set([2]));
+  });
+
+  it("`governs` defaults to true (a caller that never passes it behaves exactly as before)", () => {
+    const source = [{}, {}, {}];
+    const { result } = renderHook(() => usePeakTableSelection(source));
+    act(() => result.current.select(1, { shift: false, ctrlOrMeta: false }));
+    expect(result.current.selected).toEqual(new Set([1]));
+  });
+});

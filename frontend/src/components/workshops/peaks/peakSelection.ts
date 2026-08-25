@@ -63,12 +63,25 @@ export interface PeakTableSelection {
  *  `fitResult.peaks`) — pass the SAME array reference the table renders
  *  from, and pass a stable empty-array constant when there's nothing yet
  *  (a fresh `[]` literal on every render would spuriously reset on every
- *  keystroke elsewhere in the panel). */
-export function usePeakTableSelection(source: readonly unknown[]): PeakTableSelection {
+ *  keystroke elsewhere in the panel).
+ *
+ *  `governs` (K1 review finding — the two peak tables are mutually
+ *  exclusive as a LABELING source: "Label peaks" only ever reads ONE of
+ *  them, whichever `hasFit` currently names, see PeaksPanel.tsx). Without
+ *  this, the NON-governing table kept a stale selection alive: it stayed
+ *  clickable and highlighted while every click silently did nothing to
+ *  what Label actually used, and — the sharper bug — that stale pick could
+ *  resurrect and become live again the moment governance flipped BACK (a
+ *  fit that lands zero peaks, `fitResult.peaks = []`, hands governance
+ *  straight back to the detected table with whatever it was showing
+ *  before). Default `true` so a table that never receives this argument
+ *  (e.g. a future standalone use) behaves exactly as before. */
+export function usePeakTableSelection(source: readonly unknown[], governs = true): PeakTableSelection {
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   // Tracked via useState (not a ref) so React's own render-time bailout
   // machinery drives the reset, exactly as the pattern above prescribes.
   const [prevSource, setPrevSource] = useState(source);
+  const [prevGoverns, setPrevGoverns] = useState(governs);
   // The shift-range anchor — like `selectRange`'s `activeId`, extending a
   // range never moves it; only a plain click or a ctrl-toggle does. A plain
   // ref is safe to reset here even though this runs during render: it's
@@ -76,11 +89,19 @@ export function usePeakTableSelection(source: readonly unknown[]): PeakTableSele
   // event handlers, so mutating it can't make the render itself impure.
   const anchorRef = useRef<number | null>(null);
 
-  if (source !== prevSource) {
-    setPrevSource(source);
+  const sourceChanged = source !== prevSource;
+  // Reset on LOSING governance (true -> false), not on gaining it: a table
+  // that just regained governance already had its selection cleared the
+  // moment it lost governance, so there is nothing left to resurrect — and
+  // clearing again on the gain edge would also wipe a selection a caller
+  // legitimately set while `governs` was true from the very first render.
+  const lostGovernance = prevGoverns && !governs;
+  if (sourceChanged || lostGovernance) {
     setSelected(new Set());
     anchorRef.current = null;
   }
+  if (sourceChanged) setPrevSource(source);
+  if (governs !== prevGoverns) setPrevGoverns(governs);
 
   const select = useCallback((index: number, mods: SelectMods) => {
     if (mods.shift) {

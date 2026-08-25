@@ -75,8 +75,16 @@ export default function PeaksPanel() {
   // scoped to the array that currently backs it — see peakSelection.ts's
   // header for why RULING 2's reset is keyed on THIS array's reference, and
   // NO_FITTED_PEAKS's comment for why the fallback must be a stable const.
-  const detectedSelection = usePeakTableSelection(peaks);
-  const fittedSelection = usePeakTableSelection(fitResult?.peaks ?? NO_FITTED_PEAKS);
+  //
+  // `governs` (K1 review finding): the two tables are mutually exclusive as
+  // a labeling SOURCE — only one ever backs "Label peaks" (`hasFit` picks
+  // it, same as `labelKind`/`labelSource` below) — so the LOSING table's
+  // hook-level selection must clear the instant it stops governing, not
+  // merely be masked at render time; see peakSelection.ts's own doc for why
+  // a mask-only fix would let a stale pick resurrect if governance flips
+  // back (e.g. a fit that lands zero peaks).
+  const detectedSelection = usePeakTableSelection(peaks, !hasFit);
+  const fittedSelection = usePeakTableSelection(fitResult?.peaks ?? NO_FITTED_PEAKS, hasFit);
   // The selection that governs "Label peaks" is whichever table matches the
   // CURRENT labelKind — the same fitted-over-detected choice `labelSource`
   // already makes, so the button always acts on the table it's naming.
@@ -138,7 +146,13 @@ export default function PeaksPanel() {
           columns={["#", "center", "height", "FWHM", "SNR"]}
           rows={rows}
           selected={detectedSelection.selected}
-          onSelect={detectedSelection.select}
+          // K1: this table renders WHENEVER peaks exist, independent of
+          // `hasFit` — but it only GOVERNS while `!hasFit` (see the
+          // `usePeakTableSelection` calls above). Omitting `onSelect`
+          // while a fit exists makes PeakTable itself render it inert
+          // (no aria-selected, no highlight, no tab stop, no handler) —
+          // exactly the "never look selected while ignored" contract.
+          onSelect={hasFit ? undefined : detectedSelection.select}
         />
       )}
 
