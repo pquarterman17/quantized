@@ -49,16 +49,24 @@
 // case `errorRoles` to keep an explicit `[]` distinct from an absent field
 // (every other optional Dataset array field there still omits when empty).
 //
-// Q2 (documentation, round 6): this whole module -- reading designations
-// instead of guessing, AND the `[]` marker above -- is a workaround for a
-// broken classifier, not a fix to it. The real bug is
-// `classifyErrorLabel`'s bare-`d` rule (./errorRoles.ts) misreading a
-// "Depth"-style column as an error series; that misclassification is
-// booked separately as its own fix (it also affects non-Origin, single-book
-// imports on the label-guess path, which nothing here changes). Once THAT
-// is fixed, this module's reason for existing narrows to "Origin's own
-// designations are more authoritative than a name guess", which is still
-// worth keeping, but the guesser-avoidance urgency goes away.
+// Q2 (documentation, round 6; updated after PR #238): the bare-`d`
+// misclassification described above (`classifyErrorLabel` reading a
+// "Depth"-style column as an error series) has since been fixed by a
+// structural rewrite of the classifier -- see
+// plans/ERROR_LABEL_CLASSIFIER_PLAN.md -- so this module is no longer a
+// workaround for a broken guesser. It stays anyway: an Origin book's
+// `column_designations` is ground truth recorded by the instrument
+// software, not an inference from a column's name, so it is preferred on
+// principle even against a now-correct classifier -- a renamed, ambiguous,
+// or non-English column label can still defeat any name-based rule, and
+// designations simply cannot be fooled that way. `originBookErrorRoles`
+// never calls into `./errorRoles.ts`/`./errorLabelClassify.ts` at all, so
+// its own behaviour did not change with the rewrite (re-verified by this
+// module's own `originBookRoles.test.ts`, unmodified and still green);
+// what changed is only that the label-guess FALLBACK a caller takes when
+// this module returns `null` (no usable designation info) is now itself
+// correct on Depth/Kerr/Phase-style names, for the genuinely-non-Origin
+// case this module was never meant to cover.
 
 import { columnMetaList } from "./columnmeta";
 import type { ErrorBinding } from "./errorRoles";
