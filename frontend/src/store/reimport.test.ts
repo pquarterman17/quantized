@@ -191,6 +191,38 @@ describe("reimportDataset — row/column count change", () => {
     expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
   });
 
+  // Round 7 BLOCKER (adversarial review round 2): gating errorRoles's clear
+  // on `shapeChanged` (rows OR columns) rather than `columnsChanged` alone
+  // wiped still-valid bindings on a harmless ROW-only reimport (e.g. an
+  // appended log, same columns) -- exactly the reshape lib/reimport.ts's own
+  // `reimportColumnsChanged` doc says bindings survive: "channel bindings
+  // stay provably valid across a row-only reshape (column meaning is
+  // untouched)". Two proofs: an ordinary binding survives, and (the sharper
+  // one) a deliberate O1 `[]` marker survives AS `[]`, not collapsed to
+  // `undefined` -- which would re-invite the label guesser through every
+  // `errorRoles ?? inferErrorBindings(...)` reader on the next render.
+  it("Round 7 BLOCKER: a ROW-only reimport (more rows, same columns) preserves an existing errorRoles binding", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({
+      datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([
+      { channel: 0, target: -1, axis: "x", side: "both" },
+    ]);
+  });
+
+  it("Round 7 BLOCKER: a ROW-only reimport preserves a deliberate empty errorRoles marker, not collapsed to undefined", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({ datasets: [baseDataset({ errorRoles: [] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
+
   // The dataset-scoped clear above had a parallel VIEW-scoped gap: the live
   // singleton view AND every window's stored view kept channel-keyed state
   // (styles/hidden/keys) indexing the OLD columns (noted 2026-07-21, fixed).

@@ -21,24 +21,41 @@
 
 import { useRef } from "react";
 
+// A unique sentinel, never `===` to anything a caller could pass — distinct
+// from the review round 2 fix below: `keyRef` starts here so "first render"
+// is unambiguous even when `value` itself is `undefined`.
+const UNSET: unique symbol = Symbol("useStableByValue.unset");
+type Key = typeof UNSET | undefined | null | string;
+
 /** Returns a value that keeps its PREVIOUS reference across renders whenever
  *  `serialize(value)` is unchanged from last time, even if `value` itself is
  *  a freshly allocated object/array. `serialize` must be a total,
  *  order-stable function of `value`'s content (JSON.stringify is fine for
  *  plain data shapes; the fields it walks must always appear in the same
- *  order every caller constructs them in). `value === undefined` is handled
- *  as its own case — `serialize` is never called on it — so a defined value
- *  can never collide with the "absent" state by coincidentally serializing
- *  the same way. */
+ *  order every caller constructs them in).
+ *
+ *  Round 2 (adversarial review): `null` and `undefined` are their OWN `Key`
+ *  variants, never coerced to a string or cast through `serialize` — a
+ *  `T = Foo[] | null` caller is sound (no runtime TypeError on `null`), and
+ *  neither can collide with a real value that happens to serialize the same
+ *  way, since `Key` keeps them as distinct types, not stringified sentinels.
+ *  Reference-equal input (`value === ` the previously stored value) short-
+ *  circuits before `serialize` ever runs — the common case, since most
+ *  renders simply pass the same object back — so a defined value is
+ *  serialized AT MOST ONCE per render, only when its identity actually
+ *  changed and its content still needs checking. */
 export function useStableByValue<T>(value: T, serialize: (value: NonNullable<T>) => string): T {
   const ref = useRef(value);
-  const prevKeyRef = useRef<string | undefined>(
-    value === undefined ? undefined : serialize(value as NonNullable<T>),
-  );
-  const key = value === undefined ? undefined : serialize(value as NonNullable<T>);
-  const changed = value === undefined ? ref.current !== undefined : key !== prevKeyRef.current;
-  if (changed) {
-    prevKeyRef.current = key;
+  const keyRef = useRef<Key>(UNSET);
+
+  if (keyRef.current !== UNSET && value === ref.current) {
+    return ref.current;
+  }
+
+  const isNullish = value === undefined || value === null;
+  const key: Key = isNullish ? (value as undefined | null) : serialize(value as NonNullable<T>);
+  if (keyRef.current === UNSET || key !== keyRef.current) {
+    keyRef.current = key;
     ref.current = value;
   }
   return ref.current;
