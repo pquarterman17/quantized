@@ -405,6 +405,7 @@ describe("Library — Tree / Details renderer continuity (PR D)", () => {
   });
 });
 
+
 // FU-2 (provenance-disclosure follow-ups): OriginFidelitySection used to hold
 // its collapsed flag in a per-mount useState, and Library.tsx unmounts the
 // section whenever search is active (`{!searchActive && <OriginFidelitySection />}`)

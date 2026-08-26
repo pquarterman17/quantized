@@ -113,8 +113,15 @@ export interface PeaksState {
    *  3). Prompts for a token template + decimal precision via `askParams`;
    *  a cancelled dialog or an empty peak set creates nothing (RULING 7's
    *  guard). Never mutates the dataset or `fitResult` (RULING 4) — reads
-   *  them only to compute label text and initial placement. */
-  labelPeaks: () => Promise<void>;
+   *  them only to compute label text and initial placement.
+   *
+   *  `selectedIndices` (peak-selection follow-up, RULING 3): indices into
+   *  whichever source is active (`fitResult.peaks` if it exists, else
+   *  `peaks` — the SAME choice this function already makes for the
+   *  unfiltered case) — pass the row-selection Set from PeaksPanel's
+   *  PeakTable. Omitted, or an empty Set, means "no selection" and keeps
+   *  today's behavior: every peak in the active source is labeled. */
+  labelPeaks: (selectedIndices?: ReadonlySet<number>) => Promise<void>;
 }
 
 /** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
@@ -298,7 +305,7 @@ export function usePeaks(): PeaksState {
     [active, peaks, overlayFitted],
   );
 
-  const labelPeaks = useCallback(async () => {
+  const labelPeaks = useCallback(async (selectedIndices?: ReadonlySet<number>) => {
     if (!active) return;
     // L5: refuse up front if another history batch (e.g. an in-flight
     // "import as a new version") is already running — see
@@ -306,13 +313,30 @@ export function usePeaks(): PeaksState {
     // it's a cooperative pre-flight check, not a hard lock.
     if (rejectIfHistoryBatchRunning()) return;
 
-    // RULING 7: FITTED peaks when a fit result exists, otherwise DETECTED —
-    // never both, never a user-driven selection (no row-selection exists on
-    // DataTable today; booked as a follow-up in the UX-R6 status note).
+    // RULING 7 (as extended by the peak-selection follow-up, RULING 3):
+    // FITTED peaks when a fit result exists, otherwise DETECTED — never
+    // both. `selectedIndices` (indices into whichever of those is active)
+    // narrows it to a user-driven subset when given.
     const source: { center: number; height: number; fwhm: number; area: number | null; bg: number }[] =
       fitResult && fitResult.peaks.length > 0 ? fitResult.peaks : peaks;
     if (source.length === 0) {
       toast("Find (or fit) peaks before labeling.", "danger");
+      return;
+    }
+    // Keep each peak's ORIGINAL index (matching the table's "#" column and
+    // the `{index}` template token, lib/peakLabels.ts) even when filtering
+    // to a subset — a selection of peaks #2 and #4 should still render as
+    // "2"/"4", not renumber to "1"/"2".
+    const indexed = source.map((p, i) => ({ p, i }));
+    const chosen = selectedIndices && selectedIndices.size > 0
+      ? indexed.filter(({ i }) => selectedIndices.has(i))
+      : indexed;
+    if (chosen.length === 0) {
+      // Defensive only: PeaksPanel resets its selection whenever `peaks`/
+      // `fitResult` change reference (RULING 2), so a selection that no
+      // longer matches `source` shouldn't reach here — but never label
+      // silently-wrong peaks if it somehow does.
+      toast("Selection no longer matches the current peaks — try again.", "danger");
       return;
     }
 
@@ -385,7 +409,7 @@ export function usePeaks(): PeaksState {
       // formula for both branches, or every label on a backgrounded
       // dataset (i.e. any real XRD pattern) lands far below the peak it
       // names.
-      const rendered = source.map((p, i) => ({
+      const rendered = chosen.map(({ p, i }) => ({
         label: renderLabelTemplate(template, p, i, precision),
         point: { x: p.center, y: p.height + p.bg },
       }));

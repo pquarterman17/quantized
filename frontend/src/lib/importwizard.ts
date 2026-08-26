@@ -205,17 +205,35 @@ function isNameDrivenMatch(labels: readonly string[], errorChannel: number): boo
   return labels.some((l, i) => !isErrorLabel[i] && normalizeLabel(l) === info.base); // rule 1
 }
 
-/** True when some OTHER, non-error channel sits AFTER `channel` in `order`
- *  -- the wizard's own (stricter) bar for "is a pure position-only pairing
- *  actually unambiguous", on top of `inferErrorBindingsFromLabels`' own bar
- *  (which only asks "is there anything valid preceding"). A following
- *  ERROR-role channel doesn't count -- it isn't itself a plausible target. */
+/** True when some OTHER, non-error, non-categorical channel sits AFTER
+ *  `channel` in `order` -- the wizard's own (stricter) bar for "is a pure
+ *  position-only pairing actually unambiguous", on top of
+ *  `inferErrorBindingsFromLabels`' own bar (which only asks "is there
+ *  anything valid preceding"). A following ERROR-role channel doesn't
+ *  count -- it isn't itself a plausible target. Neither does a following
+ *  CATEGORICAL (text) channel: `finalChannelOrder` places every categorical
+ *  column after every numeric one (P1.4's rule), so a categorical channel
+ *  can only ever be a text label a plot legend uses, never something error
+ *  bars could sensibly attach to -- treating it as a plausible target
+ *  wrongly demoted an otherwise-unambiguous rule-3 pairing to "no
+ *  suggestion" whenever a categorical column happened to trail the file. */
 function hasFollowingCandidate(
   order: readonly WizardChannel[],
   channel: number,
   errorChannels: ReadonlySet<number>,
+  categoricalChannels: ReadonlySet<number>,
 ): boolean {
-  return order.some((c) => c.channel > channel && !errorChannels.has(c.channel));
+  return order.some(
+    (c) => c.channel > channel && !errorChannels.has(c.channel) && !categoricalChannels.has(c.channel),
+  );
+}
+
+/** The channels sourced from a `categorical`-role column, in final-channel
+ *  order -- mirrors `errorRoleChannels` below, but for the OTHER role that
+ *  is never a plausible error target. */
+function categoricalRoleChannels(columns: readonly ImportPreviewColumn[]): WizardChannel[] {
+  const bySource = new Map(columns.map((c) => [c.index, c]));
+  return finalChannelOrder(columns).filter((c) => bySource.get(c.sourceIndex)?.role === "categorical");
 }
 
 /** Suggested error-role bindings for the CURRENT preview (P1.6 item 2): runs
@@ -247,8 +265,11 @@ export function suggestErrorBindings(columns: readonly ImportPreviewColumn[]): E
   const labels = order.map((c) => c.label);
   const raw = inferErrorBindingsFromLabels(labels);
   const errorChannels = new Set(errorRoleChannels(columns).map((c) => c.channel));
+  const categoricalChannels = new Set(categoricalRoleChannels(columns).map((c) => c.channel));
   return raw.filter(
-    (b) => isNameDrivenMatch(labels, b.channel) || !hasFollowingCandidate(order, b.channel, errorChannels),
+    (b) =>
+      isNameDrivenMatch(labels, b.channel) ||
+      !hasFollowingCandidate(order, b.channel, errorChannels, categoricalChannels),
   );
 }
 

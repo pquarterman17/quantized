@@ -190,10 +190,7 @@ function addFromPayload(
 ): string[] {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
-  // MAIN #33 provenance: what this import DECIDED, recorded on the dataset
-  // (the file is never written to). ONE timestamp per import call — every
-  // dataset this call creates, incl. every book of a multi-book project
-  // below, shares this same `importedAt`.
+  // MAIN #33 provenance: recorded on the dataset -- one timestamp per import call.
   const importedAt = new Date().toISOString();
   const figures = data.figures;
   const fidelity = data.origin_fidelity;
