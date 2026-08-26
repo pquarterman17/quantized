@@ -46,8 +46,15 @@ export interface ColumnMeta {
  *  same order as `ds.labels`/`ds.units`). Empty for non-Origin data. A
  *  worksheet computed (formula) column has no entry — those columns are
  *  appended past what `origin_column_names` covers, so callers indexing this
- *  array by channel simply get `undefined` for them, same as plain data. */
-export function columnMetaList(ds: DataStruct): (ColumnMeta | undefined)[] {
+ *  array by channel simply get `undefined` for them, same as plain data.
+ *
+ *  Takes only `.metadata` (FU-1 round 3, lib/originBookRoles.ts): an import-
+ *  time caller sometimes has a book's metadata without yet having assembled
+ *  a full `DataStruct` around it (a lazy/primary Origin book entry), and this
+ *  function never reads anything else off `ds` — narrowing the parameter
+ *  lets such a caller read through the SAME shared alignment instead of
+ *  re-deriving it, with no cast. Any full `DataStruct` still satisfies this. */
+export function columnMetaList(ds: Pick<DataStruct, "metadata">): (ColumnMeta | undefined)[] {
   const meta = ds.metadata ?? {};
   const names = meta["origin_column_names"];
   if (!Array.isArray(names)) return [];
@@ -74,7 +81,7 @@ export function columnMetaList(ds: DataStruct): (ColumnMeta | undefined)[] {
 /** Metadata for one value-channel index, or undefined when there's none
  *  (non-Origin dataset, a negative index, or `col` past the decoded Origin
  *  columns — e.g. a worksheet computed column). */
-export function columnMetaAt(ds: DataStruct, col: number): ColumnMeta | undefined {
+export function columnMetaAt(ds: Pick<DataStruct, "metadata">, col: number): ColumnMeta | undefined {
   if (col < 0) return undefined;
   return columnMetaList(ds)[col];
 }

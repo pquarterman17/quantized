@@ -33,6 +33,7 @@ import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { revealAncestorChain } from "../lib/foldertree";
+import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
 import {
   isLazyBookEntry,
@@ -95,10 +96,11 @@ interface ImportOrigin {
 }
 
 interface ErrorRolesActions {
-  /** Replace a dataset's error roles. `[]` clears them. */
+  /** Replace a dataset's error roles with a DELIBERATE answer -- `[]` means
+   *  "checked: none" and is stored literally (Round 7 / O1), never collapsed
+   *  to `undefined` (which reads as "never determined" and re-guesses). */
   setErrorRoles: (id: string, roles: readonly ErrorBinding[]) => void;
-  /** Re-run name inference over the dataset's columns — the "suggested, never
-   *  forced" affordance made explicit: the user asks for the guess. */
+  /** Re-run name inference ("suggested, never forced"); a null GUESS collapses to `undefined` (re-guessable), unlike `setErrorRoles`. */
   detectErrorRoles: (id: string) => number;
 }
 
@@ -106,23 +108,25 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 
 function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesActions {
-  const write = (id: string, roles: readonly ErrorBinding[], label: string) => {
+  // `exact` (setErrorRoles): store literally, even `[]` -- O1's "checked:
+  // none". `!exact` (detectErrorRoles): collapse an empty GUESS to `undefined`.
+  const write = (id: string, roles: readonly ErrorBinding[], label: string, exact: boolean) => {
     get().recordHistory(label);
     set((s) => ({
       datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, errorRoles: roles.length ? [...roles] : undefined } : d,
+        d.id === id ? { ...d, errorRoles: exact || roles.length ? [...roles] : undefined } : d,
       ),
     }));
   };
 
   return {
-    setErrorRoles: (id, roles) => write(id, roles, "edit error roles"),
+    setErrorRoles: (id, roles) => write(id, roles, "edit error roles", true),
 
     detectErrorRoles: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return 0;
       const found = inferErrorBindings(ds.data);
-      write(id, found, "detect error roles");
+      write(id, found, "detect error roles", false);
       return found.length;
     },
   };
@@ -167,7 +171,6 @@ export interface ImportSlice extends ErrorRolesActions {
   importPaths: (paths: string[], opts?: ImportPathsOptions) => Promise<string[]>;
 }
 
-
 /** Basename without directory — the display name for a path import. */
 export function pathBasename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -200,51 +203,41 @@ function addFromPayload(
   if (data.books && data.books.length > 1) {
     // Origin project: import every workbook as its own dataset. Per
     // ORIGIN_FILE_DECODE_PLAN #38, `book` is one of three shapes: the PRIMARY
-    // book's no-data marker (its real time/values are at the top-level `data`
-    // instead), another book's lazy preview (small preview time/values now,
-    // full data fetched on first activation — `pending` records how), or —
-    // only under the `full_books` escape hatch, never requested here — a full
-    // inline DataStruct.
+    // book's no-data marker (real time/values at the top-level `data`
+    // instead), another book's lazy preview (preview now, full data fetched
+    // on first activation — `pending` records how), or — only under the
+    // `full_books` escape hatch, never requested here — a full inline DataStruct.
     const bookSource = data.book_source;
-    for (const book of data.books) { // FU-1: every book gets importedAt (used to be dropped)
+    // FU-1: every book gets `importedAt` + designation-derived error roles
+    // (never the label guess) — see `originBookErrorRoles`'s doc. `?? {}`
+    // here: unlike the single-file branch below, this NEVER falls back to
+    // the label guess even when a book has no usable designation info.
+    for (const book of data.books) {
       const meta = (book.metadata ?? {}) as Record<string, unknown>;
       const short = String(meta.origin_book ?? "Book");
       const long = String(meta.origin_book_long ?? "");
       const label = long && long !== short ? `${short} — ${long}` : short;
       const id = nextDatasetId();
+      const name = `${stem}:${label}`;
+      const roles = originBookErrorRoles(book) ?? {};
       if (isPrimaryBookMarker(book)) {
-        get().addDataset({
-          id,
-          name: `${stem}:${label}`,
-          data: {
-            time: data.time,
-            values: data.values,
-            labels: book.labels,
-            units: book.units,
-            metadata: book.metadata,
-          },
-          ...src,
-          importedAt,
-        }, historyToken);
+        const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
+        get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
+        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({
           id,
-          name: `${stem}:${label}`,
-          data: {
-            time: book.preview.time,
-            values: book.preview.values,
-            labels: book.labels,
-            units: book.units,
-            metadata: book.metadata,
-          },
+          name,
+          data: bookData,
           ...(bookSource
             ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
             : {}),
           ...src,
+          ...roles,
           importedAt,
         }, historyToken);
       } else {
-        get().addDataset({ id, name: `${stem}:${label}`, data: book, ...src, importedAt }, historyToken);
+        get().addDataset({ id, name, data: book, ...src, ...roles, importedAt }, historyToken);
       }
       newIds.push(id);
     }
@@ -290,8 +283,14 @@ function addFromPayload(
     delete data.books;
     delete data.book_source;
     const id = nextDatasetId();
+    // L1: a single-book `.opj`/`.opju` import (books.length <= 1, probably
+    // the MORE common file) took this branch and used ONLY the label guess —
+    // the same harm E1 fixed for the multi-book branch above. Prefer Origin's
+    // designations here too; a genuinely non-Origin file (`null`) is unchanged.
     const dsInput: Dataset = {
-      id, name: origin.name, data, ...src, ...importRoles(data), importedAt,
+      id, name: origin.name, data, ...src,
+      ...(originBookErrorRoles(data) ?? importRoles(data)),
+      importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
     get().addDataset(dsInput, historyToken);
@@ -497,3 +496,4 @@ function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
   const roles = inferErrorBindings(data);
   return roles.length ? { errorRoles: roles } : {};
 }
+

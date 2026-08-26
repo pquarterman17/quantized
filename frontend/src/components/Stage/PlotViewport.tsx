@@ -18,6 +18,7 @@ import {
   buildDecimatedData,
   decimatePlugin,
   decimationEligible,
+  hasErrorMapEntries,
   shouldDecimate,
   xExtent,
 } from "../../lib/plotDecimate";
@@ -227,8 +228,11 @@ export default function PlotViewport(props: PlotViewportProps) {
         seriesColumnCount: displayPayload.series.length,
         plottedCount: args.plotted?.length,
         xAscending: xIsAscending(fullX),
-        hasErrorBars: !!(args.errorBars && args.errorBars.size > 0),
-        hasErrorSpans: !!(args.errorSpans && args.errorSpans.size > 0),
+        // M1: reads through the ONE shared predicate (lib/plotDecimate.ts)
+        // every hasErrorBars/hasErrorSpans call site now uses — here it's
+        // the trivial "already-precise Map" case, see that helper's doc.
+        hasErrorBars: hasErrorMapEntries(args.errorBars),
+        hasErrorSpans: hasErrorMapEntries(args.errorSpans),
         defaultTrace: args.defaultTrace,
         hasColorByColumns: !!(args.colorByColumns && args.colorByColumns.size > 0),
       });

@@ -123,7 +123,20 @@ export function parseWorkspaceDataset(d: unknown, i: number): Dataset {
   // differently-shaped source must not bind error bars to whatever column
   // now happens to sit at that index.
   const bindings = sanitizeBindings(dd.errorRoles, ds.data.labels.length);
-  if (bindings?.length) ds.errorRoles = bindings;
+  // O1: preserve a DELIBERATE empty array (raw `errorRoles: []` -- an Origin
+  // book whose designations were checked and found to hold zero error
+  // columns, lib/originBookRoles.ts) as `[]`, distinct from `undefined` for
+  // a genuinely absent field. `sanitizeBindings` returns `[]` for BOTH that
+  // case AND a non-empty raw array invalidated down to nothing (e.g. every
+  // saved binding now points past the current, changed channel count) --
+  // the second case is discarded stale data, not a deliberate "no errors",
+  // so it must stay unset exactly like before this change, not get promoted
+  // to `[]`. Checking the RAW shape (not just the sanitized result) tells
+  // the two apart.
+  const rawWasDeliberatelyEmpty = Array.isArray(dd.errorRoles) && dd.errorRoles.length === 0;
+  if (bindings !== undefined && (bindings.length > 0 || rawWasDeliberatelyEmpty)) {
+    ds.errorRoles = bindings;
+  }
   if (typeof dd.importedAt === "string") ds.importedAt = dd.importedAt;
   if (dd.channelRoles && typeof dd.channelRoles === "object") {
     const roles: Record<number, ChannelRole> = {};

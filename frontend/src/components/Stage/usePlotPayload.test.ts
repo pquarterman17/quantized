@@ -304,6 +304,53 @@ describe("usePlotPayload — G4 figure-scoped error honesty", () => {
   });
 });
 
+// Round 7 (adversarial review, item 4, RED-FIRST): PlotStage.tsx's
+// `focusedDocumentErrors` selector reads `window.document.bindings.errors`
+// straight off the store, and store/windowDocuments.ts's `syncPlotWindow`
+// rebuilds that document (structuredClone included) on nearly every window
+// write -- rename, focus handoff, minimize/restore, recipe apply -- even
+// when the bindings themselves are unchanged. Before the fix, the base
+// fetch effect's dependency on the RAW `documentErrors` array re-issued a
+// whole fetch on every such rerender; this mirrors the file's own
+// DATASET/EMPTY_STYLES precedent above (a freshly minted `{}`/`[]` per call
+// causing a spurious re-fetch) but for `documentErrors` specifically.
+describe("usePlotPayload — Round 7 item 4: documentErrors identity churn must not re-fetch", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("errs", false));
+  });
+
+  it("a content-equal but NEW-identity documentErrors array on rerender triggers no second fetch", () => {
+    // Every OTHER reference-typed input held stable across every rerender
+    // below (same reasoning as the file's own DATASET/EMPTY_STYLES
+    // precedent above) -- `errorParams()`/`errorDataset()` mint a fresh
+    // dataset AND a fresh `yKeys: [0]` array per call, either of which
+    // would itself trip the fetch effect's dependencies (`active` directly;
+    // `yKeys` via `fetchChannels` -> `plotted` -> `errorBars`/
+    // `colorByColumns`) and confound what this test isolates:
+    // `documentErrors` identity alone.
+    const active = errorDataset();
+    const yKeys = [0];
+    const contentEqualCopy = (): ErrorBinding[] => [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ];
+    const { rerender } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: errorParams({ active, yKeys, documentErrors: contentEqualCopy() }),
+    });
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1);
+
+    // A FRESH array, same content -- exactly what structuredClone produces
+    // on an unrelated window sync.
+    rerender(errorParams({ active, yKeys, documentErrors: contentEqualCopy() }));
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1); // still just the one base fetch
+
+    // Sanity: a GENUINE content change still refetches -- proves this isn't
+    // simply "documentErrors is no longer a dependency at all".
+    rerender(errorParams({ active, yKeys, documentErrors: [{ channel: 3, target: 0, axis: "y", side: "both" }] }));
+    expect(fetchPlotMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 // G4 review round, FIX 1 (P1, RED-FIRST): the decimation-eligibility gate
 // used to read ONLY `active.errorRoles?.length`, blind to a focused
 // window's own rich `documentErrors`. A >10,000-row dataset whose document
@@ -395,5 +442,54 @@ describe("usePlotPayload — G4 review round: decimation gate honors document er
     });
     const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
     expect(decimateWidth).not.toBeNull();
+  });
+});
+
+
+// M1 (provenance-disclosure round 4, L2 regression, RED-FIRST): the
+// decimation gate used to key `hasErrorSpans` off mere `errorRoles`
+// PRESENCE (`!!active.errorRoles?.length`) rather than whether any binding
+// actually applies to the PLOTTED channels. FU-1 (this same lane) started
+// stamping real `errorRoles` from Origin designations, so any Origin book
+// with an error column anywhere -- even one never plotted here -- lost
+// server-side decimation entirely. Fails before the fix (decimateWidth was
+// null even though channel 2, the error's target, is never plotted).
+function bigDatasetWithUnplottedErrorRole(): Dataset {
+  const n = 20_000;
+  return {
+    id: "big-unplotted-err",
+    name: "big-unplotted-err",
+    data: {
+      time: Array.from({ length: n }, (_, i) => i),
+      values: Array.from({ length: n }, (_, i) => [Math.sin(i), Math.cos(i), 0.1]),
+      labels: ["signal", "other", "other_err"],
+      units: ["", "", ""],
+      metadata: {},
+    },
+    // Targets channel 1 ("other"), which the test below never plots.
+    errorRoles: [{ channel: 2, target: 1, axis: "y", side: "both" }],
+  };
+}
+
+describe("usePlotPayload — M1: decimation gate honors WHAT IS PLOTTED, not mere errorRoles presence", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("big-unplotted-err", false));
+  });
+
+  it("a Y-error binding on a channel that is not plotted does not block server decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigDatasetWithUnplottedErrorRole(), yKeys: [0] }),
+    });
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1);
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).not.toBeNull();
+  });
+
+  it("control: the SAME binding, once its target channel IS plotted, correctly blocks decimation", () => {
+    renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: bigDatasetWithUnplottedErrorRole(), yKeys: [0, 1] }),
+    });
+    const decimateWidth = fetchPlotMock.mock.calls[0]?.[6];
+    expect(decimateWidth).toBeNull();
   });
 });

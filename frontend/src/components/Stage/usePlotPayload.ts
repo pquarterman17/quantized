@@ -27,11 +27,13 @@ import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
   defaultDecimateWidthHint,
+  errorBindingsApplyToPlotted,
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, groupSplitChannelMap } from "../../lib/plotGroupSplit";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
+import { useStableByValue } from "../../lib/useStableValue";
 
 export interface PlotPayloadParams {
   active: Dataset | null | undefined;
@@ -152,9 +154,10 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // `buildErrorSpans` built FULL-resolution magnitude arrays, and
   // `errorSpansPlugin` (uplotOverlays.ts) indexes those positionally against
   // the bucketed xs -- silently wrong uncertainty bars, exactly the
-  // misalignment `lib/plotDecimate.ts`'s own doc comment on error bars
-  // warns about.
-  const useDocumentErrors = hasRichErrorBindings(p.documentErrors);
+  // misalignment `lib/plotDecimate.ts`'s own doc comment on error bars warns
+  // about. Round 7 item 4: stabilized against its clone-on-every-sync source (see useStableValue.ts).
+  const documentErrors = useStableByValue(p.documentErrors, (v) => JSON.stringify(v));
+  const useDocumentErrors = hasRichErrorBindings(documentErrors);
 
   // P3.4 zoom-refetch residual: the full-range payload the BASE fetch effect
   // below last resolved, cached so a reset-to-full-view (xLim -> null) can
@@ -318,13 +321,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       decimationRequestEligible({
         defaultTrace: p.defaultTrace,
         hasErrorBars: errorBars.size > 0,
-        // G4 review round (P1 fix): a rich document is the errorSpans SOURCE
-        // whenever `useDocumentErrors` is true (see that flag's own doc, and
-        // the `errorSpans` useMemo below) -- `useDocumentErrors` already
-        // implies `p.documentErrors` is non-empty, so this mirrors the
-        // dataset branch's own "any roles at all disqualify decimation"
-        // rule rather than trying to pre-filter to currently-plotted columns.
-        hasErrorSpans: useDocumentErrors || !!active.errorRoles?.length,
+        // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
+        hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
         hasColorByColumns: colorByColumns.size > 0,
         hasGroupSplit: groupCol !== null,
       });
@@ -383,6 +381,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     p.selection,
     p.excludedDisplay,
     useDocumentErrors,
+    documentErrors,
+    plotted,
     groupCol,
     groupCodes,
   ]);
@@ -481,9 +481,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const errorSpans = useMemo(() => {
     // P1.5: suppressed for a grouped render -- see the `errorBars` doc above.
     if (!active || groupCol !== null) return new Map<number, ErrorSpan[]>();
-    const bindings = useDocumentErrors ? p.documentErrors! : active.errorRoles;
+    const bindings = useDocumentErrors ? documentErrors! : active.errorRoles;
     return bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
-  }, [active, plotted, useDocumentErrors, p.documentErrors, groupCol]);
+  }, [active, plotted, useDocumentErrors, documentErrors, groupCol]);
 
   return {
     payload,

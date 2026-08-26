@@ -1742,7 +1742,11 @@ describe("error roles survive save/reapply (MAIN #33)", () => {
 
   it("DROPS a binding that points past the current channel count", () => {
     // A template reapplied to a differently-shaped source must not bind error
-    // bars to whatever column now happens to sit at that index.
+    // bars to whatever column now happens to sit at that index. O1 note: a
+    // non-empty SAVED array invalidated down to nothing here must stay
+    // `undefined`, not get promoted to the O1 "[]" marker below -- discarded
+    // stale data is not the same thing as a deliberate "designations
+    // checked, no error columns".
     const roles: ErrorBinding[] = [{ channel: 9, target: 0, axis: "y", side: "both" }];
     const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["R", "dR"], roles)] }));
     expect(out.datasets[0].errorRoles).toBeUndefined();
@@ -1755,6 +1759,30 @@ describe("error roles survive save/reapply (MAIN #33)", () => {
   });
 
   it("adds nothing for a dataset with no roles", () => {
+    const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["T", "M"])] }));
+    expect(out.datasets[0].errorRoles).toBeUndefined();
+  });
+
+  // O1 (round 6, provenance-disclosure lane): an Origin book whose
+  // designations were checked and found to hold zero error columns
+  // (lib/originBookRoles.ts) stamps `errorRoles: []` -- meaningful, not
+  // absent -- and that distinction must survive a save + reload, or a
+  // reloaded dataset would silently start re-guessing Depth-style columns
+  // as errors again through the five `dataset.errorRoles ??
+  // inferErrorBindings(...)` readers elsewhere.
+  it("O1: an explicit EMPTY errorRoles array round-trips as [], not dropped", () => {
+    const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["Refl", "Depth"], [])] }));
+    expect(out.datasets[0].errorRoles).toEqual([]);
+  });
+
+  // The other half of the same guarantee: a genuinely absent field (never
+  // set at all -- every .dwk written before this change, or a plain
+  // non-Origin import) must NOT be promoted to `[]` on save, and stays
+  // `undefined` on reload -- same as "adds nothing for a dataset with no
+  // roles" above, restated here to sit next to its `[]` counterpart.
+  it("O1: a genuinely absent errorRoles field stays absent, not promoted to []", () => {
+    const raw = JSON.parse(serializeWorkspace({ datasets: [ds(["T", "M"])] }));
+    expect("errorRoles" in raw.datasets[0]).toBe(false);
     const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["T", "M"])] }));
     expect(out.datasets[0].errorRoles).toBeUndefined();
   });

@@ -81,7 +81,11 @@ describe("ErrorRolesCard", () => {
     render(<ErrorRolesCard active={d} />);
     fireEvent.click(screen.getByRole("button", { name: /Remove error role/ }));
     const after = useApp.getState().datasets[0];
-    expect(after.errorRoles).toBeUndefined();
+    // Round 7 (BLOCKER 2): removing the LAST binding is a deliberate
+    // setErrorRoles(id, []) — the O1 "checked: none" marker, not "never
+    // determined" — so it must persist as `[]`, not collapse to
+    // `undefined` and re-invite a `?? inferErrorBindings(...)` re-guess.
+    expect(after.errorRoles).toEqual([]);
     expect(after.data.values).toEqual(d.data.values); // a reference, not a rewrite
   });
 

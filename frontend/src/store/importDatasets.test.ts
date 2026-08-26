@@ -8,6 +8,7 @@ import { probeSource } from "../lib/desktopBridge";
 import type { PlotRecipe } from "../lib/plotRecipe";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Technique } from "../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { usePendingOps } from "./pendingOps";
 import { isImportRunning, pathBasename, useImportBatch } from "./importDatasets";
 import { useToasts } from "./toasts";
@@ -258,60 +259,142 @@ describe("import roles and provenance (MAIN #33)", () => {
   });
 });
 
+// Round 7 (adversarial review, BLOCKER 2): `setErrorRoles` is the direct,
+// explicit user declaration -- "these are the error roles for this dataset,
+// period" -- distinct from a silent guess. Collapsing a deliberate CLEAR
+// (`setErrorRoles(id, [])`, e.g. ErrorRolesCard's "Remove" button run down
+// to the last binding) to `errorRoles: undefined` destroys exactly the O1
+// distinction this same branch's `.dwk` round-trip work
+// (lib/workspace.ts/lib/workspaceDatasetParse.ts) exists to preserve: on
+// the next save + reload, `undefined` reads as "never determined" to every
+// `dataset.errorRoles ?? inferErrorBindings(...)` consumer, so the roles
+// the user just deleted quietly reappear.
+describe("setErrorRoles preserves a deliberate empty array (Round 7, BLOCKER 2)", () => {
+  const withRoles = () => ({
+    id: "d1",
+    name: "r.dat",
+    data: {
+      time: [0, 1],
+      values: [[1, 2], [3, 4]],
+      labels: ["R", "dR"],
+      units: ["", ""],
+      metadata: {},
+    },
+    errorRoles: [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }],
+  });
+
+  it("setErrorRoles(id, []) stores errorRoles: [], not undefined", () => {
+    useApp.setState({ datasets: [withRoles()], activeId: "d1" });
+    useApp.getState().setErrorRoles("d1", []);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
+
+  it("the clear-then-reload path: a deliberate clear via setErrorRoles survives a .dwk save + reload as [], not re-guessed", () => {
+    useApp.setState({ datasets: [withRoles()], activeId: "d1" });
+    useApp.getState().setErrorRoles("d1", []);
+
+    const saved = serializeWorkspace({ datasets: useApp.getState().datasets });
+    const reloaded = parseWorkspace(saved);
+
+    // R/dR would classify as a binding again if the guesser ever ran on
+    // reload -- proving this is really the sticky "checked: none" marker,
+    // not merely "not yet re-guessed".
+    expect(reloaded.datasets[0].errorRoles).toEqual([]);
+  });
+});
+
 // FU-1 (provenance-disclosure follow-ups): the multi-book Origin branch used
-// to stamp NO `importedAt` on any book it created — a project import's
-// book-sheet datasets landed with a blank "imported" column in Details, even
-// though the SAME file imported as a single book got one (the `else` branch
-// tested above). Covers all three `books[]` shapes (ORIGIN_FILE_DECODE_PLAN
-// #38): the primary-book marker, a lazy preview book, and a full inline book.
+// to stamp NEITHER `importedAt` NOR `errorRoles` on any book it created — a
+// project import's book-sheet datasets landed with a blank "imported" column
+// in Details and no automatic error-role inference, even though the SAME
+// file imported as a single book got both (the `else` branch a few lines
+// down in importDatasets.ts). Covers all three `books[]` shapes
+// (ORIGIN_FILE_DECODE_PLAN #38): the primary-book marker, a lazy preview
+// book, and a full inline book.
+//
+// Round 2 (E1): error roles for an Origin book come ONLY from that book's
+// authoritative `column_designations` metadata (lib/originBookRoles.ts),
+// never the label-name guesser (`inferErrorBindings`) — a guess misreads a
+// genuine "Depth" measurement column as an error series. So these fixtures
+// carry realistic Origin metadata (`column_designations` + the matching
+// `origin_column_names` channel order, exactly as `io/origin_project/
+// opj.py`'s `_build_book` emits) instead of relying on error-shaped labels.
 describe("multi-book Origin import provenance (FU-1)", () => {
   const files = (...names: string[]) => names.map((n) => new File(["x"], n));
 
-  const primaryMarker = (labels: string[], id: string, bookName: string) => ({
+  /** Origin metadata for a book with 3 value columns short-named B/C/D
+   *  (A is reserved for the X column, as Origin books do) — `designations`
+   *  supplies each of B/C/D's plot-designation string. */
+  const originMeta = (bookName: string, designations: [string, string, string]) => ({
+    origin_book: bookName,
+    origin_column_names: ["B", "C", "D"],
+    column_designations: { A: "X", B: designations[0], C: designations[1], D: designations[2] },
+  });
+
+  const primaryMarker = (labels: string[], id: string, metadata: Record<string, unknown>) => ({
     lazy: false as const,
     primary: true as const,
     id,
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
     rows: 2,
     cols: labels.length,
   });
 
-  const lazyEntry = (labels: string[], id: string, bookName: string) => ({
+  const lazyEntry = (labels: string[], id: string, metadata: Record<string, unknown>) => ({
     lazy: true as const,
     id,
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
     rows: 2,
     cols: labels.length,
-    preview: { time: [0, 1], values: [[0, 0], [0, 0]] },
+    // Structurally SMALLER than the real book (2 columns vs 3 real ones) —
+    // a realistic decimated preview, and proof the dataset's `data` field
+    // really is this preview (not the real book) while `labels`/`metadata`
+    // (what role inference and the Library tree read) are the book's own.
+    preview: { time: [0, 1], values: [[0], [0]] },
   });
 
-  const fullInlineBook = (labels: string[], bookName: string) => ({
+  const fullInlineBook = (labels: string[], metadata: Record<string, unknown>) => ({
     time: [0, 1],
-    values: [[5, 0.1], [6, 0.2]],
+    values: [[5, 0.1, 9], [6, 0.2, 8]],
     labels,
     units: labels.map(() => ""),
-    metadata: { origin_book: bookName },
+    metadata,
   });
+
+  // "Trap": every column genuinely IS a measurement ("Refl"/"Depth"/"Temp"),
+  // none an error — the exact shape `classifyErrorLabel`'s bare-`d` rule
+  // misreads (it would bind "Depth" as a Y-error for "Refl"). Origin's own
+  // designations say all three are "Y" (plain value columns): NO roles.
+  const trapLabels = ["Refl", "Depth", "Temp"];
+  const trapMeta = (bookName: string) => originMeta(bookName, ["Y", "Y", "Y"]);
+
+  // "Designated": a genuine Y-error column, immediately after the Y column
+  // it belongs to, with another plain "Depth" Y column after THAT — proves
+  // both that a real designation produces the right binding AND that the
+  // plain "Depth" column next to it stays unbound.
+  const designatedLabels = ["Refl", "Refl_err", "Depth"];
+  const designatedMeta = (bookName: string) => originMeta(bookName, ["Y", "Y-error", "Y"]);
+  const expectedDesignatedRoles = [{ channel: 1, target: 0, axis: "y", side: "both" }];
 
   function multiBookPayload() {
     return {
       time: [0, 1],
       values: [
-        [10, 1],
-        [20, 2],
+        [10, 1, 2],
+        [20, 3, 4],
       ],
-      labels: ["ignored0", "ignored1"],
-      units: ["", ""],
+      labels: ["ignored0", "ignored1", "ignored2"],
+      units: ["", "", ""],
       metadata: {},
       book_source: { kind: "upload" as const, token: "tok123" },
       books: [
-        primaryMarker(["R", "M"], "b0", "Primary"),
-        lazyEntry(["R", "M"], "b1", "Lazy"),
-        fullInlineBook(["R", "M"], "Full"),
+        primaryMarker(trapLabels, "b0", trapMeta("Trap")),
+        lazyEntry(designatedLabels, "b1", designatedMeta("Lazy")),
+        fullInlineBook(designatedLabels, designatedMeta("Full")),
       ],
     };
   }
@@ -329,13 +412,158 @@ describe("multi-book Origin import provenance (FU-1)", () => {
     expect(new Set(ds.map((d) => d.importedAt)).size).toBe(1);
   });
 
-  it("keeps the lazy book's pending ref alongside its importedAt stamp", async () => {
+  it("E1: does NOT bind a genuine 'Depth' measurement column as an error role, on any shape", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const trap = useApp.getState().datasets.find((d) => d.name === "Multi:Trap")!;
+    // O1 (round 5): designations WERE read (real column_designations on this
+    // book) and produced zero error columns -- `[]`, not `undefined`, so a
+    // `dataset.errorRoles ?? inferErrorBindings(...)` reader elsewhere can
+    // never mistake this for "never determined" and re-guess Depth as error.
+    expect(trap.errorRoles).toEqual([]);
+  });
+
+  it("E1: derives error roles from genuine Y-error designations (primary-book shape), leaving the plain Depth column beside it unbound", async () => {
+    // A single-book payload would take the `else` branch, not this one —
+    // pair the primary marker with a second (trap) book to force the
+    // multi-book branch under test.
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        primaryMarker(designatedLabels, "b0", designatedMeta("Primary")),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap2")),
+      ],
+    });
+    await useApp.getState().importFiles(files("Two.opj"));
+
+    const primary = useApp.getState().datasets.find((d) => d.name === "Two:Primary")!;
+    expect(primary.errorRoles).toEqual(expectedDesignatedRoles);
+  });
+
+  it("E1: derives error roles from genuine Y-error designations for a full inline book", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
+    await useApp.getState().importFiles(files("Multi.opj"));
+
+    const full = useApp.getState().datasets.find((d) => d.name === "Multi:Full")!;
+    expect(full.errorRoles).toEqual(expectedDesignatedRoles);
+  });
+
+  it("E1: derives error roles from genuine Y-error designations for a lazy book, and keeps its pending ref", async () => {
     vi.mocked(uploadFile).mockResolvedValueOnce(multiBookPayload());
     await useApp.getState().importFiles(files("Multi.opj"));
 
     const lazy = useApp.getState().datasets.find((d) => d.name === "Multi:Lazy")!;
-    expect(lazy.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 2 });
+    expect(lazy.errorRoles).toEqual(expectedDesignatedRoles);
+    expect(lazy.pending).toEqual({ kind: "upload", token: "tok123", bookId: "b1", rows: 2, cols: 3 });
+    // The dataset's `data` really is the (structurally smaller) preview —
+    // roles/labels/metadata come from the book's real, separate fields.
+    expect(lazy.data.values).toEqual([[0], [0]]);
+  });
+
+  it("E1: a book with NO usable designation metadata (structurally missing) gets importedAt but no guessed roles", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        // Error-shaped LABELS ("R"/"dR") but no column_designations/
+        // origin_column_names at all — must NOT fall back to the guesser.
+        primaryMarker(["R", "dR"], "b0", { origin_book: "NoDesig" }),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap3")),
+      ],
+    });
+    await useApp.getState().importFiles(files("NoDesig.opj"));
+
+    const ds = useApp.getState().datasets.find((d) => d.name === "NoDesig:NoDesig")!;
+    expect(ds.errorRoles).toBeUndefined();
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  // Round 7 (adversarial review, BLOCKER 1): io/origin_project/opj.py:257
+  // sets `column_designations: {}` (empty, not absent) for every sheet-2+
+  // pseudo-book, while `origin_column_names` is still populated -- see
+  // lib/originBookRoles.test.ts's matching unit test for the full mechanism.
+  // Left unfixed, this book's R/dR pair gets stamped `errorRoles: []`
+  // (Origin's AUTHORITATIVE "no error columns", per O1) instead of staying
+  // `undefined` (the label-guess opportunity), silently deleting error bars
+  // a downstream `dataset.errorRoles ?? inferErrorBindings(...)` reader
+  // would otherwise have drawn.
+  it("Round 7: a sheet-2+ pseudo-book (origin_column_names present, column_designations empty) leaves errorRoles undefined, not the authoritative empty marker", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        primaryMarker(["R", "dR"], "b0", {
+          origin_book: "Sheet2",
+          origin_column_names: ["B", "C"],
+          column_designations: {},
+        }),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap4")),
+      ],
+    });
+    await useApp.getState().importFiles(files("Sheet2.opj"));
+
+    const ds = useApp.getState().datasets.find((d) => d.name === "Sheet2:Sheet2")!;
+    expect(ds.errorRoles).toBeUndefined();
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+// Round 3 (L1): a ONE-workbook `.opj`/`.opju` never gets a `books[]` array at
+// all (the backend only emits it for `len(books) > 1`) -- so it takes THIS
+// single-file `else` branch, not the multi-book one above. Before this fix
+// that branch called ONLY the label guesser (`importRoles`), so the exact
+// harm E1 fixed for multi-book projects was still live for what is probably
+// the MORE common Origin file.
+describe("single-book Origin import provenance (FU-1 round 3, L1)", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  /** A single-book `.opj`-shaped payload: no `books[]` (so it takes the
+   *  `else` branch), but `data.metadata` itself carries the SAME Origin
+   *  designation metadata a real single-workbook project decodes. */
+  const originPayload = (labels: string[], b: string, c: string, d: string) => ({
+    time: [0, 1],
+    values: [[10, 1, 2], [20, 3, 4]],
+    labels,
+    units: labels.map(() => ""),
+    metadata: {
+      origin_book: "Sheet1",
+      origin_column_names: ["B", "C", "D"],
+      column_designations: { A: "X", B: b, C: c, D: d },
+    },
+  });
+
+  it("does NOT bind a genuine 'Depth' measurement column as an error role", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(originPayload(["Refl", "Depth", "Temp"], "Y", "Y", "Y"));
+    await useApp.getState().importFiles(files("OneBook.opj"));
+
+    const ds = useApp.getState().datasets[0];
+    // O1 (round 5): same distinguishable-empty-array marker on the
+    // single-file import path.
+    expect(ds.errorRoles).toEqual([]);
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("derives error roles from a genuine Y-error designation, leaving a plain Depth column beside it unbound", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(
+      originPayload(["Refl", "Refl_err", "Depth"], "Y", "Y-error", "Y"),
+    );
+    await useApp.getState().importFiles(files("OneBook.opj"));
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("a genuinely non-Origin file (no designation metadata) still uses the label guess, unchanged", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      time: [0, 1],
+      values: [[1, 10], [2, 20]],
+      labels: ["R", "dR"],
+      units: ["", ""],
+      metadata: {},
+    });
+    await useApp.getState().importFiles(files("plain.csv"));
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
   });
 });
 
