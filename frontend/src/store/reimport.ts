@@ -17,11 +17,11 @@
 // Row/column-index staleness (the #50/#53 precedent — xTrim, installBookData's
 // preview->full swap, both in store/useApp.ts): `lib/reimport.ts`'s
 // `reimportShapeChanged` decides whether excludedRows/filter/channelRoles/
-// channelTypes/formulas are cleared (shape changed — a toast explains why) or
-// kept (unchanged shape — formulas just recompute over the new values). The
-// clearing patch below only ever WRITES those fields via plain object-literal
-// keys (never reads the row-state field by property access), so it never
-// needs the #50 guard's allowlist in architecture.test.ts.
+// channelTypes/formulas/errorRoles are cleared (shape changed — a toast
+// explains why) or kept (unchanged shape — formulas just recompute over the
+// new values). The clearing patch below only ever WRITES those fields via
+// plain object-literal keys (never reads the row-state field by property
+// access), so it never needs the #50 guard's allowlist in architecture.test.ts.
 //
 // The same staleness applies to a SAVED editable figure
 // (store/figureLifecycle.ts's `editableFigures`, added later than this file's
@@ -144,9 +144,9 @@ export function applyReimportMerge(
         pending: undefined,
         ...(ds.corrections ? { raw: merge.freshRaw } : {}),
         // A shape change makes the old row/column-indexed fields
-        // (excludedRows/filter/channelRoles/channelTypes/formulas) stale —
-        // they index a shape that no longer exists. Clear them; an
-        // unchanged shape keeps them (module doc).
+        // (excludedRows/filter/channelRoles/channelTypes/formulas/
+        // errorRoles) stale — they index a shape that no longer exists.
+        // Clear them; an unchanged shape keeps them (module doc).
         ...(shapeChanged
           ? {
               excludedRows: undefined,
@@ -154,6 +154,13 @@ export function applyReimportMerge(
               channelRoles: undefined,
               channelTypes: undefined,
               formulas: undefined,
+              // Round 7 (adversarial review, item 3): errorRoles is exactly
+              // as column-index-keyed as channelRoles/channelTypes above —
+              // a binding's `channel`/`target` point into the OLD column
+              // layout, and there is no sanitizeBindings pass on this path
+              // to catch a now-invalid index (unlike the workspaceDatasetParse
+              // .dwk load path, which does bounds-check on read).
+              errorRoles: undefined,
             }
           : {}),
       };

@@ -304,6 +304,53 @@ describe("usePlotPayload — G4 figure-scoped error honesty", () => {
   });
 });
 
+// Round 7 (adversarial review, item 4, RED-FIRST): PlotStage.tsx's
+// `focusedDocumentErrors` selector reads `window.document.bindings.errors`
+// straight off the store, and store/windowDocuments.ts's `syncPlotWindow`
+// rebuilds that document (structuredClone included) on nearly every window
+// write -- rename, focus handoff, minimize/restore, recipe apply -- even
+// when the bindings themselves are unchanged. Before the fix, the base
+// fetch effect's dependency on the RAW `documentErrors` array re-issued a
+// whole fetch on every such rerender; this mirrors the file's own
+// DATASET/EMPTY_STYLES precedent above (a freshly minted `{}`/`[]` per call
+// causing a spurious re-fetch) but for `documentErrors` specifically.
+describe("usePlotPayload — Round 7 item 4: documentErrors identity churn must not re-fetch", () => {
+  beforeEach(() => {
+    fetchPlotMock.mockResolvedValue(payloadFor("errs", false));
+  });
+
+  it("a content-equal but NEW-identity documentErrors array on rerender triggers no second fetch", () => {
+    // Every OTHER reference-typed input held stable across every rerender
+    // below (same reasoning as the file's own DATASET/EMPTY_STYLES
+    // precedent above) -- `errorParams()`/`errorDataset()` mint a fresh
+    // dataset AND a fresh `yKeys: [0]` array per call, either of which
+    // would itself trip the fetch effect's dependencies (`active` directly;
+    // `yKeys` via `fetchChannels` -> `plotted` -> `errorBars`/
+    // `colorByColumns`) and confound what this test isolates:
+    // `documentErrors` identity alone.
+    const active = errorDataset();
+    const yKeys = [0];
+    const contentEqualCopy = (): ErrorBinding[] => [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ];
+    const { rerender } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: errorParams({ active, yKeys, documentErrors: contentEqualCopy() }),
+    });
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1);
+
+    // A FRESH array, same content -- exactly what structuredClone produces
+    // on an unrelated window sync.
+    rerender(errorParams({ active, yKeys, documentErrors: contentEqualCopy() }));
+    expect(fetchPlotMock).toHaveBeenCalledTimes(1); // still just the one base fetch
+
+    // Sanity: a GENUINE content change still refetches -- proves this isn't
+    // simply "documentErrors is no longer a dependency at all".
+    rerender(errorParams({ active, yKeys, documentErrors: [{ channel: 3, target: 0, axis: "y", side: "both" }] }));
+    expect(fetchPlotMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 // G4 review round, FIX 1 (P1, RED-FIRST): the decimation-eligibility gate
 // used to read ONLY `active.errorRoles?.length`, blind to a focused
 // window's own rich `documentErrors`. A >10,000-row dataset whose document

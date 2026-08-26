@@ -166,6 +166,31 @@ describe("reimportDataset — row/column count change", () => {
     expect(useApp.getState().datasets[0].channelRoles).toBeUndefined();
   });
 
+  // Round 7 (adversarial review, item 3): `errorRoles` is exactly as
+  // column-index-keyed as channelRoles/channelTypes -- a binding's
+  // `channel`/`target` are indices into the OLD column layout -- but was
+  // missing from this clear list. Latent before this branch (nothing
+  // stamped `errorRoles` on most Origin imports); now that
+  // lib/originBookRoles.ts stamps it on essentially every Origin re-import,
+  // a re-shaped re-import leaves a stale binding pointing at whatever
+  // column now happens to sit at that old index, drawing whiskers from the
+  // wrong data with no `sanitizeBindings` pass on this path to catch it.
+  it("clears errorRoles (column-index-keyed, same as channelRoles) on a column-count change", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+      values: [[11, 1], [21, 2], [31, 3]],
+    });
+    useApp.setState({
+      datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
+  });
+
   // The dataset-scoped clear above had a parallel VIEW-scoped gap: the live
   // singleton view AND every window's stored view kept channel-keyed state
   // (styles/hidden/keys) indexing the OLD columns (noted 2026-07-21, fixed).

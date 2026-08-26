@@ -96,10 +96,11 @@ interface ImportOrigin {
 }
 
 interface ErrorRolesActions {
-  /** Replace a dataset's error roles. `[]` clears them. */
+  /** Replace a dataset's error roles with a DELIBERATE answer -- `[]` means
+   *  "checked: none" and is stored literally (Round 7 / O1), never collapsed
+   *  to `undefined` (which reads as "never determined" and re-guesses). */
   setErrorRoles: (id: string, roles: readonly ErrorBinding[]) => void;
-  /** Re-run name inference over the dataset's columns — the "suggested, never
-   *  forced" affordance made explicit: the user asks for the guess. */
+  /** Re-run name inference ("suggested, never forced"); a null GUESS collapses to `undefined` (re-guessable), unlike `setErrorRoles`. */
   detectErrorRoles: (id: string) => number;
 }
 
@@ -107,23 +108,25 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 
 function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesActions {
-  const write = (id: string, roles: readonly ErrorBinding[], label: string) => {
+  // `exact` (setErrorRoles): store literally, even `[]` -- O1's "checked:
+  // none". `!exact` (detectErrorRoles): collapse an empty GUESS to `undefined`.
+  const write = (id: string, roles: readonly ErrorBinding[], label: string, exact: boolean) => {
     get().recordHistory(label);
     set((s) => ({
       datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, errorRoles: roles.length ? [...roles] : undefined } : d,
+        d.id === id ? { ...d, errorRoles: exact || roles.length ? [...roles] : undefined } : d,
       ),
     }));
   };
 
   return {
-    setErrorRoles: (id, roles) => write(id, roles, "edit error roles"),
+    setErrorRoles: (id, roles) => write(id, roles, "edit error roles", true),
 
     detectErrorRoles: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds) return 0;
       const found = inferErrorBindings(ds.data);
-      write(id, found, "detect error roles");
+      write(id, found, "detect error roles", false);
       return found.length;
     },
   };

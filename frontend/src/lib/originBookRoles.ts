@@ -91,7 +91,22 @@ export function originBookErrorRoles(
   ds: Pick<DataStruct, "metadata">,
 ): { errorRoles: ErrorBinding[] } | null {
   const list = columnMetaList(ds);
-  if (list.length === 0) return null;
+  // Round 7 (adversarial review, BLOCKER 1): `list.length === 0` alone is
+  // NOT "no usable designation info" -- `columnMetaList` returns one entry
+  // per name whenever `origin_column_names` is an array, with `designation:
+  // undefined` on every one when `column_designations` is merely empty
+  // (io/origin_project/opj.py:257 sets it to `{}` for every sheet-2+
+  // pseudo-book: `col_meta = books_meta[base_book].columns if base_book in
+  // books_meta and not sheet_no else {}`). That book's column NAMES are
+  // real, but Origin told us NOTHING about which are error columns -- the
+  // "no usable designation info at all" case this function's own doc
+  // promises `null` for. Falling through to the loop on that input matches
+  // no designation and returns the AUTHORITATIVE `{ errorRoles: [] }`,
+  // which by design (O1) suppresses every downstream label-guess fallback
+  // -- silently deleting an R/dR pair's error bars. Require at least one
+  // entry to actually carry a designation before treating the list as
+  // meaningful.
+  if (list.length === 0 || list.every((c) => c?.designation === undefined)) return null;
 
   // L4: when the designated X column could not be decoded, `.time` is a
   // SYNTHETIC row index substituted in its place (io/origin_project/
@@ -100,15 +115,48 @@ export function originBookErrorRoles(
   // it for this book rather than render a meaningless span.
   const skipXError = ds.metadata?.["x_column_recovered"] === false;
 
+  // Round 7 (adversarial review, item 5): unlike Y-error (paired to the
+  // NEAREST preceding "Y" — a real channel index the render pipeline can
+  // target individually), an X-error binding here is UNCONDITIONALLY
+  // `target: -1`, and every consumer treats that as "the plot's ONE shared
+  // x axis, apply to every plotted column" — `lib/errorbars.ts`'s
+  // `buildErrorSpans` hardcodes `target = axis === "x" ? -1 : ch` when
+  // searching bindings (never reads a channel-specific x target) and its
+  // own doc says so explicitly ("emitted against every plotted column,
+  // since the x uncertainty applies to each point regardless of which
+  // series is drawn there"); `lib/plotDecimate.ts`'s eligibility check
+  // (`b.axis === "x" ? opts.xErrorRenders : plotted.includes(b.target)`)
+  // never even inspects `target` for an x binding either. So there is NO
+  // per-channel "nearest preceding X" to give X error the same treatment
+  // as Y: whatever channel index we attached, the render pipeline would
+  // still draw it against the ONE shared axis regardless.
+  //
+  // That makes `column_designations`'s own multi-X shape (`lib/errorbars.ts`'s
+  // `originHiddenChannels` doc: a Moke-style book storing several hysteresis
+  // loops as X,Y,X,Y — only the FIRST X survives as `.time`; every later
+  // "X" is a genuine secondary axis column, hidden but present in `.values`)
+  // a real hazard rather than a hypothetical one: an "X-error" designated
+  // AFTER a secondary "X" is that loop's OWN x uncertainty, not the shared
+  // axis's — binding it to `target: -1` would draw the wrong loop's error
+  // magnitude as a whisker on every plotted series' shared abscissa. Since
+  // the pipeline cannot express "this error belongs to channel N's own x
+  // values" for the x axis at all, the safe answer is NOT a guess in either
+  // direction: stop treating "X-error" as the shared axis's error once a
+  // secondary "X" has been seen. An "X-error" that precedes any secondary
+  // "X" is unambiguous (nothing else has claimed to be an X yet) and keeps
+  // binding to the shared axis exactly as before.
   const roles: ErrorBinding[] = [];
   let lastY: number | null = null;
+  let sawSecondaryX = false;
   for (let i = 0; i < list.length; i++) {
     const designation = list[i]?.designation;
     if (designation === "Y") {
       lastY = i;
+    } else if (designation === "X") {
+      sawSecondaryX = true;
     } else if (designation === "Y-error" && lastY !== null) {
       roles.push({ channel: i, target: lastY, axis: "y", side: "both" });
-    } else if (designation === "X-error" && !skipXError) {
+    } else if (designation === "X-error" && !skipXError && !sawSecondaryX) {
       roles.push({ channel: i, target: -1, axis: "x", side: "both" });
     }
   }

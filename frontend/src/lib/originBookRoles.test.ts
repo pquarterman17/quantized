@@ -67,10 +67,82 @@ describe("originBookErrorRoles", () => {
     expect(originBookErrorRoles({ metadata: {} })).toBeNull();
   });
 
+  // Round 7 (adversarial review, BLOCKER 1): io/origin_project/opj.py:257
+  // sets `col_meta = {}` for every sheet-2+ pseudo-book (`Book1@2`, `base_book
+  // not in books_meta`) -- so `column_designations` comes back an EMPTY
+  // object while `origin_column_names` is still the book's real, non-empty
+  // column list (we're past opj.py's `if not cols` early return). That is
+  // structurally different from "no designation info at all": `columnMetaList`
+  // returns one entry per name with `designation: undefined` on every one of
+  // them, so the OLD `list.length === 0` guard did not fire and this function
+  // fell through to the loop, matched nothing, and returned the AUTHORITATIVE
+  // `{ errorRoles: [] }` -- silently suppressing the label-guess fallback for
+  // an R/dR-shaped book that never had a chance to be designated at all.
+  it("returns null (not the authoritative empty-array marker) when column_designations is empty but origin_column_names is populated -- a sheet-2+ pseudo-book", () => {
+    const roles = originBookErrorRoles({
+      metadata: {
+        origin_book: "Book1@2",
+        origin_column_names: ["B", "C"],
+        column_designations: {},
+      },
+    });
+    expect(roles).toBeNull();
+  });
+
   // O1 (round 5): the distinguishable-empty-array marker is not nullish, so
   // it must never trip a `??` fallback anywhere it flows.
   it("O1: `{ errorRoles: [] }` is not nullish -- a `?? inferErrorBindings(...)` reader never falls back on it", () => {
     const roles = originBookErrorRoles(meta("Y", "Y", "Y"));
     expect(roles?.errorRoles ?? "FELL BACK").toEqual([]);
+  });
+
+  // Round 7 (adversarial review, item 5): a multi-X (Moke-style) book stores
+  // several hysteresis loops as X,Y,X,Y -- `lib/errorbars.ts`'s
+  // `originHiddenChannels` doc names this exact shape. Only the FIRST X
+  // survives as `.time`; every later "X" designation is a genuine SECOND
+  // loop's own axis column, present in `.values` as an ordinary (hidden)
+  // channel. An "X-error" that comes AFTER that secondary "X" is that
+  // second loop's own x uncertainty -- not the shared plot axis's -- and
+  // every render consumer (`buildErrorSpans`, `plotDecimate`'s eligibility
+  // check) treats ANY `axis: "x"` binding as applying to the ONE shared
+  // axis regardless of `target`, so there is no way to attach it correctly
+  // to just that loop. Binding it to `target: -1` anyway would draw the
+  // wrong loop's error magnitude on every plotted series' abscissa -- worse
+  // than leaving it unbound.
+  it("Round 7 item 5: an X-error AFTER a secondary X (multi-loop Moke shape) is left unbound, not misattributed to the shared axis", () => {
+    const roles = originBookErrorRoles({
+      metadata: {
+        origin_book: "Moke",
+        // B: loop 1's Y; C: loop 1's Y-error (correctly binds to B).
+        // D: loop 2's OWN X column (secondary X, not the plot's shared axis).
+        // E: loop 2's Y; F: loop 2's OWN X-error -- must NOT bind to -1.
+        origin_column_names: ["B", "C", "D", "E", "F"],
+        column_designations: {
+          A: "X",
+          B: "Y",
+          C: "Y-error",
+          D: "X",
+          E: "Y",
+          F: "X-error",
+        },
+      },
+    });
+    expect(roles?.errorRoles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  // Control: an X-error that precedes any secondary "X" is unambiguous --
+  // nothing else has claimed to be an X yet -- and keeps binding to the
+  // shared axis exactly as before (same case the earlier "binds an X-error
+  // designation to the dataset's x axis" test covers with the 3-column
+  // helper; restated here alongside its Round 7 counterpart for contrast).
+  it("Round 7 item 5, control: an X-error with NO secondary X ahead of it still binds to the shared axis", () => {
+    const roles = originBookErrorRoles({
+      metadata: {
+        origin_book: "SingleX",
+        origin_column_names: ["B", "C", "D"],
+        column_designations: { A: "X", B: "X-error", C: "Y", D: "Y" },
+      },
+    });
+    expect(roles?.errorRoles).toEqual([{ channel: 0, target: -1, axis: "x", side: "both" }]);
   });
 });

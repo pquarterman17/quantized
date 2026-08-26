@@ -8,6 +8,7 @@ import { probeSource } from "../lib/desktopBridge";
 import type { PlotRecipe } from "../lib/plotRecipe";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import type { Technique } from "../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { usePendingOps } from "./pendingOps";
 import { isImportRunning, pathBasename, useImportBatch } from "./importDatasets";
 import { useToasts } from "./toasts";
@@ -258,6 +259,50 @@ describe("import roles and provenance (MAIN #33)", () => {
   });
 });
 
+// Round 7 (adversarial review, BLOCKER 2): `setErrorRoles` is the direct,
+// explicit user declaration -- "these are the error roles for this dataset,
+// period" -- distinct from a silent guess. Collapsing a deliberate CLEAR
+// (`setErrorRoles(id, [])`, e.g. ErrorRolesCard's "Remove" button run down
+// to the last binding) to `errorRoles: undefined` destroys exactly the O1
+// distinction this same branch's `.dwk` round-trip work
+// (lib/workspace.ts/lib/workspaceDatasetParse.ts) exists to preserve: on
+// the next save + reload, `undefined` reads as "never determined" to every
+// `dataset.errorRoles ?? inferErrorBindings(...)` consumer, so the roles
+// the user just deleted quietly reappear.
+describe("setErrorRoles preserves a deliberate empty array (Round 7, BLOCKER 2)", () => {
+  const withRoles = () => ({
+    id: "d1",
+    name: "r.dat",
+    data: {
+      time: [0, 1],
+      values: [[1, 2], [3, 4]],
+      labels: ["R", "dR"],
+      units: ["", ""],
+      metadata: {},
+    },
+    errorRoles: [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }],
+  });
+
+  it("setErrorRoles(id, []) stores errorRoles: [], not undefined", () => {
+    useApp.setState({ datasets: [withRoles()], activeId: "d1" });
+    useApp.getState().setErrorRoles("d1", []);
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
+
+  it("the clear-then-reload path: a deliberate clear via setErrorRoles survives a .dwk save + reload as [], not re-guessed", () => {
+    useApp.setState({ datasets: [withRoles()], activeId: "d1" });
+    useApp.getState().setErrorRoles("d1", []);
+
+    const saved = serializeWorkspace({ datasets: useApp.getState().datasets });
+    const reloaded = parseWorkspace(saved);
+
+    // R/dR would classify as a binding again if the guesser ever ran on
+    // reload -- proving this is really the sticky "checked: none" marker,
+    // not merely "not yet re-guessed".
+    expect(reloaded.datasets[0].errorRoles).toEqual([]);
+  });
+});
+
 // FU-1 (provenance-disclosure follow-ups): the multi-book Origin branch used
 // to stamp NEITHER `importedAt` NOR `errorRoles` on any book it created — a
 // project import's book-sheet datasets landed with a blank "imported" column
@@ -429,6 +474,34 @@ describe("multi-book Origin import provenance (FU-1)", () => {
     await useApp.getState().importFiles(files("NoDesig.opj"));
 
     const ds = useApp.getState().datasets.find((d) => d.name === "NoDesig:NoDesig")!;
+    expect(ds.errorRoles).toBeUndefined();
+    expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  // Round 7 (adversarial review, BLOCKER 1): io/origin_project/opj.py:257
+  // sets `column_designations: {}` (empty, not absent) for every sheet-2+
+  // pseudo-book, while `origin_column_names` is still populated -- see
+  // lib/originBookRoles.test.ts's matching unit test for the full mechanism.
+  // Left unfixed, this book's R/dR pair gets stamped `errorRoles: []`
+  // (Origin's AUTHORITATIVE "no error columns", per O1) instead of staying
+  // `undefined` (the label-guess opportunity), silently deleting error bars
+  // a downstream `dataset.errorRoles ?? inferErrorBindings(...)` reader
+  // would otherwise have drawn.
+  it("Round 7: a sheet-2+ pseudo-book (origin_column_names present, column_designations empty) leaves errorRoles undefined, not the authoritative empty marker", async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce({
+      ...multiBookPayload(),
+      books: [
+        primaryMarker(["R", "dR"], "b0", {
+          origin_book: "Sheet2",
+          origin_column_names: ["B", "C"],
+          column_designations: {},
+        }),
+        primaryMarker(trapLabels, "b1", trapMeta("Trap4")),
+      ],
+    });
+    await useApp.getState().importFiles(files("Sheet2.opj"));
+
+    const ds = useApp.getState().datasets.find((d) => d.name === "Sheet2:Sheet2")!;
     expect(ds.errorRoles).toBeUndefined();
     expect(ds.importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
