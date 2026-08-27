@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { buildErrorSpans } from "../lib/errorbars";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
@@ -392,5 +393,159 @@ describe("removeFormula never records a phantom no-op undo entry (P2-2)", () => 
     useApp.getState().removeFormula("a", 0);
     expect(useApp.getState().history.length).toBe(before + 1);
     expect(useApp.getState().datasets.find((d) => d.id === "a")?.formulas).toBeUndefined();
+  });
+});
+
+// Independent-review BUG 1: `Dataset.errorRoles` is index-keyed on BOTH
+// `channel` (the error column) and `target` (the column it describes), but
+// `removeFormula` never remapped it -- unlike channelRoles/channelTypes/filter
+// just above. A dataset with columns A, B, SCRATCH, SIGMA, OTHER, SIGMA bound
+// as A's +/- error: removing SCRATCH must leave the binding pointing at
+// SIGMA's NEW slot, not silently drift onto OTHER.
+describe("removeFormula (BUG 1 closure): errorRoles follows the shift", () => {
+  // Two base columns (A, B) plus three formula columns (SCRATCH, SIGMA,
+  // OTHER) -- formulas are always the dataset's LAST columns (module doc),
+  // so this lays out exactly A(0) B(1) SCRATCH(2) SIGMA(3) OTHER(4).
+  function dsForErrorRoles(): Dataset {
+    // Constant-valued formulas -- `removeFormula` RECOMPUTES every formula
+    // column from `base` + `formulas` (withRecomputedFormulasAnd), so a
+    // hand-written `values` array for a formula column would just be
+    // overwritten; the true per-column value has to come from its `expr`.
+    const formulas: ComputedColumn[] = [
+      { name: "SCRATCH", expr: "0", deps: [] },
+      { name: "SIGMA", expr: "7", deps: [] }, // the TRUE error value
+      { name: "OTHER", expr: "999", deps: [] }, // unrelated -- what a broken remap would misread
+    ];
+    const labels = ["A", "B", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [1, 10, 0, 7, 999],
+          [2, 20, 0, 7, 999],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+      errorRoles: [{ channel: 3, target: 0, axis: "y", side: "both" }], // SIGMA -> A
+    };
+  }
+
+  it("remaps errorRoles' channel/target indices in the store write", () => {
+    useApp.setState({ datasets: [dsForErrorRoles()] });
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH (formula index 0, column 2)
+    const updated = useApp.getState().datasets.find((d) => d.id === "a");
+    expect(updated?.data.labels).toEqual(["A", "B", "SIGMA", "OTHER"]);
+    // SIGMA shifted from column 3 to column 2; A (target) is untouched.
+    expect(updated?.errorRoles).toEqual([{ channel: 2, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("RENDERED CONSEQUENCE: buildErrorSpans reads the true +/-7, not the stale +/-999", () => {
+    useApp.setState({ datasets: [dsForErrorRoles()] });
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH
+    const updated = useApp.getState().datasets.find((d) => d.id === "a")!;
+
+    const spans = buildErrorSpans(updated.data, [0], updated.errorRoles ?? []);
+    const span = spans.get(1)?.find((s) => s.axis === "y"); // uPlot column 1 = plotted channel A
+    expect(span?.plus).toEqual([7, 7]);
+    expect(span?.minus).toEqual([7, 7]);
+    // The corruption this bug produced: reading OTHER's 999 instead.
+    expect(span?.plus).not.toEqual([999, 999]);
+  });
+
+  it("drops a binding whose channel or target WAS the removed column, rather than leaving it dangling", () => {
+    // channel IS the removed column (SCRATCH itself wrongly bound as an error column).
+    const dsChannelRemoved: Dataset = {
+      ...dsForErrorRoles(),
+      errorRoles: [{ channel: 2, target: 0, axis: "y", side: "both" }],
+    };
+    useApp.setState({ datasets: [dsChannelRemoved] });
+    useApp.getState().removeFormula("a", 0);
+    expect(useApp.getState().datasets.find((d) => d.id === "a")?.errorRoles).toEqual([]);
+
+    // target IS the removed column (SCRATCH itself wrongly bound as a target).
+    const dsTargetRemoved: Dataset = {
+      ...dsForErrorRoles(),
+      errorRoles: [{ channel: 3, target: 2, axis: "y", side: "both" }],
+    };
+    useApp.setState({ datasets: [dsTargetRemoved] });
+    useApp.getState().removeFormula("a", 0);
+    expect(useApp.getState().datasets.find((d) => d.id === "a")?.errorRoles).toEqual([]);
+  });
+
+  it("leaves a target: -1 (x-axis) error binding's target untouched -- it is a sentinel, not a column index", () => {
+    const dsXError: Dataset = {
+      ...dsForErrorRoles(),
+      errorRoles: [{ channel: 3, target: -1, axis: "x", side: "both" }],
+    };
+    useApp.setState({ datasets: [dsXError] });
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH (column 2)
+    // channel 3 (SIGMA) shifts to 2; target stays -1, never touched as if it were column 0.
+    expect(useApp.getState().datasets.find((d) => d.id === "a")?.errorRoles).toEqual([
+      { channel: 2, target: -1, axis: "x", side: "both" },
+    ]);
+  });
+});
+
+// Independent-review BUG 2: `facetKey`/`groupKey` are channel-indexed VIEW
+// bindings ("bindings-owned like xKey/yKeys", lib/plotview.ts) but were
+// missing from remapViewChannels, so removeFormula never remapped them for
+// the active dataset's live view.
+describe("removeFormula (BUG 2 closure): facetKey/groupKey follow the shift", () => {
+  // Two base columns (A, GRP) plus three formula columns (F1, SITE, BATCH):
+  // A(0) GRP(1) F1(2) SITE(3) BATCH(4) -- mirrors the reported scenario.
+  function dsForFacet(): Dataset {
+    const formulas: ComputedColumn[] = [
+      { name: "F1", expr: "A * 1", deps: ["A"] },
+      { name: "SITE", expr: "A * 2", deps: ["A"] },
+      { name: "BATCH", expr: "A * 3", deps: ["A"] },
+    ];
+    const labels = ["A", "GRP", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [1, 10, 0, 0, 0],
+          [2, 20, 0, 0, 0],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+    };
+  }
+
+  it("shifts a stale facetKey down instead of leaving it pointing at a different (later) column", () => {
+    useApp.setState({ datasets: [dsForFacet()], activeId: "a", facetKey: 3, groupKey: 4 }); // faceted by SITE(3), grouped by BATCH(4)
+    useApp.getState().removeFormula("a", 0); // remove F1 (formula index 0, column 2)
+    // SITE shifts 3 -> 2, BATCH shifts 4 -> 3.
+    expect(useApp.getState().facetKey).toBe(2);
+    expect(useApp.getState().groupKey).toBe(3);
+  });
+
+  it("nulls facetKey/groupKey when the removed column WAS the bound one", () => {
+    useApp.setState({ datasets: [dsForFacet()], activeId: "a", facetKey: 2, groupKey: 2 }); // both bound to F1 itself
+    useApp.getState().removeFormula("a", 0); // remove F1
+    expect(useApp.getState().facetKey).toBeNull();
+    expect(useApp.getState().groupKey).toBeNull();
+  });
+
+  it("leaves facetKey/groupKey untouched when the dataset is not the active one", () => {
+    useApp.setState({
+      datasets: [dsForFacet(), baseDs("other")],
+      activeId: "other",
+      facetKey: 3,
+      groupKey: 4,
+    });
+    useApp.getState().removeFormula("a", 0); // "a" is not active -- must not touch the live view
+    expect(useApp.getState().facetKey).toBe(3);
+    expect(useApp.getState().groupKey).toBe(4);
   });
 });
