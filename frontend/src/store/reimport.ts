@@ -16,17 +16,18 @@
 //
 // Row/column-index staleness (the #50/#53 precedent — xTrim, installBookData's
 // preview->full swap, both in store/useApp.ts): `lib/reimport.ts`'s
-// `reimportShapeChanged` decides whether excludedRows/filter/channelRoles/
-// channelTypes/formulas are cleared (shape changed — a toast explains why)
-// or kept (unchanged shape — formulas just recompute over the new values).
-// `errorRoles` clears on the narrower `columnsChanged` alone (Round 7
-// BLOCKER, adversarial review round 2) — it is column-index-keyed like the
-// others, but a ROW-only reimport must not wipe it (booked separately:
-// channelRoles/channelTypes/formulas over-clear the same way on a row-only
-// reshape; pre-existing, not fixed here). The clearing patch below only
-// ever WRITES those fields via plain object-literal keys (never reads the
-// row-state field by property access), so it never needs the #50 guard's
-// allowlist in architecture.test.ts.
+// `reimportShapeChanged` (rows OR columns) gates `excludedRows` alone — it is
+// the one genuinely ROW-indexed field here, so only a row-count change (or a
+// column change, which implies one) invalidates it. `filter`/`channelRoles`/
+// `channelTypes`/`formulas`/`errorRoles` are all COLUMN-indexed and clear on
+// the narrower `reimportColumnsChanged` alone (Round 7 BLOCKER, adversarial
+// review round 2, extended to the rest of the group in a later booked-finding
+// pass) — a ROW-only reimport must not wipe any of them; `formulas` in
+// particular just recomputes over the fresh rows via the `merged.formulas
+// ?.length` branch below, same as an unchanged-shape reimport always did. The
+// clearing patch below only ever WRITES those fields via plain object-literal
+// keys (never reads the row-state field by property access), so it never
+// needs the #50 guard's allowlist in architecture.test.ts.
 //
 // The same staleness applies to a SAVED editable figure
 // (store/figureLifecycle.ts's `editableFigures`, added later than this file's
@@ -148,32 +149,37 @@ export function applyReimportMerge(
         data: newData,
         pending: undefined,
         ...(ds.corrections ? { raw: merge.freshRaw } : {}),
-        // A shape change makes the old row/column-indexed fields
-        // (excludedRows/filter/channelRoles/channelTypes/formulas) stale —
-        // they index a shape that no longer exists. Clear them; an
-        // unchanged shape keeps them (module doc).
-        ...(shapeChanged
+        // A shape change makes ROW-indexed state stale — excludedRows
+        // indexes rows that may no longer exist. Clear it; an unchanged row
+        // count keeps it (module doc).
+        ...(shapeChanged ? { excludedRows: undefined } : {}),
+        // Round 7 BLOCKER (adversarial review round 2), extended (booked
+        // finding, this pass): filter/channelRoles/channelTypes/formulas are
+        // COLUMN-indexed, not row-indexed -- exactly like errorRoles below --
+        // but used to be gated on the wider `shapeChanged` (rows OR columns),
+        // which wiped every one of them on a harmless "more rows appended"
+        // reimport (identical columns). Gated on `columnsChanged` alone
+        // instead, matching reimportColumnsChanged's own doc: "channel
+        // bindings stay provably valid across a row-only reshape (column
+        // meaning is untouched)". `formulas` takes the SAME `merged.formulas
+        // ?.length` recompute branch below that an already-unchanged-shape
+        // reimport always used -- this only routes the row-only case onto
+        // that existing path instead of dropping the formula outright; it
+        // makes no new claim about `recomputeData`'s own correctness there
+        // (a separate, pre-existing concern — see reimport.test.ts's note on
+        // the formulas-preserved test — out of scope for this fix). There is
+        // still no sanitizeBindings pass on this path to catch a now-invalid
+        // index on a genuine column change, unlike the workspaceDatasetParse
+        // .dwk load path.
+        ...(columnsChanged
           ? {
-              excludedRows: undefined,
               filter: undefined,
               channelRoles: undefined,
               channelTypes: undefined,
               formulas: undefined,
+              errorRoles: undefined,
             }
           : {}),
-        // Round 7 BLOCKER (adversarial review round 2): errorRoles is
-        // column-index-keyed like channelRoles/channelTypes above, but
-        // `shapeChanged` fires on a ROW-only change too (reimportShapeChanged
-        // = rows OR columns) -- gating it there wiped a still-valid binding
-        // (and collapsed a deliberate O1 `[]` marker to `undefined`,
-        // re-inviting the label guesser) on a harmless "more rows appended"
-        // reimport. Gated on `columnsChanged` alone instead, matching
-        // reimportColumnsChanged's own doc: "channel bindings stay provably
-        // valid across a row-only reshape (column meaning is untouched)" --
-        // there is still no sanitizeBindings pass on this path to catch a
-        // now-invalid index on a genuine column change, unlike the
-        // workspaceDatasetParse .dwk load path.
-        ...(columnsChanged ? { errorRoles: undefined } : {}),
       };
       return merged.formulas?.length
         ? { ...merged, data: recomputeData(merged.data, merged.formulas) }
