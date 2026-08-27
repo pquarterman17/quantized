@@ -188,7 +188,7 @@ export default function GridHeader({
       {visibleCols.map((c) => {
         const computed = c >= baseCount;
         const meta = colMeta[c];
-        const dimmed = Boolean(channelRoles[c]) || meta?.designation === "Label" || meta?.designation === "Disregard";
+        const dimmed = Boolean(channelRoles[c]) || meta?.designation === "label" || meta?.designation === "disregard";
         return (
           <div
             key={data.labels[c]}

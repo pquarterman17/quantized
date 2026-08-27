@@ -22,7 +22,7 @@ export type SelectionPlotAction =
 
 export interface SelectionPlotResult {
   /** Store actions to run, in order (empty when the selection has nothing
-   *  plottable — e.g. only Label/Disregard/error columns selected). */
+   *  plottable — e.g. only label/disregard/error columns selected). */
   actions: SelectionPlotAction[];
   /** Human-readable summary for a status message. */
   summary: string;
@@ -41,7 +41,7 @@ export interface SelectionPlotAxis {
  *  - Every remaining selected value column becomes a Y series, in ascending
  *    channel order, EXCEPT: the column just chosen as X (never also a Y),
  *    any secondary "X" designation (Origin's own rule — never its own
- *    series), and "Label"/"Disregard" columns (never plotted).
+ *    series), and "label"/"disregard" columns (never plotted).
  *  - A selected "Y-error" column pairs to the nearest PRECEDING selected Y
  *    column (mirrors `lib/errorbars.originErrKeys`'s rule, scoped to this
  *    selection) and is never itself added to the Y list. An error column
@@ -82,7 +82,7 @@ export function resolveSelectionPlot(
   for (const c of valueCols) {
     if (c === resolvedXKey) continue; // never also a Y
     const d = meta[c]?.designation;
-    if (d === "Label" || d === "Disregard" || d === "X-error" || d === "X") continue; // never plotted
+    if (d === "label" || d === "disregard" || d === "X-error" || d === "X") continue; // never plotted
     if (d === "Y-error") {
       if (lastY !== null) errActions.push({ kind: "setErrKey", channel: lastY, errChannel: c });
       continue; // an error column is never itself a Y series
@@ -112,7 +112,7 @@ export function resolveSelectionPlot(
  *  selection into a prefilled `lib/plotspec` PlotSpec instead of plotting
  *  directly. Same column numbering and the same designation semantics as
  *  `resolveSelectionPlot` above, adapted to the well grammar:
- *  - "Label"/"Disregard" columns and error columns (X-error/Y-error) are
+ *  - "label"/"disregard" columns and error columns (X-error/Y-error) are
  *    skipped — the spec grammar has no error wells, and labels never plot.
  *  - An X-designated selected column wins the X well (Origin's own rule);
  *    absent one, the FIRST selected value column takes X when two or more
@@ -138,7 +138,7 @@ export function selectionToSpec(
     .filter((c) => c >= 0)
     .filter((c) => {
       const d = meta[c]?.designation;
-      return d !== "Label" && d !== "Disregard" && d !== "X-error" && d !== "Y-error";
+      return d !== "label" && d !== "disregard" && d !== "X-error" && d !== "Y-error";
     })
     .sort((a, b) => a - b);
   if (valueCols.length === 0) return null;

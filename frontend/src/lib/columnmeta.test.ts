@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,6 +9,7 @@ import {
   columnMetaList,
   DESIGNATION_BADGE,
   hasOriginReportSheets,
+  ORIGIN_DESIGNATIONS,
   originTextColumns,
 } from "./columnmeta";
 import type { DataStruct } from "./types";
@@ -112,9 +117,51 @@ describe("DESIGNATION_BADGE", () => {
       Y: "Y",
       "Y-error": "yEr",
       "X-error": "xEr",
-      Label: "Label",
-      Disregard: "Disregard",
+      label: "Label",
+      disregard: "Disregard",
+      Z: "Z",
     });
+  });
+
+  it("has exactly one badge per ORIGIN_DESIGNATIONS entry (no missing/stray keys)", () => {
+    expect(Object.keys(DESIGNATION_BADGE).sort()).toEqual([...ORIGIN_DESIGNATIONS].sort());
+  });
+});
+
+// Booked finding: the backend emits lowercase "label"/"disregard" and a "Z"
+// designation (src/quantized/io/origin_project/windows.py's `_DESIGNATION`
+// enum) that this module's set never accepted — every such column silently
+// parsed to `designation: undefined`, which (for a book designated ENTIRELY
+// out of these three) made lib/originBookRoles.ts's "no usable designation
+// info at all" guard misfire and fall back to the label-name guesser instead
+// of Origin's own authoritative answer.
+describe("columnMetaList — the full backend designation set (booked finding)", () => {
+  it.each(["label", "disregard", "Z"] as const)("parses a %s-designated column, not undefined", (raw) => {
+    const ds = origin(["A"], { A: raw });
+    expect(columnMetaList(ds)[0]?.designation).toBe(raw);
+  });
+
+  it("does NOT parse the old (wrong) capitalized 'Label'/'Disregard' spellings", () => {
+    const ds = origin(["A", "B"], { A: "Label", B: "Disregard" });
+    expect(columnMetaList(ds)[0]?.designation).toBeUndefined();
+    expect(columnMetaList(ds)[1]?.designation).toBeUndefined();
+  });
+});
+
+// Pins frontend/backend agreement on the designation SET itself, so a future
+// change to either side's enum (e.g. windows.py growing an 8th designation)
+// fails a test instead of silently drifting — derived from ONE shared
+// fixture (tests/fixtures/wire/origin_designations.json) rather than two
+// hand-typed lists; tests/test_io_origin_project.py pins the Python side of
+// the same fixture against `windows._DESIGNATION`.
+describe("ORIGIN_DESIGNATIONS — frontend/backend parity (shared fixture)", () => {
+  it("matches the backend's windows.py _DESIGNATION value set exactly", () => {
+    const fixturePath = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../tests/fixtures/wire/origin_designations.json",
+    );
+    const backendSet: string[] = JSON.parse(readFileSync(fixturePath, "utf-8"));
+    expect([...ORIGIN_DESIGNATIONS].sort()).toEqual([...backendSet].sort());
   });
 });
 

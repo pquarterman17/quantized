@@ -12,6 +12,7 @@ Format: see docs/origin_project_format.md.
 
 from __future__ import annotations
 
+import json
 import struct
 from collections import OrderedDict
 from pathlib import Path
@@ -2568,6 +2569,24 @@ def test_drop_empty_library_books_gates_all_nan_book() -> None:
     data = _mk_book("Real", values=np.array([[1.0], [2.0]]), labels=["A"])
     kept = drop_empty_library_books([nan_book, data])
     assert [b.metadata["origin_book"] for b in kept] == ["Real"]
+
+
+def test_designation_set_matches_frontend_fixture() -> None:
+    """Booked finding: `frontend/src/lib/columnmeta.ts`'s designation set used
+    to accept "Label"/"Disregard" (capitalized) and had no "Z" member at all
+    -- none of which this module's own `_DESIGNATION` enum ever emits, so a
+    book designated entirely out of disregard/label/Z had EVERY designation
+    silently fail to parse on the frontend, defeating
+    lib/originBookRoles.ts's Origin-authoritative error-role derivation.
+    Pins this module's value set against the SAME shared fixture
+    `columnmeta.test.ts`'s "ORIGIN_DESIGNATIONS -- frontend/backend parity"
+    test reads, so the two can never drift apart silently again."""
+    from quantized.io.origin_project.windows import _DESIGNATION
+
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "wire" / "origin_designations.json").read_text()
+    )
+    assert sorted(_DESIGNATION.values()) == sorted(fixture)
 
 
 @pytest.mark.realdata
