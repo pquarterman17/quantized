@@ -5,13 +5,16 @@ import {
   remapChannelList,
   remapDatasetChannels,
   remapErrorRoles,
+  remapFigureBindings,
+  remapFitSpec,
   remapKeyedRecord,
   remapViewChannels,
   remapWindowViews,
   type ViewChannelState,
 } from "./channelRemap";
 import type { ErrorBinding } from "./errorRoles";
-import type { SeriesStyle } from "./types";
+import type { FigureBindings } from "./figureDocument";
+import type { FitSpec, SeriesStyle } from "./types";
 
 const style = (color: string): SeriesStyle => ({ color }) as SeriesStyle;
 
@@ -75,6 +78,89 @@ describe("remapDatasetChannels", () => {
       3,
     );
     expect(out.errorRoles).toEqual([{ channel: 3, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("remaps fitSpec alongside the other dataset-scoped fields (round 2 finding 1)", () => {
+    const out = remapDatasetChannels({ fitSpec: { model: "Linear", yKey: 4 } }, 3);
+    expect(out.fitSpec).toEqual({ model: "Linear", yKey: 3 });
+  });
+});
+
+describe("remapFitSpec (round 2 finding 1: Dataset.fitSpec was not remapped at all)", () => {
+  it("shifts a surviving yKey down with it", () => {
+    expect(remapFitSpec({ model: "Linear", yKey: 4 }, 3)).toEqual({ model: "Linear", yKey: 3 });
+  });
+
+  it("drops the whole spec when yKey WAS the removed column -- no honest shifted or defaulted value exists", () => {
+    expect(remapFitSpec({ model: "Linear", yKey: 3 }, 3)).toBeUndefined();
+  });
+
+  it("clears xKey to undefined (not null) when xKey WAS the removed column, keeping a surviving yKey", () => {
+    const out = remapFitSpec({ model: "Linear", xKey: 3, yKey: 5 }, 3);
+    expect(out?.xKey).toBeUndefined();
+    expect(out?.yKey).toBe(4);
+  });
+
+  it("shifts a surviving xKey down with it", () => {
+    expect(remapFitSpec({ model: "Linear", xKey: 4, yKey: 5 }, 3)?.xKey).toBe(3);
+  });
+
+  it("leaves an explicit xKey: null (deliberately the time axis) untouched", () => {
+    expect(remapFitSpec({ model: "Linear", xKey: null, yKey: 5 }, 3)?.xKey).toBeNull();
+  });
+
+  it("leaves a legacy spec with no recorded yKey untouched -- xKey alone is meaningless without it", () => {
+    const legacy: FitSpec = { model: "Linear" };
+    expect(remapFitSpec(legacy, 3)).toEqual(legacy);
+  });
+
+  it("passes undefined through", () => {
+    expect(remapFitSpec(undefined, 3)).toBeUndefined();
+  });
+});
+
+describe("remapFigureBindings (round 2 finding 2: a saved FigureDocument's bindings were not remapped at all)", () => {
+  const bindings = (over: Partial<FigureBindings> = {}): FigureBindings => ({
+    datasetId: "d1",
+    xKey: null,
+    yKeys: null,
+    y2Keys: null,
+    groupKey: null,
+    facetKey: null,
+    errors: [],
+    ...over,
+  });
+
+  it("shifts surviving xKey/yKeys/y2Keys/groupKey/facetKey down", () => {
+    const out = remapFigureBindings(
+      bindings({ xKey: 4, yKeys: [4, 5], y2Keys: [5], groupKey: 5, facetKey: 4 }),
+      3,
+    );
+    expect(out.xKey).toBe(3);
+    expect(out.yKeys).toEqual([3, 4]);
+    expect(out.y2Keys).toEqual([4]);
+    expect(out.groupKey).toBe(4);
+    expect(out.facetKey).toBe(3);
+  });
+
+  it("nulls xKey/groupKey/facetKey and drops from yKeys/y2Keys when the removed column WAS the bound one", () => {
+    const out = remapFigureBindings(bindings({ xKey: 3, yKeys: [3], y2Keys: [3], groupKey: 3, facetKey: 3 }), 3);
+    expect(out.xKey).toBeNull();
+    expect(out.yKeys).toEqual([]);
+    expect(out.y2Keys).toEqual([]);
+    expect(out.groupKey).toBeNull();
+    expect(out.facetKey).toBeNull();
+  });
+
+  it("remaps errors the same way Dataset.errorRoles does", () => {
+    const out = remapFigureBindings(bindings({ errors: [{ channel: 4, target: 0, axis: "y", side: "both" }] }), 3);
+    expect(out.errors).toEqual([{ channel: 3, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("leaves a binding with nothing above the removed column untouched", () => {
+    const out = remapFigureBindings(bindings({ xKey: 0, yKeys: [1] }), 5);
+    expect(out.xKey).toBe(0);
+    expect(out.yKeys).toEqual([1]);
   });
 });
 

@@ -3,8 +3,13 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { facetComposition } from "../lib/composition";
 import { buildErrorSpans } from "../lib/errorbars";
-import type { ComputedColumn, Dataset } from "../lib/types";
+import { facetCompositionFromBinding, facetPayloads } from "../lib/facet";
+import { createFigureDocument } from "../lib/figureDocument";
+import { fitDataForSpec } from "../lib/fitselection";
+import { defaultPlotView } from "../lib/plotview";
+import type { ComputedColumn, Dataset, FitSpec } from "../lib/types";
 import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
 
@@ -547,5 +552,215 @@ describe("removeFormula (BUG 2 closure): facetKey/groupKey follow the shift", ()
     useApp.getState().removeFormula("a", 0); // "a" is not active -- must not touch the live view
     expect(useApp.getState().facetKey).toBe(3);
     expect(useApp.getState().groupKey).toBe(4);
+  });
+});
+
+// Independent review round 2 (2026-08-27), finding 1 -- the most serious of
+// the three: `Dataset.fitSpec.xKey`/`.yKey` are channel-indexed exactly like
+// errorRoles/facetKey above, but `remapDatasetChannels` never touched them.
+// `removeFormula`'s trailing `touchDataset` runs `recomputeStaleFits`, which
+// stamps a fresh fit result straight back onto `fitSpec` -- so a stale yKey
+// doesn't just misdraw a fit spec, it silently OVERWRITES a saved fit's
+// params with a fit of the WRONG column.
+describe("removeFormula (finding 1, review round 2): fitSpec follows the shift", () => {
+  // A(0) B(1) SCRATCH(2) SIGMA(3) OTHER(4) -- same layout as the errorRoles
+  // fixture above; SIGMA's true value is 7 in every row, OTHER's is 999
+  // (what a broken remap would misread after the shift).
+  function dsForFitSpec(fitSpec: FitSpec): Dataset {
+    const formulas: ComputedColumn[] = [
+      { name: "SCRATCH", expr: "0", deps: [] },
+      { name: "SIGMA", expr: "7", deps: [] },
+      { name: "OTHER", expr: "999", deps: [] },
+    ];
+    const labels = ["A", "B", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [10, 20],
+        values: [
+          [1, 100, 0, 7, 999],
+          [2, 200, 0, 7, 999],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+      fitSpec,
+    };
+  }
+
+  it("shifts a surviving yKey down with it -- RENDERED CONSEQUENCE: fitDataForSpec reads SIGMA's true 7s, not OTHER's stale 999s", () => {
+    useApp.setState({ datasets: [dsForFitSpec({ model: "Linear", yKey: 3 })] }); // fit recorded against SIGMA (col 3)
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH (formula index 0, column 2)
+    const updated = useApp.getState().datasets.find((d) => d.id === "a")!;
+    expect(updated.fitSpec).toEqual({ model: "Linear", yKey: 2 }); // SIGMA shifted 3 -> 2
+    const sel = fitDataForSpec(updated, updated.fitSpec!, null, null, null);
+    expect(sel?.y).toEqual([7, 7]);
+    // The corruption this bug produced: reading OTHER's 999 instead.
+    expect(sel?.y).not.toEqual([999, 999]);
+  });
+
+  it("drops fitSpec ENTIRELY when the removed column WAS the fit's subject (yKey) -- a shifted or defaulted yKey would silently refit the wrong column", () => {
+    useApp.setState({ datasets: [dsForFitSpec({ model: "Linear", yKey: 2 })] }); // fit recorded against SCRATCH itself
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH
+    const updated = useApp.getState().datasets.find((d) => d.id === "a")!;
+    expect(updated.fitSpec).toBeUndefined();
+  });
+
+  it("clears xKey to undefined (not null) when xKey WAS the removed column, keeping the surviving yKey", () => {
+    useApp.setState({ datasets: [dsForFitSpec({ model: "Linear", xKey: 2, yKey: 3 })] }); // x=SCRATCH, y=SIGMA
+    useApp.getState().removeFormula("a", 0); // remove SCRATCH (x's column)
+    const updated = useApp.getState().datasets.find((d) => d.id === "a")!;
+    expect(updated.fitSpec).toEqual({ model: "Linear", yKey: 2 }); // xKey undefined, absent from toEqual
+    // RENDERED CONSEQUENCE: fitDataForSpec falls back to the time axis for x
+    // (fitselection.ts's `xKey ?? null`), never re-reads whatever shifted
+    // into SCRATCH's old slot.
+    const sel = fitDataForSpec(updated, updated.fitSpec!, null, null, null);
+    expect(sel?.x).toEqual([10, 20]);
+  });
+});
+
+// Independent review round 2 (2026-08-27), finding 2 -- the third instance of
+// the recurring class: a saved `editableFigures` document's `bindings` are
+// channel-indexed exactly like the live view's xKey/yKeys/facetKey, but
+// `removeFormula` never touched them, so a reopened saved figure plotted the
+// wrong column.
+describe("removeFormula (finding 2, review round 2): editableFigures' bindings follow the shift", () => {
+  // A(0) F1(1) F2(2) F3(3) -- one base column, three formulas.
+  function dsForFigures(): Dataset {
+    const formulas: ComputedColumn[] = [
+      { name: "F1", expr: "A * 1", deps: ["A"] },
+      { name: "F2", expr: "A * 2", deps: ["A"] },
+      { name: "F3", expr: "A * 3", deps: ["A"] },
+    ];
+    const labels = ["A", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [1, 0, 0, 0],
+          [2, 0, 0, 0],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+    };
+  }
+
+  it("RENDERED CONSEQUENCE: a saved figure reopens on F2's true slot, not F3's, after F1 is removed", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "a",
+      view: { ...defaultPlotView(), yKeys: [3] }, // F3 (col 3) at save time
+      facetKey: 2, // faceted by F2 (col 2)
+    });
+    useApp.setState({ datasets: [dsForFigures()], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0); // remove F1 (formula index 0, column 1)
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    // F3 shifts 3 -> 2, F2 shifts 2 -> 1.
+    expect(updated.bindings.yKeys).toEqual([2]);
+    expect(updated.bindings.facetKey).toBe(1);
+  });
+
+  it("nulls a binding whose column WAS removed", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "a",
+      view: { ...defaultPlotView(), yKeys: [1] }, // F1 itself
+      groupKey: 1,
+    });
+    useApp.setState({ datasets: [dsForFigures()], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0); // remove F1
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    expect(updated.bindings.yKeys).toEqual([]);
+    expect(updated.bindings.groupKey).toBeNull();
+  });
+
+  it("leaves a figure bound to a different dataset untouched", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "other",
+      view: { ...defaultPlotView(), yKeys: [3] },
+    });
+    useApp.setState({ datasets: [dsForFigures(), baseDs("other")], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0);
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    expect(updated.bindings.yKeys).toEqual([3]);
+  });
+});
+
+// Independent review round 2 (2026-08-27), finding 3 -- makes this branch's
+// OWN facetKey fix (BUG 2 above) inert: `useEffectiveComposition` prefers the
+// ephemeral `composition` render cache over the durable `facetKey` binding
+// fallback, so a stale pre-removal `composition` keeps rendering even once
+// `facetKey` is correctly remapped -- until an unrelated focus switch nulls
+// `composition` out.
+describe("removeFormula (finding 3, review round 2): composition is invalidated so the remapped facetKey wins", () => {
+  // A(0) F1(1) SITE(2) BATCH(3) -- one base column, three formulas.
+  function dsForComposition(): Dataset {
+    const formulas: ComputedColumn[] = [
+      { name: "F1", expr: "A * 1", deps: ["A"] },
+      { name: "SITE", expr: "A * 2", deps: ["A"] }, // facet column: A=1,2 -> SITE=2,4 (2 levels)
+      { name: "BATCH", expr: "A * 3", deps: ["A"] },
+    ];
+    const labels = ["A", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [1, 0, 2, 0],
+          [2, 0, 4, 0],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+    };
+  }
+
+  it("RENDERED CONSEQUENCE: the pre-removal facet panels don't keep rendering -- composition is cleared so the stage rebuilds from the shifted facetKey", () => {
+    const ds = dsForComposition();
+    const staleComposition = facetComposition(facetPayloads(ds.data, 2, null, null)); // faceted by SITE (col 2), pre-removal
+    useApp.setState({
+      datasets: [ds],
+      activeId: "a",
+      facetKey: 2, // SITE
+      composition: staleComposition,
+    });
+    useApp.getState().removeFormula("a", 0); // remove F1 (column 1)
+    // The immediate render cache must not keep showing the pre-removal panels.
+    expect(useApp.getState().composition).toBeNull();
+    // The durable binding shifted correctly (SITE: 2 -> 1)...
+    expect(useApp.getState().facetKey).toBe(1);
+    // ...and the fallback `useEffectiveComposition` uses rebuilds correctly off it.
+    const updatedDs = useApp.getState().datasets.find((d) => d.id === "a")!;
+    const rebuilt = facetCompositionFromBinding(updatedDs, useApp.getState().facetKey, null, null);
+    expect(rebuilt?.kind).toBe("facet");
+    expect(rebuilt && "panels" in rebuilt ? rebuilt.panels.length : 0).toBe(2);
+  });
+
+  it("leaves composition untouched when the dataset is not the active one", () => {
+    const ds = dsForComposition();
+    const staleComposition = facetComposition(facetPayloads(ds.data, 2, null, null));
+    useApp.setState({
+      datasets: [ds, baseDs("other")],
+      activeId: "other",
+      facetKey: 2,
+      composition: staleComposition,
+    });
+    useApp.getState().removeFormula("a", 0);
+    expect(useApp.getState().composition).toBe(staleComposition);
   });
 });
