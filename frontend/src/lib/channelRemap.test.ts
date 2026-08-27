@@ -4,11 +4,13 @@ import {
   remapChannel,
   remapChannelList,
   remapDatasetChannels,
+  remapErrorRoles,
   remapKeyedRecord,
   remapViewChannels,
   remapWindowViews,
   type ViewChannelState,
 } from "./channelRemap";
+import type { ErrorBinding } from "./errorRoles";
 import type { SeriesStyle } from "./types";
 
 const style = (color: string): SeriesStyle => ({ color }) as SeriesStyle;
@@ -18,6 +20,8 @@ function view(over: Partial<ViewChannelState> = {}): ViewChannelState {
     xKey: 0,
     yKeys: [3, 4],
     y2Keys: null,
+    groupKey: null,
+    facetKey: null,
     hiddenChannels: [],
     seriesOrder: null,
     seriesStyles: {},
@@ -64,6 +68,67 @@ describe("remapDatasetChannels", () => {
     expect(out.channelTypes).toEqual({ 3: "continuous" });
     expect(out.filter).toEqual([{ col: 3, min: 0, max: 1 }]);
   });
+
+  it("remaps errorRoles alongside the other dataset-scoped fields (BUG 1)", () => {
+    const out = remapDatasetChannels(
+      { errorRoles: [{ channel: 4, target: 0, axis: "y", side: "both" }] },
+      3,
+    );
+    expect(out.errorRoles).toEqual([{ channel: 3, target: 0, axis: "y", side: "both" }]);
+  });
+});
+
+describe("remapErrorRoles (BUG 1: Dataset.errorRoles was not remapped at all)", () => {
+  const binding = (over: Partial<ErrorBinding>): ErrorBinding => ({
+    channel: 4,
+    target: 0,
+    axis: "y",
+    side: "both",
+    ...over,
+  });
+
+  it("shifts a surviving error column (`channel`) down with it", () => {
+    const out = remapErrorRoles([binding({ channel: 4, target: 0 })], 3);
+    expect(out).toEqual([binding({ channel: 3, target: 0 })]);
+  });
+
+  it("shifts a surviving `target` down too -- it is channel-indexed on BOTH ends", () => {
+    const out = remapErrorRoles([binding({ channel: 5, target: 4 })], 3);
+    expect(out).toEqual([binding({ channel: 4, target: 3 })]);
+  });
+
+  it("drops a binding whose error column (`channel`) WAS the removed column", () => {
+    const out = remapErrorRoles([binding({ channel: 3, target: 0 })], 3);
+    expect(out).toEqual([]);
+  });
+
+  it("drops a binding whose `target` WAS the removed column", () => {
+    const out = remapErrorRoles([binding({ channel: 5, target: 3 })], 3);
+    expect(out).toEqual([]);
+  });
+
+  it("leaves the `target: -1` x-axis sentinel untouched -- it is not a column index", () => {
+    // A naive remap would treat -1 as "channel 0" and shift or drop it.
+    const out = remapErrorRoles([binding({ channel: 5, target: -1, axis: "x" })], 3);
+    expect(out).toEqual([binding({ channel: 4, target: -1, axis: "x" })]);
+  });
+
+  it("passes an undefined errorRoles through untouched", () => {
+    expect(remapErrorRoles(undefined, 3)).toBeUndefined();
+  });
+
+  it("preserves a deliberate empty array (O1 marker) rather than collapsing to undefined", () => {
+    // originBookRoles.ts's `{ errorRoles: [] }` means "no error columns,
+    // do NOT fall back to the label guesser" -- collapsing an emptied-out
+    // remap to `undefined` would silently re-enable that guesser.
+    expect(remapErrorRoles([], 3)).toEqual([]);
+  });
+
+  it("an explicit binding set that remaps down to zero survivors stays [], not undefined", () => {
+    const out = remapErrorRoles([binding({ channel: 3, target: 0 })], 3);
+    expect(out).toEqual([]);
+    expect(out).not.toBeUndefined();
+  });
 });
 
 describe("remapViewChannels", () => {
@@ -93,6 +158,15 @@ describe("remapViewChannels", () => {
     expect(remapViewChannels(view({ xKey: 3 }), 3).xKey).toBeNull();
     expect(remapViewChannels(view({ xKey: 4 }), 3).xKey).toBe(3);
     expect(remapViewChannels(view({ xKey: 0 }), 3).xKey).toBe(0);
+  });
+
+  it("nulls groupKey/facetKey when the removed column WAS the bound one, shifts otherwise (BUG 2)", () => {
+    expect(remapViewChannels(view({ groupKey: 3 }), 3).groupKey).toBeNull();
+    expect(remapViewChannels(view({ groupKey: 4 }), 3).groupKey).toBe(3);
+    expect(remapViewChannels(view({ groupKey: 0 }), 3).groupKey).toBe(0);
+    expect(remapViewChannels(view({ facetKey: 3 }), 3).facetKey).toBeNull();
+    expect(remapViewChannels(view({ facetKey: 4 }), 3).facetKey).toBe(3);
+    expect(remapViewChannels(view({ facetKey: 0 }), 3).facetKey).toBe(0);
   });
 
   it("remaps errKeys on BOTH sides (keys are Y channels, values are error channels)", () => {

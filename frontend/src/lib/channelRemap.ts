@@ -17,7 +17,18 @@
 //
 // Both halves now live here so the rule is stated ONCE. Pure: plain values in,
 // patch out, no store import.
+//
+// 2026-08-27 (independent review): two more channel-indexed fields had the
+// same gap. `Dataset.errorRoles` (dataset-scoped, both `channel` and `target`
+// ends) went unremapped -- a removed column shifted a surviving error binding
+// onto the wrong column with no error, only a silently-wrong whisker size.
+// `groupKey`/`facetKey` (view-scoped, "bindings-owned like xKey/yKeys" per
+// `lib/plotview.ts`) had the same gap -- a removed column could leave
+// `facetKey` pointing at a different column, re-faceting the grid on the
+// wrong data. Both now follow the established patterns exactly (`errKeys`
+// for the two-sided case, `xKey` for the single-sided case).
 
+import type { ErrorBinding } from "./errorRoles";
 import type { ChannelRole, ColumnFilter, ModelingType, SeriesStyle } from "./types";
 
 /** Shift one channel index down past a removed column. `null` = the index WAS
@@ -59,11 +70,42 @@ export function remapChannelList(list: number[], removedCol: number): number[] {
   return list.map((c) => remapChannel(c, removedCol)).filter((c): c is number => c !== null);
 }
 
+/** Remap `Dataset.errorRoles` -- index-keyed on BOTH ends: `channel` (the
+ *  error column) is always a real column index, but `target` (the column the
+ *  error describes) carries the `-1` "bound to the x axis" sentinel
+ *  (`lib/errorRoles.ts`'s `ErrorBinding` doc), which is never a column index
+ *  and must pass through untouched rather than being treated as channel 0. A
+ *  binding whose `channel` or non-sentinel `target` WAS the removed column is
+ *  dropped, mirroring `remapViewChannels`'s `errKeys` treatment below.
+ *
+ *  Preserves the explicit-`[]`-vs-`undefined` distinction the O1 marker relies
+ *  on (`lib/originBookRoles.ts`): an absent `errorRoles` stays absent, but an
+ *  explicit array that remaps down to zero surviving bindings stays `[]`,
+ *  never collapses to `undefined` -- doing so would silently re-enable the
+ *  label-guesser fallback (`dataset.errorRoles ?? inferErrorBindings(...)`)
+ *  for a dataset that had deliberately opted out of it. */
+export function remapErrorRoles(
+  roles: readonly ErrorBinding[] | undefined,
+  removedCol: number,
+): ErrorBinding[] | undefined {
+  if (!roles) return undefined;
+  const out: ErrorBinding[] = [];
+  for (const r of roles) {
+    const channel = remapChannel(r.channel, removedCol);
+    if (channel === null) continue;
+    const target = r.target < 0 ? r.target : remapChannel(r.target, removedCol);
+    if (target === null) continue;
+    out.push(channel === r.channel && target === r.target ? r : { ...r, channel, target });
+  }
+  return out;
+}
+
 /** The dataset-scoped index-keyed fields (the half fixed in 2026-07-05). */
 export interface DatasetChannelState {
   channelRoles?: Record<number, ChannelRole>;
   channelTypes?: Record<number, ModelingType>;
   filter?: ColumnFilter[];
+  errorRoles?: ErrorBinding[];
 }
 
 export function remapDatasetChannels(
@@ -77,6 +119,7 @@ export function remapDatasetChannels(
     channelRoles: remapKeyedRecord(d.channelRoles, removedCol),
     channelTypes: remapKeyedRecord(d.channelTypes, removedCol),
     filter: filter && filter.length ? filter : undefined,
+    errorRoles: remapErrorRoles(d.errorRoles, removedCol),
   };
 }
 
@@ -85,6 +128,10 @@ export interface ViewChannelState {
   xKey: number | null;
   yKeys: number[] | null;
   y2Keys: number[] | null;
+  /** "Group" well channel -- bindings-owned like `xKey`/`yKeys` (`lib/plotview.ts`). */
+  groupKey: number | null;
+  /** Facet-by-column binding -- bindings-owned like `groupKey` (`lib/plotview.ts`). */
+  facetKey: number | null;
   hiddenChannels: number[];
   seriesOrder: number[] | null;
   seriesStyles: Record<number, SeriesStyle>;
@@ -96,9 +143,11 @@ export interface ViewChannelState {
  *
  *  `xKey` deliberately becomes `null` when it WAS the removed column: there is
  *  no honest substitute, and null is the store's existing "no explicit x"
- *  state (row index), which every consumer already handles. `errKeys` is
- *  remapped on BOTH sides -- its keys are Y channels and its values are error
- *  channels, so a removed column can invalidate either end. */
+ *  state (row index), which every consumer already handles. `groupKey` and
+ *  `facetKey` are "bindings-owned like xKey/yKeys" (`lib/plotview.ts`'s own
+ *  field docs) and follow the exact same null-on-removed pattern. `errKeys`
+ *  is remapped on BOTH sides -- its keys are Y channels and its values are
+ *  error channels, so a removed column can invalidate either end. */
 export function remapViewChannels(v: ViewChannelState, removedCol: number): ViewChannelState {
   const errKeys: Record<number, number> = {};
   for (const [k, val] of Object.entries(v.errKeys)) {
@@ -110,6 +159,8 @@ export function remapViewChannels(v: ViewChannelState, removedCol: number): View
     xKey: v.xKey === null ? null : remapChannel(v.xKey, removedCol),
     yKeys: v.yKeys === null ? null : remapChannelList(v.yKeys, removedCol),
     y2Keys: v.y2Keys === null ? null : remapChannelList(v.y2Keys, removedCol),
+    groupKey: v.groupKey === null ? null : remapChannel(v.groupKey, removedCol),
+    facetKey: v.facetKey === null ? null : remapChannel(v.facetKey, removedCol),
     hiddenChannels: remapChannelList(v.hiddenChannels, removedCol),
     seriesOrder: v.seriesOrder === null ? null : remapChannelList(v.seriesOrder, removedCol),
     seriesStyles: remapKeyedRecordDense(v.seriesStyles, removedCol),
