@@ -18,7 +18,7 @@ const originData: DataStruct = {
   units: ["", "", "", "", ""],
   metadata: {
     origin_column_names: ["R++", "dR++", "Sample", "X2", "Junk"],
-    column_designations: { A: "X", "R++": "Y", "dR++": "Y-error", Sample: "Label", X2: "X", Junk: "X-error" },
+    column_designations: { A: "X", "R++": "Y", "dR++": "Y-error", Sample: "label", X2: "X", Junk: "X-error" },
   },
 };
 
