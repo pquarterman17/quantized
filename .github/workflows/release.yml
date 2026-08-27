@@ -293,3 +293,59 @@ jobs:
               platforms:{"windows-x86_64":{signature:$s,url:$u}}}' > latest.json
           echo "--- latest.json ---"; cat latest.json
           gh release upload "$TAG" latest.json --repo "$REPO" --clobber
+
+  # Publish a SHA256SUMS manifest covering every asset on the Release, so a
+  # user who downloads an installer can verify it against a value that came
+  # from the build itself rather than from the same page-load that served
+  # the binary. Runs LAST: `installers` attaches the installers, updater
+  # `.sig`s and server archives, and `updater-manifest` adds latest.json,
+  # so anything earlier would hash an incomplete asset set and publish a
+  # manifest that silently omits files. Tag releases only -- a
+  # workflow_dispatch dry run has no Release to checksum, and both `needs`
+  # are themselves tag-gated, so this skips with them.
+  checksums:
+    name: checksums
+    needs: [installers, updater-manifest]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$REPO" --dir assets --pattern '*'
+          cd assets
+          if [ -z "$(ls -A .)" ]; then
+            echo "::error::no assets found on $TAG -- nothing to checksum"; exit 1
+          fi
+          # `! -name SHA256SUMS` rather than an `rm` first: a re-run downloads
+          # the manifest this job published last time, AND the `> SHA256SUMS`
+          # redirect recreates the file before `find` walks the directory, so
+          # deleting it beforehand does not stop it hashing itself. Verified
+          # locally -- the rm-first version emitted a self-entry that
+          # `sha256sum -c` then reported as FAILED on every re-run.
+          #
+          # `%P` prints the name without find's leading `./`, so the manifest
+          # matches the plain `sha256sum -c SHA256SUMS` a user runs in the
+          # directory they downloaded into. NUL-delimited throughout: a
+          # newline-delimited `find | sort | xargs` splits an asset name on
+          # whitespace and sha256sum then reports "No such file or directory"
+          # for each fragment -- verified against a `Weird Name With
+          # Spaces.dmg` fixture. LC_ALL=C so the ordering is byte-wise and
+          # identical on any runner.
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
+            | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS
+          echo "--- SHA256SUMS ---"; cat SHA256SUMS
+          # Surface the digests in the run summary too, so they can be read
+          # without downloading the manifest that vouches for them.
+          {
+            echo "### SHA256SUMS for \`$TAG\`"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh release upload "$TAG" SHA256SUMS --repo "$REPO" --clobber

@@ -54,20 +54,24 @@ export async function resolveFreshData(ds: Dataset, fresh: DataStruct): Promise<
 
 /** Does the fresh data's shape (rows or BASE columns, i.e. excluding
  *  `ds`'s own computed formula columns) differ from `ds`'s CURRENT data? If
- *  so, every row/column-indexed field (excludedRows, filter, channelRoles,
- *  channelTypes, formulas) is stale — indices into a shape that no longer
- *  exists — and must clear rather than silently point at the wrong rows or
- *  columns. Mirrors the existing xTrim (`applyCorrections`'s `rowsChanged`)
- *  and `installBookData`'s preview->full-swap precedents. */
+ *  so, the ROW-indexed `excludedRows` is stale — indices into rows that no
+ *  longer exist — and must clear rather than silently point at the wrong
+ *  rows. (The COLUMN-indexed fields — filter/channelRoles/channelTypes/
+ *  formulas/errorRoles — clear on the narrower `reimportColumnsChanged`
+ *  alone; see that function's doc.) Mirrors the existing xTrim
+ *  (`applyCorrections`'s `rowsChanged`) and `installBookData`'s
+ *  preview->full-swap precedents. */
 export function reimportShapeChanged(ds: Dataset, fresh: DataStruct): boolean {
   return fresh.time.length !== ds.data.time.length || reimportColumnsChanged(ds, fresh);
 }
 
-/** The COLUMN half of `reimportShapeChanged` alone. A saved editable figure's
- *  channel bindings stay provably valid across a row-only reshape (column
- *  meaning is untouched), so `commitReimport` disturbs those durable documents
- *  only on this narrower condition — unlike the live view/window reset, which
- *  fires on any shape change because the user is actively looking at it. */
+/** The COLUMN half of `reimportShapeChanged` alone. Every column-indexed
+ *  field — filter/channelRoles/channelTypes/formulas/errorRoles — stays
+ *  provably valid across a row-only reshape (column meaning is untouched),
+ *  so `commitReimport` clears them, and disturbs a saved editable figure's
+ *  channel bindings, only on this narrower condition — unlike the live
+ *  view/window reset, which fires on any shape change because the user is
+ *  actively looking at it. */
 export function reimportColumnsChanged(ds: Dataset, fresh: DataStruct): boolean {
   const baseCols = Math.max(0, ds.data.labels.length - (ds.formulas?.length ?? 0));
   return fresh.labels.length !== baseCols;

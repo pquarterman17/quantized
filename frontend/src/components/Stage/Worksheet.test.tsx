@@ -377,7 +377,7 @@ describe("Worksheet Origin designation + comment headers (item 4)", () => {
       labels: ["Sample", "dR++"],
       metadata: {
         origin_column_names: ["Sample", "dR++"],
-        column_designations: { A: "X", Sample: "Label", "dR++": "Y-error" },
+        column_designations: { A: "X", Sample: "label", "dR++": "Y-error" },
       },
     };
     useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: labelData }], activeId: "d1" });
