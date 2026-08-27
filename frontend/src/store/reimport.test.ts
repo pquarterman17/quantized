@@ -138,7 +138,7 @@ describe("reimportDataset — shape preserved", () => {
 });
 
 describe("reimportDataset — row/column count change", () => {
-  it("clears row/column-indexed state and toasts on a row-count change", async () => {
+  it("clears the ROW-indexed excludedRows and toasts on a row-count change, but keeps the COLUMN-indexed filter (columns unchanged)", async () => {
     vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2], values: [[11], [21]] });
     useApp.setState({
       datasets: [baseDataset({ excludedRows: [1], filter: [{ col: 0, kind: "range", min: 0, max: 100 }] })],
@@ -148,7 +148,7 @@ describe("reimportDataset — row/column count change", () => {
 
     const ds = useApp.getState().datasets[0];
     expect(ds.excludedRows).toBeUndefined();
-    expect(ds.filter).toBeUndefined();
+    expect(ds.filter).toEqual([{ col: 0, kind: "range", min: 0, max: 100 }]);
     expect(toast).toHaveBeenCalledWith(expect.stringContaining("changed shape"), "info");
   });
 
@@ -407,6 +407,130 @@ describe("reimportDataset — row/column count change", () => {
     await useApp.getState().reimportDataset("d1");
 
     expect(useApp.getState().editableFigures).toBe(initial);
+  });
+});
+
+// Column-keyed fields (filter/channelRoles/channelTypes/formulas) index
+// COLUMNS, not rows -- a row-only reshape (more rows, identical base
+// columns) leaves every one of them provably valid, exactly like errorRoles
+// above (Round 7 BLOCKER) and lib/reimport.ts's own reimportColumnsChanged
+// doc: "A saved editable figure's channel bindings stay provably valid
+// across a row-only reshape (column meaning is untouched)". Before this
+// fix these were cleared under the wider `shapeChanged` (rows OR columns),
+// which wiped them on a harmless appended-log reimport.
+describe("reimportDataset — row-only reshape preserves column-keyed state", () => {
+  it("preserves filter on a ROW-only reimport (more rows, same columns)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({
+      datasets: [baseDataset({ filter: [{ col: 0, kind: "range", min: 0, max: 100 }] })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].filter).toEqual([{ col: 0, kind: "range", min: 0, max: 100 }]);
+  });
+
+  it("preserves channelRoles on a ROW-only reimport (more rows, same columns)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({
+      datasets: [baseDataset({ channelRoles: { 0: "label" } })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].channelRoles).toEqual({ 0: "label" });
+  });
+
+  it("preserves channelTypes on a ROW-only reimport (more rows, same columns)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({
+      datasets: [baseDataset({ channelTypes: { 0: "continuous" } })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].channelTypes).toEqual({ 0: "continuous" });
+  });
+
+  it("preserves formulas on a ROW-only reimport (not cleared)", async () => {
+    // 1 base column ("m") + 1 formula column ("2x") = ds.data has 2 labels;
+    // the freshly re-read file still reports only the 1 BASE column. (Note:
+    // this test deliberately does not assert on the recomputed `ds.data`
+    // contents — `recomputeData`'s own base/formula-column bookkeeping on a
+    // freshly re-read (formula-column-free) payload is a separate, pre-
+    // existing concern, out of scope here; only whether `formulas` itself
+    // survives the row-only reshape is this gap's target.)
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      time: [1, 2, 3, 4],
+      values: [[11], [21], [31], [41]],
+    });
+    useApp.setState({
+      datasets: [
+        baseDataset({
+          data: { ...raw, labels: ["m", "2x"], units: ["emu", "emu"], values: [[10, 20], [20, 40], [30, 60]] },
+          formulas: [{ name: "2x", expr: "2*A" }],
+        }),
+      ],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].formulas).toEqual([{ name: "2x", expr: "2*A" }]);
+  });
+});
+
+// Independent-review booked finding: on a COLUMN-changing reimport,
+// `errorRoles` used to be unconditionally cleared to `undefined` — throwing
+// away a still-derivable Origin-authoritative answer instead of RE-DERIVING
+// it from the fresh `column_designations` `merge.newData` already carries.
+// `lib/originBookRoles.ts`'s `originBookErrorRoles` is the SAME chokepoint
+// the initial import path uses (#239) — re-running it here on the fresh
+// metadata means a re-import gets exactly the binding a fresh import of the
+// SAME file would produce, rather than silently downgrading to `undefined`
+// and re-inviting the five `errorRoles ?? inferErrorBindings(...)` readers'
+// label-guesser fallback (O1's whole point).
+describe("reimportDataset — errorRoles re-derived from fresh designations on a column change (booked finding)", () => {
+  it("re-derives a valid Y/Y-error binding from the fresh column_designations, instead of clearing to undefined", async () => {
+    const originFresh: DataStruct = {
+      time: [1, 2, 3],
+      values: [[1, 0.1], [2, 0.1], [3, 0.1]],
+      labels: ["R++", "dR++"],
+      units: ["", ""],
+      metadata: {
+        origin_column_names: ["R++", "dR++"],
+        column_designations: { "R++": "Y", "dR++": "Y-error" },
+      },
+    };
+    vi.mocked(importFile).mockResolvedValue(originFresh);
+    useApp.setState({ datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+    ]);
+  });
+
+  it("re-derives Origin's deliberate 'checked: none' [] marker, not collapsed to undefined", async () => {
+    const originFresh: DataStruct = {
+      time: [1, 2, 3],
+      values: [[1, 2], [2, 3], [3, 4]],
+      labels: ["R++", "T"],
+      units: ["", ""],
+      metadata: {
+        origin_column_names: ["R++", "T"],
+        // Designations exist (Origin DID answer) but neither is an error
+        // column -- the O1 "checked: none" case, which must survive as `[]`.
+        column_designations: { "R++": "Y", T: "Y" },
+      },
+    };
+    vi.mocked(importFile).mockResolvedValue(originFresh);
+    useApp.setState({ datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
   });
 });
 

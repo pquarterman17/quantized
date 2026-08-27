@@ -2,8 +2,10 @@
 // 1 / key decision 3: "one shared column-metadata reader"). `io/origin_project/
 // opj.py` decodes each worksheet column's Origin short name
 // (`metadata.origin_column_names`, in `.values` channel order), its
-// designation (X/Y/Y-error/X-error/Label/Disregard, keyed by short name in
-// `metadata.column_designations`), and any user comment
+// designation (X/Y/Y-error/X-error/label/disregard/Z, keyed by short name in
+// `metadata.column_designations` — the EXACT strings `windows.py`'s
+// `_DESIGNATION` enum emits, case included: only X/Y/Y-error/X-error are
+// capitalized; label/disregard are lowercase), and any user comment
 // (`metadata.column_comments`). This module aligns those three maps ONCE per
 // dataset so every consumer reads the SAME alignment and can never drift
 // apart:
@@ -12,22 +14,45 @@
 //    read through this instead of re-deriving the alignment privately)
 //  - the future selection→plot mapping (item 7)
 //
+// Booked-finding fix: this set used to accept "Label"/"Disregard"
+// (capitalized) and had no "Z" member at all — none of which the backend
+// ever emits (`src/quantized/io/origin_project/windows.py`'s `_DESIGNATION`
+// map is the authoritative enumeration: 0=Y, 1=disregard, 2=Y-error, 3=X,
+// 4=label, 5=Z, 6=X-error; `windows_opju.py`'s own map agrees on every
+// string it independently decodes). A book whose columns were all
+// disregard/label/Z therefore had EVERY designation silently parse to
+// `undefined` — invisible in isolation, but `lib/originBookRoles.ts`'s
+// `list.every((c) => c?.designation === undefined)` guard reads "every
+// designation absent" as "no usable designation info at all" and falls back
+// to the label-name guesser instead of Origin's own authoritative answer.
+// `ORIGIN_DESIGNATIONS` is exported so `columnmeta.test.ts` can pin
+// agreement with the backend's own set from ONE shared fixture
+// (`tests/fixtures/wire/origin_designations.json`, also read by
+// `tests/test_io_origin_project.py`) instead of a second hand-typed list.
+//
 // Null-safe: a non-Origin dataset (no `origin_column_names`) yields an empty
 // list, and every reader falls back to its pre-Origin behaviour.
 
 import type { DataStruct } from "./types";
 
-/** Origin's own designation for a worksheet column. */
-export type OriginDesignation = "X" | "Y" | "Y-error" | "X-error" | "Label" | "Disregard";
+/** Origin's own designation for a worksheet column — the exact strings
+ *  `windows.py`'s `_DESIGNATION` enum emits (case included). */
+export type OriginDesignation = "X" | "Y" | "Y-error" | "X-error" | "label" | "disregard" | "Z";
 
-const DESIGNATIONS: ReadonlySet<string> = new Set<OriginDesignation>([
+/** Every designation string the backend can emit (module doc). Exported so
+ *  a test can pin it against the backend's own enum from one shared fixture
+ *  rather than restating the list. */
+export const ORIGIN_DESIGNATIONS: readonly OriginDesignation[] = [
   "X",
   "Y",
   "Y-error",
   "X-error",
-  "Label",
-  "Disregard",
-]);
+  "label",
+  "disregard",
+  "Z",
+];
+
+const DESIGNATIONS: ReadonlySet<string> = new Set<OriginDesignation>(ORIGIN_DESIGNATIONS);
 
 export interface ColumnMeta {
   /** The Origin short column name ("A", "B", "R++", …) — NOT the worksheet's
@@ -86,15 +111,19 @@ export function columnMetaAt(ds: Pick<DataStruct, "metadata">, col: number): Col
   return columnMetaList(ds)[col];
 }
 
-/** Short, uppercase badge text for a header role line (WORKSHEET_PLAN item 4):
- *  X · Y · yEr · xEr · Label · Disregard. */
+/** Short badge text for a header role line (WORKSHEET_PLAN item 4):
+ *  X · Y · yEr · xEr · Label · Disregard · Z. Display text is capitalized
+ *  for readability even though the underlying `label`/`disregard`
+ *  designation strings (the type keys here) are lowercase, matching the
+ *  backend's own casing (module doc). */
 export const DESIGNATION_BADGE: Record<OriginDesignation, string> = {
   X: "X",
   Y: "Y",
   "Y-error": "yEr",
   "X-error": "xEr",
-  Label: "Label",
-  Disregard: "Disregard",
+  label: "Label",
+  disregard: "Disregard",
+  Z: "Z",
 };
 
 /** One Origin inline-text column (`metadata.origin_text_columns`, decoded by
