@@ -214,9 +214,16 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
                 // prefers over the durable `facetKey` binding above -- left
                 // alone, the pre-removal facet panels it holds keep
                 // rendering even though `facetKey` was just correctly
-                // remapped. Null it so the stage falls back to rebuilding
-                // from the (now-correct) `facetKey`, exactly the pattern
-                // `facetByColumn`'s own doc comment describes.
+                // remapped. Nulling it is NOT "drop the facet": that hook is
+                // `rawComposition ?? facetCompositionFromBinding(active,
+                // facetKey, xKey, yKeys)`, so the grid re-derives from the
+                // corrected `facetKey` on the very next render. This is the
+                // established lifecycle for this field -- its own doc lists
+                // a focus switch, a workspace reopen and a resolved recipe's
+                // freshly-focused window as the other moments it goes back
+                // to null and `facetKey` becomes what's left to render from.
+                // (When `facetKey` WAS the removed column, `remapViewChannels`
+                // has already set it null, and the facet correctly ends.)
                 composition: null,
               }
             : {}),
