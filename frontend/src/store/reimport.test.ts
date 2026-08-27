@@ -534,6 +534,59 @@ describe("reimportDataset — errorRoles re-derived from fresh designations on a
   });
 });
 
+// DATA LOSS (found reviewing the scope note left on the formulas test above):
+// `applyReimportMerge` called `recomputeData(merged.data, merged.formulas)`,
+// and `recomputeData` STRIPS the last `formulas.length` columns before
+// reapplying -- correct when the payload still carries stale computed
+// columns, which is every OTHER caller's situation. But `merged.data` here is
+// the FRESHLY RE-READ file, which only ever has BASE columns. Stripping
+// `formulas.length` of those deletes real measurement data, and the formulas
+// then evaluate to null because the column they reference is gone.
+//
+// With one base column "m" and one formula "2x", a reimport returned
+// labels ["2x"] and values [[null], ...] -- the user's actual data destroyed,
+// silently, with no toast and no error. `applyFormulas` is the already-base
+// variant and is what this path needs. `recomputeData` has no other
+// non-test caller.
+describe("reimportDataset — a formula must not destroy the base data (data loss)", () => {
+  const withFormula = () =>
+    baseDataset({
+      data: { ...raw, labels: ["m", "2x"], units: ["emu", "emu"], values: [[10, 20], [20, 40], [30, 60]] },
+      formulas: [{ name: "2x", expr: "2*A" }],
+    });
+
+  it("keeps the base column and recomputes the formula on an UNCHANGED-shape reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh); // same 3 rows, same 1 base col
+    useApp.setState({ datasets: [withFormula()] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const d = useApp.getState().datasets[0];
+    expect(d.data.labels).toEqual(["m", "2x"]);
+    expect(d.data.values).toEqual([
+      [11, 22],
+      [21, 42],
+      [31, 62],
+    ]);
+  });
+
+  it("keeps the base column and recomputes the formula on a ROW-only reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    useApp.setState({ datasets: [withFormula()] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const d = useApp.getState().datasets[0];
+    expect(d.data.labels).toEqual(["m", "2x"]);
+    expect(d.data.values).toEqual([
+      [11, 22],
+      [21, 42],
+      [31, 62],
+      [41, 82],
+    ]);
+  });
+});
+
 describe("reimportDataset — corrections re-applied", () => {
   it("re-applies stored corrections to the fresh raw through applyCorrectionsApi", async () => {
     vi.mocked(importFile).mockResolvedValue(fresh);
