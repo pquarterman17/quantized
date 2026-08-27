@@ -145,4 +145,21 @@ describe("originBookErrorRoles", () => {
     });
     expect(roles?.errorRoles).toEqual([{ channel: 0, target: -1, axis: "x", side: "both" }]);
   });
+
+  // Booked finding (this pass): before columnmeta.ts's designation set
+  // accepted the backend's real lowercase "label"/"disregard" strings and
+  // its "Z" member, a book designated ENTIRELY out of disregard/label/Z had
+  // every column's `columnMetaList(...)[i]?.designation` silently come back
+  // `undefined` -- indistinguishable from "no usable designation info at
+  // all" -- so this function's own `list.every((c) => c?.designation ===
+  // undefined)` guard misfired and returned `null`, sending the caller to
+  // the label-name guesser instead of Origin's own authoritative (if
+  // uninteresting) answer. Now that designation parses correctly, the
+  // guard sees a REAL designation on every column and falls through to the
+  // loop, which finds no error columns and returns the O1 "checked: none"
+  // `{ errorRoles: [] }` marker -- not a guess, and not `null` either.
+  it("booked finding: a book designated entirely disregard/label/Z is 'checked: none' ([]), not 'no info' (null)", () => {
+    const roles = originBookErrorRoles(meta("disregard", "label", "Z"));
+    expect(roles).toEqual({ errorRoles: [] });
+  });
 });
