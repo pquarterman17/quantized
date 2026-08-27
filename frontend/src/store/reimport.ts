@@ -24,10 +24,17 @@
 // review round 2, extended to the rest of the group in a later booked-finding
 // pass) — a ROW-only reimport must not wipe any of them; `formulas` in
 // particular just recomputes over the fresh rows via the `merged.formulas
-// ?.length` branch below, same as an unchanged-shape reimport always did. The
-// clearing patch below only ever WRITES those fields via plain object-literal
-// keys (never reads the row-state field by property access), so it never
-// needs the #50 guard's allowlist in architecture.test.ts.
+// ?.length` branch below, same as an unchanged-shape reimport always did.
+// `errorRoles` doesn't just clear on a column change — it RE-DERIVES from
+// the fresh `column_designations` via `lib/originBookRoles.ts`'s
+// `originBookErrorRoles` (independent-review booked finding), the SAME
+// chokepoint the initial-import path uses (#239), so a re-import gets
+// exactly the binding a fresh import of the same file would; only a fresh
+// file with NO usable designation info at all falls back to `undefined`
+// (the label-guesser case). The clearing patch below only ever WRITES those
+// fields via plain object-literal keys (never reads the row-state field by
+// property access), so it never needs the #50 guard's allowlist in
+// architecture.test.ts.
 //
 // The same staleness applies to a SAVED editable figure
 // (store/figureLifecycle.ts's `editableFigures`, added later than this file's
@@ -59,6 +66,7 @@ import { recomputeData } from "../lib/formula";
 import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
+import { originBookErrorRoles } from "../lib/originBookRoles";
 import { reimportColumnsChanged, reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import type { PlotView } from "../lib/plotview";
@@ -177,7 +185,24 @@ export function applyReimportMerge(
               channelRoles: undefined,
               channelTypes: undefined,
               formulas: undefined,
-              errorRoles: undefined,
+              // Independent-review booked finding: a plain `undefined` here
+              // threw away a still-derivable Origin-authoritative answer on
+              // EVERY column-changing reimport, not just a genuine "no
+              // longer exists" case -- `newData` already carries the FRESH
+              // `column_designations` (the same source #239's own import
+              // path derives from), so re-running `originBookErrorRoles`
+              // gets exactly the binding a brand-new import of this SAME
+              // file would produce. `?.errorRoles` still collapses to
+              // `undefined` when the fresh file has no usable designation
+              // info at all (a non-Origin re-import, or a book stripped of
+              // its metadata) -- the one case `undefined` genuinely means
+              // "not yet determined" and the label-guesser fallback is
+              // correct to run. When designations DO exist but none is an
+              // error column, `originBookErrorRoles` returns the O1
+              // "checked: none" `{ errorRoles: [] }` marker, which survives
+              // here as `[]`, not `undefined` -- exactly like the
+              // unconditional-clear code this replaces never distinguished.
+              errorRoles: originBookErrorRoles(newData)?.errorRoles,
             }
           : {}),
       };

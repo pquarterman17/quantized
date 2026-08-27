@@ -480,6 +480,60 @@ describe("reimportDataset — row-only reshape preserves column-keyed state", ()
   });
 });
 
+// Independent-review booked finding: on a COLUMN-changing reimport,
+// `errorRoles` used to be unconditionally cleared to `undefined` — throwing
+// away a still-derivable Origin-authoritative answer instead of RE-DERIVING
+// it from the fresh `column_designations` `merge.newData` already carries.
+// `lib/originBookRoles.ts`'s `originBookErrorRoles` is the SAME chokepoint
+// the initial import path uses (#239) — re-running it here on the fresh
+// metadata means a re-import gets exactly the binding a fresh import of the
+// SAME file would produce, rather than silently downgrading to `undefined`
+// and re-inviting the five `errorRoles ?? inferErrorBindings(...)` readers'
+// label-guesser fallback (O1's whole point).
+describe("reimportDataset — errorRoles re-derived from fresh designations on a column change (booked finding)", () => {
+  it("re-derives a valid Y/Y-error binding from the fresh column_designations, instead of clearing to undefined", async () => {
+    const originFresh: DataStruct = {
+      time: [1, 2, 3],
+      values: [[1, 0.1], [2, 0.1], [3, 0.1]],
+      labels: ["R++", "dR++"],
+      units: ["", ""],
+      metadata: {
+        origin_column_names: ["R++", "dR++"],
+        column_designations: { "R++": "Y", "dR++": "Y-error" },
+      },
+    };
+    vi.mocked(importFile).mockResolvedValue(originFresh);
+    useApp.setState({ datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+    ]);
+  });
+
+  it("re-derives Origin's deliberate 'checked: none' [] marker, not collapsed to undefined", async () => {
+    const originFresh: DataStruct = {
+      time: [1, 2, 3],
+      values: [[1, 2], [2, 3], [3, 4]],
+      labels: ["R++", "T"],
+      units: ["", ""],
+      metadata: {
+        origin_column_names: ["R++", "T"],
+        // Designations exist (Origin DID answer) but neither is an error
+        // column -- the O1 "checked: none" case, which must survive as `[]`.
+        column_designations: { "R++": "Y", T: "Y" },
+      },
+    };
+    vi.mocked(importFile).mockResolvedValue(originFresh);
+    useApp.setState({ datasets: [baseDataset({ errorRoles: [{ channel: 0, target: -1, axis: "x", side: "both" }] })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+  });
+});
+
 describe("reimportDataset — corrections re-applied", () => {
   it("re-applies stored corrections to the fresh raw through applyCorrectionsApi", async () => {
     vi.mocked(importFile).mockResolvedValue(fresh);
