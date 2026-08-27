@@ -2,7 +2,9 @@
 // separate from the state hook so the array-alignment / label-composition
 // logic is unit-testable without React.
 
-import { classifyErrorLabel, inferErrorBindingsFromLabels, type ErrorBinding } from "./errorRoles";
+import { flatNorm } from "./errorLabelCandidates";
+import { classifyErrorLabelInLabels } from "./errorLabelClassify";
+import { inferErrorBindingsFromLabels, type ErrorBinding } from "./errorRoles";
 import type {
   ImportColumnRole,
   ImportFilterWire,
@@ -184,25 +186,38 @@ export function finalChannelOrder(columns: readonly ImportPreviewColumn[]): Wiza
   }));
 }
 
-/** Mirrors `errorRoles.ts`'s private `norm` exactly (kept in sync by hand):
- *  needed here to independently re-derive WHICH inference rule fired for a
- *  binding without reaching into `inferErrorBindingsFromLabels`'s internals
- *  or changing that shared function. */
-function normalizeLabel(label: string): string {
-  return label.trim().toLowerCase().replace(/[\s_]+/g, "");
-}
-
 /** True when `labels[errorChannel]` matched via `inferErrorBindingsFromLabels`'
  *  RULE 1 (base-name match, e.g. `dR` -> `R`) or RULE 2 (explicit `x` prefix)
  *  -- a real NAME-driven signal. False means the binding (if any) can only
- *  have come from RULE 3 (nearest preceding column, pure position). */
+ *  have come from RULE 3 (nearest preceding column, pure position).
+ *
+ *  This re-derives WHICH rule fired without reaching into
+ *  `inferErrorBindingsFromLabels`'s internals, so it MUST make the same
+ *  three decisions the same way it does, or it mislabels a real rule-1
+ *  match as positional and `suggestErrorBindings` then drops a suggestion
+ *  it promised never to demote. Two things kept that in step (both were
+ *  wrong before -- see the independent-review test in importwizard.test.ts):
+ *
+ *  1. The CLASSIFIER. `inferErrorBindingsFromLabels` decides with the
+ *     evidence-gated `classifyErrorLabelInLabels`; this used the
+ *     context-free `classifyErrorLabel`, whose own header says it is
+ *     "deliberately NOT used for pairing-target-exclusion decisions" --
+ *     and `isErrorLabel` below is exactly such a decision, since it picks
+ *     which columns are eligible to BE a base. The lax wrapper returns the
+ *     top-ranked candidate regardless of evidence, so a provisional-only
+ *     label ("Serr": a glued "err" at the edge with no sibling "S") counted
+ *     as an error column here but not there, and got wrongly struck off as
+ *     a base.
+ *  2. The NORMALIZER. `flatNorm` (the same function `errorRoles.ts` compares
+ *     with) rather than a hand-synced local copy that had to be kept
+ *     identical by discipline alone. */
 function isNameDrivenMatch(labels: readonly string[], errorChannel: number): boolean {
-  const info = classifyErrorLabel(labels[errorChannel]);
+  const info = classifyErrorLabelInLabels(labels, errorChannel);
   if (!info) return false;
   if (info.axis === "x") return true; // rule 2
   if (!info.base) return false;
-  const isErrorLabel = labels.map((l) => classifyErrorLabel(l) !== null);
-  return labels.some((l, i) => !isErrorLabel[i] && normalizeLabel(l) === info.base); // rule 1
+  const isErrorLabel = labels.map((_, i) => classifyErrorLabelInLabels(labels, i) !== null);
+  return labels.some((l, i) => !isErrorLabel[i] && flatNorm(l) === info.base); // rule 1
 }
 
 /** True when some OTHER, non-error, non-categorical channel sits AFTER
