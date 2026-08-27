@@ -19,7 +19,12 @@ import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, DataStruct } from "../lib/types";
-import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
+import {
+  remapDatasetChannels,
+  remapFigureBindings,
+  remapViewChannels,
+  remapWindowViews,
+} from "../lib/channelRemap";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
 import type { AppState } from "./useApp";
 
@@ -193,7 +198,35 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         const remappedDataset = datasets.find((dataset) => dataset.id === id);
         return {
           datasets,
-          ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
+          // Finding 2 (independent review, round 2): a SAVED editable figure
+          // is neither the live view nor a bound plotWindows entry -- it
+          // needs its own remap of the same channel-indexed bindings.
+          editableFigures: s.editableFigures.map((doc) =>
+            doc.bindings.datasetId === id
+              ? { ...doc, bindings: remapFigureBindings(doc.bindings, removedCol) }
+              : doc,
+          ),
+          ...(s.activeId === id
+            ? {
+                ...remapViewChannels(s, removedCol),
+                // Finding 3 (independent review, round 2): `composition` is
+                // an EPHEMERAL render cache that `useEffectiveComposition`
+                // prefers over the durable `facetKey` binding above -- left
+                // alone, the pre-removal facet panels it holds keep
+                // rendering even though `facetKey` was just correctly
+                // remapped. Nulling it is NOT "drop the facet": that hook is
+                // `rawComposition ?? facetCompositionFromBinding(active,
+                // facetKey, xKey, yKeys)`, so the grid re-derives from the
+                // corrected `facetKey` on the very next render. This is the
+                // established lifecycle for this field -- its own doc lists
+                // a focus switch, a workspace reopen and a resolved recipe's
+                // freshly-focused window as the other moments it goes back
+                // to null and `facetKey` becomes what's left to render from.
+                // (When `facetKey` WAS the removed column, `remapViewChannels`
+                // has already set it null, and the facet correctly ends.)
+                composition: null,
+              }
+            : {}),
           plotWindows: syncDatasetWindowDocuments(remappedWindows, id, remappedDataset?.errorRoles),
         };
       });
