@@ -143,6 +143,47 @@ describe("suggestErrorBindings (P1.6 item 2 — 'no guess can silently attach')"
     expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
   });
 
+  // Independent-review finding: `isNameDrivenMatch` re-derived "did rule 1
+  // fire?" using the CONTEXT-FREE `classifyErrorLabel`, while
+  // `inferErrorBindingsFromLabels` decides with the evidence-gated
+  // `classifyErrorLabelInLabels`. `errorLabelClassify.ts`'s own header says
+  // the context-free wrapper is "deliberately NOT used for
+  // pairing-target-exclusion decisions" -- but `isErrorLabel` here IS one:
+  // it decides which columns are eligible to BE a base.
+  //
+  // The lax wrapper returns the top-ranked candidate regardless of
+  // evidence, so a provisional-only label like "Serr" (a glued "err" at the
+  // edge, with no sibling "S" to confirm it) reads as an error column
+  // context-free but NOT under the strict classifier. It was therefore
+  // excluded as a possible base, `labels.some(...)` found nothing, and a
+  // binding rule 1 genuinely produced got demoted to a positional guess --
+  // then dropped outright by `hasFollowingCandidate`. That contradicts this
+  // function's own contract: "A rule 1 (base-name) or rule 2 (explicit
+  // x-prefix) match is NEVER demoted."
+  //
+  // The failure direction is safe (a suggestion vanishes rather than
+  // attaching to the wrong column), which is why a fully green suite never
+  // noticed it.
+  it("does not drop a rule-1 pairing whose BASE column is only provisionally error-like", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "Serr", unit: "", role: "y" },
+      { index: 1, name: "dSerr", unit: "", role: "error" },
+      { index: 2, name: "X", unit: "", role: "y" },
+    ];
+    // inferErrorBindingsFromLabels(["Serr","dSerr","X"]) really does emit
+    // this binding via rule 1 -- the wizard must not then throw it away.
+    expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("CONTROL: the same shape with a non-provisional base was never affected", () => {
+    const cs: ImportPreviewColumn[] = [
+      { index: 0, name: "R", unit: "", role: "y" },
+      { index: 1, name: "dR", unit: "", role: "error" },
+      { index: 2, name: "X", unit: "", role: "y" },
+    ];
+    expect(suggestErrorBindings(cs)).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
   it("P1-5 DEFECT 2: classifies against effective_name, not the raw header name, when label_line overrides it", () => {
     // RED before the fix: the raw header names ("Col2"/"Col3") share no
     // base-name relationship at all, so the OLD name-only classifier finds
