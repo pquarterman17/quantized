@@ -62,7 +62,7 @@ import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type C
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
-import { recomputeData } from "../lib/formula";
+import { applyFormulas } from "../lib/formula";
 import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
@@ -173,9 +173,14 @@ export function applyReimportMerge(
         // ?.length` recompute branch below that an already-unchanged-shape
         // reimport always used -- this only routes the row-only case onto
         // that existing path instead of dropping the formula outright; it
-        // makes no new claim about `recomputeData`'s own correctness there
-        // (a separate, pre-existing concern — see reimport.test.ts's note on
-        // the formulas-preserved test — out of scope for this fix). There is
+        // recomputes through `applyFormulas`, the ALREADY-BASE variant.
+        // `recomputeData` (which strips `formulas.length` trailing columns
+        // first) is wrong here and was silently destroying data: every other
+        // caller hands it a payload that still carries stale computed
+        // columns, but `merged.data` is the freshly RE-READ file, which only
+        // ever has BASE columns -- so the strip deleted real measurement
+        // data and the formulas then evaluated to null against a column that
+        // no longer existed. See reimport.test.ts's data-loss describe. There is
         // still no sanitizeBindings pass on this path to catch a now-invalid
         // index on a genuine column change, unlike the workspaceDatasetParse
         // .dwk load path.
@@ -207,7 +212,7 @@ export function applyReimportMerge(
           : {}),
       };
       return merged.formulas?.length
-        ? { ...merged, data: recomputeData(merged.data, merged.formulas) }
+        ? { ...merged, data: applyFormulas(merged.data, merged.formulas) }
         : merged;
     }),
     // A shape change makes the old channel-keyed VIEW state (keys/styles/
