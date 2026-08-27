@@ -7,9 +7,17 @@
 
 ## Current truth
 
-Sol extracted the Plot Recipe persistence schema from the capture implementation and changed recipe capture/matching to load on first recipe action. The production build fell from approximately **904.4 kB to 902.5 kB eager JavaScript** against the unchanged **904.7 kB budget**. This is real, but approximately **2.3 kB is not meaningful working headroom**. R8 remains open; do not raise the budget or mark it complete from this result.
+> **Superseded 2026-08-26.** The paragraphs below are Sol's 2026-08-22 snapshot, kept as historical evidence. Current state follows.
 
-Installed-app acceptance must use a new candidate. `v0.23.0-rc1` points to `069616d1` and predates the post-sprint fixes and later recipe/calculator work, so RC1 cannot qualify the current tree.
+~~Sol extracted the Plot Recipe persistence schema from the capture implementation and changed recipe capture/matching to load on first recipe action. The production build fell from approximately **904.4 kB to 902.5 kB eager JavaScript** against the unchanged **904.7 kB budget**. This is real, but approximately **2.3 kB is not meaningful working headroom**. R8 remains open; do not raise the budget or mark it complete from this result.~~
+
+~~Installed-app acceptance must use a new candidate. `v0.23.0-rc1` points to `069616d1` and predates the post-sprint fixes and later recipe/calculator work, so RC1 cannot qualify the current tree.~~
+
+### Current truth (2026-08-26)
+
+- **R8 is CLOSED.** C2 landed a measured 20.3 kB net eager recovery (PR #218) and lowered the ratchet accordingly. The bundle now measures **887.7 kB eager against a 910,711 B (889.4 kB) budget — 1.7 kB headroom.** That is again thin: the ratchet's own header (`frontend/scripts/check-bundle-size.mjs`) requires a lazy split to be attempted before any raise, and separately fails the build if headroom ever exceeds 40 kB. See the open decision recorded under C6.
+- **Neither RC1 nor RC2 can qualify the current tree.** RC1 (`069616d1`) predates the post-sprint work. RC2 (`4f51f6e`) was cut and published but never owner-tested, and **19 further merges (#221-#239) landed after it** — including fixes for silent data-integrity defects that a fully green CI did not catch. A new candidate is required.
+- **`main` is `174e0d7`.** All CI green; `releases/latest` still `v0.22.0`, so the rollback build is intact.
 
 ## Relink consent and interaction contract
 
@@ -67,9 +75,11 @@ This is the product contract for Claude's native implementation. It avoids repea
 
 **Goal:** remove stale status claims before cutting a candidate.
 
-- [ ] Reconcile `POST_SPRINT_INDEPENDENT_REVIEW.md`, `RELEASE_BLOCKERS.md`, `RC_RELEASE_NOTES_DRAFT.md`, and the Day-7 sprint section against `origin/main` after C1/C2 merge.
-- [ ] Keep R2 open until owner acceptance occurs; keep R8 open until its measured target is met.
-- [ ] Replace stale in-flight claims with PRs/SHAs by appending dated closure rows, without rewriting historical evidence.
+- [x] Reconcile `POST_SPRINT_INDEPENDENT_REVIEW.md`, `RELEASE_BLOCKERS.md`, `RC_RELEASE_NOTES_DRAFT.md`, and the Day-7 sprint section against `origin/main` after C1/C2 merge.
+- [x] Keep R2 open until owner acceptance occurs; keep R8 open until its measured target is met.
+- [x] Replace stale in-flight claims with PRs/SHAs by appending dated closure rows, without rewriting historical evidence.
+
+**Closed 2026-08-23** — PR #219, merge `4f51f6e`. R8 closed by C2's measured recovery; R2 remains open pending owner acceptance (now against RC3, see C6).
 
 **Owner/model:** Claude Haiku for mechanical reconciliation, then Sonnet fact-check.
 
@@ -77,10 +87,12 @@ This is the product contract for Claude's native implementation. It avoids repea
 
 **Goal:** provide one reproducible candidate containing the reviewed post-sprint tree.
 
-- [ ] Cut `v0.23.0-rc2` from the exact reviewed `main` SHA after C1/C2 and record it.
-- [ ] Run the required frontend, backend, packaging, installer, and platform matrix.
-- [ ] Publish artifacts/checksums and verify the installed desktop/taskbar icon uses the Quantized logo.
-- [ ] Perform owner testing on RC2, not a dev server or RC1. Fix failures through branches/PRs; never patch a tag.
+- [x] Cut `v0.23.0-rc2` from the exact reviewed `main` SHA after C1/C2 and record it.
+- [x] Run the required frontend, backend, packaging, installer, and platform matrix.
+- [x] Publish artifacts/checksums and verify the installed desktop/taskbar icon uses the Quantized logo.
+- [ ] ~~Perform owner testing on RC2~~ — **SUPERSEDED by C6/RC3.** RC2 was cut and published but never owner-tested; 19 further merges (#221-#239) landed after it, several fixing silent data-integrity defects. RC2 is no longer a valid acceptance candidate for the same reason RC1 was not.
+
+**Closed 2026-08-23** — tag `v0.23.0-rc2` at `4f51f6e`, `release.yml` run `32622022893`. Verified 2026-08-26: the prerelease carries 8 assets (`Quantized_0.23.0_x64-setup.exe` + `.sig`, `Quantized_0.23.0_aarch64.dmg`, `Quantized_0.23.0_amd64.deb`, three `qz-server-*` archives, `latest.json`), each with a GitHub-recorded sha256 digest. `releases/latest` still points at `v0.22.0`, so the rollback build is intact.
 
 **Owner/model:** Claude Sonnet. Haiku may collect logs/checklists, but should not interpret packaging or integrity failures.
 
@@ -94,6 +106,27 @@ This is the product contract for Claude's native implementation. It avoids repea
 - [ ] Promote `v0.23.0` only after blockers close on the exact candidate SHA and rollback/recovery instructions match shipped behavior.
 
 **Owner/model:** owner + Claude Sonnet. Use Sol for follow-up interaction/wording review once owner observations exist.
+
+### C6. Cut and qualify RC3
+
+**Goal:** one reproducible candidate containing the post-RC2 correctness work, since RC2 is no longer valid (see C4).
+
+**Why RC3 exists:** #221-#239 landed 19 merges after RC2. Several fixed defects that were live on `main` with fully green CI and would have shipped in RC2 — an invisible hit box swallowing clicks on the Export control after any box-zoom; Delete on a focused peak row silently removing the user's dataset with no confirm; an arrow key wiping a fit; fifteen ordinary column names (`Kerr`, `Phase`, `Noise`, `Depth`, …) being converted into error bars, costing a plain MOKE file both of its data channels; and a guard that would have silently deleted error bars from every sheet-2+ Origin book. None were caught by a test suite.
+
+- [ ] Land the two gaps PR #239 recorded: reimport over-clearing `channelRoles`/`channelTypes`/`formulas` on a row-only change, and the frontend designation set not matching what `io/origin_project/windows.py` emits.
+- [ ] Complete an independent correctness review of #221-#239, weighted to error-role inference, reimport, and `.dwk` persistence. Fix what it confirms before cutting.
+- [ ] Cut `v0.23.0-rc3` from the exact reviewed `main` SHA and record it. Tags must go through `cut-tag.yml` — the agent git proxy silently no-ops tag pushes.
+- [ ] Dispatch `release.yml` **with the tag as the ref**. A tag created by `GITHUB_TOKEN` does not trigger tag-push workflows, so the release build will not start on its own.
+- [ ] Verify the published prerelease carries all three installers, the three server archives, the `.sig`, and `latest.json`; confirm `releases/latest` still points at `v0.22.0`.
+- [ ] Owner acceptance on the installed RC3 build (carries C5 and R2).
+
+**Open decisions recorded here rather than silently resolved:**
+
+1. **Checksums.** `release.yml` publishes no `SHA256SUMS` manifest. GitHub records a sha256 digest per asset and the Windows installer carries a `.sig` for the updater, but there is no single offline-verifiable checksum file. Adding one is a change to the release pipeline; doing it before a cut means the pipeline shipping RC3 is not the pipeline that shipped RC2.
+2. **Bundle headroom (1.7 kB).** Defer `ContextMenu` (14.2 kB, the one real lazy-split candidate — but it puts a Suspense fallback on right-click, which the ratchet's own rule forbids on a hot path), or raise the pin with written justification for irreducible eager store/lib growth. Owner call; both are within the documented rules.
+3. **macOS coverage.** The pipeline builds `aarch64` only — there is no Intel `x86_64` .dmg. Fine if Apple Silicon is the only supported target; a gap if not.
+
+**Owner/model:** Claude for cut/qualify/verification; owner for installed acceptance.
 
 ## Sol static usability findings for RC2
 
