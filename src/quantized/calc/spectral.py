@@ -118,6 +118,40 @@ def cross_correlation(
     }
 
 
+def _infer_sampling_rate(xv: NDArray[np.float64]) -> float:
+    """Infer the FFT sampling rate from the x-axis spacing.
+
+    Historically a verbatim port of ``fs = 1/abs(mean(diff(x)))``
+    (``utilities/fftSpectral.m:105-106``). ``mean(diff(x))`` is
+    ``(x[-1] - x[0]) / (n - 1)``, which is ~0 for a there-and-back
+    (hysteresis-loop) sweep even though the sample-to-sample spacing is
+    perfectly well defined -- for the exactly-closed case MATLAB's ``1/0``
+    evaluates to ``Inf`` and the function keeps going with a degenerate
+    spectrum, while for the near-closed case it silently returns a frequency
+    axis overstated by orders of magnitude. Both are latent bugs in the
+    behavioural reference (``estimateBackground.m``/``findPeaksRobust.m`` use
+    the more robust ``median(diff(x))`` for the same purpose).
+
+    This uses ``median(abs(diff(x)))`` instead -- identical to the old
+    formula for uniformly-spaced ascending x (so golden parity is
+    unaffected), but also correct for a there-and-back sweep, since the
+    per-sample spacing (not the net displacement) is what matters for a
+    sampling rate. Only a genuinely degenerate axis (all-equal x, or
+    otherwise zero/non-finite spacing) still fails here -- raise ``ValueError``
+    so the route's ``except ValueError`` reports a 422, never an Internal
+    Server Error (Python raises ``ZeroDivisionError`` on ``1.0 / 0.0`` where
+    MATLAB's ``1/0`` is ``Inf`` and keeps going; that divergence, not the
+    formula, is the non-faithful part).
+    """
+    dx = float(np.median(np.abs(np.diff(xv))))
+    if not math.isfinite(dx) or dx == 0.0:
+        raise ValueError(
+            "cannot infer a sampling rate: the x-axis spacing is zero or "
+            "non-finite (e.g. all x values are equal)"
+        )
+    return 1.0 / dx
+
+
 def fft_spectral(
     x: ArrayLike,
     y: ArrayLike,
@@ -136,14 +170,14 @@ def fft_spectral(
     ``output_type`` selects ``psd`` | ``magnitude`` | ``phase`` (degrees) |
     ``complex``. With ``segment_len > 0`` a Welch PSD is returned (segments of
     ``segment_len`` with fractional ``overlap``). One-sided spectra fold interior
-    bins (x2); the sampling rate is inferred from the mean x-spacing.
+    bins (x2); the sampling rate is inferred from the median x-spacing.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
     n = xv.size
     if n < 4:
         raise ValueError("need at least 4 data points")
-    fs = 1.0 / abs(float(np.mean(np.diff(xv))))
+    fs = _infer_sampling_rate(xv)
 
     if segment_len > 0:
         return _welch_psd(
@@ -285,7 +319,7 @@ def fft_filter(
     n = xv.size
     if n < 4:
         raise ValueError("need at least 4 data points")
-    fs = 1.0 / abs(float(np.mean(np.diff(xv))))
+    fs = _infer_sampling_rate(xv)
     f_nyq = fs / 2.0
 
     if cutoff is None:

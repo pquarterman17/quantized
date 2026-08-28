@@ -88,3 +88,47 @@ def test_fft_filter_lowpass_attenuates_high_tone() -> None:
     r = fft_filter(x, y, filter_type="lowpass", cutoff=10, detrend=False)
     # High-frequency content removed -> filtered variance below original.
     assert np.var(r["yFiltered"]) < np.var(y)
+
+
+def _hysteresis_loop() -> tuple[np.ndarray, np.ndarray]:
+    """A closed there-and-back sweep (M-vs-H loop shape): x returns exactly
+    to its starting value, so mean(diff(x)) == (x[-1]-x[0])/(n-1) == 0."""
+    up = np.linspace(-1.0, 1.0, 33)
+    down = np.linspace(1.0, -1.0, 33)[1:]
+    x = np.concatenate([up, down])
+    y = np.sin(2 * np.pi * 5 * np.arange(x.size) / x.size)
+    return x, y
+
+
+def test_fft_spectral_on_closed_hysteresis_loop_reports_true_sample_rate() -> None:
+    """A closed there-and-back sweep makes mean(diff(x)) == 0.0 exactly --
+    the old ``fs = 1.0 / abs(mean(diff(x)))`` raised an uncaught
+    ZeroDivisionError. Switching the estimator to
+    ``median(abs(diff(x)))`` (step (b)) fixes this case outright: the
+    per-sample spacing is well defined even though the net displacement is
+    zero, so this must now succeed with the TRUE sampling rate, not merely
+    degrade to a 422."""
+    x, y = _hysteresis_loop()
+    true_spacing = float(np.median(np.abs(np.diff(x))))
+    out = fft_spectral(x, y)
+    assert out["fs"] == pytest.approx(1.0 / true_spacing)
+
+
+def test_fft_filter_on_closed_hysteresis_loop_reports_true_sample_rate() -> None:
+    """``fft_filter`` doesn't expose ``fs`` directly, but its ``freqPos`` axis
+    is derived from it -- its top must reflect the true (nonzero) sample
+    spacing rather than raising or silently using a near-infinite fs."""
+    x, y = _hysteresis_loop()
+    true_spacing = float(np.median(np.abs(np.diff(x))))
+    nyquist = 1.0 / (2.0 * true_spacing)
+    out = fft_filter(x, y)
+    assert out["freqPos"][-1] == pytest.approx(nyquist, rel=0.1)
+
+
+def test_fft_spectral_on_constant_x_raises_valueerror() -> None:
+    """All-equal x (diff is all zero) is the other zero-spacing degenerate
+    case; it must also come back as ValueError, not ZeroDivisionError."""
+    x = np.full(8, 3.0)
+    y = np.arange(8.0)
+    with pytest.raises(ValueError, match="sampling rate"):
+        fft_spectral(x, y)
