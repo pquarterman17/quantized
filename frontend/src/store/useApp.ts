@@ -11,6 +11,7 @@ import type { Measurement } from "../lib/measure";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
+import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import {
   makeStep,
@@ -156,10 +157,14 @@ import type {
  *  same pass, so a base-data edit that fixes (or breaks) a formula's
  *  evaluation keeps the visible error state in sync everywhere `recompute`
  *  is the chokepoint — not just at the store/computedColumns.ts authoring
- *  sites. */
+ *  sites. `asAlreadyComputed` (SILENT_STATE_CORRUPTION_PLAN #2) is sound
+ *  HERE ONLY because `d.data` is a Dataset's OWN table — by construction it
+ *  already carries `d.formulas`' stale columns. A caller with base-only data
+ *  must NOT route through `recompute` — see derivedWorksheets.ts's
+ *  `recomputeFromBase` (the #4 fix). */
 export const recompute = (d: Dataset): Dataset => {
   if (!d.formulas?.length) return d;
-  const { data, errors } = recomputeWithErrors(d.data, d.formulas);
+  const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
   return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 };
 let _refSeq = 0;

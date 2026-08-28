@@ -6,10 +6,10 @@ import {
   channelLetter,
   compileFormula,
   formulaErrors,
-  recomputeData,
   recomputeWithErrors,
   referencedColumns,
 } from "./formula";
+import { asAlreadyComputed } from "./formulaInputs";
 import type { ComputedColumn, DataStruct } from "./types";
 
 const ev = (src: string, ctx: Record<string, number> = {}) => compileFormula(src)(ctx);
@@ -116,9 +116,11 @@ describe("computed columns", () => {
     expect(baseColumns(base, 0)).toBe(base); // no-op
   });
 
-  it("recomputeData re-derives the computed column from an edited base", () => {
+  it("recomputeWithErrors re-derives the computed column from an edited base that already carries it", () => {
     const withS = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
-    // Simulate a base edit: A[0] 10 → 100.
+    // Simulate a base edit: A[0] 10 → 100. `edited` already carries the
+    // stale "S" column (like d.data everywhere `recompute` is called), so
+    // asAlreadyComputed's assertion is honest here — see formulaInputs.ts.
     const edited: DataStruct = {
       ...withS,
       values: [
@@ -126,9 +128,17 @@ describe("computed columns", () => {
         [30, 40, 70],
       ],
     };
-    const out = recomputeData(edited, [{ name: "S", expr: "A + B" }]);
+    const out = recomputeWithErrors(asAlreadyComputed(edited), [{ name: "S", expr: "A + B" }]).data;
     expect(out.values[0][2]).toBe(120); // 100 + 20
     expect(out.values[1][2]).toBe(70); // unchanged row
+  });
+
+  it("recomputeWithErrors requires an explicit asAlreadyComputed assertion, not a bare DataStruct (Class B guard, compile-time)", () => {
+    // @ts-expect-error — `base` is a plain DataStruct, not StrippableData.
+    // Only `asAlreadyComputed` (lib/formulaInputs.ts) may vouch for it; if
+    // that stops being enforced, tsc fails with "Unused '@ts-expect-error'
+    // directive" instead (SILENT_STATE_CORRUPTION_PLAN #2).
+    recomputeWithErrors(base, [{ name: "S", expr: "A + B" }]);
   });
 });
 
@@ -697,11 +707,12 @@ describe("formulaErrors", () => {
     expect(Object.keys(formulaErrors(base, formulas))).toEqual(["bad"]);
   });
 
-  it("recomputeWithErrors derives data + errors from the SAME pass as recomputeData/formulaErrors", () => {
+  it("recomputeWithErrors derives data + errors from the SAME pass as applyFormulas/formulaErrors on the stripped base", () => {
     const formulas: ComputedColumn[] = [{ name: "bad", expr: "A +" }];
-    const withErrors = recomputeWithErrors(base, formulas);
-    expect(withErrors.data).toEqual(recomputeData(base, formulas));
-    expect(withErrors.errors).toEqual(formulaErrors(baseColumns(base, formulas.length), formulas));
+    const strippedBase = baseColumns(base, formulas.length);
+    const withErrors = recomputeWithErrors(asAlreadyComputed(base), formulas);
+    expect(withErrors.data).toEqual(applyFormulas(strippedBase, formulas));
+    expect(withErrors.errors).toEqual(formulaErrors(strippedBase, formulas));
   });
 });
 

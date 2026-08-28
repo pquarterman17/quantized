@@ -64,15 +64,16 @@
 //                                for none).
 //
 // Aggregate / row-scope (J11 #3 — resolved, not assumed): applyFormulas /
-// recomputeData receive whatever DataStruct the CALLER hands them, and today
-// that is the dataset's FULL raw row set — store/useApp.ts's `recompute` and
-// `addFormula` call `applyFormulas`/`recomputeData` on `d.data` directly, NOT
-// through lib/rowstate's `analysisData(ds)` (the exclusion(#50)/filter(#53)
-// -pruned "analysis view"). So the existing plain per-row scalar context
-// (`ctx.A`, `ctx.x`, …) already includes excluded and filter-dropped rows
-// today — and this evaluator has no way to see otherwise: it takes a
-// DataStruct, never a Dataset, so it can't read `excludedRows`/the filter
-// itself (architecture.test.ts's row-state guard enforces that boundary —
+// recomputeWithErrors receive whatever DataStruct the CALLER hands them, and
+// today that is the dataset's FULL raw row set — store/useApp.ts's
+// `recompute` and `addFormula` call `applyFormulas`/`recomputeWithErrors` on
+// `d.data` directly, NOT through lib/rowstate's `analysisData(ds)` (the
+// exclusion(#50)/filter(#53)-pruned "analysis view"). So the existing plain
+// per-row scalar context (`ctx.A`, `ctx.x`, …) already includes excluded
+// and filter-dropped rows today — and this evaluator has no way to see
+// otherwise: it takes a DataStruct, never a Dataset, so it can't read
+// `excludedRows`/the filter itself (architecture.test.ts's row-state guard
+// enforces that boundary —
 // only lib/rowstate + a couple of store slices may touch that field). To
 // stay CONSISTENT with the scalar context every existing formula already
 // reads, row()/lag()/diff()/the aggregates are computed over that exact same
@@ -93,6 +94,7 @@
 
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
+import type { StrippableData } from "./formulaInputs";
 import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
@@ -470,18 +472,15 @@ export function formulaErrors(base: DataStruct, formulas: ComputedColumn[]): Rec
   return computeFormulas(base, formulas).errors;
 }
 
-/** Recompute a dataset's computed columns from its current base: strip the last
- *  `formulas.length` columns (the stale computed ones) and reapply the formulas. */
-export function recomputeData(data: DataStruct, formulas: ComputedColumn[]): DataStruct {
-  return computeFormulas(baseColumns(data, formulas.length), formulas).data;
-}
-
-/** `recomputeData` plus its per-column error state (K5b), in the one pass —
- *  the chokepoint `store/useApp.ts`'s `recompute` helper uses so every base-
- *  data-changing action (corrections apply/reset, cell edits, reimport)
- *  keeps `Dataset.formulaErrors` in sync for free. */
+/** Strip the last `formulas.length` stale computed columns from `data` and
+ *  reapply, plus the error state (K5b), in one pass — `store/useApp.ts`'s
+ *  `recompute` chokepoint. `data` must be `StrippableData`
+ *  (lib/formulaInputs.ts): assert via `asAlreadyComputed` ONLY when those
+ *  columns are known present — a base-only table has none to strip, and
+ *  stripping anyway deletes real columns (#245, #4); use `recomputeFromBase`
+ *  there instead. `recomputeData` (bare-`DataStruct`) deleted 2026-08-27. */
 export function recomputeWithErrors(
-  data: DataStruct,
+  data: StrippableData,
   formulas: ComputedColumn[],
 ): { data: DataStruct; errors: Record<string, string> } {
   return computeFormulas(baseColumns(data, formulas.length), formulas);

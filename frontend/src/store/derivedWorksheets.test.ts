@@ -13,6 +13,7 @@ vi.mock("../lib/api", async (importOriginal) => ({
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import * as recalcModule from "../lib/recalc";
+import { recomputeDerivedSheet } from "./derivedWorksheets";
 
 const data = (): DataStruct => ({
   time: [1, 2, 3],
@@ -226,5 +227,50 @@ describe("freezeCopy (L0.50)", () => {
     const before = useApp.getState().history.length;
     useApp.getState().freezeCopy("sheet1");
     expect(useApp.getState().history.length).toBe(before + 1);
+  });
+});
+
+// SILENT_STATE_CORRUPTION_PLAN #4 (Class B): `recomputeDerivedSheet` re-runs
+// the sheet's OWN pipeline against the SOURCE's current table, then used to
+// route the result through `recompute` — which strips the last
+// `sheet.formulas.length` columns before reapplying them. That's correct
+// ONLY when the payload already carries the SHEET's own stale computed
+// columns; here it's the SOURCE's freshly-corrected table, which never had
+// them. With a source table ["A", "B", "C_srcComputed"] and a sheet formula
+// "F1", the strip ate the source's own real computed column instead of a
+// sheet-formula column that was never there.
+describe("recomputeDerivedSheet — must not strip the SOURCE's own columns (#4)", () => {
+  it("keeps the source's own computed column AND recomputes the sheet's own formula (VALUES, not just labels)", async () => {
+    const source: Dataset = ds("src", {
+      data: {
+        time: [1, 2, 3],
+        values: [
+          [1, 10, 100],
+          [2, 20, 200],
+          [3, 30, 300],
+        ],
+        labels: ["A", "B", "C_srcComputed"],
+        units: ["", "", ""],
+        metadata: {},
+      },
+      formulas: [{ name: "C_srcComputed", expr: "B * 10" }],
+    });
+    const sheet: Dataset = ds("sheet1", {
+      derivedFrom: { datasetId: "src", pipeline: "Corrections (no params)" },
+      formulas: [{ name: "F1", expr: "A + B" }],
+    });
+    useApp.setState({ datasets: [source, sheet] });
+    // An empty-params corrections pipeline returns the source's current
+    // table verbatim — exactly what recomputeDerivedSheet does with `{}`.
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(source.data);
+
+    const result = await recomputeDerivedSheet(useApp.getState, sheet);
+
+    expect(result.data.labels).toEqual(["A", "B", "C_srcComputed", "F1"]);
+    expect(result.data.values).toEqual([
+      [1, 10, 100, 11],
+      [2, 20, 200, 22],
+      [3, 30, 300, 33],
+    ]);
   });
 });
