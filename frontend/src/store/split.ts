@@ -22,10 +22,15 @@
 //   - data: SLICED to the group's rows (lib/datasetsplit.sliceDataStruct) —
 //     the CURRENT (corrected) view, matching duplicateDataset's precedent of
 //     cloning `src.data`, not `src.raw`.
-//   - formulas/channelRoles/channelTypes: copied verbatim. These are
-//     COLUMN-indexed, and a row slice never changes the column layout (same
-//     labels/units/count) — only which ROWS survive — so they stay valid
-//     completely untouched.
+//   - formulas/channelRoles/channelTypes/errorRoles: copied verbatim. These
+//     are COLUMN-indexed, and a row slice never changes the column layout
+//     (same labels/units/count) — only which ROWS survive — so they stay
+//     valid completely untouched. errorRoles needs the explicit `[]`-vs-
+//     `undefined` distinction preserved (F5, SILENT_STATE_CORRUPTION_PLAN):
+//     an empty array is the O1 "designations checked, no error columns"
+//     marker (lib/originBookRoles.ts) that stops the label-guesser fallback
+//     (`dataset.errorRoles ?? inferErrorBindings(...)`) — dropping the field
+//     entirely on the child silently re-enables that guesser.
 // What does NOT carry over, and why:
 //   - excludedRows/filter: row-indexed/row-scoped state tied to the
 //     SOURCE's row layout. After a slice, source row 47 might be row 3 of
@@ -142,6 +147,10 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
         if (src.formulas?.length) child.formulas = src.formulas.map((f) => ({ ...f }));
         if (src.channelRoles) child.channelRoles = { ...src.channelRoles };
         if (src.channelTypes) child.channelTypes = { ...src.channelTypes };
+        // F5: preserve `[]` (O1 marker) vs `undefined` exactly -- `[]` is
+        // truthy, so this carries an explicit empty array too, unlike a
+        // `?.length` guard which would collapse it to "not carried".
+        if (src.errorRoles) child.errorRoles = [...src.errorRoles];
         return child;
       });
       const firstChild = children[0];

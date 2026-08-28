@@ -1853,6 +1853,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
         ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
         ...(src.channelTypes ? { channelTypes: { ...src.channelTypes } } : {}),
+        ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
