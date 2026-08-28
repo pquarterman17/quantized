@@ -1,7 +1,13 @@
 # Error-label classifier — structural fix
 
-**Status:** Proposed (2026-08-25). Supersedes the round-by-round patching on
-`claude/fix-error-label-classifier`.
+**Status:** Complete (2026-08-28 reconciliation) — implemented as proposed
+in PR #238 (`errorLabelCandidates.ts` generate/rank/select, merged
+2026-08-25), superseding the round-by-round patching on
+`claude/fix-error-label-classifier`. No open items remain in this doc; kept
+as the design record for why the classifier is structured this way.
+Follow-on hardening (Origin designation-derived roles, `isNameDrivenMatch`
+scope) is tracked in `SILENT_STATE_CORRUPTION_PLAN.md` and its own PRs
+(#239, #243), not here.
 
 ## Why this plan exists
 

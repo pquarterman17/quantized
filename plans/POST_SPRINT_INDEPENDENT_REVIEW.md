@@ -618,6 +618,16 @@ reason, or linked to a live follow-up; none remains ambiguously in progress.
 
 ## Stable-promotion gate
 
+> **Note (2026-08-28, docs reconciliation — boxes below deliberately left
+> unticked).** `v0.23.0` and `v0.23.1` were promoted to stable and published
+> as `releases/latest` on 2026-08-28, ahead of this gate closing — the owner
+> decided the promotion could not wait on R2/full-matrix acceptance because
+> the RC4 fix tree closes a real data-loss exposure present in `v0.22.0`
+> (reimport silently deleting a dataset's measurement column; see
+> `SILENT_STATE_CORRUPTION_PLAN.md`). R2 (packaged/owner acceptance) and the
+> exact-SHA release-matrix row below remain genuinely open and are not
+> satisfied by the promotion having happened.
+
 - [x] R1, R3, R4 are fixed and independently reviewed (PRs #207/#210/#208;
   orchestrator diff reads + adversarial code-review rounds, findings fixed
   pre-merge). R6/R7/R9 (P2, not gating rows in this list but tracked the

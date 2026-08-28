@@ -1,6 +1,7 @@
 # Origin Replacement One-Week Sprint
 
 **Plan author:** ChatGPT-Sol (not Claude)  
+**Parent:** `plans/MAIN_PLAN.md`  
 **Created:** 2026-08-17  
 **Sprint window:** 2026-08-17 through 2026-08-24  
 **Repository:** `C:\Users\patri\git\quantized`  
@@ -1015,15 +1016,19 @@ under one unchecked list. They are now tracked separately:
   906,894); #217 additionally lands the relink native folder-grant consent
   from the release handoff's contract. Acceptance (R2) therefore targets a
   new `v0.23.0-rc2` cut from `main` after #218 — rc1 predates all of this.
-- **Stable promotion accepted — OPEN, owner.** Not started. Per the owner's
-  own decision (recorded 2026-08-22), promotion is deliberately deferred
-  past the tag: the packaged Windows/macOS install + workflow smoke pass,
-  the 60-90 minute real-data session, the installer/icon/taskbar check, and
-  ChatGPT-Sol's wording/menu review must run **against this exact RC build**
-  first (`POST_SPRINT_INDEPENDENT_REVIEW.md` R2). Promotion itself is a
-  separate plain `v0.23.0` tag (same cut-tag-workflow + manual release-
-  dispatch mechanics as the RC) once the owner gives the word; only then
-  does `releases/latest`/auto-update/PyPI pick it up.
+- **Stable promotion accepted — OPEN, owner.** Not started as of this
+  section's own last edit. Per the owner's own decision (recorded
+  2026-08-22), promotion was deliberately deferred past the tag: the
+  packaged Windows/macOS install + workflow smoke pass, the 60-90 minute
+  real-data session, the installer/icon/taskbar check, and ChatGPT-Sol's
+  wording/menu review were meant to run **against the exact RC build**
+  first (`POST_SPRINT_INDEPENDENT_REVIEW.md` R2). **Update 2026-08-28:**
+  `v0.23.0` and `v0.23.1` were promoted and published as `releases/latest`
+  ahead of that full acceptance pass — the RC4 fix tree closed a
+  data-loss exposure in `v0.22.0` (see `SILENT_STATE_CORRUPTION_PLAN.md`)
+  and the owner judged that more urgent than waiting on R2. R2's own
+  checklist remains open; see its dated note under
+  `POST_SPRINT_INDEPENDENT_REVIEW.md`'s Stable-promotion gate.
 
 Sub-items, tracked against the three states above:
 

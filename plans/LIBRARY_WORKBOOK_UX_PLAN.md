@@ -1559,8 +1559,8 @@ build, and focused interaction coverage where appropriate.
     scope):** the full Trash dependency-review UI offering restore/delete-
     dependent/freeze-materialize as distinct choices (today's UI is
     preview-then-confirm-then-Trash only). These stay open under PR M.
-    **L0.33 BUILT 2026-08-23 (`claude/m2-reimport-all`, not yet merged) —
-    narrows the claim above:** `store/reimportAll.ts`'s two-phase
+    **L0.33 BUILT 2026-08-23, MERGED 2026-08-23 as PR #221 — narrows the
+    claim above:** `store/reimportAll.ts`'s two-phase
     stage/commit (`stageReimportAll` probes+validates every selected
     source with ZERO mutation via the SAME `computeReimportMerge` chokepoint
     `store/reimport.ts`'s single reimport now exposes for exactly this

@@ -2,7 +2,13 @@
 
 **Status:** FINAL for v0.23.0-rc1; extended 2026-08-23 with the
 "Changes since rc1 → v0.23.0-rc2" section, and again 2026-08-27 with
-"Changes since rc2 → rc3 → rc4" at the end. **The current acceptance
+"Changes since rc2 → rc3 → rc4" at the end. **Superseded 2026-08-28: `v0.23.0`
+and `v0.23.1` were promoted to stable from rc4 and published as
+`releases/latest` — this doc's "current acceptance candidate is rc4" claim
+below is historical.** The next acceptance candidate will be `v0.23.2-rc1`,
+cut after the Class B (silent-state-corruption) fix branch merges (see
+`SILENT_STATE_CORRUPTION_PLAN.md`); no SHA exists yet. Original text,
+unrewritten: **The current acceptance
 candidate is `v0.23.0-rc4` (`a8a939c1`); rc1, rc2 and rc3 are all
 disqualified** — see that final section for why, including a data-loss
 defect verified present in v0.22.0. The rc1 body below
