@@ -478,39 +478,78 @@ def _string_literal_text(node: ast.expr) -> str | None:
     return None
 
 
-def test_route_error_details_are_ascii() -> None:
-    """Every ``HTTPException(..., detail=...)`` literal in routes/ is ASCII.
+# raise ValueError(...) / raise RuntimeError(...) messages in calc/io end up
+# in an HTTP `detail` too, via a route's `except (...): raise HTTPException(
+# status_code=422, detail=str(exc))` -- they just aren't a literal in the
+# HTTPException( call itself, so the routes/-only AST walk below can't see
+# them. Scanned as their own root set, same AST approach.
+_RAISE_EXC_NAMES = {"ValueError", "RuntimeError"}
 
-    A codebase-authored non-ASCII error string has shipped before --
-    ``routes/books.py``'s "upload expired" message used an em dash (U+2014).
-    This is the narrow, routes/-scoped guard for that class: walk every
-    ``HTTPException(`` call's ``detail=`` keyword and flag a literal string
-    containing any character outside ASCII. (It does not reach ``raise
-    ValueError(...)`` messages in calc/io -- those are a much larger surface
-    and are fixed as found rather than statically guarded here.)
-    """
+
+def _ascii_offenders(root: Path, *, raise_exceptions: bool) -> list[str]:
+    """Walk every .py file under `root`, flagging non-ASCII string literals
+    either in `HTTPException(..., detail=...)` calls (raise_exceptions=False,
+    the routes/ shape) or in `raise ValueError(...)`/`raise RuntimeError(...)`
+    calls (raise_exceptions=True, the calc/io shape)."""
     offenders = []
-    for path in (SRC / "routes").rglob("*.py"):
+    for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "HTTPException"
-            ):
-                continue
-            for kw in node.keywords:
-                if kw.arg != "detail":
+            texts: list[str] = []
+            if raise_exceptions:
+                if not (
+                    isinstance(node, ast.Raise)
+                    and isinstance(node.exc, ast.Call)
+                    and isinstance(node.exc.func, ast.Name)
+                    and node.exc.func.id in _RAISE_EXC_NAMES
+                ):
                     continue
-                text = _string_literal_text(kw.value)
-                if text is None:
+                lineno = node.lineno
+                for arg in node.exc.args:
+                    text = _string_literal_text(arg)
+                    if text is not None:
+                        texts.append(text)
+            else:
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "HTTPException"
+                ):
                     continue
+                lineno = node.lineno
+                for kw in node.keywords:
+                    if kw.arg != "detail":
+                        continue
+                    text = _string_literal_text(kw.value)
+                    if text is not None:
+                        texts.append(text)
+            for text in texts:
                 bad = sorted({c for c in text if ord(c) > 127})
                 if bad:
                     offenders.append(
-                        f"{path.relative_to(ROOT)}:{node.lineno}: "
+                        f"{path.relative_to(ROOT)}:{lineno}: "
                         f"{[f'U+{ord(c):04X}' for c in bad]} in {text!r}"
                     )
+    return offenders
+
+
+def test_route_error_details_are_ascii() -> None:
+    """Every codebase-authored HTTP-visible error string is ASCII.
+
+    A codebase-authored non-ASCII error string has shipped before --
+    ``routes/books.py``'s "upload expired" message used an em dash (U+2014),
+    and separately ``calc/diffusion.py`` spelled ``dx`` as capital-delta-x
+    (U+0394) and ``calc/crystallography.py``/``calc/reflectivity.py`` used
+    <=/>=/sigma glyphs -- all of which reach an HTTP client, the
+    crystallography/reflectivity/diffusion ones via a route's
+    ``except (...): raise HTTPException(422, detail=str(exc))``. This walks
+    two shapes: every ``HTTPException(detail=...)`` literal in routes/, and
+    every ``raise ValueError(...)``/``raise RuntimeError(...)`` message
+    literal in calc/ and io/ (f-strings included, static parts only).
+    """
+    offenders = _ascii_offenders(SRC / "routes", raise_exceptions=False)
+    offenders += _ascii_offenders(SRC / "calc", raise_exceptions=True)
+    offenders += _ascii_offenders(SRC / "io", raise_exceptions=True)
     assert not offenders, (
         "Non-ASCII HTTPException(detail=...) literal(s) in routes/ (use "
         "plain ASCII, e.g. '--' not an em dash):\n  " + "\n  ".join(offenders)

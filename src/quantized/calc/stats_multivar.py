@@ -64,7 +64,7 @@ def multiple_regression(
         coeffs = np.asarray(np.linalg.solve(xtx, xmat.T @ yv), dtype=float)
     except np.linalg.LinAlgError as exc:
         raise ValueError(
-            "regression is singular — a predictor is constant or predictors are collinear"
+            "regression is singular -- a predictor is constant or predictors are collinear"
         ) from exc
     y_fit = np.asarray(xmat @ coeffs, dtype=float)
     residuals = np.asarray(yv - y_fit, dtype=float)

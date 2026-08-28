@@ -358,7 +358,7 @@ def hall_coefficient(n: float, p: float, mu_e: float, mu_h: float) -> dict[str, 
         raise ValueError("mobilities must be positive")
     denom = p * mu_h + n * mu_e
     if denom == 0:
-        raise ValueError("p·μ_h + n·μ_e must be non-zero")
+        raise ValueError("p*mu_h + n*mu_e must be non-zero")
     q = constants()["e"]
     r_h = (1.0 / q) * (p * mu_h**2 - n * mu_e**2) / denom**2
     return {"RH": r_h, "apparent_type": "n" if r_h < 0 else "p"}

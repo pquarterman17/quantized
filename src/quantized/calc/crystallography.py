@@ -111,7 +111,7 @@ def cell_volume(
     ca, cb, cg = _cos(alpha), _cos(beta), _cos(gamma)
     radicand = 1.0 - ca * ca - cb * cb - cg * cg + 2.0 * ca * cb * cg
     if radicand <= 0:
-        raise ValueError("non-physical cell angles (cell volume would be ≤ 0)")
+        raise ValueError("non-physical cell angles (cell volume would be <= 0)")
     return a * b * c * math.sqrt(radicand)
 
 
@@ -127,7 +127,7 @@ def theoretical_density(molar_mass: float, z: int, volume_a3: float) -> float:
     if not (math.isfinite(molar_mass) and molar_mass > 0):
         raise ValueError("molar mass must be positive and finite")
     if z < 1:
-        raise ValueError("formula units per cell Z must be ≥ 1")
+        raise ValueError("formula units per cell Z must be >= 1")
     if not (math.isfinite(volume_a3) and volume_a3 > 0):
         raise ValueError("cell volume must be positive and finite")
     na = constants()["NA"]
