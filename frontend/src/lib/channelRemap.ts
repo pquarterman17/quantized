@@ -59,9 +59,17 @@
 // module's own primitives) rather than resetting the document the way
 // `lib/figureDocumentReimport.ts`'s `resetFigureDocumentForReshape` does for
 // an unrecoverable reshape.
+//
+// SILENT_STATE_CORRUPTION_PLAN task 3 (2026-08-27): `remapFigureBindings`
+// covers a saved document's `bindings`, but its `plot.view` (`FigureViewState`)
+// carries its OWN copy of `seriesOrder`/`hiddenChannels`/`seriesStyles`/
+// `seriesLabels` -- the live-view analogue of exactly these fields IS handled
+// by `remapViewChannels`; this was the saved-document copy. Fixed by
+// `remapFigureViewChannels`, which reuses `remapViewChannels` rather than
+// re-deriving the four rules.
 
 import type { ErrorBinding } from "./errorRoles";
-import type { FigureBindings } from "./figureDocument";
+import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
 
 /** Shift one channel index down past a removed column. `null` = the index WAS
@@ -240,6 +248,43 @@ export function remapViewChannels(v: ViewChannelState, removedCol: number): View
     seriesStyles: remapKeyedRecordDense(v.seriesStyles, removedCol),
     seriesLabels: remapKeyedRecordDense(v.seriesLabels, removedCol),
     errKeys,
+  };
+}
+
+/** Remap a saved `FigureDocument`'s `plot.view` copy of its still-channel-
+ *  indexed fields (SILENT_STATE_CORRUPTION_PLAN task 3): `remapFigureBindings`
+ *  above covers `FigureBindings` (`xKey`/`yKeys`/`y2Keys`/`groupKey`/
+ *  `facetKey`/`errors`), but `FigureViewState` (`lib/figureDocument.ts`'s
+ *  `Omit<PlotView, ...those bindings-owned fields>`) still carries its OWN
+ *  copy of `seriesOrder`/`hiddenChannels`/`seriesStyles`/`seriesLabels` --
+ *  exactly the fields `remapViewChannels` above remaps for the LIVE view.
+ *  Reuses that function (padding in inert values for the bindings-owned
+ *  fields `FigureViewState` omits, which are never read back out) rather
+ *  than re-deriving the same four rules a second time. Severity here is
+ *  cosmetic -- a style/hidden/label/order entry follows the shifted column,
+ *  unlike `fitSpec`'s or `errorRoles`' silent-wrong-data class above. */
+export function remapFigureViewChannels(view: FigureViewState, removedCol: number): FigureViewState {
+  const remapped = remapViewChannels(
+    {
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      groupKey: null,
+      facetKey: null,
+      errKeys: {},
+      hiddenChannels: view.hiddenChannels,
+      seriesOrder: view.seriesOrder,
+      seriesStyles: view.seriesStyles,
+      seriesLabels: view.seriesLabels,
+    },
+    removedCol,
+  );
+  return {
+    ...view,
+    hiddenChannels: remapped.hiddenChannels,
+    seriesOrder: remapped.seriesOrder,
+    seriesStyles: remapped.seriesStyles,
+    seriesLabels: remapped.seriesLabels,
   };
 }
 
