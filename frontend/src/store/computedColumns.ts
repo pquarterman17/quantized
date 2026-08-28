@@ -22,6 +22,7 @@ import type { ComputedColumn, DataStruct } from "../lib/types";
 import {
   remapDatasetChannels,
   remapFigureBindings,
+  remapFigureViewChannels,
   remapViewChannels,
   remapWindowViews,
 } from "../lib/channelRemap";
@@ -201,9 +202,16 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           // Finding 2 (independent review, round 2): a SAVED editable figure
           // is neither the live view nor a bound plotWindows entry -- it
           // needs its own remap of the same channel-indexed bindings.
+          // Task 3 (SILENT_STATE_CORRUPTION_PLAN): the SAME document's
+          // `plot.view` still carries its own copy of seriesOrder/
+          // hiddenChannels/seriesStyles/seriesLabels -- remap those too.
           editableFigures: s.editableFigures.map((doc) =>
             doc.bindings.datasetId === id
-              ? { ...doc, bindings: remapFigureBindings(doc.bindings, removedCol) }
+              ? {
+                  ...doc,
+                  bindings: remapFigureBindings(doc.bindings, removedCol),
+                  plot: { ...doc.plot, view: remapFigureViewChannels(doc.plot.view, removedCol) },
+                }
               : doc,
           ),
           ...(s.activeId === id

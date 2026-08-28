@@ -698,6 +698,90 @@ describe("removeFormula (finding 2, review round 2): editableFigures' bindings f
   });
 });
 
+// SILENT_STATE_CORRUPTION_PLAN Task 3 (2026-08-27): `remapFigureBindings`
+// (finding 2 above, #244) covers `FigureBindings`, but a saved figure also
+// holds a `plot.view` copy of `seriesOrder`/`hiddenChannels`/`seriesStyles`/
+// `seriesLabels` -- channel-indexed exactly like the live view's identically
+// named fields (see lib/channelRemap.ts's `remapViewChannels`) -- that
+// `removeFormula` never touched. Severity is cosmetic (a style/hidden flag
+// follows the shifted column, not "plots the wrong column"), but the plan's
+// own acceptance case is concrete: hiding F1 must not silently hide F2 once
+// F1 is gone and F2 has shifted into F1's old slot.
+describe("removeFormula (Task 3, SILENT_STATE_CORRUPTION_PLAN): editableFigures' plot.view channel fields follow the shift", () => {
+  // W(0) X(1) Y(2) F1(3) F2(4) -- three base columns, two formulas, so F1
+  // lands at column 3 and F2 at column 4 (the plan's own acceptance case).
+  function dsForPlotViewFigures(): Dataset {
+    const formulas: ComputedColumn[] = [
+      { name: "F1", expr: "W * 1", deps: ["W"] },
+      { name: "F2", expr: "W * 2", deps: ["W"] },
+    ];
+    const labels = ["W", "X", "Y", ...formulas.map((f) => f.name)];
+    return {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [1, 10, 100, 0, 0],
+          [2, 20, 200, 0, 0],
+        ],
+        labels,
+        units: labels.map(() => ""),
+        metadata: {},
+      },
+      formulas,
+    };
+  }
+
+  it("ACCEPTANCE: a saved figure's hiddenChannels:[3] (F1) must not hide F2 (shifted 4 -> 3) after F1 is removed", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "a",
+      view: { ...defaultPlotView(), hiddenChannels: [3] }, // hides F1 (col 3)
+    });
+    useApp.setState({ datasets: [dsForPlotViewFigures()], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0); // remove F1 (formula index 0, column 3)
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    // F1 (the hidden column) is gone entirely; F2 shifted 4 -> 3 and must NOT
+    // silently inherit F1's stale hide.
+    expect(updated.plot.view.hiddenChannels).toEqual([]);
+  });
+
+  it("shifts seriesOrder/seriesStyles/seriesLabels entries down with the column, same as the live view", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "a",
+      view: {
+        ...defaultPlotView(),
+        seriesOrder: [4, 3],
+        seriesStyles: { 4: { color: "#ff0000" } },
+        seriesLabels: { 4: "F2 renamed" },
+      },
+    });
+    useApp.setState({ datasets: [dsForPlotViewFigures()], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0); // remove F1 (column 3)
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    expect(updated.plot.view.seriesOrder).toEqual([3]);
+    expect(updated.plot.view.seriesStyles).toEqual({ 3: { color: "#ff0000" } });
+    expect(updated.plot.view.seriesLabels).toEqual({ 3: "F2 renamed" });
+  });
+
+  it("leaves a figure bound to a different dataset's plot.view untouched", () => {
+    const doc = createFigureDocument({
+      id: "fig1",
+      name: "Fig",
+      datasetId: "other",
+      view: { ...defaultPlotView(), hiddenChannels: [4] },
+    });
+    useApp.setState({ datasets: [dsForPlotViewFigures(), baseDs("other")], editableFigures: [doc] });
+    useApp.getState().removeFormula("a", 0);
+    const updated = useApp.getState().editableFigures.find((d) => d.id === "fig1")!;
+    expect(updated.plot.view.hiddenChannels).toEqual([4]);
+  });
+});
+
 // Independent review round 2 (2026-08-27), finding 3 -- makes this branch's
 // OWN facetKey fix (BUG 2 above) inert: `useEffectiveComposition` prefers the
 // ephemeral `composition` render cache over the durable `facetKey` binding
