@@ -38,6 +38,31 @@ def _is_numeric(token: str) -> bool:
     return not math.isnan(value)
 
 
+def _is_numeric_like(token: str) -> bool:
+    """Like ``_is_numeric``, but a NaN spelling ("nan", "-nan", "NaN", ...)
+    also counts as numeric here.
+
+    D5 (2026-08-27 bug hunt): ``_is_numeric`` deliberately excludes NaN for
+    str2double CONVERSION parity with MATLAB's ``+parser/importCSV.m``
+    (``detectLayout``, line 401) -- but that same exclusion, reused for
+    ``_numeric_score``'s row-CLASSIFICATION heuristic, meant a data row
+    with one missing numeric cell scored as if that cell were text. This
+    app's own writers emit literal ``"nan"`` for a missing value
+    (``io.delimited._to_float``, ``io.origin_project.writer``), so the
+    reader's layout scorer must accept its own output. Used ONLY by
+    ``_numeric_score``/``_score_chunk`` below -- never by the actual
+    string -> float data conversion path (``_convert_column``/
+    ``_to_float``), which still must turn "nan" into NaN, not reject it,
+    and never by ``_looks_like_units_row``, which keeps the original
+    str2double-parity ``_is_numeric``.
+    """
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
+
+
 def _datetime_epoch(token: str) -> float | None:
     """Conservatively parse common ISO/lab timestamp forms as UTC seconds.
 
@@ -69,10 +94,36 @@ def _datetime_epoch(token: str) -> float | None:
 
 
 def _numeric_score(row: Sequence[str]) -> float:
+    """Fraction of the row's cells that are numeric.
+
+    D5 (2026-08-27 bug hunt): a NaN/Inf spelling now counts as numeric
+    (``_is_numeric_like``, not ``_is_numeric``) -- see its docstring for
+    why. A data row with one cell spelled "nan" (``"0.05,nan"``, exactly
+    what this app's own ``/api/export/xrd-csv`` writer emits for a missing
+    value) now scores 1.0 instead of exactly 0.5 -- the boundary value that
+    used to tie with the strict ``> 0.5`` majority rule below and silently
+    drop the row (and, via the header check in ``_detect_layout``, the
+    header above it too, since 0.5 is also not ``< 0.5``). A header row
+    (``"Temp,Moment"``) or units row (``"K,emu"``) is unaffected: neither
+    cell parses as a number either way, so both still score 0.0.
+
+    The denominator is deliberately still ``len(row)`` -- EXCLUDING empty
+    cells from it (so a truly blank cell, not a "nan" string, also scored
+    1.0) was tried and reverted: it regressed a pre-existing, legitimate
+    case a real corpus/test already covers -- a genuinely categorical/text
+    column with one blank row (``"Time,Tag" / "1,A" / "2," / "3,A"``, see
+    ``test_categorical_missing_cell_encodes_as_nan_not_a_level``) -- by
+    inflating that row's lone leftover cell to a 1.0 score the row-level
+    scorer has no column-type context to justify; it ate both the header
+    and the first real data row. The narrower fix here still resolves the
+    concretely-proven bug (the round-trip test below), because the app's
+    own writers emit the literal string "nan" for a missing numeric cell,
+    never a truly empty one.
+    """
     if not row:
         return 0.0
     recognized = sum(
-        1 for token in row if _is_numeric(token.strip()) or _datetime_epoch(token) is not None
+        1 for token in row if _is_numeric_like(token.strip()) or _datetime_epoch(token) is not None
     )
     return recognized / len(row)
 
@@ -98,8 +149,8 @@ def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
     return n_non_empty > 0 and (n_unit_like / max(n, 1)) >= 0.6
 
 
-def _numeric_mask_column(cells: Sequence[str]) -> np.ndarray | None:
-    """Vectorized equivalent of ``[_is_numeric(c.strip()) for c in cells]``.
+def _numeric_like_mask_column(cells: Sequence[str]) -> np.ndarray | None:
+    """Vectorized equivalent of ``[_is_numeric_like(c.strip()) for c in cells]``.
 
     Returns ``None`` -- never a partially-correct answer -- whenever the
     column can't be PROVEN equivalent to numpy's parser; the caller then
@@ -107,11 +158,16 @@ def _numeric_mask_column(cells: Sequence[str]) -> np.ndarray | None:
     fast-path contract as ``delimited._convert_column``: attempt the
     C-speed ``np.asarray(..., dtype=float)`` parse and let any cell numpy
     rejects (an NA-token spelling other than "nan"/"inf", stray text, a
-    genuinely malformed number, ...) raise and trigger the fallback.
+    genuinely malformed number, an empty cell, ...) raise and trigger the
+    fallback.
 
-    Where it succeeds, every cell WAS numpy-float-parseable; the only way
-    it can disagree with ``_is_numeric`` is if numpy's parser and Python's
-    ``float()`` produced different values for the same string. Verified
+    D5 (2026-08-27 bug hunt): unlike the old ``_numeric_mask_column``, does
+    NOT exclude a NaN-parsed cell (``~np.isnan(parsed)``) -- D5 counts a
+    NaN/Inf spelling as numeric, so every cell that parses at all is
+    numeric-like here. Where it succeeds, every cell WAS numpy-float-
+    parseable; the only way it can disagree with ``_is_numeric_like`` is if
+    numpy's parser and Python's ``float()`` produced different values for
+    the same string, or disagreed on whether it parses at all -- verified
     empirically for this project's numpy floor (>=1.26; tested against
     2.4.2) across >20,000 randomized numeric strings plus every case/sign
     spelling of nan/inf, underscore-grouped literals ("1_000"), and
@@ -122,12 +178,7 @@ def _numeric_mask_column(cells: Sequence[str]) -> np.ndarray | None:
         parsed = np.asarray([c.strip() for c in cells], dtype=np.float64)
     except (ValueError, TypeError):
         return None
-    # A parseable cell only comes out NaN if it literally spelled some
-    # sign/case variant of "nan" -- and no such token can ALSO satisfy
-    # `_datetime_epoch` (ISO/slash date patterns are all digit-shaped), so
-    # `~isnan` alone reproduces `_is_numeric(...) or _datetime_epoch(...)`
-    # exactly for every cell that reaches this fast path.
-    return ~np.isnan(parsed)
+    return np.ones_like(parsed, dtype=bool)
 
 
 def _score_chunk(chunk: Sequence[Sequence[str]]) -> list[float]:
@@ -136,8 +187,8 @@ def _score_chunk(chunk: Sequence[Sequence[str]]) -> list[float]:
 
     Rows of uniform, nonzero width -- the shape of an actual data region --
     transpose into columns (mirrors ``delimited._tokens_to_columns``) and
-    dispatch each column through `_numeric_mask_column` (fast) or the
-    exact per-cell ``_is_numeric(...) or _datetime_epoch(...)`` test
+    dispatch each column through `_numeric_like_mask_column` (fast) or the
+    exact per-cell ``_is_numeric_like(...) or _datetime_epoch(...)`` test
     (fallback), then recombine per row. A ragged or all-empty block -- in
     practice only ever the file's header/preamble, a handful of rows --
     falls back to `_numeric_score` row-by-row exactly as before.
@@ -149,10 +200,13 @@ def _score_chunk(chunk: Sequence[Sequence[str]]) -> list[float]:
         return [_numeric_score(row) for row in chunk]
     recognized = np.zeros(len(chunk), dtype=np.int64)
     for col_cells in zip(*chunk, strict=True):
-        mask = _numeric_mask_column(col_cells)
+        mask = _numeric_like_mask_column(col_cells)
         if mask is None:
             mask = np.array(
-                [_is_numeric(c.strip()) or _datetime_epoch(c) is not None for c in col_cells]
+                [
+                    _is_numeric_like(c.strip()) or _datetime_epoch(c) is not None
+                    for c in col_cells
+                ]
             )
         recognized += mask
     return [float(x) for x in recognized / width]

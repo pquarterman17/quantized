@@ -297,3 +297,147 @@ def test_categorical_round_trip_through_dict(tmp_path: Path) -> None:
     assert back.cat_levels == ds.cat_levels
     assert back.labels == ds.labels
     assert back.column("Sample").tolist() == ds.column("Sample").tolist()
+
+
+# --------------------------------------------------------------------------
+# D5 (2026-08-27 bug hunt): a leading partially-blank row must not be eaten
+# --------------------------------------------------------------------------
+# `_detect_layout` scored a row's "data-ness" as numeric-cells/TOTAL-cells
+# with a strict `> 0.5` majority. A 2-column row like "0.05,nan" scored
+# exactly 0.5 -- not a majority, so the detector walked past it (the row
+# was silently lost), AND the `scores[first_data - 1] < 0.5` header check
+# then failed too (0.5 is not < 0.5), so header_row came back -1 and every
+# column label degraded to ColN. This is a faithful port of
+# ../quantized_matlab/+parser/importCSV.m:401 detectLayout's identical
+# rule (str2double("nan") is NaN -> counted non-numeric there too), i.e. a
+# latent behavioural-reference bug -- fixed here by counting a NaN/Inf
+# spelling as numeric (see `_delimited_layout._numeric_score`), not by
+# relaxing the `> 0.5` majority rule itself.
+#
+# NARROWER than the original proposed design: excluding a truly EMPTY cell
+# from the denominator too (so "0.05," -- no "nan" string, just a bare
+# blank -- would also score 1.0 instead of 0.5) was tried and reverted: it
+# regressed `test_categorical_missing_cell_encodes_as_nan_not_a_level`
+# below, a pre-existing, legitimate case where a genuinely categorical
+# column's one blank row ("Time,Tag" / "1,A" / "2," / "3,A") got inflated
+# to a false 1.0 "data" score purely from having a single leftover cell,
+# with no column-type context to justify it -- eating both the header and
+# the first real data row. The narrower fix (NaN-spelling only) still
+# resolves the concretely-proven bug below, because the app's own writers
+# emit the literal string "nan" for a missing numeric cell, never a truly
+# empty one (verified via the actual /api/export/xrd-csv output in
+# `test_export_then_reimport_round_trip_preserves_rows`).
+_LEADING_BLANK_CSV = "Depth (um),Intensity (counts)\n0.05,nan\n0.86,20\n1.67,30\n2.49,40\n"
+
+
+def test_csv_leading_partially_blank_row_is_not_eaten(tmp_path: Path) -> None:
+    path = _write(tmp_path, "leading_blank.csv", _LEADING_BLANK_CSV)
+    ds = import_csv(path)
+    assert ds.n_points == 4
+    assert ds.time[0] == pytest.approx(0.05)
+    assert ds.time.tolist() == pytest.approx([0.05, 0.86, 1.67, 2.49])
+
+
+def test_csv_leading_partially_blank_row_keeps_header(tmp_path: Path) -> None:
+    path = _write(tmp_path, "leading_blank.csv", _LEADING_BLANK_CSV)
+    ds = import_csv(path)
+    assert ds.labels == ("Intensity",)
+    assert ds.metadata["x_column_name"] == "Depth"
+
+
+def test_csv_leading_blank_cell_row_scores_as_data_not_half(tmp_path: Path) -> None:
+    """Unit-level pin on the actual boundary value: a 2-column row with one
+    cell spelled "nan" used to score exactly 0.5 (a tie with the strict
+    majority rule); it must now score 1.0 (both cells count as numeric),
+    while a header/units row -- whose cells are all non-empty text --
+    still scores 0.0. A truly EMPTY cell (no "nan" string) deliberately
+    still scores 0.5, unchanged -- see the module docstring above for why
+    that narrower boundary was kept."""
+    from quantized.io import _delimited_layout as layout
+
+    assert layout._numeric_score(["0.05", "nan"]) == 1.0
+    assert layout._numeric_score(["0.05", ""]) == 0.5
+    assert layout._numeric_score(["Depth (um)", "Intensity (counts)"]) == 0.0
+
+
+# --------------------------------------------------------------------------
+# D6 (2026-08-27 bug hunt): an all-blank x column must not raise an internal
+# invariant error
+# --------------------------------------------------------------------------
+# Column 0 is entirely blank (a leading delimiter -- exactly what Origin's
+# "export worksheet to CSV" emits when the first worksheet column is empty).
+# time_idx defaults to 0; the column is neither numeric nor a datetime, so
+# `time_promoted` fires and used to force-add it to `categorical_idx`
+# WITHOUT the `any(cells)` guard the sibling f2 promotion branch (and the
+# `text_columns` sidecar loop) already apply -- encoding to a categorical
+# channel with ZERO levels, which DataStruct.create then rejected with an
+# internal invariant message ("cat_levels[1] must be a non-empty tuple of
+# str, got ()"), making an otherwise perfectly good 2-numeric-channel file
+# unimportable. Quantized-only code; no MATLAB counterpart.
+#
+# Design decision: an all-blank x column is DROPPED (not promoted, not kept
+# as an all-NaN numeric channel) -- consistent with how every OTHER
+# all-blank column in this file is handled (the f2 branch's `any(cells)`
+# guard, and the `text_columns` sidecar's own `if any(cells)` guard both
+# silently drop a blank column as padding). Time already falls back to the
+# synthetic 1..N row index via the pre-existing `time_promoted` path.
+_BLANK_X_CSV = ",Kerr Signal,H\n,(mdeg),Oe\n,1.5,-7046.7\n,1.6,-6869.3\n,1.7,-6680.5\n"
+
+
+def test_blank_x_column_does_not_raise_cat_levels_error(tmp_path: Path) -> None:
+    path = _write(tmp_path, "blank_x.csv", _BLANK_X_CSV)
+    ds = import_csv(path)
+    assert ds.n_channels == 2
+    assert list(ds.labels) == ["Kerr Signal", "H"]
+    assert ds.cat_levels is None  # the blank column was dropped, not promoted
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]  # fell back to the 1..N row index
+    assert any("blank" in note.lower() for note in ds.metadata.get("notes", []))
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "origin/probes/verify/PJ2_realmiddle.opj.Book2.csv",
+        "origin/probes/verify/PK1_g1.opj.Book2.csv",
+        "origin/probes/verify/PK5_all4.opj.Book2.csv",
+        "origin/probes/verify/PU5_writerprops.opj.Book2.csv",
+    ],
+)
+def test_realdata_origin_csv_with_blank_x_column_imports(rel: str, corpus_dir: Path) -> None:
+    """Corpus anchor: 4 real Origin CSV exports in ../test-data (leading-
+    comma worksheets) failed to import with the same internal cat_levels
+    error before this fix. `test_parsers_matrix.py` deliberately excludes
+    `origin/probes/` (those files are otherwise-corrupt RE probes), so this
+    is the dedicated anchor for the one real defect among them."""
+    p = corpus_dir / rel
+    if not p.is_file():
+        pytest.skip(f"{rel} absent from the corpus")
+    ds = import_auto(p)
+    assert ds.n_channels > 0
+
+
+def test_export_then_reimport_round_trip_preserves_rows(tmp_path: Path) -> None:
+    """End-to-end proof through the app's own public API: export a dataset
+    whose first intensity is NaN via /api/export/xrd-csv, then re-import the
+    file the app just wrote -- the app must be able to round-trip its own
+    export."""
+    from fastapi.testclient import TestClient
+
+    from quantized.app import app
+
+    client = TestClient(app)
+    ds_in = {
+        "time": [0.05, 0.86, 1.67, 2.49, 3.30],
+        "values": [[None], [20.0], [30.0], [40.0], [50.0]],
+        "labels": ["Intensity"],
+        "units": ["counts"],
+        "metadata": {"x_column_name": "Depth", "x_column_unit": "um"},
+    }
+    resp = client.post("/api/export/xrd-csv", json={"dataset": ds_in, "filename": "probe.csv"})
+    assert resp.status_code == 200, resp.text
+    out = tmp_path / "probe.csv"
+    out.write_bytes(resp.content)
+    ds_out = import_csv(out)
+    assert ds_out.n_points == 5, f"exported 5 rows, re-imported {ds_out.n_points}"
+    assert ds_out.labels == ("Intensity",)

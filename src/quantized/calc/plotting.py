@@ -82,13 +82,38 @@ def validate_y2_subset(
         raise ValueError(f"y2_keys must be a subset of y_keys (not in y_keys: {bad!r})")
 
 
+def _default_x_label(ds: DataStruct) -> str:
+    """Label for the default x axis (``ds.time``, i.e. ``state.x_key is None``).
+
+    Mirrors what every frontend reader of this same metadata shows for the
+    same case -- ``lib/plotdata.ts``, ``lib/plotspec.ts``, ``lib/
+    panelwindow.ts``, ``Inspector/ChannelsCard.tsx``, and ``lib/
+    quickFigureMapping.ts`` all evaluate ``x_column_long || x_column_name``
+    (JS truthiness: an empty-string long name falls through too, hence
+    Python ``or`` here rather than a plain default). This is the backend's
+    only chokepoint for that same default label, shared by ``build_series``
+    (``/api/plot/series``, the on-screen plot) and ``build_grouped_series``
+    (the Graph-Builder group-split path, also reachable from the vector
+    publication export) so the two can never again disagree the way they
+    did before this fix: an Origin import's on-screen plot showed the long
+    display name (e.g. "Theta") while the exported SVG/PDF baked in the raw
+    short column identifier ("A") -- reproduced on RockingCurve.opju,
+    Moke.opj, MnN_Diffusion_PNR.opj, XRD.opj, and the app's own
+    qz_written.opj. No camelCase ``xColumnLong`` variant exists anywhere in
+    the codebase (verified by grep), so unlike some other metadata readers
+    (the ``_meta_get``-style helpers), there is no second key spelling to
+    also check here.
+    """
+    return str(ds.metadata.get("x_column_long") or ds.metadata.get("x_column_name") or "x")
+
+
 def build_series(ds: DataStruct, state: PlotState | None = None) -> PlotData:
     """Select x + y channels per ``state``; default x = ds.time, y = all channels."""
     state = state or PlotState()
 
     if state.x_key is None:
         x = ds.time
-        x_label = str(ds.metadata.get("x_column_name", "x"))
+        x_label = _default_x_label(ds)
         x_unit = str(ds.metadata.get("x_column_unit", ""))
     else:
         xi = _resolve(ds, state.x_key)
@@ -188,7 +213,7 @@ def build_grouped_series(
     """
     if x_key is None:
         x = ds.time
-        x_label = str(ds.metadata.get("x_column_name", "x"))
+        x_label = _default_x_label(ds)
         x_unit = str(ds.metadata.get("x_column_unit", ""))
     else:
         xi = _resolve(ds, x_key)

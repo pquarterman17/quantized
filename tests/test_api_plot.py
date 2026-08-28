@@ -385,3 +385,47 @@ def test_plot_map_too_few_points_is_422() -> None:
         json={"dataset": two, "x_key": 0, "y_key": 1, "z_key": 2},
     )
     assert resp.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# D3 (2026-08-27 bug hunt): default x-axis label prefers x_column_long
+# --------------------------------------------------------------------------
+# calc.plotting.build_series used to read only `x_column_name` (Origin's raw
+# short column identifier, e.g. "A") for the default x label, while every
+# frontend consumer of the same metadata (lib/plotdata.ts, lib/plotspec.ts,
+# lib/panelwindow.ts, Inspector/ChannelsCard.tsx) prefers `x_column_long`
+# (the Origin display name, e.g. "Theta"). Since this route and
+# /api/export/figure share build_series, the on-screen plot and the
+# exported figure disagreed on every Origin import with a long name.
+
+
+def test_plot_series_x_label_uses_origin_long_name() -> None:
+    dataset = {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[10.0], [20.0], [30.0], [40.0]],
+        "labels": ["Counts"],
+        "units": ["cps"],
+        "metadata": {
+            "source_format": "opju",
+            "x_column_name": "A",
+            "x_column_long": "Theta",
+            "x_column_unit": "deg",
+        },
+    }
+    resp = client.post("/api/plot/series", json={"dataset": dataset})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["x"]["label"] == "Theta"
+
+
+@pytest.mark.realdata
+def test_realdata_plot_series_x_label_uses_origin_long_name(corpus_dir: Path) -> None:
+    """Corpus anchor: RockingCurve.opju is x_column_name='A',
+    x_column_long='Theta' -- the plot must show "Theta", matching the
+    Inspector and every other frontend consumer of the same import."""
+    p = corpus_dir / "origin" / "RockingCurve.opju"
+    if not p.is_file():
+        pytest.skip("origin/RockingCurve.opju absent from the corpus")
+    dataset = client.post("/api/parsers/import", json={"path": str(p)}).json()
+    resp = client.post("/api/plot/series", json={"dataset": dataset})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["x"]["label"] == "Theta"
