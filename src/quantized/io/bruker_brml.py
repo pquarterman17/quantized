@@ -101,7 +101,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
             raise ValueError(f"no RawData scan document in archive: {path.name}")
         if len(members) > 1:
             raise ValueError(
-                f"multi-scan .brml detected ({len(members)} scans) — reciprocal-space "
+                f"multi-scan .brml detected ({len(members)} scans) -- reciprocal-space "
                 f"maps are not supported by the 1-D parser: {path.name}"
             )
         xml_text = zf.read(members[0]).decode("utf-8", "replace")

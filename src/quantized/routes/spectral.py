@@ -46,7 +46,7 @@ def fft(req: FftRequest) -> dict[str, Any]:
             sided=req.sided,
             detrend=req.detrend,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # Drop the window-function array: same length as the input, internal detail
     # the caller never plots (keeps the response small).

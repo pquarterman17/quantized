@@ -57,7 +57,7 @@ def export_xrd_csv(req: XrdCsvRequest) -> Response:
             intensity=req.intensity,
             include_metadata=req.include_metadata,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=text,
@@ -80,7 +80,14 @@ def export_hdf5(req: Hdf5Request) -> Response:
         raise HTTPException(
             status_code=501, detail="HDF5 export requires h5py"
         ) from exc
-    except (ValueError, KeyError, IndexError, FileNotFoundError, FileExistsError) as exc:
+    except (
+        ValueError,
+        ArithmeticError,
+        KeyError,
+        IndexError,
+        FileNotFoundError,
+        FileExistsError,
+    ) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=payload,
@@ -163,7 +170,7 @@ def export_origin(req: OriginRequest) -> Response:
             created=created,
             graph=graph_spec,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     buf = BytesIO()
@@ -183,7 +190,7 @@ def export_consolidated(req: ConsolidatedRequest) -> Response:
     try:
         items = [(DataStruct.from_dict(it.dataset), it.name) for it in req.datasets]
         text = consolidate_csv(items, fmt=req.fmt)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=text,
@@ -212,7 +219,7 @@ def export_opj(req: OpjRequest) -> Response:
                 )
             books.append(ds)
         payload = opj_bytes(books)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     stem = _safe_name(req.filename, "")
     return Response(
@@ -229,7 +236,7 @@ def export_origin_project(req: OpjRequest) -> Response:
     try:
         items = [(DataStruct.from_dict(i.dataset), i.name) for i in req.datasets]
         csvs, ogs_text = format_origin_project_script(items, created=created)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     stem = _safe_name(req.filename, "")
     buf = BytesIO()
@@ -273,7 +280,7 @@ def export_origin_com(req: OriginComRequest) -> dict[str, Any]:
         items = [DataStruct.from_dict(i.dataset) for i in req.datasets]
         book_names = [i.name for i in req.datasets]
         result = send_to_origin(items, book_names=book_names)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

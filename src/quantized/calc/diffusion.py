@@ -166,6 +166,6 @@ def fick_flux(d: float, dc: float, dx: float) -> dict[str, float]:
     if d < 0:
         raise ValueError("D must be non-negative")
     if dx <= 0:
-        raise ValueError("Δx must be > 0")
+        raise ValueError("dx must be > 0")
     j = -d * dc / dx  # atoms/(cm²·s)
     return {"J": j, "J_abs": abs(j), "D": d, "dC": dc, "dx": dx}

@@ -63,7 +63,7 @@ def export_correlation_heatmap_figure(req: CorrelationHeatmapFigureRequest) -> R
             req.labels, req.r, title=req.title, fmt=req.fmt, style=req.style,
             dpi=_clamp_dpi(req.dpi), width_in=req.width_in, height_in=req.height_in,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img, media_type=_FIGURE_MIME[req.fmt],
@@ -98,7 +98,7 @@ def export_splom_figure(req: SplomFigureRequest) -> Response:
             req.labels, req.columns, title=req.title, fmt=req.fmt, style=req.style,
             dpi=_clamp_dpi(req.dpi), bins=req.bins, width_in=req.width_in, height_in=req.height_in,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img, media_type=_FIGURE_MIME[req.fmt],
@@ -144,7 +144,7 @@ def export_pca_figure(req: PcaFigureRequest) -> Response:
             title=req.title, fmt=req.fmt, style=req.style, dpi=_clamp_dpi(req.dpi),
             width_in=req.width_in, height_in=req.height_in,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img, media_type=_FIGURE_MIME[req.fmt],
@@ -176,7 +176,7 @@ def export_pca_scree_figure(req: PcaScreeFigureRequest) -> Response:
             req.explained, req.cumulative, title=req.title, fmt=req.fmt, style=req.style,
             dpi=_clamp_dpi(req.dpi), width_in=req.width_in, height_in=req.height_in,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img, media_type=_FIGURE_MIME[req.fmt],

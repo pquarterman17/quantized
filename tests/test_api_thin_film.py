@@ -32,3 +32,19 @@ def test_sauerbrey_with_area_and_density() -> None:
 def test_sauerbrey_rejects_nonpositive_f0() -> None:
     r = client.post("/api/thin-film/sauerbrey", json={"delta_f": -10.0, "f0": 0.0})
     assert r.status_code == 422
+
+
+def test_sauerbrey_extreme_finite_input_is_422_not_500() -> None:
+    """Regression: f0=1e308 overflowed calc.thin_film.sauerbrey's f0**2 term,
+    an uncaught OverflowError escaping the route's old `except ValueError`."""
+    r = client.post("/api/thin-film/sauerbrey", json={"delta_f": 1.0, "f0": 1e308})
+    assert r.status_code == 422, r.text
+
+
+def test_kiessig_thickness_extreme_finite_input_is_422_not_500() -> None:
+    """Regression: a huge delta_q with an sld correction overflows
+    calc.thin_film.kiessig_thickness's delta_q**2 term."""
+    r = client.post(
+        "/api/thin-film/kiessig-thickness", json={"delta_q": 1e308, "sld": 1.0}
+    )
+    assert r.status_code == 422, r.text

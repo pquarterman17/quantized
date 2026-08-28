@@ -144,7 +144,7 @@ def full_grids(ds: DataStruct) -> dict[str, Any]:
     shape = ds.metadata.get("map_shape")
     if not shape or len(shape) != 2:
         raise ValueError(
-            "dataset has no regular (frames x pixels) grid (map_shape missing) — "
+            "dataset has no regular (frames x pixels) grid (map_shape missing) -- "
             "use cut_segment, which works on the scattered cloud"
         )
     n, m = int(shape[0]), int(shape[1])
@@ -167,7 +167,7 @@ def full_grids(ds: DataStruct) -> dict[str, Any]:
 
 def require_q(g: dict[str, Any]) -> None:
     if g["qx"] is None:
-        raise ValueError("dataset has no Qx/Qz columns — Q-space cut unavailable")
+        raise ValueError("dataset has no Qx/Qz columns -- Q-space cut unavailable")
 
 
 def scatter_columns(
@@ -197,7 +197,7 @@ def scatter_columns(
         raise ValueError(f"space must be one of {SPACES}, got {space!r}")
     if space == "q":
         if "Qx" not in ds.labels:
-            raise ValueError("dataset has no Qx/Qz columns — Q-space cut unavailable")
+            raise ValueError("dataset has no Qx/Qz columns -- Q-space cut unavailable")
         xs, ys = ds.column("Qx"), ds.column("Qz")
         x_name, y_name = "Qx", "Qz"
         axis_unit = "Ang^-1"

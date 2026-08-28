@@ -75,7 +75,7 @@ def apply_constraints(
     k = len(free_idx)
     if k == 0 and pf.size:
         raise ValueError(
-            f"all {m} parameters are constrained — p_free must be empty when nothing is free"
+            f"all {m} parameters are constrained -- p_free must be empty when nothing is free"
         )
     if pf.size != k:
         raise ValueError(f"p_free has {pf.size} elements but {k} free parameters found")

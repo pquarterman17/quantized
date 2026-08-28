@@ -31,7 +31,7 @@ def strain(req: StrainRequest) -> dict[str, Any]:
     """In-plane / out-of-plane strain + relaxation from an RSM peak pair."""
     try:
         result = rsm_strain(req.q_sub, req.q_film, bulk=req.bulk)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # NaN (symmetric reflection / no bulk) -> null for valid wire JSON.
     return to_jsonable(result)  # type: ignore[no-any-return]
@@ -68,7 +68,7 @@ def analyze(req: AnalyzeRequest, response: Response) -> dict[str, Any]:
             fit_model=req.fit_model,
             intensity_unit=grids["intensity_unit"],
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return to_jsonable(result)  # type: ignore[no-any-return]
@@ -91,7 +91,7 @@ def linecut(req: LineCutRequest, response: Response) -> dict[str, Any]:
         out = line_cut(
             ds, direction=req.direction, value=req.value, space=req.space, width=req.width
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -113,7 +113,7 @@ def cut_segment_route(req: CutSegmentRequest, response: Response) -> dict[str, A
     try:
         ds, handle = resolve_or_409(req)
         out = cut_segment(ds, p0=req.p0, p1=req.p1, n=req.n, width=req.width, space=req.space)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -132,7 +132,7 @@ def projection_route(req: ProjectionRequest, response: Response) -> dict[str, An
     try:
         ds, handle = resolve_or_409(req)
         out = projection(ds, axis=req.axis, space=req.space)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -219,7 +219,7 @@ def sector(req: SectorRequest, response: Response) -> dict[str, Any]:
             phi_max=phi_max,
             mode=req.mode,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -247,7 +247,7 @@ def chi_profile_route(req: ChiProfileRequest, response: Response) -> dict[str, A
             phi_max=phi_max,
             mode=req.mode,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -286,7 +286,7 @@ def box(req: BoxCutRequest, response: Response) -> dict[str, Any]:
             angle=req.angle,
             wrap=req.wrap,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return datastruct_payload(out)
@@ -319,7 +319,7 @@ def box_stats_route(req: BoxStatsRequest, response: Response) -> dict[str, Any]:
             angle=req.angle,
             wrap=req.wrap,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.headers["X-Dataset-Handle"] = handle
     return to_jsonable(result)  # type: ignore[no-any-return]

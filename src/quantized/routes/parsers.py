@@ -244,7 +244,7 @@ def _import_with_books(
                 source_names=source_names,
                 preview_diagnostics=preview_diagnostics,
             )
-        except (IndexError, ValueError, KeyError, struct.error):
+        except (IndexError, ValueError, ArithmeticError, KeyError, struct.error):
             # Figures are an optional nicety; a decode hiccup on a malformed or
             # truncated project must degrade to "no figures", never fail the
             # whole import (the data books already succeeded above).
@@ -274,7 +274,7 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     """
     try:
         resolved = os.path.realpath(req.path)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
     # Inline containment guard (kept in this function so the static analyzer can
     # see the path-traversal barrier sits between the taint and the sink).
@@ -306,7 +306,7 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
         return _import_with_books(Path(safe_path), full_books=req.full_books)
-    except (ValueError, KeyError, OSError) as exc:
+    except (ValueError, ArithmeticError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -340,5 +340,5 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> dict[str, A
             return _import_with_books(dest, full_books=full_books)
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except (ValueError, KeyError, OSError) as exc:
+    except (ValueError, ArithmeticError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

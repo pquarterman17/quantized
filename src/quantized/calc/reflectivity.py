@@ -42,7 +42,7 @@ def parratt_refl(
         elif res.size == n:
             dq = res.ravel()
         else:
-            raise ValueError("resolution must be empty, a scalar dQ/Q, or an N-vector σ_Q")
+            raise ValueError("resolution must be empty, a scalar dQ/Q, or an N-vector sigma_Q")
         n_over, n_sigma = 21, 3
         offsets = np.linspace(-n_sigma, n_sigma, n_over)
         zero_res = dq <= 0

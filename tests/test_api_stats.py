@@ -31,6 +31,18 @@ def test_regression_recovers_line() -> None:
     assert out["R2"] > 0.9999
 
 
+def test_regression_singular_x_message_is_ascii() -> None:
+    """Regression: constant x makes the normal equations singular, and the
+    message used to spell the separator with an em dash (U+2014)."""
+    resp = client.post(
+        "/api/stats/regression", json={"x": [3.0] * 8, "y": [1.0] * 8, "order": 1}
+    )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert all(ord(c) < 128 for c in detail), detail
+    assert "singular" in detail
+
+
 # ── /api/stats/regression band_x (JMP_GAP_PLAN J3 residual) ────────────────
 
 

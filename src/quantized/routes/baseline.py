@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.backgrounds import (
     anchor_baseline,
@@ -36,10 +36,19 @@ class EstimateRequest(BaseModel):
     y: list[float]
     method: str = "snip"
     max_window_deg: float = 2.0
-    smooth_passes: int = 3
-    poly_degree: int = 4
+    # calc.baseline._snip_background ends in `for _ in range(passes):`, each
+    # pass a concatenate+convolve over the whole array -- unbounded, this
+    # wedges a worker thread forever (smooth_passes=1e9 never returns;
+    # measured 1e4 passes ~0.04s on n=2000). 10_000 is >3000x the default.
+    smooth_passes: int = Field(3, ge=0, le=10_000)
+    poly_degree: int = 4  # internally clamped to n//3-1 in _poly_background; no hang risk
     iterative: bool = False
-    iter_max_passes: int = 3
+    # calc.baseline._iterative_refine's outer `for _ in range(iter_max_passes)`
+    # re-runs a full background pass (incl. an inner SNIP call) each
+    # iteration -- the same unbounded-loop shape as smooth_passes, just
+    # heavier per iteration (measured ~1s/1000 passes on n=5000 noisy data).
+    # 1_000 is >300x the default.
+    iter_max_passes: int = Field(3, ge=0, le=1_000)
     iter_sigma: float = 3.0
 
 
@@ -112,7 +121,7 @@ def estimate(req: EstimateRequest) -> dict[str, Any]:
             iter_max_passes=req.iter_max_passes,
             iter_sigma=req.iter_sigma,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -128,7 +137,7 @@ def als(req: ALSRequest) -> dict[str, Any]:
             max_iter=req.max_iter,
             tol=req.tol,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -138,7 +147,7 @@ def rollingball(req: RollingBallRequest) -> dict[str, Any]:
     """Rolling-ball (grayscale morphological opening) baseline."""
     try:
         bg, info = baseline_rolling_ball(req.y, radius=req.radius, smooth=req.smooth)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -150,7 +159,7 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
         bg, info = baseline_modpoly(
             req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -161,7 +170,7 @@ def anchor(req: AnchorRequest) -> dict[str, Any]:
     clamps to the end anchors."""
     try:
         bg = anchor_baseline(req.x, req.y, req.anchors, method=req.method)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -175,7 +184,7 @@ def shirley(req: ShirleyRequest) -> dict[str, Any]:
             req.x, req.y, max_iter=req.max_iter, tol=req.tol,
             edge_average=req.edge_average,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -188,7 +197,7 @@ def xrd_low_angle(req: XrdLowAngleRequest) -> dict[str, Any]:
             req.x, req.y, include_x2=req.include_x2,
             max_iter=req.max_iter, tol=req.tol,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -202,7 +211,7 @@ def region(req: RegionBackgroundRequest) -> dict[str, Any]:
             req.x, req.y, req.x_min, req.x_max,
             y_min=req.y_min, y_max=req.y_max, order=req.order,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     bg = result.pop("background")
     out: dict[str, Any] = to_jsonable(result)

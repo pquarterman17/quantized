@@ -176,6 +176,9 @@ def test_book_data_route_unknown_token_404() -> None:
         "/api/parsers/books/data", json={"book_id": "Anything", "token": "not-a-real-token"}
     )
     assert resp.status_code == 404
+    # Regression: this message used to contain an em dash (U+2014).
+    detail = resp.json()["detail"]
+    assert all(ord(c) < 128 for c in detail), detail
 
 
 def test_book_data_route_unknown_book_id_404(tmp_path: Path) -> None:

@@ -177,7 +177,7 @@ def required_n(
     while _power_from_n(kind, effect_size, hi, alpha, tails) < power:
         hi *= 2
         if hi > 2**22:
-            raise ValueError("required n exceeds 4e6 — effect size too small")
+            raise ValueError("required n exceeds 4e6 -- effect size too small")
     while lo < hi:
         mid = (lo + hi) // 2
         if _power_from_n(kind, effect_size, mid, alpha, tails) >= power:

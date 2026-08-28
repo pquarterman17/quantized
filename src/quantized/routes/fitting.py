@@ -93,7 +93,7 @@ def autoguess(req: GuessRequest) -> dict[str, Any]:
     _require_model(req.model)
     try:
         p0 = auto_guess(req.model, req.x, req.y)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"p0": to_jsonable(p0)}
 
@@ -121,7 +121,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
 
@@ -166,7 +166,7 @@ def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
                 return_samples=req.return_samples,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -202,7 +202,7 @@ def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
     """Validate a custom fit equation; 200 with ok/params[]/error (live UI)."""
     try:
         _, names = equation_model(req.equation)
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         # Telling the user WHY their equation is rejected ("unknown function
         # 'expp'", "unbalanced parenthesis") is the whole point of a validate
         # endpoint -- an opaque "invalid" here would make the live editor
@@ -245,7 +245,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     out["paramNames"] = names
@@ -290,7 +290,7 @@ def scan(req: ScanRequest) -> dict[str, Any]:
                 [e.model_dump() for e in req.equations] if req.equations is not None else None
             ),
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # A scan deliberately fits implausible candidates and reports each failure
     # as a per-candidate `error` string (calc/fit_scan._run_candidate) so the
@@ -373,7 +373,7 @@ def posterior(req: PosteriorRequest) -> dict[str, Any]:
                 upper=req.upper,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -430,7 +430,7 @@ def find_xy(req: FindXYRequest) -> dict[str, Any]:
         assert equation is not None  # narrowed by the "exactly one" check above
         try:
             fcn, names = equation_model(equation)
-        except (ValueError, IndexError) as exc:
+        except (ValueError, ArithmeticError, IndexError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if len(req.params) != len(names):
             raise HTTPException(
@@ -444,5 +444,5 @@ def find_xy(req: FindXYRequest) -> dict[str, Any]:
         assert req.y is not None  # narrowed by the "exactly one" check above
         xs = find_x(fcn, req.params, req.y, req.x_min, req.x_max, grid_points=req.grid_points)
         return {"x": to_jsonable(xs)}
-    except (ValueError, IndexError, ZeroDivisionError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

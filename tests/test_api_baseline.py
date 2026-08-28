@@ -151,3 +151,58 @@ def test_xrdlowangle_nonpositive_x_is_422() -> None:
         json={"x": [0.0, 1.0, 2.0, 3.0], "y": [1.0, 1.0, 1.0, 1.0]},
     )
     assert resp.status_code == 422
+
+
+def test_estimate_rejects_absurd_smooth_passes_without_hanging() -> None:
+    """Regression: calc.baseline._snip_background ends in
+    `for _ in range(passes)`; smooth_passes=1e9 used to wedge the worker
+    thread forever (a Python thread can't be killed). Bounded by
+    Field(ge=0, le=10_000) it must reject in milliseconds, not hang."""
+    import threading
+
+    x = [float(i) for i in range(64)]
+    y = [1.0 + (i % 7) for i in range(64)]
+    box: dict[str, object] = {}
+
+    def call() -> None:
+        r = client.post(
+            "/api/baseline/estimate",
+            json={"x": x, "y": y, "smooth_passes": 1_000_000_000},
+        )
+        box["status"] = r.status_code
+
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    # 30s is an enormous margin, not a perf budget: a bounded request
+    # rejects in milliseconds; the wedged one never returns at all.
+    t.join(30.0)
+    assert not t.is_alive(), "POST /api/baseline/estimate with smooth_passes=1e9 never returned"
+    assert box.get("status") == 422
+
+
+def test_estimate_rejects_absurd_iter_max_passes_without_hanging() -> None:
+    """Sibling of smooth_passes in the same EstimateRequest model:
+    calc.baseline._iterative_refine's outer loop is the same unbounded-count
+    shape (each iteration re-runs a full background pass)."""
+    import threading
+
+    x = [float(i) for i in range(64)]
+    y = [1.0 + (i % 7) for i in range(64)]
+    box: dict[str, object] = {}
+
+    def call() -> None:
+        r = client.post(
+            "/api/baseline/estimate",
+            json={
+                "x": x, "y": y, "iterative": True, "iter_max_passes": 1_000_000_000,
+            },
+        )
+        box["status"] = r.status_code
+
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(30.0)
+    assert not t.is_alive(), (
+        "POST /api/baseline/estimate with iter_max_passes=1e9 never returned"
+    )
+    assert box.get("status") == 422

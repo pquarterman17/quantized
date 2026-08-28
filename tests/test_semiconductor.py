@@ -68,6 +68,44 @@ def test_carrier_concentration_intrinsic_and_p_type() -> None:
     assert s.carrier_concentration(0.0, 1e16, 1.5e10)["type"] == "p"
 
 
+def _stable_carrier_concentration(nd: float, na: float, ni: float) -> tuple[float, float]:
+    """Independent reference: solve for the LARGER root first (whichever
+    carrier dominates) and derive the other from n*p = ni**2, so the two
+    nearly-equal terms in sqrt(net**2 + 4*ni**2) +/- net never get
+    subtracted from each other."""
+    net = nd - na
+    if net < 0:
+        p = 0.5 * (-net + math.sqrt(net**2 + 4.0 * ni**2))
+        return ni**2 / p, p
+    n = 0.5 * (net + math.sqrt(net**2 + 4.0 * ni**2))
+    return n, ni**2 / n
+
+
+@pytest.mark.parametrize(
+    ("nd", "na", "ni"),
+    [
+        (1e17, 1e18, 1e10),  # naive form: n=128.0, ~15% off the stable 111.111
+        (1e17, 1e19, 1e10),  # naive form: ZeroDivisionError (net rounds to 0)
+        (1e17, 1e20, 1e10),  # naive form: ZeroDivisionError (net rounds to 0)
+    ],
+)
+def test_carrier_concentration_heavy_doping_matches_stable_form(
+    nd: float, na: float, ni: float
+) -> None:
+    """Regression for catastrophic cancellation: ordinary silicon doping
+    numbers (|Nd-Na| >> ni) used to round sqrt(net**2+4*ni**2) to exactly
+    |net|, making n = 0.5*(net+sqrt(...)) lose almost all its precision (or
+    divide by an exact zero). carrier_concentration must match the
+    numerically stable reference to double-precision, not merely "close"."""
+    n_stable, p_stable = _stable_carrier_concentration(nd, na, ni)
+    r = s.carrier_concentration(nd, na, ni)
+    assert r["n"] == pytest.approx(n_stable, rel=1e-9)
+    assert r["p"] == pytest.approx(p_stable, rel=1e-9)
+    # Mass-action law must hold to machine precision -- the whole point of
+    # solving for the dominant carrier first.
+    assert r["n"] * r["p"] == pytest.approx(ni**2, rel=1e-6)
+
+
 def test_built_in_potential_reference() -> None:
     r = s.built_in_potential(1e17, 1e17, 9.65e9, 300.0)
     kt = C["kB"] * 300.0 / C["e"]

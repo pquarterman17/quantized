@@ -55,7 +55,7 @@ def dspacing(req: DSpacingRequest) -> dict[str, Any]:
             gamma=req.gamma,
             i=req.i,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -95,7 +95,7 @@ def angle(req: InterplanarAngleRequest) -> dict[str, Any]:
             beta=req.beta,
             gamma=req.gamma,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -124,5 +124,5 @@ def cell(req: CellRequest) -> dict[str, Any]:
             out["molar_mass"] = mass
             out["density"] = theoretical_density(mass, req.z, volume)
         return out
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
