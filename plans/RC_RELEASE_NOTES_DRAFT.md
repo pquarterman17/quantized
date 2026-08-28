@@ -1,9 +1,13 @@
 # Release-candidate notes draft — v0.23.0-rc1 (proposed)
 
 **Status:** FINAL for v0.23.0-rc1; extended 2026-08-23 with the
-"Changes since rc1 → v0.23.0-rc2" section at the end (the rc1 body above
+"Changes since rc1 → v0.23.0-rc2" section, and again 2026-08-27 with
+"Changes since rc2 → rc3 → rc4" at the end. **The current acceptance
+candidate is `v0.23.0-rc4` (`a8a939c1`); rc1, rc2 and rc3 are all
+disqualified** — see that final section for why, including a data-loss
+defect verified present in v0.22.0. The rc1 body below
 it is a frozen record — two Known-limitations bullets carry dated
-"superseded on main" annotations rather than edits). Original: FINAL for
+"superseded on main" annotations rather than edits. Original: FINAL for
 v0.23.0-rc1 — owner gave the explicit tag go on
 2026-08-22 after the audit wave (#194–#200) and her local verification
 campaign (corpus re-sweep 350 graphs / 0 renderer failures, DiraCulator
@@ -236,3 +240,88 @@ in `POST_SPRINT_INDEPENDENT_REVIEW.md`'s closure log and
 
 rc2 publishes as a prerelease exactly like rc1 (auto-update and PyPI
 untouched); `v0.22.0` remains the rollback build.
+
+---
+
+## Changes since rc2 → rc3 → rc4 (2026-08-27)
+
+**rc4 (`a8a939c1`) is the acceptance candidate. rc1, rc2 and rc3 are all
+disqualified** — each by a defect found after it was cut. 25 PRs (#221-#247)
+landed after rc2.
+
+### Fixes that affect data you already have
+
+Two of these were **live in v0.22.0**, the current stable. They are the reason
+to upgrade, not merely reasons this candidate is newer.
+
+- **Re-importing a dataset with a computed column destroyed the base data.**
+  With a measurement column `m` and a formula `2x`, a re-import returned only
+  `2x`, filled with nulls — the measurement column gone, silently, no toast and
+  no error. The recompute stripped trailing computed columns from a payload
+  that had none to strip, because a freshly re-read file only ever carries base
+  columns. **Verified present in v0.22.0, rc1, rc2 and rc3**; fixed in #245.
+  If you have re-imported a formula-bearing dataset on any of those builds,
+  check that dataset against its source file.
+- **Removing a computed column silently re-fitted a saved fit against the wrong
+  column.** The saved fit's own parameters were then overwritten with the wrong
+  result. The only guard was an out-of-range check, which an in-range-but-wrong
+  index passes. Fixed in #244, along with four more instances of the same
+  stale-column-index class (error-bar roles, group/facet keys, saved figure
+  bindings, and the facet render cache).
+- **Fifteen ordinary column names were being converted into error bars** —
+  `Kerr`, `Phase`, `Noise`, `Depth` and others — which cost a plain MOKE file
+  both of its data channels. The error-label classifier was rewritten around
+  explicit generate/rank/select stages (#238), and Origin error roles now come
+  from the file's own column designations rather than a name guess (#239).
+- **Origin books whose columns were all `disregard`/`label`/`Z` discarded
+  Origin's own answer** in favour of a label guess, because the frontend's
+  designation set had two of the seven strings miscased and one missing
+  entirely. Both sides now pin to one shared fixture (#241).
+- **Two keystrokes in the new peak table destroyed data** — Delete on a focused
+  peak row removed the whole dataset with no confirm, and an arrow key wiped a
+  fit (#237). **An invisible hit box swallowed clicks on the Export control**
+  after any box-zoom (#234).
+
+### New in this window
+
+- **Reimport All** (#221) — transactional multi-source re-import.
+- **Faceting reaches parity**: a durable facet-by-column binding (#222),
+  faceted views exporting as the small-multiples grid on every export path
+  (#226), and faceted Figure Page panels rendering as true vector sub-grids
+  (#227).
+- **Annotation**: right-click "Add text here…" (#224) and a bulk "Label peaks"
+  workflow with per-peak row selection (#228, #236).
+- **Library**: Origin project imports land collapsed with the active sheet's
+  chain revealed (#225); fidelity disclosure survives search (#233).
+- **Browser multi-tab single-writer lock** for the shared autosave slot (#223).
+
+### Release engineering
+
+- **Every release now publishes a `SHA256SUMS` manifest** covering all assets
+  (#242). Previously there was no single offline-verifiable checksum file.
+  Verified on both rc3 and rc4 against GitHub's own per-asset digests.
+
+### Why rc3 was disqualified
+
+rc3 (`412609850e...`) was cut, built and fully verified — all five jobs green,
+nine assets, checksums matching — and then the reimport data-loss bug above was
+found. Because that defect is pre-existing rather than introduced, rc1 and rc2
+carry it too, so there was no earlier candidate to fall back to. rc4 is the
+first candidate without it.
+
+### Acceptance still owed against rc4
+
+Unchanged in kind from rc1: the packaged Windows/macOS install and workflow
+smoke pass, the 60-90 minute interactive real-data session with friction log,
+the installer/icon/taskbar check, and ChatGPT-Sol's wording/menu review.
+Promotion to plain `v0.23.0` waits on those.
+
+**Note on urgency.** Because the reimport defect is live in v0.22.0, the usual
+"a bad candidate is worse than no release" calculus is not symmetric here:
+holding also leaves a data-destroying bug in the shipped stable. That argues
+for testing rc4 promptly, not for skipping the test — promotion makes rc4
+`releases/latest`, which auto-updates every existing install, and publishes to
+PyPI irreversibly.
+
+rc4 publishes as a prerelease exactly like rc1-rc3 (auto-update and PyPI both
+skip `-rc` tags), so `releases/latest` remains `v0.22.0` until promotion.
