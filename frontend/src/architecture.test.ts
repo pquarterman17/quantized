@@ -773,6 +773,164 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
   });
 });
 
+// Class A channel-remap registration ratchet (SILENT_STATE_CORRUPTION_PLAN
+// #1): five column-index-keyed fields (Dataset.errorRoles, the view's
+// groupKey/facetKey, Dataset.fitSpec, editableFigures' bindings, the
+// composition render cache) shipped unremapped in ONE DAY (2026-08-27)
+// because nothing forced a newly added channel-index-keyed field on `Dataset`
+// or `PlotView` to be registered with `lib/channelRemap.ts` -- every test
+// passed either way, because no test knew the field existed. This is the
+// same shape of gap `HISTORY_EXCLUDED` below closes for undo coverage, and
+// the fix is the same: enumerate every field on the two root types, and
+// require each one to be either named by channelRemap's own registry types
+// (`DatasetChannelState` / `ViewChannelState`) or explicitly excluded here
+// with a one-line reason it is NOT column-index-keyed. A field that is
+// neither fails this test, by name.
+const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
+  id: "dataset identity string, not channel-indexed",
+  name: "display name, not channel-indexed",
+  data: "the DataStruct itself -- columns shift/drop inside it directly; not index-keyed METADATA about columns",
+  raw: "pre-formula base DataStruct, same as data -- not index-keyed metadata",
+  corrections:
+    "correction-pipeline params (xOff, bgPoly, smoothWindow, ...) apply to the whole dataset, not a single channel",
+  bgRef: "reference-background pick: a dataset id + interp method string, not a column index",
+  notes: "free-text notes, not channel-indexed",
+  tags: "free-text tag list, not channel-indexed",
+  group: "legacy group label string, not channel-indexed",
+  folderId: "Library organization only, not channel-indexed",
+  order: "sort key among folder siblings, not channel-indexed",
+  formulas:
+    "computed-column list; positional shift on removal is handled by lib/formulaRename's remapSurvivingFormulas, a separate mechanism from lib/channelRemap",
+  formulaErrors: "keyed by formula NAME, not column index",
+  derivedFrom: "source dataset id + pipeline descriptor, not channel-indexed",
+  importedAt: "timestamp, not channel-indexed",
+  excludedRows:
+    "ROW indices (JMP-style row state, #50), not COLUMN/channel indices -- unaffected by a column removal",
+  pending: "lazy-load book-source descriptor, not channel-indexed",
+  source: "re-import source path descriptor, not channel-indexed",
+  versionOf: "a dataset id, not channel-indexed",
+  workbookId: "Library organization only, not channel-indexed",
+};
+
+const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
+  yScale: "axis scale mode, not channel-indexed",
+  xScale: "axis scale mode, not channel-indexed",
+  showGrid: "display toggle, not channel-indexed",
+  showLegend: "display toggle, not channel-indexed",
+  legendPos: "legend corner preset, not channel-indexed",
+  legendXY: "legend free position, plot-area FRACTIONS -- not a column index",
+  legendFrameXY: "legend frame-anchored position, frame FRACTIONS -- not a column index",
+  legendStatic: "display toggle, not channel-indexed",
+  legendTitle: "text, not channel-indexed",
+  axisLabelOffsets: "keyed by AXIS (x/y/y2), not by channel",
+  axisLabelStyles: "keyed by AXIS (x/y/y2), not by channel",
+  plotTemplate: "named template, not channel-indexed",
+  showAxisBox: "display toggle, not channel-indexed",
+  stackMode: "display toggle, not channel-indexed",
+  insetMode: "display toggle, not channel-indexed",
+  polarMode: "display toggle, not channel-indexed",
+  statMode: "display toggle, not channel-indexed",
+  xLim: "x-axis range [min, max], not a column index",
+  yLim: "y-axis range [min, max], not a column index",
+  xStep: "x-axis tick step, not a column index",
+  yStep: "y-axis tick step, not a column index",
+  xFmt: "axis tick format, not channel-indexed",
+  yFmt: "axis tick format, not channel-indexed",
+  y2Fmt: "axis tick format, not channel-indexed",
+  plotTitle: "text, not channel-indexed",
+  xAxisLabel: "text, not channel-indexed",
+  yAxisLabel: "text, not channel-indexed",
+  y2Lim: "y2-axis range [min, max], not a column index",
+  y2Scale: "axis scale mode, not channel-indexed",
+  y2Step: "y2-axis tick step, not a column index",
+  y2AxisLabel: "text, not channel-indexed",
+  refLines: "RefLine[] keyed by its own id + axis + value, not a column index",
+  annotations: "Annotation[] pinned at data/page coordinates, not a column index",
+  regionShades: "RegionShade[] pinned at data coordinates, not a column index",
+  shapes: "Shape[] pinned at data/page coordinates, not a column index",
+  waterfall: "numeric offset step, not a column index",
+  panelFit: "layout-fit mode enum, not channel-indexed",
+  pageSetup: "page geometry model, not channel-indexed",
+};
+
+/** Extract top-level field names from one `export interface <name> { ... }`
+ *  block in `src` -- same technique as the HistorySnapshot/PlotView parsing
+ *  below (skip comment lines, match `word:`/`word?:` with no `(` before the
+ *  colon so methods never masquerade as fields). */
+function interfaceFieldNames(src: string, name: string): Set<string> {
+  const marker = `export interface ${name} {`;
+  const start = src.indexOf(marker);
+  if (start < 0) throw new Error(`could not find "${marker}"`);
+  const end = src.indexOf("\n}", start) + 2;
+  const body = src.slice(start, end);
+  const fields = new Set<string>();
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue;
+    const m = /^\s*(\w+)\??\s*:/.exec(line);
+    if (m) fields.add(m[1]);
+  }
+  return fields;
+}
+
+describe("Class A: channel-index-keyed field coverage (SILENT_STATE_CORRUPTION_PLAN #1)", () => {
+  const typesSrc = sources().find(([p]) => p.endsWith("/lib/types.ts"))?.[1] ?? "";
+  const plotviewSrc = sources().find(([p]) => p.endsWith("/lib/plotview.ts"))?.[1] ?? "";
+  const remapSrc = sources().find(([p]) => p.endsWith("/lib/channelRemap.ts"))?.[1] ?? "";
+
+  it("every Dataset field is named by DatasetChannelState (channelRemap's registry) or explicitly excluded", () => {
+    if (!typesSrc || !remapSrc) throw new Error("could not load lib/types.ts or lib/channelRemap.ts source");
+    const datasetFields = interfaceFieldNames(typesSrc, "Dataset");
+    if (datasetFields.size < 15) throw new Error("Dataset parse degraded — guard would silently weaken");
+    const registered = interfaceFieldNames(remapSrc, "DatasetChannelState");
+    if (registered.size < 3) throw new Error("DatasetChannelState parse degraded — guard would silently weaken");
+
+    const uncovered = [...datasetFields].filter(
+      (field) => !registered.has(field) && !DATASET_CHANNEL_REMAP_EXCLUDED[field],
+    );
+    expect(
+      uncovered,
+      `a new Dataset field is not registered for column-removal remapping. Either add it to
+DatasetChannelState + remapDatasetChannels (lib/channelRemap.ts) so a column
+removal keeps it pointing at the right channel, or add it to
+DATASET_CHANNEL_REMAP_EXCLUDED (architecture.test.ts) with a one-line reason
+it is NOT channel-indexed. SILENT_STATE_CORRUPTION_PLAN #1: 5 fields shipped
+unremapped in one day because nothing forced this decision.`,
+    ).toEqual([]);
+  });
+
+  it("every PlotView field is named by ViewChannelState (channelRemap's registry) or explicitly excluded", () => {
+    if (!plotviewSrc || !remapSrc) throw new Error("could not load lib/plotview.ts or lib/channelRemap.ts source");
+    const viewFields = interfaceFieldNames(plotviewSrc, "PlotView");
+    if (viewFields.size < 30) throw new Error("PlotView parse degraded — guard would silently weaken");
+    const registered = interfaceFieldNames(remapSrc, "ViewChannelState");
+    if (registered.size < 5) throw new Error("ViewChannelState parse degraded — guard would silently weaken");
+
+    const uncovered = [...viewFields].filter(
+      (field) => !registered.has(field) && !PLOTVIEW_CHANNEL_REMAP_EXCLUDED[field],
+    );
+    expect(
+      uncovered,
+      `a new PlotView field is not registered for column-removal remapping. Either add it
+to ViewChannelState + remapViewChannels (lib/channelRemap.ts) so a column
+removal keeps it pointing at the right channel, or add it to
+PLOTVIEW_CHANNEL_REMAP_EXCLUDED (architecture.test.ts) with a one-line reason
+it is NOT channel-indexed.`,
+    ).toEqual([]);
+  });
+
+  it("exclusion list entries are documented with reasons", () => {
+    const missing: string[] = [];
+    for (const [field, reason] of Object.entries({
+      ...DATASET_CHANNEL_REMAP_EXCLUDED,
+      ...PLOTVIEW_CHANNEL_REMAP_EXCLUDED,
+    })) {
+      if (!reason || reason.trim().length < 5) missing.push(`${field}: reason is too short ("${reason}")`);
+    }
+    expect(missing, "each exclusion must have a descriptive reason (>=5 chars)").toEqual([]);
+  });
+});
+
 // History coverage ratchet (GUI_INTERACTION_PLAN #21): every persistent store
 // field must be either in HistorySnapshot (undoable) or on an explicit
 // HISTORY_EXCLUDED list with justification. The `savedRois` field was missing
