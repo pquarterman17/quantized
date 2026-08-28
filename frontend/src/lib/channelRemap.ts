@@ -147,16 +147,33 @@ export function remapErrorRoles(
  *  legacy spec with no recorded `yKey` at all has nothing channel-indexed to
  *  remap and passes through untouched (its own `xKey`, if any, is meaningless
  *  without a `yKey` -- `fitselection.ts`'s own `xKey === undefined && yKey
- *  === undefined` fallback check treats the pair as a unit). */
+ *  === undefined` fallback check treats the pair as a unit).
+ *
+ *  F2 (SILENT_STATE_CORRUPTION_PLAN, 2026-08-27): `weight.errKey` is a
+ *  channel index too -- `lib/fitweights.ts`'s `dyForFit` reads it
+ *  positionally and its only guard is `errKey < 0 || errKey >= width`, so an
+ *  in-range but now-WRONG index passes silently and `stampRecompute` then
+ *  writes the wrong-column fit's params back onto the saved spec. Shifted
+ *  the same way `xKey`/`yKey` are; when the removed column WAS the errKey
+ *  column there is no honest shifted substitute (unlike `xKey`, which can
+ *  fall back to the time axis), so the whole `weight` is dropped -- the fit
+ *  reverts to unweighted rather than silently reading whatever shifted into
+ *  that slot. */
 export function remapFitSpec(spec: FitSpec | undefined, removedCol: number): FitSpec | undefined {
   if (!spec) return undefined;
   if (spec.yKey === undefined) return spec;
   const yKey = remapChannel(spec.yKey, removedCol);
   if (yKey === null) return undefined; // the fit's subject column is gone -- the spec is meaningless
+  let weight = spec.weight;
+  if (weight?.errKey != null) {
+    const errKey = remapChannel(weight.errKey, removedCol);
+    weight = errKey === null ? undefined : errKey === weight.errKey ? weight : { ...weight, errKey };
+  }
   return {
     ...spec,
     yKey,
     ...(spec.xKey != null ? { xKey: remapChannel(spec.xKey, removedCol) ?? undefined } : {}),
+    weight,
   };
 }
 

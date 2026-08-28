@@ -45,6 +45,39 @@ describe("document-backed plot-window persistence", () => {
     expect(restored.view.groupKey).toBe(2);
   });
 
+  // F6 (SILENT_STATE_CORRUPTION_PLAN): migrateLegacyWindow threads groupKey
+  // (P1.5, above) but not facetKey, which joined the same bindings-owned
+  // class in F4.4 -- a faceted grid silently collapses to one panel on
+  // whichever legacy-promotion path this function serves.
+  it("F6: a legacy PlotView-only window's own facetKey survives the migration (future-version path)", () => {
+    const future = {
+      ...createFigureDocument({ id: "future", name: "Future", datasetId: "d1", view: defaultPlotView() }),
+      version: 3,
+    };
+    const [restored] = sanitizeDocumentBackedPlotWindows(
+      [{ ...window({ view: { ...defaultPlotView(), groupKey: 2, facetKey: 4 } }), document: future }],
+      new Set(["d1"]),
+    );
+    expect(restored.document?.bindings.groupKey).toBe(2);
+    expect(restored.document?.bindings.facetKey).toBe(4);
+    expect(restored.view.facetKey).toBe(4);
+  });
+
+  it("F6: a window whose document fails validation keeps its facetKey the same way", () => {
+    const [restored] = sanitizeDocumentBackedPlotWindows(
+      [
+        {
+          ...window({ view: { ...defaultPlotView(), groupKey: 2, facetKey: 4 } }),
+          document: { not: "a figure document" },
+        },
+      ],
+      new Set(["d1"]),
+    );
+    expect(restored.document?.bindings.groupKey).toBe(2);
+    expect(restored.document?.bindings.facetKey).toBe(4);
+    expect(restored.view.facetKey).toBe(4);
+  });
+
   it("treats a valid document as authoritative over stale compatibility fields", () => {
     const document = createFigureDocument({
       id: "figure-stable",

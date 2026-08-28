@@ -33,6 +33,11 @@ function migrateLegacyWindow(window: PlotWindow): FigureDocument {
     // window promoted through this legacy bridge) silently lost a durable
     // group binding on the very next .dwk save/reload.
     groupKey: window.view.groupKey,
+    // F6 (SILENT_STATE_CORRUPTION_PLAN): `facetKey` joined the same
+    // bindings-owned class as `groupKey` in F4.4 -- the same gap applies:
+    // without threading it here, a faceted grid silently collapses to one
+    // panel on the very next .dwk save/reload through this legacy bridge.
+    facetKey: window.view.facetKey,
   });
 }
 

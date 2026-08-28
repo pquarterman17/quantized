@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchBookData } from "../lib/api";
+import { initialQuickFigureMapping } from "../lib/quickFigureMappingActions";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -233,6 +234,48 @@ describe("splitDatasetByColumn — what carries to a child, and what doesn't", (
     expect(child.formulas).toEqual([{ name: "T2", expr: "A^2" }]);
     expect(child.channelRoles).toEqual({ 0: "label" });
     expect(child.channelTypes).toEqual({ 0: "continuous" });
+  });
+
+  // F5 (SILENT_STATE_CORRUPTION_PLAN): errorRoles is column-indexed like its
+  // two siblings above and a row-only split never changes the column layout,
+  // so it must carry too -- an O1 "checked: no error columns" marker
+  // (`errorRoles: []`) dropping to `undefined` re-enables the label guesser
+  // on the child and silently unplots a series.
+  it("carries errorRoles alongside channelRoles/channelTypes, preserving [] vs undefined (F5)", async () => {
+    const data: DataStruct = {
+      time: [1, 1, 2, 2],
+      values: [
+        [10, 1],
+        [11, 2],
+        [20, 3],
+        [21, 4],
+      ],
+      labels: ["Refl", "Refl_err"],
+      units: ["", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        baseDataset({
+          data,
+          channelRoles: { 0: "label" },
+          channelTypes: { 0: "continuous" },
+          errorRoles: [], // O1: designations checked -> no error columns
+        }),
+      ],
+    });
+
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+
+    const child = useApp.getState().datasets.find((d) => d.id !== "d1")!;
+    expect(child.channelRoles).toEqual({ 0: "label" });
+    expect(child.channelTypes).toEqual({ 0: "continuous" });
+    expect(child.errorRoles).toEqual([]);
+    // The consequence: without the O1 marker, "Refl_err" is guessed to be an
+    // error column for "Refl" and silently dropped from plotted Y channels.
+    const m = initialQuickFigureMapping(child);
+    expect(m.yKeys).toEqual([1]);
+    expect(m.errorBindings).toEqual([]);
   });
 
   it("drops row-indexed state (excludedRows/filter) — the indices are meaningless post-slice", async () => {

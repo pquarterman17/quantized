@@ -16,6 +16,7 @@ import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
+import { initialQuickFigureMapping } from "../lib/quickFigureMappingActions";
 import type { Dataset, DataStruct } from "../lib/types";
 import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
@@ -649,6 +650,44 @@ describe("useApp duplicateDataset", () => {
     expect(copy.data.time).toEqual(full.time);
     expect(copy.pending).toBeUndefined();
     expect(useApp.getState().datasets[0].pending).toBeUndefined(); // the source resolved too
+  });
+
+  // F5 (SILENT_STATE_CORRUPTION_PLAN): errorRoles is column-indexed like its
+  // two siblings channelRoles/channelTypes, which duplicateDataset already
+  // carries -- it must carry too, preserving the O1 "[]" marker exactly.
+  it("carries errorRoles alongside channelRoles/channelTypes, preserving [] vs undefined (F5)", async () => {
+    const data: DataStruct = {
+      time: [1, 1, 2, 2],
+      values: [
+        [10, 1],
+        [11, 2],
+        [20, 3],
+        [21, 4],
+      ],
+      labels: ["Refl", "Refl_err"],
+      units: ["", ""],
+      metadata: {},
+    };
+    const src: Dataset = {
+      id: "d1",
+      name: "book1",
+      data,
+      channelRoles: { 0: "label" },
+      channelTypes: { 0: "continuous" },
+      errorRoles: [], // O1: designations checked -> no error columns
+    };
+    useApp.setState({ datasets: [src], activeId: "d1" });
+
+    await useApp.getState().duplicateDataset("d1");
+
+    const clone = useApp.getState().datasets[1];
+    expect(clone.channelTypes).toEqual({ 0: "continuous" });
+    expect(clone.errorRoles).toEqual([]);
+    // The consequence: without the O1 marker, "Refl_err" is guessed to be an
+    // error column for "Refl" and silently dropped from plotted Y channels.
+    const m = initialQuickFigureMapping(clone);
+    expect(m.yKeys).toEqual([1]);
+    expect(m.errorBindings).toEqual([]);
   });
 });
 
