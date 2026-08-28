@@ -5,6 +5,7 @@ this file proves the transport layer turns finite-but-extreme input into a
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -67,3 +68,18 @@ def test_mobility_model_extreme_finite_input_is_422_not_500() -> None:
         "/api/semiconductor/mobility-model", json={"material": "Si", "t": 1e-308, "n": 1.0}
     )
     assert r.status_code == 422, r.text
+
+
+def test_carrier_concentration_heavy_doping_no_longer_500s() -> None:
+    """Regression (D8): ordinary heavy p-type doping (na=1e19 >> ni=1e10)
+    used to catastrophically cancel to net=0 in the naive
+    0.5*(net+sqrt(net**2+4*ni**2)) form, then ZeroDivisionError on
+    p = ni**2/n. This must return real physics, not a 4xx or 5xx."""
+    r = client.post(
+        "/api/semiconductor/carrier-concentration",
+        json={"nd": 1e17, "na": 1e19, "ni": 1e10},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["n"] == pytest.approx(10.1010101010101, rel=1e-6)
+    assert body["type"] == "p"

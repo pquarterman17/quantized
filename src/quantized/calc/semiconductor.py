@@ -166,14 +166,32 @@ def carrier_concentration(nd: float, na: float, ni: float) -> dict[str, Any]:
     >>> r = carrier_concentration(1e16, 0.0, 1.5e10)
     >>> round(r["n"] / 1e16, 4), r["type"]
     (1.0, 'n')
+
+    Numerically stable form (do-not-"fix" back to the naive one): for
+    ordinary p-type doping ``|net| >> ni`` (e.g. ``nd=1e17, na=1e18,
+    ni=1e10``), ``sqrt(net**2 + 4*ni**2)`` rounds to exactly ``|net|`` in
+    float64, so the naive ``0.5*(net + sqrt(...))`` catastrophically cancels
+    (that example returns ``n=128.0``, 15% off the true 111.111) and for
+    heavier doping (``na=1e19`` or ``1e20``) cancels to exactly 0, making the
+    ``p = ni**2/n`` step a ``ZeroDivisionError``. Solving for the LARGER root
+    first (whichever carrier dominates) and getting the other from the
+    mass-action law ``n*p = ni**2`` avoids subtracting two nearly-equal
+    numbers entirely. This is a faithful-port bug shared with the MATLAB
+    reference (``+calc/+semiconductor/carrierConcentration.m:45`` uses the
+    same naive form) -- fixed here as the intended behaviour, not a silent
+    upstream deviation.
     """
     if nd < 0 or na < 0:
         raise ValueError("Nd and Na must be non-negative")
     if ni <= 0:
         raise ValueError("ni must be positive")
     net = nd - na
-    n = 0.5 * (net + math.sqrt(net**2 + 4.0 * ni**2))
-    p = ni**2 / n
+    if net < 0:
+        p = 0.5 * (-net + math.sqrt(net**2 + 4.0 * ni**2))
+        n = ni**2 / p
+    else:
+        n = 0.5 * (net + math.sqrt(net**2 + 4.0 * ni**2))
+        p = ni**2 / n
     return {"n": n, "p": p, "type": _doping_type(net, ni)}
 
 
