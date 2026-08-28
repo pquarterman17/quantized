@@ -94,7 +94,7 @@
 
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
-import type { StrippableData } from "./formulaInputs";
+import { stripCatLevels, type StrippableData } from "./formulaInputs";
 import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
@@ -358,7 +358,7 @@ export function referencedColumns(expr: string): { letters: string[]; valid: boo
 }
 
 /** Strip the last `n` columns (the computed ones) from a DataStruct, returning
- *  the base. `n <= 0` returns the input unchanged. */
+ *  the base (`n <= 0` = unchanged); also strips stale `cat_levels` (#8). */
 export function baseColumns(data: DataStruct, n: number): DataStruct {
   if (n <= 0) return data;
   const keep = Math.max(0, data.labels.length - n);
@@ -367,6 +367,7 @@ export function baseColumns(data: DataStruct, n: number): DataStruct {
     labels: data.labels.slice(0, keep),
     units: data.units.slice(0, keep),
     values: data.values.map((row) => row.slice(0, keep)),
+    cat_levels: stripCatLevels(data.cat_levels, keep),
   };
 }
 

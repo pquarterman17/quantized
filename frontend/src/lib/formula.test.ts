@@ -116,6 +116,61 @@ describe("computed columns", () => {
     expect(baseColumns(base, 0)).toBe(base); // no-op
   });
 
+  // SILENT_STATE_CORRUPTION_PLAN #8: `cat_levels` is column-index-keyed
+  // (DataStruct.cat_levels, P1.4) but `baseColumns` only ever sliced
+  // labels/units/values -- a stripped column's level table survived into
+  // the "base" it was stripped OUT of, ready to re-land on whatever formula
+  // column `computeFormulas` next assigns that same index.
+  it("baseColumns strips cat_levels entries at/beyond the kept column count, not just labels/units/values", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [
+        [0, 1],
+        [1, 0],
+      ],
+      labels: ["A", "R1"],
+      units: ["", ""],
+      metadata: {},
+      cat_levels: { 0: ["lo", "hi"], 1: ["x", "y"] },
+    };
+    const out = baseColumns(data, 1);
+    expect(out.labels).toEqual(["A"]);
+    // The kept column's own level table survives...
+    expect(out.cat_levels).toEqual({ 0: ["lo", "hi"] });
+    // ...but the stripped column's does not ride along as stale state.
+    expect(out.cat_levels?.[1]).toBeUndefined();
+  });
+
+  it("baseColumns drops cat_levels entirely once every categorical column is stripped (never an empty stale object)", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[0], [1]],
+      labels: ["R1"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["x", "y"] },
+    };
+    expect(baseColumns(data, 1).cat_levels).toBeUndefined();
+  });
+
+  it("recomputeWithErrors does not re-seed a stale cat_levels entry onto a plain arithmetic column at the same index", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [
+        [0, 5],
+        [1, 6],
+      ],
+      labels: ["A", "F1"],
+      units: ["", ""],
+      metadata: {},
+      // Stale: index 1 was categorical under a PREVIOUS formula list (e.g. a
+      // recode column that has since been replaced by a plain arithmetic one).
+      cat_levels: { 1: ["ghost"] },
+    };
+    const out = recomputeWithErrors(asAlreadyComputed(data), [{ name: "F1", expr: "A * 10" }]).data;
+    expect(out.cat_levels).toBeUndefined();
+  });
+
   it("recomputeWithErrors re-derives the computed column from an edited base that already carries it", () => {
     const withS = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
     // Simulate a base edit: A[0] 10 → 100. `edited` already carries the

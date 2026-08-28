@@ -57,3 +57,25 @@ export function recomputeFromBase(
 ): { data: DataStruct; errors: Record<string, string> } {
   return { data: applyFormulas(base, formulas), errors: formulaErrors(base, formulas) };
 }
+
+/** Drop `cat_levels` (P1.4, column-index-keyed) entries at/beyond `keep`
+ *  (SILENT_STATE_CORRUPTION_PLAN #8): `lib/formula.ts`'s `baseColumns`
+ *  slices `labels`/`units`/`values` down to `keep` columns but, without
+ *  this, spread the FULL level table through unchanged — so a stripped
+ *  categorical column's table survived into the "base" it was stripped out
+ *  of, ready to re-land on whatever plain formula column `computeFormulas`
+ *  next assigns that same index. Lives here (not lib/formula.ts, which sits
+ *  at its 500-line ceiling) purely for headroom. Returns `undefined` for an
+ *  absent or now-empty table — `baseColumns` must never carry forward a
+ *  stale `{}`. */
+export function stripCatLevels(
+  levels: Record<number, string[]> | undefined,
+  keep: number,
+): Record<number, string[]> | undefined {
+  if (!levels) return undefined;
+  const out: Record<number, string[]> = {};
+  for (const [key, list] of Object.entries(levels)) {
+    if (Number(key) < keep) out[Number(key)] = list;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
