@@ -191,6 +191,32 @@ describe("reimportDataset — row/column count change", () => {
     expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
   });
 
+  // SILENT_STATE_CORRUPTION_PLAN #6/#7 (task 7): `fitSpec.yKey` is exactly as
+  // column-index-keyed as channelRoles/channelTypes/errorRoles above, but the
+  // columnsChanged clear list never named it -- an in-range-but-now-WRONG
+  // yKey survives verbatim, `recomputeStaleFits` refits the wrong column, and
+  // `stampRecompute` silently overwrites the saved `params` with a fit of
+  // data the user never asked to fit.
+  it("clears fitSpec (column-index-keyed) on a column-count change", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      labels: ["moment", "field"],
+      units: ["emu", "Oe"],
+      values: [[11, 100], [21, 200], [31, 300]],
+    });
+    // A saved fitSpec makes this dataset have a downstream dependency (its
+    // OWN fit going stale) per computeDependencyImpact's module doc, so the
+    // reimport asks for confirmation first — the user says yes.
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({
+      datasets: [baseDataset({ fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [1, 2] } })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].fitSpec).toBeUndefined();
+  });
+
   // Round 7 BLOCKER (adversarial review round 2): gating errorRoles's clear
   // on `shapeChanged` (rows OR columns) rather than `columnsChanged` alone
   // wiped still-valid bindings on a harmless ROW-only reimport (e.g. an
@@ -477,6 +503,18 @@ describe("reimportDataset — row-only reshape preserves column-keyed state", ()
     await useApp.getState().reimportDataset("d1");
 
     expect(useApp.getState().datasets[0].formulas).toEqual([{ name: "2x", expr: "2*A" }]);
+  });
+
+  it("preserves fitSpec on a ROW-only reimport (column meaning is untouched)", async () => {
+    vi.mocked(importFile).mockResolvedValue({ ...fresh, time: [1, 2, 3, 4], values: [[11], [21], [31], [41]] });
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({
+      datasets: [baseDataset({ fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [1, 2] } })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().datasets[0].fitSpec).toEqual({ model: "Linear", xKey: null, yKey: 0, params: [1, 2] });
   });
 });
 

@@ -208,6 +208,13 @@ export function applyReimportMerge(
               // here as `[]`, not `undefined` -- exactly like the
               // unconditional-clear code this replaces never distinguished.
               errorRoles: originBookErrorRoles(newData)?.errorRoles,
+              // SILENT_STATE_CORRUPTION_PLAN #7: fitSpec.yKey/xKey are exactly
+              // as column-index-keyed as the fields above, but `yKey` has no
+              // honest re-derivation the way errorRoles does -- an in-range-
+              // but-now-wrong index would otherwise survive, get refit by
+              // `recomputeStaleFits`, and have its saved `params` silently
+              // overwritten with a fit of the wrong column.
+              fitSpec: undefined,
             }
           : {}),
       };
