@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   remapChannel,
@@ -13,8 +13,11 @@ import {
   type ViewChannelState,
 } from "./channelRemap";
 import type { ErrorBinding } from "./errorRoles";
+import { fitDataForSpec } from "./fitselection";
+import { dyForFit } from "./fitweights";
 import type { FigureBindings } from "./figureDocument";
-import type { FitSpec, SeriesStyle } from "./types";
+import { useApp } from "../store/useApp";
+import type { ComputedColumn, DataStruct, Dataset, FitSpec, SeriesStyle } from "./types";
 
 const style = (color: string): SeriesStyle => ({ color }) as SeriesStyle;
 
@@ -84,6 +87,16 @@ describe("remapDatasetChannels", () => {
     const out = remapDatasetChannels({ fitSpec: { model: "Linear", yKey: 4 } }, 3);
     expect(out.fitSpec).toEqual({ model: "Linear", yKey: 3 });
   });
+
+  // F2: the chokepoint every store call site goes through must carry
+  // weight.errKey too, not just direct remapFitSpec callers.
+  it("carries fitSpec.weight.errKey through the chokepoint (F2)", () => {
+    const out = remapDatasetChannels(
+      { fitSpec: { model: "Linear", yKey: 1, weight: { mode: "yerr", errKey: 3 } } },
+      2,
+    );
+    expect(out.fitSpec?.weight?.errKey).toBe(2);
+  });
 });
 
 describe("remapFitSpec (round 2 finding 1: Dataset.fitSpec was not remapped at all)", () => {
@@ -116,6 +129,31 @@ describe("remapFitSpec (round 2 finding 1: Dataset.fitSpec was not remapped at a
 
   it("passes undefined through", () => {
     expect(remapFitSpec(undefined, 3)).toBeUndefined();
+  });
+
+  // F2 (SILENT_STATE_CORRUPTION_PLAN): `weight.errKey` is a channel index too --
+  // `dyForFit`'s only guard is `errKey < 0 || errKey >= width`, so an in-range
+  // but now-WRONG index passes silently and `stampRecompute` stamps the wrong
+  // fit's params back onto the saved spec.
+  it("shifts a surviving weight.errKey down with the removed column", () => {
+    const out = remapFitSpec({ model: "Linear", yKey: 1, weight: { mode: "manual", errKey: 3 } }, 2);
+    expect(out?.weight?.errKey).toBe(2);
+  });
+
+  it("drops the whole weight (falls back to unweighted) when errKey WAS the removed column, keeping yKey", () => {
+    const out = remapFitSpec({ model: "Linear", yKey: 1, weight: { mode: "manual", errKey: 3 } }, 3);
+    expect(out?.yKey).toBe(1);
+    expect(out?.weight).toBeUndefined();
+  });
+
+  it("leaves weight untouched when errKey is below the removed column", () => {
+    const out = remapFitSpec({ model: "Linear", yKey: 5, weight: { mode: "yerr", errKey: 1 } }, 3);
+    expect(out?.weight).toEqual({ mode: "yerr", errKey: 1 });
+  });
+
+  it("leaves a spec with no weight untouched", () => {
+    const out = remapFitSpec({ model: "Linear", yKey: 4 }, 3);
+    expect(out?.weight).toBeUndefined();
   });
 });
 
@@ -298,5 +336,60 @@ describe("remapWindowViews", () => {
     expect(out[1].view.hiddenChannels).toEqual([4]); // d2 window left alone
     expect(out[1]).toBe(windows[1]); // untouched windows keep identity
     expect(out[2]).toBe(windows[2]);
+  });
+});
+
+// F2 (SILENT_STATE_CORRUPTION_PLAN): full-chain regression through the real
+// `removeFormula` action -- proves the chokepoint fix, not just the pure
+// remap function, stops a saved fit's weighting from silently reading a
+// different column's numbers.
+describe("removeFormula keeps a weighted fit reading its OWN sigma column (F2)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [],
+      activeId: null,
+      recalcMode: "off",
+      staleDatasets: [],
+      staleFits: [],
+      status: "",
+    });
+  });
+
+  it("a fit weighted by E2 still reads E2's numbers after F1 is removed, not F3's", () => {
+    // base [A,B]; formulas F1@2, E2@3 (a computed sigma column), F3@4.
+    const formulas: ComputedColumn[] = [
+      { name: "F1", expr: "A" },
+      { name: "E2", expr: "B" }, // the sigma column the fit is weighted by
+      { name: "F3", expr: "A*100" },
+    ];
+    const data: DataStruct = {
+      time: [0, 1, 2],
+      values: [
+        [1, 5, 1, 5, 100],
+        [2, 6, 2, 6, 200],
+        [3, 7, 3, 7, 300],
+      ],
+      labels: ["A", "B", "F1", "E2", "F3"],
+      units: ["", "", "", "", ""],
+      metadata: {},
+    };
+    const ds: Dataset = {
+      id: "d1",
+      name: "d1",
+      data,
+      formulas,
+      fitSpec: { model: "Linear", yKey: 1, weight: { mode: "manual", errKey: 3 } },
+    };
+    // Before removal the recorded weighting reads E2 = [5,6,7].
+    expect(dyForFit(ds, 1, ds.fitSpec!.weight!).dy).toEqual([5, 6, 7]);
+
+    useApp.setState({ datasets: [ds], activeId: "d1", recalcMode: "off" });
+    useApp.getState().removeFormula("d1", 0); // delete F1
+    const after = useApp.getState().datasets[0];
+    expect(after.data.labels).toEqual(["A", "B", "E2", "F3"]);
+    // E2 is now channel 2. The recorded weighting must still read [5,6,7];
+    // an unremapped errKey=3 would silently read F3 = [100,200,300] instead.
+    const sel = fitDataForSpec(after, after.fitSpec!, null, null, null);
+    expect(sel?.dy).toEqual([5, 6, 7]);
   });
 });
