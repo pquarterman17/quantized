@@ -5,7 +5,7 @@
 across every cell in the file -- ~9 s of a 14.6 s profiled 1M-row import)
 with a lazily-pulled, chunk-vectorized score sequence. These tests pin the
 new fast path against the exact per-cell logic it replaces: `_score_chunk`
-(and its `_numeric_mask_column` fast path) must reproduce `_numeric_score`
+(and its `_numeric_like_mask_column` fast path) must reproduce `_numeric_score`
 bit-for-bit on every row shape, and `_detect_layout` must reproduce the
 original eager algorithm (reimplemented here from `_numeric_score` alone,
 independent of the new module's internals) on every layout shape.
@@ -106,14 +106,15 @@ def test_score_chunk_empty_chunk_is_empty_list() -> None:
     assert layout._score_chunk([]) == []
 
 
-def test_numeric_mask_column_falls_back_on_underscore_and_na_tokens() -> None:
+def test_numeric_like_mask_column_falls_back_on_underscore_and_na_tokens() -> None:
     """Regardless of whether numpy's parser agrees with float() on a given
     token (verified empirically -- see the docstring), a column mixing a
     non-numpy-parseable NA spelling with numbers must still classify every
-    cell exactly like `_is_numeric`."""
+    cell exactly like `_is_numeric_like` (D5's fast-path contract), or fall
+    back to ``None`` rather than answer wrong."""
     for cells in (["1", "2", "-"], ["1", "n/a", "3"], ["1", "", "3"]):
-        mask = layout._numeric_mask_column(cells)
-        expected = [layout._is_numeric(c.strip()) for c in cells]
+        mask = layout._numeric_like_mask_column(cells)
+        expected = [layout._is_numeric_like(c.strip()) for c in cells]
         if mask is None:
             # Fell back -- the caller (`_score_chunk`) applies the exact
             # per-cell OR-datetime test itself; nothing to check here

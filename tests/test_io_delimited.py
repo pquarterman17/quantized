@@ -297,3 +297,90 @@ def test_categorical_round_trip_through_dict(tmp_path: Path) -> None:
     assert back.cat_levels == ds.cat_levels
     assert back.labels == ds.labels
     assert back.column("Sample").tolist() == ds.column("Sample").tolist()
+
+
+# --------------------------------------------------------------------------
+# D5 (2026-08-27 bug hunt): a leading partially-blank row must not be eaten
+# --------------------------------------------------------------------------
+# `_detect_layout` scored a row's "data-ness" as numeric-cells/TOTAL-cells
+# with a strict `> 0.5` majority. A 2-column row like "0.05,nan" scored
+# exactly 0.5 -- not a majority, so the detector walked past it (the row
+# was silently lost), AND the `scores[first_data - 1] < 0.5` header check
+# then failed too (0.5 is not < 0.5), so header_row came back -1 and every
+# column label degraded to ColN. This is a faithful port of
+# ../quantized_matlab/+parser/importCSV.m:401 detectLayout's identical
+# rule (str2double("nan") is NaN -> counted non-numeric there too), i.e. a
+# latent behavioural-reference bug -- fixed here by counting a NaN/Inf
+# spelling as numeric (see `_delimited_layout._numeric_score`), not by
+# relaxing the `> 0.5` majority rule itself.
+#
+# NARROWER than the original proposed design: excluding a truly EMPTY cell
+# from the denominator too (so "0.05," -- no "nan" string, just a bare
+# blank -- would also score 1.0 instead of 0.5) was tried and reverted: it
+# regressed `test_categorical_missing_cell_encodes_as_nan_not_a_level`
+# below, a pre-existing, legitimate case where a genuinely categorical
+# column's one blank row ("Time,Tag" / "1,A" / "2," / "3,A") got inflated
+# to a false 1.0 "data" score purely from having a single leftover cell,
+# with no column-type context to justify it -- eating both the header and
+# the first real data row. The narrower fix (NaN-spelling only) still
+# resolves the concretely-proven bug below, because the app's own writers
+# emit the literal string "nan" for a missing numeric cell, never a truly
+# empty one (verified via the actual /api/export/xrd-csv output in
+# `test_export_then_reimport_round_trip_preserves_rows`).
+_LEADING_BLANK_CSV = "Depth (um),Intensity (counts)\n0.05,nan\n0.86,20\n1.67,30\n2.49,40\n"
+
+
+def test_csv_leading_partially_blank_row_is_not_eaten(tmp_path: Path) -> None:
+    path = _write(tmp_path, "leading_blank.csv", _LEADING_BLANK_CSV)
+    ds = import_csv(path)
+    assert ds.n_points == 4
+    assert ds.time[0] == pytest.approx(0.05)
+    assert ds.time.tolist() == pytest.approx([0.05, 0.86, 1.67, 2.49])
+
+
+def test_csv_leading_partially_blank_row_keeps_header(tmp_path: Path) -> None:
+    path = _write(tmp_path, "leading_blank.csv", _LEADING_BLANK_CSV)
+    ds = import_csv(path)
+    assert ds.labels == ("Intensity",)
+    assert ds.metadata["x_column_name"] == "Depth"
+
+
+def test_csv_leading_blank_cell_row_scores_as_data_not_half(tmp_path: Path) -> None:
+    """Unit-level pin on the actual boundary value: a 2-column row with one
+    cell spelled "nan" used to score exactly 0.5 (a tie with the strict
+    majority rule); it must now score 1.0 (both cells count as numeric),
+    while a header/units row -- whose cells are all non-empty text --
+    still scores 0.0. A truly EMPTY cell (no "nan" string) deliberately
+    still scores 0.5, unchanged -- see the module docstring above for why
+    that narrower boundary was kept."""
+    from quantized.io import _delimited_layout as layout
+
+    assert layout._numeric_score(["0.05", "nan"]) == 1.0
+    assert layout._numeric_score(["0.05", ""]) == 0.5
+    assert layout._numeric_score(["Depth (um)", "Intensity (counts)"]) == 0.0
+
+
+def test_export_then_reimport_round_trip_preserves_rows(tmp_path: Path) -> None:
+    """End-to-end proof through the app's own public API: export a dataset
+    whose first intensity is NaN via /api/export/xrd-csv, then re-import the
+    file the app just wrote -- the app must be able to round-trip its own
+    export."""
+    from fastapi.testclient import TestClient
+
+    from quantized.app import app
+
+    client = TestClient(app)
+    ds_in = {
+        "time": [0.05, 0.86, 1.67, 2.49, 3.30],
+        "values": [[None], [20.0], [30.0], [40.0], [50.0]],
+        "labels": ["Intensity"],
+        "units": ["counts"],
+        "metadata": {"x_column_name": "Depth", "x_column_unit": "um"},
+    }
+    resp = client.post("/api/export/xrd-csv", json={"dataset": ds_in, "filename": "probe.csv"})
+    assert resp.status_code == 200, resp.text
+    out = tmp_path / "probe.csv"
+    out.write_bytes(resp.content)
+    ds_out = import_csv(out)
+    assert ds_out.n_points == 5, f"exported 5 rows, re-imported {ds_out.n_points}"
+    assert ds_out.labels == ("Intensity",)
