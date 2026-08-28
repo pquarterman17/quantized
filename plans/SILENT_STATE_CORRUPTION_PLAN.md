@@ -11,8 +11,10 @@ exists.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-27
-**Updated:** 2026-08-27 (created after the #241-#246 wave; five instances of
-class A and three of class B fixed, three instances still open)
+**Updated:** 2026-08-28 (tasks #1/#3/#5 shipped in #253/#254; a 2026-08-28
+adversarial bug hunt with a failing-probe evidence standard found seven more
+frontend instances — three shipped in #255, four booked as tasks #6-#9 — and
+eight backend defects, shipped in #256/#257; see Completed)
 
 ---
 
@@ -74,7 +76,7 @@ loudly.
 
 ## Tasks
 
-### 1. Make class A structurally impossible
+### 1. Make class A structurally impossible — **shipped #254** (see Completed)
 
 **Goal:** adding a column-index-keyed field without registering it with the
 remap should fail a test, not ship.
@@ -123,7 +125,7 @@ whether it should exist at all, or whether `applyFormulas` +
   fails to compile (or fails an assertion test). Restore; green.
 - **Stop when:** that probe fails as described.
 
-### 3. `editableFigures` `plot.view` fields not remapped
+### 3. `editableFigures` `plot.view` fields not remapped — **shipped #254**
 
 `remapFigureBindings` (added #244) covers `FigureBindings`, but a saved figure
 also holds a `plot.view` copy of `seriesOrder` / `hiddenChannels` /
@@ -162,7 +164,7 @@ path. Task #2 should make this a compile error rather than a judgement call.
 - **Acceptance:** red-first with the probe above, asserting the recomputed
   values, not just the surviving label.
 
-### 5. `reimportColumnsChanged` compares count, not identity
+### 5. `reimportColumnsChanged` compares count, not identity — **shipped #253**
 
 `frontend/src/lib/reimport.ts` decides "did the columns change?" by comparing
 `fresh.labels.length` against the base column count. A file whose column
@@ -177,6 +179,59 @@ one level up: the predicate is a proxy for the property it is asked about.
 - **Open question:** what identity signal is available and cheap — label
   sequence, Origin short names, `column_designations`? Decide before coding;
   a wrong identity check is worse than an honest count check.
+  *(Resolved in #253: label sequence positional, plus `column_designations`
+  positional only when both sides carry them.)*
+
+### 6. `applyCorrections` / `resetCorrections` delete the measurement column
+
+**Class B, a different caller than #245 — and it refutes the Completed row
+below that "audited and cleared `corrections.ts`".** `store/corrections.ts`
+captures `raw = ds.raw ?? ds.data` at first apply; `addFormula`/`removeFormula`
+change `data`'s width and never touch `raw`, so `raw` is frozen at the formula
+count it had when corrections were last applied. The next apply (or a Reset —
+the user's undo button for a correction) feeds that stale-width `raw` to the
+strip, which eats real columns (`expected [ '2m' ] to deeply equal [ 'm', '2m' ]`)
+or, after `removeFormula`, leaves `raw` too wide so a re-apply invents a
+phantom duplicate column (`expected [ 'm', 'F1', 'F1' ]`). Repro: import →
+Smooth 3 → add computed column → Smooth 5. **Data loss.** The two paths already
+disagree about what `raw` means (`store/reimport.ts` writes it base-only,
+`corrections.ts` base+computed) — that is the root cause task #2 must encode.
+
+- **Files:** `frontend/src/store/corrections.ts`, task #2's input type
+- **Acceptance:** red-first with the probe above, both the re-apply and the
+  Reset paths, asserting values not just labels; `Dataset.raw` defined as
+  always base-only (matching reimport).
+
+### 7. A column-changing reimport leaves `fitSpec` stale
+
+`store/reimport.ts`'s `columnsChanged` patch clears `filter`/`channelRoles`/
+`channelTypes`/`formulas`/`errorRoles` but not `fitSpec`; `yKey` survives
+verbatim and, in-range-but-wrong after the reshape, `recomputeStaleFits` refits
+the wrong column and `stampRecompute` overwrites the saved params
+(`expected [1000,2000,3000] to deeply equal [100,200,300]`). Fix: `fitSpec:
+undefined` in the same patch — it is column-indexed like its five neighbours
+and has no honest re-derivation.
+
+### 8. `DataStruct.cat_levels` is index-keyed and reaches neither the strip nor the remap
+
+`lib/formula.ts` `baseColumns` slices `labels`/`units`/`values` but carries
+`cat_levels` through the spread; `computeFormulas` re-seeds `catLevels` from
+the stale map. Deleting a recode column `R1` ahead of an arithmetic `F2` shifts
+`F2` into index 1 and it inherits `R1`'s level table — a numeric column renders
+as level strings and modelling infers `nominal`. Fix at the chokepoint: strip
+`cat_levels` entries at/beyond `keep` inside `baseColumns`. (Only formula
+columns are removable, so no `DatasetChannelState` registration is needed
+unless a base-column removal path appears.)
+
+### 9. `resetFigureDocumentForReshape` leaves `publication.seriesStyles`
+
+`lib/figureDocumentReimport.ts` resets `bindings` + `plot.view` but not
+`publication.seriesStyles`, a positional `(ExportSeriesStyle | null)[]` that
+**wins** over the view at export (`lib/figureSpec.ts`). After the reset widens
+`yKeys` to all channels, the one-entry style array paints the wrong series in
+the exported PDF (`expected [ { color: '#ff0000' } ] to deeply equal [ null,
+{ color: '#ff0000' } ]`). Fix: clear it (→ derive from the view) in the same
+reset.
 
 ---
 
@@ -187,17 +242,42 @@ one level up: the predicate is a proxy for the property it is asked about.
   at #217 and has since been trimmed, so do not trust the older figure in the
   release handoff). Not a bug — but a file near its pin needs an extraction
   rather than a line squeeze when the next feature lands on it.
-- **Dependency PRs** (triaged 2026-08-27): #230 (codeql-action patch) is CI-only
-  and mergeable any time. #229 bumps **rolldown, the bundler**, against 0.9 kB of
-  eager-bundle headroom — land it after v0.23.0 and re-measure. #231 bumps
-  **pyinstaller, which builds the release sidecar**, plus ruff (new rules
-  routinely redden CI) — after v0.23.0, so the acceptance-tested artifacts and
-  the shipped ones share a toolchain.
-- **Bundle headroom is 0.9 kB** as of `a8a939c1`. The ratchet's own header
+- **Dependency PRs — landed 2026-08-28** after v0.23.1: #230 (codeql-action),
+  #251 (npm minor/patch incl. rolldown/vite/vitest — superseded #229) and #252
+  (ruff/mypy/pyinstaller/platformdirs — superseded #231). The rolldown bump
+  *gained* 0.6 kB of eager headroom. The one open Dependabot alert (#1, `glib`
+  0.18.5 medium, `VariantStrIter` unsoundness) is upstream-blocked: it is
+  pulled by `gtk 0.18` ← `tauri 2.11`, Linux-only, and not on any code path
+  the app uses — same posture as the earlier extract-zip alert.
+- **Bundle headroom is 0.7 kB** as of #255 (888.7 kB eager vs 889.4 kB budget;
+  the three F2/F5/F6 fixes cost ~0.2 kB). The ratchet's own header
   (`frontend/scripts/check-bundle-size.mjs`) requires attempting a lazy split
   before any pin raise; `ContextMenu` (14.2 kB) is the one real candidate, but it
   puts a Suspense fallback on right-click, which that same rule forbids on a hot
   path. Owner call, and better made deliberately than under CI-red pressure.
+- **Behavioural-reference (MATLAB) latent bugs surfaced by the 2026-08-28 hunt**
+  — fixed on the Python side as deliberate deviations, NOT changed in
+  `../quantized_matlab` (fix there only on a branch with headless verify):
+  `+utilities/fftSpectral.m:105-106` infers the sampling rate from
+  `mean(diff(x))`, which is ~0 for a there-and-back sweep (Python now uses
+  `median(abs(diff(x)))`, identical for uniform x, 248/248 goldens unchanged);
+  `+calc/+semiconductor/carrierConcentration.m:45` cancels catastrophically for
+  |nd−na| ≫ ni (15 % wrong at na=1e18, 1/0 above it; Python now larger-root +
+  mass action, 14/14 goldens unchanged); `+parser/importCSV.m:401 detectLayout`
+  counts a `nan` cell as text so a 2-column `0.05,nan` row ties the 0.5 majority
+  and drops both the row and the header. Also two MATLAB-side declaration bugs
+  already on record in memory (`londonDepth.m`/`coherenceLength.m`).
+- **Residual, deliberately not fixed (D5):** a leading 2-column row with a truly
+  EMPTY cell (`0.05,`) still ties at 0.5 and is dropped. Widening the scorer to
+  ignore empty cells was tried and reverted on a concrete counter-example — a
+  categorical column's blank row got a false 1.0 and ate the header
+  (`test_categorical_missing_cell_encodes_as_nan_not_a_level`). The row scorer
+  has no column-type context; a real fix needs one. MATLAB-faithful as it stands.
+- **By design, flagged for an owner call:** `Export XRD CSV…` (`io/xrd_csv.py`,
+  a faithful port of `writeXRDcsv.m`) writes only the first channel under a
+  fabricated `Intensity (counts)` label; an 8-channel SIMS profile exports as 2
+  columns. `Export consolidated CSV…` covers all channels. Question is whether
+  the command label is honest enough, not whether the code is wrong.
 
 ---
 
@@ -207,4 +287,18 @@ one level up: the predicate is a proxy for the property it is asked about.
 |---|---|---|---|
 | 2026-08-27 | Class A: `errorRoles`, `groupKey`/`facetKey`, `fitSpec`, `editableFigures` bindings, `composition` | #244 | Red 16 failed/34 passed, then 6 failed/30 passed. Rendered-consequence assertions: `expected [999,999] to deeply equal [7,7]`; `expected { model: 'Linear', yKey: 3 } to deeply equal { ..., yKey: 2 }`. Full gate 564 files / 8747 tests. |
 | 2026-08-27 | Class B: reimport deleting base data | #245 | Red 2 failed/40 passed both paths, `expected [ '2x' ] to deeply equal [ 'm', '2x' ]`. Pre-existing — reproduced on the unchanged-shape path, which predates the row-only change. Present in rc1/rc2/rc3. |
-| 2026-08-27 | Class B: audited and cleared `corrections.ts` and every `cellEdit.ts` site | — | `raw` is `ds.raw ?? ds.data` so the strip is balanced; cell edits keep the column count. Recorded so the audit is not repeated. |
+| 2026-08-27 | ~~Class B: audited and cleared `corrections.ts`~~ and every `cellEdit.ts` site | — | **The `corrections.ts` half was WRONG** — refuted 2026-08-28 by a failing probe (task #6): `raw` is balanced at the instant of one apply but drifts across the lifecycle because `addFormula`/`removeFormula` never touch it. The `cellEdit.ts` half stands (cell edits keep the column count). Lesson: an audit that reasons "X is Y so the strip is balanced" is a claim about one instant, not a lifecycle; only a probe that exercises the sequence counts. |
+| 2026-08-28 | Task 5: `reimportColumnsChanged` compares identity (base label sequence + Origin designations when both sides carry them), not just count | #253 | Red 4 failed/15 passed (reorder, rename, rename-with-formula-exclusion, designation mismatch) → 19/19. No column-rename feature exists, so user edits cannot trip the label comparison. Gate 564 files / 8770 tests. |
+| 2026-08-28 | Task 3: `editableFigures.plot.view` `seriesOrder`/`hiddenChannels`/`seriesStyles`/`seriesLabels` remapped on column removal via `remapFigureViewChannels` (reuses `remapViewChannels`) | #254 | Red `expected [ 3 ] to deeply equal []`, `expected [ 4, 3 ] to deeply equal [ 3 ]` → 39/39. |
+| 2026-08-28 | Task 1: Class A registration ratchet — every `Dataset`/`PlotView` field must be in `DatasetChannelState`/`ViewChannelState` or in a reasoned exclusion map (`architecture.test.ts`); plan option (b) | #254 | Probe `Dataset.__probeChannelField` → `expected [ '__probeChannelField' ] to deeply equal []`; removed → green. Option (a) rejected: TS cannot structurally tell a channel-indexed `number[]` from `excludedRows`. Exclusions independently checked against the real types. |
+| 2026-08-28 | F2: `fitSpec.weight.errKey` never remapped — a deleted column silently re-weighted a saved fit by a *different* column and `stampRecompute` wrote the wrong params back | #255 | Red 4 failed/36 passed incl. full-chain `removeFormula`→`dyForFit` (`expected [100,200,300] to deeply equal [5,6,7]`) → 40/40. `remapFitSpec` shifts `errKey`, drops the whole `weight` when its column was removed. |
+| 2026-08-28 | F5: `split`/`duplicateDataset` dropped `errorRoles`, re-enabling the label guesser (`[]` O1 marker vs `undefined` destroyed) | #255 | Red `expected undefined to deeply equal []` at both sites; green with `initialQuickFigureMapping(child).yKeys` staying `[1]`. |
+| 2026-08-28 | F6: `migrateLegacyWindow` threaded `groupKey` but not `facetKey` — faceted grid collapsed to one panel on the forward-compat/failed-validation path | #255 | Red 2 failed (`expected null to be 4`) → 9/9 on both fallback paths. |
+| 2026-08-28 | Backend D3: plot AND exported PDF x-label used the Origin short name (`A`) while four UI readers show `x_column_long` (`Theta`) — new `_default_x_label` chokepoint in `calc/plotting.py` shared by `build_series` and `build_grouped_series` | #256 | Realdata anchors on `RockingCurve.opju`; 248/248 goldens unchanged. |
+| 2026-08-28 | Backend D5: a leading `0.05,nan` row tied the 0.5 majority and dropped the row AND the header — the app could not re-import its own `xrd-csv` export | #256 | Classification-only `_is_numeric_like` (NaN/Inf spellings numeric) in `_delimited_layout.py`; conversion path untouched; 36 differential tests unchanged; round-trip test via the real route. Residual recorded in Notes. |
+| 2026-08-28 | Backend D6: an all-blank x column made a file unimportable (`cat_levels[1] must be a non-empty tuple`) — 4 real corpus Origin CSV exports | #256 | `any(cells)` guard mirrored onto the `time_promoted` branch; column dropped with an honest note. |
+| 2026-08-28 | Backend D1: `/api/spectral/fft` 500 on a closed hysteresis loop, 63× wrong axis on a near-closed one | #257 | `_infer_sampling_rate` = `median(abs(diff(x)))` + ASCII `ValueError` on a degenerate axis; closed loop now 200 with correct `fs`; 248/248 goldens. |
+| 2026-08-28 | Backend D4: 34 HTTP 500s across 18 routes — ten copy-pasted `_call` adapters caught only `ValueError` | #257 | `routes/_errors.py::call_calc` + `CALC_ERRORS = (ValueError, ArithmeticError, LinAlgError)`, every `except ValueError` adapter in 45 route files widened; red-proof by narrowing the tuple (15 tests). |
+| 2026-08-28 | Backend D2: 3 of 449 unbounded numeric fields wedge a synchronous worker (`baseline smooth_passes` measured 3,650 s at 1e9; violin `n_points`; histogram `bins`) | #257 | `Field(ge, le)` per the `plot.py:130` precedent, caps from measured timings; thread+join tests that fail rather than hang. |
+| 2026-08-28 | Backend D8: `carrier_concentration` catastrophic cancellation — 15 % wrong at `na=1e18`, `ZeroDivisionError` 500 at `na≥1e19` (textbook Si numbers) | #257 | Larger-root-first + `n·p = ni²`; 14/14 goldens unchanged; module split (`_semiconductor_materials.py`) to stay under the 500-line ceiling. |
+| 2026-08-28 | Backend D7: 13 non-ASCII error strings across `routes/`, `calc/`, `io/` + an AST guard (`test_route_error_details_are_ascii`) covering `HTTPException(detail=…)` and `raise ValueError/RuntimeError(...)` literals | #257 | Red-proofed per file. |
