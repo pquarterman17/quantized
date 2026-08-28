@@ -8,10 +8,16 @@ route modules (``optics``, ``electrical``, ``magnetic``, ``semiconductor``,
 ``_call`` helper for this -- each one independently caught only
 ``ValueError``, so a pure numeric function raising ``OverflowError`` or
 ``ZeroDivisionError`` on finite-but-extreme input (e.g. ``n1=1e308`` in a
-refractive-index product) escaped every one of them as an HTTP 500. Import
-``call_calc`` (or ``CALC_ERRORS``) from here instead of re-declaring the
-adapter, so a new calculator route inherits the same coverage without having
-to remember it.
+refractive-index product) escaped every one of them as an HTTP 500.
+``numpy.linalg.LinAlgError`` is included explicitly too (a singular-matrix
+failure inside a calc function, e.g. ``violin_kde``'s ``gaussian_kde`` on
+degenerate/duplicate data): it happens to subclass ``ValueError`` in the
+numpy version this repo currently pins, so today it is already caught
+incidentally, but that is an implementation detail of one numpy release,
+not a contract -- listing it explicitly makes the coverage correct by
+construction rather than by version accident. Import ``call_calc`` (or
+``CALC_ERRORS``) from here instead of re-declaring the adapter, so a new
+calculator route inherits the same coverage without having to remember it.
 """
 
 from __future__ import annotations
@@ -19,16 +25,23 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 from fastapi import HTTPException
 
 #: Exception types a pure ``calc/`` function may legitimately raise for
-#: bad-but-well-typed input: ``ValueError`` for explicit validation, and
+#: bad-but-well-typed input: ``ValueError`` for explicit validation,
 #: ``ArithmeticError`` as the common base of ``OverflowError`` /
-#: ``ZeroDivisionError`` / ``FloatingPointError`` from extreme finite input.
-#: Routes that also need to catch structural errors (malformed dict/array
-#: input) should splice this tuple in, e.g.
+#: ``ZeroDivisionError`` / ``FloatingPointError`` from extreme finite input,
+#: and ``numpy.linalg.LinAlgError`` for a singular/degenerate linear-algebra
+#: failure (listed explicitly, not relied on as a ValueError subclass -- see
+#: the module docstring). Routes that also need to catch structural errors
+#: (malformed dict/array input) should splice this tuple in, e.g.
 #: ``except (*CALC_ERRORS, KeyError, IndexError) as exc:``.
-CALC_ERRORS: tuple[type[BaseException], ...] = (ValueError, ArithmeticError)
+CALC_ERRORS: tuple[type[BaseException], ...] = (
+    ValueError,
+    ArithmeticError,
+    np.linalg.LinAlgError,
+)
 
 
 def call_calc(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:

@@ -50,6 +50,22 @@ def test_violin_extreme_bw_method_is_422_not_500() -> None:
     assert resp.status_code == 422, resp.text
 
 
+def test_violin_singular_bw_method_is_422_with_ascii_detail() -> None:
+    """bw_method=0.0 collapses gaussian_kde's covariance to a singular
+    matrix, raising numpy.linalg.LinAlgError. It happens to subclass
+    ValueError in the numpy version this repo pins (see
+    test_routes_errors.py::test_calc_errors_includes_linalg_error), so this
+    already returns 422 today -- this test anchors that outcome end-to-end
+    and checks the detail text is ASCII."""
+    resp = client.post(
+        "/api/statplots/violin",
+        json={"data": [1.0, 2.0, 3.0, 4.0, 5.0], "bw_method": 0.0},
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert all(ord(c) < 128 for c in detail), detail
+
+
 def test_qq_roundtrip() -> None:
     data = [(-2.0), -1.0, -0.5, 0.0, 0.3, 0.7, 1.1, 2.0, 1.5, -1.2]
     resp = client.post("/api/statplots/qq", json={"data": data})
