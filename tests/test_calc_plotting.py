@@ -9,7 +9,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quantized.calc.plotting import build_grouped_series, resolve_style_channels
+from quantized.calc.plotting import (
+    PlotState,
+    build_grouped_series,
+    build_series,
+    resolve_style_channels,
+)
 from quantized.datastruct import DataStruct
 
 
@@ -198,3 +203,88 @@ def test_build_grouped_series_non_categorical_group_col_is_unchanged() -> None:
     byte-identical to before P1.4 -- the numeric _format_level path."""
     plot = build_grouped_series(_parity_ds(), None, [0], 1)
     assert [s.label for s in plot.series] == ["Value (Group=1)", "Value (Group=2)"]
+
+
+# --------------------------------------------------------------------------
+# D3 (2026-08-27 bug hunt): default x-axis label prefers x_column_long
+# --------------------------------------------------------------------------
+# `build_series`/`build_grouped_series` used to read only `x_column_name`
+# (Origin's raw short column identifier, e.g. "A") for the default x label,
+# while every frontend consumer of the same metadata (`lib/plotdata.ts`,
+# `lib/plotspec.ts`, `lib/panelwindow.ts`, `Inspector/ChannelsCard.tsx`,
+# `lib/quickFigureMapping.ts`) prefers `x_column_long` (the Origin display
+# name, e.g. "Theta"). This backend function serves BOTH `/api/plot/series`
+# (the on-screen plot) and `routes.export_figures` (the vector publication
+# export), so the mismatch meant the exported SVG/PDF disagreed with the
+# screen on every Origin import that has a long name.
+
+
+def _origin_like_ds() -> DataStruct:
+    """Shaped exactly like a real Origin import: `x_column_name` holds the
+    raw column letter, `x_column_long` holds the display name Origin itself
+    shows -- verified against the real corpus (RockingCurve.opju is
+    literally x_column_name='A', x_column_long='Theta')."""
+    return DataStruct.create(
+        time=[1.0, 2.0, 3.0, 4.0],
+        values=[[10.0], [20.0], [30.0], [40.0]],
+        labels=["Counts"],
+        units=["cps"],
+        metadata={
+            "source_format": "opju",
+            "x_column_name": "A",
+            "x_column_long": "Theta",
+            "x_column_unit": "deg",
+        },
+    )
+
+
+def test_build_series_default_x_label_prefers_x_column_long() -> None:
+    plot = build_series(_origin_like_ds())
+    assert plot.x_label == "Theta"
+
+
+def test_build_series_default_x_label_falls_back_to_x_column_name() -> None:
+    ds = DataStruct.create(
+        time=[1.0, 2.0],
+        values=[[1.0], [2.0]],
+        labels=["Y"],
+        units=[""],
+        metadata={"x_column_name": "Depth"},
+    )
+    plot = build_series(ds)
+    assert plot.x_label == "Depth"
+
+
+def test_build_series_default_x_label_falls_back_when_long_name_is_blank() -> None:
+    """JS `||` treats an empty string as falsy, so an empty `x_column_long`
+    (a genuinely blank Origin display name) must fall through to
+    `x_column_name` here too, exactly like the frontend readers."""
+    ds = DataStruct.create(
+        time=[1.0, 2.0],
+        values=[[1.0], [2.0]],
+        labels=["Y"],
+        units=[""],
+        metadata={"x_column_name": "A", "x_column_long": ""},
+    )
+    plot = build_series(ds)
+    assert plot.x_label == "A"
+
+
+def test_build_series_explicit_x_key_is_unaffected() -> None:
+    """An explicit x_key uses the channel's own label, never the metadata
+    default -- unchanged by this fix."""
+    ds = DataStruct.create(
+        time=[1.0, 2.0],
+        values=[[10.0, 100.0], [20.0, 200.0]],
+        labels=["Counts", "Other"],
+        units=["cps", ""],
+        metadata={"x_column_name": "A", "x_column_long": "Theta"},
+    )
+    plot = build_series(ds, state=PlotState(x_key=1))
+    assert plot.x_label == "Other"  # the channel's own label, not "Theta"
+
+
+def test_build_grouped_series_default_x_label_prefers_x_column_long() -> None:
+    ds = _origin_like_ds()
+    plot = build_grouped_series(ds, None, [0], 0)
+    assert plot.x_label == "Theta"

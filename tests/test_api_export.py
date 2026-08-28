@@ -4,8 +4,10 @@ responses, filename sanitization, and error mapping."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -174,6 +176,57 @@ def test_figure_svg_download() -> None:
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/svg+xml"
     assert b"<svg" in resp.content[:400]
+
+
+# --------------------------------------------------------------------------
+# D3 (2026-08-27 bug hunt): exported figure's x label prefers x_column_long
+# --------------------------------------------------------------------------
+# The vector publication export (this route) shares calc.plotting.build_series
+# with /api/plot/series (see tests/test_api_plot.py's twin of this test), so
+# before the fix the exported SVG/PDF baked in the raw Origin column letter
+# ("A") while the on-screen plot showed the long display name ("Theta").
+# Read through the actual rendered SVG text so the assertion is about what a
+# reader of the exported figure sees, not an internal data structure.
+
+
+def test_export_figure_x_label_uses_origin_long_name() -> None:
+    dataset = {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[10.0], [20.0], [30.0], [40.0]],
+        "labels": ["Counts"],
+        "units": ["cps"],
+        "metadata": {
+            "source_format": "opju",
+            "x_column_name": "A",
+            "x_column_long": "Theta",
+            "x_column_unit": "deg",
+        },
+    }
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": dataset, "fmt": "svg", "filename": "d3_x_label"},
+    )
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "replace")
+    assert "Theta" in svg
+    assert ">A<" not in svg  # the raw column letter must not leak through either
+
+
+@pytest.mark.realdata
+def test_realdata_export_figure_x_label_uses_origin_long_name(corpus_dir: Path) -> None:
+    """Corpus anchor: RockingCurve.opju is x_column_name='A',
+    x_column_long='Theta' -- the exported figure must show "Theta"."""
+    p = corpus_dir / "origin" / "RockingCurve.opju"
+    if not p.is_file():
+        pytest.skip("origin/RockingCurve.opju absent from the corpus")
+    dataset = client.post("/api/parsers/import", json={"path": str(p)}).json()
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": dataset, "fmt": "svg", "filename": "rocking_curve"},
+    )
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "replace")
+    assert "Theta" in svg
 
 
 def test_figure_tiff_download() -> None:
