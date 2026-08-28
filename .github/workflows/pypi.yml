@@ -15,7 +15,18 @@ name: pypi
 on:
   push:
     tags: ["v*"]
+  # A dispatch defaults to the TestPyPI dry run, exactly as before. `target:
+  # pypi` is the deliberate escape hatch for a REAL publish, and exists
+  # because a tag created by `cut-tag.yml` (GITHUB_TOKEN) emits no push
+  # event -- so a promotion cut that way could never reach PyPI at all. It
+  # is opt-in, and still refuses anything that is not a non-rc tag ref.
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Publish target (pypi requires a non-rc tag as the ref)"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
 
 # Least privilege at the workflow level; the publish job elevates only the
 # OIDC token it needs, scoped to its own job.
@@ -80,10 +91,10 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: publish (${{ github.event_name == 'workflow_dispatch' && 'TestPyPI' || 'PyPI' }})
+    name: publish (${{ (github.event_name == 'workflow_dispatch' && inputs.target || 'pypi') == 'pypi' && 'PyPI' || 'TestPyPI' }})
     needs: build
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && 'testpypi' || 'pypi' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'pypi' }}
     permissions:
       id-token: write # OIDC for Trusted Publishing — no API token secret
     steps:
@@ -93,7 +104,7 @@ jobs:
           path: dist
 
       - name: Publish to TestPyPI (manual dry run)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
@@ -103,5 +114,16 @@ jobs:
         # for a plain 0.X.Y version string, so an RC would immediately
         # become what `pip install quantized-lab` resolves. Promotion
         # (a plain vX.Y.Z tag) publishes.
-        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-rc')
+        #
+        # The trailing clause is what makes a dispatch safe. Previously this
+        # condition read only the ref, so dispatching with a TAG as the ref
+        # fired BOTH publish steps -- TestPyPI (correctly) and then real
+        # PyPI under the `testpypi` environment's OIDC identity, which
+        # Trusted Publishing rejects. A dispatch now reaches this step only
+        # when it explicitly asked for `target: pypi`, in which case the
+        # environment above resolves to `pypi` and the identity matches.
+        if: >-
+          startsWith(github.ref, 'refs/tags/')
+          && !contains(github.ref_name, '-rc')
+          && (github.event_name != 'workflow_dispatch' || inputs.target == 'pypi')
         uses: pypa/gh-action-pypi-publish@release/v1
