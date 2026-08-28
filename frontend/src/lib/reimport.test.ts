@@ -7,7 +7,8 @@ vi.mock("./api", () => ({
   fetchBookData: (...args: unknown[]) => fetchBookData(...args),
 }));
 
-const { datasetBookId, findBook, reimportShapeChanged, resolveFreshData } = await import("./reimport");
+const { datasetBookId, findBook, reimportColumnsChanged, reimportShapeChanged, resolveFreshData } =
+  await import("./reimport");
 
 function ds(over: Partial<Dataset> = {}): Dataset {
   return {
@@ -86,6 +87,86 @@ describe("reimportShapeChanged", () => {
     // fresh raw has only the ONE base column — matches once the formula
     // column is excluded from the comparison.
     expect(reimportShapeChanged(withFormula, struct())).toBe(false);
+  });
+});
+
+describe("reimportColumnsChanged", () => {
+  it("is true when the count matches but the label SEQUENCE is reordered", () => {
+    const base = ds({ data: { ...ds().data, labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] } });
+    const fresh = struct({ labels: ["B", "A"], units: ["", ""], values: [[2, 1], [4, 3], [6, 5]] });
+    expect(reimportColumnsChanged(base, fresh)).toBe(true);
+  });
+
+  it("is true when the count matches but one label was renamed", () => {
+    const base = ds({ data: { ...ds().data, labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] } });
+    const fresh = struct({ labels: ["A", "C"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] });
+    expect(reimportColumnsChanged(base, fresh)).toBe(true);
+  });
+
+  it("is false when the label sequence is identical", () => {
+    const base = ds({ data: { ...ds().data, labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] } });
+    const fresh = struct({ labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] });
+    expect(reimportColumnsChanged(base, fresh)).toBe(false);
+  });
+
+  it("excludes the base dataset's own computed-formula columns from the label comparison, exactly like the count path", () => {
+    const withFormula = ds({
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 2, 10], [3, 4, 30], [5, 6, 50]],
+        labels: ["A", "B", "computed"],
+        units: ["", "", ""],
+        metadata: {},
+      },
+      formulas: [{ name: "computed", expr: "A*10" }],
+    });
+    // fresh has only the two BASE columns, unchanged — must read as
+    // unchanged once the trailing formula column is excluded.
+    const freshSame = struct({ labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] });
+    expect(reimportColumnsChanged(withFormula, freshSame)).toBe(false);
+
+    // A genuine rename of a BASE column must still be caught even though a
+    // formula column is present.
+    const freshRenamed = struct({ labels: ["A", "Z"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]] });
+    expect(reimportColumnsChanged(withFormula, freshRenamed)).toBe(true);
+  });
+
+  it("is true on a designation mismatch even when labels are identical, when both sides carry column_designations", () => {
+    const base = ds({
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 2], [3, 4], [5, 6]],
+        labels: ["A", "B"],
+        units: ["", ""],
+        metadata: { origin_column_names: ["A", "B"], column_designations: { A: "X", B: "Y" } },
+      },
+    });
+    // Same labels, same positions -- but Origin now designates A as Y and B
+    // as X (a re-designation in Origin without renaming or reordering).
+    const fresh = struct({
+      labels: ["A", "B"],
+      units: ["", ""],
+      values: [[1, 2], [3, 4], [5, 6]],
+      metadata: { origin_column_names: ["A", "B"], column_designations: { A: "Y", B: "X" } },
+    });
+    expect(reimportColumnsChanged(base, fresh)).toBe(true);
+  });
+
+  it("does not fabricate a designation mismatch when only one side carries column_designations", () => {
+    const base = ds({
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 2], [3, 4], [5, 6]],
+        labels: ["A", "B"],
+        units: ["", ""],
+        metadata: { origin_column_names: ["A", "B"], column_designations: { A: "X", B: "Y" } },
+      },
+    });
+    // Fresh carries no designation metadata at all (e.g. re-imported as a
+    // plain ASCII file) -- identical labels must read as unchanged, not as
+    // a designation mismatch against absent data.
+    const fresh = struct({ labels: ["A", "B"], units: ["", ""], values: [[1, 2], [3, 4], [5, 6]], metadata: {} });
+    expect(reimportColumnsChanged(base, fresh)).toBe(false);
   });
 });
 
