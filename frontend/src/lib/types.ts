@@ -295,9 +295,6 @@ export interface MapResponse {
 // site (`from "./types"`) is unaffected.
 export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductionTypes";
 
-/** A dataset held client-side: the parsed DataStruct + a stable id + name.
- *  `raw` is the pristine import; `data` is the currently displayed (corrected)
- *  view. `corrections` are the params that produced `data` from `raw`. */
 /** A worksheet computed column: a display `name` and a formula `expr` over `x`
  *  and the channel letters (A, B, …). Stored on the dataset so it recomputes
  *  when the base data changes. The computed columns are always the LAST
@@ -415,6 +412,17 @@ export interface FitSpec {
   uncertainty?: "covariance" | "none";
 }
 
+/** A dataset held client-side: the parsed DataStruct + a stable id + name.
+ *  `data` is the currently displayed (corrected + formula-recomputed) view;
+ *  `corrections` are the params that produced its base portion from `raw`.
+ *  `raw` is ALWAYS BASE-ONLY (SILENT_STATE_CORRUPTION_PLAN #6) — it never
+ *  carries computed/formula columns, matching `store/reimport.ts`'s
+ *  definition exactly, so `store/corrections.ts`'s apply/reset can safely
+ *  hand it to the non-stripping `recomputeFromBase` (lib/formulaInputs.ts)
+ *  without eating real columns or inventing a phantom one. The one
+ *  documented exception is `store/derivedWorksheets.ts`, which repurposes
+ *  `.raw` on a DERIVED sheet as a cache of its SOURCE's current table — see
+ *  that module's own doc for why. */
 export interface Dataset {
   id: string;
   name: string;

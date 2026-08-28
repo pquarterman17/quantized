@@ -58,6 +58,23 @@ export function recomputeFromBase(
   return { data: applyFormulas(base, formulas), errors: formulaErrors(base, formulas) };
 }
 
+/** `recomputeFromBase`, collapsed into the `{ data, formulaErrors }` patch
+ *  shape `store/useApp.ts`'s `recompute` helper produces (SILENT_STATE_
+ *  CORRUPTION_PLAN #6) — for a caller with a freshly-corrected BASE table
+ *  (never a dataset's own `.data`, which `recompute` already handles) that
+ *  needs to reapply `formulas` without stripping: `store/corrections.ts`'s
+ *  `applyCorrections`/`resetCorrections`, whose `raw` is always base-only
+ *  (#6). No formulas = `base` verbatim, errors cleared — the same "nothing
+ *  to recompute" shape `recompute` returns for a formula-less dataset. */
+export function recomputeFromBaseOrEmpty(
+  base: DataStruct,
+  formulas: ComputedColumn[] | undefined,
+): { data: DataStruct; formulaErrors: Record<string, string> | undefined } {
+  if (!formulas?.length) return { data: base, formulaErrors: undefined };
+  const { data, errors } = recomputeFromBase(base, formulas);
+  return { data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+}
+
 /** Drop `cat_levels` (P1.4, column-index-keyed) entries at/beyond `keep`
  *  (SILENT_STATE_CORRUPTION_PLAN #8): `lib/formula.ts`'s `baseColumns`
  *  slices `labels`/`units`/`values` down to `keep` columns but, without
