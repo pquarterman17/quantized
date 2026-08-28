@@ -150,7 +150,7 @@ def lin_regress(
         # collinear columns. MATLAB's backslash returns Inf with a warning; we
         # surface a clean ValueError instead of an opaque LinAlgError (→ HTTP 422).
         raise ValueError(
-            f"order-{order} regression is singular — x has too few distinct values "
+            f"order-{order} regression is singular -- x has too few distinct values "
             f"or is collinear; use a lower order or more varied x"
         ) from exc
     y_fit = xmat @ coeffs

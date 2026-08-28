@@ -36,3 +36,13 @@ def test_c_profile_rejects_negative_time() -> None:
         "/api/diffusion/c-profile", json={"x": 1e-5, "t": 0.0, "d": 1e-12, "c0": 1e18}
     )
     assert r.status_code == 422
+
+
+def test_fick_flux_rejects_nonpositive_dx_with_ascii_message() -> None:
+    """Regression: the dx<=0 message used to spell dx as capital-delta-x
+    (U+0394), a non-ASCII character shipped in an HTTP error detail."""
+    r = client.post("/api/diffusion/fick-flux", json={"d": 1.0, "dc": 1.0, "dx": 0.0})
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert all(ord(c) < 128 for c in detail), detail
+    assert "dx" in detail

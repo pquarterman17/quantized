@@ -85,7 +85,7 @@ def polynomial_confidence_band(
         xtx_inv = np.linalg.inv(xtx)
     except np.linalg.LinAlgError as exc:
         raise ValueError(
-            f"order-{order} regression is singular — x has too few distinct values "
+            f"order-{order} regression is singular -- x has too few distinct values "
             f"or is collinear; use a lower order or more varied x"
         ) from exc
     residuals = yv - xmat @ coeffs

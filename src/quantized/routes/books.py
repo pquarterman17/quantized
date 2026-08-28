@@ -85,7 +85,7 @@ def book_data(req: BookDataRequest) -> dict[str, Any]:
         if resolved is None:
             raise HTTPException(
                 status_code=404,
-                detail="upload expired — re-import the file to fetch this book",
+                detail="upload expired -- re-import the file to fetch this book",
             )
     else:
         assert req.path is not None

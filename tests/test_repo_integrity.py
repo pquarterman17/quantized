@@ -24,6 +24,7 @@ See .claude/rules/architecture-guards.md for the full rationale.
 
 from __future__ import annotations
 
+import ast
 import re
 import tomllib
 from pathlib import Path
@@ -455,4 +456,62 @@ def test_sql_execution_stays_in_the_reviewed_connector() -> None:
         "is excluded repo-wide for the reviewed connector, so a new one gets "
         "that silence for free. Review the new module's query handling, then "
         "register it here."
+    )
+
+
+def _string_literal_text(node: ast.expr) -> str | None:
+    """Best-effort literal text of a string or f-string AST node.
+
+    For an f-string only the static (non-``{...}``) parts are checked -- a
+    codebase-authored non-ASCII character always lives in a literal part, and
+    interpolated values can't be known statically anyway.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        parts = [
+            c.value
+            for c in node.values
+            if isinstance(c, ast.Constant) and isinstance(c.value, str)
+        ]
+        return "".join(parts)
+    return None
+
+
+def test_route_error_details_are_ascii() -> None:
+    """Every ``HTTPException(..., detail=...)`` literal in routes/ is ASCII.
+
+    A codebase-authored non-ASCII error string has shipped before --
+    ``routes/books.py``'s "upload expired" message used an em dash (U+2014).
+    This is the narrow, routes/-scoped guard for that class: walk every
+    ``HTTPException(`` call's ``detail=`` keyword and flag a literal string
+    containing any character outside ASCII. (It does not reach ``raise
+    ValueError(...)`` messages in calc/io -- those are a much larger surface
+    and are fixed as found rather than statically guarded here.)
+    """
+    offenders = []
+    for path in (SRC / "routes").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "HTTPException"
+            ):
+                continue
+            for kw in node.keywords:
+                if kw.arg != "detail":
+                    continue
+                text = _string_literal_text(kw.value)
+                if text is None:
+                    continue
+                bad = sorted({c for c in text if ord(c) > 127})
+                if bad:
+                    offenders.append(
+                        f"{path.relative_to(ROOT)}:{node.lineno}: "
+                        f"{[f'U+{ord(c):04X}' for c in bad]} in {text!r}"
+                    )
+    assert not offenders, (
+        "Non-ASCII HTTPException(detail=...) literal(s) in routes/ (use "
+        "plain ASCII, e.g. '--' not an em dash):\n  " + "\n  ".join(offenders)
     )
