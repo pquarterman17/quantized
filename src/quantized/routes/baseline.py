@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.backgrounds import (
     anchor_baseline,
@@ -36,10 +36,19 @@ class EstimateRequest(BaseModel):
     y: list[float]
     method: str = "snip"
     max_window_deg: float = 2.0
-    smooth_passes: int = 3
-    poly_degree: int = 4
+    # calc.baseline._snip_background ends in `for _ in range(passes):`, each
+    # pass a concatenate+convolve over the whole array -- unbounded, this
+    # wedges a worker thread forever (smooth_passes=1e9 never returns;
+    # measured 1e4 passes ~0.04s on n=2000). 10_000 is >3000x the default.
+    smooth_passes: int = Field(3, ge=0, le=10_000)
+    poly_degree: int = 4  # internally clamped to n//3-1 in _poly_background; no hang risk
     iterative: bool = False
-    iter_max_passes: int = 3
+    # calc.baseline._iterative_refine's outer `for _ in range(iter_max_passes)`
+    # re-runs a full background pass (incl. an inner SNIP call) each
+    # iteration -- the same unbounded-loop shape as smooth_passes, just
+    # heavier per iteration (measured ~1s/1000 passes on n=5000 noisy data).
+    # 1_000 is >300x the default.
+    iter_max_passes: int = Field(3, ge=0, le=1_000)
     iter_sigma: float = 3.0
 
 

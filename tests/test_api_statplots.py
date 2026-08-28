@@ -70,3 +70,48 @@ def test_histogram_roundtrip_with_fit() -> None:
     assert body["n_bins"] >= 1
     assert sum(body["counts"]) == 50
     assert body["fit"]["dist"] == "norm" and len(body["fit"]["pdf"]) == 256
+
+
+def test_violin_rejects_absurd_n_points_without_hanging() -> None:
+    """Regression: calc.statplots.violin_kde evaluates gaussian_kde at
+    n_points grid locations; n_points=1e9 used to wedge the worker thread
+    forever. Bounded by Field(ge=1, le=100_000) it must reject fast."""
+    import threading
+
+    box: dict[str, object] = {}
+
+    def call() -> None:
+        r = client.post(
+            "/api/statplots/violin",
+            json={"data": [1.0, 2.0, 3.0, 4.0, 5.0], "n_points": 1_000_000_000},
+        )
+        box["status"] = r.status_code
+
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(30.0)
+    assert not t.is_alive(), "POST /api/statplots/violin with n_points=1e9 never returned"
+    assert box.get("status") == 422
+
+
+def test_histogram_rejects_absurd_bins_without_hanging() -> None:
+    """Regression: calc.statplots.histogram passes an int `bins` straight to
+    np.histogram, which allocates `bins + 1` edges; bins=1e9 used to wedge
+    the worker thread forever. Bounded by Field(ge=1, le=100_000) it must
+    reject fast."""
+    import threading
+
+    box: dict[str, object] = {}
+
+    def call() -> None:
+        r = client.post(
+            "/api/statplots/histogram",
+            json={"data": [float(x) for x in range(50)], "bins": 1_000_000_000},
+        )
+        box["status"] = r.status_code
+
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(30.0)
+    assert not t.is_alive(), "POST /api/statplots/histogram with bins=1e9 never returned"
+    assert box.get("status") == 422

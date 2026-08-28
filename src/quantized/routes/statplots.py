@@ -7,11 +7,11 @@ matplotlib export path.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.statplots import (
     grouped_box_stats,
@@ -46,7 +46,10 @@ def box_route(req: BoxRequest) -> dict[str, Any]:
 class ViolinRequest(BaseModel):
     data: list[float]
     bw_method: str | float = "scott"
-    n_points: int = 128
+    # calc.statplots.violin_kde evaluates scipy's gaussian_kde at n_points grid
+    # locations (O(n_points * len(data))); n_points=1e9 never returns
+    # (measured: 1e7 -> ~9.8s already). 100_000 is >780x the default.
+    n_points: int = Field(128, ge=1, le=100_000)
     cut: float = 2.0
 
 
@@ -80,7 +83,13 @@ def qq_route(req: QQRequest) -> dict[str, Any]:
 
 class HistogramRequest(BaseModel):
     data: list[float]
-    bins: str | int = "fd"
+    # calc.statplots.histogram passes an int `bins` straight to
+    # np.histogram, which allocates `bins + 1` edges; bins=1e9 never returns
+    # (measured: 1e7 -> ~12.5s already). 100_000 is a generous ceiling for a
+    # data-driven bin count (the str rules above rarely exceed a few hundred).
+    # A named rule ("fd", "sturges", ...) is unaffected -- only the int
+    # branch of the union carries the bound.
+    bins: str | Annotated[int, Field(ge=1, le=100_000)] = "fd"
     density: bool = False
     fit: str | None = None
 
