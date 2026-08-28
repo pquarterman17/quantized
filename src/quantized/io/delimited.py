@@ -312,8 +312,23 @@ def import_csv(
     # f1 note below always promises the promoted time column was imported as
     # categorical, so it must actually happen regardless of how the OTHER
     # data columns were selected.
+    #
+    # D6 (2026-08-27 bug hunt): guarded by `any(time_cells)` -- same test the
+    # sibling f2 branch above (and the `text_columns` sidecar loop below)
+    # already apply -- so an entirely BLANK x column (a leading delimiter,
+    # e.g. an Origin worksheet export whose first column is empty) is
+    # dropped as padding, not promoted to a categorical channel with ZERO
+    # levels. An empty `cat_levels[i]` tuple failed `DataStruct.create`'s
+    # invariant check and made the whole file unimportable, even though its
+    # other columns were perfectly good numeric data. Time already fell back
+    # to the synthetic 1..N row index above (`time_promoted`), so dropping
+    # the blank column here is consistent with how every other all-blank
+    # column in this file is handled -- it simply isn't represented in the
+    # output, same as a blank non-x column never reaches `text_columns`.
     if time_promoted:
-        categorical_idx = sorted({time_idx, *categorical_idx})
+        time_cells = [row[time_idx].strip() if time_idx < len(row) else "" for row in data_tokens]
+        if any(time_cells):
+            categorical_idx = sorted({time_idx, *categorical_idx})
     if not data_idx and not categorical_idx:
         raise ValueError(f"no valid data columns in {path.name}")
 
@@ -430,11 +445,20 @@ def import_csv(
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
     if time_promoted:
-        notes.append(
-            f"Column '{col_headers[time_idx]}' is text, not numeric or datetime; the time "
-            "axis fell back to a 1..N row index and the column was imported as a "
-            "categorical channel."
-        )
+        if time_idx in categorical_idx:
+            notes.append(
+                f"Column '{col_headers[time_idx]}' is text, not numeric or datetime; the time "
+                "axis fell back to a 1..N row index and the column was imported as a "
+                "categorical channel."
+            )
+        else:
+            # D6: the column was blank (not merely non-numeric text), so it
+            # was dropped as padding rather than promoted -- see the
+            # `time_cells` guard above.
+            notes.append(
+                f"Column '{col_headers[time_idx]}' is blank; the time axis fell back to a "
+                "1..N row index and the column was dropped (no data)."
+            )
     other_categorical = [c for c in categorical_idx if not (time_promoted and c == time_idx)]
     if other_categorical:
         names = ", ".join(col_headers[c] for c in other_categorical)

@@ -360,6 +360,63 @@ def test_csv_leading_blank_cell_row_scores_as_data_not_half(tmp_path: Path) -> N
     assert layout._numeric_score(["Depth (um)", "Intensity (counts)"]) == 0.0
 
 
+# --------------------------------------------------------------------------
+# D6 (2026-08-27 bug hunt): an all-blank x column must not raise an internal
+# invariant error
+# --------------------------------------------------------------------------
+# Column 0 is entirely blank (a leading delimiter -- exactly what Origin's
+# "export worksheet to CSV" emits when the first worksheet column is empty).
+# time_idx defaults to 0; the column is neither numeric nor a datetime, so
+# `time_promoted` fires and used to force-add it to `categorical_idx`
+# WITHOUT the `any(cells)` guard the sibling f2 promotion branch (and the
+# `text_columns` sidecar loop) already apply -- encoding to a categorical
+# channel with ZERO levels, which DataStruct.create then rejected with an
+# internal invariant message ("cat_levels[1] must be a non-empty tuple of
+# str, got ()"), making an otherwise perfectly good 2-numeric-channel file
+# unimportable. Quantized-only code; no MATLAB counterpart.
+#
+# Design decision: an all-blank x column is DROPPED (not promoted, not kept
+# as an all-NaN numeric channel) -- consistent with how every OTHER
+# all-blank column in this file is handled (the f2 branch's `any(cells)`
+# guard, and the `text_columns` sidecar's own `if any(cells)` guard both
+# silently drop a blank column as padding). Time already falls back to the
+# synthetic 1..N row index via the pre-existing `time_promoted` path.
+_BLANK_X_CSV = ",Kerr Signal,H\n,(mdeg),Oe\n,1.5,-7046.7\n,1.6,-6869.3\n,1.7,-6680.5\n"
+
+
+def test_blank_x_column_does_not_raise_cat_levels_error(tmp_path: Path) -> None:
+    path = _write(tmp_path, "blank_x.csv", _BLANK_X_CSV)
+    ds = import_csv(path)
+    assert ds.n_channels == 2
+    assert list(ds.labels) == ["Kerr Signal", "H"]
+    assert ds.cat_levels is None  # the blank column was dropped, not promoted
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]  # fell back to the 1..N row index
+    assert any("blank" in note.lower() for note in ds.metadata.get("notes", []))
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "origin/probes/verify/PJ2_realmiddle.opj.Book2.csv",
+        "origin/probes/verify/PK1_g1.opj.Book2.csv",
+        "origin/probes/verify/PK5_all4.opj.Book2.csv",
+        "origin/probes/verify/PU5_writerprops.opj.Book2.csv",
+    ],
+)
+def test_realdata_origin_csv_with_blank_x_column_imports(rel: str, corpus_dir: Path) -> None:
+    """Corpus anchor: 4 real Origin CSV exports in ../test-data (leading-
+    comma worksheets) failed to import with the same internal cat_levels
+    error before this fix. `test_parsers_matrix.py` deliberately excludes
+    `origin/probes/` (those files are otherwise-corrupt RE probes), so this
+    is the dedicated anchor for the one real defect among them."""
+    p = corpus_dir / rel
+    if not p.is_file():
+        pytest.skip(f"{rel} absent from the corpus")
+    ds = import_auto(p)
+    assert ds.n_channels > 0
+
+
 def test_export_then_reimport_round_trip_preserves_rows(tmp_path: Path) -> None:
     """End-to-end proof through the app's own public API: export a dataset
     whose first intensity is NaN via /api/export/xrd-csv, then re-import the
