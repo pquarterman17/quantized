@@ -31,7 +31,7 @@ def calc(req: XrayCalcRequest) -> dict[str, Any]:
     (see ``calc.xray`` for the full list)."""
     try:
         return xray_calc(req.mode, req.wavelength, req.value, req.n)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -47,5 +47,5 @@ def neutron(req: NeutronCalcRequest) -> dict[str, Any]:
     ``temperature``); see ``calc.xray.neutron_calc``."""
     try:
         return neutron_calc(req.quantity, req.value)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

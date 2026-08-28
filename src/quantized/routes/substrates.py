@@ -39,7 +39,7 @@ def get_substrate(name: str) -> dict[str, Any]:
     """Single substrate property card by name (case-insensitive)."""
     try:
         return substrates.get_substrate(name)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
@@ -48,7 +48,7 @@ def mismatch(req: MismatchRequest) -> dict[str, Any]:
     """f = (a_film - a_sub)/a_sub, with tensile/compressive/matched label."""
     try:
         return substrates.lattice_mismatch(req.a_film, req.a_sub)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -58,5 +58,5 @@ def critical_thickness(req: CriticalThicknessRequest) -> dict[str, Any]:
     lattice mismatch f."""
     try:
         return substrates.critical_thickness(req.mismatch, b=req.b, nu=req.nu)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

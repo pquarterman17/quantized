@@ -55,7 +55,7 @@ def get_element(symbol: str) -> dict[str, Any]:
     """One element by symbol (e.g. ``Fe``)."""
     try:
         return to_jsonable(by_symbol(symbol))  # type: ignore[no-any-return]
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
@@ -64,7 +64,7 @@ def convert(req: ConvertRequest) -> dict[str, Any]:
     """Convert a value between unit expressions (e.g. ``Oe`` -> ``T``)."""
     try:
         result, info = unit_convert(req.value, req.from_unit, req.to_unit)
-    except (ValueError, KeyError) as exc:
+    except (ValueError, ArithmeticError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"result": to_jsonable(result), "info": to_jsonable(info)}
 

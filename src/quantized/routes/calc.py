@@ -51,6 +51,6 @@ def call(req: CallRequest) -> dict[str, Any]:
         result = call_calculator(req.name, req.params)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=_detail(exc)) from exc
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=_detail(exc)) from exc
     return {"name": req.name, "result": to_jsonable(result)}

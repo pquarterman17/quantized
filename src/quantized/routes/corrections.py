@@ -79,6 +79,6 @@ def apply(req: CorrectionsRequest) -> dict[str, Any]:
         bg = DataStruct.from_dict(req.bg_dataset) if req.bg_dataset else None
         params = req.params.model_dump(by_alias=True, exclude_none=True)
         out = apply_corrections(ds, params, bg_dataset=bg, bg_interp=req.bg_interp)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(out)

@@ -57,7 +57,7 @@ def _resolve_book_path(raw_path: str) -> Path:
     """
     try:
         resolved = os.path.realpath(raw_path)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
     if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(
@@ -100,7 +100,14 @@ def book_data(req: BookDataRequest) -> dict[str, Any]:
     try:
         raw = resolved.read_bytes()
         _primary, all_books = read_origin_project_all(resolved, raw=raw)
-    except (OriginProjectError, ValueError, KeyError, struct.error, OSError) as exc:
+    except (
+        OriginProjectError,
+        ValueError,
+        ArithmeticError,
+        KeyError,
+        struct.error,
+        OSError,
+    ) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     books = drop_empty_library_books(all_books)
     cache_project_books(resolved, books)

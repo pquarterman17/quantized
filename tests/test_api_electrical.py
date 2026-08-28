@@ -53,3 +53,20 @@ def test_van_der_pauw_with_thickness_returns_resistivity() -> None:
 def test_van_der_pauw_rejects_nonpositive() -> None:
     r = client.post("/api/electrical/van-der-pauw", json={"r_a": 0.0, "r_b": 1.0})
     assert r.status_code == 422
+
+
+def test_hall_extreme_finite_input_is_422_not_500() -> None:
+    """Regression: v_h=1e-308 drove calc.electrical.hall_single_point's
+    Hall-coefficient division to ZeroDivisionError, which the route's old
+    `except ValueError` did not catch -> Internal Server Error."""
+    r = client.post(
+        "/api/electrical/hall", json={"v_h": 1e-308, "i": 1.0, "b": 1.0, "t": 1.0}
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_mobility_extreme_finite_input_is_422_not_500() -> None:
+    """Regression: rho=1e-308 drove calc.electrical.mobility to a
+    ZeroDivisionError escaping as a 500."""
+    r = client.post("/api/electrical/mobility", json={"rho": 1e-308, "n": 1.0})
+    assert r.status_code == 422, r.text

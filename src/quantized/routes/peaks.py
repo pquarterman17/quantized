@@ -56,7 +56,7 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
             min_prominence=req.min_prominence,
             sensitivity=req.sensitivity,
         )
-    except (ValueError, IndexError, KeyError) as exc:
+    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
 
@@ -85,7 +85,7 @@ def fit(req: FitPeakRequest) -> dict[str, Any]:
             model=req.model,
             snip_bg=req.snip_bg,
         )
-    except (ValueError, IndexError, KeyError) as exc:
+    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     return out
@@ -125,7 +125,7 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
             model=req.model, bg_degree=req.bg_degree,
             constrain=req.constrain, link_mode=req.link_mode,
         )
-    except (ValueError, IndexError, KeyError) as exc:
+    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     return out
@@ -150,7 +150,7 @@ def integrate(req: IntegrateRequest) -> dict[str, Any]:
                 baseline=req.baseline,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -186,5 +186,5 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
                 reference=req.reference, labels=req.labels,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

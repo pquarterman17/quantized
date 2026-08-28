@@ -33,3 +33,14 @@ def test_curie_weiss_fit_requires_three_points() -> None:
         json={"temperature": [100.0, 200.0], "susceptibility": [0.1, 0.2]},
     )
     assert r.status_code == 422
+
+
+def test_langevin_extreme_finite_input_is_422_not_500() -> None:
+    """Regression: a huge field with a near-zero temperature drove
+    calc.magnetic.langevin's saturation-argument division to
+    ZeroDivisionError, escaping the route's old `except ValueError`."""
+    r = client.post(
+        "/api/magnetic/langevin",
+        json={"mu": 1.0, "field_oe": 1e308, "temperature": 1e-308},
+    )
+    assert r.status_code == 422, r.text

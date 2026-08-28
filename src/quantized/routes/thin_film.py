@@ -6,13 +6,13 @@ stress, thermal-mismatch strain. Validate -> call the pure fn -> serialize.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc import thin_film
+from quantized.routes._errors import call_calc as _call
 
 router = APIRouter(prefix="/api/thin-film", tags=["thin-film"])
 
@@ -84,13 +84,6 @@ class ThermalMismatchRequest(BaseModel):
     delta_t: float  # K
     e: float | None = None  # Pa
     nu: float = 0.3
-
-
-def _call(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:
-    try:
-        return fn(*args, **kwargs)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/deposition-rate")

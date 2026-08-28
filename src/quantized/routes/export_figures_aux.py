@@ -93,7 +93,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
             width_in=req.width_in, height_in=req.height_in,
             view_elev=req.view_elev, view_azim=req.view_azim,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,
@@ -140,7 +140,7 @@ def export_corner_figure(req: CornerFigureRequest) -> Response:
             title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
             width_in=req.width_in, height_in=req.height_in,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img,
@@ -179,7 +179,7 @@ def export_ternary_figure(req: TernaryFigureRequest) -> Response:
             fmt=req.fmt, style=req.style, dpi=dpi, marker_size=req.marker_size,
             title=req.title,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img,
@@ -221,7 +221,7 @@ def export_field_figure(req: FieldFigureRequest) -> Response:
             kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
             title=req.title, x_label=req.x_label, y_label=req.y_label,
         )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img,

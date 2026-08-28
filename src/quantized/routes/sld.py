@@ -38,5 +38,5 @@ def formula(req: SldRequest) -> dict[str, Any]:
             neutron_wavelength=req.neutron_wavelength,
             xray_wavelength=req.xray_wavelength,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

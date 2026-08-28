@@ -41,6 +41,6 @@ def algebra(req: AlgebraRequest) -> dict[str, Any]:
             channel_a=req.channel_a,
             channel_b=req.channel_b,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(out)

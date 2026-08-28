@@ -61,7 +61,7 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
         )
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     kwargs: dict[str, Any] = {
         "model": req.model,
@@ -95,6 +95,6 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
 
     try:
         result = fit_bumps(req.x, req.y, req.dy, **kwargs)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]

@@ -39,6 +39,17 @@ def test_violin_constant_data_422() -> None:
     assert resp.status_code == 422
 
 
+def test_violin_extreme_bw_method_is_422_not_500() -> None:
+    """Regression: an absurd (but finite) bw_method scale factor drives
+    scipy.stats.gaussian_kde's covariance scaling to OverflowError, which the
+    route's old `except (ValueError, IndexError)` did not catch."""
+    resp = client.post(
+        "/api/statplots/violin",
+        json={"data": [1.0, 2.0, 3.0, 4.0, 5.0], "bw_method": 1e300},
+    )
+    assert resp.status_code == 422, resp.text
+
+
 def test_qq_roundtrip() -> None:
     data = [(-2.0), -1.0, -0.5, 0.0, 0.3, 0.7, 1.1, 2.0, 1.5, -1.2]
     resp = client.post("/api/statplots/qq", json={"data": data})

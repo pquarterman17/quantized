@@ -213,7 +213,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             align_labels=req.align_labels,
             resize_mode=req.resize_mode,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,

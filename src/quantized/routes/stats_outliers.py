@@ -51,7 +51,7 @@ def grubbs_route(req: GrubbsRequest) -> dict[str, Any]:
         return _wrap(
             grubbs_test(np.asarray(req.x, dtype=float), alpha=req.alpha, tail=req.tail)
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -60,7 +60,7 @@ def rosner_route(req: RosnerRequest) -> dict[str, Any]:
     """Generalized ESD test (Rosner) for up to k outliers."""
     try:
         return _wrap(rosner_test(np.asarray(req.x, dtype=float), req.k, alpha=req.alpha))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -69,7 +69,7 @@ def dixon_q_route(req: DixonQRequest) -> dict[str, Any]:
     """Dixon's Q test for a single outlier in a small sample (3 <= n <= 30)."""
     try:
         return _wrap(dixon_q_test(np.asarray(req.x, dtype=float), alpha=req.alpha))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -78,5 +78,5 @@ def mad_outliers_route(req: MadOutliersRequest) -> dict[str, Any]:
     """Robust modified z-score (MAD-based) outlier flagging."""
     try:
         return _wrap(mad_outliers(np.asarray(req.x, dtype=float), threshold=req.threshold))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

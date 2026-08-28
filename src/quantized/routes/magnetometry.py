@@ -66,7 +66,7 @@ def hysteresis(req: HysteresisRequest) -> dict[str, Any]:
             pre_smooth=req.pre_smooth,
             virgin_detect=req.virgin_detect,
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
 
@@ -81,7 +81,7 @@ def subtract_background(req: SubtractBgRequest) -> dict[str, Any]:
             fit_range=req.fit_range,
             auto_fraction=req.auto_fraction,
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "corrected": to_jsonable(corrected),
@@ -99,7 +99,7 @@ def subtract_hysteresis_bg(req: HysteresisBgRequest) -> dict[str, Any]:
         corrected, slope, offset = subtract_hysteresis_background(
             req.h, req.m, hi_fraction=req.hi_fraction, min_points=req.min_points
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "corrected": to_jsonable(corrected),
@@ -122,7 +122,7 @@ def convert_units(req: ConvertUnitsRequest) -> dict[str, Any]:
             sample_mass=req.sample_mass,
             sample_volume=req.sample_volume,
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "x": to_jsonable(np.asarray(x_out, dtype=float)),

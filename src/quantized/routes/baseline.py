@@ -112,7 +112,7 @@ def estimate(req: EstimateRequest) -> dict[str, Any]:
             iter_max_passes=req.iter_max_passes,
             iter_sigma=req.iter_sigma,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -128,7 +128,7 @@ def als(req: ALSRequest) -> dict[str, Any]:
             max_iter=req.max_iter,
             tol=req.tol,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -138,7 +138,7 @@ def rollingball(req: RollingBallRequest) -> dict[str, Any]:
     """Rolling-ball (grayscale morphological opening) baseline."""
     try:
         bg, info = baseline_rolling_ball(req.y, radius=req.radius, smooth=req.smooth)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -150,7 +150,7 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
         bg, info = baseline_modpoly(
             req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -161,7 +161,7 @@ def anchor(req: AnchorRequest) -> dict[str, Any]:
     clamps to the end anchors."""
     try:
         bg = anchor_baseline(req.x, req.y, req.anchors, method=req.method)
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -175,7 +175,7 @@ def shirley(req: ShirleyRequest) -> dict[str, Any]:
             req.x, req.y, max_iter=req.max_iter, tol=req.tol,
             edge_average=req.edge_average,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -188,7 +188,7 @@ def xrd_low_angle(req: XrdLowAngleRequest) -> dict[str, Any]:
             req.x, req.y, include_x2=req.include_x2,
             max_iter=req.max_iter, tol=req.tol,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
@@ -202,7 +202,7 @@ def region(req: RegionBackgroundRequest) -> dict[str, Any]:
             req.x, req.y, req.x_min, req.x_max,
             y_min=req.y_min, y_max=req.y_max, order=req.order,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     bg = result.pop("background")
     out: dict[str, Any] = to_jsonable(result)

@@ -5,13 +5,13 @@ fields / depairing current / BCS gap. Validate -> call the pure fn -> serialize.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc import superconductor
+from quantized.routes._errors import call_calc as _call
 
 router = APIRouter(prefix="/api/superconductor", tags=["superconductor"])
 
@@ -62,13 +62,6 @@ class BcsGapRequest(BaseModel):
 
 class PresetsRequest(BaseModel):
     material: str | None = None
-
-
-def _call(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:
-    try:
-        return fn(*args, **kwargs)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/material-presets")

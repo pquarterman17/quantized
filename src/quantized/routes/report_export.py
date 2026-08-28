@@ -84,7 +84,7 @@ def emit_report(req: ReportEmitRequest) -> dict[str, Any]:
     """Result dict + kind -> a validated #36 report sheet (JSON)."""
     try:
         sheet = _emit_sheet(req)
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     payload = sheet.to_dict()
     # calc stays deterministic/pure; the route stamps the creation time.
@@ -103,7 +103,7 @@ def export_report(req: ReportExportRequest) -> Response:
     """Report dict + format -> downloadable file (.tex/.html/.docx/.pptx)."""
     try:
         validate_report(req.report)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         data, mime, _is_text = render_report(req.report, req.format)

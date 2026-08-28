@@ -67,7 +67,7 @@ def import_template(path: str) -> dict[str, Any]:
     """
     try:
         resolved = os.path.realpath(path)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
     if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(

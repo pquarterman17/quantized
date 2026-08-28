@@ -39,7 +39,7 @@ def box_route(req: BoxRequest) -> dict[str, Any]:
     """Box/whisker stats for one or more groups (matplotlib-compatible)."""
     try:
         return _wrap(grouped_box_stats(req.groups, labels=req.labels, whis=req.whis))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -60,7 +60,7 @@ def violin_route(req: ViolinRequest) -> dict[str, Any]:
                 bw_method=req.bw_method, n_points=req.n_points, cut=req.cut,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -74,7 +74,7 @@ def qq_route(req: QQRequest) -> dict[str, Any]:
     """Quantile-quantile / probability-plot coordinates against a distribution."""
     try:
         return _wrap(qq_plot(np.asarray(req.data, dtype=float), dist=req.dist))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -95,5 +95,5 @@ def histogram_route(req: HistogramRequest) -> dict[str, Any]:
                 bins=req.bins, density=req.density, fit=req.fit,
             )
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

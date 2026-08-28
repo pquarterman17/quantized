@@ -31,7 +31,7 @@ def _resolve_db_path(raw_path: str) -> Path:
     """
     try:
         resolved = os.path.realpath(raw_path)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
     if not resolved.startswith(_allowed_prefixes()):
         raise HTTPException(
@@ -50,5 +50,5 @@ def sqlite_query(req: SqliteQueryRequest) -> dict[str, object]:
         return query_sqlite(
             db_path, req.query, x_column=req.x_column or None, max_rows=req.max_rows
         ).to_dict()
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

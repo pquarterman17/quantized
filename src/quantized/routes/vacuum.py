@@ -5,13 +5,13 @@ flow conductance. Validate -> call the pure fn -> serialize.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc import vacuum
+from quantized.routes._errors import call_calc as _call
 
 router = APIRouter(prefix="/api/vacuum", tags=["vacuum"])
 
@@ -54,13 +54,6 @@ class GasFlowRequest(BaseModel):
     length: float
     temperature: float = 300.0
     m: float = 4.65e-26
-
-
-def _call(fn: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:
-    try:
-        return fn(*args, **kwargs)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/mean-free-path")

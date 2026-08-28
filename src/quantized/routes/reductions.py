@@ -41,7 +41,7 @@ def williamson_hall_route(req: WilliamsonHallRequest) -> dict[str, Any]:
             k_factor=req.k_factor,
             instrumental_broadening_deg=req.instrumental_broadening_deg,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -68,7 +68,7 @@ def fft_thickness_route(req: FFTThicknessRequest) -> dict[str, Any]:
             window=req.window,
             max_thickness_nm=req.max_thickness_nm,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -101,7 +101,7 @@ def reflectivity_fft_route(req: ReflectivityFFTRequest) -> dict[str, Any]:
             max_thickness_nm=req.max_thickness_nm,
             peak_prominence_threshold=req.peak_prominence_threshold,
         )
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -117,5 +117,5 @@ def spin_asymmetry_route(req: SpinAsymmetryRequest) -> dict[str, Any]:
     """Neutron spin asymmetry (R++ - R--)/(R++ + R--) with propagated error."""
     try:
         return spin_asymmetry(req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

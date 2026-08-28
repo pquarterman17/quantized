@@ -391,7 +391,7 @@ def export_figure(req: FigureRequest) -> Response:
                 y2_fmt=_tick_fmt(req.y2_fmt),
                 y2_step=req.y2_step,
             )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,
@@ -479,5 +479,5 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             y2_fmt=_tick_fmt(req.y2_fmt),
             y2_step=req.y2_step,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

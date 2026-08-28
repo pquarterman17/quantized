@@ -131,7 +131,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
             )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img,
@@ -208,7 +208,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, dpi=dpi,
             )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=img,

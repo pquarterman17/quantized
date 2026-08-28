@@ -75,7 +75,7 @@ def simulate(req: SimulateRequest) -> dict[str, Any]:
             background=req.background,
             resolution=req.resolution,
         )
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"q": to_jsonable(q), "r": to_jsonable(r)}
 
@@ -86,6 +86,6 @@ def sld_profile_route(req: SldProfileRequest) -> dict[str, Any]:
     _validate_layers(req.layers)
     try:
         z, sld = sld_profile(req.layers, n_points=req.n_points, padding=req.padding)
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"z": to_jsonable(z), "sld": to_jsonable(sld)}

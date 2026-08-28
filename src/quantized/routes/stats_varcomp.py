@@ -44,7 +44,7 @@ def nested_anova_route(req: NestedAnovaRequest) -> dict[str, Any]:
     B(A) tested against Error."""
     try:
         return _wrap(nested_anova(req.groups, alpha=req.alpha))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -53,7 +53,7 @@ def variance_components_route(req: NestedGroupsRequest) -> dict[str, Any]:
     """ANOVA/EMS-method variance-component estimates for a 2-level nested design."""
     try:
         return _wrap(variance_components_nested(req.groups))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -62,5 +62,5 @@ def variability_summary_route(req: NestedGroupsRequest) -> dict[str, Any]:
     """Per-cell / per-A-group / grand summary stats for the variability chart."""
     try:
         return _wrap(variability_summary(req.groups))
-    except (ValueError, IndexError) as exc:
+    except (ValueError, ArithmeticError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
