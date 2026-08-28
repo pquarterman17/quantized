@@ -4001,15 +4001,17 @@ describe("useApp computed columns (recompute)", () => {
   });
 
   it("recomputes after corrections (base changes upstream)", async () => {
-    // The backend echoes the same shape it received (3 cols incl. the stale
-    // computed S, value 999 here) — recompute strips it and re-derives S.
+    // SILENT_STATE_CORRUPTION_PLAN #6: `Dataset.raw` is captured BASE-ONLY
+    // (via `baseColumns`), so the request the backend actually receives is
+    // just A/B — never the stale computed S column — and a well-behaved
+    // backend echoes that same base-only shape back. `applyCorrections` then
+    // routes the corrected base through the non-stripping
+    // `recomputeFromBaseOrEmpty`, so S is freshly derived on top of it.
     const corrected: DataStruct = {
       ...twoCol,
-      labels: ["A", "B", "S"],
-      units: ["u", "v", ""],
       values: [
-        [0, 20, 999],
-        [20, 40, 999],
+        [0, 20],
+        [20, 40],
       ],
     };
     vi.mocked(applyCorrectionsApi).mockResolvedValue(corrected);
@@ -4017,13 +4019,15 @@ describe("useApp computed columns (recompute)", () => {
     useApp.getState().addFormula("d1", "S", "A + B");
     await useApp.getState().applyCorrections("d1", { yOff: -10 });
     const d = useApp.getState().datasets[0];
-    // corrected A column drove a fresh S = A + B (999 discarded).
+    // corrected A/B columns drove a fresh S = A + B.
+    expect(d.data.labels).toEqual(["A", "B", "S"]);
     expect(d.data.values[0][2]).toBe(20); // 0 + 20
     expect(d.data.values[1][2]).toBe(60); // 20 + 40
   });
 
-  // Review-round P3: formulaErrors (K5b) clears through the SAME `recompute`
-  // chokepoint corrections/reimport already route through — pinning that a
+  // Review-round P3: formulaErrors (K5b) clears through the same data+errors
+  // pass every base-data-changing action routes through (recompute here;
+  // corrections.ts's recomputeFromBaseOrEmpty since #6) — pinning that a
   // BASE-DATA change (not a formula EDIT — updateFormula is untouched here)
   // can turn a previously-failing formula valid again.
   it("formulaErrors clears when a base-data change (not a formula edit) makes a previously-erroring formula valid", async () => {
@@ -4058,15 +4062,17 @@ describe("useApp computed columns (recompute)", () => {
     });
 
     // A correction (a base-data change, NOT a formula edit) grows the base
-    // to include B — the backend echoes the shape it received (3 cols incl.
-    // the stale/erroring S, discarded on recompute).
+    // to include B. SILENT_STATE_CORRUPTION_PLAN #6: the request sent is
+    // base-only (A alone, the erroring S never included), so a well-behaved
+    // backend echoes back the base-only shape it actually received — never a
+    // stale S column to discard, since S was never part of what was sent.
     const corrected: DataStruct = {
       time: [1, 2],
-      labels: ["A", "B", "S"],
-      units: ["u", "v", ""],
+      labels: ["A", "B"],
+      units: ["u", "v"],
       values: [
-        [0, 20, NaN],
-        [20, 40, NaN],
+        [0, 20],
+        [20, 40],
       ],
       metadata: {},
     };
