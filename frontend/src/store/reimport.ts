@@ -61,7 +61,13 @@
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile, type CorrectionsRequest } from "../lib/api";
 import { computeDependencyImpact, formatDependencyImpact, hasDependencyImpact } from "../lib/dependencyImpact";
 import { hasDesktopShell, pathState } from "../lib/desktopBridge";
-import { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
+// perf(reimport): lib/figureDocumentReimport.ts is loaded dynamically
+// (below, inside computeReimportMerge -- the async staging phase, never
+// the synchronous commit) so it never joins the eager bundle; this is a
+// TYPE-ONLY import, erased at compile time, giving applyReimportMerge a
+// typed reference to the already-resolved function without importing
+// the module's VALUE here.
+import type { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
 import { applyFormulas } from "../lib/formula";
 import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
@@ -98,6 +104,15 @@ export interface ReimportMerge {
   shapeChanged: boolean;
   columnsChanged: boolean;
   viewReset: Partial<PlotView> | null;
+  /** `lib/figureDocumentReimport.ts`'s reset function, already resolved via
+   *  a dynamic `import()` during THIS async staging phase (perf: keeps the
+   *  module out of the eager bundle) -- `null` when `!columnsChanged`, the
+   *  only case `applyReimportMerge` would ever call it. Resolving it here
+   *  (not in `applyReimportMerge`) keeps that commit function fully
+   *  synchronous, which `store/reimportAllRun.ts`'s batch loop depends on
+   *  (see its own module doc: every `applyReimportMerge` call there is
+   *  synchronous, back-to-back, for one atomic multi-dataset commit). */
+  resetFigureDocumentForReshape: typeof resetFigureDocumentForReshape | null;
 }
 
 /** Validate + stage a re-import of `ds` with freshly-read `freshRaw`: re-runs
@@ -123,7 +138,12 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
   }
   const columnsChanged = reimportColumnsChanged(ds, freshRaw);
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
-  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset };
+  // perf(reimport): only fetched when actually needed, during this async
+  // staging phase -- never on the synchronous commit path (applyReimportMerge).
+  const resetFigureDocumentForReshape = columnsChanged
+    ? (await import("../lib/figureDocumentReimport")).resetFigureDocumentForReshape
+    : null;
+  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, resetFigureDocumentForReshape };
 }
 
 /** Commit an already-staged `merge` (from `computeReimportMerge`) for `ds`:
@@ -140,7 +160,7 @@ export function applyReimportMerge(
   merge: ReimportMerge,
   historyToken?: HistoryBatchToken,
 ): void {
-  const { newData, shapeChanged, columnsChanged, viewReset } = merge;
+  const { newData, shapeChanged, columnsChanged, viewReset, resetFigureDocumentForReshape } = merge;
   get().recordHistory("re-import dataset", historyToken);
   // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
   // now clears a stale groupKey (see its module doc) — capture whether any
@@ -243,9 +263,11 @@ export function applyReimportMerge(
     // list, gated on the COLUMN half only (module doc).
     ...(columnsChanged
       ? {
+          // Non-null by construction: computeReimportMerge only resolves
+          // `null` when `!columnsChanged` (interface doc).
           editableFigures: s.editableFigures.map((document) =>
             document.bindings.datasetId === ds.id
-              ? resetFigureDocumentForReshape(document)
+              ? resetFigureDocumentForReshape!(document)
               : document,
           ),
         }
