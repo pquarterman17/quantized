@@ -85,17 +85,38 @@ describe("calc history per-entry storage bound", () => {
 
 describe("quota failure degrades instead of losing the session", () => {
   it("sheds oldest history but keeps favorites when the slot will not fit", () => {
-    // A storage that refuses anything over ~4 kB, the shape of a quota error.
-    const real = Storage.prototype.setItem;
+    // Simulating a full disk needs care about WHAT gets patched. jsdom's
+    // `localStorage` is an exotic Storage object: `setItem` is not an own
+    // property, and neither `vi.spyOn(localStorage, "setItem")` nor a
+    // `Storage.prototype` patch reliably intercepts its internal calls --
+    // measured here, spyOn landed 0 of 1 calls. `Storage.prototype` did work
+    // on Node 22 and then silently stopped on newer Node, which ships its own
+    // global `Storage` class for the patch to hit instead; that is how the
+    // first version of this test passed one CI node version and failed the
+    // other. Replacing the global binding is the one approach that does not
+    // depend on either detail, and `rejected` below asserts the interception
+    // actually happened rather than trusting it.
     const LIMIT = 4096;
-    Storage.prototype.setItem = function (k: string, v: string) {
-      if (v.length > LIMIT) {
-        const err = new Error("QuotaExceededError");
-        err.name = "QuotaExceededError";
-        throw err;
-      }
-      return real.call(this, k, v);
-    };
+    const backing = new Map<string, string>();
+    let rejected = 0;
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string): string | null => backing.get(k) ?? null,
+        setItem: (k: string, v: string): void => {
+          if (v.length > LIMIT) {
+            rejected += 1;
+            const err = new Error("QuotaExceededError");
+            err.name = "QuotaExceededError";
+            throw err;
+          }
+          backing.set(k, v);
+        },
+        removeItem: (k: string): void => void backing.delete(k),
+        clear: (): void => backing.clear(),
+      },
+    });
     try {
       for (let i = 0; i < 60; i++) {
         useCalcHistory.getState().record({
@@ -107,8 +128,12 @@ describe("quota failure degrades instead of losing the session", () => {
       }
       useCalcHistory.getState().toggleFavorite(useCalcHistory.getState().history[0].id);
 
-      const raw = localStorage.getItem("qz.calcHistory");
-      expect(raw, "something was persisted rather than nothing").not.toBeNull();
+      // The quota path was genuinely exercised. Without this the assertions
+      // below can pass for the wrong reason wherever the patch fails to bite.
+      expect(rejected, "the oversized write was actually refused").toBeGreaterThan(0);
+
+      const raw = backing.get("qz.calcHistory");
+      expect(raw, "something was persisted rather than nothing").toBeDefined();
       const parsed = JSON.parse(raw ?? "{}") as {
         history: unknown[];
         favorites: unknown[];
@@ -117,8 +142,9 @@ describe("quota failure degrades instead of losing the session", () => {
       expect(parsed.favorites).toHaveLength(1);
       // History was shed to make room, not silently dropped whole-session.
       expect(parsed.history.length).toBeLessThan(60);
+      expect((raw ?? "").length).toBeLessThanOrEqual(LIMIT);
     } finally {
-      Storage.prototype.setItem = real;
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
     }
   });
 });
