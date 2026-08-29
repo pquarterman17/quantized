@@ -23,6 +23,8 @@ import {
   MIN_WIDTH,
   TITLE_BAR_HEIGHT,
 } from "../../lib/toolwindow";
+import { workshopHelpTopic } from "../../lib/workshopHelp";
+import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
 
 let zTop = 0;
@@ -34,6 +36,7 @@ export default function ToolWindow({
   y = 90,
   width = 360,
   onClose,
+  helpTopic,
   children,
 }: {
   /** Stable identity for the persisted-layout registry (store/toolwindows.ts)
@@ -46,6 +49,13 @@ export default function ToolWindow({
   y?: number;
   width?: number;
   onClose?: () => void;
+  /** P3.1 contextual help: when set, the title bar carries a `?` that opens
+   *  Help already filtered to this string — the `Card` `helpTopic` affordance
+   *  lifted to the panel level, because the complex workshops render no Card
+   *  to hang one on. Pass the workshop's own command label (e.g. "Find peaks")
+   *  so the search lands on that command's shared one-sentence description
+   *  rather than a parallel catalog. */
+  helpTopic?: string;
   children: ReactNode;
 }) {
   const stored = useApp((s) => s.toolWindowLayout[id]);
@@ -53,6 +63,10 @@ export default function ToolWindow({
   const toggleCollapsed = useApp((s) => s.toggleToolWindowCollapsed);
   const fallback = defaultToolWindowLayout(x, y, width);
   const layout = stored ?? fallback;
+  // P3.1: registry-driven by default (lib/workshopHelp.ts) so no panel needs
+  // its own edit; an explicit `helpTopic` still wins, including for a window
+  // with no registry entry.
+  const topic = helpTopic ?? workshopHelpTopic(id);
 
   const [z, setZ] = useState(() => ++zTop);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
@@ -161,6 +175,26 @@ export default function ToolWindow({
           />
         )}
         <span className="grow">{title}</span>
+        {topic && (
+          <button
+            type="button"
+            className="qz-card-help"
+            aria-label={`Help for ${typeof title === "string" ? title : "this panel"}`}
+            data-tip="Open related help"
+            data-tip-desc="Show Help already filtered to this panel's related tools."
+            // The title bar IS the drag handle; Close and Collapse both stop
+            // pointerdown reaching it, and so must this or `?` picks the
+            // window up.
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              openHelpTopic(topic);
+            }}
+          >
+            {/* Decorative: the accessible name comes from aria-label above. */}
+            <span aria-hidden="true">?</span>
+          </button>
+        )}
         <button
           className="qzk-win-collapse"
           title={layout.collapsed ? "Expand" : "Collapse"}

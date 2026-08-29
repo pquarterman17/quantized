@@ -17,6 +17,35 @@ body,
   margin: 0;
 }
 
+/* Reduce motion, from two independent sources.
+   
+   The OS setting comes first and needs no discovery: someone who turns on
+   "reduce motion" in Windows/macOS/GNOME has said what they want once, for
+   every app, and this honours it by default. Before P3.3 only two rules in
+   shell.css consulted it, so an OS-level preference bought almost nothing —
+   the app-wide sweep below was reachable only through Preferences ▸
+   Appearance, whose `reduceMotion` flag defaults to false.
+   
+   The Preferences toggle stays as an independent override, for someone who
+   wants motion reduced in Quantized without changing their whole desktop.
+   Either source alone is enough; the declarations are identical so the two
+   cannot drift.
+   
+   The universal selector is deliberate. Enumerating the animated selectors is
+   what left five of the seven motion declarations uncovered in the first
+   place: any new transition, or one inside a dependency's stylesheet, is
+   covered here without anyone remembering to add it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Preferences ▸ Appearance ▸ Reduce motion — kill transitions + animations app-wide. */
 [data-reduce-motion] *,
 [data-reduce-motion] *::before,
