@@ -331,3 +331,71 @@ PyPI irreversibly.
 
 rc4 publishes as a prerelease exactly like rc1-rc3 (auto-update and PyPI both
 skip `-rc` tags), so `releases/latest` remains `v0.22.0` until promotion.
+
+## Changes since v0.23.1 → v0.23.2-rc1 (2026-08-28/29)
+
+**Candidate commit:** `cd68ad16` (main after #259). Version files already say
+`0.23.2` (#258). Published as a GitHub **prerelease**; auto-update keeps
+serving v0.23.1 and PyPI is untouched until promotion.
+
+**Why a new candidate.** The owner asked to test only once everything that
+does not need her had landed. A 2026-08-28 adversarial bug hunt — two hunters
+required to commit a FAILING probe for every claim — found 15 real defects in
+a tree with 8,770 vitest + 4,376 pytest green, two of them data loss. All are
+fixed here; none of it is feature work, hence a patch version.
+
+### Fixes that affect data you already have
+- **Applying or resetting a correction after adding a computed column deleted
+  the measurement column** (`store/corrections.ts`; #259). `Dataset.raw` is
+  now always base-only; a `.dwk` saved by an older build with the old wide
+  `raw` is normalized on load, so opening an old workspace cannot re-trigger it.
+- **A derived worksheet with its own formula dropped the source's last
+  column** (#259).
+- **A CSV whose first data row had a `nan` cell lost that row AND its header**
+  — the app could not re-import its own `Export XRD CSV` output (#256).
+- **An all-blank x column made a file unimportable** — four real Origin CSV
+  exports in the corpus (#256).
+- A re-designated or reordered re-import kept the old column roles/filters
+  (#253); a column-changing re-import kept a stale saved fit (#259); deleting
+  a column silently re-weighted saved fits by a different column's error
+  column (#255); deleting a recode column made the next column render as
+  categorical (#259).
+
+### Fixes you will see on screen or in exports
+- Exported PDF/SVG x-axis label now matches the on-screen long name (`Theta`,
+  not the Origin short name `A`) for every Origin import (#256).
+- Saved figures: hidden/reordered/styled series follow their column after a
+  column removal (#254); publication per-series styles no longer paint the
+  wrong series after a re-import reshape (#259); a faceted grid restored via
+  the legacy window path keeps its facet (#255); split/duplicate keep verified
+  "no error columns" so Quick Figure does not go blank (#255).
+- FFT of a hysteresis loop no longer errors (and reports the true sample
+  rate); `carrier_concentration` is numerically stable at textbook p-type
+  doping (was 15 % off, then an error); 34 HTTP 500s across 18 calculator
+  routes are now proper 422s; three routes that could wedge the app for an
+  hour on absurd counts are bounded; all error messages ASCII (#257).
+
+### Release engineering
+- Dependabot #230/#251/#252 landed after v0.23.1, as planned, so the tested
+  artifacts and the shipped ones share a toolchain. The rolldown bump gained
+  0.6 kB of bundle headroom; the Class B fixes spent it — headroom is now ~0
+  and the `ContextMenu` lazy-split decision is due.
+- Structural guards added so these classes cannot silently recur: a
+  registration ratchet for channel-indexed fields (#254), a branded input
+  type for stripping recomputes (#259), an ASCII-error-string AST guard and a
+  shared `ArithmeticError` route adapter (#257).
+
+### Verified on this exact tree (things CI cannot run)
+Backend suite with the local corpus, frontend suite + build + Playwright E2E
+on Windows, the 12-project Origin visual corpus sweep (350 figures / 332
+consistent / 18 known-unresolved / 0 renderer failures), a live OriginPro COM
+"Send to Origin" smoke, and the published v0.23.1 installer's SHA256. Exact
+counts are in the closing session report and the plan's Completed table.
+
+### Acceptance still owed against rc1
+Unchanged in kind: the packaged Windows/macOS install + workflow smoke pass,
+the 60–90 minute interactive real-data session with friction log, the
+installer/icon/taskbar check, and ChatGPT-Sol's wording/menu review
+(`POST_SPRINT_INDEPENDENT_REVIEW.md` R2). Promotion to plain `v0.23.2` = cut
+the tag at the accepted sha, then dispatch `release.yml` and `pypi.yml`
+(`target: pypi`) at that ref.

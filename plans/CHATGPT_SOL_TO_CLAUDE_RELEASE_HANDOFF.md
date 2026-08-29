@@ -19,9 +19,10 @@
 > stable and published as `releases/latest` (release-plumbing PRs
 > #249/#250) — RC4 was accepted as the promotion candidate. The bullets
 > below (RC4 as the acceptance candidate, `releases/latest` still v0.22.0)
-> are historical. The next acceptance candidate will be `v0.23.2-rc1`, cut
-> after the Class B (silent-state-corruption) fix branch merges — see
-> `SILENT_STATE_CORRUPTION_PLAN.md` tasks #2/#4/#6-#9. No SHA exists yet.
+> are historical. The acceptance candidate is now **`v0.23.2-rc1` =
+> `cd68ad16`** (main after the Class B branch #259 merged 2026-08-29; see
+> `SILENT_STATE_CORRUPTION_PLAN.md` — all of #1-#9 shipped — and
+> `RC_RELEASE_NOTES_DRAFT.md`'s final section for what it carries).
 
 - **R8 is CLOSED.** C2 landed a measured 20.3 kB net eager recovery (PR #218) and lowered the ratchet accordingly. The bundle measures **888.5 kB eager against a 910,711 B (889.4 kB) budget — 0.9 kB headroom** as of `a8a939c1` (was 887.7 kB / 1.7 kB before #241-#245). That is again thin: the ratchet's own header (`frontend/scripts/check-bundle-size.mjs`) requires a lazy split to be attempted before any raise, and separately fails the build if headroom ever exceeds 40 kB. See the open decision recorded under C6.
 - **Neither RC1 nor RC2 can qualify the current tree.** RC1 (`069616d1`) predates the post-sprint work. RC2 (`4f51f6e`) was cut and published but never owner-tested, and **19 further merges (#221-#239) landed after it** — including fixes for silent data-integrity defects that a fully green CI did not catch. A new candidate is required.

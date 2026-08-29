@@ -11,10 +11,10 @@ exists.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-27
-**Updated:** 2026-08-28 (tasks #1/#3/#5 shipped in #253/#254; a 2026-08-28
-adversarial bug hunt with a failing-probe evidence standard found seven more
-frontend instances — three shipped in #255, four booked as tasks #6-#9 — and
-eight backend defects, shipped in #256/#257; see Completed)
+**Updated:** 2026-08-29 (ALL of #1-#9 shipped: #253/#254/#255 and the Class B
+branch #259; the 2026-08-28 adversarial bug hunt's eight backend defects
+shipped in #256/#257. One new task #10 booked from #259's `Dataset.raw` audit.
+Acceptance candidate `v0.23.2-rc1` = `cd68ad16`.)
 
 ---
 
@@ -101,7 +101,7 @@ compile time) but matches a pattern the repo already uses and enforces.
 - **Stop when:** that probe fails as described. Do not also refactor the existing
   remap helpers — they are correct and covered.
 
-### 2. Make class B structurally impossible
+### 2. Make class B structurally impossible — **shipped #259** (see Completed)
 
 **Goal:** a caller cannot pass base-only data to a stripping recompute without
 saying so.
@@ -140,7 +140,7 @@ not "plots the wrong column". The live-view analogue of exactly these fields
 - **Acceptance:** red-first — a saved figure with `hiddenChannels: [3]` over
   F1@3/F2@4 must not hide F2 after F1 is removed.
 
-### 4. Derived worksheet drops the source's last column
+### 4. Derived worksheet drops the source's last column — **shipped #259**
 
 `store/derivedWorksheets.ts:90` calls `recompute({ ...sheet, data, raw:
 sourceData })` where `data` is the **source's** table. `recompute` strips
@@ -182,7 +182,7 @@ one level up: the predicate is a proxy for the property it is asked about.
   *(Resolved in #253: label sequence positional, plus `column_designations`
   positional only when both sides carry them.)*
 
-### 6. `applyCorrections` / `resetCorrections` delete the measurement column
+### 6. `applyCorrections` / `resetCorrections` delete the measurement column — **shipped #259**
 
 **Class B, a different caller than #245 — and it refutes the Completed row
 below that "audited and cleared `corrections.ts`".** `store/corrections.ts`
@@ -202,7 +202,7 @@ disagree about what `raw` means (`store/reimport.ts` writes it base-only,
   Reset paths, asserting values not just labels; `Dataset.raw` defined as
   always base-only (matching reimport).
 
-### 7. A column-changing reimport leaves `fitSpec` stale
+### 7. A column-changing reimport leaves `fitSpec` stale — **shipped #259**
 
 `store/reimport.ts`'s `columnsChanged` patch clears `filter`/`channelRoles`/
 `channelTypes`/`formulas`/`errorRoles` but not `fitSpec`; `yKey` survives
@@ -212,7 +212,7 @@ the wrong column and `stampRecompute` overwrites the saved params
 undefined` in the same patch — it is column-indexed like its five neighbours
 and has no honest re-derivation.
 
-### 8. `DataStruct.cat_levels` is index-keyed and reaches neither the strip nor the remap
+### 8. `DataStruct.cat_levels` is index-keyed and reaches neither the strip nor the remap — **shipped #259**
 
 `lib/formula.ts` `baseColumns` slices `labels`/`units`/`values` but carries
 `cat_levels` through the spread; `computeFormulas` re-seeds `catLevels` from
@@ -223,7 +223,7 @@ as level strings and modelling infers `nominal`. Fix at the chokepoint: strip
 columns are removable, so no `DatasetChannelState` registration is needed
 unless a base-column removal path appears.)
 
-### 9. `resetFigureDocumentForReshape` leaves `publication.seriesStyles`
+### 9. `resetFigureDocumentForReshape` leaves `publication.seriesStyles` — **shipped #259**
 
 `lib/figureDocumentReimport.ts` resets `bindings` + `plot.view` but not
 `publication.seriesStyles`, a positional `(ExportSeriesStyle | null)[]` that
@@ -232,6 +232,25 @@ unless a base-column removal path appears.)
 the exported PDF (`expected [ { color: '#ff0000' } ] to deeply equal [ null,
 { color: '#ff0000' } ]`). Fix: clear it (→ derive from the view) in the same
 reset.
+
+### 10. Corrections card reachable on a derived worksheet bypasses its pipeline
+
+Surfaced by #259's `Dataset.raw` audit. `components/Inspector/Inspector.tsx`
+(~line 65) mounts `<CorrectionsCard>` for ANY active dataset with no
+`active.derivedFrom` gate, and the card calls `applyCorrections`/
+`resetCorrections` directly. A derived worksheet's `.raw` is deliberately the
+SOURCE's cached table (`store/derivedWorksheets.ts`'s documented override), not
+this dataset's own base — so Apply/Reset from the card on a derived sheet
+bypasses `recomputeDerivedSheet` and feeds the wrong-contract `raw` into
+`corrections.ts`. Pre-existing; not worsened by #259.
+
+- **Files:** `frontend/src/components/Inspector/Inspector.tsx` (gate), or
+  `store/corrections.ts` (refuse with a status message when `derivedFrom` is set
+  and point at the derived-sheet corrections path) — the store-side refusal is
+  the class fix, the Inspector gate is the instance fix; do both.
+- **Acceptance:** red-first — a derived sheet with a source computed column,
+  Apply from the card, assert the sheet's columns are unchanged and a status
+  message names the derived-sheet path.
 
 ---
 
@@ -249,8 +268,13 @@ reset.
   0.18.5 medium, `VariantStrIter` unsoundness) is upstream-blocked: it is
   pulled by `gtk 0.18` ← `tauri 2.11`, Linux-only, and not on any code path
   the app uses — same posture as the earlier extract-zip alert.
-- **Bundle headroom is 0.7 kB** as of #255 (888.7 kB eager vs 889.4 kB budget;
-  the three F2/F5/F6 fixes cost ~0.2 kB). The ratchet's own header
+- **Bundle headroom is effectively ZERO** as of #259 (889.3 kB eager vs the
+  889.4 kB budget — under by <51 B). The Class B fixes grew the eager `useApp`
+  chunk 0.6 kB; per the ratchet's rule a lazy split was attempted FIRST
+  (`figureDocumentReimport.ts` now loads via dynamic `import()` on the already-
+  async reimport path, 0.46 kB lazy chunk) and that is what kept it green.
+  The next change to any eager store/lib file WILL trip the ratchet. The
+  ratchet's own header
   (`frontend/scripts/check-bundle-size.mjs`) requires attempting a lazy split
   before any pin raise; `ContextMenu` (14.2 kB) is the one real candidate, but it
   puts a Suspense fallback on right-click, which that same rule forbids on a hot
@@ -302,3 +326,11 @@ reset.
 | 2026-08-28 | Backend D2: 3 of 449 unbounded numeric fields wedge a synchronous worker (`baseline smooth_passes` measured 3,650 s at 1e9; violin `n_points`; histogram `bins`) | #257 | `Field(ge, le)` per the `plot.py:130` precedent, caps from measured timings; thread+join tests that fail rather than hang. |
 | 2026-08-28 | Backend D8: `carrier_concentration` catastrophic cancellation — 15 % wrong at `na=1e18`, `ZeroDivisionError` 500 at `na≥1e19` (textbook Si numbers) | #257 | Larger-root-first + `n·p = ni²`; 14/14 goldens unchanged; module split (`_semiconductor_materials.py`) to stay under the 500-line ceiling. |
 | 2026-08-28 | Backend D7: 13 non-ASCII error strings across `routes/`, `calc/`, `io/` + an AST guard (`test_route_error_details_are_ascii`) covering `HTTPException(detail=…)` and `raise ValueError/RuntimeError(...)` literals | #257 | Red-proofed per file. |
+| 2026-08-29 | Task 2: stripping recomputes take a branded `StrippableData` (only `asAlreadyComputed(d.data)` produces it); `lib/formulaInputs.ts` `recomputeFromBase` is the non-stripping path | #259 | Acceptance probe: pointing `store/reimport.ts` at the stripping variant fails `tsc` — `Argument of type 'DataStruct' is not assignable to parameter of type 'StrippableData'`. |
+| 2026-08-29 | Task 4: derived worksheets recompute from the source table without stripping | #259 | Red `["A","B","C_srcComputed"]` + F1 → `["A","B","F1"]`; green keeps all three, values asserted. |
+| 2026-08-29 | Task 6: `Dataset.raw` defined ALWAYS base-only; `applyCorrections`/`resetCorrections` capture via `baseColumns` and run `recomputeFromBaseOrEmpty`; every `.raw` reader/writer audited (table in the #259 lane report; `derivedWorksheets`' source-cache override documented as the one exception) | #259 | Red 4/4 (`expected [ '2m' ] to deeply equal [ 'm', '2m' ]` on re-apply AND reset; phantom `[ 'm', 'F1', 'F1' ]` after removeFormula) → green; 359/359 `useApp.test.ts` after two stale base+computed mocks were updated. |
+| 2026-08-29 | Task 6 version-skew guard: a `.dwk` from an older build carrying a base+computed `raw` is normalized to base-only at load (`workspaceDatasetParse.ts`, wider → `baseColumns`, narrower left alone, never throws) | #259 | Red `expected [ 'm', '2m', '2m' ] to deeply equal [ 'm', '2m' ]` after reset on a legacy fixture → 5/5. |
+| 2026-08-29 | Task 7: reimport's `columnsChanged` patch clears stale `fitSpec` (row-only reshape preserves it) | #259 | Red `expected { model: 'Linear', … } to be undefined` → 44/44. |
+| 2026-08-29 | Task 8: `baseColumns` strips `cat_levels` entries at/beyond `keep` (`stripCatLevels` in `formulaInputs.ts`; `formula.ts` sits at its ceiling) | #259 | Red `expected {'1':[…]} to be undefined` + e2e `expected true to be false` → 109/109 + 41/41. Base columns' own levels proven untouched. |
+| 2026-08-29 | Task 9: `resetFigureDocumentForReshape` clears `publication.seriesStyles` (positional, wins over the view at export); `publication.overrides` audited, no other positional field | #259 | Red length-1 styles replayed onto widened length-2 `y_keys` → 7/7. |
+| 2026-08-29 | Bundle: `figureDocumentReimport.ts` lazy-loaded on the async reimport path (the ratchet-mandated split attempt) | #259 | 889.4 kB (0.1 kB over) → 889.3 kB (green); `applyReimportMerge` stays synchronous for `reimportAllRun.ts`'s atomic batch. |
