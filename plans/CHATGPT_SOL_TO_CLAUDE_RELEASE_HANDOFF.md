@@ -21,14 +21,14 @@
 > below (RC4 as the acceptance candidate, `releases/latest` still v0.22.0)
 > are historical.
 >
-> **Superseded again 2026-08-29.** `v0.23.2-rc1` (`cd68ad16`) was never cut as a tag and is **superseded**:
-> five merges landed after it — #260 (DiraCulator calculator follow-ups),
-> #261 (bundle: lazy SqliteQueryDialog + the profiling record), #262
-> (SILENT_STATE_CORRUPTION_PLAN #10, the derived-worksheet corrections
-> refusal), #263 (error-label regression coverage) and #264 (this round's two
-> post-review findings: the calc-history storage bound and the SQLite dialog
-> draft retention). The acceptance candidate is **`v0.23.2-rc2`**, cut from
-> `main` after #264 merges; its SHA is recorded at cut time.
+> **Superseded again 2026-08-29.** `v0.23.2-rc1` (`cd68ad16`) WAS cut and published as a prerelease on
+> 2026-08-29 (00:48-00:53 UTC, all nine assets: installers, `latest.json`,
+> `SHA256SUMS`). It is **superseded, not un-cut**: five merges landed after it —
+> #260 (DiraCulator calculator follow-ups), #261 (bundle: lazy SqliteQueryDialog
+> + the profiling record), #262 (SILENT_STATE_CORRUPTION_PLAN #10, the
+> derived-worksheet corrections refusal), #263 (error-label regression coverage)
+> and #264 (the calc-history storage bound and the SQLite dialog draft
+> retention). The acceptance candidate is **`v0.23.2-rc2` = `1264b2a4`**.
 >
 > `SILENT_STATE_CORRUPTION_PLAN.md` now has **no open tasks** (#1-#10 all
 > shipped). Bundle headroom is **2.9 kB** (CI-measured, after #261) — the
