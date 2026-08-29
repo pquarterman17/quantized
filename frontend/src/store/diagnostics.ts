@@ -7,18 +7,28 @@
 // belongs to `DiagnosticsSnapshot`'s shape: if a field is not on that type,
 // no amount of collecting can leak it.
 
+import { hasDesktopShell } from "../lib/desktopBridge";
 import { buildDiagnostics, type DiagnosticsSnapshot } from "../lib/diagnostics";
 import { useApp } from "./useApp";
 
-/** Byte sizes of this app's own persisted slots. Keys and lengths only —
- *  values are never read, let alone included. */
+/** Byte sizes of this app's own persisted slots. Keys and sizes only — a
+ *  value is measured and immediately discarded, never included.
+ *
+ *  Measured as UTF-8 bytes, not `String.length`. This app's stored content is
+ *  full of multi-byte characters — units, Greek symbols in saved calculator
+ *  inputs and plot labels — so a code-unit count understates the real size by
+ *  up to 3x under a "bytes" label, in the one report whose whole value is
+ *  being accurate. (Browsers vary in how they charge quota, several counting
+ *  UTF-16 units; this is a well-defined figure rather than a guess at any one
+ *  engine's accounting.) */
 function storageSlots(): { key: string; bytes: number }[] {
   const out: { key: string; bytes: number }[] = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key?.startsWith("qz.")) continue;
-      out.push({ key, bytes: localStorage.getItem(key)?.length ?? 0 });
+      const raw = localStorage.getItem(key);
+      out.push({ key, bytes: raw === null ? 0 : new TextEncoder().encode(raw).length });
     }
   } catch {
     /* storage unavailable (private mode) — an empty list is the honest answer */
@@ -47,7 +57,12 @@ export function collectDiagnostics(): DiagnosticsSnapshot {
     platform: {
       userAgent: navigator.userAgent,
       language: navigator.language,
-      desktop: typeof window !== "undefined" && "pywebview" in window,
+      // Via the shared bridge helper, not a hand-rolled `"pywebview" in
+      // window`: pywebview creates the object and injects `.api` afterwards,
+      // so the naive check reports "desktop" during a window in which no
+      // native call can be made — and would miss a future Tauri shell, which
+      // the same helper is designed to cover.
+      desktop: hasDesktopShell(),
     },
     display: {
       width: window.innerWidth,
