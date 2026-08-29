@@ -62,7 +62,15 @@ export default function Inspector() {
 
       <PlotObjectsCard />
 
-      <CorrectionsCard key={active?.id ?? "none"} active={active} />
+      {/* SILENT_STATE_CORRUPTION_PLAN #10: a derived worksheet's corrections
+          are its pipeline recipe, re-run from its source by
+          `recomputeDerivedSheet`. Correcting one from this card rebuilt it
+          from the sheet's cached copy of the source instead of the source's
+          current data. store/corrections.ts refuses it outright (the class
+          fix, covering the bulk/pipeline/baseline callers too); hiding the
+          card here is the instance fix, so the affordance isn't offered at
+          all rather than offered and refused. */}
+      {!active?.derivedFrom && <CorrectionsCard key={active?.id ?? "none"} active={active} />}
 
       <StatsCard active={active} />
 

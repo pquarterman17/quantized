@@ -11,10 +11,12 @@ exists.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-08-27
-**Updated:** 2026-08-29 (ALL of #1-#9 shipped: #253/#254/#255 and the Class B
-branch #259; the 2026-08-28 adversarial bug hunt's eight backend defects
-shipped in #256/#257. One new task #10 booked from #259's `Dataset.raw` audit.
-Acceptance candidate `v0.23.2-rc1` = `cd68ad16`.)
+**Updated:** 2026-08-29 (ALL of #1-#10 shipped: #253/#254/#255, the Class B
+branch #259, and #10 below; the 2026-08-28 adversarial bug hunt's eight backend
+defects shipped in #256/#257. **No open tasks remain in this plan.**
+The acceptance candidate recorded here, `v0.23.2-rc1` = `cd68ad16`, is now
+STALE — it predates #259's Class B fixes, #260, #261 and #10's fix, so it must
+be re-pointed before acceptance testing starts. Owner call.)
 
 ---
 
@@ -233,7 +235,7 @@ the exported PDF (`expected [ { color: '#ff0000' } ] to deeply equal [ null,
 { color: '#ff0000' } ]`). Fix: clear it (→ derive from the view) in the same
 reset.
 
-### 10. Corrections card reachable on a derived worksheet bypasses its pipeline
+### 10. Corrections card reachable on a derived worksheet bypasses its pipeline — **shipped, see Completed**
 
 Surfaced by #259's `Dataset.raw` audit. `components/Inspector/Inspector.tsx`
 (~line 65) mounts `<CorrectionsCard>` for ANY active dataset with no
@@ -254,6 +256,36 @@ bypasses `recomputeDerivedSheet` and feeds the wrong-contract `raw` into
 
 ---
 
+---
+
+## Completed
+
+### 10. Corrections card reachable on a derived worksheet — 2026-08-29
+
+Both halves shipped, each red-first.
+
+`store/corrections.ts` (class fix) now refuses `applyCorrections` /
+`resetCorrections` when `derivedFrom` is set, with a status message pointing at
+`freezeCopy`. This covers every caller, not just the card — `folderOps`' bulk
+apply, the pipeline workshop's `executeSteps`, and the baseline workshop all
+reach this slice, which the task description did not account for.
+
+`components/Inspector/Inspector.tsx` (instance fix) no longer mounts
+`CorrectionsCard` for a derived dataset, so the affordance isn't offered at all
+rather than offered and refused.
+
+**The consequence was narrower than the task assumed, and is recorded honestly
+here.** It is NOT data loss: #259's non-stripping `recomputeFromBaseOrEmpty`
+already prevents column deletion on this path, and a probe confirmed the labels
+survive. The real defect is STALENESS — the sheet was rebuilt from its cached
+copy of the source rather than the source's current data, which
+`recomputeDerivedSheet` reads live. Proven with the source moved on to
+`[999, 888, 777]` while an apply on the sheet still produced `[20, 40, 60]`:
+values derived from a version of the source that no longer exists, with no
+error and no toast. Refusing loses no capability, because `.corrections` on a
+derived sheet is its pipeline recipe (owned by `recomputeDerivedSheet`) and no
+"edit an existing sheet's pipeline" action exists.
+
 ## Notes
 
 - **Module ceilings.** `frontend/src/store/relink.ts` is the tightest `.ts`
@@ -268,8 +300,19 @@ bypasses `recomputeDerivedSheet` and feeds the wrong-contract `raw` into
   0.18.5 medium, `VariantStrIter` unsoundness) is upstream-blocked: it is
   pulled by `gtk 0.18` ← `tauri 2.11`, Linux-only, and not on any code path
   the app uses — same posture as the earlier extract-zip alert.
-- **Bundle headroom is effectively ZERO** as of #259 (889.3 kB eager vs the
-  889.4 kB budget — under by <51 B). The Class B fixes grew the eager `useApp`
+- **Bundle headroom: 2.9 kB** as of #261 (886.5 kB eager vs the 889.4 kB
+  budget, CI-measured). It really was effectively zero after #259 — CI printed
+  "0.0 kB under budget", 68 B of slack. #261 recovered 2.8 kB by lazy-loading
+  `SqliteQueryDialog`, whose second, non-obvious eager edge was
+  `commands/dataCommands.ts` importing its `SHOW_SQLITE_QUERY` *constant* from
+  the component file (that alone pinned the whole dialog eager, so fixing only
+  its window listener would have recovered nothing). #261 also recorded a full
+  per-module attribution proving no larger split remains: the component surface
+  is flat at 5.1 kB max and everything above 3 kB is first-paint, so the next
+  lane needing real room needs a justified rule-2 pin raise, not another diet
+  pass. Measure on CI, never locally — a drifted local `node_modules` built the
+  same tree 0.7 kB larger, enough to invert the pass/fail verdict.
+  ORIGINAL #259 NOTE, kept for the record: The Class B fixes grew the eager `useApp`
   chunk 0.6 kB; per the ratchet's rule a lazy split was attempted FIRST
   (`figureDocumentReimport.ts` now loads via dynamic `import()` on the already-
   async reimport path, 0.46 kB lazy chunk) and that is what kept it green.
@@ -279,6 +322,10 @@ bypasses `recomputeDerivedSheet` and feeds the wrong-contract `raw` into
   before any pin raise; `ContextMenu` (14.2 kB) is the one real candidate, but it
   puts a Suspense fallback on right-click, which that same rule forbids on a hot
   path. Owner call, and better made deliberately than under CI-red pressure.
+  (#261 confirmed that reading and left `ContextMenu` eager for exactly that
+  reason; the remaining ~26 kB of command handlers was rejected on the same
+  grounds — deferring them puts a dynamic import in front of the first press
+  of every keyboard shortcut.)
 - **Behavioural-reference (MATLAB) latent bugs surfaced by the 2026-08-28 hunt**
   — fixed on the Python side as deliberate deviations, NOT changed in
   `../quantized_matlab` (fix there only on a branch with headless verify):

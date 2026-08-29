@@ -102,9 +102,38 @@ export function rowsChangedGuard(
   };
 }
 
+/** SILENT_STATE_CORRUPTION_PLAN #10. A derived worksheet's `.raw` is the
+ *  documented exception to this slice's base-only rule: it caches its SOURCE's
+ *  table, not its own base (see store/derivedWorksheets.ts's module doc). This
+ *  slice's header long ASSERTED that case "never reaches this slice" -- but
+ *  nothing enforced it, and several callers can: Inspector's CorrectionsCard
+ *  mounted for any active dataset, plus folderOps' bulk apply, the pipeline
+ *  workshop, and the baseline workshop.
+ *
+ *  Correcting through this slice then rebuilds the sheet from that CACHE
+ *  instead of the source's CURRENT data, which `recomputeDerivedSheet` reads
+ *  live. Proven: with the source moved on to [999, 888, 777], an apply on the
+ *  sheet still produced [20, 40, 60] -- values derived from a version of the
+ *  source that no longer exists, with no error and no toast.
+ *
+ *  A derived sheet's `.corrections` IS its re-runnable pipeline recipe and is
+ *  owned by `recomputeDerivedSheet`; there is no "edit an existing sheet's
+ *  pipeline" action, so refusing here loses no capability. `freezeCopy` is the
+ *  honest path to an independently correctable dataset. */
+function refuseDerived(get: SliceGet, id: string): boolean {
+  const ds = get().datasets.find((d) => d.id === id);
+  if (!ds?.derivedFrom) return false;
+  get().setStatus(
+    `"${ds.name}" is a derived worksheet — its corrections re-run from its source. ` +
+      `Use Freeze copy to make an independent dataset you can correct.`,
+  );
+  return true;
+}
+
 export function createCorrectionsSlice(set: SliceSet, get: SliceGet): CorrectionsSlice {
   return {
     applyCorrections: async (id, params, bg) => {
+      if (refuseDerived(get, id)) return false;
       try {
         // #38 deferred edge: corrections must never compute on a still-pending
         // (preview-only) dataset — resolve the target AND any bg reference to
@@ -180,6 +209,7 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
       }
     },
     resetCorrections: (id) => {
+      if (refuseDerived(get, id)) return;
       const ds = get().datasets.find((d) => d.id === id);
       get().recordHistory("reset corrections");
       set((s) => {

@@ -151,3 +151,66 @@ describe("applyCorrections + computed columns (data loss)", () => {
     ]);
   });
 });
+
+// SILENT_STATE_CORRUPTION_PLAN task #10. `store/derivedWorksheets.ts`
+// deliberately overrides `.raw` to mean "a cache of the SOURCE's table", the
+// one documented exception to the base-only rule this slice depends on. This
+// module's own header asserts that case "never reaches this slice" -- but
+// nothing enforced it: `Inspector.tsx` mounted CorrectionsCard for ANY active
+// dataset, and `folderOps`/`executeSteps`/`useBaseline` all call
+// `applyCorrections` too. Feeding a derived sheet's source-shaped `.raw` into
+// this slice corrects the WRONG table and bypasses `recomputeDerivedSheet`.
+describe("corrections refuse a derived worksheet (plan #10)", () => {
+  // Source has its own computed column; the sheet has a different formula.
+  // `.raw` is the SOURCE's table, so a correction here would rebuild the
+  // sheet's `data` from the source's columns.
+  function seedDerived(): void {
+    const source: Dataset = {
+      id: "src",
+      name: "source",
+      data: { ...base, values: [[10], [20], [30]], labels: ["A"] },
+    };
+    const sheet: Dataset = {
+      id: "sheet",
+      name: "derived",
+      derivedFrom: { datasetId: "src", pipeline: "smooth=3" },
+      formulas: [{ name: "F1", expr: "A*3" }],
+      data: {
+        ...base,
+        values: [[10, 30], [20, 60], [30, 90]],
+        labels: ["A", "F1"],
+        units: ["emu", ""],
+      },
+      // The documented override: the SOURCE's table, not this sheet's base.
+      raw: { ...base, values: [[10], [20], [30]], labels: ["A"] },
+    };
+    useApp.setState({ datasets: [source, sheet], activeId: "sheet" });
+  }
+
+  it("applyCorrections leaves a derived sheet untouched and says why", async () => {
+    seedDerived();
+    const before = useApp.getState().datasets[1].data;
+
+    const ok = await useApp.getState().applyCorrections("sheet", { smooth: 3 } as CorrectionParams);
+
+    expect(ok).toBe(false);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    const after = useApp.getState().datasets[1];
+    expect(after.data.labels).toEqual(before.labels);
+    expect(after.data.values).toEqual(before.values);
+    expect(after.corrections).toBeUndefined();
+    expect(useApp.getState().status).toMatch(/derived worksheet/i);
+  });
+
+  it("resetCorrections leaves a derived sheet untouched and says why", () => {
+    seedDerived();
+    const before = useApp.getState().datasets[1].data;
+
+    useApp.getState().resetCorrections("sheet");
+
+    const after = useApp.getState().datasets[1];
+    expect(after.data.labels).toEqual(before.labels);
+    expect(after.data.values).toEqual(before.values);
+    expect(useApp.getState().status).toMatch(/derived worksheet/i);
+  });
+});
