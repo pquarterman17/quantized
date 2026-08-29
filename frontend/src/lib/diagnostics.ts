@@ -20,6 +20,10 @@
 export interface DiagnosticsSnapshot {
   /** ISO timestamp, supplied by the caller so the builder stays pure. */
   takenAt: string;
+  /** Which build produced this report. Supplied by the collector (the values
+   *  are injected at build time; see lib/buildInfo.ts) rather than read here,
+   *  so this module stays a pure function of its argument. */
+  build: { version: string; sha: string };
   platform: {
     userAgent: string;
     language: string;
@@ -52,9 +56,20 @@ export interface DiagnosticsSnapshot {
     datasetsWithErrorRoles: number;
     stageTab: string;
   };
-  /** Persisted slots by key and byte size. Contents are never read. */
+  /** Vetted persisted slots by key and byte size. Contents are never read,
+   *  and a key that is not on `lib/storageKeys.ts`'s allowlist never gets
+   *  here — it is aggregated into `otherStorage` instead. */
   storage: readonly { key: string; bytes: number }[];
+  /** Everything under the app's namespace that the allowlist does not name,
+   *  reduced to a count and a byte total. Present so an unrecognised slot
+   *  filling the quota is still visible, without printing its name. */
+  otherStorage: { slots: number; bytes: number };
 }
+
+/** Bumped when the rendered layout changes in a way that would break a
+ *  consumer parsing it. Owned by the builder, not the snapshot: the format is
+ *  this module's, and a collector must not be able to misreport it. */
+export const DIAGNOSTICS_SCHEMA_VERSION = 1;
 
 function section(title: string, rows: readonly (readonly [string, string])[]): string {
   const width = Math.max(...rows.map(([k]) => k.length));
@@ -75,6 +90,8 @@ export function buildDiagnostics(s: DiagnosticsSnapshot): string {
     "",
     section("Session", [
       ["taken at", s.takenAt],
+      ["version", `${s.build.version} (${s.build.sha})`],
+      ["report schema", String(DIAGNOSTICS_SCHEMA_VERSION)],
       ["shell", s.platform.desktop ? "desktop" : "browser"],
       ["language", s.platform.language],
       ["user agent", s.platform.userAgent],
@@ -106,12 +123,16 @@ export function buildDiagnostics(s: DiagnosticsSnapshot): string {
       ["with error roles", String(w.datasetsWithErrorRoles)],
     ]),
     "",
-    section(
-      "Stored slots (key and size only)",
-      s.storage.length
-        ? s.storage.map((e) => [e.key, `${e.bytes} bytes`] as const)
-        : [["(none)", ""] as const],
-    ),
+    section("Stored slots (key and size only)", [
+      ...s.storage.map((e) => [e.key, `${e.bytes} bytes`] as const),
+      // Always rendered, even at zero: "0 slots" says the allowlist covered
+      // everything, whereas an omitted line is indistinguishable from a
+      // report built before this section existed.
+      [
+        "(unrecognised)",
+        `${s.otherStorage.slots} slots, ${s.otherStorage.bytes} bytes`,
+      ] as const,
+    ]),
     "",
   ].join("\n");
 }

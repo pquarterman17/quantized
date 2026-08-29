@@ -139,12 +139,12 @@ function sameUnmatchedSet(a: readonly string[], b: readonly string[]): boolean {
   return a.every((x) => bSet.has(x));
 }
 
-// No app-version constant is plumbed into the frontend bundle yet (no
-// `import.meta.env`/package.json wiring anywhere in this repo today) --
-// threading one through is out of this lane's scope. `captureRecipe`'s
-// `appVersion` is provenance-only (never read back for gating), so a stable
-// placeholder is a deliberate, low-risk stand-in for that future wiring.
-const PLOT_RECIPE_APP_VERSION = "0";
+// Was a hardcoded `"0"` until vite's `define` supplied a real version. Read
+// as a bare global rather than via lib/buildInfo.ts because this module is
+// EAGER: measured, importing that module costs 43 B of startup budget and
+// this costs 5 B. Provenance-only -- never read back for gating.
+declare const __APP_VERSION__: string;
+const PLOT_RECIPE_APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0";
 
 /** A recipe resolution with `unmatched` fields, staged for a preview+confirm
  *  UI (a later lane) rather than applied immediately -- see the module doc. */
