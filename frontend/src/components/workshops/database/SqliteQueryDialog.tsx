@@ -9,10 +9,15 @@ import { Button } from "../../primitives";
 
 let sequence = 0;
 
-/** Mounted only while open -- `AppOverlays` gates it on the
- *  `store/sqliteQueryDialog` flag and loads this chunk lazily, so there is no
- *  local `open` state and no window listener here any more. */
+/** Loaded lazily on first open and then KEPT MOUNTED while closed, the same
+ *  `useKeepMountedAfterOpen` + self-hide shape as SplitDatasetDialog. Mounting
+ *  only while open (as the #261 lazy split first did) throws away a half-typed
+ *  query every time the dialog is dismissed; staying mounted preserves the
+ *  draft exactly as the pre-#261 eager mount did, at no startup cost. The
+ *  window listener lives in the store, so nothing here needs to be mounted to
+ *  hear the Data command. */
 export default function SqliteQueryDialog() {
+  const open = useSqliteQueryDialog((s) => s.open);
   const close = useSqliteQueryDialog((s) => s.close);
   const [path, setPath] = useState("");
   const [query, setQuery] = useState("SELECT * FROM measurements LIMIT 1000");
@@ -22,6 +27,8 @@ export default function SqliteQueryDialog() {
   const [error, setError] = useState<string | null>(null);
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+
+  if (!open) return null;
 
   const run = async () => {
     setBusy(true);

@@ -19,10 +19,21 @@
 > stable and published as `releases/latest` (release-plumbing PRs
 > #249/#250) — RC4 was accepted as the promotion candidate. The bullets
 > below (RC4 as the acceptance candidate, `releases/latest` still v0.22.0)
-> are historical. The acceptance candidate is now **`v0.23.2-rc1` =
-> `cd68ad16`** (main after the Class B branch #259 merged 2026-08-29; see
-> `SILENT_STATE_CORRUPTION_PLAN.md` — all of #1-#9 shipped — and
-> `RC_RELEASE_NOTES_DRAFT.md`'s final section for what it carries).
+> are historical.
+>
+> **Superseded again 2026-08-29.** `v0.23.2-rc1` (`cd68ad16`) was never cut as a tag and is **superseded**:
+> five merges landed after it — #260 (DiraCulator calculator follow-ups),
+> #261 (bundle: lazy SqliteQueryDialog + the profiling record), #262
+> (SILENT_STATE_CORRUPTION_PLAN #10, the derived-worksheet corrections
+> refusal), #263 (error-label regression coverage) and #264 (this round's two
+> post-review findings: the calc-history storage bound and the SQLite dialog
+> draft retention). The acceptance candidate is **`v0.23.2-rc2`**, cut from
+> `main` after #264 merges; its SHA is recorded at cut time.
+>
+> `SILENT_STATE_CORRUPTION_PLAN.md` now has **no open tasks** (#1-#10 all
+> shipped). Bundle headroom is **2.9 kB** (CI-measured, after #261) — the
+> 0.9 kB figure in the R8 bullet below is stale, and #261 recorded a
+> per-module attribution showing no larger lazy split remains.
 
 - **R8 is CLOSED.** C2 landed a measured 20.3 kB net eager recovery (PR #218) and lowered the ratchet accordingly. The bundle measures **888.5 kB eager against a 910,711 B (889.4 kB) budget — 0.9 kB headroom** as of `a8a939c1` (was 887.7 kB / 1.7 kB before #241-#245). That is again thin: the ratchet's own header (`frontend/scripts/check-bundle-size.mjs`) requires a lazy split to be attempted before any raise, and separately fails the build if headroom ever exceeds 40 kB. See the open decision recorded under C6.
 - **Neither RC1 nor RC2 can qualify the current tree.** RC1 (`069616d1`) predates the post-sprint work. RC2 (`4f51f6e`) was cut and published but never owner-tested, and **19 further merges (#221-#239) landed after it** — including fixes for silent data-integrity defects that a fully green CI did not catch. A new candidate is required.
