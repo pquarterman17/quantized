@@ -41,9 +41,7 @@ export default function SubstratesTab() {
   const [aFilm, setAFilm] = useState("3.876");
   const mm = useCard("Substrates");
 
-  // Matthews-Blakeslee critical thickness, chained off the mismatch above.
-  const [mbMismatchPct, setMbMismatchPct] = useState("1.0");
-  const [mbB, setMbB] = useState("4.0");
+  // MATLAB criticalThickness derives mismatch and b from a_film/a_sub.
   const [mbNu, setMbNu] = useState("0.3");
   const mb = useCard("Substrates");
 
@@ -96,33 +94,33 @@ export default function SubstratesTab() {
       mm.setResult({ text: "a_film must be a positive number", err: true });
       return;
     }
-    await mm.run(`Lattice mismatch vs ${selected.name}`, async (isCurrent) => {
-      const r = await substrateMismatch(af, selected.a as number);
-      // DIRACULATOR_AUDIT P2: lossless — this value chains into the Matthews-
-      // Blakeslee input below; display sig-figs must not alter that result.
-      // Writing it edits mb's input, so mb's shown result is invalidated too.
-      // Gated on isCurrent: a disowned completion must not overwrite an f the
-      // user typed while this request was pending.
-      if (isCurrent()) {
-        setMbMismatchPct(String(r.mismatchPct));
-        mb.touch();
-      }
-      return `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
-    });
+    await mm.run(
+      `Lattice mismatch vs ${selected.name}`,
+      `a_film=${aFilm} Å, substrate=${selected.name}, a_sub=${selected.a} Å`,
+      async () => {
+        const r = await substrateMismatch(af, selected.a as number);
+        return `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
+      },
+    );
   }
 
   async function runCriticalThickness(): Promise<void> {
-    const fPct = Number(mbMismatchPct);
-    const b = Number(mbB);
+    if (!selected || selected.a == null) return;
+    const af = Number(aFilm);
     const nu = Number(mbNu);
-    if (!Number.isFinite(fPct) || fPct === 0) {
-      mb.setResult({ text: "enter a non-zero mismatch %", err: true });
+    if (!Number.isFinite(af) || af <= 0) {
+      mb.setResult({ text: "a_film must be a positive number", err: true });
       return;
     }
-    await mb.run("Matthews-Blakeslee critical thickness", async () => {
-      const r = await substratesCriticalThickness(fPct / 100, b, nu);
-      return `h_c = ${fmtNum(r.h_c)} Å = ${fmtNum(r.h_c_nm)} nm`;
-    });
+    await mb.run(
+      "Matthews-Blakeslee critical thickness",
+      `a_film=${aFilm} Å, a_sub=${selected.a} Å, ν=${mbNu}`,
+      async () => {
+        const r = await substratesCriticalThickness(af, selected.a as number, nu);
+        if (r.matched) return "h_c = ∞ (lattice matched)";
+        return `h_c = ${fmtNum(r.h_c as number)} Å = ${fmtNum(r.h_c_nm as number)} nm`;
+      },
+    );
   }
 
   const isAmorphous = selected?.latticeType === "amorphous";
@@ -146,6 +144,7 @@ export default function SubstratesTab() {
             onClick={() => {
               setSelected(s);
               mm.touch(); // a_sub changed — any shown mismatch is stale
+              mb.touch();
             }}
           >
             <span>
@@ -207,6 +206,7 @@ export default function SubstratesTab() {
                   onChange={(e) => {
                     setAFilm(e.target.value);
                     mm.touch();
+                    mb.touch();
                   }}
                   aria-label="a_film"
                 />
@@ -225,36 +225,7 @@ export default function SubstratesTab() {
             <Card title="Matthews-Blakeslee critical thickness">
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
-                  f
-                </span>
-                <input
-                  className="qz-input"
-                  style={{ width: 70 }}
-                  value={mbMismatchPct}
-                  onChange={(e) => {
-                    setMbMismatchPct(e.target.value);
-                    mb.touch();
-                  }}
-                  aria-label="mismatch percent"
-                />
-                <span className="qzk-field-lbl" style={{ margin: 0 }}>
-                  %
-                </span>
-                <span className="qzk-field-lbl" style={{ margin: 0 }}>
-                  b
-                </span>
-                <input
-                  className="qz-input"
-                  style={{ width: 56 }}
-                  value={mbB}
-                  onChange={(e) => {
-                    setMbB(e.target.value);
-                    mb.touch();
-                  }}
-                  aria-label="Burgers vector b"
-                />
-                <span className="qzk-field-lbl" style={{ margin: 0 }}>
-                  Å
+                  b = a_film/√2
                 </span>
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
                   ν

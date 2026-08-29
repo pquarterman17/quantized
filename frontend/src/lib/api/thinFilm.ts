@@ -126,3 +126,17 @@ export function thinFilmSauerbrey(
 }> {
   return postJSON("/api/thin-film/sauerbrey", { delta_f: deltaF, f0, area, density });
 }
+
+/** Scherrer crystallite size from FWHM (degrees 2-theta), wavelength (Angstrom),
+ *  and peak position (degrees 2-theta), using DiraCulator's fixed K=0.9. */
+export function thinFilmScherrer(
+  fwhmDeg: number,
+  wavelength: number,
+  twoThetaDeg: number,
+): Promise<{ D: number; D_nm: number; K: number }> {
+  return postJSON("/api/thin-film/scherrer", {
+    fwhm_deg: fwhmDeg,
+    wavelength,
+    two_theta_deg: twoThetaDeg,
+  });
+}

@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 const rec = (label: string, summary = "x"): void =>
-  useCalcHistory.getState().record({ domain: "Electrical", label, summary });
+  useCalcHistory.getState().record({ domain: "Electrical", label, summary, inputs: "rho=0.01" });
 
 describe("calcHistory store", () => {
   it("records newest-first with a unique id and a timestamp", () => {
@@ -28,6 +28,7 @@ describe("calcHistory store", () => {
     expect(history[1].label).toBe("Conductivity");
     expect(history[0].id).not.toBe(history[1].id);
     expect(history[0].summary).toBe("μ = 42 cm²/Vs");
+    expect(history[0].inputs).toBe("rho=0.01");
     expect(history[0].domain).toBe("Electrical");
     expect(typeof history[0].ts).toBe("string");
   });

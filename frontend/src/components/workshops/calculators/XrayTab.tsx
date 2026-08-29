@@ -167,7 +167,10 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
             variant="primary"
             size="sm"
             onClick={() =>
-              void nCard.run("Neutron conversion", async () => {
+              void nCard.run(
+                "Neutron conversion",
+                `quantity=${nQuantity}, value=${nValue}`,
+                async () => {
                 const v = Number(nValue);
                 if (!Number.isFinite(v)) throw new Error("enter a numeric value");
                 const r = await neutronCalc(nQuantity, v);
@@ -175,7 +178,8 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
                   `λ = ${fmtNum(r.wavelength_a)} Å · E = ${fmtNum(r.energy_mev)} meV · ` +
                   `v = ${fmtNum(r.velocity_m_s)} m/s · T = ${fmtNum(r.temperature_k)} K`
                 );
-              })
+                },
+              )
             }
           >
             Convert

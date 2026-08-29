@@ -11,16 +11,14 @@ this table), tested here as one full-table data-parity dump (the
 ``calc_element_data`` precedent). ``lattice_mismatch`` is a verbatim port of
 ``+calc/+crystal/latticeMismatch.m``.
 
-``critical_thickness`` is a KNOWN, VERIFIED FORMULA DIVERGENCE from its
-MATLAB counterpart ``+calc/+crystal/criticalThickness.m`` -- not a units or
-argument-convention difference. See the two divergence tests below and the
-DIRACULATOR_AUDIT report for the full comparison; per DIRACULATOR_AUDIT_PLAN
-P1 this is reported, not silently "fixed".
+``critical_thickness`` now ports
+``+calc/+crystal/criticalThickness.m`` at method level, including its derived
+Burgers vector and fixed 50-iteration scheme. The two fixtures that originally
+documented the divergence now gate exact behavioral parity.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from typing import Any
 
@@ -52,54 +50,30 @@ def test_lattice_mismatch_matches_matlab(
     compare_calc(result, _no_latex(g["output"]))
 
 
-@pytest.mark.golden
-def test_critical_thickness_diverges_from_matlab_large_mismatch(
-    load_golden: Callable[[str], dict[str, Any]],
-) -> None:
-    """KNOWN DIVERGENCE (see DIRACULATOR_AUDIT report): +calc/+crystal/
-    criticalThickness.m and Python's ``critical_thickness`` implement
-    different closed-form models -- MATLAB's prefactor is ``b/(2*pi*f)``
-    with ``cos(60 deg)`` in the denominator and solves
-    ``hc = A*(ln(hc/b)+1)``; Python's is ``b/(8*pi*f)`` with ``cos(30 deg)``
-    and solves ``h = A*ln(h/b+1)`` (the "+1" moves inside the log). MATLAB
-    also derives ``b = aFilm/sqrt(2)`` from the film lattice parameter,
-    while Python takes ``b`` as a free parameter (default 4.0 Angstrom).
+def _critical_for_compare(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "hc": result["h_c"],
+        "hcNm": result["h_c_nm"],
+        "mismatch": result["mismatch"],
+        "burgersVector": result["b"],
+    }
 
-    For MATLAB's own docstring example (InGaAs/GaAs, f=3.82%), MATLAB
-    returns a finite ``hc`` (frozen below); Python's port RAISES ValueError
-    for the identical mismatch at ANY ``b`` (its own default 4.0 Angstrom,
-    or MATLAB's implied ``aFilm/sqrt(2)`` = 4.15 Angstrom) because
-    ``A/b <= 1`` under Python's model -- no numeric parity is even possible
-    for this input.
-    """
+
+@pytest.mark.golden
+def test_critical_thickness_matches_matlab_doc_example(
+    load_golden: Callable[[str], dict[str, Any]], compare_calc: Callable[..., None]
+) -> None:
+    """+calc/+crystal/criticalThickness.m docstring example."""
     g = load_golden("calc_dira_substrates_critical_thickness_a.json")
-    a_film, a_sub, nu = 5.869, 5.653, 0.3
-    assert g["output"]["hc"] > 0  # MATLAB computes a finite, positive hc
-    mismatch = (a_film - a_sub) / a_sub
-    with pytest.raises(ValueError, match="too large"):
-        substrates.critical_thickness(mismatch, b=a_film / math.sqrt(2), nu=nu)
-    with pytest.raises(ValueError, match="too large"):
-        substrates.critical_thickness(mismatch, nu=nu)  # Python's default b=4.0
+    result = substrates.critical_thickness(5.869, 5.653, nu=0.3)
+    compare_calc(_critical_for_compare(result), _no_latex(g["output"]))
 
 
 @pytest.mark.golden
-def test_critical_thickness_diverges_from_matlab_small_mismatch(
-    load_golden: Callable[[str], dict[str, Any]],
+def test_critical_thickness_matches_matlab_small_mismatch(
+    load_golden: Callable[[str], dict[str, Any]], compare_calc: Callable[..., None]
 ) -> None:
-    """Same known divergence, quantified where BOTH models can produce a
-    number: LSMO/SrTiO3 (f=-0.74%). Re-implementing MATLAB's algorithm in
-    Python gives hc=522.44 Angstrom; Python's port (same mismatch,
-    b=aFilm/sqrt(2)=2.7407 Angstrom to isolate the prefactor/log
-    difference from the b-convention difference) gives h_c=29.88 Angstrom
-    -- about 17.5x smaller. This assertion is NOT a parity claim -- the
-    point is the divergence -- it guards that the documented finding stays
-    a large, consistent divergence rather than silently drifting to
-    near-parity (which would mean this finding needs re-verifying).
-    """
+    """LSMO/SrTiO3 case exercises negative signed mismatch."""
     g = load_golden("calc_dira_substrates_critical_thickness_b.json")
-    a_film, a_sub, nu = 3.876, 3.905, 0.3
-    mismatch = (a_film - a_sub) / a_sub
-    result = substrates.critical_thickness(mismatch, b=a_film / math.sqrt(2), nu=nu)
-    matlab_hc = g["output"]["hc"]
-    ratio = matlab_hc / result["h_c"]
-    assert ratio == pytest.approx(17.5, rel=0.05)
+    result = substrates.critical_thickness(3.876, 3.905, nu=0.3)
+    compare_calc(_critical_for_compare(result), _no_latex(g["output"]))

@@ -76,6 +76,7 @@ export default function HistoryTab() {
                   <div style={META}>
                     {e.domain} · {e.label}
                   </div>
+                  {e.inputs && <div style={META}>Inputs: {e.inputs}</div>}
                   <div style={SUMMARY}>{e.summary}</div>
                 </span>
               </div>

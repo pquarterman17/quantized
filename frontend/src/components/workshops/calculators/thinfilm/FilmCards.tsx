@@ -6,7 +6,15 @@
 
 import { useState } from "react";
 
-import { thinFilmKiessig, thinFilmMultilayerThermal, thinFilmProjectedRange, thinFilmStoneyStress, thinFilmThermalMismatch, thinFilmSauerbrey } from "../../../../lib/api/thinFilm";
+import {
+  thinFilmKiessig,
+  thinFilmMultilayerThermal,
+  thinFilmProjectedRange,
+  thinFilmSauerbrey,
+  thinFilmScherrer,
+  thinFilmStoneyStress,
+  thinFilmThermalMismatch,
+} from "../../../../lib/api/thinFilm";
 import {
   Button,
   Card,
@@ -34,7 +42,7 @@ export function KiessigCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c6.run("Kiessig thickness", async () => {
+            void c6.run("Kiessig thickness", `ΔQ=${kDq} Å⁻¹, SLD=${kSld} Å⁻²`, async () => {
               const sld = kSld.trim() === "" ? undefined : Number(kSld);
               const r = await thinFilmKiessig(Number(kDq), sld);
               const corr = Number.isNaN(r.Qc) ? "" : ` (Qc = ${fmtNum(r.Qc)} Å⁻¹)`;
@@ -77,10 +85,14 @@ export function MultilayerThermalCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c7.run("Multilayer thermal conductivity", async () => {
+            void c7.run(
+              "Multilayer thermal conductivity",
+              `d=${JSON.stringify(mlD)} nm, k=${JSON.stringify(mlK)} W/m/K`,
+              async () => {
               const r = await thinFilmMultilayerThermal(parseList(mlD), parseList(mlK));
               return `k⊥ = ${fmtNum(r.k_series)} · k∥ = ${fmtNum(r.k_parallel)} W/m/K`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -114,10 +126,14 @@ export function ProjectedRangeCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c8.run("Projected range (LSS)", async () => {
+            void c8.run(
+              "Projected range (LSS)",
+              `ion=${prIon}, target=${prTarget}, E=${prE} keV`,
+              async () => {
               const r = await thinFilmProjectedRange(prIon, prTarget, Number(prE));
               return `Rp = ${fmtNum(r.Rp)} nm · ΔRp = ${fmtNum(r.deltaRp)} nm`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -149,7 +165,10 @@ export function StoneyStressCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c9.run("Stoney stress", async () => {
+            void c9.run(
+              "Stoney stress",
+              `E_s=${stEs} Pa, ν_s=${stNu}, t_s=${stTs} m, t_f=${stTf} m, R=${stR} m`,
+              async () => {
               const r = await thinFilmStoneyStress(
                 Number(stEs),
                 Number(stNu),
@@ -158,7 +177,8 @@ export function StoneyStressCard() {
                 Number(stR),
               );
               return `σ = ${fmtNum(r.stress_MPa)} MPa · ${fmtNum(r.stress_GPa)} GPa`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -190,7 +210,10 @@ export function ThermalMismatchCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c10.run("Thermal-mismatch strain", async () => {
+            void c10.run(
+              "Thermal-mismatch strain",
+              `α_f=${tmAf} 1/K, α_s=${tmAs} 1/K, ΔT=${tmDT} K, E=${tmE} Pa, ν=${tmNu}`,
+              async () => {
               const e = tmE.trim() === "" ? undefined : Number(tmE);
               const r = await thinFilmThermalMismatch(
                 Number(tmAf),
@@ -203,7 +226,8 @@ export function ThermalMismatchCard() {
                 ? ""
                 : ` · σ = ${fmtNum(r.stress_MPa)} MPa`;
               return `ε = ${fmtNum(r.strain)} (${r.description})${stress}`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -233,7 +257,10 @@ export function SauerbreyCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c11.run("Sauerbrey (QCM)", async () => {
+            void c11.run(
+              "Sauerbrey (QCM)",
+              `Δf=${sfDf} Hz, f₀=${sfF0} Hz, A=${sfArea} cm², ρ=${sfRho} g/cm³`,
+              async () => {
               const area = sfArea.trim() === "" ? undefined : Number(sfArea);
               const density = sfRho.trim() === "" ? undefined : Number(sfRho);
               const r = await thinFilmSauerbrey(Number(sfDf), Number(sfF0), area, density);
@@ -242,13 +269,49 @@ export function SauerbreyCard() {
               )} Hz·cm²/µg`;
               if (r.thickness_nm != null) s += ` · t = ${fmtNum(r.thickness_nm)} nm`;
               return s;
-            })
+              },
+            )
           }
         >
           Calculate
         </Button>
       </div>
       {resultLine(c11.result)}
+    </Card>
+  );
+}
+
+/** Card 12 — Scherrer crystallite size (DiraCulator Thin Film Card 6). */
+export function ScherrerCard() {
+  const [fwhm, setFwhm] = useState("0.5");
+  const [wavelength, setWavelength] = useState("1.5406");
+  const [twoTheta, setTwoTheta] = useState("33");
+  const c12 = useCard("Thin Film");
+
+  return (
+    <Card title="Scherrer grain size">
+      <div style={ROW}>
+        <Field label="FWHM" value={fwhm} onChange={withTouch(c12.touch, setFwhm)} unit="° 2θ" width={64} />
+        <Field label="λ" value={wavelength} onChange={withTouch(c12.touch, setWavelength)} unit="Å" width={64} />
+        <Field label="2θ" value={twoTheta} onChange={withTouch(c12.touch, setTwoTheta)} unit="°" width={56} />
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() =>
+            void c12.run(
+              "Scherrer grain size",
+              `FWHM=${fwhm} ° 2θ, λ=${wavelength} Å, 2θ=${twoTheta} °`,
+              async () => {
+              const r = await thinFilmScherrer(Number(fwhm), Number(wavelength), Number(twoTheta));
+              return `D = ${fmtNum(r.D)} Å · ${fmtNum(r.D_nm)} nm`;
+              },
+            )
+          }
+        >
+          Calculate
+        </Button>
+      </div>
+      {resultLine(c12.result)}
     </Card>
   );
 }

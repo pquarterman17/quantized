@@ -1,8 +1,8 @@
 # DiraCulator Calculator Audit Plan
 
-**Status:** MERGED (PR #143, merge `ebe06c3`, 2026-08-16); GOLDEN CAMPAIGN FROZEN; OPEN follow-ups tracked below — history input-snapshot capture, critical-thickness formula decision, Scherrer port
+**Status:** COMPLETE — merged audit + frozen campaign; final follow-ups implemented 2026-08-28
 **Created:** 2026-08-15  
-**Updated:** 2026-08-22 — 93-case campaign frozen from `quantized_matlab@aee70d12`; 248 golden tests pass; review fixes close the Optics bidirectional stale-write race and reconcile campaign provenance
+**Updated:** 2026-08-28 — 94-case campaign; exact history input snapshots, Scherrer Card 6, and MATLAB-parity critical thickness close the remaining follow-ups
 **Repository:** `C:\Users\patri\git\quantized`  
 **Scope:** `frontend/src/components/workshops/calculators/`, calculator API
 contracts, calculator parity evidence, and calculator session history  
@@ -71,11 +71,9 @@ Affected areas include:
   replace the latest result.
 - [x] Add per-domain representative tests proving that changing an input clears
   or marks the prior result stale.
-- [ ] **OPEN (acceptance-gate remainder):** history entries describe the exact
-  input snapshot used. The provenance guard guarantees an entry can no longer
-  be WRONG (only the owning completion records), but most card summaries still
-  render the result without the inputs — enriching `record()`/call sites with
-  an inputs description is a per-card sweep, deliberately not claimed here.
+- [x] History entries describe the exact literal input snapshot used. New
+  records require an `inputs` description at compile time; every calculator
+  call site supplies it, while legacy persisted records remain readable.
 
 #### Acceptance gate
 
@@ -202,16 +200,15 @@ No `lib/` transport module imports from `components/`; calculator source files
 are within the documented frontend ceiling or carry a written, reviewed
 exception.
 
-## Open follow-ups (explicit — none of these is claimed complete)
+## Follow-ups
 
-- [ ] **History input-snapshot capture** — the P1 provenance acceptance-gate
-  remainder (see the unchecked item in that section).
-- [ ] **`substrates.critical_thickness` formula decision** — Python and MATLAB
-  disagree four independent ways (~17.5× where both compute); owner picks the
-  intended Matthews-Blakeslee form, then the op gets fixed + frozen. Tracked
-  on the PORT_CHECKLIST substrates entry.
-- [ ] **Scherrer grain-size port** — MATLAB Thin Film Card 6 was never ported;
-  new PORT_CHECKLIST item under W4.
+- [x] **History input-snapshot capture** — exact invocation-time text is stored
+  separately from the formatted result and shown in History/Favorites.
+- [x] **`substrates.critical_thickness` parity** — resolved in favor of the
+  repository's behavioral authority: the MATLAB method and API contract are
+  ported exactly, and both pre-existing frozen cases now assert parity.
+- [x] **Scherrer grain-size port** — calc, route, card, and MATLAB GUI-formula
+  golden case completed.
 
 ## Recommended implementation order
 
@@ -324,3 +321,10 @@ line ceilings, dependency policy, and frontend conventions are checked together.
   reconciled this plan, the W4 checklist, and all twelve campaign test
   docstrings. History input snapshots, the critical-thickness formula decision,
   and the Scherrer port remain explicitly open.
+- 2026-08-28 — **Final follow-ups complete.** Required exact invocation-time
+  input descriptions across all calculator history producers and surfaced them
+  in History/Favorites; ported Thin Film Card 6 Scherrer grain size through the
+  pure calc, thin route, React card, and a newly frozen MATLAB GUI-formula case
+  (campaign 93→94); resolved `critical_thickness` using the repository's
+  behavioral authority and converted both existing divergence fixtures into
+  passing method-parity tests. No release was cut.

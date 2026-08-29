@@ -135,6 +135,7 @@ describe("SubstratesTab", () => {
       mismatch: 0.01,
       b: 4.0,
       nu: 0.3,
+      matched: false,
     });
     render(<SubstratesTab />);
     await screen.findByText("SrTiO3(100)");
@@ -143,19 +144,25 @@ describe("SubstratesTab", () => {
     fireEvent.click(screen.getByText("Calculate"));
 
     expect(await screen.findByText(/h_c = .* Å = .* nm/)).toBeInTheDocument();
-    expect(substratesCriticalThickness).toHaveBeenCalledWith(0.01, 4.0, 0.3);
+    expect(substratesCriticalThickness).toHaveBeenCalledWith(3.876, 3.905, 0.3);
   });
 
-  it("chains the last computed mismatch into the critical-thickness mismatch field", async () => {
+  it("renders the MATLAB lattice-matched infinity result", async () => {
+    vi.mocked(substratesCriticalThickness).mockResolvedValue({
+      h_c: null,
+      h_c_nm: null,
+      mismatch: 0,
+      b: 3.905 / Math.sqrt(2),
+      nu: 0.3,
+      matched: true,
+    });
     render(<SubstratesTab />);
     await screen.findByText("SrTiO3(100)");
     fireEvent.click(screen.getByText("SrTiO3(100)"));
 
-    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "3.876" } });
-    fireEvent.click(screen.getByText("Mismatch"));
-    await waitFor(() => expect(screen.getByText(/compressive/)).toBeInTheDocument());
-
-    expect(screen.getByLabelText("mismatch percent")).toHaveValue("-0.74264");
+    fireEvent.change(screen.getByLabelText("a_film"), { target: { value: "3.905" } });
+    fireEvent.click(screen.getByText("Calculate"));
+    expect(await screen.findByText("h_c = ∞ (lattice matched)")).toBeInTheDocument();
   });
 
   it("editing a_film invalidates the displayed mismatch (provenance contract)", async () => {
@@ -177,6 +184,7 @@ describe("SubstratesTab", () => {
       mismatch: 0.01,
       b: 4.0,
       nu: 0.3,
+      matched: false,
     });
     render(<SubstratesTab />);
     await screen.findByText("SrTiO3(100)");

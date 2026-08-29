@@ -1,7 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { thinFilmDepositionRate, thinFilmKiessig, thinFilmProjectedRange, thinFilmStoneyStress, thinFilmThermalMismatch, thinFilmSauerbrey } from "../../../lib/api/thinFilm";
+import {
+  thinFilmDepositionRate,
+  thinFilmKiessig,
+  thinFilmProjectedRange,
+  thinFilmSauerbrey,
+  thinFilmScherrer,
+  thinFilmStoneyStress,
+  thinFilmThermalMismatch,
+} from "../../../lib/api/thinFilm";
 import ThinFilmTab from "./ThinFilmTab";
 
 
@@ -17,6 +25,7 @@ vi.mock("../../../lib/api/thinFilm", () => ({
   thinFilmProjectedRange: vi.fn(),
   thinFilmStoneyStress: vi.fn(),
   thinFilmThermalMismatch: vi.fn(),
+  thinFilmScherrer: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -142,5 +151,14 @@ describe("ThinFilmTab", () => {
     fireEvent.click(screen.getAllByText("Calculate")[10]);
     expect(await screen.findByText(/Δm\/A = .* ng\/cm² · Cf = .* Hz·cm²\/µg/)).toBeInTheDocument();
     expect(thinFilmSauerbrey).toHaveBeenCalledWith(-10, 5e6, undefined, undefined);
+  });
+
+  it("computes Scherrer grain size from the MATLAB card defaults", async () => {
+    vi.mocked(thinFilmScherrer).mockResolvedValue({ D: 165.674, D_nm: 16.5674, K: 0.9 });
+    render(<ThinFilmTab />);
+
+    fireEvent.click(screen.getAllByText("Calculate")[11]);
+    expect(await screen.findByText(/D = .* Å · .* nm/)).toBeInTheDocument();
+    expect(thinFilmScherrer).toHaveBeenCalledWith(0.5, 1.5406, 33);
   });
 });

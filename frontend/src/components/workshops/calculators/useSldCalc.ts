@@ -109,6 +109,7 @@ export function useSldCalc(): SldCalcState {
         summary:
           `${r.formula}: SLD_n = ${fmtNum(r.neutron.sld_real)}, ` +
           `SLD_x = ${fmtNum(r.xray.sld_real)} ×10⁻⁶ Å⁻²`,
+        inputs: `formula=${JSON.stringify(sld.formula)}, density=${sld.density} g/cm³, neutron λ=${sld.neutronWavelength} Å, x-ray λ=${sld.xrayWavelength} Å`,
       });
     } catch (e) {
       if (seq.current !== id) return;

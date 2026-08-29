@@ -78,6 +78,16 @@ def test_dose_to_concentration_matches_matlab(
 
 
 @pytest.mark.golden
+def test_scherrer_grain_size_matches_matlab_gui_formula(
+    load_golden: Callable[[str], dict[str, Any]],
+    compare_calc: Callable[..., None],
+) -> None:
+    g = load_golden("calc_dira_thinfilm_scherrer.json")
+    result = thin_film.scherrer_grain_size(0.5, 1.5406, 33.0)
+    compare_calc(result, g["output"])
+
+
+@pytest.mark.golden
 def test_kiessig_thickness_basic_matches_matlab(
     load_golden: Callable[[str], dict[str, Any]],
     compare_calc: Callable[..., None],

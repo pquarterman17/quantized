@@ -6,14 +6,14 @@
   "campaigns": {
     "diraculator_w4": {
       "fixtures": "calc_dira_*.json",
-      "case_count": 93,
+      "case_count": 94,
       "source_repo": "../quantized_matlab",
       "source_commit": "aee70d12ddd13024a33ac8d29fafbd3245442c7e",
-      "frozen": "2026-08-21",
+      "frozen": "2026-08-28",
       "freeze_script": "tools/matlab/freeze_diraculator_values.m",
       "rtol": 1e-09,
       "atol": 1e-12,
-      "note": "W4 DiraCulator calculator campaign. Intentional divergences and Python-only extensions are documented in the companion golden tests and DIRACULATOR_AUDIT_PLAN.md."
+      "note": "W4 DiraCulator calculator campaign: 93 cases frozen 2026-08-21, extended 2026-08-28 with the GUI-embedded Scherrer Card 6 formula. Intentional divergences and Python-only extensions are documented in the companion golden tests and DIRACULATOR_AUDIT_PLAN.md."
     }
   },
   "cases": {

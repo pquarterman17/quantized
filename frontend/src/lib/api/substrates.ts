@@ -41,12 +41,18 @@ export function substrateMismatch(
   return postJSON("/api/substrates/mismatch", { a_film: aFilm, a_sub: aSub });
 }
 
-/** Matthews-Blakeslee equilibrium critical thickness h_c (Å, nm) from a
- *  lattice mismatch f. */
+/** MATLAB-parity Matthews-Blakeslee critical thickness h_c (Å, nm). */
 export function substratesCriticalThickness(
-  mismatch: number,
-  b?: number,
+  aFilm: number,
+  aSub: number,
   nu?: number,
-): Promise<{ h_c: number; h_c_nm: number; mismatch: number; b: number; nu: number }> {
-  return postJSON("/api/substrates/critical-thickness", { mismatch, b, nu });
+): Promise<{
+  h_c: number | null;
+  h_c_nm: number | null;
+  mismatch: number;
+  b: number;
+  nu: number;
+  matched: boolean;
+}> {
+  return postJSON("/api/substrates/critical-thickness", { a_film: aFilm, a_sub: aSub, nu });
 }

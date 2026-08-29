@@ -32,8 +32,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from scipy.optimize import brentq
-
 __all__ = [
     "critical_thickness",
     "get_substrate",
@@ -156,80 +154,74 @@ def get_substrate(name: str) -> dict[str, Any]:
     raise ValueError(f'Unknown substrate "{name}". Did you mean "{suggestion}"?')
 
 
-def critical_thickness(mismatch: float, *, b: float = 4.0, nu: float = 0.3) -> dict[str, Any]:
-    r"""Matthews-Blakeslee equilibrium critical thickness ``h_c`` for a
-    strained epitaxial film (Matthews & Blakeslee, *J. Cryst. Growth* **27**,
-    118 (1974)) — the natural next step after :func:`lattice_mismatch`.
+def critical_thickness(a_film: float, a_sub: float, *, nu: float = 0.3) -> dict[str, Any]:
+    r"""Matthews-Blakeslee critical thickness, matching MATLAB exactly.
 
-    Solves the standard implicit equation for 60°-dislocations (the usual
-    convention for diamond/zincblende (100) epitaxy, e.g. SiGe/Si, III-V/III-V):
+    This is a method-level port of ``+calc/+crystal/criticalThickness.m``:
+    ``b = a_film / sqrt(2)``, 60° character and Schmid-factor angles, and 50
+    fixed-point iterations from 1000 Å.  Keep the iteration rather than
+    substituting another root solver—the MATLAB toolbox is the behavioral
+    authority for calculator parity.
+
+    The fixed-point equation is
 
     .. math::
 
-        h_c = \frac{b}{8\pi f}\cdot
-              \frac{1-\nu\cos^2 60°}{(1+\nu)\cos 30°}\cdot
-              \ln\!\left(\frac{h_c}{b}+1\right)
+        h_c = \frac{b}{2\pi |f|}
+              \frac{1-\nu\cos^2(60°)}{(1+\nu)\cos(60°)}
+              \left[\ln(h_c/b)+1\right].
 
-    where ``f`` is the (absolute) lattice mismatch (dimensionless, e.g. from
-    :func:`lattice_mismatch`'s ``mismatch``), ``b`` is the Burgers vector
-    magnitude of the misfit dislocation, and ``ν`` is the film's Poisson
-    ratio. Solved numerically for ``h_c`` via bracketed root-finding
-    (``scipy.optimize.brentq``) on ``g(h) = h - A·ln(h/b + 1)`` where
-    ``A`` is the coefficient above: ``g`` is convex, ``g(0) = 0``, and a
-    second positive root exists iff ``A/b > 1`` — physically, iff the
-    mismatch is small enough that a metastable pseudomorphic (dislocation-free)
-    thickness exists at all; when ``A/b ≤ 1`` this function raises (any
-    finite thickness is already above the equilibrium critical thickness).
+    A mismatch below ``1e-10`` is treated as lattice matched and returns an
+    infinite critical thickness, as MATLAB does.
 
-    Limitations (state clearly to the caller): this is the EQUILIBRIUM model
-    — real (kinetically limited) films routinely grow thicker than ``h_c``
-    before misfit dislocations actually nucleate (the metastable regime;
-    People & Bean, *Appl. Phys. Lett.* **47**, 322 (1985), give a distinct,
-    larger estimate). ``b`` and 60° dislocations are the standard defaults
-    for diamond/zincblende (100) growth but are not universal — an edge
-    (90°) dislocation system or a different lattice needs a different ``b``,
-    dislocation angle, and (implicitly, via the fixed 60°/30° trig factors
-    here) a re-derivation of the equation itself.
-
-    Args:
-        mismatch: lattice mismatch f (dimensionless, e.g. from
-            :func:`lattice_mismatch`'s ``mismatch``); only ``|mismatch|`` is
-            used (compressive and tensile films have the same ``h_c``).
-        b: Burgers vector magnitude (Å), > 0; default 4.0 Å (typical for a
-            diamond/zincblende lattice's ``a/√2⟨110⟩`` misfit dislocation).
-        nu: film Poisson ratio (dimensionless), ``0 <= nu < 1``; default 0.3.
-
-    Returns ``h_c`` (Å) and ``h_c_nm``, plus the echoed inputs.
-
-    >>> r = critical_thickness(0.01)
-    >>> round(r["h_c"], 4)
-    26.6115
+    Raises:
+        ValueError: if the mismatch (or an unphysical ``nu``) leaves the fixed
+            point with no root, i.e. the film relaxes immediately.  MATLAB
+            iterates unguarded into ``log()`` of a negative number there and
+            returns a complex ``hc``; refusing is the honest port.
     """
+    if not (math.isfinite(a_film) and a_film > 0):
+        raise ValueError("film lattice parameter must be positive and finite")
+    if not (math.isfinite(a_sub) and a_sub > 0):
+        raise ValueError("substrate lattice parameter must be positive and finite")
+    if not (math.isfinite(nu) and nu >= 0):
+        raise ValueError("Poisson ratio nu must be non-negative and finite")
+
+    mismatch = (a_film - a_sub) / a_sub
     f = abs(mismatch)
-    if not (math.isfinite(f) and f > 0):
-        raise ValueError("mismatch must be non-zero and finite")
-    if not (math.isfinite(b) and b > 0):
-        raise ValueError("Burgers vector b must be positive and finite")
-    if not (0.0 <= nu < 1.0):
-        raise ValueError("Poisson ratio nu must satisfy 0 <= nu < 1")
+    b = a_film / math.sqrt(2.0)
+    if f < 1e-10:
+        return {
+            "h_c": math.inf,
+            "h_c_nm": math.inf,
+            "mismatch": 0.0,
+            "b": b,
+            "nu": nu,
+        }
 
     cos60 = 0.5
-    cos30 = math.sqrt(3.0) / 2.0
-    k = (1.0 - nu * cos60 * cos60) / ((1.0 + nu) * cos30)
-    coeff = b / (8.0 * math.pi * f) * k  # "A" in the docstring
+    prefactor = (b / (2.0 * math.pi * f)) * ((1.0 - nu * cos60 * cos60) / ((1.0 + nu) * cos60))
 
-    if coeff <= b:
+    # Substituting y = h_c/b the fixed point is y = c*(ln y + 1) with
+    # c = prefactor/b.  Since ln y + 1 <= y with equality only at y = 1, the
+    # curve c*(ln y + 1) reaches at most c*ln(c) above the diagonal, so a root
+    # exists if and only if c > 1.  Below that threshold the misfit dislocation
+    # is favourable at every thickness -- the film relaxes immediately and no
+    # critical thickness exists.  MATLAB iterates unguarded and walks into
+    # log() of a negative number (returning a complex hc that jsonencode cannot
+    # even serialize, which is why no golden covers this regime); refuse the
+    # input instead of inventing a number.
+    if prefactor <= b:
         raise ValueError(
-            "mismatch is too large for a stable pseudomorphic thickness under "
-            "this model (A/b <= 1 in the implicit equation); reduce |mismatch|"
+            f"no critical thickness exists for mismatch {mismatch:.4%} with nu={nu:g}: "
+            "the film relaxes immediately (h_c would be below one Burgers vector)"
         )
 
-    def _g(h: float) -> float:
-        return h - coeff * math.log(h / b + 1.0)
+    h_c = 1000.0
+    for _ in range(50):
+        h_c = prefactor * (math.log(h_c / b) + 1.0)
 
-    h_c = brentq(_g, b * 1e-9, coeff * 1e6, xtol=1e-10, rtol=1e-12)
-
-    return {"h_c": h_c, "h_c_nm": h_c * 0.1, "mismatch": mismatch, "b": b, "nu": nu}
+    return {"h_c": h_c, "h_c_nm": h_c / 10.0, "mismatch": mismatch, "b": b, "nu": nu}
 
 
 def lattice_mismatch(a_film: float, a_sub: float) -> dict[str, Any]:

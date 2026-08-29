@@ -14,7 +14,7 @@ def test_diraculator_campaign_manifest_covers_every_fixture() -> None:
     campaign: dict[str, Any] = manifest["campaigns"]["diraculator_w4"]
     fixtures = sorted(GOLDEN_DIR.glob(campaign["fixtures"]))
 
-    assert len(fixtures) == campaign["case_count"] == 93
+    assert len(fixtures) == campaign["case_count"] == 94
     assert campaign["source_repo"] == "../quantized_matlab"
     assert campaign["source_commit"] == "aee70d12ddd13024a33ac8d29fafbd3245442c7e"
     assert campaign["freeze_script"] == "tools/matlab/freeze_diraculator_values.m"

@@ -45,6 +45,7 @@ __all__ = [
     "multilayer_thermal_conductivity",
     "projected_range",
     "sauerbrey",
+    "scherrer_grain_size",
     "sputter_rate",
     "stoney_stress",
     "thermal_mismatch_strain",
@@ -54,6 +55,51 @@ __all__ = [
 # values, e.g. Sauerbrey, Z. Phys. 155, 206 (1959)).
 _MU_Q = 2.947e11  # shear modulus, g/(cm*s^2)
 _RHO_Q = 2.648  # density, g/cm^3
+
+
+def scherrer_grain_size(
+    fwhm_deg: float,
+    wavelength: float,
+    two_theta_deg: float,
+) -> dict[str, float]:
+    r"""Crystallite size from the Scherrer equation (DiraCulator Card 6).
+
+    The MATLAB GUI supplies the instrument-corrected peak FWHM ``beta`` in
+    degrees of 2-theta, converts it to radians, and uses the Bragg angle
+    ``theta = two_theta / 2`` with the fixed shape factor ``K = 0.9``:
+
+    .. math:: D = \frac{K\lambda}{\beta\cos\theta}
+
+    Args:
+        fwhm_deg: instrument-corrected peak FWHM in degrees of 2-theta, > 0.
+        wavelength: X-ray wavelength in Angstrom, > 0.
+        two_theta_deg: Bragg peak position in degrees, 0 <= value < 180.
+
+    Returns ``D`` in Angstrom and ``D_nm`` in nanometres, plus the inputs and
+    fixed ``K`` for traceability.
+
+    >>> round(scherrer_grain_size(0.5, 1.5406, 33.0)["D"], 1)
+    165.7
+    """
+    if not (math.isfinite(fwhm_deg) and fwhm_deg > 0):
+        raise ValueError("FWHM must be positive and finite")
+    if not (math.isfinite(wavelength) and wavelength > 0):
+        raise ValueError("wavelength must be positive and finite")
+    if not (math.isfinite(two_theta_deg) and 0 <= two_theta_deg < 180):
+        raise ValueError("two_theta_deg must be finite and satisfy 0 <= value < 180")
+
+    beta = math.radians(fwhm_deg)
+    theta = math.radians(two_theta_deg / 2)
+    shape_factor = 0.9  # DiraCulator.m Card 6; intentional fixed value.
+    grain_size = shape_factor * wavelength / (beta * math.cos(theta))
+    return {
+        "D": grain_size,
+        "D_nm": grain_size / 10,
+        "fwhm_deg": fwhm_deg,
+        "wavelength": wavelength,
+        "two_theta_deg": two_theta_deg,
+        "K": shape_factor,
+    }
 
 
 def deposition_rate(thickness: float, time: float) -> dict[str, float]:

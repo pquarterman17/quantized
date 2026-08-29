@@ -267,6 +267,21 @@ function freeze_diraculator_values()
     writeJson(struct('input', struct('dose', 1e15, 'Rp', 50, 'deltaRp', 15), ...
         'output', r), fullfile(goldenDir, 'calc_dira_thinfilm_dose_to_concentration.json'));
 
+    % Scherrer grain size — GUI-embedded formula from DiraCulator.m Card 6
+    % (lines 2495-2510), using the card defaults. There is no standalone
+    % +calc/+thinFilm function, so freeze the cited GUI formula inline.
+    fwhm_sch = 0.5; lambda_sch = 1.5406; twoTheta_sch = 33; K_sch = 0.9;
+    beta_sch = fwhm_sch * pi / 180;
+    theta_sch = twoTheta_sch / 2 * pi / 180;
+    D_sch = K_sch * lambda_sch / (beta_sch * cos(theta_sch));
+    out_sch = struct('D', D_sch, 'D_nm', D_sch / 10, ...
+        'fwhm_deg', fwhm_sch, 'wavelength', lambda_sch, ...
+        'two_theta_deg', twoTheta_sch, 'K', K_sch);
+    writeJson(struct('input', struct('fwhm_deg', fwhm_sch, ...
+        'wavelength', lambda_sch, 'two_theta_deg', twoTheta_sch), ...
+        'output', out_sch), ...
+        fullfile(goldenDir, 'calc_dira_thinfilm_scherrer.json'));
+
     % kiessig_thickness(deltaQ=0.0628 Ang^-1) — kiessigThickness.m, Card 2, kinematic
     % (uncorrected) branch — deltaQ far above any plausible Qc so Qc stays NaN.
     r = calc.thinFilm.kiessigThickness(0.0628);
@@ -896,47 +911,9 @@ function freeze_diraculator_values()
 
     % criticalThickness(aFilm, aSub, nu=0.3) -> hc, hcNm, mismatch, burgersVector,
     % latex (+calc/+crystal/criticalThickness.m).
-    %
-    % *** PARITY DISCREPANCY — report verbatim in the audit, do not "fix" ***
-    % MATLAB's criticalThickness.m and Python's substrates.critical_thickness
-    % implement DIFFERENT closed-form models, not merely a units/argument-
-    % convention difference:
-    %   MATLAB (+calc/+crystal/criticalThickness.m, lines 60-69):
-    %     b = aFilm / sqrt(2);  alpha = deg2rad(60);  lambda = deg2rad(60);
-    %     prefactor = (b / (2*pi*f)) * (1 - nu*cos(alpha)^2) / ((1+nu)*cos(lambda));
-    %     hc = prefactor * (log(hc / b) + 1);        % iterated 50x from hc=1000
-    %   Python (src/quantized/calc/substrates.py critical_thickness, ~lines 216-230):
-    %     cos60 = 0.5; cos30 = sqrt(3)/2;
-    %     k = (1.0 - nu * cos60 * cos60) / ((1.0 + nu) * cos30);   % cos30, not cos60!
-    %     coeff = b / (8.0 * math.pi * f) * k;                     % 8*pi, not 2*pi
-    %     % h_c solves:  h = coeff * log(h / b + 1.0)               % "+1" INSIDE the log
-    % Differences: (1) MATLAB's denominator uses cos(60 deg) (its `lambda`),
-    % Python's uses cos(30 deg) (its `cos30`, i.e. a DIFFERENT angle, not a
-    % relabeling); (2) MATLAB's prefactor is b/(2*pi*f), Python's is
-    % b/(8*pi*f) — a 4x structural difference before the cos-ratio is even
-    % applied; (3) MATLAB's implicit equation is hc = A*(ln(hc/b)+1), Python's
-    % is h = A*ln(h/b+1) — the "+1" is INSIDE the log in Python and OUTSIDE it
-    % in MATLAB, which are not algebraically equivalent; (4) MATLAB derives
-    % b = aFilm/sqrt(2) from the film lattice parameter itself, Python takes b
-    % as a free parameter defaulting to 4.0 Angstrom, independent of aFilm.
-    % Two cases below quantify the resulting divergence (verified against this
-    % checkout with `uv run python`, see the audit report for the transcript):
-    %   Case A (MATLAB's own docstring example, InGaAs/GaAs, f=3.82%): MATLAB
-    %   returns a finite hc=103.79 Ang (10.38 nm, computed by re-implementing
-    %   this exact algorithm in Python for the report — not yet MATLAB-frozen);
-    %   Python's critical_thickness RAISES ValueError for this identical
-    %   mismatch at ANY b (its own default 4.0 Ang, or MATLAB's implied
-    %   aFilm/sqrt(2)=4.15 Ang) because A/b <= 1 under Python's model — no
-    %   numeric parity is even possible for this input.
-    %   Case B (LSMO/SrTiO3, f=-0.74%, both models CAN produce a number):
-    %   re-implemented-MATLAB hc=522.44 Ang (52.24 nm); Python (same mismatch,
-    %   b=aFilm/sqrt(2)=2.7407 Ang to match MATLAB's b) gives h_c=29.88 Ang
-    %   (2.99 nm) — about 17.5x smaller. This is a genuine formula divergence,
-    %   not a units or rounding difference.
-    % Freezing MATLAB's TRUE output for both cases below as the authoritative
-    % evidence (supersedes the Python-side re-implementation used to estimate
-    % the numbers above); do NOT "fix" either side (DIRACULATOR_AUDIT_PLAN P1 —
-    % report, don't repair).
+    % These two cases originally exposed a four-part Python formula divergence.
+    % They now gate method-level parity: b=aFilm/sqrt(2), both 60-degree
+    % factors, hc=A*(log(hc/b)+1), and 50 iterations from hc=1000 Angstrom.
     rSub3a = calc.crystal.criticalThickness(5.869, 5.653);
     writeJson(struct('input', struct('aFilm', 5.869, 'aSub', 5.653, 'nu', 0.3), ...
         'output', rSub3a), ...

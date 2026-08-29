@@ -75,7 +75,7 @@ export default function ElectricalTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c1.run("Resistivity / Sheet resistance", async () => {
+              void c1.run("Resistivity / Sheet resistance", `Rs=${rs} Ω/sq, thickness=${thick} nm`, async () => {
                 const r = await electricalResistivity(Number(rs), Number(thick) * NM_TO_CM);
                 return `ρ = ${fmtNum(r.rho)} Ω·cm`;
               })
@@ -89,7 +89,7 @@ export default function ElectricalTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c1.run("Resistivity / Sheet resistance", async () => {
+              void c1.run("Resistivity / Sheet resistance", `ρ=${rho1} Ω·cm, thickness=${thick} nm`, async () => {
                 const r = await electricalSheetResistance(Number(rho1), Number(thick) * NM_TO_CM);
                 return `Rs = ${fmtNum(r.Rs)} Ω/sq`;
               })
@@ -108,7 +108,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c2.run("Conductivity", async () => {
+              void c2.run("Conductivity", `ρ=${rho2} Ω·cm`, async () => {
                 const r = await electricalConductivity(Number(rho2));
                 return `σ = ${fmtNum(r.sigma)} S/cm`;
               })
@@ -128,7 +128,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c3.run("Mobility", async () => {
+              void c3.run("Mobility", `ρ=${rho3} Ω·cm, n=${n3} cm⁻³`, async () => {
                 const r = await electricalMobility(Number(rho3), Number(n3));
                 return `μ = ${fmtNum(r.mu)} cm²/(V·s)`;
               })
@@ -148,7 +148,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c4.run("Current density", async () => {
+              void c4.run("Current density", `I=${cur} A, area=${area} cm²`, async () => {
                 const r = await electricalCurrentDensity(Number(cur), Number(area));
                 return `J = ${fmtNum(r.J)} A/cm²`;
               })
@@ -179,7 +179,10 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c5.run("Hall effect", async () => {
+              void c5.run(
+                "Hall effect",
+                `V_H=${vH} V, I=${hallI} A, B=${hallB} T, thickness=${hallT} nm`,
+                async () => {
                 const r = await electricalHall(
                   Number(vH),
                   Number(hallI),
@@ -189,7 +192,8 @@ export default function ElectricalTab() {
                 return `R_H = ${fmtNum(r.r_h)} cm³/C · n = ${fmtNum(
                   r.carrier_density,
                 )} cm⁻³ · ${r.carrier_type}-type`;
-              })
+                },
+              )
             }
           >
             =
@@ -235,7 +239,10 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c6.run("Hall sweep", async () => {
+              void c6.run(
+                "Hall sweep",
+                `data=${JSON.stringify(hsText)}, thickness=${hsT} nm, conductivity=${hsSigma} S/cm`,
+                async () => {
                 const { x: field, y: hallResistance } = parseXYPairs(hsText);
                 if (field.length < 2) throw new Error("paste at least 2 valid H, R_xy rows");
                 const t = hsT.trim() === "" ? undefined : Number(hsT) * NM_TO_CM;
@@ -251,7 +258,8 @@ export default function ElectricalTab() {
                   `${r.carrier_type}-type · R² = ${fmtNum(r.fit_r2)}`;
                 if (Number.isFinite(r.mobility)) s += ` · µ = ${fmtNum(r.mobility)} cm²/(V·s)`;
                 return s;
-              })
+                },
+              )
             }
           >
             Fit
@@ -276,13 +284,17 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c7.run("Van der Pauw", async () => {
+              void c7.run(
+                "Van der Pauw",
+                `R_A=${vdpRa} Ω, R_B=${vdpRb} Ω, thickness=${vdpT} nm`,
+                async () => {
                 const t = vdpT.trim() === "" ? undefined : Number(vdpT) * NM_TO_CM;
                 const r = await electricalVanDerPauw(Number(vdpRa), Number(vdpRb), t);
                 let s = `Rs = ${fmtNum(r.Rs)} Ω/sq`;
                 if (r.rho != null) s += ` · ρ = ${fmtNum(r.rho)} Ω·cm`;
                 return s;
-              })
+                },
+              )
             }
           >
             Calculate

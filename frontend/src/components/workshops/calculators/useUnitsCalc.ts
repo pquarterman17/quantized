@@ -170,6 +170,7 @@ export function useUnitsCalc(): UnitsCalcState {
           domain: "Units",
           label: "Unit conversion",
           summary: `${value} ${from} = ${fmtNum(out)} ${to}`,
+          inputs: `value=${value}, from=${from}, to=${to}`,
         });
       }
     } catch (e) {
@@ -211,6 +212,7 @@ export function useUnitsCalc(): UnitsCalcState {
         summary: Object.entries(out)
           .map(([u, val]) => `${u}=${fmtNum(val)}`)
           .join(" · "),
+        inputs: `value=${peValue}, from=${peFrom}`,
       });
     } catch (e) {
       if (peSeq.current !== id) return;

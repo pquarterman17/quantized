@@ -55,6 +55,31 @@ def test_kiessig_thickness_kinematic() -> None:
     assert r["thickness_raw"] == pytest.approx(r["thickness"], rel=1e-12)
 
 
+def test_scherrer_grain_size_matches_dira_card_defaults() -> None:
+    r = tf.scherrer_grain_size(0.5, 1.5406, 33.0)
+    assert r["D"] == pytest.approx(165.70975176473607, rel=1e-12)
+    assert r["D_nm"] == pytest.approx(r["D"] / 10)
+    assert r["K"] == 0.9
+
+
+@pytest.mark.parametrize(
+    ("fwhm", "wavelength", "two_theta"),
+    [
+        (0.0, 1.5406, 33.0),
+        (-0.1, 1.5406, 33.0),
+        (float("nan"), 1.5406, 33.0),
+        (0.5, 0.0, 33.0),
+        (0.5, float("inf"), 33.0),
+        (0.5, 1.5406, 180.0),
+    ],
+)
+def test_scherrer_rejects_invalid_geometry(
+    fwhm: float, wavelength: float, two_theta: float
+) -> None:
+    with pytest.raises(ValueError):
+        tf.scherrer_grain_size(fwhm, wavelength, two_theta)
+
+
 def test_kiessig_thickness_sld_correction() -> None:
     # Refraction-corrected: Qc = 4*sqrt(pi*SLD); t = 2*pi/sqrt(dQ^2 - 4*Qc^2).
     sld = 6.3e-6
