@@ -7,6 +7,11 @@
 // own module. Behavior is unchanged — this is a verbatim move.
 
 import { copyText } from "../lib/clipboard";
+// Static, not dynamic: lib/download is already in the eager graph (the export
+// commands use it), so importing it here costs nothing, while a dynamic
+// import measured 0.7 kB WORSE — the extra chunk boundary outweighed a
+// deferral that defers nothing.
+import { saveBlob } from "../lib/download";
 import type { StoreGet } from "../lib/exportActive";
 import { toast } from "../store/toasts";
 import { openHelp, useHelp } from "../store/help";
@@ -146,19 +151,35 @@ export function buildUiCommands(s: StoreGet): Action[] {
           // Dynamic import: the bundle is only ever needed AFTER this action,
           // so neither the renderer nor the collector belongs in the eager
           // graph that `commands/` otherwise sits in. Eagerly importing it put
-          // the build 2.6 kB over the size ratchet, which is precisely the
-          // case check-bundle-size.mjs tells you to solve this way rather than
-          // by raising the budget.
+          // the build over the size ratchet, which is precisely the case
+          // check-bundle-size.mjs tells you to solve this way.
           const { diagnosticsText } = await import("../store/diagnostics");
-          const ok = await copyText(diagnosticsText());
-          if (ok) {
+          const text = diagnosticsText();
+          if (await copyText(text)) {
             s().setStatus("diagnostics copied — no dataset names, paths, or values included");
             toast("diagnostics copied to the clipboard", "ok");
-          } else {
-            s().setStatus("could not copy diagnostics to the clipboard");
-            toast("could not copy diagnostics", "danger");
+            return;
           }
-        })();
+          // `copyText` resolves false (it does not throw) in an insecure
+          // context or a browser without the async clipboard API. Reporting
+          // "could not copy" and stopping there threw the bundle away and left
+          // the user with no way to obtain it — and the user hitting a
+          // degraded environment is exactly the one who needs a bug report.
+          // Fall back to the app's own download mechanism.
+          saveBlob(
+            new Blob([text], { type: "text/plain" }),
+            `quantized-diagnostics-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`,
+          );
+          s().setStatus("clipboard unavailable — diagnostics saved as a file instead");
+          toast("clipboard unavailable — diagnostics downloaded", "info");
+        })().catch((reason: unknown) => {
+          // The detached body had no outer catch, so a rejected dynamic import
+          // — a chunk that 404s after a deploy, an offline desktop shell —
+          // became an unhandled rejection and the user saw nothing at all.
+          const why = reason instanceof Error ? reason.message : String(reason);
+          s().setStatus(`could not produce diagnostics: ${why}`);
+          toast("could not produce diagnostics", "danger");
+        });
       },
     },
     {
