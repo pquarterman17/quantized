@@ -5,9 +5,14 @@
 "Changes since rc2 → rc3 → rc4" at the end. **Superseded 2026-08-28: `v0.23.0`
 and `v0.23.1` were promoted to stable from rc4 and published as
 `releases/latest` — this doc's "current acceptance candidate is rc4" claim
-below is historical.** The next acceptance candidate will be `v0.23.2-rc1`,
-cut after the Class B (silent-state-corruption) fix branch merges (see
-`SILENT_STATE_CORRUPTION_PLAN.md`); no SHA exists yet. Original text,
+below is historical.** **Superseded again 2026-08-29:** `v0.23.2-rc1` (`cd68ad16`) was never cut as a tag and is **superseded**:
+five merges landed after it — #260 (DiraCulator calculator follow-ups),
+#261 (bundle: lazy SqliteQueryDialog + the profiling record), #262
+(SILENT_STATE_CORRUPTION_PLAN #10, the derived-worksheet corrections
+refusal), #263 (error-label regression coverage) and #264 (this round's two
+post-review findings: the calc-history storage bound and the SQLite dialog
+draft retention). The acceptance candidate is **`v0.23.2-rc2`**, cut from
+`main` after #264 merges; its SHA is recorded at cut time. Original text,
 unrewritten: **The current acceptance
 candidate is `v0.23.0-rc4` (`a8a939c1`); rc1, rc2 and rc3 are all
 disqualified** — see that final section for why, including a data-loss
@@ -332,9 +337,13 @@ PyPI irreversibly.
 rc4 publishes as a prerelease exactly like rc1-rc3 (auto-update and PyPI both
 skip `-rc` tags), so `releases/latest` remains `v0.22.0` until promotion.
 
-## Changes since v0.23.1 → v0.23.2-rc1 (2026-08-28/29)
+## Changes since v0.23.1 → v0.23.2-rc1 (2026-08-28/29) — SUPERSEDED by rc2
 
-**Candidate commit:** `cd68ad16` (main after #259). Version files already say
+> **This section is historical.** `cd68ad16` was named as a candidate but no
+> `v0.23.2-rc1` tag was ever cut, and five merges (#260-#264) landed after it.
+> The live candidate is `v0.23.2-rc2`; see the section appended at cut time.
+
+**Candidate commit (historical):** `cd68ad16` (main after #259). Version files already say
 `0.23.2` (#258). Published as a GitHub **prerelease**; auto-update keeps
 serving v0.23.1 and PyPI is untouched until promotion.
 

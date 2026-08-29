@@ -241,6 +241,7 @@ export default function AppOverlays() {
   // listener so the Data command can dispatch before anything is mounted.
   useEffect(listenForSqliteQuery, []);
 
+  const sqliteQueryMounted = useKeepMountedAfterOpen(sqliteQueryOpen);
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
   const combineDialogMounted = useKeepMountedAfterOpen(combineDialogOpen);
   const separateDialogMounted = useKeepMountedAfterOpen(separateDialogOpen);
@@ -264,7 +265,7 @@ export default function AppOverlays() {
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />
-      {sqliteQueryOpen && <SqliteQueryDialog />}
+      {sqliteQueryMounted && <SqliteQueryDialog />}
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}

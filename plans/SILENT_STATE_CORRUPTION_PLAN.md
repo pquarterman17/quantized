@@ -14,9 +14,9 @@ exists.
 **Updated:** 2026-08-29 (ALL of #1-#10 shipped: #253/#254/#255, the Class B
 branch #259, and #10 below; the 2026-08-28 adversarial bug hunt's eight backend
 defects shipped in #256/#257. **No open tasks remain in this plan.**
-The acceptance candidate recorded here, `v0.23.2-rc1` = `cd68ad16`, is now
-STALE — it predates #259's Class B fixes, #260, #261 and #10's fix, so it must
-be re-pointed before acceptance testing starts. Owner call.)
+The acceptance candidate once recorded here, `v0.23.2-rc1` = `cd68ad16`, was
+superseded without ever being tagged; the candidate is `v0.23.2-rc2`, cut from
+`main` after #264.)
 
 ---
 
