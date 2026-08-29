@@ -6,7 +6,9 @@
 // "Edit", or "Help" — the small app-chrome groups that don't warrant their
 // own module. Behavior is unchanged — this is a verbatim move.
 
+import { copyText } from "../lib/clipboard";
 import type { StoreGet } from "../lib/exportActive";
+import { toast } from "../store/toasts";
 import { openHelp, useHelp } from "../store/help";
 import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
 import { showInteractionHints } from "../components/overlays/InteractionHints";
@@ -129,6 +131,36 @@ export function buildUiCommands(s: StoreGet): Action[] {
     },
     // GOTO #11: the rich-text label micro-syntax reference (Help menu + ⌘K).
     { id: "text-format-help", group: "Help", label: "Text formatting", description: "View syntax for Greek letters, scientific symbols, fractions, roots, and formatted plot text.", run: () => s().setTextFormatHelpOpen(true) },
+    // P3.4: "copyable diagnostic bundle excludes raw/private data by default".
+    // Shape and settings only — see lib/diagnostics.ts for what is withheld
+    // and why, and diagnostics.test.ts for the redaction guarantee.
+    {
+      id: "copy-diagnostics",
+      group: "Help",
+      label: "Copy diagnostics",
+      description:
+        "Copy a plain-text report of app settings, display, and workspace size for a bug report — no dataset names, file paths, or measured values.",
+      keywords: "bug report support troubleshoot environment version bundle",
+      run: () => {
+        void (async () => {
+          // Dynamic import: the bundle is only ever needed AFTER this action,
+          // so neither the renderer nor the collector belongs in the eager
+          // graph that `commands/` otherwise sits in. Eagerly importing it put
+          // the build 2.6 kB over the size ratchet, which is precisely the
+          // case check-bundle-size.mjs tells you to solve this way rather than
+          // by raising the budget.
+          const { diagnosticsText } = await import("../store/diagnostics");
+          const ok = await copyText(diagnosticsText());
+          if (ok) {
+            s().setStatus("diagnostics copied — no dataset names, paths, or values included");
+            toast("diagnostics copied to the clipboard", "ok");
+          } else {
+            s().setStatus("could not copy diagnostics to the clipboard");
+            toast("could not copy diagnostics", "danger");
+          }
+        })();
+      },
+    },
     {
       id: "what-is-this",
       group: "Help",
