@@ -33,8 +33,8 @@ describe("useCard — request provenance", () => {
 
     let p1: Promise<void>, p2: Promise<void>;
     act(() => {
-      p1 = result.current.run("slow", () => slow.promise); // issued first...
-      p2 = result.current.run("fast", () => fast.promise);
+      p1 = result.current.run("slow", "x=1", () => slow.promise); // issued first...
+      p2 = result.current.run("fast", "x=2", () => fast.promise);
     });
     await act(async () => {
       fast.resolve("NEW");
@@ -59,8 +59,8 @@ describe("useCard — request provenance", () => {
 
     let p1: Promise<void>, p2: Promise<void>;
     act(() => {
-      p1 = result.current.run("failing", () => failing.promise);
-      p2 = result.current.run("ok", () => ok.promise);
+      p1 = result.current.run("failing", "x=1", () => failing.promise);
+      p2 = result.current.run("ok", "x=2", () => ok.promise);
     });
     await act(async () => {
       ok.resolve("GOOD");
@@ -74,7 +74,7 @@ describe("useCard — request provenance", () => {
   it("touch() clears the displayed result immediately", async () => {
     const { result } = renderHook(() => useCard("Test"));
     await act(async () => {
-      await result.current.run("calc", () => Promise.resolve("R"));
+      await result.current.run("calc", "x=1", () => Promise.resolve("R"));
     });
     expect(result.current.result).toEqual({ text: "R" });
 
@@ -88,7 +88,7 @@ describe("useCard — request provenance", () => {
 
     let p: Promise<void>;
     act(() => {
-      p = result.current.run("calc", () => d.promise);
+      p = result.current.run("calc", "x=1", () => d.promise);
       result.current.touch(); // the user edited an input while pending
     });
     await act(async () => {
@@ -106,7 +106,7 @@ describe("useCard — request provenance", () => {
 
     let p: Promise<void>;
     act(() => {
-      p = result.current.run("calc", () => d.promise);
+      p = result.current.run("calc", "x=1", () => d.promise);
       result.current.touch();
     });
     await act(async () => {
@@ -119,18 +119,19 @@ describe("useCard — request provenance", () => {
   it("history is written only by the completion that owns the display", async () => {
     const { result } = renderHook(() => useCard("Dom"));
     await act(async () => {
-      await result.current.run("first", () => Promise.resolve("A"));
-      await result.current.run("second", () => Promise.resolve("B"));
+      await result.current.run("first", "x=1", () => Promise.resolve("A"));
+      await result.current.run("second", "x=2", () => Promise.resolve("B"));
     });
     const h = useCalcHistory.getState().history;
     expect(h.map((e) => e.summary)).toEqual(["B", "A"]); // newest-first, both owned
+    expect(h.map((e) => e.inputs)).toEqual(["x=2", "x=1"]);
     expect(h[0].domain).toBe("Dom");
   });
 
   it("errors surface inline with the API message", async () => {
     const { result } = renderHook(() => useCard("Test"));
     await act(async () => {
-      await result.current.run("calc", () => Promise.reject(new Error("T must be positive")));
+      await result.current.run("calc", "T=-1", () => Promise.reject(new Error("T must be positive")));
     });
     expect(result.current.result).toEqual({ text: "T must be positive", err: true });
     expect(useCalcHistory.getState().history).toHaveLength(0); // failures never recorded

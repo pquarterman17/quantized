@@ -88,7 +88,10 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c1.run("Moment conversions", async () => {
+              void c1.run(
+                "Moment conversions",
+                `moment=${momVal} ${momUnit}, volume=${momVol} cm³, atoms=${momAtoms}`,
+                async () => {
                 const vol = Number(momVol);
                 const atoms = Number(momAtoms);
                 const r = await magneticMomentConvert(
@@ -101,7 +104,8 @@ export default function MagneticTab() {
                 if (r.m_si != null) s += ` · M = ${fmtNum(r.m_si)} A/m`;
                 if (r.mu_b_per_atom != null) s += ` · ${fmtNum(r.mu_b_per_atom)} µ_B/atom`;
                 return s;
-              })
+                },
+              )
             }
           >
             Convert
@@ -131,7 +135,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c2.run("Demagnetization factors", async () => {
+              void c2.run("Demagnetization factors", `shape=${shape}`, async () => {
                 const r = await magneticDemag(shape);
                 return `Nz = ${fmtNum(r.Nz)} · Nxy = ${fmtNum(r.Nxy)} · 4πNz = ${fmtNum(
                   r.n_cgs,
@@ -153,7 +157,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c3.run("Curie-Weiss law", async () => {
+              void c3.run("Curie-Weiss law", `C=${cwC}, θ=${cwTheta} K`, async () => {
                 const r = await magneticCurieWeiss(Number(cwC), Number(cwTheta));
                 return `µ_eff = ${fmtNum(r.mu_eff)} µ_B · ${r.mag_type}`;
               })
@@ -174,10 +178,14 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c4.run("Langevin / superparamagnetism", async () => {
+              void c4.run(
+                "Langevin / superparamagnetism",
+                `μ=${langMu} μ_B, H=${langH} T, T=${langT} K`,
+                async () => {
                 const r = await magneticLangevin(Number(langMu), Number(langH), Number(langT));
                 return `L(x) = ${fmtNum(r.L)} at x = ${fmtNum(r.x)}`;
-              })
+                },
+              )
             }
           >
             Calculate
@@ -194,7 +202,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c5.run("Domain wall & anisotropy", async () => {
+              void c5.run("Domain wall & anisotropy", `A=${dwA} J/m, K=${dwK} J/m³`, async () => {
                 const r = await magneticDomainWall(Number(dwA), Number(dwK));
                 return `δ = ${fmtNum(r.delta_nm)} nm · E_wall = ${fmtNum(r.e_wall_mj_m2)} mJ/m²`;
               })
@@ -227,7 +235,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c6.run("Curie-Weiss fit", async () => {
+              void c6.run("Curie-Weiss fit", `data=${JSON.stringify(cwFitText)}`, async () => {
                 const { x: temperature, y: susceptibility } = parseXYPairs(cwFitText);
                 if (temperature.length < 3) {
                   throw new Error("paste at least 3 valid T, χ rows");

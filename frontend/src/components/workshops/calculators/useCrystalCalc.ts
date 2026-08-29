@@ -166,6 +166,7 @@ export function useCrystalCalc(): CrystalCalcState {
         domain: "Crystal",
         label: "d-spacing",
         summary: `d = ${fmtNum(r.d)} Å (${r.system}, hkl=${h} ${k} ${l})`,
+        inputs: `crystal=${JSON.stringify(crystal)}`,
       });
     } catch (e) {
       if (crSeq.current !== id) return;
@@ -196,6 +197,7 @@ export function useCrystalCalc(): CrystalCalcState {
         summary:
           `V = ${fmtNum(r.volume)} Å³` +
           (r.density != null ? ` · ρ = ${fmtNum(r.density)} g/cm³` : ""),
+        inputs: `crystal=${JSON.stringify(crystal)}`,
       });
     } catch (e) {
       if (cellSeq.current !== id) return;

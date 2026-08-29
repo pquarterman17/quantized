@@ -7,6 +7,7 @@ the POST endpoint computes the epitaxial lattice mismatch f = (a_f - a_s)/a_s.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -23,8 +24,8 @@ class MismatchRequest(BaseModel):
 
 
 class CriticalThicknessRequest(BaseModel):
-    mismatch: float
-    b: float = 4.0  # Burgers vector (Å)
+    a_film: float
+    a_sub: float
     nu: float = 0.3  # Poisson ratio
 
 
@@ -54,9 +55,11 @@ def mismatch(req: MismatchRequest) -> dict[str, Any]:
 
 @router.post("/critical-thickness")
 def critical_thickness(req: CriticalThicknessRequest) -> dict[str, Any]:
-    """Matthews-Blakeslee equilibrium critical thickness h_c (Å, nm) from a
-    lattice mismatch f."""
+    """MATLAB-parity Matthews-Blakeslee critical thickness h_c (Å, nm)."""
     try:
-        return substrates.critical_thickness(req.mismatch, b=req.b, nu=req.nu)
+        result = substrates.critical_thickness(req.a_film, req.a_sub, nu=req.nu)
+        if math.isinf(result["h_c"]):
+            return {**result, "h_c": None, "h_c_nm": None, "matched": True}
+        return {**result, "matched": False}
     except (ValueError, ArithmeticError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

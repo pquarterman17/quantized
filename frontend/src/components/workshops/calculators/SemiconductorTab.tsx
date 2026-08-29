@@ -230,7 +230,10 @@ export default function SemiconductorTab() {
   const num = (id: string) => Number(vals[id]);
 
   function run(idx: number, card: CardSpec): Promise<void> {
-    return cards[idx].run(card.title, () => card.compute(num));
+    const inputs = card.fields
+      .map((field) => `${field.label}=${vals[field.id]}${field.unit ? ` ${field.unit}` : ""}`)
+      .join(", ");
+    return cards[idx].run(card.title, inputs, () => card.compute(num));
   }
 
   function pickMaterial(idx: number, card: CardSpec, name: string): void {

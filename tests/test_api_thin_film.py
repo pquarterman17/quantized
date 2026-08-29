@@ -12,6 +12,23 @@ from quantized.app import app
 client = TestClient(app)
 
 
+def test_scherrer_card_defaults() -> None:
+    r = client.post(
+        "/api/thin-film/scherrer",
+        json={"fwhm_deg": 0.5, "wavelength": 1.5406, "two_theta_deg": 33.0},
+    )
+    assert r.status_code == 200
+    assert r.json()["D"] == pytest.approx(165.70975176473607, rel=1e-12)
+
+
+def test_scherrer_rejects_zero_fwhm() -> None:
+    r = client.post(
+        "/api/thin-film/scherrer",
+        json={"fwhm_deg": 0.0, "wavelength": 1.5406, "two_theta_deg": 33.0},
+    )
+    assert r.status_code == 422
+
+
 def test_sauerbrey_5mhz_sensitivity_factor() -> None:
     r = client.post("/api/thin-film/sauerbrey", json={"delta_f": -10.0, "f0": 5e6})
     assert r.status_code == 200
@@ -44,7 +61,5 @@ def test_sauerbrey_extreme_finite_input_is_422_not_500() -> None:
 def test_kiessig_thickness_extreme_finite_input_is_422_not_500() -> None:
     """Regression: a huge delta_q with an sld correction overflows
     calc.thin_film.kiessig_thickness's delta_q**2 term."""
-    r = client.post(
-        "/api/thin-film/kiessig-thickness", json={"delta_q": 1e308, "sld": 1.0}
-    )
+    r = client.post("/api/thin-film/kiessig-thickness", json={"delta_q": 1e308, "sld": 1.0})
     assert r.status_code == 422, r.text

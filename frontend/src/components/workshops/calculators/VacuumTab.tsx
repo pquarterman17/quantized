@@ -88,7 +88,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c1.run("Mean free path", async () => {
+              void c1.run("Mean free path", `P=${mfpP} Pa, T=${mfpT} K, molecular diameter=${mfpGas} m`, async () => {
                 const r = await vacuumMeanFreePath(Number(mfpP), Number(mfpT), Number(mfpGas));
                 return `λ = ${fmtNum(r.mfp)} m (${fmtNum(r.mfpMm)} mm)`;
               })
@@ -107,7 +107,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c2.run("Monolayer formation time", async () => {
+              void c2.run("Monolayer formation time", `P=${monoP} Pa`, async () => {
                 const r = await vacuumMonolayerTime(Number(monoP));
                 return `t_mono = ${fmtNum(r.tMono)} s`;
               })
@@ -128,7 +128,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c3.run("Sputter yield", async () => {
+              void c3.run("Sputter yield", `target=${syMat}, ion=${syIon}, E=${syE} eV`, async () => {
                 const r = await vacuumSputterYield(syMat, Number(syE), syIon);
                 return Number.isNaN(r.Y)
                   ? `Y(${syMat}/${syIon}) = N/A (out of table)`
@@ -154,7 +154,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c4.run("Pump-down estimate", async () => {
+              void c4.run("Pump-down estimate", `V=${pV} L, S=${pS} L/s, P0=${pP0} Pa, Pf=${pPf} Pa`, async () => {
                 const r = await vacuumPumpDownTime(
                   Number(pV),
                   Number(pS),
@@ -179,7 +179,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c5.run("Knudsen number", async () => {
+              void c5.run("Knudsen number", `MFP=${knMfp} m, L=${knL} m`, async () => {
                 const r = await vacuumKnudsen(Number(knMfp), Number(knL));
                 return `Kn = ${fmtNum(r.Kn)} [${r.regime} flow]`;
               })
@@ -203,7 +203,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c6.run("Gas-flow conductance", async () => {
+              void c6.run("Gas-flow conductance", `P1=${gfP1} Pa, P2=${gfP2} Pa, d=${gfD} m, L=${gfL} m`, async () => {
                 const r = await vacuumGasFlow(
                   Number(gfP1),
                   Number(gfP2),

@@ -244,7 +244,10 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             variant="primary"
             size="sm"
             onClick={() =>
-              void angleCard.run("Interplanar angle", async () => {
+              void angleCard.run(
+                "Interplanar angle",
+                `cell=${JSON.stringify(c.crystal)}, hkl₁=(${ah1},${ak1},${al1}), hkl₂=(${ah2},${ak2},${al2})`,
+                async () => {
                 const cell = assembleCell(c.crystal);
                 const h1v = Number(ah1);
                 const k1v = Number(ak1);
@@ -266,7 +269,8 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
                   l2: l2v,
                 });
                 return `φ = ${fmtNum(r.angle_deg)}°  (d₁ = ${fmtNum(r.d1)} Å, d₂ = ${fmtNum(r.d2)} Å)`;
-              })
+                },
+              )
             }
           >
             =

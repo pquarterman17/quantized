@@ -13,6 +13,9 @@ export interface CalcEntry {
   domain: string;
   label: string;
   summary: string;
+  /** Exact raw input snapshot used for this result. Absent only on entries
+   *  persisted by builds predating DIRACULATOR_AUDIT's provenance sweep. */
+  inputs?: string;
   ts: string;
 }
 
@@ -36,7 +39,8 @@ function sane(x: unknown): CalcEntry[] {
       !!e &&
       typeof e === "object" &&
       typeof (e as CalcEntry).id === "string" &&
-      typeof (e as CalcEntry).summary === "string",
+      typeof (e as CalcEntry).summary === "string" &&
+      ((e as CalcEntry).inputs === undefined || typeof (e as CalcEntry).inputs === "string"),
   );
 }
 
@@ -72,7 +76,7 @@ interface CalcHistoryState {
   seq: number;
   /** Prepend a result to history (newest-first, capped). Side-effect only — safe
    *  to call from any tab's success path without a backend. */
-  record: (entry: { domain: string; label: string; summary: string }) => void;
+  record: (entry: { domain: string; label: string; summary: string; inputs: string }) => void;
   /** Pin an entry into favorites (copied from history); unpin if already there. */
   toggleFavorite: (id: string) => void;
   isFavorite: (id: string) => boolean;

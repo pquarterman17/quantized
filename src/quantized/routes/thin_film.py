@@ -63,6 +63,12 @@ class SauerbreyRequest(BaseModel):
     density: float | None = None  # g/cm^3
 
 
+class ScherrerRequest(BaseModel):
+    fwhm_deg: float  # degrees of 2-theta
+    wavelength: float  # Angstrom
+    two_theta_deg: float  # degrees
+
+
 class SputterRateRequest(BaseModel):
     y: float  # atoms/ion
     j: float  # mA/cm^2
@@ -132,6 +138,17 @@ def projected_range(req: ProjectedRangeRequest) -> dict[str, Any]:
 def sauerbrey(req: SauerbreyRequest) -> dict[str, Any]:
     """Δf = -Cf·Δm/A (QCM areal mass, + total mass/thickness when area/density given)."""
     return _call(thin_film.sauerbrey, req.delta_f, req.f0, area=req.area, density=req.density)
+
+
+@router.post("/scherrer")
+def scherrer(req: ScherrerRequest) -> dict[str, Any]:
+    """D = K*lambda/(beta*cos(theta)), K=0.9 (Angstrom/nm)."""
+    return _call(
+        thin_film.scherrer_grain_size,
+        req.fwhm_deg,
+        req.wavelength,
+        req.two_theta_deg,
+    )
 
 
 @router.post("/sputter-rate")

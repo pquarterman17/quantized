@@ -33,7 +33,7 @@ export function DepositionRateCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c1.run("Deposition rate", async () => {
+            void c1.run("Deposition rate", `thickness=${drThick} Å, time=${drTime} s`, async () => {
               const r = await thinFilmDepositionRate(Number(drThick), Number(drTime));
               return `rate = ${fmtNum(r.rate)} Å/s · ${fmtNum(r.rate_nm_per_min)} nm/min`;
             })
@@ -66,7 +66,10 @@ export function SputterRateCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c2.run("Sputter rate", async () => {
+            void c2.run(
+              "Sputter rate",
+              `Y=${spY}, J=${spJ} mA/cm², ρ=${spRho} g/cm³, M=${spM} g/mol`,
+              async () => {
               const r = await thinFilmSputterRate(
                 Number(spY),
                 Number(spJ),
@@ -74,7 +77,8 @@ export function SputterRateCard() {
                 Number(spM),
               );
               return `rate = ${fmtNum(r.rate)} nm/s · ${fmtNum(r.rate_nm_per_min)} nm/min`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -100,7 +104,7 @@ export function DiffusionLengthCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c3.run("Thermal diffusion length", async () => {
+            void c3.run("Thermal diffusion length", `D=${dlD} cm²/s, t=${dlT} s`, async () => {
               const r = await thinFilmDiffusionLength(Number(dlD), Number(dlT));
               return `L = ${fmtNum(r.L)} cm · ${fmtNum(r.L_nm)} nm`;
             })
@@ -131,14 +135,18 @@ export function ImplantDoseCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c4.run("Implant dose (beam current)", async () => {
+            void c4.run(
+              "Implant dose (beam current)",
+              `I=${doseI} A, t=${doseT} s, A=${doseA} cm²`,
+              async () => {
               const r = await thinFilmDoseFromCurrent(
                 Number(doseI),
                 Number(doseT),
                 Number(doseA),
               );
               return `dose = ${fmtNum(r.dose)} ions/cm²`;
-            })
+              },
+            )
           }
         >
           Calculate
@@ -166,14 +174,18 @@ export function PeakConcentrationCard() {
           variant="primary"
           size="sm"
           onClick={() =>
-            void c5.run("Peak concentration", async () => {
+            void c5.run(
+              "Peak concentration",
+              `Φ=${dcDose} ions/cm², Rp=${dcRp} nm, ΔRp=${dcDRp} nm`,
+              async () => {
               const r = await thinFilmDoseToConcentration(
                 Number(dcDose),
                 Number(dcRp),
                 Number(dcDRp),
               );
               return `C_peak = ${fmtNum(r.Cpeak)} atoms/cm³`;
-            })
+              },
+            )
           }
         >
           Calculate

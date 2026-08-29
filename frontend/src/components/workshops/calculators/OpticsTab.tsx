@@ -58,7 +58,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c1.run("Fresnel coefficients", async () => {
+              void c1.run("Fresnel coefficients", `n₁=${fN1}, n₂=${fN2}, θ=${fTh}°`, async () => {
                 const r = await opticsFresnel(Number(fN1), Number(fN2), Number(fTh));
                 return `Rs = ${fmtNum(r.Rs)} · Rp = ${fmtNum(r.Rp)} · Ts = ${fmtNum(
                   r.Ts,
@@ -80,7 +80,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c2.run("Critical / Brewster angle", async () => {
+              void c2.run("Critical / Brewster angle", `n₁=${aN1}, n₂=${aN2}`, async () => {
                 const [rc, rb] = await Promise.all([
                   opticsCriticalAngle(Number(aN1), Number(aN2)),
                   opticsBrewsterAngle(Number(aN1), Number(aN2)),
@@ -105,7 +105,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c3.run("Penetration depth", async () => {
+              void c3.run("Penetration depth", `n=${pN}, k=${pK}, λ=${pLam}`, async () => {
                 const r = await opticsPenetrationDepth(Number(pN), Number(pK), Number(pLam));
                 return `depth = ${fmtNum(r.depth)} (same unit as λ)`;
               })
@@ -125,7 +125,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void c4.run("Skin depth", async () => {
+              void c4.run("Skin depth", `ρ=${sRho} Ω·m, f=${sFreq} Hz`, async () => {
                 const r = await opticsSkinDepth(Number(sRho), Number(sFreq));
                 return `δ = ${fmtNum(r.delta_um)} µm`;
               })
@@ -144,7 +144,7 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c5.run("Refractive index / Dielectric function", async (isCurrent) => {
+              void c5.run("Refractive index / Dielectric function", `direction=n,k→ε; n=${rdN}, k=${rdK}`, async (isCurrent) => {
                 const r = await opticsRefractiveToDielectric(Number(rdN), Number(rdK));
                 // These are editable inputs, not just result text. Gate the
                 // chained writes before mutating them: useCard drops a stale
@@ -166,7 +166,7 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void c5.run("Refractive index / Dielectric function", async (isCurrent) => {
+              void c5.run("Refractive index / Dielectric function", `direction=ε→n,k; ε₁=${rdE1}, ε₂=${rdE2}`, async (isCurrent) => {
                 const r = await opticsDielectricToRefractive(Number(rdE1), Number(rdE2));
                 if (isCurrent()) {
                   setRdN(String(r.n));

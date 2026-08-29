@@ -133,6 +133,9 @@ export function useXrayCalc(): XrayCalcState {
         domain: "Xray",
         label: modeDef?.label ?? xrayMode,
         summary: `${fmtNum(r.result)} ${r.unit}`,
+        inputs: needsWavelength
+          ? `mode=${xrayMode}, wavelength=${wavelength} Å, value=${xrayValue}, order=${xrayOrder}`
+          : `mode=${xrayMode}, value=${xrayValue}`,
       });
     } catch (e) {
       if (seq.current !== id) return;
