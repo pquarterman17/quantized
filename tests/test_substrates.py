@@ -7,6 +7,8 @@ so reference-value rather than golden-frozen (same rationale as test_electrical)
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from quantized.calc import substrates
@@ -123,3 +125,34 @@ def test_critical_thickness_rejects_bad_inputs() -> None:
         substrates.critical_thickness(3.9, 0.0)
     with pytest.raises(ValueError):
         substrates.critical_thickness(3.9, 4.0, nu=-0.1)
+
+
+def test_critical_thickness_refuses_when_no_solution_exists() -> None:
+    """Large mismatch has no Matthews-Blakeslee root -- refuse, never invent one.
+
+    Substituting y = h_c/b the fixed point is y = c*(ln y + 1) with
+    c = prefactor/b; since ln y + 1 <= y, a root exists only for c > 1.  The
+    unguarded 50-iteration loop drives h_c negative here, so returning any
+    finite number would be a fabrication rather than a computed thickness.
+    """
+    with pytest.raises(ValueError, match="no critical thickness exists"):
+        substrates.critical_thickness(5.0, 3.905)  # f = 28.0%, c < 1
+
+    with pytest.raises(ValueError, match="no critical thickness exists"):
+        substrates.critical_thickness(3.0, 3.905)  # f = 23.2% compressive, c < 1
+
+
+def test_critical_thickness_refuses_unphysical_poisson_ratio() -> None:
+    """nu >= 4 zeroes/flips the prefactor; refuse instead of returning h_c = b."""
+    with pytest.raises(ValueError, match="no critical thickness exists"):
+        substrates.critical_thickness(5.869, 5.653, nu=4.0)
+
+
+def test_critical_thickness_solution_side_of_the_boundary_is_a_true_root() -> None:
+    """Just inside the solvable region the result must satisfy the equation."""
+    r = substrates.critical_thickness(4.51, 3.905)  # f = 15.5%, c > 1
+    b, nu, cos60 = r["b"], r["nu"], 0.5
+    f = abs(r["mismatch"])
+    prefactor = (b / (2.0 * math.pi * f)) * ((1.0 - nu * cos60 * cos60) / ((1.0 + nu) * cos60))
+    residual = r["h_c"] - prefactor * (math.log(r["h_c"] / b) + 1.0)
+    assert abs(residual) < 1e-9

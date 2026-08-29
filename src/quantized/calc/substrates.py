@@ -173,6 +173,12 @@ def critical_thickness(a_film: float, a_sub: float, *, nu: float = 0.3) -> dict[
 
     A mismatch below ``1e-10`` is treated as lattice matched and returns an
     infinite critical thickness, as MATLAB does.
+
+    Raises:
+        ValueError: if the mismatch (or an unphysical ``nu``) leaves the fixed
+            point with no root, i.e. the film relaxes immediately.  MATLAB
+            iterates unguarded into ``log()`` of a negative number there and
+            returns a complex ``hc``; refusing is the honest port.
     """
     if not (math.isfinite(a_film) and a_film > 0):
         raise ValueError("film lattice parameter must be positive and finite")
@@ -195,12 +201,25 @@ def critical_thickness(a_film: float, a_sub: float, *, nu: float = 0.3) -> dict[
 
     cos60 = 0.5
     prefactor = (b / (2.0 * math.pi * f)) * ((1.0 - nu * cos60 * cos60) / ((1.0 + nu) * cos60))
+
+    # Substituting y = h_c/b the fixed point is y = c*(ln y + 1) with
+    # c = prefactor/b.  Since ln y + 1 <= y with equality only at y = 1, the
+    # curve c*(ln y + 1) reaches at most c*ln(c) above the diagonal, so a root
+    # exists if and only if c > 1.  Below that threshold the misfit dislocation
+    # is favourable at every thickness -- the film relaxes immediately and no
+    # critical thickness exists.  MATLAB iterates unguarded and walks into
+    # log() of a negative number (returning a complex hc that jsonencode cannot
+    # even serialize, which is why no golden covers this regime); refuse the
+    # input instead of inventing a number.
+    if prefactor <= b:
+        raise ValueError(
+            f"no critical thickness exists for mismatch {mismatch:.4%} with nu={nu:g}: "
+            "the film relaxes immediately (h_c would be below one Burgers vector)"
+        )
+
     h_c = 1000.0
     for _ in range(50):
         h_c = prefactor * (math.log(h_c / b) + 1.0)
-        if h_c <= 0:
-            h_c = b
-            break
 
     return {"h_c": h_c, "h_c_nm": h_c / 10.0, "mismatch": mismatch, "b": b, "nu": nu}
 
