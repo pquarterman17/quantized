@@ -1356,3 +1356,73 @@ describe("alert/note messages are not clipped", () => {
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Storage-key registry ratchet (P3.4 diagnostics — #268 follow-up review).
+//
+// `store/diagnostics.ts` may only NAME a `localStorage` slot that
+// `lib/storageKeys.ts` vets; anything else is aggregated to a count and a byte
+// total. That guard is only as good as the allowlist is current, and an
+// allowlist maintained by habit drifts silently: a new slot would simply stop
+// appearing by name, and nobody would notice until a support report was
+// missing the one line that explained the quota.
+//
+// So the drift is made loud here. Adding a slot becomes a two-line change with
+// a red build in between, which is the point — the second line is a decision
+// about whether that key's NAME is safe to show a stranger.
+//
+// The reverse direction is deliberately NOT checked. An entry whose writer has
+// been deleted still earns its place: browsers that ran the older build still
+// hold the slot, and dropping it would reclassify a perfectly well-understood
+// key as "unrecognised" in exactly the reports where it matters. A stale entry
+// is inert (it matches nothing); a missing one is a regression.
+describe("storage-key registry ratchet (P3.4)", () => {
+  /** `"qz.…"` in a single- or double-quoted literal. Template literals are
+   *  handled separately below — they are the dangerous shape, not this one. */
+  const LITERAL = /["'](qz\.[A-Za-z0-9_.-]+)["']/g;
+
+  function registered(): Set<string> {
+    const [, src] =
+      sources().find(([p]) => p.endsWith("/lib/storageKeys.ts")) ??
+      ([undefined, ""] as unknown as [string, string]);
+    return new Set([...src.matchAll(LITERAL)].map((m) => m[1]));
+  }
+
+  it("every qz. storage key literal in src is on the diagnostics allowlist", () => {
+    const known = registered();
+    expect(known.size, "lib/storageKeys.ts must be readable and non-empty").toBeGreaterThan(0);
+    const missing: string[] = [];
+    for (const [path, src] of sources()) {
+      if (path.endsWith("/lib/storageKeys.ts")) continue;
+      for (const m of src.matchAll(LITERAL)) {
+        if (!known.has(m[1])) missing.push(`${path}: ${m[1]}`);
+      }
+    }
+    expect(
+      missing,
+      "Add each key to KNOWN_STORAGE_KEYS in lib/storageKeys.ts — and while you " +
+        "are there, decide whether its NAME is safe to print in a diagnostics " +
+        "bundle a user pastes into a public issue.",
+    ).toEqual([]);
+  });
+
+  it("no storage key is built by interpolation — a composed key IS user content", () => {
+    // `qz.figure.${title}` puts an unpublished sample name in the key itself,
+    // which the allowlist can then only suppress, never report usefully. Keep
+    // per-object state inside one vetted slot's VALUE instead.
+    //
+    // The character class before `${` is what keeps this test honest, and it
+    // is not incidental: `qz.` is ALSO the macro-recording script namespace
+    // (`qz.fit("${model}")`, `qz.addColumn(${lit(name)}, …)` — see
+    // store/cellEdit.ts and friends), which is emitted as user-visible code
+    // and interpolates by design. A storage key is bare identifier characters
+    // through to the interpolation; a macro call reaches `(` first. Matching
+    // `[^`]*` instead flags all ~40 macro sites and the guard gets deleted as
+    // noise within a week.
+    const dynamic = sources()
+      .filter(([p]) => !p.endsWith("/lib/storageKeys.ts"))
+      .filter(([, src]) => /`qz\.[A-Za-z0-9_.-]*\$\{/.test(src))
+      .map(([p]) => p);
+    expect(dynamic).toEqual([]);
+  });
+});

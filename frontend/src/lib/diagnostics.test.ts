@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildDiagnostics, type DiagnosticsSnapshot } from "./diagnostics";
+import {
+  buildDiagnostics,
+  DIAGNOSTICS_SCHEMA_VERSION,
+  type DiagnosticsSnapshot,
+} from "./diagnostics";
 
 const SECRETS = {
   datasetName: "UNPUBLISHED-LaSrMnO3-batch7",
@@ -23,6 +27,7 @@ const SECRETS = {
 
 const SNAP: DiagnosticsSnapshot = {
   takenAt: "2026-08-29T18:00:00.000Z",
+  build: { version: "0.23.2", sha: "abc1234" },
   platform: { userAgent: "Mozilla/5.0 (X11; Linux x86_64)", language: "en-GB", desktop: true },
   display: { width: 2560, height: 1440, devicePixelRatio: 2 },
   environment: {
@@ -49,6 +54,7 @@ const SNAP: DiagnosticsSnapshot = {
     { key: "qz.calcHistory", bytes: 4096 },
     { key: "qz.prefs", bytes: 512 },
   ],
+  otherStorage: { slots: 0, bytes: 0 },
 };
 
 describe("diagnostics bundle — redaction", () => {
@@ -95,6 +101,43 @@ describe("diagnostics bundle — usefulness", () => {
     expect(text).toContain("12"); // dataset count
     expect(text).toContain("1000000"); // largest rows, for perf reports
     expect(text).toContain("desktop");
+  });
+
+  it("names the build that produced it", () => {
+    // "0.23.2" alone cannot tell a release tag from eleven commits past it,
+    // and the first question asked of any bug report is which build it is.
+    expect(text).toContain("0.23.2");
+    expect(text).toContain("abc1234");
+  });
+
+  it("stamps the report schema so a later layout change is detectable", () => {
+    expect(text).toContain(`report schema  ${String(DIAGNOSTICS_SCHEMA_VERSION)}`);
+  });
+
+  it("renders a completely empty slot list without NaN padding", () => {
+    // The old "(none)" row existed to stop `Math.max()` of an empty array
+    // returning -Infinity and poisoning `padEnd`. The always-present
+    // unrecognised row makes that structurally impossible now — but only as
+    // long as it IS always present, which is what this pins.
+    const empty = buildDiagnostics({ ...SNAP, storage: [], otherStorage: { slots: 0, bytes: 0 } });
+    expect(empty).not.toContain("NaN");
+    expect(empty).not.toContain("Infinity");
+    expect(empty).toContain("(unrecognised)");
+  });
+
+  it("reports unrecognised slots even when there are none", () => {
+    // An omitted line is indistinguishable from a report built before this
+    // section existed, which is the reading that matters when triaging one.
+    expect(text).toContain("(unrecognised)");
+    expect(text).toContain("0 slots, 0 bytes");
+  });
+
+  it("summarises unrecognised slots without a name when some exist", () => {
+    const withOther = buildDiagnostics({
+      ...SNAP,
+      otherStorage: { slots: 3, bytes: 8192 },
+    });
+    expect(withOther).toContain("3 slots, 8192 bytes");
   });
 
   it("is stable and copy-pasteable plain text", () => {

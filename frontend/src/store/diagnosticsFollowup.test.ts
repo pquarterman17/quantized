@@ -31,16 +31,28 @@ describe("storage sizes are actually bytes", () => {
     // in saved calculator inputs and plot labels). Reporting `.length` under
     // a "bytes" label understates a quota problem by up to 3x, in the one
     // report whose entire value is being accurate.
-    localStorage.setItem("qz.unitsTest", "µ°Ω");
-    const slot = collectDiagnostics().storage.find((e) => e.key === "qz.unitsTest");
+    // A real allowlisted slot: a synthetic key is aggregated into
+    // `otherStorage` now (lib/storageKeys.ts) and never appears by name.
+    localStorage.setItem("qz.prefs", "µ°Ω");
+    const slot = collectDiagnostics().storage.find((e) => e.key === "qz.prefs");
     expect(slot, "the slot must be reported at all").toBeDefined();
     expect(slot!.bytes, "3 chars but 6 UTF-8 bytes").toBe(6);
   });
 
   it("still reports plain ASCII slots at their obvious size", () => {
-    localStorage.setItem("qz.asciiTest", "abcd");
-    const slot = collectDiagnostics().storage.find((e) => e.key === "qz.asciiTest");
+    localStorage.setItem("qz.recent", "abcd");
+    const slot = collectDiagnostics().storage.find((e) => e.key === "qz.recent");
     expect(slot!.bytes).toBe(4);
+  });
+
+  it("counts UTF-8 bytes in the unrecognised-slot aggregate too", () => {
+    // The aggregate is a separate code path from the named list, and it is
+    // the one that will carry a future feature's slots — the multi-byte
+    // undercount would land there first, unnoticed.
+    localStorage.setItem("qz.someFutureSlot", "µ°Ω");
+    const other = collectDiagnostics().otherStorage;
+    expect(other.slots).toBe(1);
+    expect(other.bytes, "3 chars but 6 UTF-8 bytes").toBe(6);
   });
 });
 

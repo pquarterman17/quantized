@@ -645,7 +645,31 @@ import { fileURLToPath } from "node:url";
  *  measured + 1,024 = 910,711 per the same minimal-raise-margin convention
  *  — still 15.4 kB below the 926,154 B the R8 campaign started from. Full
  *  vitest (554 files / 8,434 tests), tsc --noEmit, and eslint all green
- *  post-raise. */
+ *  post-raise.
+ *
+ *  2026-08-29 (#268 follow-up review: diagnostics storage allowlist + build
+ *  identity, `claude/quantized-origin-jmp-gaps-vbtfnm`) — PIN UNCHANGED.
+ *  Recorded because the measurement method matters more than the number
+ *  here. Everything the review asked for (lib/storageKeys.ts's allowlist,
+ *  the unrecognised-slot aggregate, the schema stamp) lives in the LAZY
+ *  diagnostics chunk and measured +0 B eager, byte-identical to the base.
+ *  The only eager cost was retiring plotRecipes.ts's `appVersion = "0"`
+ *  placeholder, and the two ways of spending it were measured rather than
+ *  guessed: importing lib/buildInfo.ts from that eager module costs 43 B
+ *  (it drags BUILD_SHA, which only the lazy chunk wants), while reading
+ *  the define'd `__APP_VERSION__` global in place costs 5 B. Took the 5 B.
+ *  Base 911,101 -> 911,106 B measured LOCALLY, both of which EXCEED this
+ *  pin while CI passes comfortably -- the same branch measured 888.9 kB on
+ *  CI, 0.5 kB under. That ~0.9 kB spread (a differently-sized uPlot chunk
+ *  among others) is the whole reason the "measure on CI, never locally"
+ *  note above exists: a local absolute number here is not merely noisy, it
+ *  is on the wrong side of the pin, and reading it as a failure would have
+ *  argued for a pin raise that CI shows is not needed. Only the DELTA
+ *  between two builds in ONE environment is evidence. Calibrating that
+ *  spread from memory is also unsafe -- it was first estimated at ~450 B
+ *  for this entry and corrected to ~900 B once the CI number was actually
+ *  read, so re-measure the base rather than trusting this figure. Full
+ *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. */
 const EAGER_JS_BUDGET = 910_711;
 
 /** Lower the pin once the measurement drops more than this far below it —

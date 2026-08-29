@@ -1,11 +1,46 @@
 /// <reference types="vitest/config" />
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+
+// Build identity for the diagnostics bundle (see src/lib/buildInfo.ts). Read
+// here rather than imported from package.json so the bundle never depends on
+// `resolveJsonModule`, and so a tree with no `.git` (an sdist, a vendored
+// copy) still builds — it just reports an unknown SHA.
+const pkgVersion = (): string => {
+  try {
+    return (JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
+      version?: string;
+    }).version ?? "dev";
+  } catch {
+    return "dev";
+  }
+};
+
+const gitSha = (): string => {
+  try {
+    // execFileSync, not execSync: no shell, so nothing here can be influenced
+    // by a directory name or an environment variable.
+    return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      cwd: new URL(".", import.meta.url).pathname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+};
 
 // Dev: proxy /api to the FastAPI backend (`qz` / uvicorn on :8000).
 // Build: emit into the backend package so `qz` can serve the SPA statically.
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkgVersion()),
+    __BUILD_SHA__: JSON.stringify(gitSha()),
+  },
   build: {
     outDir: "../src/quantized/web",
     emptyOutDir: true,

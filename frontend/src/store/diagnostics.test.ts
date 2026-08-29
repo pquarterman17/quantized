@@ -45,7 +45,12 @@ beforeEach(() => {
     stageTab: "plot",
   });
   try {
-    localStorage.setItem("qz.secretSlot", JSON.stringify({ path: SECRET_PATH }));
+    localStorage.clear();
+    // A vetted slot (its name is on the allowlist) and an unvetted one whose
+    // KEY carries project content — the shape a future `qz.figure.<title>`
+    // would take.
+    localStorage.setItem("qz.prefs", JSON.stringify({ theme: "dark" }));
+    localStorage.setItem(`qz.figure.${SECRET_NAME}`, JSON.stringify({ path: SECRET_PATH }));
   } catch {
     /* private mode — the slot assertions below tolerate absence */
   }
@@ -62,8 +67,36 @@ describe("collected diagnostics never carry project content", () => {
 
   it("names a stored slot but never its contents", () => {
     const text = diagnosticsText();
-    // The key may appear; what it holds must not.
+    expect(text).toContain("qz.prefs");
     expect(text).not.toContain("embargoed");
+  });
+
+  it("refuses to print the NAME of a slot the allowlist does not vet", () => {
+    // The namespace prefix is not a safety property: a composed key makes the
+    // KEY itself project content. Before the allowlist this section printed
+    // every `qz.` key verbatim, so this exact string reached the bundle.
+    const text = diagnosticsText();
+    expect(text).not.toContain(SECRET_NAME);
+    expect(text).not.toContain("qz.figure.");
+  });
+
+  it("still counts unvetted slots, so a quota problem stays diagnosable", () => {
+    // Suppressing the name must not suppress the evidence — the section
+    // exists to answer "what is filling my storage?".
+    const snap = collectDiagnostics();
+    expect(snap.otherStorage.slots).toBe(1);
+    expect(snap.otherStorage.bytes).toBeGreaterThan(0);
+    expect(snap.storage.map((e) => e.key)).toEqual(["qz.prefs"]);
+  });
+
+  it("reports a build identity rather than an anonymous report", () => {
+    const snap = collectDiagnostics();
+    // Under vitest the vite `define` supplies the real values; the point of
+    // the assertion is that neither field is empty or `undefined`, which is
+    // what an unwired global would produce.
+    expect(snap.build.version).toBeTruthy();
+    expect(snap.build.sha).toBeTruthy();
+    expect(diagnosticsText()).not.toContain("undefined");
   });
 
   it("still reports the shape that makes a bug report useful", () => {
