@@ -15,12 +15,30 @@
 // An optional `bg` picks another loaded dataset as the reference background
 // (step 4 of the pipeline): we forward its CURRENT `data` + the interp method
 // so the golden /api/corrections/apply does the interpolated subtraction.
+//
+// SILENT_STATE_CORRUPTION_PLAN #6 (refuting the plan's earlier "audited and
+// cleared" record): `Dataset.raw` is ALWAYS BASE-ONLY -- it never carries
+// computed/formula columns, matching store/reimport.ts's definition exactly.
+// The old `raw = ds.raw ?? ds.data` capture was only honest at the INSTANT
+// of the first apply (when `ds.data`'s width happened to match the formula
+// count); `addFormula`/`removeFormula` change `data`'s width afterward and
+// never touched `raw`, so the two drifted apart across the dataset's
+// lifecycle and the next apply/reset fed a wrong-width `raw` into a
+// STRIPPING recompute -- deleting real columns or inventing a phantom
+// duplicate. Both `applyCorrections` and `resetCorrections` now route
+// through the non-stripping `recomputeFromBaseOrEmpty` (lib/formulaInputs.ts)
+// on the base-only table, exactly like #245/#4 did for reimport/
+// derivedWorksheets. (store/derivedWorksheets.ts's OWN use of `.raw` as "a
+// cache of the SOURCE's data" is a documented, deliberate exception for that
+// cross-dataset case — see its module doc — and never reaches this slice.)
 
 import { applyCorrections as applyCorrectionsApi, type CorrectionsRequest } from "../lib/api";
+import { baseColumns } from "../lib/formula";
+import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams } from "../lib/types";
-import { recompute, type AppState } from "./useApp";
+import type { AppState } from "./useApp";
 
 export interface CorrectionsSlice {
   applyCorrections: (
@@ -95,7 +113,9 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         // falling through to the preview.
         const ds = await get().resolveDataset(id);
         if (!ds) return false;
-        const raw = ds.raw ?? ds.data;
+        // #6: always base-only, matching store/reimport.ts -- never `ds.data`
+        // verbatim, which may already carry stale computed columns.
+        const raw = ds.raw ?? baseColumns(ds.data, ds.formulas?.length ?? 0);
         // Resolve the background only if it points at a real, different dataset.
         const bgDs =
           bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
@@ -134,11 +154,11 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
           const guard = rowsChangedGuard(s, id, rowsChanged, ds.excludedRows);
           statusMsg = guard.statusMessage;
           return {
-            datasets: s.datasets.map((d) =>
-              d.id === id
-                ? recompute({ ...d, data: corrected, raw, corrections: params, bgRef, ...guard.datasetPatch })
-                : d,
-            ),
+            datasets: s.datasets.map((d) => {
+              if (d.id !== id) return d;
+              const patch = recomputeFromBaseOrEmpty(corrected, d.formulas);
+              return { ...d, ...patch, raw, corrections: params, bgRef, ...guard.datasetPatch };
+            }),
             ...guard.statePatch,
           };
         });
@@ -170,14 +190,15 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         return {
           datasets: s.datasets.map((d) => {
             if (d.id !== id || !d.raw) return d;
-            return recompute({
+            const patch = recomputeFromBaseOrEmpty(d.raw, d.formulas);
+            return {
               ...d,
-              data: d.raw,
+              ...patch,
               raw: undefined,
               corrections: undefined,
               bgRef: undefined,
               ...(rowsChanged ? { excludedRows: undefined } : {}),
-            });
+            };
           }),
           ...(rowsChanged ? clearOverlaysFor(s, id) : {}),
         };

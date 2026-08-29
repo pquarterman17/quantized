@@ -23,10 +23,11 @@
 
 import { cloneDataStruct } from "../lib/dataset";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { recomputeFromBase } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import { nextDatasetId, recompute, type AppState } from "./useApp";
+import { nextDatasetId, type AppState } from "./useApp";
 
 export interface DerivedWorksheetsSlice {
   /** Create a linked derived worksheet (L0.50) inside `sourceId`'s workbook:
@@ -74,20 +75,33 @@ function summarizePipeline(params: CorrectionParams): string {
  *  derived from A) skips straight past B's entire pipeline to A's raw
  *  value — chains stop composing. A still-pending (lazy, preview-only)
  *  source fails closed rather than deriving from a downsampled preview;
- *  the caller (recalcNow) surfaces this and leaves the sheet stale. */
+ *  the caller (recalcNow) surfaces this and leaves the sheet stale.
+ *
+ *  SILENT_STATE_CORRUPTION_PLAN #4 (Class B): `corrected` below is the
+ *  SOURCE's own table run through THIS sheet's pipeline — it has never had
+ *  THIS sheet's `.formulas` appended, so it must go through the
+ *  non-stripping `recomputeFromBase` (lib/formulaInputs.ts), never
+ *  `recompute`/`recomputeWithErrors` (useApp.ts/formula.ts). Those STRIP
+ *  the last `sheet.formulas.length` columns before reapplying — correct for
+ *  a dataset's own `.data` (which already carries its own stale computed
+ *  columns) but wrong here, where those trailing columns are REAL source
+ *  columns (e.g. the source's own computed column) that were never the
+ *  sheet's formulas at all. See derivedWorksheets.test.ts's #4 probe. */
 export async function recomputeDerivedSheet(get: SliceGet, sheet: Dataset): Promise<Dataset> {
   const sourceId = sheet.derivedFrom?.datasetId;
   const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
   if (source.pending) throw new Error(`source dataset "${source.name}" hasn't fully loaded yet`);
   const sourceData = source.data;
-  const data = await applyCorrectionsApi({ dataset: sourceData, params: sheet.corrections ?? {} });
+  const corrected = await applyCorrectionsApi({ dataset: sourceData, params: sheet.corrections ?? {} });
   // #50/#53 row-count-changed guard (excludedRows + the four overlays) is
   // applied by the CALLER (useApp.ts's recalcNow, via the shared
   // rowsChangedGuard — see store/corrections.ts) once it can see both the
   // old and new row counts and perform the actual `set()`; this function
   // stays a pure "compute the new Dataset" step, same shape as before.
-  return recompute({ ...sheet, data, raw: sourceData });
+  if (!sheet.formulas?.length) return { ...sheet, data: corrected, raw: sourceData, formulaErrors: undefined };
+  const { data, errors } = recomputeFromBase(corrected, sheet.formulas);
+  return { ...sheet, data, raw: sourceData, formulaErrors: Object.keys(errors).length ? errors : undefined };
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the

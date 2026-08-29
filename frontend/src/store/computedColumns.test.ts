@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { categoricalLevels, isCategoricalChannel } from "../lib/categorical";
 import { facetComposition } from "../lib/composition";
 import { buildErrorSpans } from "../lib/errorbars";
 import { facetCompositionFromBinding, facetPayloads } from "../lib/facet";
@@ -353,6 +354,82 @@ describe("removeFormula (DEFECT A closure, Sol audit P1-3): surviving formulas f
     expect(f1?.expr).toBe("A * 1");
     expect(f1?.deps).toEqual(["A"]);
     expect(updated.formulaErrors?.F1).toBeUndefined();
+  });
+});
+
+// SILENT_STATE_CORRUPTION_PLAN #8: `DataStruct.cat_levels` is column-index-
+// keyed exactly like errorRoles/fitSpec/editableFigures above, but the strip
+// (`lib/formula.ts`'s `baseColumns`) spread it through unchanged instead of
+// dropping the removed column's entry — so a plain arithmetic column that
+// shifts INTO a just-removed recode column's old index inherits its stale
+// level table: a numeric column renders as level strings and modelling
+// infers `nominal` instead of `continuous`.
+describe("removeFormula (Task 8, SILENT_STATE_CORRUPTION_PLAN): cat_levels does not ride along onto the shifted column", () => {
+  it("F2 (plain arithmetic) is not left categorical after the recode column ahead of it is removed", () => {
+    const ds: Dataset = {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [0, 0, 0],
+          [1, 1, 10],
+        ],
+        labels: ["A", "R1", "F2"],
+        units: ["", "", ""],
+        metadata: {},
+        cat_levels: { 1: ["lo", "hi"] }, // R1's OWN level table
+      },
+      formulas: [
+        { name: "R1", expr: "", recode: { sourceLetter: "A", mapping: { groups: [] } } },
+        { name: "F2", expr: "A * 10" },
+      ],
+    };
+    useApp.setState({ datasets: [ds] });
+
+    useApp.getState().removeFormula("a", 0); // delete R1; F2 shifts index 2 -> 1
+
+    const updated = useApp.getState().datasets[0];
+    expect(updated.data.labels).toEqual(["A", "F2"]);
+    expect(updated.data.values).toEqual([
+      [0, 0],
+      [1, 10],
+    ]);
+    expect(isCategoricalChannel(updated.data, 1)).toBe(false);
+    expect(categoricalLevels(updated.data, 1)).toBeNull();
+    expect(updated.data.cat_levels).toBeUndefined();
+  });
+
+  // Only FORMULA columns are removable (there is no base-column-delete path
+  // today), so a BASE column's own cat_levels entry must survive a removal
+  // untouched — this is not a case the remap registry needs to cover.
+  it("a base column's OWN cat_levels entry survives a formula-column removal untouched", () => {
+    const ds: Dataset = {
+      id: "a",
+      name: "a",
+      data: {
+        time: [0, 1],
+        values: [
+          [0, 0, 0],
+          [1, 1, 10],
+        ],
+        labels: ["A", "R1", "F2"],
+        units: ["", "", ""],
+        metadata: {},
+        cat_levels: { 0: ["lo", "hi"], 1: ["x", "y"] }, // A is ALSO categorical
+      },
+      formulas: [
+        { name: "R1", expr: "", recode: { sourceLetter: "A", mapping: { groups: [] } } },
+        { name: "F2", expr: "A * 10" },
+      ],
+    };
+    useApp.setState({ datasets: [ds] });
+
+    useApp.getState().removeFormula("a", 0); // delete R1
+
+    const updated = useApp.getState().datasets[0];
+    expect(categoricalLevels(updated.data, 0)).toEqual(["lo", "hi"]); // A, untouched
+    expect(isCategoricalChannel(updated.data, 1)).toBe(false); // F2, not categorical
   });
 });
 

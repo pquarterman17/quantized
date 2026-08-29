@@ -6,10 +6,10 @@ import {
   channelLetter,
   compileFormula,
   formulaErrors,
-  recomputeData,
   recomputeWithErrors,
   referencedColumns,
 } from "./formula";
+import { asAlreadyComputed } from "./formulaInputs";
 import type { ComputedColumn, DataStruct } from "./types";
 
 const ev = (src: string, ctx: Record<string, number> = {}) => compileFormula(src)(ctx);
@@ -116,9 +116,66 @@ describe("computed columns", () => {
     expect(baseColumns(base, 0)).toBe(base); // no-op
   });
 
-  it("recomputeData re-derives the computed column from an edited base", () => {
+  // SILENT_STATE_CORRUPTION_PLAN #8: `cat_levels` is column-index-keyed
+  // (DataStruct.cat_levels, P1.4) but `baseColumns` only ever sliced
+  // labels/units/values -- a stripped column's level table survived into
+  // the "base" it was stripped OUT of, ready to re-land on whatever formula
+  // column `computeFormulas` next assigns that same index.
+  it("baseColumns strips cat_levels entries at/beyond the kept column count, not just labels/units/values", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [
+        [0, 1],
+        [1, 0],
+      ],
+      labels: ["A", "R1"],
+      units: ["", ""],
+      metadata: {},
+      cat_levels: { 0: ["lo", "hi"], 1: ["x", "y"] },
+    };
+    const out = baseColumns(data, 1);
+    expect(out.labels).toEqual(["A"]);
+    // The kept column's own level table survives...
+    expect(out.cat_levels).toEqual({ 0: ["lo", "hi"] });
+    // ...but the stripped column's does not ride along as stale state.
+    expect(out.cat_levels?.[1]).toBeUndefined();
+  });
+
+  it("baseColumns drops cat_levels entirely once every categorical column is stripped (never an empty stale object)", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [[0], [1]],
+      labels: ["R1"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["x", "y"] },
+    };
+    expect(baseColumns(data, 1).cat_levels).toBeUndefined();
+  });
+
+  it("recomputeWithErrors does not re-seed a stale cat_levels entry onto a plain arithmetic column at the same index", () => {
+    const data: DataStruct = {
+      time: [0, 1],
+      values: [
+        [0, 5],
+        [1, 6],
+      ],
+      labels: ["A", "F1"],
+      units: ["", ""],
+      metadata: {},
+      // Stale: index 1 was categorical under a PREVIOUS formula list (e.g. a
+      // recode column that has since been replaced by a plain arithmetic one).
+      cat_levels: { 1: ["ghost"] },
+    };
+    const out = recomputeWithErrors(asAlreadyComputed(data), [{ name: "F1", expr: "A * 10" }]).data;
+    expect(out.cat_levels).toBeUndefined();
+  });
+
+  it("recomputeWithErrors re-derives the computed column from an edited base that already carries it", () => {
     const withS = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
-    // Simulate a base edit: A[0] 10 → 100.
+    // Simulate a base edit: A[0] 10 → 100. `edited` already carries the
+    // stale "S" column (like d.data everywhere `recompute` is called), so
+    // asAlreadyComputed's assertion is honest here — see formulaInputs.ts.
     const edited: DataStruct = {
       ...withS,
       values: [
@@ -126,9 +183,17 @@ describe("computed columns", () => {
         [30, 40, 70],
       ],
     };
-    const out = recomputeData(edited, [{ name: "S", expr: "A + B" }]);
+    const out = recomputeWithErrors(asAlreadyComputed(edited), [{ name: "S", expr: "A + B" }]).data;
     expect(out.values[0][2]).toBe(120); // 100 + 20
     expect(out.values[1][2]).toBe(70); // unchanged row
+  });
+
+  it("recomputeWithErrors requires an explicit asAlreadyComputed assertion, not a bare DataStruct (Class B guard, compile-time)", () => {
+    // @ts-expect-error — `base` is a plain DataStruct, not StrippableData.
+    // Only `asAlreadyComputed` (lib/formulaInputs.ts) may vouch for it; if
+    // that stops being enforced, tsc fails with "Unused '@ts-expect-error'
+    // directive" instead (SILENT_STATE_CORRUPTION_PLAN #2).
+    recomputeWithErrors(base, [{ name: "S", expr: "A + B" }]);
   });
 });
 
@@ -697,11 +762,12 @@ describe("formulaErrors", () => {
     expect(Object.keys(formulaErrors(base, formulas))).toEqual(["bad"]);
   });
 
-  it("recomputeWithErrors derives data + errors from the SAME pass as recomputeData/formulaErrors", () => {
+  it("recomputeWithErrors derives data + errors from the SAME pass as applyFormulas/formulaErrors on the stripped base", () => {
     const formulas: ComputedColumn[] = [{ name: "bad", expr: "A +" }];
-    const withErrors = recomputeWithErrors(base, formulas);
-    expect(withErrors.data).toEqual(recomputeData(base, formulas));
-    expect(withErrors.errors).toEqual(formulaErrors(baseColumns(base, formulas.length), formulas));
+    const strippedBase = baseColumns(base, formulas.length);
+    const withErrors = recomputeWithErrors(asAlreadyComputed(base), formulas);
+    expect(withErrors.data).toEqual(applyFormulas(strippedBase, formulas));
+    expect(withErrors.errors).toEqual(formulaErrors(strippedBase, formulas));
   });
 });
 

@@ -50,6 +50,20 @@
 // meaning is provably intact then, and a saved document is a durable
 // artifact worth preserving (unlike the live view, which resets on any
 // shape change because the user is actively looking at it).
+//
+// SILENT_STATE_CORRUPTION_PLAN #9: `document.publication.seriesStyles` is a
+// POSITIONAL `(ExportSeriesStyle | null)[]` outside this field list above —
+// and it WINS over every field this function resets: lib/figureSpec.ts's
+// buildFigureSpecFromDocument only derives styles from the (freshly reset)
+// view when `publicationSeriesStyles === undefined`. Left behind, a
+// one-entry array built for a one-channel figure survives verbatim onto a
+// reset that just widened the plotted set to every surviving channel — so
+// the export replays it at the WRONG position (index 0 now means a
+// different, newly-added channel) instead of deriving fresh per-channel
+// styles the way the reset view's own (also-cleared) `seriesStyles` map
+// intends. Cleared to `undefined` here — the sibling `overrides` field has
+// no channel-position fields of its own (grid/margins/ticks/annotations use
+// fixed axes coordinates, never a channel index) and is left alone.
 import type { FigureDocument } from "./figureDocument";
 
 /**
@@ -62,7 +76,11 @@ import type { FigureDocument } from "./figureDocument";
  * and the matching channel-indexed plot.view fields (seriesOrder,
  * hiddenChannels, seriesStyles, seriesLabels) plus the axis-range fields
  * datasetViewDefaults bundles with them (xLim/yLim/xStep/yStep,
- * y2Lim/y2Scale/y2Step/y2AxisLabel) reset alongside them. Never mutates.
+ * y2Lim/y2Scale/y2Step/y2AxisLabel) reset alongside them. `publication.
+ * seriesStyles` (task #9 — see module doc) clears to `undefined` too, so
+ * export re-derives it from the just-reset view instead of replaying a
+ * stale positional array; `publication.overrides` has no channel-position
+ * fields and is left untouched. Never mutates.
  */
 export function resetFigureDocumentForReshape(document: FigureDocument): FigureDocument {
   return {
@@ -94,5 +112,8 @@ export function resetFigureDocumentForReshape(document: FigureDocument): FigureD
         y2AxisLabel: "",
       },
     },
+    ...(document.publication?.seriesStyles === undefined
+      ? {}
+      : { publication: { ...document.publication, seriesStyles: undefined } }),
   };
 }
