@@ -19,6 +19,7 @@ import { sanitizeDataStruct } from "./categorical";
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
+import { baseColumns } from "./formula";
 import { applyComputedColumnsExtras } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
 import type {
@@ -90,7 +91,6 @@ export function parseWorkspaceDataset(d: unknown, i: number): Dataset {
     name: typeof dd.name === "string" ? dd.name : `dataset ${i + 1}`,
     data: sanitizeDataStruct(dd.data),
   };
-  if (isDataStruct(dd.raw)) ds.raw = sanitizeDataStruct(dd.raw);
   if (dd.corrections && typeof dd.corrections === "object") {
     ds.corrections = dd.corrections as CorrectionParams;
   }
@@ -116,6 +116,24 @@ export function parseWorkspaceDataset(d: unknown, i: number): Dataset {
         typeof (f as Record<string, unknown>).expr === "string",
     );
     if (formulas.length) ds.formulas = formulas;
+  }
+  // SILENT_STATE_CORRUPTION_PLAN #6 version-skew: `ds.formulas` is final as
+  // of this point (the block above), so `Dataset.raw`'s always-base-only
+  // contract (lib/types.ts's doc) can be enforced here -- a .dwk saved by
+  // any build before #6 landed could carry `raw` under the OLD contract
+  // (base + whatever computed columns were present at the dataset's FIRST
+  // correction apply), which would otherwise make the next apply/reset run
+  // `recomputeFromBaseOrEmpty` on an already-wide `raw` and append the
+  // formulas a SECOND time (phantom duplicate columns) -- the same
+  // corruption class #6 fixed for the live session, now reachable again
+  // just by opening an old workspace. Strip the excess trailing columns
+  // down to the expected base width when `raw` is too WIDE; a `raw`
+  // that's already base-only (the common case) or narrower than expected
+  // (nothing to invent) passes through untouched.
+  if (isDataStruct(dd.raw)) {
+    const raw = sanitizeDataStruct(dd.raw);
+    const expectedWidth = ds.data.labels.length - (ds.formulas?.length ?? 0);
+    ds.raw = raw.labels.length > expectedWidth ? baseColumns(raw, raw.labels.length - expectedWidth) : raw;
   }
   applyComputedColumnsExtras(ds, dd); // PR K (K2/K5b) — lib/workspaceComputedColumns.ts
   // MAIN #33: error roles survive save/reapply, but are re-validated
