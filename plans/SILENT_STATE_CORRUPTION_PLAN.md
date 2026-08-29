@@ -15,8 +15,8 @@ exists.
 branch #259, and #10 below; the 2026-08-28 adversarial bug hunt's eight backend
 defects shipped in #256/#257. **No open tasks remain in this plan.**
 The acceptance candidate once recorded here, `v0.23.2-rc1` = `cd68ad16`, was
-superseded without ever being tagged; the candidate is `v0.23.2-rc2`, cut from
-`main` after #264.)
+cut and published, then superseded by #260-#264; the candidate is
+`v0.23.2-rc2` = `1264b2a4`.)
 
 ---
 
