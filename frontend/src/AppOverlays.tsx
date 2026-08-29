@@ -13,9 +13,16 @@
 // interfaces that must be ready before a component has rendered. Help and the
 // ordinary store-flag dialogs are exceptions: their open flags live here, so
 // their growing content can be omitted from startup without losing an event
-// listener. `SqliteQueryDialog`
-// is eager because it self-gates on a `SHOW_SQLITE_QUERY` window event
-// registered in a `useEffect`, so it must stay mounted to hear it at all.
+// listener. `SqliteQueryDialog` WAS eager for the same reason -- it self-gated
+// on a `SHOW_SQLITE_QUERY` window event registered in its own `useEffect`, so
+// it had to stay mounted to hear it -- but as of the 2026-08-29 bundle pass
+// that listener and the event name moved to `store/sqliteQueryDialog.ts`
+// (the `store/annotationTextDialog.ts` shape). The flag is read here, the
+// event is heard while the chunk is still unloaded, and the dialog itself is
+// a `lazyPanel()` below. That also cut the second, less obvious eager edge:
+// `commands/dataCommands.ts` imported the `SHOW_SQLITE_QUERY` *constant* from
+// the component file, which gave the whole dialog the command registry's
+// reachability no matter how it was mounted.
 //
 // Three more overlays were evaluated for the same treatment; two stay put and
 // one now joins the lazy panels below. `AnnotationTextDialog` exposes a
@@ -53,11 +60,11 @@ import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
-import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
+import { listenForSqliteQuery, useSqliteQueryDialog } from "./store/sqliteQueryDialog";
 import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
@@ -96,6 +103,7 @@ function useKeepMountedAfterOpen(open: boolean): boolean {
   return mounted;
 }
 
+const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"));
 const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"));
 const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"));
 const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"));
@@ -222,12 +230,17 @@ export default function AppOverlays() {
   const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
   const recipeManagerOpen = useRecipeManager((s) => s.open);
   const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
+  const sqliteQueryOpen = useSqliteQueryDialog((s) => s.open);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelink((s) => s.open);
   const recodeOpen = useRecode((s) => s.open);
+  // Heard while the dialog chunk is still unloaded -- the store owns the
+  // listener so the Data command can dispatch before anything is mounted.
+  useEffect(listenForSqliteQuery, []);
+
   const splitDialogMounted = useKeepMountedAfterOpen(splitDialogOpen);
   const combineDialogMounted = useKeepMountedAfterOpen(combineDialogOpen);
   const separateDialogMounted = useKeepMountedAfterOpen(separateDialogOpen);
@@ -251,7 +264,7 @@ export default function AppOverlays() {
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />
-      <SqliteQueryDialog />
+      {sqliteQueryOpen && <SqliteQueryDialog />}
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}

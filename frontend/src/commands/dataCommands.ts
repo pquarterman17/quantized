@@ -12,7 +12,7 @@ import {
   runUnstackWorksheet,
 } from "../lib/worksheetTransformCommands";
 import type { Action } from "../store/commands";
-import { SHOW_SQLITE_QUERY } from "../components/workshops/database/SqliteQueryDialog";
+import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
 
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build

@@ -45,6 +45,61 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-08-29 — pin UNCHANGED at 910,711 after one split plus a full
+ *  per-module profiling pass. CI at e276d56 measured 889.3 kB eager and
+ *  printed "0.0 kB under budget" — 68 bytes of real headroom, i.e. the next
+ *  byte of eager growth reds the build. This split takes that to ~2.9 kB.
+ *  (Measure on CI, not locally: a drifted local node_modules built the same
+ *  tree 0.7 kB larger here, enough to invert the pass/fail verdict. Local
+ *  builds are only trustworthy as a DELTA between two builds in the same
+ *  environment, which is how the -2,849 B below was obtained.)
+ *
+ *  THE SPLIT (-2,849 B, local 911,374 -> 908,525 on one environment).
+ *  `SqliteQueryDialog` was the last dialog in the eager graph, held there by
+ *  TWO edges, both the 2026-08-18 `askAnnotationText` pattern: (a) it
+ *  self-gated on a `SHOW_SQLITE_QUERY` window listener registered in its own
+ *  `useEffect`, so it had to stay mounted to hear the event; (b) less
+ *  obviously, `commands/dataCommands.ts` (always eager) imported the
+ *  `SHOW_SQLITE_QUERY` *constant* from the component file, which handed the
+ *  whole dialog the command registry's reachability no matter how AppOverlays
+ *  mounted it. Both now live in `store/sqliteQueryDialog.ts` (the
+ *  `store/annotationTextDialog.ts` shape): the store owns the flag and the
+ *  listener, AppOverlays registers the listener eagerly and gates a
+ *  `lazyPanel()` on the flag, and the command dispatches the event without
+ *  touching the render tree. The event is still heard while the chunk is
+ *  unloaded — two new tests dispatch it with nothing mounted.
+ *
+ *  WHY THERE IS NO BIGGER SPLIT LEFT (measured, not assumed). Per-module
+ *  attribution over all 36 eager chunks via their sourcemaps, 869.4 kB
+ *  attributed across 391 modules:
+ *    236.0 kB  VENDOR — react-dom 170.5, uPlot 49.9, react 7.3. Irreducible:
+ *              React is the framework and uPlot draws the default first paint.
+ *    298.6 kB  lib/ — pure logic on the store + plot-render path.
+ *    140.9 kB  store/ — useApp 35.6 kB and friends; session restore is sync.
+ *     31.9 kB  commands/ — the registry; keyboard shortcuts need handlers.
+ *    143.3 kB  components/ — the ONLY lazy-able surface, and it is now flat:
+ *              the largest eager component file is 5.1 kB (PlotStage), and
+ *              every file above 3 kB is first-paint (PlotStage, Library,
+ *              PlotWindowFrame, ContextMenu, PlotLegend, DatasetRow,
+ *              PlotResultChips, MenuBar, PlotToolbar).
+ *  The fat panels are already lazy — Inspector, MapStage, CalculatorsContent,
+ *  FigureBuilderView, WorksheetPane, StatStage, BackgroundPlotWindow,
+ *  AnnotationTextDialog, the primitives barrel. Two candidates were measured
+ *  and REJECTED: `lib/originFigures.ts` (6.9 kB) is imported by `useApp.ts`
+ *  for 7 symbols spread the length of the file — not the thin eager surface
+ *  the annotation dialog had; and deferring the ~26 kB of command handlers
+ *  would put a dynamic import in front of the FIRST PRESS of every keyboard
+ *  shortcut, which is exactly the frequent-interaction latency this budget
+ *  exists to protect.
+ *
+ *  SO: splitting is spent as a lever. ~2.9 kB is what is available, not the
+ *  25-40 kB band this file calls healthy. The next lane that needs real room
+ *  should expect a justified RAISE under rule 2 above — measured, minimal
+ *  (`measured + 1,024`), with the growth named — not another diet pass. The
+ *  pin is NOT lowered to `measured + 1,024` here (rule 3): rule 3 locks in a
+ *  real diet, and 2.8 kB pinned tight would leave ~1 kB and red the next lane
+ *  on contact.
+ *
  *  2026-08-18 — pinned at 905,104 after the bundle-diet pass that followed
  *  four feature lanes (P1.6 import wizard, L metadata/collections, K derived
  *  worksheets, J combine/split) landing the same day and leaving the eager
