@@ -11,6 +11,7 @@ import { collectRecipes } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
+import { recipeFidelity } from "../../../store/plotRecipes";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
@@ -112,7 +113,7 @@ export default function RecipeLibraryPanel() {
     plotProject: projectPlots,
     plotGlobal: globalPlots,
     quickPlot: quickPlots,
-    plotSourcesComplete: globalHydrated && globalComplete,
+    plotSourcesComplete: globalHydrated && globalComplete && recipeFidelity.complete,
   });
 
   const rows = sortRows(collection.recipes).filter((row) =>

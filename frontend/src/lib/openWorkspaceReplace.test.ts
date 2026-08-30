@@ -50,7 +50,7 @@ function emptyWorkspace(): LoadedWorkspace {
     expandedWorkbookIds: [],
     collections: [],
     visibleDetailsColumns: [],
-    plotRecipes: [],
+    plotRecipes: [], recipeSourcesComplete: true,
   };
 }
 
