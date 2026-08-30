@@ -1,27 +1,37 @@
 import { describe, expect, it } from "vitest";
 
+// Covers the whole originFigures MODULE FAMILY, kept as one spec after the
+// bundle-headroom slice-1 split (`plans/BUNDLE_HEADROOM.md`) so the cases and
+// their shared fixtures stay verbatim — the split moved code between modules,
+// not behaviour, and a test file that moved at the same time would have hidden
+// that. Eager half: `./originFigures`. Lazy apply half:
+// `./originFigureSelection` + `./originSpatialPanels`.
 import {
   buildOriginFigureEntries,
-  coincidentOverlayGroups,
   curveDisplayName,
-  doubleYPartner,
-  figureChannelSelection,
   figureLabel,
   figureLayerFamily,
-  figureSelectionState,
   originCurveSeriesStyle,
+  type OriginFigureEntry,
+  resolveFigureDataset,
+  resolveLegendTemplate,
+} from "./originFigures";
+import {
+  doubleYPartner,
+  figureChannelSelection,
+  figureSelectionState,
   originFigureAnnotations,
   originLegendFrameXY,
   originLegendPos,
   originLegendState,
   originRegionShades,
-  type OriginFigureEntry,
-  resolveFigureDataset,
+} from "./originFigureSelection";
+import {
+  coincidentOverlayGroups,
   resolveFigurePanels,
-  resolveLegendTemplate,
   resolveSpatialPanels,
   spatialApplyNotices,
-} from "./originFigures";
+} from "./originSpatialPanels";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
 const figure = (overrides: Partial<OriginFigure> = {}): OriginFigure => ({

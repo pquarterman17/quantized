@@ -34,18 +34,8 @@ import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import type { WorkbookNode } from "../lib/workbooks";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
-import {
-  doubleYPartner,
-  figureChannelSelection,
-  figureLabel,
-  figureLayerFamily,
-  figureSelectionState,
-  originFigureAnnotations,
-  originLegendState,
-  originRegionShades,
-  resolveSpatialPanels,
-  spatialApplyNotices,
-} from "../lib/originFigures";
+import { figureLabel, figureLayerFamily } from "../lib/originFigures";
+import { originApplyLibs } from "./originApplyLibs"; // apply-only half: lazy chunk
 import {
   dedupeWindowTitle,
   displayedWindowTitle,
@@ -128,7 +118,7 @@ import { fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
 import { analysisData, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import { toast } from "./toasts";
-import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
+import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
@@ -1180,6 +1170,12 @@ export const useApp = create<AppState>((set, get) => ({
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
     if (confirmOriginReapplyDiscard(get, entry, id, opts) || deferOriginFigureApply(get, entry, id, opts)) return; // #57 confirm-then-defer
+    // Bundle headroom slice 1: `libs` is the apply-only half of the figure
+    // library, a LAZY chunk. Until it has been fetched, hand off to the third
+    // preflight — it loads the chunk and re-enters here, taking this
+    // synchronous path on the second pass (see store/originApplyLibs.ts).
+    const libs = originApplyLibs();
+    if (!libs) return deferOriginApplyLibs(get, id, opts);
     // Item 9: open a NEW window for this figure instead of overwriting the
     // focused one. Creating (bound to the figure's dataset) then focusing
     // BEFORE any of the apply logic below runs means every `setActive`/
@@ -1258,13 +1254,13 @@ export const useApp = create<AppState>((set, get) => ({
           yAxisLabel: fig.y_title ?? "",
           // Pin the figure's decoded floating text; REPLACE so re-applying
           // or switching figures never stacks stale marks.
-          annotations: originFigureAnnotations([fig], entry.id),
+          annotations: libs.originFigureAnnotations([fig], entry.id),
           // Decoded Rect* region bands (item 41) — REPLACE, same lifecycle
           // as annotations (figures without shades clear the plot's bands).
-          regionShades: originRegionShades([fig], entry.id),
+          regionShades: libs.originRegionShades([fig], entry.id),
           // Origin's legend placement -> nearest corner preset + decoded title
           // header (decode #52; position only when decoded, never guessed).
-          ...originLegendState(fig),
+          ...libs.originLegendState(fig),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -1276,13 +1272,13 @@ export const useApp = create<AppState>((set, get) => ({
     // primary Y axis, layer-2 curves on the secondary (y2) axis — instead
     // of just the clicked layer's own curves. Axis range/log come from the
     // LOWER layer number (Origin draws layer 1's axis as the "main" one).
-    const partner = doubleYPartner(entry, get().originFigures);
+    const partner = libs.doubleYPartner(entry, get().originFigures);
     const dsForPartner = partner ? get().datasets.find((d) => d.id === entry.datasetId) : null;
     if (partner && dsForPartner) {
       const lower = (entry.figure.layer ?? 1) <= (partner.figure.layer ?? 1) ? entry : partner;
       const upper = lower === entry ? partner : entry;
-      const baseSel = figureChannelSelection(lower.figure, dsForPartner);
-      const partnerSel = figureChannelSelection(upper.figure, dsForPartner);
+      const baseSel = libs.figureChannelSelection(lower.figure, dsForPartner);
+      const partnerSel = libs.figureChannelSelection(upper.figure, dsForPartner);
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
@@ -1317,10 +1313,10 @@ export const useApp = create<AppState>((set, get) => ({
           // Both layers' marks (lower first) — REPLACE, never stack. The upper
           // layer's marks are tagged axis:1 so they land on y2 (fix #3), not
           // the primary axis lower.figure's own marks stay on.
-          annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id, [0, 1]),
+          annotations: libs.originFigureAnnotations([lower.figure, upper.figure], entry.id, [0, 1]),
           // Both layers' region bands, the upper layer's tagged to y2 (item 41).
-          regionShades: originRegionShades([lower.figure, upper.figure], entry.id, [0, 1]),
-          ...originLegendState(lower.figure),
+          regionShades: libs.originRegionShades([lower.figure, upper.figure], entry.id, [0, 1]),
+          ...libs.originLegendState(lower.figure),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -1343,7 +1339,7 @@ export const useApp = create<AppState>((set, get) => ({
     // any layer doesn't resolve.
     const family = figureLayerFamily(entry, get().originFigures);
     if (family.length >= 2) {
-      const spatialResult = resolveSpatialPanels(family, get().datasets);
+      const spatialResult = libs.resolveSpatialPanels(family, get().datasets);
       if (spatialResult) {
         const { panels: placed, layout, droppedOverlays } = spatialResult;
         get().setActive(entry.datasetId);
@@ -1369,7 +1365,7 @@ export const useApp = create<AppState>((set, get) => ({
           regionShades: [],
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
-        for (const msg of spatialApplyNotices(layout, placed.length, droppedOverlays)) toast(msg, "info");
+        for (const msg of libs.spatialApplyNotices(layout, placed.length, droppedOverlays)) toast(msg, "info");
         return;
       }
       toast(
@@ -1381,7 +1377,7 @@ export const useApp = create<AppState>((set, get) => ({
     // Decoded curve bindings (partial recall, 100% precision) select the
     // actually-plotted channels; without them the default view stands.
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
-    const selection = ds ? figureChannelSelection(fig, ds) : null;
+    const selection = ds ? libs.figureChannelSelection(fig, ds) : null;
     set({
       facetKey: null, // F4.4 review L1 -- see the overlay branch's doc above
       ...ORIGIN_FIGURE_AXIS,
@@ -1394,10 +1390,10 @@ export const useApp = create<AppState>((set, get) => ({
       xAxisLabel: fig.x_title ?? "",
       yAxisLabel: fig.y_title ?? "",
       // Pin the figure's decoded floating text; REPLACE, never stack.
-      annotations: originFigureAnnotations([fig], entry.id),
-      regionShades: originRegionShades([fig], entry.id),
-      ...originLegendState(fig),
-      ...figureSelectionState(selection),
+      annotations: libs.originFigureAnnotations([fig], entry.id),
+      regionShades: libs.originRegionShades([fig], entry.id),
+      ...libs.originLegendState(fig),
+      ...libs.figureSelectionState(selection),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
   },

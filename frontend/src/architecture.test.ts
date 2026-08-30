@@ -446,7 +446,13 @@ const TS_MODULE_PINS: Record<string, number> = {
   // or .dwk; that's PR A2).
   "/lib/types.ts": 1053,
   "/lib/plotspec.ts": 893,
-  "/lib/originFigures.ts": 793,
+  // originFigures.ts GRADUATED 2026-08-30 (pin was 793; BUNDLE_HEADROOM
+  // slice 1): 793 -> 208 lines. The apply-only half — legend/annotation/
+  // region resolution and the spatial multi-panel solver — moved to
+  // lib/originFigureSelection.ts + lib/originSpatialPanels.ts, which the
+  // store loads on demand via store/originApplyLibs.ts. Like lib/api.ts
+  // above this was an EAGER-BYTES extraction, not a line-count one:
+  // measured 890.2 -> 885.3 kB eager (local, same environment).
   "/components/Stage/useMultiPanelStage.ts": 791,
   "/components/Stage/useStatStage.ts": 704,
   // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
@@ -1443,6 +1449,61 @@ describe("storage-key registry ratchet (P3.4)", () => {
       .filter(([, src]) => /`qz\.[A-Za-z0-9_.-]*\$\{/.test(src))
       .map(([p]) => p);
     expect(dynamic).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lazy Origin-apply chunk guard (BUNDLE_HEADROOM slice 1, 2026-08-30).
+//
+// `lib/originFigureSelection.ts` + `lib/originSpatialPanels.ts` hold the half
+// of the Origin figure library that only an APPLY needs. `store/useApp.ts`
+// reaches them through `store/originApplyLibs.ts`'s dynamic `import()`, which
+// is what keeps them — and `lib/originPanels.ts`, whose only value import is
+// there — out of the entry chunk (measured 890.2 -> 885.3 kB eager).
+//
+// Rollup ships a module to wherever ANY of its importers' chunks land, so ONE
+// static import from an eagerly-reachable file silently folds all of it back
+// in. `scripts/check-bundle-size.mjs` would eventually catch that as a budget
+// failure, but only after the fact and without naming the cause; this guard
+// names it at the import site.
+describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)", () => {
+  const LAZY = ["originFigureSelection", "originSpatialPanels"];
+  // Files allowed to import them STATICALLY, each because it is itself only
+  // reachable from a lazy chunk. Adding a row here is a claim that the new
+  // importer is lazy too — verify with `node scripts/profile-eager-bundle.mjs`
+  // (the module must be absent from the eager table) before you add one.
+  const LAZY_IMPORTERS = [
+    "/lib/originSpatialPanels.ts", // the other half of the same lazy pair
+    "/lib/thumbnailArtifacts.ts", // reached only via lib/thumbnailGenerators
+  ];
+
+  it("scans the modules it claims to", () => {
+    // A guard whose subject has been renamed away passes vacuously.
+    const paths = sources().map(([p]) => p);
+    for (const name of LAZY) {
+      expect(paths.some((p) => p.endsWith(`/lib/${name}.ts`)), `${name} not found`).toBe(true);
+    }
+  });
+
+  it("no eagerly-reachable module statically imports them", () => {
+    const pattern = new RegExp(`from "[^"]*/(${LAZY.join("|")})"`);
+    const offenders = sources()
+      .filter(([p]) => !LAZY_IMPORTERS.some((allowed) => p.endsWith(allowed)))
+      .filter(([, src]) => pattern.test(src))
+      .map(([p]) => p);
+    expect(
+      offenders,
+      "reach these through store/originApplyLibs.ts's dynamic import(), or prove the importer is lazy and allowlist it",
+    ).toEqual([]);
+  });
+
+  it("the loader itself uses a dynamic import, not a static one", () => {
+    const loader = sources().find(([p]) => p.endsWith("/store/originApplyLibs.ts"));
+    expect(loader, "store/originApplyLibs.ts not found").toBeDefined();
+    const src = loader?.[1] ?? "";
+    for (const name of LAZY) {
+      expect(src).toContain(`import("../lib/${name}")`);
+    }
   });
 });
 
