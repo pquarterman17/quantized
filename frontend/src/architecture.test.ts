@@ -1426,3 +1426,70 @@ describe("storage-key registry ratchet (P3.4)", () => {
     expect(dynamic).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// File-URL-to-path guard (#269 follow-up review: Windows build SHA).
+//
+// `new URL(".", import.meta.url).pathname` is a URL component, not a
+// filesystem path. On POSIX the two happen to coincide, which is exactly what
+// makes this a trap worth a build guard: it works perfectly on every machine
+// in CI, and on Windows returns `/C:/Users/.../frontend/`, which Node rejects
+// as a `cwd` with ENOENT. In #269 that made every Windows build stamp the
+// diagnostics bundle with `unknown` instead of the commit SHA, silently,
+// because the failure was swallowed by a fallback and `"unknown"` is truthy.
+//
+// A behavioural test cannot hold this line here: both frontend CI jobs run
+// ubuntu-latest, and reverting the fix leaves the build-identity tests green
+// on Linux (verified). Until a Windows frontend job exists, the only guard
+// that actually runs on the failing pattern is a grep for it.
+//
+// Scoped to build config and scripts, where every `.pathname` is a file URL's.
+// `window.location.pathname` in app code is a different thing entirely and is
+// unaffected.
+describe("file URLs are converted with fileURLToPath, never .pathname (#269)", () => {
+  const buildFiles = {
+    ...(import.meta.glob("../vite.config.ts", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>),
+    ...(import.meta.glob("../scripts/*.mjs", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>),
+  };
+
+  /** Lines with comments dropped, so prose ABOUT the trap (including the
+   *  warning in vite.config.ts) does not read as an instance of it. */
+  function code(src: string): string[] {
+    return src
+      .split("\n")
+      .filter((l) => {
+        const t = l.trim();
+        return t !== "" && !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+      });
+  }
+
+  it("scans the build config and scripts it claims to", () => {
+    // A glob that silently matches nothing is a guard that silently passes.
+    const names = Object.keys(buildFiles);
+    expect(names.some((n) => n.endsWith("vite.config.ts"))).toBe(true);
+    expect(names.some((n) => n.endsWith("check-bundle-size.mjs"))).toBe(true);
+  });
+
+  it("no build file derives a path from a file URL's .pathname", () => {
+    const offenders: string[] = [];
+    for (const [path, src] of Object.entries(buildFiles)) {
+      for (const line of code(src)) {
+        if (/\.pathname/.test(line)) offenders.push(`${path}: ${line.trim()}`);
+      }
+    }
+    expect(
+      offenders,
+      "Use fileURLToPath(new URL(…, import.meta.url)) — a file URL's pathname " +
+        "keeps the drive letter behind a leading slash on Windows (/C:/…), " +
+        "which Node rejects as a cwd. See this block's comment.",
+    ).toEqual([]);
+  });
+});
