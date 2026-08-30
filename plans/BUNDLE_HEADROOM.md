@@ -29,11 +29,20 @@ to the next segment's — over exactly the chunk set `check-bundle-size.mjs`
 calls eager (entry script + every `modulepreload`), so the two tools cannot
 disagree about the denominator.
 
+Two details there are easy to get wrong, and both were wrong in this script's
+first version (found in review): an UNMAPPED segment still ends the preceding
+span, or bundler glue gets charged to whichever module precedes it; and
+sourcemap columns are UTF-16 code units, so a span must be sliced by column
+and then measured with `Buffer.byteLength`, not reported as a unit count under
+a "bytes" heading. The attribution core lives in
+`frontend/scripts/eagerAttribution.mjs` with regression tests for both in
+`src/lib/eagerAttribution.test.ts`.
+
 ```
 eager chunks:        36
 bytes on disk:       913,348
-attributed:          896,145  (rest is chunk boilerplate/runtime)
-  of which vendor:   241,688 (27.0%)
+attributed:          897,425  (rest is chunk boilerplate/runtime)
+  of which vendor:   241,688 (26.9%)
 ```
 
 ### What these numbers are NOT
@@ -50,26 +59,26 @@ bound; the measured net delta is TBD until a spike runs.
 |--------:|--------|-------------|
 | 174,554 | `react-dom` (vendor) | no |
 | 51,084 | `uplot` (vendor) | no — the plot is first paint |
-| 36,516 | `store/useApp.ts` | only via slice decomposition (P4.1) |
+| 36,562 | `store/useApp.ts` | only via slice decomposition (P4.1) |
 | 12,336 | `lib/uplotOpts.ts` | no — plot rendering |
 | 11,234 | `lib/uplotOverlays.ts` | no — plot rendering |
 | 9,394 | `lib/plotview.ts` | no — plot model |
 | 8,891 | `src/AppOverlays.tsx` | no — it *is* the lazy-panel registry |
-| 8,136 | `store/windows.ts` | no |
-| 7,985 | `commands/fileCommands.ts` | partially — see slice 2 |
-| 7,616 | `commands/analysisCommands.ts` | partially — see slice 2 |
+| 8,140 | `store/windows.ts` | no |
+| 8,041 | `commands/fileCommands.ts` | partially — see slice 2 |
+| 7,680 | `commands/analysisCommands.ts` | partially — see slice 2 |
 | 7,436 | `react` (vendor) | no |
-| 7,116 | `lib/originFigures.ts` | **yes — slice 1** |
+| 7,121 | `lib/originFigures.ts` | **yes — slice 1** |
 | 7,102 | `lib/uplotShapes.ts` | no — plot rendering |
-| 7,014 | `store/figureLifecycle.ts` | unclear |
+| 7,016 | `store/figureLifecycle.ts` | unclear |
 | 6,954 | `lib/plotspec.ts` | no — plot model |
 | 6,736 | `lib/figureDocument.ts` | no — workspace parse needs it |
-| 6,612 | `commands/plotCommands.ts` | partially — see slice 2 |
+| 6,626 | `commands/plotCommands.ts` | partially — see slice 2 |
 | 5,926 | `lib/plotRecipeIO.ts` | partially — slice 3 |
-| 5,817 | `lib/contextActions.ts` | no — right-click latency |
+| 5,835 | `lib/contextActions.ts` | no — right-click latency |
 | 5,231 | `lib/uplotGadgets.ts` | no — plot rendering |
 
-**241,688 B (27.0%) is vendor** — react-dom 174.5 kB, uPlot 51 kB, react 7.4 kB
+**241,688 B (26.9%) is vendor** — react-dom 174.5 kB, uPlot 51 kB, react 7.4 kB
 and the remainder. That is the single largest fact here and no amount of
 splitting touches it.
 
@@ -77,7 +86,7 @@ splitting touches it.
 
 ### Slice 1 — split `lib/originFigures.ts`
 
-**Upper bound 7,116 B · measured net eager delta: TBD · MEDIUM risk**
+**Upper bound 7,121 B · measured net eager delta: TBD · MEDIUM risk**
 
 The bound is loose on purpose: `figureLabel`, `figureLayerFamily`, the
 `OriginFigureEntry` type and whatever helpers the thin side keeps all stay
@@ -122,7 +131,7 @@ guessing:
 
 ### Slice 2 — command metadata vs. handlers
 
-**Upper bound 22,213 B · measured net eager delta: TBD · HIGHER risk**
+**Upper bound 22,347 B · measured net eager delta: TBD · HIGHER risk**
 
 Especially loose: the metadata (id, label, section, keywords) and the dispatch
 seam must stay eager for the palette to list and search commands at all. The
@@ -130,7 +139,7 @@ real prize is the handlers' TRANSITIVE imports, which this attribution
 credits to those modules rather than to the command files — so the bound says
 little about the achievable number. Spike before scheduling.
 
-`fileCommands` + `analysisCommands` + `plotCommands` = 22,213 B. The earlier
+`fileCommands` + `analysisCommands` + `plotCommands` = 22,347 B. The earlier
 rejection ("a dynamic import in front of the FIRST PRESS of every keyboard
 shortcut") conflates two things: the command **metadata** (id, label, section,
 keywords — needed eagerly so the palette can list and search) and the

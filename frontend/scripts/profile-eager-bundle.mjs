@@ -35,35 +35,13 @@ import { readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { attributeMappings } from "./eagerAttribution.mjs";
+
 // fileURLToPath, never `new URL(...).pathname`: on Windows the latter keeps
 // the drive letter behind a leading slash (see vite.config.ts's note).
 const here = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(here, "..", "..", "src", "quantized", "web");
 const repoRoot = resolve(here, "..", "..");
-
-const B64 = new Map(
-  [..."ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"].map((c, i) => [c, i]),
-);
-
-/** Decode one VLQ segment into its signed fields. */
-function decodeSegment(seg) {
-  const out = [];
-  let shift = 0;
-  let acc = 0;
-  for (const ch of seg) {
-    const d = B64.get(ch);
-    if (d === undefined) return out; // malformed — skip the rest of the segment
-    acc |= (d & 31) << shift;
-    if (d & 32) {
-      shift += 5;
-    } else {
-      out.push((acc >> 1) * (acc & 1 ? -1 : 1));
-      shift = 0;
-      acc = 0;
-    }
-  }
-  return out;
-}
 
 /** The chunks the browser loads before any user interaction: the entry script
  *  plus every `modulepreload`. Identical to check-bundle-size.mjs's rule, so
@@ -75,35 +53,6 @@ function eagerChunkNames() {
     ...html.matchAll(/<link[^>]+rel="modulepreload"[^>]+href="([^"]+\.js)"/g),
   ].map((m) => m[1].replace(/^\//, ""));
   return new Set(refs.map((r) => r.split("/").pop()));
-}
-
-/** Bytes of generated output attributed to each source module. A segment owns
- *  the generated text from its own column up to the next segment's column (or
- *  end of line). */
-function attribute(mapPath, jsPath, into) {
-  const map = JSON.parse(readFileSync(mapPath, "utf8"));
-  const lines = readFileSync(jsPath, "utf8").split("\n");
-  let srcIndex = 0;
-  map.mappings.split(";").forEach((lineMappings, lineNo) => {
-    let col = 0;
-    const segs = [];
-    for (const seg of lineMappings.split(",")) {
-      if (!seg) continue;
-      const v = decodeSegment(seg);
-      if (v.length === 0) continue;
-      col += v[0];
-      if (v.length >= 4) {
-        srcIndex += v[1];
-        segs.push([col, srcIndex]);
-      }
-    }
-    const lineLen = lineNo < lines.length ? lines[lineNo].length : 0;
-    segs.forEach(([c, si], i) => {
-      const end = i + 1 < segs.length ? segs[i + 1][0] : lineLen;
-      const src = map.sources[si];
-      if (src !== undefined) into.set(src, (into.get(src) ?? 0) + Math.max(0, end - c));
-    });
-  });
 }
 
 const assets = join(distDir, "assets");
@@ -123,7 +72,11 @@ if (maps.length === 0) {
 }
 
 const bytes = new Map();
-for (const m of maps) attribute(join(assets, m), join(assets, m.slice(0, -4)), bytes);
+for (const m of maps) {
+  const map = JSON.parse(readFileSync(join(assets, m), "utf8"));
+  const lines = readFileSync(join(assets, m.slice(0, -4)), "utf8").split("\n");
+  attributeMappings({ mappings: map.mappings, sources: map.sources, lines }, bytes);
+}
 
 const total = [...bytes.values()].reduce((a, b) => a + b, 0);
 const eagerOnDisk = [...eager].reduce(
