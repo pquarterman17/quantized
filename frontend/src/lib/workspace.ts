@@ -110,8 +110,8 @@ export interface WorkspaceState {
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
   /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
   plotRecipes?: PlotRecipe[];
-  recipeSourcesComplete?: boolean; // transient parse-fidelity signal; never serialized
 }
+
 /** A parsed workspace — every field populated (folder tree defaults to empty,
  *  active/selection defaulted from the datasets). Assignable to WorkspaceState. */
 export interface LoadedWorkspace {
@@ -148,9 +148,8 @@ export interface LoadedWorkspace {
   collections: Collection[]; // PR L — always populated
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
-  /** Transient parse-fidelity signal; false if workspace recipe records were filtered. */
-  recipeSourcesComplete: boolean;
 }
+
 interface WorkspaceDoc {
   format: string;
   version: number;
@@ -389,7 +388,6 @@ export function parseWorkspace(
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   const collections = sanitizeCollections(o.collections);
   const plotRecipes = sanitizeRecipes(o.plotRecipes); // P1.3 — drop-malformed-never-throw, same as sanitizeQuickPlotTemplates
-  const recipeSourcesComplete = (o.quickPlotTemplates === undefined || (Array.isArray(o.quickPlotTemplates) && o.quickPlotTemplates.length === quickPlotTemplates.length)) && (o.plotRecipes === undefined || (Array.isArray(o.plotRecipes) && o.plotRecipes.length === plotRecipes.length));
   return {
     datasets,
     folders: migration.folders,
@@ -418,9 +416,11 @@ export function parseWorkspace(
     workbookLastChild,
     expandedWorkbookIds,
     collections,
-    visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns), plotRecipes, recipeSourcesComplete,
+    visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
+    plotRecipes,
   };
 }
+
 // Append-a-second-workspace ("Append Project") — `mergeWorkspace` +
 // `WorkspaceMergeResult` — lives in ./workspaceMerge.ts (moved out under the
 // RSM_CUTS_PLAN item 13 size ratchet: it was already fully self-contained,

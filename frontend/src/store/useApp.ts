@@ -103,7 +103,7 @@ import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureL
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
 import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./quickFigureCreate";
 import { createQuickPlotTemplatesSlice, type QuickPlotTemplatesSlice } from "./quickPlotTemplates";
-import { createPlotRecipesSlice, recipeFidelity, type PlotRecipesSlice } from "./plotRecipes";
+import { createPlotRecipesSlice, type PlotRecipesSlice } from "./plotRecipes";
 import { createCollectionsSlice, type CollectionsSlice } from "./collections";
 import { createLibraryDetailsColumnsSlice, type LibraryDetailsColumnsSlice } from "./libraryDetailsColumns";
 import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./quickFigureBuilder";
@@ -1514,7 +1514,7 @@ export const useApp = create<AppState>((set, get) => ({
   // strings get promoted to folders (item 6) either way, exactly once.
   loadWorkspace: (ws, options) =>
     set((s) => {
-      recipeFidelity.complete = ws.recipeSourcesComplete ?? true; const skipLayout = options?.skipLayout ?? false; // PR E2, see AppState doc
+      const skipLayout = options?.skipLayout ?? false; // PR E2, see AppState doc
       // v1/legacy compat: promote any un-foldered `Dataset.group` into a
       // root-level folder before anything else reads `datasets`/`folders` —
       // idempotent, so reloading an already-migrated workspace is a no-op.

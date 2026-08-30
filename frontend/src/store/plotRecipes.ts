@@ -125,7 +125,6 @@ import {
   type SliceGet,
   type SliceSet,
 } from "./plotRecipeApply";
-export const recipeFidelity = { complete: true };
 
 let _recipeSeq = 0;
 const nextPlotRecipeId = (): string => `pr-${Date.now().toString(36)}-${++_recipeSeq}`;
@@ -161,6 +160,7 @@ export interface PendingPlotRecipeApplication {
  *  not change every existing call site's arity. */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- deliberate forward-compat placeholder, see above
 export interface ApplyPlotRecipeOptions {}
+
 export interface PlotRecipesSlice {
   /** Every named saved plot recipe (F4). In-memory only this lane -- see the
    *  module doc's PERSISTENCE note. */

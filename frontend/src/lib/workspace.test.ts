@@ -1547,7 +1547,6 @@ describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(serializeWorkspace({ datasets }));
     expect(loaded.quickPlotTemplates).toEqual([]);
-    expect(loaded.recipeSourcesComplete).toBe(true);
   });
 
   it("drops a corrupt template entry without throwing or dropping the rest of the doc (never throws on load)", () => {
@@ -1563,7 +1562,6 @@ describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR
     const loaded = parseWorkspace(JSON.stringify(doc));
     expect(loaded.quickPlotTemplates).toHaveLength(1);
     expect(loaded.quickPlotTemplates[0].id).toBe("qpt-1");
-    expect(loaded.recipeSourcesComplete).toBe(false);
   });
 
   it("never throws on a hand-edited non-array quickPlotTemplates", () => {
@@ -1572,9 +1570,7 @@ describe("workspace Quick Plot template persistence (LIBRARY_WORKBOOK_UX_PLAN PR
       unknown
     >;
     doc.quickPlotTemplates = "not an array";
-    const loaded = parseWorkspace(JSON.stringify(doc));
-    expect(loaded.quickPlotTemplates).toEqual([]);
-    expect(loaded.recipeSourcesComplete).toBe(false);
+    expect(parseWorkspace(JSON.stringify(doc)).quickPlotTemplates).toEqual([]);
   });
 });
 
@@ -2030,7 +2026,6 @@ describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(serializeWorkspace({ datasets }));
     expect(loaded.plotRecipes).toEqual([]);
-    expect(loaded.recipeSourcesComplete).toBe(true);
   });
 
   it("drops a malformed entry without throwing or dropping the rest of the doc", () => {
@@ -2045,7 +2040,6 @@ describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)
     const loaded = parseWorkspace(JSON.stringify(doc));
     expect(loaded.plotRecipes).toHaveLength(1);
     expect(loaded.plotRecipes[0].id).toBe("r1");
-    expect(loaded.recipeSourcesComplete).toBe(false);
   });
 
   it("never throws on a hand-edited non-array plotRecipes", () => {
@@ -2053,8 +2047,6 @@ describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)
       serializeWorkspace({ datasets: [makeDataset("a", "first")] }),
     ) as Record<string, unknown>;
     doc.plotRecipes = "not an array";
-    const loaded = parseWorkspace(JSON.stringify(doc));
-    expect(loaded.plotRecipes).toEqual([]);
-    expect(loaded.recipeSourcesComplete).toBe(false);
+    expect(parseWorkspace(JSON.stringify(doc)).plotRecipes).toEqual([]);
   });
 });

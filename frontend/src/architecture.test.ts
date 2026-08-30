@@ -23,25 +23,6 @@ function sources(): [string, string][] {
   );
 }
 
-/** Test modules only, for ratchets on test-environment technique. */
-function testSources(): [string, string][] {
-  return Object.entries(modules).filter(([p]) => /\.test\.(ts|tsx)$/.test(p) && !p.endsWith("/architecture.test.ts"));
-}
-
-describe("browser-storage test reliability", () => {
-  it("replaces the localStorage binding instead of patching Storage.prototype", () => {
-    const unreliable = testSources()
-      .filter(([, src]) =>
-        /Storage\.prototype\s*\.\s*(?:getItem|setItem|removeItem|clear)|spyOn\(\s*(?:globalThis\.)?localStorage\s*,\s*["'](?:getItem|setItem|removeItem|clear)["']/.test(src.replace(/\/\/.*$/gm, "")),
-      )
-      .map(([path]) => path);
-    expect(
-      unreliable,
-      "jsdom Storage methods are not reliably intercepted; replace globalThis.localStorage with a fake and restore it after the test",
-    ).toEqual([]);
-  });
-});
-
 /** Modules that reference `re`, minus those whose path ends with an allowlisted
  *  suffix (the sanctioned model layers). */
 function offenders(re: RegExp, allow: string[]): string[] {

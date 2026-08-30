@@ -7,7 +7,6 @@ import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import RecipeLibraryPanel from "./RecipeLibraryPanel";
-import { recipeFidelity } from "../../../store/plotRecipes";
 
 const plot = {
   id: "plot-1",
@@ -25,7 +24,6 @@ const plot = {
 beforeEach(() => {
   localStorage.clear();
   useApp.setState({ plotRecipes: [], quickPlotTemplates: [] });
-  recipeFidelity.complete = true;
   useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
   useRecipeManager.setState({ open: true, library: true });
 });
@@ -63,12 +61,6 @@ describe("RecipeLibraryPanel", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
     expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
     expect(useGlobalPlotRecipes.getState().complete).toBe(false);
-  });
-
-  it("warns when workspace parsing had to drop recipe records", () => {
-    recipeFidelity.complete = false;
-    render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
   });
 
   it("edits comma-separated tags without changing the recipe", () => {
