@@ -3,7 +3,7 @@
 // lib/plotRecipeStorage.ts -- the same "exercise the real store" convention
 // store/plotRecipes.test.ts uses for the project-scope slice.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView } from "../lib/plotview";
@@ -74,6 +74,20 @@ describe("setAll", () => {
     const raw = localStorage.getItem("qz.plotRecipes");
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw!)).toHaveLength(1);
+  });
+
+  it("keeps session recipes but does not certify a failed persistence write", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+    const list = [recipe("r1", "Session only")];
+
+    useGlobalPlotRecipes.getState().setAll(list);
+
+    expect(useGlobalPlotRecipes.getState().recipes).toEqual(list);
+    expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+    setItem.mockRestore();
   });
 });
 

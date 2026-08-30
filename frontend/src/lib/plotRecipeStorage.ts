@@ -66,11 +66,13 @@ export function loadGlobalPlotRecipes(): PlotRecipe[] {
 
 /** Overwrite the global recipe list. Best-effort — a storage failure (quota,
  *  private-mode) is swallowed; the caller's in-memory list is unaffected. */
-export function saveGlobalPlotRecipes(list: readonly PlotRecipe[]): void {
+export function saveGlobalPlotRecipes(list: readonly PlotRecipe[]): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
+    return true;
   } catch {
     /* storage unavailable — recipes stay session-local */
+    return false;
   }
 }
 

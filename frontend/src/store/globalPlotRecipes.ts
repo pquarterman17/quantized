@@ -117,8 +117,8 @@ export const useGlobalPlotRecipes = create<GlobalPlotRecipesState>((set, get) =>
   },
 
   setAll: (list) => {
-    saveGlobalPlotRecipes(list);
-    set({ recipes: list, hydrated: true, complete: true });
+    const complete = saveGlobalPlotRecipes(list);
+    set({ recipes: list, hydrated: true, complete });
   },
 
   rename: (id, name) => {
