@@ -76,14 +76,22 @@ describe("loadGlobalPlotRecipes / saveGlobalPlotRecipes", () => {
   });
 
   it("saveGlobalPlotRecipes never throws when storage is unavailable", () => {
-    const original = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => {
-      throw new Error("quota exceeded");
-    };
+    let rejected = 0;
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        setItem: (): never => {
+          rejected += 1;
+          throw new Error("quota exceeded");
+        },
+      },
+    });
     try {
-      expect(() => saveGlobalPlotRecipes([recipe("r1")])).not.toThrow();
+      expect(saveGlobalPlotRecipes([recipe("r1")])).toBe(false);
+      expect(rejected, "the unavailable-storage path must actually run").toBe(1);
     } finally {
-      Storage.prototype.setItem = original;
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
     }
   });
 });

@@ -3,7 +3,7 @@
 // lib/plotRecipeStorage.ts -- the same "exercise the real store" convention
 // store/plotRecipes.test.ts uses for the project-scope slice.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView } from "../lib/plotview";
@@ -77,17 +77,32 @@ describe("setAll", () => {
   });
 
   it("keeps session recipes but does not certify a failed persistence write", () => {
-    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
-      throw new DOMException("quota", "QuotaExceededError");
+    let rejected = 0;
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (): null => null,
+        setItem: (): never => {
+          rejected += 1;
+          throw new DOMException("quota", "QuotaExceededError");
+        },
+        removeItem: (): void => undefined,
+        clear: (): void => undefined,
+        key: (): null => null,
+        length: 0,
+      },
     });
     const list = [recipe("r1", "Session only")];
-
-    useGlobalPlotRecipes.getState().setAll(list);
-
-    expect(useGlobalPlotRecipes.getState().recipes).toEqual(list);
-    expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
-    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
-    setItem.mockRestore();
+    try {
+      useGlobalPlotRecipes.getState().setAll(list);
+      expect(rejected, "the quota failure must actually be intercepted").toBe(1);
+      expect(useGlobalPlotRecipes.getState().recipes).toEqual(list);
+      expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
+      expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+    }
   });
 });
 
