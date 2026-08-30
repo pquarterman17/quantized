@@ -7,8 +7,15 @@ import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import { setFavorite, setTags } from "./recipeIndex";
 import { collectRecipes, liveKeys, type RecipeSourceInput } from "./recipeSources";
 
-const SECRET_EQUATION = "y = a*exp(-x/tau_UNPUBLISHED) + c";
-const SECRET_COLUMN = "Moment_collabCompound";
+// Named for what they are: a researcher's unpublished modelling and a
+// collaborator's compound. NOT "SECRET_*" — these are invented fixtures, not
+// credentials, and CodeQL's clear-text-storage query reads identifier names to
+// decide what is sensitive, so calling them secrets while writing them to
+// localStorage produced three high-severity alerts for a risk that does not
+// exist. The old naming also contradicted this codebase's own redaction
+// vocabulary, where the material worth protecting is the science, not a token.
+const UNPUBLISHED_EQUATION = "y = a*exp(-x/tau_unpublished) + c";
+const COLLABORATOR_COLUMN = "Moment_collabCompound";
 
 const plot = (id: string, name: string): PlotRecipe =>
   ({
@@ -18,7 +25,7 @@ const plot = (id: string, name: string): PlotRecipe =>
     createdAt: "2026-08-01T00:00:00.000Z",
     modifiedAt: "2026-08-02T00:00:00.000Z",
     schemaVersion: 1,
-    provenance: { sourceDatasetLabel: SECRET_COLUMN, appVersion: "0.23.2" },
+    provenance: { sourceDatasetLabel: COLLABORATOR_COLUMN, appVersion: "0.23.2" },
     technique: "xrd.powder",
     signature: [{ id: "c0" }, { id: "c1" }],
     mapping: {},
@@ -32,7 +39,7 @@ const quick = (id: string, name: string): QuickPlotTemplate =>
     createdAt: "2026-08-01T00:00:00.000Z",
     scope: { kind: "schema" },
     technique: "sims",
-    signature: { channels: [{ label: SECRET_COLUMN }] },
+    signature: { channels: [{ label: COLLABORATOR_COLUMN }] },
   }) as unknown as QuickPlotTemplate;
 
 const input: RecipeSourceInput = {
@@ -86,7 +93,7 @@ beforeEach(() => {
       {
         version: 1,
         name: "Stretched exp",
-        equation: SECRET_EQUATION,
+        equation: UNPUBLISHED_EQUATION,
         params: ["a", "tau", "c"],
         guesses: [1, 1, 0],
         lower: [null, null, null],
@@ -137,9 +144,9 @@ describe("summaries describe shape, never the user's science", () => {
     const blob = collectRecipes(input)
       .recipes.map((r) => `${r.summary ?? ""} ${r.description ?? ""}`)
       .join("\n");
-    expect(blob).not.toContain(SECRET_EQUATION);
-    expect(blob).not.toContain("tau_UNPUBLISHED");
-    expect(blob).not.toContain(SECRET_COLUMN);
+    expect(blob).not.toContain(UNPUBLISHED_EQUATION);
+    expect(blob).not.toContain("tau_unpublished");
+    expect(blob).not.toContain(COLLABORATOR_COLUMN);
   });
 
   it("still says enough to tell two recipes apart", () => {
