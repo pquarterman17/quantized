@@ -1,6 +1,8 @@
 /// <reference types="vitest/config" />
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -9,9 +11,19 @@ import { defineConfig } from "vite";
 // here rather than imported from package.json so the bundle never depends on
 // `resolveJsonModule`, and so a tree with no `.git` (an sdist, a vendored
 // copy) still builds — it just reports an unknown SHA.
+//
+// `fileURLToPath`, never `new URL(…).pathname`. A file URL's pathname is a URL
+// component, not a filesystem path, and on Windows it comes back with the
+// drive letter behind a leading slash — `/C:/Users/…/frontend/`. Node rejects
+// that as a `cwd` with ENOENT, `gitSha()` swallows it, and every Windows build
+// silently stamps `unknown` while the tests stay green because `"unknown"` is
+// a perfectly truthy string. That is exactly what shipped in #269 and what
+// review caught. `fileURLToPath` is platform-aware and yields `C:\Users\…`.
+const configDir = fileURLToPath(new URL(".", import.meta.url));
+
 const pkgVersion = (): string => {
   try {
-    return (JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
+    return (JSON.parse(readFileSync(join(configDir, "package.json"), "utf8")) as {
       version?: string;
     }).version ?? "dev";
   } catch {
@@ -24,7 +36,7 @@ const gitSha = (): string => {
     // execFileSync, not execSync: no shell, so nothing here can be influenced
     // by a directory name or an environment variable.
     return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
-      cwd: new URL(".", import.meta.url).pathname,
+      cwd: configDir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
