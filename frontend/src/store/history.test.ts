@@ -298,6 +298,7 @@ describe("per-action-class undo/redo coverage", () => {
       collections: [],
       visibleDetailsColumns: [],
       plotRecipes: [],
+      recipeSourcesComplete: true,
     };
 
     useApp.getState().appendWorkspace(incoming);

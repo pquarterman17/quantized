@@ -375,7 +375,14 @@ const MODULE_PINS: Record<string, number> = {
   // cohesive block funds this 9-line addition; written justification per
   // CLAUDE.md's "raise only with written justification" — the pin's own
   // history comment named this exact addition as the intended spend.
-  "/lib/workspace.ts": 430,
+  // workspace.ts GRADUATED 2026-08-30 (pin was 430; P3.5 recipe-source
+  // fidelity): 429 -> 361 lines. The .dwk WRITE side — the private
+  // `WorkspaceDoc` shape and `serializeWorkspace` — moved verbatim to
+  // lib/workspaceSerialize.ts, re-exported from workspace.ts exactly as
+  // lib/workspaceMerge.ts already was, so no importer changed. This file is
+  // the READ side now; a new persisted field costs a line here and a line
+  // there. The extraction is what funded the fidelity signal rather than a
+  // bigger number, and it graduates the pin instead of lowering it.
   // 978 -> 981 (2026-08-23, FIGURE_AUTHORING_WORKFLOW_PLAN F4.4): `facetKey`
   // added to `PlotView` (interface field + `defaultPlotView()` +
   // `sanitizePlotView()`), mirroring `groupKey`'s own three-site pattern
@@ -613,6 +620,10 @@ describe("row-state model guard (#50 universal linking)", () => {
       // workspace.ts's parseWorkspace (2026-08-22 extraction) — same .dwk
       // (de)serialize role as workspace.ts itself, just relocated.
       "/lib/workspaceDatasetParse.ts",
+      // The .dwk WRITE side that used to live inline in workspace.ts
+      // (2026-08-30 extraction, P3.5) — same (de)serialize role, relocated
+      // for the same size-pin reason as workspaceDatasetParse.ts above.
+      "/lib/workspaceSerialize.ts",
       "/store/useApp.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",
@@ -973,6 +984,8 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   graphBuilderOpen: "Graph Builder workshop visibility; UI state, transient",
   graphBuilderSeed: "seeded spec from another workflow; consumed on use, not persistent",
   quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
+
+  recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
 
   // history slice: the undo stack itself (not a field to undo INTO)
   history: "undo stack; the history system itself, not undoable data",
