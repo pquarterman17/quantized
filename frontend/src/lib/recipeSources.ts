@@ -40,32 +40,67 @@ export interface RecipeSourceInput {
   readonly plotProject: readonly PlotRecipe[];
   readonly plotGlobal: readonly PlotRecipe[];
   readonly quickPlot: readonly QuickPlotTemplate[];
+  /** Whether the caller's OWN three lists are a faithful, complete read.
+   *
+   *  Required, not optional-defaulting-to-true, and that is the point: the
+   *  workspace load and `globalPlotRecipes`' hydration both sanitize by
+   *  dropping malformed entries, so the caller is the only code that can know
+   *  whether its lists are whole. Defaulting to `true` would reintroduce at
+   *  the boundary exactly the optimistic assumption this flag exists to kill.
+   *  Pass false whenever hydration was skipped, failed, or dropped records. */
+  readonly plotSourcesComplete: boolean;
 }
 
 export interface RecipeCollection {
   readonly recipes: readonly RecipeDescriptor[];
-  /** False when any localStorage-backed source could not be read. Callers
-   *  MUST pass this through to `pruneEntries` — pruning the sidecar index
-   *  against a list built from a failed read would delete every favorite the
-   *  user has (see recipeIndex.ts). */
+  /** True only when EVERY source is known to be represented in `recipes`:
+   *  each localStorage slot parsed and yielded exactly as many records as it
+   *  holds, and the caller vouched for its own lists. False if any slot was
+   *  unreachable, corrupt, wrongly shaped, or had records filtered out.
+   *
+   *  Callers MUST pass this through to `pruneEntries`. Pruning against an
+   *  incomplete collection deletes the favorites and tags of recipes that
+   *  still exist (see `slotComplete` below). */
   readonly complete: boolean;
 }
 
 const plural = (n: number, one: string, many = `${one}s`): string =>
   `${n} ${n === 1 ? one : many}`;
 
-/** Is localStorage actually reachable? The four `load*` functions below all
- *  swallow their own errors and return [], so an empty list from them is
- *  ambiguous between "nothing saved" and "storage threw". This probe is the
- *  only way to tell the two apart, and telling them apart is what makes
- *  pruning safe. */
-function storageReadable(): boolean {
+/** Was ONE slot read whole?
+ *
+ *  Review finding on #271, and a real metadata-loss bug: the first version of
+ *  this asked only whether localStorage was reachable, on the reasoning that
+ *  an unreachable store is the way a read fails. That is not the only way, and
+ *  it is not even the common one. The four `load*` functions all sanitize by
+ *  swallowing errors and filtering bad entries, so a reachable store with a
+ *  CORRUPT slot, or a valid array with one unparseable record in it, yields an
+ *  empty-or-short list and a cheerful "complete". A caller then following this
+ *  module's own documented contract deletes the favorites and tags of every
+ *  recipe that got dropped — while the stored records are still sitting there,
+ *  so the recipes come back later stripped of their metadata.
+ *
+ *  Hence per-slot, and hence the length comparison rather than a mere parse
+ *  check: a partially-filtered array is the dangerous case precisely because
+ *  the records still exist. If the loader returned fewer items than the slot
+ *  holds, something in there is not represented in the collection, and
+ *  pruning against that collection is destructive. */
+function slotComplete(key: string, loadedCount: number): boolean {
+  let raw: string | null;
   try {
-    localStorage.getItem("qz.recipeIndex");
-    return true;
+    raw = localStorage.getItem(key);
   } catch {
-    return false;
+    return false; // storage unavailable
   }
+  if (raw === null) return true; // genuinely absent: an empty system is whole
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false; // corrupt
+  }
+  if (!Array.isArray(parsed)) return false; // wrong shape
+  return parsed.length === loadedCount; // no silently dropped records
 }
 
 function describe(
@@ -106,7 +141,6 @@ function plotDescriptors(
 }
 
 export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
-  const readable = storageReadable();
   const index = loadIndex();
   const out: RecipeDescriptor[] = [
     ...plotDescriptors(input.plotProject, "project", index),
@@ -126,7 +160,8 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
   // The name-keyed four. `id` is the name because that IS their primary key
   // (recipeLibrary.ts's header); this is describing them honestly, not
   // choosing a shortcut.
-  for (const t of loadTemplates()) {
+  const analysis = loadTemplates();
+  for (const t of analysis) {
     out.push(
       describe({ kind: "analysis", scope: "global", id: t.name }, t.name, {
         schemaVersion: t.version,
@@ -135,7 +170,8 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     );
   }
 
-  for (const r of loadPeakRecipes()) {
+  const peaks = loadPeakRecipes();
+  for (const r of peaks) {
     out.push(
       describe({ kind: "peak", scope: "global", id: r.name }, r.name, {
         schemaVersion: r.version,
@@ -147,7 +183,8 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     );
   }
 
-  for (const t of loadGraphTemplates()) {
+  const graphs = loadGraphTemplates();
+  for (const t of graphs) {
     out.push(
       describe({ kind: "graph", scope: "global", id: t.name }, t.name, {
         summary: t.source === "origin" ? "imported from Origin" : t.style,
@@ -155,7 +192,8 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     );
   }
 
-  for (const m of loadCustomModels()) {
+  const models = loadCustomModels();
+  for (const m of models) {
     out.push(
       describe({ kind: "fitModel", scope: "global", id: m.name }, m.name, {
         schemaVersion: m.version,
@@ -167,7 +205,16 @@ export function collectRecipes(input: RecipeSourceInput): RecipeCollection {
     );
   }
 
-  return { recipes: out, complete: readable };
+  // Every contributor must vouch for itself; one doubtful source makes the
+  // whole collection unsafe to prune against.
+  const complete =
+    input.plotSourcesComplete &&
+    slotComplete("qz.analysisTemplates", analysis.length) &&
+    slotComplete("qz.peakRecipes", peaks.length) &&
+    slotComplete("qz.graphTemplates", graphs.length) &&
+    slotComplete("qz.customFitModels", models.length);
+
+  return { recipes: out, complete };
 }
 
 /** Every live `refKey`, for `pruneEntries`. Pair it with the collection's

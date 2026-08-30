@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { PlotRecipe } from "./plotRecipeSchema";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
-import { setFavorite, setTags } from "./recipeIndex";
+import { metaFor, pruneEntries, setFavorite, setTags } from "./recipeIndex";
 import { collectRecipes, liveKeys, type RecipeSourceInput } from "./recipeSources";
 
 // Named for what they are: a researcher's unpublished modelling and a
@@ -46,6 +46,19 @@ const input: RecipeSourceInput = {
   plotProject: [plot("p1", "Project plot")],
   plotGlobal: [plot("g1", "Global plot")],
   quickPlot: [quick("q1", "Quick one")],
+  plotSourcesComplete: true,
+};
+
+/** A valid analysis template. Real steps: loadTemplates() validates via
+ *  parseTemplate/isStep and silently drops malformed ones. */
+const GOOD_TEMPLATE = {
+  version: 1,
+  name: "Batch fit",
+  steps: [
+    { kind: "expression", label: "Add column", code: "qz.addColumn()", params: {} },
+    { kind: "fit", label: "Fit", code: "qz.fit()", params: {} },
+  ],
+  outputs: ["A"],
 };
 
 const realStorage = globalThis.localStorage;
@@ -192,6 +205,55 @@ describe("completeness is reported honestly", () => {
     // The workspace-backed kinds still come through — they never needed
     // localStorage in the first place.
     expect(collection.recipes.some((r) => r.kind === "plot")).toBe(true);
+  });
+
+  it("is false when a source slot is CORRUPT, even though storage is fine", () => {
+    // Review finding on #271. The original probe asked only whether
+    // localStorage was reachable; a reachable store with an unparseable slot
+    // still yields an empty list from the loader and used to report complete.
+    localStorage.setItem("qz.analysisTemplates", "{{{ not json");
+    expect(collectRecipes(input).complete).toBe(false);
+  });
+
+  it("is false when a slot parses but the loader DROPPED records from it", () => {
+    // The dangerous case: the bad record is still sitting in storage, so
+    // pruning its metadata loses data for a recipe that still exists and may
+    // come back (a fixed record, a newer parser).
+    localStorage.setItem(
+      "qz.analysisTemplates",
+      JSON.stringify([GOOD_TEMPLATE, { version: 1, name: "Broken", steps: [{}], outputs: [] }]),
+    );
+    const c = collectRecipes(input);
+    expect(c.recipes.filter((r) => r.kind === "analysis")).toHaveLength(1);
+    expect(c.complete).toBe(false);
+  });
+
+  it("is false when a slot holds something that is not an array at all", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify({ nope: true }));
+    expect(collectRecipes(input).complete).toBe(false);
+  });
+
+  it("is false when the caller cannot vouch for its own lists", () => {
+    // Workspace load and globalPlotRecipes hydration both sanitize by
+    // dropping malformed entries, and only the caller knows whether that
+    // happened — which is why the field is required rather than defaulted.
+    expect(collectRecipes({ ...input, plotSourcesComplete: false }).complete).toBe(false);
+  });
+
+  it("following the documented prune contract preserves metadata on a bad read", () => {
+    // The end-to-end property the flag exists for. Red before the fix:
+    // "favorite must survive: expected false to be true".
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([GOOD_TEMPLATE]));
+    const ref = { kind: "analysis", scope: "global", id: "Batch fit" } as const;
+    setFavorite(ref, true);
+    setTags(ref, ["nightly"]);
+
+    localStorage.setItem("qz.analysisTemplates", "{{{ not json");
+    const c = collectRecipes(input);
+    pruneEntries(liveKeys(c), c.complete);
+
+    expect(metaFor(ref).favorite, "favorite must survive").toBe(true);
+    expect(metaFor(ref).tags, "tags must survive").toEqual(["nightly"]);
   });
 
   it("liveKeys covers every descriptor it collected", () => {
