@@ -3843,6 +3843,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       collections: [],
       visibleDetailsColumns: [],
       plotRecipes: [],
+      recipeSourcesComplete: true,
     };
   }
 

@@ -58,6 +58,7 @@ function asLoaded(datasets: Dataset[], workbooks: WorkbookNode[] = []): LoadedWo
     collections: [],
     visibleDetailsColumns: [],
     plotRecipes: [],
+    recipeSourcesComplete: true,
   };
 }
 

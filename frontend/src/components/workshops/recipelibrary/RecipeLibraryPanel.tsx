@@ -101,6 +101,11 @@ export default function RecipeLibraryPanel() {
   const globalPlots = useGlobalPlotRecipes((s) => s.recipes);
   const globalHydrated = useGlobalPlotRecipes((s) => s.hydrated);
   const globalComplete = useGlobalPlotRecipes((s) => s.complete);
+  // The workspace-backed half of `plotSourcesComplete` (P3.5): `plotRecipes`
+  // and `quickPlotTemplates` are sanitized at project load, and until this
+  // existed nothing downstream could tell a load that dropped records from a
+  // clean one — only the global slot vouched for itself.
+  const workspaceComplete = useApp((s) => s.recipeSourcesComplete);
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -112,7 +117,7 @@ export default function RecipeLibraryPanel() {
     plotProject: projectPlots,
     plotGlobal: globalPlots,
     quickPlot: quickPlots,
-    plotSourcesComplete: globalHydrated && globalComplete,
+    plotSourcesComplete: globalHydrated && globalComplete && workspaceComplete,
   });
 
   const rows = sortRows(collection.recipes).filter((row) =>

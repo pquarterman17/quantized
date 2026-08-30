@@ -64,6 +64,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       collections: [],
       visibleDetailsColumns: [],
       plotRecipes: [],
+      recipeSourcesComplete: true,
     };
   }
 
@@ -495,6 +496,7 @@ describe("mergeWorkspace never imports the LIBRARY_WORKBOOK_UX_PLAN PR E2 sessio
       collections: [],
       visibleDetailsColumns: [],
       plotRecipes: [],
+      recipeSourcesComplete: true,
     };
     const genId2 = () => "unused";
     const genWorkbookId2 = () => "unused-wb";

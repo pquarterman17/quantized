@@ -51,6 +51,7 @@ function emptyWorkspace(): LoadedWorkspace {
     collections: [],
     visibleDetailsColumns: [],
     plotRecipes: [],
+    recipeSourcesComplete: true,
   };
 }
 

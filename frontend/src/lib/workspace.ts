@@ -21,7 +21,7 @@ import { pruneDanglingWorkbookScopeTemplates, sanitizeQuickPlotTemplates, type Q
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
-import { deserializeRois, serializeRois } from "../store/rois";
+import { deserializeRois } from "../store/rois";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import {
   librarySelectionLiveIds,
@@ -35,7 +35,6 @@ import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import { sanitizeCollections, type Collection } from "./collections";
 import { sanitizeVisibleDetailsColumns, type LibraryDetailsColumnKey } from "./libraryDetailsColumns";
 import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
-import { serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
@@ -110,6 +109,11 @@ export interface WorkspaceState {
   visibleDetailsColumns?: LibraryDetailsColumnKey[]; // PR L slice 2 (L0.56) — additive-optional, absent = seven-column default
   /** P1.3 — every saved PlotRecipe scoped to this workspace (project scope); additive-optional, absent = none. */
   plotRecipes?: PlotRecipe[];
+  /** P3.5 — see LoadedWorkspace's doc. Present here only so `loadWorkspace`
+   *  can carry a parse result through this (wider) type; NEVER serialized —
+   *  `WorkspaceDoc` has no such field, and `serializeWorkspace` picks its
+   *  fields explicitly, so it cannot reach a saved project. */
+  recipeSourcesComplete?: boolean;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -148,127 +152,20 @@ export interface LoadedWorkspace {
   collections: Collection[]; // PR L — always populated
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
+  /** Were `plotRecipes` and `quickPlotTemplates` read from this file WHOLE?
+   *
+   *  False when either field was present but not an array, or when its
+   *  sanitizer dropped a record. Transient and derived — never serialized (it
+   *  is absent from `WorkspaceDoc`, so it cannot round-trip into a saved
+   *  project), and re-derived on every parse.
+   *
+   *  The Recipe Library is the consumer: it combines this with the global
+   *  slot's own signal, and a false anywhere makes the collection unsafe to
+   *  prune sidecar favorites/tags against. See `slotFidelity` for why the
+   *  measurement happens BEFORE the dangling-scope prune. */
+  recipeSourcesComplete: boolean;
 }
 
-interface WorkspaceDoc {
-  format: string;
-  version: number;
-  savedAt: string;
-  datasets: Dataset[];
-  folders: FolderNode[];
-  workbooks: WorkbookNode[];
-  activeId: string | null;
-  selectedIds: string[];
-  expandedFolders: string[];
-  originFigures: OriginFigureEntry[];
-  originFidelity: OriginFidelityEntry[];
-  smartFolders: SmartFolder[];
-  reports: ReportEntry[];
-  pipeline: PipelineStep[];
-  recalcMode: RecalcMode;
-  figureDocs: FigureDoc[];
-  editableFigures: FigureDocument[];
-  pages: PageDocument[];
-  plotWindows: PlotWindow[];
-  focusedWindowId: string | null;
-  toolWindowLayout: Record<string, ToolWindowLayout>;
-  savedPlotSpecs: SavedPlotSpec[];
-  techniqueViewMemory: TechniqueViewMemoryMap;
-  savedRois: RoiDef[];
-  quickPlotTemplates: QuickPlotTemplate[];
-  librarySelection: LibrarySelection | null;
-  workbookLastChild: Record<string, string>;
-  expandedWorkbookIds: string[];
-  collections: Collection[];
-  visibleDetailsColumns: LibraryDetailsColumnKey[];
-  plotRecipes: PlotRecipe[];
-}
-
-/** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
-export function serializeWorkspace(ws: WorkspaceState): string {
-  const doc: WorkspaceDoc = {
-    format: WORKSPACE_FORMAT,
-    version: WORKSPACE_VERSION,
-    savedAt: new Date().toISOString(),
-    folders: ws.folders ?? [],
-    workbooks: ws.workbooks ?? [],
-    activeId: ws.activeId ?? null,
-    selectedIds: ws.selectedIds ?? [],
-    expandedFolders: ws.expandedFolders ?? [],
-    originFigures: ws.originFigures ?? [],
-    originFidelity: ws.originFidelity ?? [],
-    smartFolders: ws.smartFolders ?? [],
-    reports: ws.reports ?? [],
-    pipeline: ws.macroSteps ?? [],
-    recalcMode: ws.recalcMode ?? "auto",
-    figureDocs: ws.figureDocs ?? [],
-    editableFigures: ws.editableFigures ?? [],
-    pages: ws.pages ?? [],
-    // MULTI_PLOT_PLAN item 7: passed through VERBATIM — the caller (the
-    // store's `windowsForSave()`, per the interface doc above) is
-    // responsible for the focused window's live-view snapshot; this module
-    // stays a plain serializer, same as every other field here.
-    plotWindows: ws.plotWindows ?? [],
-    focusedWindowId: ws.focusedWindowId ?? null,
-    toolWindowLayout: ws.toolWindowLayout ?? {},
-    savedPlotSpecs: ws.savedPlotSpecs ?? [],
-    quickPlotTemplates: ws.quickPlotTemplates ?? [], // PR H — verbatim, same convention as savedPlotSpecs
-    // PLOT_WORKFLOW_PLAN item 5: passed through verbatim, same convention as
-    // `plotWindows` above — the caller (windowsForSave()'s save-time-freshen
-    // sibling, `captureTechniqueView` applied to the live view) owns the fold.
-    techniqueViewMemory: ws.techniqueViewMemory ?? {},
-    // RSM_CUTS_PLAN item 13: named ROIs only (see WorkspaceState's doc) — the
-    // actual (de)serialize logic lives in store/rois.ts, this module just calls it.
-    savedRois: serializeRois(ws.savedRois ?? []),
-    // PR E2: passed through verbatim, same plain-serializer convention as
-    // every other field here.
-    librarySelection: ws.librarySelection ?? null,
-    workbookLastChild: ws.workbookLastChild ?? {},
-    expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
-    collections: ws.collections ?? [],
-    visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
-    plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
-    datasets: ws.datasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      data: d.data,
-      ...(d.raw ? { raw: d.raw } : {}),
-      ...(d.corrections ? { corrections: d.corrections } : {}),
-      ...(d.bgRef ? { bgRef: d.bgRef } : {}),
-      ...(d.notes ? { notes: d.notes } : {}),
-      ...(d.tags?.length ? { tags: d.tags } : {}),
-      ...(d.group?.trim() ? { group: d.group } : {}),
-      ...(d.folderId ? { folderId: d.folderId } : {}),
-      ...(d.workbookId ? { workbookId: d.workbookId } : {}),
-      ...(d.order !== undefined ? { order: d.order } : {}),
-      ...(d.formulas?.length ? { formulas: d.formulas } : {}),
-      ...serializeComputedColumnsExtras(d),
-      ...(d.errorRoles !== undefined ? { errorRoles: d.errorRoles } : {}), // O1 exception: `[]` is meaningful -- lib/originBookRoles.ts
-      ...(d.importedAt ? { importedAt: d.importedAt } : {}),
-      ...(d.channelRoles && Object.keys(d.channelRoles).length ? { channelRoles: d.channelRoles } : {}),
-      ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
-      ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
-      ...(d.filter?.length ? { filter: d.filter } : {}),
-      ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
-      // ORIGIN_FILE_DECODE_PLAN #38: an explicit "Save workspace (.dwk)…"
-      // resolves every pending dataset FIRST (App.tsx's save command calls
-      // `resolvePendingDatasets` before this runs), so `d.pending` is never
-      // set in a real exported .dwk — only autosave (lib/autosave.ts, which
-      // reuses this same serializer for its localStorage snapshot) can
-      // legitimately still have one, and it's fine for that round-trip to
-      // carry it: the render-side ensureBookData hooks re-fetch it the next
-      // time that dataset is shown after a reload.
-      ...(d.pending ? { pending: d.pending } : {}),
-      ...(d.source ? { source: d.source } : {}),
-      // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
-      // dropped entirely before (not just narrowed like `source`), so a
-      // saved-and-reopened new-version dataset lost its link to the
-      // original outright.
-      ...(d.versionOf ? { versionOf: d.versionOf } : {}),
-    })),
-  };
-  return JSON.stringify(doc, null, 2);
-}
 
 /** Future editable schemas are skipped; malformed v1 and duplicate ids are dropped. */
 function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, migrationWarnings: string[]): FigureDocument[] {
@@ -292,6 +189,24 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
     );
   }
   return documents;
+}
+
+/** Did one .dwk recipe array survive its sanitizer intact?
+ *
+ *  Mirrors `lib/recipeSources.ts`'s `slotComplete` deliberately, because the
+ *  Recipe Library combines both answers into one `complete` flag and they have
+ *  to mean the same thing: an ABSENT field is a whole (empty) source; a
+ *  non-array is a source we could not read; and an array the sanitizer
+ *  SHORTENED is the dangerous case — those records still exist in the file,
+ *  so a consumer pruning sidecar metadata against the loaded list would delete
+ *  the favorites and tags of recipes that are merely missing from THIS read.
+ *
+ *  `loaded` must be the sanitize output's length, never a later filtered one:
+ *  see the two-step quick-plot-template call in `parseWorkspace`. */
+function slotFidelity(raw: unknown, loaded: number): boolean {
+  if (raw === undefined || raw === null) return true;
+  if (!Array.isArray(raw)) return false;
+  return raw.length === loaded;
 }
 
 /** Parse a .dwk document into the full workspace state, throwing a clear error on
@@ -374,7 +289,15 @@ export function parseWorkspace(
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
   const workbookIds = new Set(workbooks.map((w) => w.id)); // PR E2 — hoisted for the H-review dangling-scope prune below
-  const quickPlotTemplates = pruneDanglingWorkbookScopeTemplates(sanitizeQuickPlotTemplates(o.quickPlotTemplates), workbookIds);
+  // Kept as two steps, deliberately: `recipeSourceFidelity` below measures
+  // against the SANITIZE output, never the post-prune one. Sanitizing drops a
+  // record it could not read (a fidelity failure the user must be told about);
+  // pruning drops a template whose workbook the user themselves deleted (a
+  // decision, on a file that was read perfectly). Folding these back into one
+  // expression is what made deleting a workbook announce "some recipe sources
+  // could not be read completely" with nothing wrong.
+  const sanitizedQuickPlotTemplates = sanitizeQuickPlotTemplates(o.quickPlotTemplates);
+  const quickPlotTemplates = pruneDanglingWorkbookScopeTemplates(sanitizedQuickPlotTemplates, workbookIds);
   const techniqueViewMemory = sanitizeTechniqueViewMemory(o.techniqueViewMemory);
   // RSM_CUTS_PLAN item 13: a malformed/hand-edited entry is skipped (named in
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
@@ -388,6 +311,9 @@ export function parseWorkspace(
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   const collections = sanitizeCollections(o.collections);
   const plotRecipes = sanitizeRecipes(o.plotRecipes); // P1.3 — drop-malformed-never-throw, same as sanitizeQuickPlotTemplates
+  const recipeSourcesComplete =
+    slotFidelity(o.plotRecipes, plotRecipes.length) &&
+    slotFidelity(o.quickPlotTemplates, sanitizedQuickPlotTemplates.length);
   return {
     datasets,
     folders: migration.folders,
@@ -418,6 +344,7 @@ export function parseWorkspace(
     collections,
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
     plotRecipes,
+    recipeSourcesComplete,
   };
 }
 
@@ -427,3 +354,8 @@ export function parseWorkspace(
 // with store/workspaceIO.ts as its only external caller, so extracting it
 // funds the named-ROI hook-in below without that caller needing to change).
 export * from "./workspaceMerge";
+
+// The .dwk WRITE side (`serializeWorkspace` + the private `WorkspaceDoc`) —
+// extracted to ./workspaceSerialize.ts under this file's size pin, re-exported
+// here so every caller keeps importing it from `lib/workspace`.
+export * from "./workspaceSerialize";

@@ -302,19 +302,23 @@ describe("startup recovery choice (P1.2 box 5)", () => {
 // mechanism architecture.test.ts's HISTORY_EXCLUDED guard uses) rather than
 // hand-maintaining a duplicate list here — a hand-copied list would just be
 // a second place to forget the same field.
-const rawModules = import.meta.glob("./lib/workspace.ts", {
+// `WorkspaceDoc` moved to lib/workspaceSerialize.ts with `serializeWorkspace`
+// (2026-08-30, P3.5 extraction under workspace.ts's size pin). It is still the
+// one declaration of the persisted document shape — only its file changed, and
+// this scan throws rather than passing vacuously if it moves again.
+const rawModules = import.meta.glob("./lib/workspaceSerialize.ts", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-/** Field names declared in lib/workspace.ts's `interface WorkspaceDoc { ... }`
- *  — the actual persisted document shape. */
+/** Field names declared in lib/workspaceSerialize.ts's
+ *  `interface WorkspaceDoc { ... }` — the actual persisted document shape. */
 function workspaceDocFields(): string[] {
-  const src = rawModules["./lib/workspace.ts"];
-  if (!src) throw new Error("could not read lib/workspace.ts source (glob pattern moved?)");
+  const src = rawModules["./lib/workspaceSerialize.ts"];
+  if (!src) throw new Error("could not read lib/workspaceSerialize.ts source (glob pattern moved?)");
   const block = /interface WorkspaceDoc \{([^}]*)\}/s.exec(src);
-  if (!block) throw new Error("could not find `interface WorkspaceDoc` in lib/workspace.ts");
+  if (!block) throw new Error("could not find `interface WorkspaceDoc` in lib/workspaceSerialize.ts");
   return [...block[1].matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1]);
 }
 

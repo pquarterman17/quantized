@@ -23,7 +23,7 @@ const plot = {
 
 beforeEach(() => {
   localStorage.clear();
-  useApp.setState({ plotRecipes: [], quickPlotTemplates: [] });
+  useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
   useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
   useRecipeManager.setState({ open: true, library: true });
 });
@@ -61,6 +61,25 @@ describe("RecipeLibraryPanel", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
     expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
     expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+  });
+
+  it("warns when the PROJECT's own recipe lists loaded incomplete (P3.5)", () => {
+    // The workspace-backed half. Every localStorage-backed source is healthy
+    // here and the global slot vouches for itself, so before this signal
+    // existed the panel had nothing to go on and reported a clean library —
+    // while `plotRecipes`/`quickPlotTemplates` records dropped at project load
+    // were missing, and pruning sidecar favorites/tags would have deleted the
+    // metadata of recipes that still exist in the file.
+    useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(screen.getByText("XRD publication")).toBeInTheDocument(); // what survived is still shown
+  });
+
+  it("shows no warning when every source, project included, is whole", () => {
+    useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: true });
+    render(<RecipeLibraryPanel />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("edits comma-separated tags without changing the recipe", () => {
