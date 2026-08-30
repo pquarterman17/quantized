@@ -201,11 +201,21 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
  *  so a consumer pruning sidecar metadata against the loaded list would delete
  *  the favorites and tags of recipes that are merely missing from THIS read.
  *
+ *  ABSENT means `undefined` — the key is not in the document — and ONLY that.
+ *  An explicit `null` is present, is not an array, and so is a shape we did
+ *  not understand. Getting this wrong is easy because `slotComplete` appears
+ *  to accept null: its `raw === null` is `localStorage.getItem` reporting the
+ *  key ABSENT, whereas a STORED JSON `null` parses to `null` there and fails
+ *  the same `Array.isArray` check this one does. No real save can produce it
+ *  either way — `serializeWorkspace` writes `?? []` for both fields — so a
+ *  `null` here came from a hand-edited or truncated file, which is precisely
+ *  when certifying completeness is destructive.
+ *
  *  `loaded` must be the sanitize output's length, never a later filtered one:
  *  see the two-step quick-plot-template call in `parseWorkspace`. */
 function slotFidelity(raw: unknown, loaded: number): boolean {
-  if (raw === undefined || raw === null) return true;
-  if (!Array.isArray(raw)) return false;
+  if (raw === undefined) return true;
+  if (!Array.isArray(raw)) return false; // null included — present, wrong shape
   return raw.length === loaded;
 }
 

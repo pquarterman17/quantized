@@ -88,6 +88,17 @@ describe("parseWorkspace — recipeSourcesComplete", () => {
   it("is FALSE when a recipe field is present but not an array", () => {
     expect(parseWorkspace(docWith({ plotRecipes: "corrupt" })).recipeSourcesComplete).toBe(false);
     expect(parseWorkspace(docWith({ quickPlotTemplates: { a: 1 } })).recipeSourcesComplete).toBe(false);
+    // An explicit `null` is PRESENT and is not an array, so it is a shape we
+    // did not understand — not the absent case. `serializeWorkspace` writes
+    // `?? []` for both fields, so no real save produces this; a hand-edited or
+    // truncated file does, and certifying it would suppress the warning and
+    // permit pruning on a document we could not read. Review finding on this
+    // PR: the first version returned true here, diverging from the
+    // `slotComplete` semantics this helper claims to mirror (there, a STORED
+    // JSON `null` parses to `null`, fails `Array.isArray`, and is incomplete —
+    // its `raw === null` branch is `getItem` reporting the key ABSENT).
+    expect(parseWorkspace(docWith({ plotRecipes: null })).recipeSourcesComplete).toBe(false);
+    expect(parseWorkspace(docWith({ quickPlotTemplates: null })).recipeSourcesComplete).toBe(false);
   });
 
   it("stays TRUE when a template is pruned for a dangling workbook scope", () => {
