@@ -30,26 +30,49 @@ import { serializeRecipe, type PlotRecipe } from "./plotRecipe";
 
 const KEY = "qz.plotRecipes";
 
+export interface GlobalPlotRecipeLoad {
+  recipes: PlotRecipe[];
+  /** True only when the persisted array was represented without dropping an
+   * entry. Missing storage is a complete empty source; corrupt or partially
+   * invalid storage is not. */
+  complete: boolean;
+}
+
+/** Status-bearing load for consumers that must distinguish empty from lost. */
+export function loadGlobalPlotRecipesWithStatus(): GlobalPlotRecipeLoad {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(KEY);
+  } catch {
+    return { recipes: [], complete: false };
+  }
+  if (raw === null) return { recipes: [], complete: true };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return { recipes: [], complete: false };
+    const recipes = sanitizeRecipes(parsed);
+    return { recipes, complete: recipes.length === parsed.length };
+  } catch {
+    return { recipes: [], complete: false };
+  }
+}
+
 /** Load every globally-saved recipe. Tolerates missing storage, corrupt JSON,
  *  a non-array payload, and any malformed entry within it (dropped
  *  individually, per `sanitizeRecipes`) — never throws. */
 export function loadGlobalPlotRecipes(): PlotRecipe[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    return sanitizeRecipes(JSON.parse(raw));
-  } catch {
-    return [];
-  }
+  return loadGlobalPlotRecipesWithStatus().recipes;
 }
 
 /** Overwrite the global recipe list. Best-effort — a storage failure (quota,
  *  private-mode) is swallowed; the caller's in-memory list is unaffected. */
-export function saveGlobalPlotRecipes(list: readonly PlotRecipe[]): void {
+export function saveGlobalPlotRecipes(list: readonly PlotRecipe[]): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
+    return true;
   } catch {
     /* storage unavailable — recipes stay session-local */
+    return false;
   }
 }
 

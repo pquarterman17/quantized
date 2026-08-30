@@ -32,6 +32,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   peaks: "Find peaks",
   peakwizard: "Peak analyzer",
   pipeline: "Pipeline",
+  "recipe-library": "Recipe Library",
   "recipe-manager": "Plot recipes",
   "recode-workshop": "Recode",
   reflview: "Reflectometry view",

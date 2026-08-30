@@ -157,6 +157,9 @@ const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/Plot
 // palette / a menu), so it stays out of the eager bundle like every other
 // workshop panel above.
 const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"));
+// P3.5: the cross-kind Recipe Library is a separate, browse-first surface.
+// The existing Plot Recipe Manager remains the advanced plot-specific editor.
+const RecipeLibraryPanel = lazyPanel(() => import("./components/workshops/recipelibrary/RecipeLibraryPanel"));
 const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
 const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
 const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
@@ -229,6 +232,7 @@ export default function AppOverlays() {
   const quickPlotWithOpen = useQuickPlotWithDialog((s) => s.datasetId !== null || s.workbookId !== null);
   const pendingRecipeOpen = useApp((s) => s.pendingRecipeApplication !== null);
   const recipeManagerOpen = useRecipeManager((s) => s.open);
+  const recipeLibrary = useRecipeManager((s) => s.library);
   const annotationTextOpen = useAnnotationTextDialog((s) => s.title !== null);
   const sqliteQueryOpen = useSqliteQueryDialog((s) => s.open);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
@@ -261,7 +265,8 @@ export default function AppOverlays() {
       {reimportAllOpen && <ReimportAllDialog />}
       {quickPlotWithMounted && <QuickPlotWithDialog />}
       {pendingRecipeOpen && <PlotRecipeApplyDialog />}
-      {recipeManagerOpen && <RecipeManagerPanel />}
+      {recipeManagerOpen && !recipeLibrary && <RecipeManagerPanel />}
+      {recipeManagerOpen && recipeLibrary && <RecipeLibraryPanel />}
       <TooltipLayer />
       {whatIsThisOn && <WhatIsThis />}
       <InteractionHints />

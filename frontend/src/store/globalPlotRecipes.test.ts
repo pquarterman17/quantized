@@ -31,7 +31,7 @@ function recipe(id: string, name: string): PlotRecipe {
 
 beforeEach(() => {
   localStorage.clear();
-  useGlobalPlotRecipes.setState({ recipes: [], hydrated: false });
+  useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
 });
 
 describe("hydrate", () => {
@@ -51,6 +51,19 @@ describe("hydrate", () => {
   it("degrades to an empty list when storage is empty", () => {
     useGlobalPlotRecipes.getState().hydrate();
     expect(useGlobalPlotRecipes.getState().recipes).toEqual([]);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(true);
+  });
+
+  it("does not certify corrupt or partially filtered storage as complete", () => {
+    localStorage.setItem("qz.plotRecipes", "{{{ not json");
+    useGlobalPlotRecipes.getState().hydrate();
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "Valid"), { nope: true }]));
+    useGlobalPlotRecipes.getState().hydrate();
+    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(1);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
   });
 });
 
@@ -61,6 +74,35 @@ describe("setAll", () => {
     const raw = localStorage.getItem("qz.plotRecipes");
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw!)).toHaveLength(1);
+  });
+
+  it("keeps session recipes but does not certify a failed persistence write", () => {
+    let rejected = 0;
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (): null => null,
+        setItem: (): never => {
+          rejected += 1;
+          throw new DOMException("quota", "QuotaExceededError");
+        },
+        removeItem: (): void => undefined,
+        clear: (): void => undefined,
+        key: (): null => null,
+        length: 0,
+      },
+    });
+    const list = [recipe("r1", "Session only")];
+    try {
+      useGlobalPlotRecipes.getState().setAll(list);
+      expect(rejected, "the quota failure must actually be intercepted").toBe(1);
+      expect(useGlobalPlotRecipes.getState().recipes).toEqual(list);
+      expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
+      expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+    }
   });
 });
 

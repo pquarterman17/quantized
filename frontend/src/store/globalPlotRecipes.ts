@@ -65,7 +65,7 @@
 import { create } from "zustand";
 
 import type { PlotRecipe } from "../lib/plotRecipe";
-import { loadGlobalPlotRecipes, saveGlobalPlotRecipes } from "../lib/plotRecipeStorage";
+import { loadGlobalPlotRecipes, loadGlobalPlotRecipesWithStatus, saveGlobalPlotRecipes } from "../lib/plotRecipeStorage";
 import { dedupeWindowTitle } from "../lib/plotview";
 
 let _seq = 0;
@@ -74,6 +74,7 @@ const nextGlobalRecipeId = (): string => `gpr-${Date.now().toString(36)}-${++_se
 interface GlobalPlotRecipesState {
   recipes: PlotRecipe[];
   hydrated: boolean;
+  complete: boolean;
   /** Load from localStorage once; a repeat call after the first is a no-op
    *  (never clobbers an in-session edit with a stale disk read). */
   hydrate: () => void;
@@ -107,15 +108,17 @@ interface GlobalPlotRecipesState {
 export const useGlobalPlotRecipes = create<GlobalPlotRecipesState>((set, get) => ({
   recipes: [],
   hydrated: false,
+  complete: false,
 
   hydrate: () => {
     if (get().hydrated) return;
-    set({ recipes: loadGlobalPlotRecipes(), hydrated: true });
+    const loaded = loadGlobalPlotRecipesWithStatus();
+    set({ recipes: loaded.recipes, hydrated: true, complete: loaded.complete });
   },
 
   setAll: (list) => {
-    saveGlobalPlotRecipes(list);
-    set({ recipes: list, hydrated: true });
+    const complete = saveGlobalPlotRecipes(list);
+    set({ recipes: list, hydrated: true, complete });
   },
 
   rename: (id, name) => {

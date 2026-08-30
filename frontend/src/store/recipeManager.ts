@@ -9,12 +9,16 @@ import { create } from "zustand";
 
 interface RecipeManagerState {
   open: boolean;
+  library: boolean;
   openRecipeManager: () => void;
   closeRecipeManager: () => void;
+  openRecipeLibrary: () => void;
 }
 
 export const useRecipeManager = create<RecipeManagerState>((set) => ({
   open: false,
-  openRecipeManager: () => set({ open: true }),
+  library: true,
+  openRecipeManager: () => set({ open: true, library: false }),
   closeRecipeManager: () => set({ open: false }),
+  openRecipeLibrary: () => set({ open: true, library: true }),
 }));
