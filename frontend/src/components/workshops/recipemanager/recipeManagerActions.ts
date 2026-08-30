@@ -19,7 +19,14 @@ import { saveBlob } from "../../../lib/download";
 import { hydratedGlobalRecipes, useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useApp } from "../../../store/useApp";
 
-export type RecipeScope = "project" | "global";
+// Re-exported, not redeclared: storage scope is a domain fact (see
+// lib/recipeLibrary.ts, which the unified Recipe Library also builds on), and
+// two copies of the same union is how the Library and this panel would
+// eventually disagree about what "global" means. Type-only, so it costs
+// nothing at runtime.
+import type { RecipeScope } from "../../../lib/recipeLibrary";
+
+export type { RecipeScope };
 
 export interface RecipeRow {
   scope: RecipeScope;

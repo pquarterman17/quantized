@@ -41,6 +41,7 @@ export const KNOWN_STORAGE_KEYS: readonly string[] = [
   "qz.plotRecipes",
   "qz.prefs",
   "qz.recent",
+  "qz.recipeIndex",
   "qz.recentProjects",
   "qz.session.active",
   "qz.toolbarPrefs",
