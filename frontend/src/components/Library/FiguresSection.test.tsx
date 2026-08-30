@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../lib/types";
+import { loadOriginApplyLibs } from "../../store/originApplyLibs";
 import { useApp } from "../../store/useApp";
 import FiguresSection from "./FiguresSection";
 
@@ -10,6 +11,13 @@ const d1: Dataset = {
   name: "XRD:Book1",
   data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: { origin_book: "Book1" } },
 };
+
+// Warm the lazy Origin-apply chunk so a click applies synchronously, which is
+// what these specs assert (and what every apply after a session's first does).
+// The cold/deferred path is covered in store/originApplyLibs.test.ts.
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
 
 beforeEach(() => {
   useApp.setState({

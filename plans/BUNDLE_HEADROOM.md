@@ -1,6 +1,7 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. No slice executed yet.
+**Status:** measured 2026-08-30 on `af88f43`. **Slice 1 executed** (see its
+section below); slices 2 and 3 remain unmeasured proposals.
 
 `main` sits at ~11 B of CI headroom against the 889.4 kB eager budget, so any
 eager addition is currently blocked. `check-bundle-size.mjs`'s history says
@@ -84,9 +85,51 @@ splitting touches it.
 
 ## Ranked slices
 
-### Slice 1 — split `lib/originFigures.ts`
+### Slice 1 — split `lib/originFigures.ts` — **DONE**
 
-**Upper bound 7,121 B · measured net eager delta: TBD · MEDIUM risk**
+**Upper bound 7,121 B · measured net eager delta −4.8 kB · MEDIUM risk**
+
+Measured with `scripts/check-bundle-size.mjs` on the same machine, same Node,
+back-to-back builds: **890.2 kB → 885.4 kB eager**. Local builds run ~0.9 kB
+heavier than CI, so only this DELTA is evidence; on CI it takes the headroom
+from ~11 B to ~4.8 kB. The budget pin was NOT raised.
+
+Where the difference went, per `scripts/profile-eager-bundle.mjs`:
+
+| module | before | after |
+|--------|-------:|------:|
+| `lib/originFigures.ts` | 7,121 | 1,914 |
+| `lib/originPanels.ts` | 1,918 | 0 (lazy) |
+| `lib/originFigureSelection.ts` (new) | — | 0 (lazy) |
+| `lib/originSpatialPanels.ts` (new) | — | 0 (lazy) |
+| `store/useApp.ts` | 36,562 | 36,897 |
+
+The gap between the 7,121 B upper bound and the ~4.8 kB realised is exactly
+what the caveat above predicted: the eager half keeps the Library row label,
+the layer-family grouping, import-time entry construction and the legend-text
+helpers `lib/originOverlay.ts` needs (1,914 B), and the store grew a preflight.
+`lib/originPanels.ts` came along for free — the split module owns its only
+value import.
+
+**Not deferred, and why:** `lib/originOverlay.ts` (3,090 B) is apply-only from
+`useApp`'s side, but `lib/plotSelectedTogether.ts` — eager, via
+`contextActions`/`plotCommands` — statically imports `buildSelectionOverlay`
+from it. Deferring it means splitting that module too; out of scope here.
+
+**Shape of the fix:** the apply body was NOT rewritten. `applyOriginFigure`
+keeps its synchronous `void` signature and its whole 190-line body verbatim;
+only its ENTRY is gated. A third preflight joins the existing
+confirm-then-defer chain: when `originApplyLibs()` is still null it loads the
+chunk and re-enters the action, which then finds the modules cached and runs
+straight through. One apply, one `set()` sequence, one macro entry, whichever
+path it took. Guarded by the same `applySeq` counter the other two preflights
+share (`store/originFigureApply.ts`).
+
+**Cost:** the first Origin-figure apply of a session waits one chunk fetch.
+Every later apply is synchronous. A prefetch on figure import would erase even
+that, at the price of a nondeterministic warm-up in the suite; not taken.
+
+**Original analysis, kept for the record:**
 
 The bound is loose on purpose: `figureLabel`, `figureLayerFamily`, the
 `OriginFigureEntry` type and whatever helpers the thin side keeps all stay
@@ -110,24 +153,48 @@ become async, changing caller contracts. This is core Origin project loading
 with golden-tested behaviour — it needs its own PR and a careful pass, not a
 ride-along.
 
-**Acceptance criteria** — what "done" means, so the implementing agent is not
-guessing:
+**Acceptance criteria** — all met; where each is discharged:
 
 1. Inventory every non-test importer and caller of each moved export BEFORE
    moving it; the move is only safe once that list is complete.
+   → Done, and it corrected the plan's own premise: most apparent importers of
+   `resolveFigurePanels`/`coincidentOverlayGroups`/`originFigureAnnotations`
+   etc. were doc-comment MENTIONS, not imports. The real non-test importer set
+   is nine files, and `store/useApp.ts` was the only eager consumer of the
+   heavy half.
 2. Preserve the synchronous public action contract where possible. If an
    action must become async, enumerate and update every caller, and say so
    explicitly in the PR rather than letting the signature change ride.
+   → Preserved: `applyOriginFigure` is still `(id, opts) => void`. No caller
+   signature changed. Three specs that assert state immediately after a click
+   now warm the chunk in a `beforeAll`.
 3. One history/macro entry per Origin apply, unchanged across the new async
    boundary — an await must not split one user action into two undo steps.
+   → The body is untouched and runs once; asserted directly by "records exactly
+   one macro step for a deferred apply".
 4. Guard stale completion: if the active workspace or figure changes while the
    heavy chunk is loading, the resolved apply must not land. (Same seq-guard
    shape as `applyEnergyAsWavelength`.)
+   → Shares `applySeq`. The obvious test (two chunk-deferred applies) does NOT
+   hold this line — both resolve in registration order, so the newer one wins
+   either way and the guard can be deleted with the suite still green (checked
+   by mutation). The test that does hold it supersedes a chunk-deferred apply
+   with one deferred on a slower PENDING SOURCE BOOK, and asserts the stale
+   figure leaves no macro entry behind.
 5. Cover single-layer, double-Y, spatial panels, annotations/region shades,
    and chunk-load failure.
+   → The first four keep their existing `store/useApp.test.ts` coverage (warm
+   path). Chunk-load failure, deferral, supersession and retry are new, in
+   `store/originApplyLibs.test.ts`; each assertion was mutation-verified.
+   `src/architecture.test.ts` gains a guard so a future static import from an
+   eagerly-reachable module can't silently undo the split.
 6. Report the measured net eager delta (profiler before/after) against an
    UNCHANGED budget pin. If the delta does not clear what the blocked lane
    needs, say so rather than raising the pin quietly.
+   → Reported above; pin unchanged at 910,711 B. 4.8 kB of CI headroom is
+   enough for the P3.5 workspace recipe-source completeness work this slice was
+   cut to unblock, but it is well short of the 25-40 kB this file's own history
+   calls healthy. Slices 2 and 3 stay on the table.
 
 ### Slice 2 — command metadata vs. handlers
 

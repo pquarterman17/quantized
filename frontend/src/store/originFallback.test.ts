@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset, OriginFigure } from "../lib/types";
+import { loadOriginApplyLibs } from "./originApplyLibs";
 import { useApp } from "./useApp";
 
 const book: Dataset = {
@@ -16,6 +17,19 @@ const figure: OriginFigure = {
   y_from: 0, y_to: 20, y_log: false, n_curves: 1, annotations: [],
   curves: [{ book: "Book1", x: "A", y: "B", style: "line" }],
 };
+
+
+// The Origin-apply half of the figure library is a lazy chunk (bundle
+// headroom slice 1). Load it once up front so the specs below exercise the
+// WARM path — `applyOriginFigure` synchronous, exactly as it behaves for
+// every apply after a session's first. The cold path (deferred first apply,
+// latest-request-wins, chunk-load failure) has its own dedicated coverage in
+// store/originApplyLibs.test.ts; without this warm-up the cold path would
+// leak into these specs as an order-dependent failure of whichever apply
+// test happens to run first.
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
 
 beforeEach(() => {
   useApp.setState({

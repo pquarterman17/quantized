@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, fetchBookData, guessImportSettings, parseImportText, uploadFile } from "../lib/api";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
@@ -18,6 +18,7 @@ import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { initialQuickFigureMapping } from "../lib/quickFigureMappingActions";
 import type { Dataset, DataStruct } from "../lib/types";
+import { loadOriginApplyLibs } from "./originApplyLibs";
 import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 import { useToasts } from "./toasts";
@@ -41,6 +42,19 @@ const raw: DataStruct = {
   units: ["emu"],
   metadata: {},
 };
+
+
+// The Origin-apply half of the figure library is a lazy chunk (bundle
+// headroom slice 1). Load it once up front so the specs below exercise the
+// WARM path — `applyOriginFigure` synchronous, exactly as it behaves for
+// every apply after a session's first. The cold path (deferred first apply,
+// latest-request-wins, chunk-load failure) has its own dedicated coverage in
+// store/originApplyLibs.test.ts; without this warm-up the cold path would
+// leak into these specs as an order-dependent failure of whichever apply
+// test happens to run first.
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

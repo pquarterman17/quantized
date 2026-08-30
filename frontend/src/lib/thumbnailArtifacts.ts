@@ -1,4 +1,4 @@
-import { figureChannelSelection } from "./originFigures";
+import { figureChannelSelection } from "./originFigureSelection";
 import type { ThumbnailRequest, ThumbnailResult } from "./thumbnailCache";
 import { plotSvgBody, svgResult } from "./thumbnailSvg";
 import type { DataStruct, Dataset } from "./types";

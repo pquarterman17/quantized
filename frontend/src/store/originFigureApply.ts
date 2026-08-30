@@ -3,6 +3,7 @@
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
+import { loadOriginApplyLibs } from "./originApplyLibs";
 import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
@@ -77,6 +78,36 @@ export function deferOriginFigureApply(
       toast(`couldn't apply Origin figure — ${message}`, "danger");
     });
   return true;
+}
+
+/** Defer application until the lazily-chunked apply half of the figure library
+ *  is loaded (bundle headroom slice 1, `plans/BUNDLE_HEADROOM.md`).
+ *
+ *  `useApp.applyOriginFigure` calls this only when `originApplyLibs()` is
+ *  still null — i.e. at most once per session, on the first figure applied.
+ *  The chunk load then re-enters the action, which finds the modules cached
+ *  and runs its whole synchronous body, so the apply produces exactly one
+ *  history/macro entry either way.
+ *
+ *  Shares `applySeq` with the two preflights above for the same
+ *  latest-request-wins reason: applying a DIFFERENT figure while the chunk is
+ *  in flight bumps the counter, and the stale completion is dropped instead of
+ *  landing on top of the newer apply. A failed chunk fetch reports and stops —
+ *  `loadOriginApplyLibs` does not cache the failure, so the next apply
+ *  retries. */
+export function deferOriginApplyLibs(get: GetApp, id: string, opts?: ApplyOpts): void {
+  const requestSeq = ++applySeq;
+  void loadOriginApplyLibs()
+    .then(() => {
+      if (applySeq !== requestSeq) return;
+      get().applyOriginFigure(id, opts);
+    })
+    .catch((error: unknown) => {
+      if (applySeq !== requestSeq) return;
+      const message = error instanceof Error ? error.message : "figure tools failed to load";
+      get().setStatus(`couldn't apply Origin figure — ${message}`);
+      toast(`couldn't apply Origin figure — ${message}`, "danger");
+    });
 }
 
 /** Human-readable list of the user edits `originOverlayDataset` would drop on
