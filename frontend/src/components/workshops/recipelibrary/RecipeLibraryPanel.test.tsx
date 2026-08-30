@@ -24,7 +24,7 @@ const plot = {
 beforeEach(() => {
   localStorage.clear();
   useApp.setState({ plotRecipes: [], quickPlotTemplates: [] });
-  useGlobalPlotRecipes.setState({ recipes: [], hydrated: true });
+  useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
   useRecipeManager.setState({ open: true, library: true });
 });
 
@@ -45,12 +45,22 @@ describe("RecipeLibraryPanel", () => {
   });
 
   it("favorites a recipe and can filter to favorites", () => {
-    useApp.setState({ plotRecipes: [plot] });
+    useApp.setState({ plotRecipes: [plot, { ...plot, id: "plot-2", name: "Not favorite" }] });
     render(<RecipeLibraryPanel />);
     fireEvent.click(screen.getByRole("button", { name: /Add XRD publication to favorites/ }));
     expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" }).favorite).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Favorites only" }));
     expect(screen.getByText("XRD publication")).toBeInTheDocument();
+    expect(screen.queryByText("Not favorite")).not.toBeInTheDocument();
+  });
+
+  it("warns when global hydration drops a corrupt source", () => {
+    localStorage.setItem("qz.plotRecipes", "{{{ not json");
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
   });
 
   it("edits comma-separated tags without changing the recipe", () => {

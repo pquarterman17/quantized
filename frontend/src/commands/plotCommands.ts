@@ -55,6 +55,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Layout",
       label: "Recipe Library…",
       description: "Browse every saved recipe and template.",
+      keywords: "plot recipes manager",
       run: () => useRecipeManager.getState().openRecipeLibrary(),
     },
     // ── Plot ──

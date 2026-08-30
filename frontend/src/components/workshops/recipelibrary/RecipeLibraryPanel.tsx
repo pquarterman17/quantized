@@ -100,6 +100,7 @@ export default function RecipeLibraryPanel() {
   const quickPlots = useApp((s) => s.quickPlotTemplates);
   const globalPlots = useGlobalPlotRecipes((s) => s.recipes);
   const globalHydrated = useGlobalPlotRecipes((s) => s.hydrated);
+  const globalComplete = useGlobalPlotRecipes((s) => s.complete);
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -111,7 +112,7 @@ export default function RecipeLibraryPanel() {
     plotProject: projectPlots,
     plotGlobal: globalPlots,
     quickPlot: quickPlots,
-    plotSourcesComplete: globalHydrated,
+    plotSourcesComplete: globalHydrated && globalComplete,
   });
 
   const rows = sortRows(collection.recipes).filter((row) =>

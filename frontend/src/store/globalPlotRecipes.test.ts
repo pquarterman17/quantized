@@ -31,7 +31,7 @@ function recipe(id: string, name: string): PlotRecipe {
 
 beforeEach(() => {
   localStorage.clear();
-  useGlobalPlotRecipes.setState({ recipes: [], hydrated: false });
+  useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
 });
 
 describe("hydrate", () => {
@@ -51,6 +51,19 @@ describe("hydrate", () => {
   it("degrades to an empty list when storage is empty", () => {
     useGlobalPlotRecipes.getState().hydrate();
     expect(useGlobalPlotRecipes.getState().recipes).toEqual([]);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(true);
+  });
+
+  it("does not certify corrupt or partially filtered storage as complete", () => {
+    localStorage.setItem("qz.plotRecipes", "{{{ not json");
+    useGlobalPlotRecipes.getState().hydrate();
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
+
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
+    localStorage.setItem("qz.plotRecipes", JSON.stringify([recipe("r1", "Valid"), { nope: true }]));
+    useGlobalPlotRecipes.getState().hydrate();
+    expect(useGlobalPlotRecipes.getState().recipes).toHaveLength(1);
+    expect(useGlobalPlotRecipes.getState().complete).toBe(false);
   });
 });
 
