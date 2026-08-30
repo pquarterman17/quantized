@@ -955,3 +955,21 @@ body {
 .qzk-quick-builder-notice p + p { margin-top: 6px; }
 @media (max-width: 1050px) { .qzk-quick-builder-grid { grid-template-columns: 1fr 1.35fr; } .qzk-quick-builder-grid > :last-child { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .qzk-quick-builder-head { flex-direction: column-reverse; } .qzk-quick-builder-grid { grid-template-columns: 1fr; } .qzk-quick-builder-grid > :last-child { grid-column: auto; } }
+/* P3.5 Recipe Library — browse-first rows; operations stay in each manager. */
+.qz-recipe-library-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.qz-recipe-library-count { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-micro); }
+.qz-recipe-library-warning { margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--warn); border-radius: var(--radius-sm); color: var(--text-dim); }
+.qz-recipe-library-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: min(62vh, 560px); overflow: auto; }
+.qz-recipe-library-row { display: flex; gap: 9px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.qz-recipe-library-row:hover { border-color: var(--border-strong); }
+.qz-recipe-favorite, .qz-recipe-tags { border: 0; background: transparent; color: var(--text-dim); cursor: default; }
+.qz-recipe-favorite { padding: 1px; font-size: 18px; color: var(--accent); }
+.qz-recipe-library-main { min-width: 0; flex: 1; }
+.qz-recipe-library-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.qz-recipe-library-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-recipe-badge { flex: none; padding: 1px 5px; border-radius: 999px; background: var(--surface-1); color: var(--text-dim); font-size: 10px; font-weight: 500; }
+.qz-recipe-library-summary { margin-top: 3px; color: var(--text-faint); font-size: 11px; }
+.qz-recipe-tags { margin-top: 5px; padding: 0; font-size: 11px; text-align: left; }
+.qz-recipe-tags:hover { color: var(--accent); }
+.qz-recipe-tag-input { width: min(100%, 360px); margin-top: 5px; }
+.qz-recipe-library-empty { display: grid; gap: 5px; justify-items: center; padding: 32px 18px; color: var(--text-faint); text-align: center; }

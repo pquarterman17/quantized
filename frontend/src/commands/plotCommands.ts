@@ -47,17 +47,15 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => s().setWaterfallOpen(true),
     },
     {
-      // P1.3 wave 3, Lane D deliverable 3: the recipe list/apply/scope-move
-      // manager surface. Project + global scopes are BOTH read here (see
-      // store/globalPlotRecipes.ts's header) -- this command just opens the
-      // panel, which owns reading both lists itself.
+      // P3.5: the unified browse surface. Plot-specific operations remain one
+      // click away in the existing manager rather than being duplicated here.
+      // Keep the established id: toolbar preferences persist command ids.
       id: "plot-recipe-manager",
       group: "Plot",
       section: "Layout",
-      label: "Plot Recipe Manager…",
-      description: "List, apply, rename, duplicate, move between scopes, and import/export saved Plot Recipes.",
-      keywords: "plot recipe manager template reuse global project",
-      run: () => useRecipeManager.getState().openRecipeManager(),
+      label: "Recipe Library…",
+      description: "Browse every saved recipe and template.",
+      run: () => useRecipeManager.getState().openRecipeLibrary(),
     },
     // ── Plot ──
     {
