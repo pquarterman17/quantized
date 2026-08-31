@@ -53,7 +53,12 @@ export { deleteIsUndoable };
  *  that into `ok: false` styled it as a refusal, which the code comment
  *  claiming otherwise did not prevent. */
 export type ActionResult =
-  | { readonly ok: true; readonly message: string }
+  /** `ref` is where the row ENDED UP. For the four name-keyed kinds the id is
+   *  the name, so a rename moves the row to a new identity and the caller
+   *  cannot derive it from the input ref -- the panel needs it to put keyboard
+   *  focus back on the row it just renamed. Absent when the operation did not
+   *  produce a row (import, export). */
+  | { readonly ok: true; readonly message: string; readonly ref?: RecipeRef }
   | { readonly ok: false; readonly pending?: false; readonly reason: string }
   | { readonly ok: false; readonly pending: true; readonly reason: string };
 
@@ -155,7 +160,12 @@ export function renameRecipe(ref: RecipeRef, name: string): ActionResult {
 
   if (isNameKeyed(ref.kind)) {
     const r = renameNameKeyed(ref.kind, ref.id, wanted);
-    return r.ok ? { ok: true, message: `renamed to "${r.name}"` } : r;
+    // `r.name` is the name ACTUALLY used, which differs from `wanted` when a
+    // collision forced a dedupe -- so the new ref has to come from it, not
+    // from what the user typed.
+    return r.ok
+      ? { ok: true, message: `renamed to "${r.name}"`, ref: { ...ref, id: r.name } }
+      : r;
   }
   if (ref.kind === "quickPlot") {
     // `renameQuickPlotTemplate` silently no-ops for an unknown id, so without
@@ -165,11 +175,11 @@ export function renameRecipe(ref: RecipeRef, name: string): ActionResult {
       return { ok: false, reason: "that template no longer exists" };
     }
     useApp.getState().renameQuickPlotTemplate(ref.id, wanted);
-    return { ok: true, message: "renamed" };
+    return { ok: true, message: "renamed", ref }; // stable id: the row does not move
   }
   if (!plotRecipeFor(ref)) return { ok: false, reason: "that recipe no longer exists" };
   plotOps.renameRecipe(ref.scope, ref.id, wanted);
-  return { ok: true, message: "renamed" };
+  return { ok: true, message: "renamed", ref }; // stable id: the row does not move
 }
 
 export function duplicateRecipe(ref: RecipeRef): ActionResult {

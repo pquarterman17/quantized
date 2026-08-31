@@ -186,9 +186,14 @@ describe("name-keyed operations route through the safe layer", () => {
     setFavorite(ref("analysis", "A"), true);
 
     // Renaming onto a taken name dedupes rather than merging two recipes.
+    // `ref` must report where the row ACTUALLY ended up — "B (2)", not the "B"
+    // the user typed. The panel focuses the row by this id after a rename, so
+    // deriving it from the typed name instead would send focus to a different
+    // recipe's row on every collision.
     expect(renameRecipe(ref("analysis", "A"), "B")).toEqual({
       ok: true,
       message: 'renamed to "B (2)"',
+      ref: { kind: "analysis", scope: "global", id: "B (2)" },
     });
     expect(metaFor(ref("analysis", "B (2)")).favorite).toBe(true);
     expect(loadTemplates().map((t) => t.name).sort()).toEqual(["B", "B (2)"]);
