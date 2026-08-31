@@ -171,6 +171,20 @@ export function recordUse(ref: RecipeRef, now: string = new Date().toISOString()
   return update(ref, (m) => ({ ...m, lastUsedAt: now, useCount: m.useCount + 1 }));
 }
 
+/** Forget one recipe's metadata outright. For a DELETE, where the recipe is
+ *  provably gone and waiting for `pruneEntries` would be wrong: pruning is
+ *  guarded on every source having been read completely, so a deletion made
+ *  while some other system is unreadable would otherwise keep its favorite
+ *  and tags indefinitely — and worse, hand them to the next recipe saved
+ *  under that name (the name-keyed kinds key on it). */
+export function dropEntry(ref: RecipeRef): void {
+  const map = loadIndex();
+  const key = refKey(ref);
+  if (!(key in map)) return;
+  delete map[key];
+  save(map);
+}
+
 /** Carry metadata across a rename. Required for the name-keyed kinds, where
  *  the ref itself changes; harmless for the rest. Merges into any existing
  *  entry at the destination rather than clobbering it, since a rename onto an

@@ -9,15 +9,14 @@
 // (rowstate.analysisData) so exclusions/filters are honored.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePeakBaseline } from "./usePeakBaseline";
 
-import { baselineALS, baselineModPoly, baselineRollingBall } from "../../../lib/api/baseline";
 import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
   cutRange,
   DEFAULT_RECIPE,
-  expandToFullRows,
   loadRecipes,
   regionsFromPeaks,
   saveRecipe as persistRecipe,
@@ -29,6 +28,7 @@ import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import type { Dataset, MultiFitResult, Peak } from "../../../lib/types";
+import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -118,9 +118,6 @@ export function usePeakWizard(): PeakWizardState {
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
-  const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
-  const [baselineBusy, setBaselineBusy] = useState(false);
-  const [baselineError, setBaselineError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<CandidatePeak[]>([]);
   const [findBusy, setFindBusy] = useState(false);
   const [findError, setFindError] = useState<string | null>(null);
@@ -159,52 +156,12 @@ export function usePeakWizard(): PeakWizardState {
     return cutRange(sel.x, sel.y, recipe.range.lo, recipe.range.hi);
   }, [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi]);
 
-  // ① Baseline on the working segment; overlays onto the FULL plot x.
-  useEffect(() => {
-    setBaseline(null);
-    setBaselineError(null);
-    if (!active || !segment || segment.x.length === 0) {
-      setBaselineOverlay(null);
-      return;
-    }
-    if (recipe.baseline.method === "none") {
-      setBaselineOverlay(null);
-      return;
-    }
-    let cancelled = false;
-    setBaselineBusy(true);
-    const activeId = active.id;
-    const b = recipe.baseline;
-    void (async () => {
-      try {
-        // #38 deferred edge: auto-baseline must never run on the small
-        // preview — resolve the active dataset's full data first (a no-op
-        // if it isn't pending). The working `segment` itself is unaffected
-        // (recomputed reactively once `active` swaps), so this only guards
-        // the eagerly-fired first step.
-        const ds = await useApp.getState().resolveDataset(activeId);
-        if (cancelled || !ds) return;
-        const res = await (b.method === "als"
-          ? baselineALS({ y: segment.y, lam: b.lam, p: b.p })
-          : b.method === "rollingball"
-            ? baselineRollingBall({ y: segment.y, radius: b.radius })
-            : baselineModPoly({ y: segment.y, order: b.order }));
-        if (cancelled) return;
-        setBaseline(res.baseline);
-        setBaselineOverlay({
-          datasetId: ds.id,
-          y: expandToFullRows(res.baseline, segment.kept, ds.data.time.length),
-        });
-      } catch (e: unknown) {
-        if (!cancelled) setBaselineError(e instanceof Error ? e.message : "baseline failed");
-      } finally {
-        if (!cancelled) setBaselineBusy(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [active, segment, recipe.baseline, setBaselineOverlay]);
+  const { baseline, baselineBusy, baselineError } = usePeakBaseline(
+    active,
+    segment,
+    recipe.baseline,
+    setBaselineOverlay,
+  );
 
   // The corrected trace every later step consumes.
   const workingY = useMemo(() => {
@@ -456,6 +413,9 @@ export function usePeakWizard(): PeakWizardState {
   const applyRecipe = (name: string) => {
     const r = recipes.find((x) => x.name === name);
     if (!r) return;
+    // P3.5 "recently used" — after the existence guard, so applying a recipe
+    // that is already gone records nothing.
+    recordUse({ kind: "peak", scope: "global", id: r.name });
     setRecipe(r);
     setCandidates([]);
     setFitResult(null);

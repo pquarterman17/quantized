@@ -64,6 +64,7 @@ import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { nextFigureId } from "./figureLifecycle";
+import { recordRecipeUse } from "./recordRecipeUse";
 import { withPlotWindowDocument } from "./windowDocuments";
 
 export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -168,6 +169,22 @@ export function applyResolvedRecipe(
   // into an actual small-multiples grid -- closing `store/plotRecipes.ts`'s
   // own documented GAP note for the facet case (spatial/break still open).
   get().focusWindow(windowId);
+  // P3.5 "recently used". This is the ONE commit seam every plot-recipe apply
+  // entry point funnels through (`resolveApplyOrStage`'s clean-match branch
+  // and both confirm paths — see this file's header), so recording here counts
+  // each apply exactly once and cannot miss a route. Deliberately AFTER the
+  // early `return false` above: staging, refusing, or losing the dataset is
+  // not a use.
+  //
+  // Scope is derived rather than threaded through: a recipe reaches here as a
+  // bare object from `applyPlotRecipeObject` with no scope attached, so the
+  // honest answer is where it lives right now. Project membership wins because
+  // that is the list `applyPlotRecipe` searches first.
+  recordRecipeUse({
+    kind: "plot",
+    scope: get().plotRecipes.some((r) => r.id === recipe.id) ? "project" : "global",
+    id: recipe.id,
+  });
   return true;
 }
 

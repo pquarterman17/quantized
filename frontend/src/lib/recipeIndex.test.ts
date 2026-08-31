@@ -21,6 +21,7 @@ import { isKnownStorageKey } from "./storageKeys";
 import {
   parseRefKey,
   RECIPE_CAPABILITIES,
+  supportsOperation,
   RECIPE_KINDS,
   type RecipeRef,
   refKey,
@@ -68,12 +69,40 @@ describe("ref identity", () => {
 describe("capability table is honest about what each system can do", () => {
   it("the four name-keyed systems admit they have no stable id", () => {
     // Their save/delete functions key on name (lib/template.ts et al), so a
-    // rename destroys identity. A Library offering Rename on them would be
-    // offering to silently orphan metadata.
+    // rename genuinely destroys identity — `stableId` must keep saying so.
+    //
+    // `canRename` used to be false here for the reason stated in the original
+    // version of this test: "a Library offering Rename on them would be
+    // offering to silently orphan metadata." P3.5 removed that condition
+    // rather than the concern — `lib/nameKeyedRecipes.renameNameKeyed` carries
+    // the sidecar across with `recipeIndex.moveEntry`, and there is a test
+    // that the favorites and tags survive. So rename is offered now, and
+    // `stableId` still reports the underlying truth. The two flags answer
+    // different questions and this is exactly the case that separates them.
     for (const kind of ["analysis", "peak", "graph", "fitModel"] as const) {
       expect(RECIPE_CAPABILITIES[kind].stableId, kind).toBe(false);
-      expect(RECIPE_CAPABILITIES[kind].canRename, kind).toBe(false);
+      expect(RECIPE_CAPABILITIES[kind].canRename, kind).toBe(true);
       expect(RECIPE_CAPABILITIES[kind].scopes, kind).toEqual(["global"]);
+    }
+  });
+
+  it("supportsOperation refuses what genuinely is not built", () => {
+    // The table is only worth having if a `false` reaches the UI. These are
+    // the ones that must stay refused until something real backs them.
+    expect(supportsOperation("quickPlot", "duplicate")).toBe(false);
+    for (const kind of ["peak", "graph", "fitModel"] as const) {
+      expect(supportsOperation(kind, "export"), kind).toBe(false);
+      expect(supportsOperation(kind, "import"), kind).toBe(false);
+    }
+    // Only `plot` lives in two scopes, so only `plot` can be copied between
+    // them — derived from `scopes`, never a second flag to drift.
+    for (const kind of RECIPE_KINDS) {
+      expect(supportsOperation(kind, "copyScope"), kind).toBe(kind === "plot");
+    }
+    // Apply and delete are universal, and every kind was checked by hand.
+    for (const kind of RECIPE_KINDS) {
+      expect(supportsOperation(kind, "apply"), kind).toBe(true);
+      expect(supportsOperation(kind, "delete"), kind).toBe(true);
     }
   });
 

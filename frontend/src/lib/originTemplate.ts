@@ -12,6 +12,11 @@
 
 import { postForm } from "./api";
 import { loadGraphTemplates, saveGraphTemplate, type GraphTemplate } from "./figuredoc";
+// Shared with the P3.5 operation layer (lib/nameKeyedRecipes.ts), which needs
+// the same collision rule for renames and duplicates. In its own leaf module
+// so importing it here — from an eagerly-reachable file — cannot reach that
+// layer's sidecar-index and recipe-store imports.
+import { uniqueTemplateName } from "./uniqueName";
 import type { FigureOverrides } from "./figureOverrides";
 import type { ExportSeriesStyle } from "./exportStyles";
 import { toast } from "../store/toasts";
@@ -51,13 +56,7 @@ export function sanitizeImportedTemplate(v: unknown, fallbackName: string): Grap
  *  saveGraphTemplate upserts by name, so an import must never reuse one
  *  (re-importing the same file appends a numbered copy instead of clobbering
  *  the earlier import or a user-saved template). */
-export function uniqueTemplateName(name: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(name)) return name;
-  for (let i = 2; ; i++) {
-    const candidate = `${name} (${i})`;
-    if (!taken.has(candidate)) return candidate;
-  }
-}
+
 
 /** Full flow for one file: upload → sanitize → unique-name → persist into the
  *  saved graph-templates store. Throws (with the backend's 422 detail when

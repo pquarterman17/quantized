@@ -8,8 +8,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
+import { recordUse } from "../../../lib/recipeIndex";
 import {
   deleteCustomModel,
+  loadCustomModels,
   saveCustomModel,
   type CustomFitModel,
 } from "../../../lib/fitmodels";
@@ -187,6 +189,16 @@ export function useEquationFit(
         ...(upper.some((v) => v !== null) ? { upper } : {}),
       });
       setResult(r);
+      // P3.5 "recently used" — the one genuinely ambiguous kind, so it is
+      // wired precisely. Selecting a saved model from the dropdown is a
+      // BROWSE; the use is the fit actually running with it. And the name is
+      // checked against what is really stored, because `modelName` is free
+      // text a user may have typed without ever saving: recording it
+      // unchecked would mint sidecar entries for models that do not exist,
+      // which `pruneEntries` would then have to clean up after.
+      if (modelName && loadCustomModels().some((m) => m.name === modelName)) {
+        recordUse({ kind: "fitModel", scope: "global", id: modelName });
+      }
       // Script-only macro step ("ui" kind): the pipeline runner's "fit" step
       // re-executes registry models by name, which a raw equation is not.
       useApp

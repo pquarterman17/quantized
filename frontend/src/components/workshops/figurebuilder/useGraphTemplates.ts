@@ -20,6 +20,7 @@ import {
 } from "../../../lib/figuredoc";
 import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
+import { recordUse } from "../../../lib/recipeIndex";
 import type { LegacyFigureState } from "./legacyFigure";
 
 export interface GraphTemplatesApi {
@@ -58,6 +59,8 @@ export function useGraphTemplates(deps: {
   function applyStyleTemplate(name: string): void {
     const template = graphTemplates.find((candidate) => candidate.name === name);
     if (!template) return;
+    // P3.5 "recently used" — after the existence guard.
+    recordUse({ kind: "graph", scope: "global", id: template.name });
     deps.setStyle(template.style);
     deps.setOverrides(template.overrides ?? {});
     // `?? null` is load-bearing: a template with no styles must set the
