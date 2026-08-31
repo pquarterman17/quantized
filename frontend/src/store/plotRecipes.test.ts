@@ -9,7 +9,7 @@
 // store/plotRecipes.ts's module doc's LAZY-LOADED note, the bundle-size-
 // budget fix) -- every call below is awaited.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { facetPanelsOf } from "../lib/composition";
 import { facetCompositionFromBinding } from "../lib/facet";
@@ -18,6 +18,7 @@ import { defaultPlotView, type PlotView } from "../lib/plotview";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
 import { useGlobalPlotRecipes } from "./globalPlotRecipes";
+import { metaFor } from "../lib/recipeIndex";
 import { useApp } from "./useApp";
 
 // `technique: null` (never `undefined` -- a default parameter would silently
@@ -274,6 +275,44 @@ describe("applyPlotRecipe", () => {
     focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
     return (await useApp.getState().saveAsPlotRecipe("XRD Recipe", "d1"))!;
   }
+
+  it("records a use on a clean apply, with the scope it actually lives in (P3.5)", async () => {
+    const id = await saved();
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    // `applyResolvedRecipe` is the one commit seam every apply route funnels
+    // through, and it reaches the sidecar via a dynamic import to keep it out
+    // of the eager bundle — hence the wait.
+    await vi.waitFor(() => expect(metaFor({ kind: "plot", scope: "project", id }).useCount).toBe(1));
+    // A recipe saved into the project must not be recorded as a global one:
+    // the two are different rows in the Library and different sidecar keys.
+    expect(metaFor({ kind: "plot", scope: "global", id }).useCount).toBe(0);
+  });
+
+  it("records NOTHING when the apply only STAGES a pending application", async () => {
+    // Staging mutates nothing and waits for a confirm the user may cancel, so
+    // counting it would put never-applied recipes in "recently used".
+    //
+    // The negative is proved by ORDERING, not by waiting a fixed number of
+    // microtasks: the recorder reaches the sidecar through a dynamic import,
+    // so `useCount === 0` shortly after the call passes just as well when the
+    // write is merely late. A second, definitely-recording apply is awaited
+    // first; both go through the same resolved module in order.
+    const id = await saved();
+    const original = useApp.getState().datasets[0];
+    useApp.setState({
+      datasets: [{ ...original, data: { ...original.data, labels: ["totally", "different"] } }],
+    });
+    await useApp.getState().applyPlotRecipe(id, "d1");
+    expect(useApp.getState().editableFigures).toHaveLength(0); // nothing was applied
+
+    useApp.setState({ datasets: [original] });
+    const witness = await saved();
+    await useApp.getState().applyPlotRecipe(witness, "d1");
+    await vi.waitFor(() =>
+      expect(metaFor({ kind: "plot", scope: "project", id: witness }).useCount).toBe(1),
+    );
+    expect(metaFor({ kind: "plot", scope: "project", id }).useCount).toBe(0);
+  });
 
   it("clean match: creates a NEW figure via ONE undo entry (undo removes the figure AND the window)", async () => {
     const id = await saved();

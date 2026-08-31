@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
-import { metaFor } from "../../../lib/recipeIndex";
+import { metaFor, setFavorite } from "../../../lib/recipeIndex";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -108,5 +108,111 @@ describe("RecipeLibraryPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Manage Plot Recipes…" }));
     expect(useRecipeManager.getState().open).toBe(true);
     expect(useRecipeManager.getState().library).toBe(false);
+  });
+});
+
+describe("pruning the sidecar index (P3.5)", () => {
+  const orphan = { kind: "plot" as const, scope: "project" as const, id: "deleted-long-ago" };
+
+  beforeEach(() => {
+    localStorage.clear();
+    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
+    useRecipeManager.setState({ open: true, library: true });
+  });
+
+  it("drops metadata for a recipe that no longer exists", () => {
+    // Without this the index only ever grows: every recipe a user ever
+    // favorited keeps a row after the recipe itself is gone.
+    setFavorite(orphan, true);
+    useApp.setState({ plotRecipes: [plot] });
+
+    render(<RecipeLibraryPanel />);
+
+    expect(metaFor(orphan).favorite).toBe(false);
+    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" })).toBeDefined();
+  });
+
+  it("keeps metadata for recipes that ARE live", () => {
+    setFavorite({ kind: "plot", scope: "project", id: "plot-1" }, true);
+    useApp.setState({ plotRecipes: [plot] });
+
+    render(<RecipeLibraryPanel />);
+
+    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" }).favorite).toBe(true);
+  });
+
+  it("does NOT prune when a source could not be read completely", () => {
+    // The whole reason `pruneEntries` takes a completeness flag. Every source
+    // reader returns [] both for "empty" and for "the read failed", so pruning
+    // against a failed read deletes every favorite the user has. Here the
+    // project's own recipe lists are flagged incomplete, which is exactly the
+    // state a corrupt .dwk field produces.
+    setFavorite(orphan, true);
+    useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
+
+    render(<RecipeLibraryPanel />);
+
+    expect(metaFor(orphan).favorite, "an incomplete read must never prune").toBe(true);
+  });
+
+  it("prunes as soon as completeness flips true, without the recipe set changing", () => {
+    // The `complete` dependency, not just the `complete` guard. A source that
+    // hydrates late (or a project reopened cleanly after a corrupt one) flips
+    // this flag with the live recipe set unchanged, so an effect keyed only on
+    // the signature would sit on a stale refusal until something else moved.
+    // `exhaustive-deps` is a WARNING in this repo, so lint does not hold it.
+    setFavorite(orphan, true);
+    useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
+    const view = render(<RecipeLibraryPanel />);
+    expect(metaFor(orphan).favorite).toBe(true); // refused while incomplete
+
+    useApp.setState({ recipeSourcesComplete: true });
+    view.rerender(<RecipeLibraryPanel />);
+    expect(metaFor(orphan).favorite).toBe(false); // pruned on the flip
+  });
+
+  it("does not re-prune on a favorite toggle (no re-read storm while browsing)", () => {
+    // The collection is recomputed on every render and each toggle bumps a
+    // revision counter, so a dependency on the collection OBJECT would re-run
+    // the prune on every click. Counting READS, not writes, is what makes this
+    // test load-bearing: `pruneEntries` writes only when it drops something,
+    // so a storm of no-op prunes is invisible to a write counter (measured —
+    // the write-counting version of this test passed against the bug).
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+
+    let indexReads = 0;
+    const real = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    const backing = window.localStorage;
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => {
+          if (k === "qz.recipeIndex") indexReads += 1;
+          return backing.getItem(k);
+        },
+        setItem: (k: string, v: string) => backing.setItem(k, v),
+        removeItem: (k: string) => backing.removeItem(k),
+        clear: () => backing.clear(),
+        key: (i: number) => backing.key(i),
+        get length() {
+          return backing.length;
+        },
+      },
+    });
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /Add XRD publication to favorites/ }));
+    } finally {
+      if (real) Object.defineProperty(globalThis, "localStorage", real);
+    }
+
+    // The toggle itself reads the index (setFavorite) and the re-render reads
+    // it again to show the new state. A prune re-firing adds another on top,
+    // and the count climbs with every subsequent click.
+    // MEASURED, not guessed: 2 with the signature dependency, 3 with the
+    // collection object. `<= 3` — the first bound written here — passed
+    // against the bug, which is exactly how a loose bound hides a regression.
+    expect(indexReads, `index re-read ${indexReads}x for one favorite toggle`).toBeLessThanOrEqual(2);
   });
 });

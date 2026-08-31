@@ -37,6 +37,7 @@ import {
 import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
 import { techniqueOf } from "../lib/techniqueDefaults";
+import { recordRecipeUse } from "./recordRecipeUse";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -165,7 +166,15 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
       }
       // The ONE canonical create path (G4) -- its own recordHistory is the
       // gesture's only history entry; this function adds none of its own.
-      return get().createQuickFigureFromMapping(dataset.id, resolution.mapping, template.style);
+      const created = get().createQuickFigureFromMapping(dataset.id, resolution.mapping, template.style);
+      // P3.5 "recently used": only a figure that actually got created counts.
+      // Every refusal above returns before this, and the create path can still
+      // decline on its own (a gate this function does not re-check), so the
+      // result is what decides -- not merely having reached this line.
+      if (created) {
+        recordRecipeUse({ kind: "quickPlot", scope: "project", id: template.id });
+      }
+      return created;
     },
   };
 }

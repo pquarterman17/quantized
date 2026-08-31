@@ -94,11 +94,24 @@ export interface RecipeCapabilities {
 }
 
 /** The capability matrix, read off the code rather than aspirational.
- *  `plot` is the reference implementation: P1.3 already gave it scope,
- *  rename, duplicate and import/export (components/workshops/recipemanager/
- *  recipeManagerActions.ts). The gap this contract exposes is how far behind
- *  the other five are — which is the actual P3.5 work, and is deliberately
- *  NOT closed by lying in this table. */
+ *  `plot` is the reference implementation: P1.3 gave it scope, rename,
+ *  duplicate and import/export (components/workshops/recipemanager/
+ *  recipeManagerActions.ts).
+ *
+ *  P3.5 closed part of the gap this table exposed — rename and duplicate are
+ *  now real for the four name-keyed kinds (`lib/nameKeyedRecipes.ts`) — and
+ *  deliberately left the rest open rather than lying about it. What is still
+ *  genuinely absent, and why:
+ *
+ *    - quickPlot duplicate: no action in `store/quickPlotTemplates.ts`.
+ *    - peak/graph/fitModel import/export: no serializer or validator exists,
+ *      and inventing an ad-hoc JSON shape here would make this module the
+ *      owner of a format it has no business defining.
+ *    - project scope for the name-keyed four: they have no project-file
+ *      representation at all, so "copy to project" is not a missing feature,
+ *      it is a category error.
+ *
+ *  A `false` here is a promise the Library keeps by greying the action out. */
 export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   plot: {
     stableId: true,
@@ -113,8 +126,11 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   quickPlot: {
     stableId: true,
     scopes: ["project"],
-    canRename: false,
-    canDuplicate: false,
+    // CORRECTED 2026-08-30 (P3.5): this read `false`, but
+    // `store/quickPlotTemplates.ts` has exposed `renameQuickPlotTemplate`
+    // since PR H. The table claimed to be read off the code and was not.
+    canRename: true,
+    canDuplicate: false, // honest: that slice has no duplicate action
     canImportExport: false,
     hasTechnique: true,
     hasTimestamps: true,
@@ -123,8 +139,13 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   analysis: {
     stableId: false,
     scopes: ["global"],
-    canRename: false,
-    canDuplicate: false,
+    // Rename/duplicate became REAL in P3.5 (`lib/nameKeyedRecipes.ts`), not
+    // aspirational: renaming is still a delete plus a create — `stableId`
+    // stays false because the identity genuinely changes — but it now carries
+    // the sidecar across with `recipeIndex.moveEntry`, which is the condition
+    // that made offering it destructive before.
+    canRename: true,
+    canDuplicate: true,
     canImportExport: true, // serializeTemplate/parseTemplate
     hasTechnique: false,
     hasTimestamps: false,
@@ -133,8 +154,13 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   peak: {
     stableId: false,
     scopes: ["global"],
-    canRename: false,
-    canDuplicate: false,
+    // Rename/duplicate became REAL in P3.5 (`lib/nameKeyedRecipes.ts`), not
+    // aspirational: renaming is still a delete plus a create — `stableId`
+    // stays false because the identity genuinely changes — but it now carries
+    // the sidecar across with `recipeIndex.moveEntry`, which is the condition
+    // that made offering it destructive before.
+    canRename: true,
+    canDuplicate: true,
     canImportExport: false,
     hasTechnique: false,
     hasTimestamps: false,
@@ -143,8 +169,13 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   graph: {
     stableId: false,
     scopes: ["global"],
-    canRename: false,
-    canDuplicate: false,
+    // Rename/duplicate became REAL in P3.5 (`lib/nameKeyedRecipes.ts`), not
+    // aspirational: renaming is still a delete plus a create — `stableId`
+    // stays false because the identity genuinely changes — but it now carries
+    // the sidecar across with `recipeIndex.moveEntry`, which is the condition
+    // that made offering it destructive before.
+    canRename: true,
+    canDuplicate: true,
     canImportExport: false,
     hasTechnique: false,
     hasTimestamps: false,
@@ -153,14 +184,65 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
   fitModel: {
     stableId: false,
     scopes: ["global"],
-    canRename: false,
-    canDuplicate: false,
+    // Rename/duplicate became REAL in P3.5 (`lib/nameKeyedRecipes.ts`), not
+    // aspirational: renaming is still a delete plus a create — `stableId`
+    // stays false because the identity genuinely changes — but it now carries
+    // the sidecar across with `recipeIndex.moveEntry`, which is the condition
+    // that made offering it destructive before.
+    canRename: true,
+    canDuplicate: true,
     canImportExport: false,
     hasTechnique: false,
     hasTimestamps: false,
     schemaVersioned: true,
   },
 };
+
+
+/** The operations a Library row can offer. One closed union so a view, a
+ *  command and a menu item cannot disagree about what "duplicate" means. */
+export type RecipeOperation =
+  | "apply"
+  | "rename"
+  | "duplicate"
+  | "delete"
+  | "export"
+  | "import"
+  | "copyScope";
+
+/** Can this kind do this operation, today?
+ *
+ *  The single question the UI asks, so no view re-derives the answer from raw
+ *  capability flags and gets it subtly wrong. Two operations are answered by
+ *  constants rather than flags, and that is deliberate rather than lazy:
+ *
+ *   - `apply` — every one of the six has a real apply gesture, verified by
+ *     walking them (plot/quickPlot in the store, the other four in their
+ *     owning workshop). There is no read-only kind, so a flag would be a
+ *     column of `true` that teaches nobody anything.
+ *   - `delete` — likewise: all six expose a delete. If a built-in preset kind
+ *     ever arrives, THAT is when this earns a flag.
+ *
+ *  `copyScope` is derived from `scopes` rather than duplicated as a flag: a
+ *  kind that lives in exactly one place has nowhere to copy to, and stating
+ *  that twice is how two sources of truth drift apart. */
+export function supportsOperation(kind: RecipeKind, op: RecipeOperation): boolean {
+  const c = RECIPE_CAPABILITIES[kind];
+  switch (op) {
+    case "apply":
+    case "delete":
+      return true;
+    case "rename":
+      return c.canRename;
+    case "duplicate":
+      return c.canDuplicate;
+    case "export":
+    case "import":
+      return c.canImportExport;
+    case "copyScope":
+      return c.scopes.length > 1;
+  }
+}
 
 /** Identifies one recipe across every system. `id` is that system's own key:
  *  a real id for plot/quickPlot, the NAME for the other four (see the header

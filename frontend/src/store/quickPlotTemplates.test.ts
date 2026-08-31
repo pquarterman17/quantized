@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { QuickFigureMapping } from "../lib/quickFigureMapping";
+import { metaFor } from "../lib/recipeIndex";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -173,6 +174,64 @@ describe("applyQuickPlotTemplate (H3 apply delegates to the canonical create pat
 
     expect(useApp.getState().editableFigures.length).toBe(figuresBefore);
     expect(useApp.getState().plotWindows.length).toBe(windowsBefore);
+  });
+
+  it("records a use, so \"recently used\" reflects real applies (P3.5)", async () => {
+    const id = saved();
+    useApp.getState().applyQuickPlotTemplate(id, "d1");
+    // The recorder reaches lib/recipeIndex through a dynamic import so the
+    // sidecar stays out of the eager bundle, so this lands a microtask later.
+    await vi.waitFor(() =>
+      expect(metaFor({ kind: "quickPlot", scope: "project", id }).useCount).toBe(1),
+    );
+    expect(metaFor({ kind: "quickPlot", scope: "project", id }).lastUsedAt).toBeDefined();
+  });
+
+  /** Prove a use was NOT recorded, without racing the recorder.
+   *
+   *  `recordRecipeUse` reaches the sidecar through a dynamic import, so
+   *  asserting `useCount === 0` after a couple of microtasks proves nothing —
+   *  it passes just as well when the write is merely LATE. (Measured: the
+   *  first version of these two tests did exactly that and survived a mutation
+   *  that removed the guard entirely.)
+   *
+   *  So: run the action under test, then perform an apply that definitely DOES
+   *  record and wait for it. Both go through the same already-resolved module,
+   *  in order, so once the second has landed the first would have too. */
+  async function expectNoUseRecorded(id: string, act: () => void): Promise<void> {
+    act();
+    const witness = useApp.getState().saveQuickPlotTemplate("d1", mapping(), "line", "Witness", { kind: "schema" })!;
+    useApp.getState().applyQuickPlotTemplate(witness, "d1");
+    await vi.waitFor(() =>
+      expect(metaFor({ kind: "quickPlot", scope: "project", id: witness }).useCount).toBe(1),
+    );
+    expect(metaFor({ kind: "quickPlot", scope: "project", id }).useCount).toBe(0);
+  }
+
+  it("records NOTHING when the apply is refused before it starts", async () => {
+    const id = saved();
+    await expectNoUseRecorded(id, () => {
+      useApp.getState().applyQuickPlotTemplate(id, "no-such-dataset");
+    });
+  });
+
+  it("records NOTHING when the CREATE PATH itself declines", async () => {
+    // The case the early guards cannot reach: template and dataset both
+    // resolve, so control reaches `createQuickFigureFromMapping`, and THAT
+    // declines on a gate this action does not re-check. Stubbing the store
+    // action is the precise way there — contriving data that passes
+    // `resolveTemplate` and then fails `canCreateQuickFigure` would be testing
+    // a coincidence rather than the contract.
+    const id = saved();
+    await expectNoUseRecorded(id, () => {
+      const real = useApp.getState().createQuickFigureFromMapping;
+      useApp.setState({ createQuickFigureFromMapping: () => false });
+      try {
+        expect(useApp.getState().applyQuickPlotTemplate(id, "d1")).toBe(false);
+      } finally {
+        useApp.setState({ createQuickFigureFromMapping: real });
+      }
+    });
   });
 
   it("never mutates quickPlotTemplates itself (apply is not a second save)", () => {

@@ -11,9 +11,11 @@ import {
   importOriginTemplateFile,
   importOriginTemplateFiles,
   sanitizeImportedTemplate,
-  uniqueTemplateName,
   uploadOriginTemplate,
 } from "./originTemplate";
+// Moved to lib/nameKeyedRecipes.ts (P3.5): the same collision rule now serves
+// renames and duplicates of every name-keyed kind, not just Origin imports.
+import { uniqueTemplateName } from "./uniqueName";
 
 // The backend route's real response shape (routes/import_template.py →
 // io/origin_project/templates.py::read_origin_template).

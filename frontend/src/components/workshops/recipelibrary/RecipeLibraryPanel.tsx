@@ -5,9 +5,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { setFavorite, setTags } from "../../../lib/recipeIndex";
+import { pruneEntries, setFavorite, setTags } from "../../../lib/recipeIndex";
 import { RECIPE_KIND_LABEL, RECIPE_KINDS, type RecipeDescriptor, type RecipeKind } from "../../../lib/recipeLibrary";
-import { collectRecipes } from "../../../lib/recipeSources";
+import { collectRecipes, liveKeys } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -119,6 +119,34 @@ export default function RecipeLibraryPanel() {
     quickPlot: quickPlots,
     plotSourcesComplete: globalHydrated && globalComplete && workspaceComplete,
   });
+
+  // P3.5: drop sidecar metadata for recipes that no longer exist — the only
+  // thing keeping `qz.recipeIndex` from growing forever as recipes come and go.
+  //
+  // Gated twice, and both gates matter. `collection.complete` is the one
+  // `pruneEntries` itself demands: every source reader returns [] both for
+  // "empty" and for "the read failed", so pruning against a failed read would
+  // delete every favorite the user has.
+  //
+  // Depending on `liveSignature` rather than on `collection` is the second.
+  // This component recomputes the collection on every render (each favorite or
+  // tag toggle bumps `revision`), so depending on the object would re-run this
+  // on every click. That is a READ storm, not a write one — `pruneEntries`
+  // writes only when it actually drops something — but it still parses and
+  // sanitizes the whole index per render for nothing. The signature changes
+  // only when the SET of live recipes does, which is the only time there is
+  // anything to prune. Measured: one favorite toggle costs 2 index reads with
+  // the signature dependency and 3 with the object, which is what the
+  // regression in RecipeLibraryPanel.test.tsx pins.
+  const live = liveKeys(collection);
+  const liveSignature = [...live].sort().join("\u0000");
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const complete = collection.complete;
+  useEffect(() => {
+    if (!complete) return;
+    pruneEntries(liveRef.current, true);
+  }, [complete, liveSignature]);
 
   const rows = sortRows(collection.recipes).filter((row) =>
     (kind === "all" || row.kind === kind) && (!favoritesOnly || row.favorite),

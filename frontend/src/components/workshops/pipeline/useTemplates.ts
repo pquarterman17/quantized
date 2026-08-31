@@ -25,6 +25,7 @@ import {
   type AnalysisTemplate,
   type BatchRow,
 } from "../../../lib/template";
+import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -84,6 +85,10 @@ export function useTemplates(): TemplatesState {
       const t = loadTemplates().find((x) => x.name === name);
       if (!t) return;
       loadSteps(t.steps);
+      // P3.5 "recently used". After the existence check, so loading a template
+      // deleted in another tab records nothing. A direct import is free here:
+      // this hook only ever ships in the lazy Pipeline workshop chunk.
+      recordUse({ kind: "analysis", scope: "global", id: t.name });
       toast(`template "${name}" loaded — ${t.steps.length} steps`);
     },
     [loadSteps],
