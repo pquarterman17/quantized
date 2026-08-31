@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadGraphTemplates, saveGraphTemplate } from "../../../lib/figuredoc";
 import { makeStep } from "../../../lib/pipeline";
+import { captureRecipe } from "../../../lib/plotRecipe";
+import { defaultPlotView } from "../../../lib/plotview";
 import { metaFor, setFavorite } from "../../../lib/recipeIndex";
 import type { RecipeRef } from "../../../lib/recipeLibrary";
 import { loadTemplates, saveTemplate } from "../../../lib/template";
@@ -40,6 +42,25 @@ const dataset: Dataset = {
     metadata: { technique: "magnetometry.mvsh" },
   },
 };
+
+/** A three-column XRD set whose Y label can be swapped to force an UNMATCHED
+ *  (staged, not refused) resolution -- the same shape store/plotRecipes.test.ts
+ *  uses for its staging case. */
+const xrd = (labels: string[]): Dataset => ({
+  id: "x1",
+  name: "x1.xy",
+  data: {
+    time: [0, 1, 2],
+    values: [
+      [10, 100, 1],
+      [20, 200, 2],
+      [30, 300, 3],
+    ],
+    labels,
+    units: ["deg", "cps", "cps"],
+    metadata: { technique: "xrd.powder" },
+  },
+});
 
 function seedAnalysis(name: string) {
   saveTemplate({
@@ -200,6 +221,38 @@ describe("name-keyed operations route through the safe layer", () => {
 describe("an imperfect match is PENDING, not refused", () => {
   const plotRecipe = (id: string) =>
     ({ id, name: id, schemaVersion: 1, signature: [], mapping: {}, visual: {} }) as never;
+
+  it("reports a genuinely staged apply as PENDING, not as a refusal", async () => {
+    // The positive half. Only pinning "a stale pending is not this call's"
+    // left the whole `pending` variant removable: fold staging back into a
+    // plain `ok: false` and that test still passes, because it only asserts
+    // `pending` is FALSY. This one fails unless a real staging is reported as
+    // pending, which is what stops the panel styling it as an error.
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const captured = captureRecipe(xrd(["2theta", "Intensity", "Ierr"]), view, null, {
+      id: "p-stage",
+      name: "staged",
+      appVersion: "0",
+    });
+    // Rename the Y column the recipe bound: X resolves, Y does not -- unmatched,
+    // which stages rather than refusing.
+    useApp.setState({
+      datasets: [xrd(["2theta", "Signal", "Ierr"])],
+      activeId: "x1",
+      plotRecipes: [captured],
+      pendingRecipeApplication: null,
+      status: "",
+    });
+
+    const r = await applyOrOpen(ref("plot", "p-stage", "project"));
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.pending, "a real staging MUST be pending, not a refusal").toBe(true);
+      expect(r.reason).toContain("confirm");
+    }
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+  });
 
   it("does not report a fresh refusal as staged just because something is pending", async () => {
     // Detecting staging by TRUTHINESS of `pendingRecipeApplication` meant a

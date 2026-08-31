@@ -301,6 +301,34 @@ describe("row actions (P3.5 slice 3)", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("chunk 404"));
   });
 
+  it("shows a STAGED apply as a confirmation prompt, not as a failure", async () => {
+    // A staged apply is neither success nor refusal: the store is holding a
+    // resolution for the user to confirm. Styling it as "Not done" told the
+    // user their action failed when it is actually waiting on them, and the
+    // `qz-is-pending`/`qz-is-refused` split is the only thing keeping the two
+    // visually apart. Both the prefix and the class were untested.
+    useApp.setState({
+      plotRecipes: [plot],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      // Stand in for `resolveApplyOrStage`'s staging branch: returns false
+      // having installed a NEW pending application and written no status.
+      applyPlotRecipeObject: () => {
+        useApp.setState({ pendingRecipeApplication: { staged: true } as never });
+        return Promise.resolve(false);
+      },
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(/^Needs confirmation — /),
+    );
+    expect(screen.getByRole("status")).toHaveClass("qz-is-pending");
+    expect(screen.getByRole("status")).not.toHaveClass("qz-is-refused");
+  });
+
   it("serializes actions across the whole list while one apply is in flight", async () => {
     // `busy` is panel-wide, not per-row: an apply is async and reports through
     // ONE shared status line, so a second apply started on another row would
