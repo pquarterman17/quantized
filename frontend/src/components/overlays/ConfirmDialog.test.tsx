@@ -72,3 +72,54 @@ describe("ConfirmDialog / askConfirm", () => {
     await expect(result).resolves.toBe(false);
   });
 });
+
+describe("safety for irreversible confirms (P3.5 review)", () => {
+  it("ignores an auto-REPEAT Enter, so a held key cannot confirm blind", async () => {
+    // The key listener mounts in an effect AFTER the dialog renders. A user
+    // who opened this by holding Enter on the triggering button would have the
+    // next auto-repeat land here as a confirm, before reading the question —
+    // on a delete that cannot be undone, the whole safeguard bypassed.
+    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
+    render(<ConfirmDialog />);
+    await screen.findByText("Delete it?");
+
+    fireEvent.keyDown(window, { key: "Enter", repeat: true });
+    expect(screen.getByText("Delete it?")).toBeInTheDocument(); // still open
+
+    fireEvent.keyDown(window, { key: "Enter" }); // a deliberate press still works
+    expect(await answer).toBe(true);
+  });
+
+  it("Enter on the focused Cancel button CANCELS — it does not confirm", async () => {
+    // Moving focus to Cancel made Enter-on-Cancel the natural keyboard
+    // gesture. A window-level handler that treats Enter as "confirm"
+    // regardless of focus therefore turns the safest control in the dialog
+    // into the destructive one — strictly worse than not moving focus at all.
+    const answer = open("Delete it?", "This cannot be undone.", "Delete", true);
+    render(<ConfirmDialog />);
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    act(() => cancel.focus());
+
+    fireEvent.keyDown(cancel, { key: "Enter", bubbles: true });
+    // The native activation of the focused button is what should decide.
+    fireEvent.click(cancel);
+    expect(await answer).toBe(false);
+  });
+
+  it("announces itself as a dialog and moves focus to the SAFE button", async () => {
+    // Without a role the backdrop is just a div, and focus stays on the button
+    // behind it — a screen-reader user is never taken to the question.
+    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
+    render(<ConfirmDialog />);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAccessibleName("Delete it?");
+    expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
+    // Cancel, not the destructive button: a stray Space/Enter must dismiss.
+    expect(document.activeElement).toHaveTextContent("Cancel");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(await answer).toBe(false);
+  });
+});

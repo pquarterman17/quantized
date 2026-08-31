@@ -26,7 +26,7 @@
 // favorite the user has. So pruning takes an explicit completeness flag and
 // no-ops unless the caller can vouch that every source was read successfully.
 
-import { type RecipeRef, refKey } from "./recipeLibrary";
+import { deleteIsUndoable, parseRefKey, type RecipeRef, refKey } from "./recipeLibrary";
 
 const KEY = "qz.recipeIndex";
 
@@ -209,24 +209,63 @@ export function moveEntry(from: RecipeRef, to: RecipeRef): void {
   save(map);
 }
 
-/** Drop metadata for recipes that no longer exist.
+/** Drop the metadata of recipes that no longer exist.
  *
  *  `complete` is not a courtesy flag. Every source reader returns an empty
  *  list both for "this system is empty" and for "the read failed", so pruning
  *  against a list built from a failed read would delete every favorite the
  *  user has. Callers pass false whenever ANY source could not be read, and
  *  this then does nothing at all — an index that is briefly too big is a
- *  non-event next to silently wiping someone's favorites. */
+ *  non-event next to silently wiping someone's favorites.
+ *
+ *  ── WHAT SURVIVES, AND WHY IT DEPENDS ON THE KIND ────────────────────────
+ *  For a kind whose delete is UNDOABLE (`deleteIsUndoable`: project-scope plot
+ *  recipes and quick-plot templates) an explicit choice — a favorite or tags —
+ *  is KEPT and only the derived recency is dropped. The Library prunes
+ *  whenever the live set changes, so deleting a favorited plot recipe would
+ *  otherwise drop its star before the user could press Ctrl+Z, and the undo
+ *  would bring the recipe back stripped of it.
+ *
+ *  For every other kind the entry is dropped OUTRIGHT, and that asymmetry is
+ *  the whole point rather than an oversight. Keeping an orphan's favorite is
+ *  only defensible while the recipe can come back to claim it. Where it cannot:
+ *
+ *    - the entry would live forever, since nothing else ever removes it; and
+ *    - worse, the four name-keyed kinds key this index BY NAME, and their
+ *      `save*` upserts by name — so a brand-new recipe saved under a
+ *      previously-used name would inherit a dead recipe's star and tags.
+ *
+ *  That second failure is not hypothetical: the workshop-side deletes
+ *  (`useTemplates`, `useEquationFit`, `useGraphTemplates`) remove a record
+ *  directly and never reach `dropEntry`, so a prune is the ONLY thing that
+ *  ever cleans up after them. Kind-awareness here is what keeps that true.
+ *
+ *  An unparseable key is treated as droppable: it cannot correspond to a live
+ *  recipe (every live key is built by `refKey`), so keeping it would be a leak
+ *  with no upside.
+ *
+ *  Returns how many entries were REMOVED. Entries merely stripped of their
+ *  recency are not counted: nothing the user chose was forgotten. */
 export function pruneEntries(liveKeys: ReadonlySet<string>, complete: boolean): number {
   if (!complete) return 0;
   const map = loadIndex();
   let dropped = 0;
+  let changed = false;
   for (const key of Object.keys(map)) {
-    if (!liveKeys.has(key)) {
-      delete map[key];
-      dropped += 1;
+    if (liveKeys.has(key)) continue;
+    const entry = map[key];
+    const ref = parseRefKey(key);
+    const worthKeeping = (entry.favorite || entry.tags.length > 0) && ref !== null && deleteIsUndoable(ref);
+    if (worthKeeping) {
+      if (entry.useCount === 0 && entry.lastUsedAt === undefined) continue; // already bare
+      map[key] = { ...entry, useCount: 0, lastUsedAt: undefined };
+      changed = true;
+      continue;
     }
+    delete map[key];
+    dropped += 1;
+    changed = true;
   }
-  if (dropped > 0) save(map);
+  if (changed) save(map);
   return dropped;
 }

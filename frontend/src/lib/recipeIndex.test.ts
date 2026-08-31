@@ -27,9 +27,13 @@ import {
   refKey,
 } from "./recipeLibrary";
 
-const ref = (id: string, kind: RecipeRef["kind"] = "analysis"): RecipeRef => ({
+const ref = (
+  id: string,
+  kind: RecipeRef["kind"] = "analysis",
+  scope: RecipeRef["scope"] = "global",
+): RecipeRef => ({
   kind,
-  scope: "global",
+  scope,
   id,
 });
 
@@ -207,24 +211,84 @@ describe("rename carries metadata across a name-keyed identity change", () => {
 });
 
 describe("pruning refuses to run on an incomplete read", () => {
-  it("drops metadata for recipes that are really gone", () => {
-    setFavorite(ref("live"), true);
-    setFavorite(ref("dead"), true);
+  it("drops the recency of recipes that are really gone", () => {
+    recordUse(ref("live"), "2026-08-30T10:00:00.000Z");
+    recordUse(ref("dead"), "2026-08-30T10:00:00.000Z");
     const dropped = pruneEntries(new Set([refKey(ref("live"))]), true);
     expect(dropped).toBe(1);
-    expect(metaFor(ref("live")).favorite).toBe(true);
-    expect(metaFor(ref("dead")).favorite).toBe(false);
+    expect(metaFor(ref("live")).useCount).toBe(1);
+    expect(metaFor(ref("dead")).useCount).toBe(0);
+  });
+
+  it("KEEPS a favorite whose recipe can still come back, and says so in the count", () => {
+    // Same rule `save` applies under quota pressure: keep what the user chose,
+    // shed what the app derived — but ONLY where an undo could return the
+    // recipe to claim it. A project-scope plot recipe is that case.
+    const undoable = ref("p1", "plot", "project");
+    setFavorite(undoable, true);
+    setTags(undoable, ["keep"]);
+    recordUse(undoable, "2026-08-30T10:00:00.000Z");
+
+    const dropped = pruneEntries(new Set<string>(), true);
+
+    expect(metaFor(undoable).favorite).toBe(true);
+    expect(metaFor(undoable).tags).toEqual(["keep"]);
+    expect(metaFor(undoable).useCount, "the derived half still goes").toBe(0);
+    expect(dropped, "an entry stripped of recency was not FORGOTTEN").toBe(0);
+  });
+
+  it("DROPS a favorite outright when the recipe can never come back", () => {
+    // The asymmetry is the point. An analysis template's delete is not
+    // undoable, and the four name-keyed kinds key this index BY NAME — so a
+    // kept orphan would live forever AND be inherited by the next recipe saved
+    // under that name. Workshop-side deletes never reach `dropEntry`, so this
+    // prune is the only thing that ever cleans up after them.
+    setFavorite(ref("gone"), true);
+    setTags(ref("gone"), ["stale"]);
+
+    expect(pruneEntries(new Set<string>(), true)).toBe(1);
+    expect(metaFor(ref("gone")).favorite).toBe(false);
+    expect(metaFor(ref("gone")).tags).toEqual([]);
+  });
+
+  it("drops an orphan whose key cannot be parsed", () => {
+    // Every live key is built by `refKey`, so an unparseable one cannot match
+    // a live recipe; keeping it would leak with no upside.
+    localStorage.setItem("qz.recipeIndex", JSON.stringify({ "not-a-valid-key": { favorite: true, tags: [], useCount: 0 } }));
+    expect(pruneEntries(new Set<string>(), true)).toBe(1);
+  });
+
+  it("survives delete-then-undo of a favorited recipe (the regression)", () => {
+    // The Library prunes whenever the live recipe set changes, and deleting a
+    // plot recipe changes it — so with the old behaviour the star was gone
+    // before the user could press Ctrl+Z, and the undo brought the recipe
+    // back stripped of it.
+    const undoable = ref("p1", "plot", "project");
+    setFavorite(undoable, true);
+    pruneEntries(new Set<string>(), true); // the delete's prune
+    pruneEntries(new Set([refKey(undoable)]), true); // the undo restores it
+    expect(metaFor(undoable).favorite).toBe(true);
   });
 
   it("does nothing at all when the caller cannot vouch for the list", () => {
     // Every source reader returns [] both for "empty" and for "storage
-    // threw". Pruning against a failed read would wipe every favorite the
-    // user has — the exact failure this flag exists to prevent.
-    setFavorite(ref("live"), true);
-    setFavorite(ref("other"), true);
+    // threw". Pruning against a failed read would wipe metadata for recipes
+    // that are merely missing from THIS read — the failure this flag exists
+    // to prevent.
+    //
+    // The sentinel MUST be recency, not a favorite. This test used to seed
+    // bare favorites, which stopped discriminating the moment favorites began
+    // surviving every prune: the guard could be deleted outright and the test
+    // still passed (measured — mutation testing killed it). Recency is now
+    // the only thing a prune destroys, so it is the only honest sentinel.
+    setFavorite(ref("starred"), true);
+    recordUse(ref("starred"), "2026-08-30T10:00:00.000Z");
+    recordUse(ref("plain"), "2026-08-30T10:00:00.000Z");
+
     const dropped = pruneEntries(new Set<string>(), false);
+
     expect(dropped).toBe(0);
-    expect(metaFor(ref("live")).favorite).toBe(true);
-    expect(metaFor(ref("other")).favorite).toBe(true);
+    expect(metaFor(ref("starred")).useCount, "recency must survive a refused prune").toBe(1);
+    expect(metaFor(ref("plain")).useCount, "a bare entry must not be dropped either").toBe(1);
   });
 });

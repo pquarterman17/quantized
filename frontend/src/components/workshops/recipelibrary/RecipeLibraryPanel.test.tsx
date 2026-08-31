@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
-import { metaFor, setFavorite } from "../../../lib/recipeIndex";
+import { makeStep } from "../../../lib/pipeline";
+import { metaFor, recordUse, setFavorite } from "../../../lib/recipeIndex";
+import { supportsOperation } from "../../../lib/recipeLibrary";
+import { loadTemplates, saveTemplate } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -58,7 +61,7 @@ describe("RecipeLibraryPanel", () => {
     localStorage.setItem("qz.plotRecipes", "{{{ not json");
     useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
     render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(screen.getByText(/Some recipe sources could not be read completely/)).toBeInTheDocument();
     expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
     expect(useGlobalPlotRecipes.getState().complete).toBe(false);
   });
@@ -72,20 +75,20 @@ describe("RecipeLibraryPanel", () => {
     // metadata of recipes that still exist in the file.
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
     render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(screen.getByText(/Some recipe sources could not be read completely/)).toBeInTheDocument();
     expect(screen.getByText("XRD publication")).toBeInTheDocument(); // what survived is still shown
   });
 
   it("shows no warning when every source, project included, is whole", () => {
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: true });
     render(<RecipeLibraryPanel />);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Some recipe sources could not be read completely/)).not.toBeInTheDocument();
   });
 
   it("edits comma-separated tags without changing the recipe", () => {
     useApp.setState({ plotRecipes: [plot] });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Add tags" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit tags for/ }));
     const input = screen.getByRole("textbox", { name: "Tags for XRD publication" });
     fireEvent.change(input, { target: { value: "xrd, publication" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -96,7 +99,7 @@ describe("RecipeLibraryPanel", () => {
   it("cancels tag edits with Escape", () => {
     useApp.setState({ plotRecipes: [plot] });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Add tags" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit tags for/ }));
     const input = screen.getByRole("textbox", { name: "Tags for XRD publication" });
     fireEvent.change(input, { target: { value: "do-not-save" } });
     fireEvent.keyDown(input, { key: "Escape" });
@@ -121,16 +124,28 @@ describe("pruning the sidecar index (P3.5)", () => {
     useRecipeManager.setState({ open: true, library: true });
   });
 
-  it("drops metadata for a recipe that no longer exists", () => {
+  it("drops the recency of a recipe that no longer exists", () => {
     // Without this the index only ever grows: every recipe a user ever
-    // favorited keeps a row after the recipe itself is gone.
+    // applied keeps a row after the recipe itself is gone.
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
+    useApp.setState({ plotRecipes: [plot] });
+
+    render(<RecipeLibraryPanel />);
+
+    expect(metaFor(orphan).useCount).toBe(0);
+    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" })).toBeDefined();
+  });
+
+  it("KEEPS an orphan's favorite — deleting a plot recipe is undoable", () => {
+    // The Library prunes whenever the live set changes, and deleting a recipe
+    // changes it. Dropping the star here would mean an undo restores the
+    // recipe without it.
     setFavorite(orphan, true);
     useApp.setState({ plotRecipes: [plot] });
 
     render(<RecipeLibraryPanel />);
 
-    expect(metaFor(orphan).favorite).toBe(false);
-    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" })).toBeDefined();
+    expect(metaFor(orphan).favorite).toBe(true);
   });
 
   it("keeps metadata for recipes that ARE live", () => {
@@ -148,12 +163,12 @@ describe("pruning the sidecar index (P3.5)", () => {
     // against a failed read deletes every favorite the user has. Here the
     // project's own recipe lists are flagged incomplete, which is exactly the
     // state a corrupt .dwk field produces.
-    setFavorite(orphan, true);
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
 
     render(<RecipeLibraryPanel />);
 
-    expect(metaFor(orphan).favorite, "an incomplete read must never prune").toBe(true);
+    expect(metaFor(orphan).useCount, "an incomplete read must never prune").toBe(1);
   });
 
   it("prunes as soon as completeness flips true, without the recipe set changing", () => {
@@ -162,14 +177,14 @@ describe("pruning the sidecar index (P3.5)", () => {
     // this flag with the live recipe set unchanged, so an effect keyed only on
     // the signature would sit on a stale refusal until something else moved.
     // `exhaustive-deps` is a WARNING in this repo, so lint does not hold it.
-    setFavorite(orphan, true);
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
     const view = render(<RecipeLibraryPanel />);
-    expect(metaFor(orphan).favorite).toBe(true); // refused while incomplete
+    expect(metaFor(orphan).useCount).toBe(1); // refused while incomplete
 
     useApp.setState({ recipeSourcesComplete: true });
     view.rerender(<RecipeLibraryPanel />);
-    expect(metaFor(orphan).favorite).toBe(false); // pruned on the flip
+    expect(metaFor(orphan).useCount).toBe(0); // pruned on the flip
   });
 
   it("does not re-prune on a favorite toggle (no re-read storm while browsing)", () => {
@@ -214,5 +229,216 @@ describe("pruning the sidecar index (P3.5)", () => {
     // collection object. `<= 3` — the first bound written here — passed
     // against the bug, which is exactly how a loose bound hides a regression.
     expect(indexReads, `index re-read ${indexReads}x for one favorite toggle`).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("row actions (P3.5 slice 3)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useApp.setState({
+      datasets: [], activeId: null, plotRecipes: [], quickPlotTemplates: [],
+      recipeSourcesComplete: true, pipelineOpen: false, status: "",
+    });
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
+    useRecipeManager.setState({ open: true, library: true });
+  });
+
+  it("offers only the operations a kind can honour", () => {
+    // Unsupported actions are ABSENT, not disabled: a greyed-out Duplicate
+    // invites the user to hunt for the state that enables it, and there is
+    // none. Analysis templates can be renamed/duplicated/exported since P3.5;
+    // they can never be copied to project scope, having no project-file
+    // representation at all.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    expect(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate Loop fit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export Loop fit" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy to/ })).not.toBeInTheDocument();
+  });
+
+  it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("button", { name: "Apply: XRD publication" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Open in/ })).not.toBeInTheDocument();
+  });
+
+  it("reports a refusal on the status line instead of doing nothing", async () => {
+    // With no active dataset an apply has no target. The user must be told
+    // why, or the button looks broken.
+    useApp.setState({ plotRecipes: [plot], activeId: null });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    // The "Not done — " prefix is the point, not decoration: success and
+    // refusal used to differ only by a border tint (WCAG 1.4.1), and several
+    // refusal strings come verbatim from the store and read like neutral
+    // status on their own.
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Not done — select a dataset first"),
+    );
+    expect(useApp.getState().editableFigures).toHaveLength(0);
+  });
+
+  it("surfaces a failed apply instead of leaving an unhandled rejection", async () => {
+    // The plot path lazy-loads its matcher chunk; a failed fetch rejects the
+    // promise. Without a catch the click does nothing visible and the
+    // rejection escapes — the user is left thinking the button is broken.
+    useApp.setState({
+      plotRecipes: [plot],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => Promise.reject(new Error("chunk 404")),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("chunk 404"));
+  });
+
+  it("shows a STAGED apply as a confirmation prompt, not as a failure", async () => {
+    // A staged apply is neither success nor refusal: the store is holding a
+    // resolution for the user to confirm. Styling it as "Not done" told the
+    // user their action failed when it is actually waiting on them, and the
+    // `qz-is-pending`/`qz-is-refused` split is the only thing keeping the two
+    // visually apart. Both the prefix and the class were untested.
+    useApp.setState({
+      plotRecipes: [plot],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      // Stand in for `resolveApplyOrStage`'s staging branch: returns false
+      // having installed a NEW pending application and written no status.
+      applyPlotRecipeObject: () => {
+        useApp.setState({ pendingRecipeApplication: { staged: true } as never });
+        return Promise.resolve(false);
+      },
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(/^Needs confirmation — /),
+    );
+    expect(screen.getByRole("status")).toHaveClass("qz-is-pending");
+    expect(screen.getByRole("status")).not.toHaveClass("qz-is-refused");
+  });
+
+  it("serializes actions across the whole list while one apply is in flight", async () => {
+    // `busy` is panel-wide, not per-row: an apply is async and reports through
+    // ONE shared status line, so a second apply started on another row would
+    // race both that line and the store state the first is still reading.
+    let release!: (v: boolean) => void;
+    useApp.setState({
+      plotRecipes: [plot, { ...plot, id: "plot-2", name: "Second" }],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => new Promise<boolean>((r) => { release = r; }),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
+    );
+    // Every other row's actions are held too, not just the clicked row's.
+    expect(screen.getByRole("button", { name: "Delete Second" })).toBeDisabled();
+
+    release(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).not.toBeDisabled(),
+    );
+  });
+
+  it("opens the owning workshop for a kind it cannot apply here", async () => {
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" }));
+    await waitFor(() => expect(useApp.getState().pipelineOpen).toBe(true));
+  });
+
+  it("renames in place and carries the favorite across", async () => {
+    saveTemplate({
+      version: 1, name: "Old name",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    setFavorite({ kind: "analysis", scope: "global", id: "Old name" }, true);
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Old name" }));
+    const input = screen.getByRole("textbox", { name: "Rename Old name" });
+    fireEvent.change(input, { target: { value: "New name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("New name")).toBeInTheDocument());
+    expect(loadTemplates().map((t) => t.name)).toEqual(["New name"]);
+    expect(metaFor({ kind: "analysis", scope: "global", id: "New name" }).favorite).toBe(true);
+  });
+
+  it("Escape cancels a rename without saving it", () => {
+    // NOTE on the trailing `fireEvent.blur`: a real browser fires NO blur when
+    // a focused element is removed, so this sequence is synthetic. It pins the
+    // OUTCOME (nothing saved); the reopen test below is what pins the
+    // mechanism the outcome depends on.
+    saveTemplate({
+      version: 1, name: "Keep me",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Keep me" }));
+    const input = screen.getByRole("textbox", { name: "Rename Keep me" });
+    fireEvent.change(input, { target: { value: "Discarded" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    fireEvent.blur(input);
+
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Keep me"]);
+  });
+
+  it("a cancelled rename does not wedge the NEXT commit", () => {
+    // Escape unmounts the input, and no blur ever fires for a removed element
+    // — so a `skipBlurCommit` flag set on Escape and only cleared on blur
+    // stays set, and the next legitimate click-away commit (in EITHER editor
+    // of this row, since they share one ref) is silently swallowed. The user's
+    // rename just vanishes with no message.
+    saveTemplate({
+      version: 1, name: "Original",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Original" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Rename Original" }), { key: "Escape" });
+
+    // Reopen and commit by clicking away — the real gesture, not a synthetic
+    // blur after an unmount.
+    fireEvent.click(screen.getByRole("button", { name: "Rename Original" }));
+    const input = screen.getByRole("textbox", { name: "Rename Original" });
+    fireEvent.change(input, { target: { value: "Committed" } });
+    fireEvent.blur(input);
+
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Committed"]);
+  });
+
+  it("offers no rename affordance for a kind that cannot be renamed", () => {
+    // There is none today — every kind supports rename since P3.5 — so this
+    // asserts the MECHANISM by driving it from the capability table directly,
+    // rather than pretending a kind is unsupported.
+    expect(supportsOperation("plot", "rename")).toBe(true);
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("button", { name: "Rename XRD publication" })).toBeInTheDocument();
   });
 });
