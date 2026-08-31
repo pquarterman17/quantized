@@ -15,6 +15,7 @@ import { useApp } from "../../../store/useApp";
 import {
   applyOrOpen,
   copyToOtherScope,
+  deleteIsUndoable,
   deleteRecipe,
   duplicateRecipe,
   exportRecipe,
@@ -75,10 +76,20 @@ describe("capability gating happens BEFORE anything is touched", () => {
       reason: "Graph templates cannot be exported yet",
     });
     expect(importRecipe("graph", "global", "{}").ok).toBe(false);
-    // Quick Plot templates have no duplicate action in their store slice.
-    expect(duplicateRecipe(ref("quickPlot", "q1", "project")).ok).toBe(false);
-    // The name-keyed four have no project-file representation at all.
-    expect(copyToOtherScope(ref("graph", "G")).ok).toBe(false);
+    // Asserting the exact REASON, not merely `.ok === false`: without the
+    // capability guard these fall through to a store lookup and refuse with
+    // "no longer exists" — still false, so an `.ok` assertion passes against
+    // the bug (measured). The reason is what proves the guard ran, and the
+    // guard is what stops a quickPlot id colliding with a plot id and
+    // operating on the wrong recipe.
+    expect(duplicateRecipe(ref("quickPlot", "q1", "project"))).toEqual({
+      ok: false,
+      reason: "Quick Plot templates cannot be duplicated yet",
+    });
+    expect(copyToOtherScope(ref("graph", "G"))).toEqual({
+      ok: false,
+      reason: "Graph templates cannot be copied between project and global yet",
+    });
 
     expect(loadGraphTemplates()).toHaveLength(1); // nothing was mutated by any refusal
   });
@@ -92,10 +103,15 @@ describe("capability gating happens BEFORE anything is touched", () => {
       () => copyToOtherScope(ref("plot", "ghost", "project")),
       () => deleteRecipe(ref("quickPlot", "ghost", "project")),
       () => renameRecipe(ref("analysis", "ghost"), "New"),
+      // `renameQuickPlotTemplate` silently no-ops for an unknown id, so
+      // without an explicit existence check this reported SUCCESS while
+      // nothing happened — a false success, worse than a throw.
+      () => renameRecipe(ref("quickPlot", "ghost", "project"), "New"),
     ]) {
       const r = act();
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.reason).toMatch(/no longer exists/);
+      else throw new Error(`a stale ref reported success: ${JSON.stringify(r)}`);
     }
   });
 });
@@ -182,15 +198,37 @@ describe("name-keyed operations route through the safe layer", () => {
 });
 
 describe("delete tells the truth about whether undo will help", () => {
-  it("promises an undo only where one exists", () => {
-    // Project-scope plot recipes are undo-tracked; the global store carries no
-    // history by design, so promising an undo there would be a lie.
-    useApp.setState({
-      plotRecipes: [{ id: "p1", name: "P", schemaVersion: 1, signature: [], mapping: {}, visual: {} } as never],
-    });
+  // This flag drives the confirm dialog's wording. An always-true bug promises
+  // "You can undo this." before an irreversible delete — the exact scenario
+  // `deleteIsUndoable`'s own doc calls worse than no dialog — so BOTH branches
+  // need pinning, not just the true one.
+  const plotRecipe = (id: string) =>
+    ({ id, name: id, schemaVersion: 1, signature: [], mapping: {}, visual: {} }) as never;
+
+  it("promises an undo for the two kinds that have one", () => {
+    expect(deleteIsUndoable(ref("plot", "p1", "project"))).toBe(true);
+    expect(deleteIsUndoable(ref("quickPlot", "q1", "project"))).toBe(true);
+
+    useApp.setState({ plotRecipes: [plotRecipe("p1")] });
     expect(deleteRecipe(ref("plot", "p1", "project"))).toEqual({
       ok: true,
       message: "deleted — undo restores it",
     });
   });
+
+  it("promises NOTHING for the kinds that cannot be undone", () => {
+    // The global plot store carries no history by design, and the four
+    // name-keyed systems write straight to localStorage.
+    expect(deleteIsUndoable(ref("plot", "p1", "global"))).toBe(false);
+    for (const kind of ["analysis", "peak", "graph", "fitModel"] as const) {
+      expect(deleteIsUndoable(ref(kind, "x")), kind).toBe(false);
+    }
+
+    seedAnalysis("Gone");
+    expect(deleteNameKeyedViaDispatcher("Gone")).toEqual({ ok: true, message: "deleted" });
+  });
 });
+
+function deleteNameKeyedViaDispatcher(name: string) {
+  return deleteRecipe(ref("analysis", name));
+}

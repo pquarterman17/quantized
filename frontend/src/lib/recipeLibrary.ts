@@ -253,6 +253,24 @@ export interface RecipeRef {
   readonly id: string;
 }
 
+
+/** Will Ctrl+Z bring this recipe back after a delete?
+ *
+ *  Only project-scope plot recipes and quick-plot templates are undo-tracked.
+ *  The global plot store carries no history by design
+ *  (`store/globalPlotRecipes.ts`'s header) and the four name-keyed systems
+ *  write straight to localStorage.
+ *
+ *  Two very different consumers depend on this being ONE answer: the delete
+ *  confirm dialog's wording, and `recipeIndex.pruneEntries`, which keeps an
+ *  orphan's favorite ONLY when an undo could bring the recipe back to claim
+ *  it. A dialog promising an undo that does not exist, and a sidecar entry
+ *  outliving a recipe that can never return, are the same mistake. */
+export function deleteIsUndoable(ref: RecipeRef): boolean {
+  if (ref.kind === "quickPlot") return true;
+  return ref.kind === "plot" && ref.scope === "project";
+}
+
 /** Stable string form, for use as a map key or a React key.
  *  `encodeURIComponent` on the id is load-bearing rather than decorative: a
  *  name-keyed id is a user-typed string that may contain the separator, and

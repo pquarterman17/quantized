@@ -25,6 +25,15 @@ import { Button, Select } from "../../primitives";
 
 type KindFilter = "all" | RecipeKind;
 
+/** Success, refusal, and the third state — needs-confirmation — are separated
+ *  by more than colour: the text itself is prefixed ("Not done — …"), because
+ *  a border tint alone fails WCAG 1.4.1 and several refusal strings come
+ *  verbatim from the store and read like neutral status. */
+function resultClass(result: ActionResult | null): string {
+  if (result === null || result.ok) return "qz-recipe-library-result";
+  return `qz-recipe-library-result ${result.pending ? "qz-is-pending" : "qz-is-refused"}`;
+}
+
 function sortRows(rows: readonly RecipeDescriptor[]): RecipeDescriptor[] {
   return [...rows].sort((a, b) => {
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
@@ -37,6 +46,8 @@ function RecipeRow({
   row,
   refresh,
   onResult,
+  busy,
+  setBusy,
 }: {
   row: RecipeDescriptor;
   /** Re-render the panel. ONE mechanism serves both a sidecar change and a
@@ -45,12 +56,29 @@ function RecipeRow({
    *  (If that is ever memoized, this needs to split in two.) */
   refresh: () => void;
   onResult: (result: ActionResult) => void;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
 }) {
   const [editingTags, setEditingTags] = useState(false);
   const [tagText, setTagText] = useState(row.tags.join(", "));
   const [editingName, setEditingName] = useState(false);
   const [nameText, setNameText] = useState(row.name);
+  // Reset on OPEN, not only consumed on blur. Removing a focused element fires
+  // NO blur in any browser or in jsdom, so an Escape-cancel — which unmounts
+  // the input — leaves this flag set and the NEXT click-away commit, in either
+  // editor of this row, is silently swallowed. (The comment this replaces
+  // claimed "Escape fires before blur"; it does not. Verified in review.)
   const skipBlurCommit = useRef(false);
+  const nameButtonRef = useRef<HTMLButtonElement | null>(null);
+  const openNameEditor = (): void => {
+    skipBlurCommit.current = false;
+    setNameText(row.name);
+    setEditingName(true);
+  };
+  const openTagEditor = (): void => {
+    skipBlurCommit.current = false;
+    setEditingTags(true);
+  };
 
   const commitTags = (): void => {
     setTags(row.ref, tagText.split(","));
@@ -60,6 +88,9 @@ function RecipeRow({
 
   const commitName = (): void => {
     setEditingName(false);
+    // Without this the input unmounts and focus falls to <body>, so a keyboard
+    // user renaming three recipes tabs in from the top three times.
+    queueMicrotask(() => nameButtonRef.current?.focus());
     if (nameText.trim() === row.name) return; // nothing to do, and no toast for it
     const result = renameRecipe(row.ref, nameText);
     onResult(result);
@@ -103,6 +134,7 @@ function RecipeRow({
                   skipBlurCommit.current = true;
                   setEditingName(false);
                   setNameText(row.name);
+                  queueMicrotask(() => nameButtonRef.current?.focus());
                 }
                 e.stopPropagation();
               }}
@@ -111,12 +143,14 @@ function RecipeRow({
             <button
               className="qz-recipe-library-name"
               // The visible text is the recipe name, which alone says nothing
-              // about what the button DOES. The label keeps the visible text
-              // as a prefix so voice control still matches what is on screen
-              // (WCAG 2.5.3, label in name).
+              // about what the button DOES. The label CONTAINS the visible
+              // text, which is what WCAG 2.5.3 requires for voice control —
+              // as a suffix, not a prefix (an earlier version of this comment
+              // said prefix; the code has always produced "Rename <name>").
               aria-label={`Rename ${row.name}`}
               title={`Rename ${row.name}`}
-              onClick={() => { setNameText(row.name); setEditingName(true); }}
+              ref={nameButtonRef}
+              onClick={openNameEditor}
             >
               {row.name}
             </button>
@@ -129,7 +163,9 @@ function RecipeRow({
         <div className="qz-recipe-library-summary">
           {row.summary ?? "Saved recipe"}
           {row.technique ? ` · ${row.technique}` : ""}
-          {row.lastUsedAt ? ` · used ${new Date(row.lastUsedAt).toLocaleDateString()}` : ""}
+          {row.lastUsedAt ? (
+            <> · used <time dateTime={row.lastUsedAt}>{new Date(row.lastUsedAt).toLocaleDateString()}</time></>
+          ) : ""}
         </div>
         {editingTags ? (
           <input
@@ -157,12 +193,17 @@ function RecipeRow({
             }}
           />
         ) : (
-          <button className="qz-recipe-tags" onClick={() => setEditingTags(true)}>
+          <button
+            className="qz-recipe-tags"
+            aria-label={`Edit tags for ${row.name}`}
+            title={`Edit tags for ${row.name}`}
+            onClick={openTagEditor}
+          >
             {row.tags.length ? row.tags.map((tag) => `#${tag}`).join("  ") : "+ Add tags"}
           </button>
         )}
       </div>
-      <RecipeRowActions row={row} onChanged={refresh} onResult={onResult} />
+      <RecipeRowActions row={row} onChanged={refresh} onResult={onResult} busy={busy} setBusy={setBusy} />
     </li>
   );
 }
@@ -188,6 +229,8 @@ export default function RecipeLibraryPanel() {
   // here is ordinary ("select a dataset first", "that recipe no longer
   // exists"), not an error worth a modal.
   const [result, setResult] = useState<ActionResult | null>(null);
+  // One in-flight action across the whole list — see RecipeRowActions' prop doc.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
 
@@ -230,36 +273,49 @@ export default function RecipeLibraryPanel() {
     (kind === "all" || row.kind === kind) && (!favoritesOnly || row.favorite),
   );
 
+  /** Drop a stale outcome when the thing it described is no longer on screen.
+   *  "select a dataset first" sitting there after the user selected one, or
+   *  "deleted — undo restores it" after they undid, is worse than silence. */
+  const clearResult = (): void => setResult(null);
+
   return (
     <ToolWindow id="recipe-library" title="Recipe Library" width={620} onClose={close}>
       <div className="qz-recipe-library-toolbar">
         <Select
           aria-label="Recipe type"
           value={kind}
-          onChange={(e) => setKind(e.target.value as KindFilter)}
+          onChange={(e) => { clearResult(); setKind(e.target.value as KindFilter); }}
           options={[
             { value: "all", label: "All recipe types" },
             ...RECIPE_KINDS.map((value) => ({ value, label: RECIPE_KIND_LABEL[value] })),
           ]}
         />
-        <Checkbox checked={favoritesOnly} onChange={setFavoritesOnly}>
+        <Checkbox checked={favoritesOnly} onChange={(v) => { clearResult(); setFavoritesOnly(v); }}>
           Favorites only
         </Checkbox>
         <span className="qz-recipe-library-count">{rows.length} of {collection.recipes.length}</span>
         <Button size="sm" onClick={() => openPlotManager()}>Manage Plot Recipes…</Button>
       </div>
 
-      {result && (
-        <div
-          className={result.ok ? "qz-recipe-library-result" : "qz-recipe-library-result qz-is-refused"}
-          role="status"
-        >
-          {result.ok ? result.message : result.reason}
-        </div>
-      )}
+      {/* Mounted unconditionally and emptied when idle. A live region that is
+          inserted ALREADY containing its text is unreliably announced (often
+          not at all), which would have made the first outcome of a session —
+          typically the "select a dataset first" refusal — silent. */}
+      <div
+        className={resultClass(result)}
+        role="status"
+        // Hidden from layout when empty, but never unmounted, so the region
+        // exists before its content changes.
+        hidden={result === null}
+      >
+        {result === null ? "" : result.ok ? result.message : `${result.pending ? "Needs confirmation" : "Not done"} — ${result.reason}`}
+      </div>
 
       {!collection.complete && (
-        <div className="qz-recipe-library-warning" role="status">
+        // NOT a live region: it reflects the state of the load, does not change
+        // while the panel is open, and role="status" on a never-changing node
+        // announces nothing anyway.
+        <div className="qz-recipe-library-warning">
           Some recipe sources could not be read completely. Available recipes are shown; cleanup is paused.
         </div>
       )}
@@ -279,6 +335,8 @@ export default function RecipeLibraryPanel() {
               row={row}
               refresh={() => setRevision((n) => n + 1)}
               onResult={setResult}
+              busy={busy}
+              setBusy={setBusy}
             />
           ))}
         </ul>

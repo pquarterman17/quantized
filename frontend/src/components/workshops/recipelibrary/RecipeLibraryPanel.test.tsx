@@ -61,7 +61,7 @@ describe("RecipeLibraryPanel", () => {
     localStorage.setItem("qz.plotRecipes", "{{{ not json");
     useGlobalPlotRecipes.setState({ recipes: [], hydrated: false, complete: false });
     render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(screen.getByText(/Some recipe sources could not be read completely/)).toBeInTheDocument();
     expect(useGlobalPlotRecipes.getState().hydrated).toBe(true);
     expect(useGlobalPlotRecipes.getState().complete).toBe(false);
   });
@@ -75,20 +75,20 @@ describe("RecipeLibraryPanel", () => {
     // metadata of recipes that still exist in the file.
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
     render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Some recipe sources could not be read completely");
+    expect(screen.getByText(/Some recipe sources could not be read completely/)).toBeInTheDocument();
     expect(screen.getByText("XRD publication")).toBeInTheDocument(); // what survived is still shown
   });
 
   it("shows no warning when every source, project included, is whole", () => {
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: true });
     render(<RecipeLibraryPanel />);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Some recipe sources could not be read completely/)).not.toBeInTheDocument();
   });
 
   it("edits comma-separated tags without changing the recipe", () => {
     useApp.setState({ plotRecipes: [plot] });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Add tags" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit tags for/ }));
     const input = screen.getByRole("textbox", { name: "Tags for XRD publication" });
     fireEvent.change(input, { target: { value: "xrd, publication" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -99,7 +99,7 @@ describe("RecipeLibraryPanel", () => {
   it("cancels tag edits with Escape", () => {
     useApp.setState({ plotRecipes: [plot] });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Add tags" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit tags for/ }));
     const input = screen.getByRole("textbox", { name: "Tags for XRD publication" });
     fireEvent.change(input, { target: { value: "do-not-save" } });
     fireEvent.keyDown(input, { key: "Escape" });
@@ -256,16 +256,16 @@ describe("row actions (P3.5 slice 3)", () => {
     });
     render(<RecipeLibraryPanel />);
 
-    expect(screen.getByRole("button", { name: "Open in Pipeline" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate Loop fit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export Loop fit" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy to/ })).not.toBeInTheDocument();
   });
 
   it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
     useApp.setState({ plotRecipes: [plot] });
     render(<RecipeLibraryPanel />);
-    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply: XRD publication" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Open in/ })).not.toBeInTheDocument();
   });
 
@@ -274,11 +274,15 @@ describe("row actions (P3.5 slice 3)", () => {
     // why, or the button looks broken.
     useApp.setState({ plotRecipes: [plot], activeId: null });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    // The "Not done — " prefix is the point, not decoration: success and
+    // refusal used to differ only by a border tint (WCAG 1.4.1), and several
+    // refusal strings come verbatim from the store and read like neutral
+    // status on their own.
     await waitFor(() =>
-      expect(screen.getByText("select a dataset first")).toBeInTheDocument(),
+      expect(screen.getByRole("status")).toHaveTextContent("Not done — select a dataset first"),
     );
-    expect(useApp.getState().editableFigures ?? []).toHaveLength(0);
+    expect(useApp.getState().editableFigures).toHaveLength(0);
   });
 
   it("opens the owning workshop for a kind it cannot apply here", async () => {
@@ -288,7 +292,7 @@ describe("row actions (P3.5 slice 3)", () => {
       outputs: [],
     });
     render(<RecipeLibraryPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Open in Pipeline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" }));
     await waitFor(() => expect(useApp.getState().pipelineOpen).toBe(true));
   });
 
@@ -312,8 +316,10 @@ describe("row actions (P3.5 slice 3)", () => {
   });
 
   it("Escape cancels a rename without saving it", () => {
-    // Escape fires before blur, so it must suppress the blur commit — the same
-    // ordering the tag editor already handles.
+    // NOTE on the trailing `fireEvent.blur`: a real browser fires NO blur when
+    // a focused element is removed, so this sequence is synthetic. It pins the
+    // OUTCOME (nothing saved); the reopen test below is what pins the
+    // mechanism the outcome depends on.
     saveTemplate({
       version: 1, name: "Keep me",
       steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
@@ -328,6 +334,32 @@ describe("row actions (P3.5 slice 3)", () => {
     fireEvent.blur(input);
 
     expect(loadTemplates().map((t) => t.name)).toEqual(["Keep me"]);
+  });
+
+  it("a cancelled rename does not wedge the NEXT commit", () => {
+    // Escape unmounts the input, and no blur ever fires for a removed element
+    // — so a `skipBlurCommit` flag set on Escape and only cleared on blur
+    // stays set, and the next legitimate click-away commit (in EITHER editor
+    // of this row, since they share one ref) is silently swallowed. The user's
+    // rename just vanishes with no message.
+    saveTemplate({
+      version: 1, name: "Original",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Original" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Rename Original" }), { key: "Escape" });
+
+    // Reopen and commit by clicking away — the real gesture, not a synthetic
+    // blur after an unmount.
+    fireEvent.click(screen.getByRole("button", { name: "Rename Original" }));
+    const input = screen.getByRole("textbox", { name: "Rename Original" });
+    fireEvent.change(input, { target: { value: "Committed" } });
+    fireEvent.blur(input);
+
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Committed"]);
   });
 
   it("offers no rename affordance for a kind that cannot be renamed", () => {

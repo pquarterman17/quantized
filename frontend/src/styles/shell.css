@@ -973,12 +973,21 @@ body {
 .qz-recipe-library-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; }
 .qz-recipe-library-name:hover { color: var(--accent); }
 .qz-recipe-name-input { flex: 1; min-width: 0; }
-.qz-recipe-badge { flex: none; padding: 1px 5px; border-radius: 999px; background: var(--surface-1); color: var(--text-dim); font-size: 10px; font-weight: 500; }
-.qz-recipe-library-summary { margin-top: 3px; color: var(--text-faint); font-size: 11px; }
+.qz-recipe-badge { flex: none; padding: 1px 5px; border-radius: 999px; background: var(--surface-1); color: var(--text-dim); font-size: var(--type-micro, 10px); font-weight: var(--weight-medium, 500); }
+.qz-recipe-library-summary { margin-top: 3px; color: var(--text-faint); font-size: var(--type-label, 11px); }
+.qz-recipe-library-summary time { font-family: var(--font-mono); }
 .qz-recipe-tags { margin-top: 5px; padding: 0; font-size: 11px; text-align: left; }
 .qz-recipe-tags:hover { color: var(--accent); }
 .qz-recipe-tag-input { width: min(100%, 360px); margin-top: 5px; }
-.qz-recipe-row-actions { display: flex; flex: none; flex-wrap: wrap; gap: 4px; align-items: flex-start; justify-content: flex-end; max-width: 46%; }
-.qz-recipe-library-result { margin-bottom: 8px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-dim); font-size: 11px; }
+/* No wrap and no width cap. With a 46% cap in a 620px window the five-button
+   plot row wrapped on EVERY row, not just long ones — rows became 2-3 button
+   lines tall, and with flex-wrap the danger button landed next to a different
+   neighbour depending on the row's kind, so muscle memory misclicked onto
+   Delete. Fixed single line, Delete always last. */
+.qz-recipe-row-actions { display: flex; flex: none; flex-wrap: nowrap; gap: 4px; align-items: flex-start; }
+.qz-recipe-library-result { margin-bottom: 8px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-dim); font-size: var(--type-label, 11px); }
 .qz-recipe-library-result.qz-is-refused { border-color: var(--warn); }
+/* Staged, not failed: an imperfect plot-recipe match is waiting for a
+   confirmation elsewhere, which is neither a success nor a refusal. */
+.qz-recipe-library-result.qz-is-pending { border-color: var(--accent); }
 .qz-recipe-library-empty { display: grid; gap: 5px; justify-items: center; padding: 32px 18px; color: var(--text-faint); text-align: center; }

@@ -26,7 +26,7 @@
 // favorite the user has. So pruning takes an explicit completeness flag and
 // no-ops unless the caller can vouch that every source was read successfully.
 
-import { type RecipeRef, refKey } from "./recipeLibrary";
+import { deleteIsUndoable, parseRefKey, type RecipeRef, refKey } from "./recipeLibrary";
 
 const KEY = "qz.recipeIndex";
 
@@ -209,7 +209,7 @@ export function moveEntry(from: RecipeRef, to: RecipeRef): void {
   save(map);
 }
 
-/** Drop the DERIVED metadata of recipes that no longer exist.
+/** Drop the metadata of recipes that no longer exist.
  *
  *  `complete` is not a courtesy flag. Every source reader returns an empty
  *  list both for "this system is empty" and for "the read failed", so pruning
@@ -218,23 +218,34 @@ export function moveEntry(from: RecipeRef, to: RecipeRef): void {
  *  this then does nothing at all — an index that is briefly too big is a
  *  non-event next to silently wiping someone's favorites.
  *
- *  EXPLICIT CHOICES SURVIVE A PRUNE. An entry carrying a favorite or tags is
- *  kept even when its recipe is gone; only pure recency (`useCount`/
- *  `lastUsedAt`) is dropped. This is the same rule `save` above already
- *  applies under quota pressure — keep what the user chose, shed what the app
- *  derived — and pruning is where it matters most, because deleting a recipe
- *  is UNDOABLE for the plot and quick-plot kinds. Without this, deleting a
- *  favorited plot recipe from the Library prunes its star, and the undo then
- *  brings the recipe back stripped of it: exactly the "silent betrayal" this
- *  module's header warns about, arriving through the one path a user is most
- *  likely to reverse.
+ *  ── WHAT SURVIVES, AND WHY IT DEPENDS ON THE KIND ────────────────────────
+ *  For a kind whose delete is UNDOABLE (`deleteIsUndoable`: project-scope plot
+ *  recipes and quick-plot templates) an explicit choice — a favorite or tags —
+ *  is KEPT and only the derived recency is dropped. The Library prunes
+ *  whenever the live set changes, so deleting a favorited plot recipe would
+ *  otherwise drop its star before the user could press Ctrl+Z, and the undo
+ *  would bring the recipe back stripped of it.
  *
- *  A deliberate delete is different and does drop everything — see
- *  `dropEntry`, which `lib/nameKeyedRecipes.deleteNameKeyed` calls for the
- *  kinds whose deletion is NOT undoable.
+ *  For every other kind the entry is dropped OUTRIGHT, and that asymmetry is
+ *  the whole point rather than an oversight. Keeping an orphan's favorite is
+ *  only defensible while the recipe can come back to claim it. Where it cannot:
  *
- *  Returns how many entries this actually removed. Entries merely stripped of
- *  their recency are not counted: nothing was forgotten that the user chose. */
+ *    - the entry would live forever, since nothing else ever removes it; and
+ *    - worse, the four name-keyed kinds key this index BY NAME, and their
+ *      `save*` upserts by name — so a brand-new recipe saved under a
+ *      previously-used name would inherit a dead recipe's star and tags.
+ *
+ *  That second failure is not hypothetical: the workshop-side deletes
+ *  (`useTemplates`, `useEquationFit`, `useGraphTemplates`) remove a record
+ *  directly and never reach `dropEntry`, so a prune is the ONLY thing that
+ *  ever cleans up after them. Kind-awareness here is what keeps that true.
+ *
+ *  An unparseable key is treated as droppable: it cannot correspond to a live
+ *  recipe (every live key is built by `refKey`), so keeping it would be a leak
+ *  with no upside.
+ *
+ *  Returns how many entries were REMOVED. Entries merely stripped of their
+ *  recency are not counted: nothing the user chose was forgotten. */
 export function pruneEntries(liveKeys: ReadonlySet<string>, complete: boolean): number {
   if (!complete) return 0;
   const map = loadIndex();
@@ -243,7 +254,9 @@ export function pruneEntries(liveKeys: ReadonlySet<string>, complete: boolean): 
   for (const key of Object.keys(map)) {
     if (liveKeys.has(key)) continue;
     const entry = map[key];
-    if (entry.favorite || entry.tags.length > 0) {
+    const ref = parseRefKey(key);
+    const worthKeeping = (entry.favorite || entry.tags.length > 0) && ref !== null && deleteIsUndoable(ref);
+    if (worthKeeping) {
       if (entry.useCount === 0 && entry.lastUsedAt === undefined) continue; // already bare
       map[key] = { ...entry, useCount: 0, lastUsedAt: undefined };
       changed = true;

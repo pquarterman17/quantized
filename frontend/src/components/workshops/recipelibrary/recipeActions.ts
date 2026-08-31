@@ -10,12 +10,16 @@
 // this as blocked on relocating recipeManagerActions into the store; that was
 // wrong. Only a store-side dispatcher needs the move.)
 //
-// EVERY function here refuses rather than throws, and refuses FIRST on
-// capability: `supportsOperation` is consulted before any store or storage is
-// touched, so a UI that fails to grey out a button still cannot perform an
-// operation the kind does not support. Belt and braces on purpose — the
-// capability table exists to stop exactly the operations that destroy data on
-// the systems that cannot take them.
+// EVERY function here refuses rather than throws: a stale ref, a kind without
+// a serializer, or a malformed import file are ordinary outcomes, not bugs.
+//
+// The five OPTIONAL operations (rename, duplicate, export, import, copyScope)
+// consult `supportsOperation` before touching any store or storage, so a UI
+// that fails to hide a button still cannot perform an operation the kind
+// cannot take. `applyOrOpen` and `deleteRecipe` deliberately do not: every
+// kind supports both, `supportsOperation` hard-returns true for them, and a
+// guard that can never fire is a guard nobody maintains. If a read-only kind
+// ever arrives, those two gain the check along with the flag.
 
 import {
   duplicateNameKeyed,
@@ -26,6 +30,7 @@ import {
   type NameKeyedKind,
 } from "../../../lib/nameKeyedRecipes";
 import {
+  deleteIsUndoable,
   RECIPE_KIND_LABEL,
   supportsOperation,
   type RecipeKind,
@@ -36,9 +41,18 @@ import { hydratedGlobalRecipes } from "../../../store/globalPlotRecipes";
 import { useApp } from "../../../store/useApp";
 import * as plotOps from "../recipemanager/recipeManagerActions";
 
+// Re-exported so the row UI reads the delete-undoability rule from the same
+// place `recipeIndex.pruneEntries` does.
+export { deleteIsUndoable };
+
+/** Three outcomes, not two. `pending` exists because an imperfect plot-recipe
+ *  match neither applies nor fails: it STAGES a confirmation elsewhere. Folding
+ *  that into `ok: false` styled it as a refusal, which the code comment
+ *  claiming otherwise did not prevent. */
 export type ActionResult =
   | { readonly ok: true; readonly message: string }
-  | { readonly ok: false; readonly reason: string };
+  | { readonly ok: false; readonly pending?: false; readonly reason: string }
+  | { readonly ok: false; readonly pending: true; readonly reason: string };
 
 const NAME_KEYED = new Set<RecipeKind>(["analysis", "peak", "graph", "fitModel"]);
 const isNameKeyed = (kind: RecipeKind): kind is NameKeyedKind => NAME_KEYED.has(kind);
@@ -83,23 +97,36 @@ export async function applyOrOpen(ref: RecipeRef): Promise<ActionResult> {
   if (!datasetId) return { ok: false, reason: "select a dataset first" };
 
   if (ref.kind === "quickPlot") {
+    // This path DOES write `status` synchronously on every refusal
+    // (`applyQuickPlotTemplate` sets it before each early return), so echoing
+    // it names the channel that failed to resolve rather than talking over it.
     return useApp.getState().applyQuickPlotTemplate(ref.id, datasetId)
       ? { ok: true, message: "applied" }
-      // The store already wrote a specific reason to `status` (which channel
-      // resolution failed, or why the match was refused); repeating a vaguer
-      // one here would talk over it.
       : { ok: false, reason: useApp.getState().status };
   }
 
   const recipe = plotRecipeFor(ref);
   if (!recipe) return { ok: false, reason: "that recipe no longer exists" };
+  // Snapshot BEFORE the await. The plot path is not uniformly chatty: the
+  // staging branch of `resolveApplyOrStage` sets `pendingRecipeApplication`
+  // and returns false WITHOUT writing `status`, so reading it afterwards
+  // surfaced whatever unrelated message happened to be sitting there — a
+  // stale line from another action, presented as this one's reason.
+  const before = useApp.getState().status;
   const applied = await plotOps.applyRecipeToDataset(recipe, datasetId);
-  return applied
-    ? { ok: true, message: "applied" }
-    // Not necessarily a failure: an imperfect match STAGES a pending
-    // application for confirmation instead of applying, and the store's
-    // status says which. Reporting it as an error would be wrong.
-    : { ok: false, reason: useApp.getState().status };
+  if (applied) return { ok: true, message: "applied" };
+
+  const after = useApp.getState();
+  if (after.pendingRecipeApplication) {
+    // Staged, not failed: some fields did not match, so the store is holding a
+    // resolution for the user to confirm in the Plot Recipe manager.
+    return {
+      ok: false,
+      pending: true,
+      reason: "some fields did not match — confirm in Manage Plot Recipes…",
+    };
+  }
+  return { ok: false, reason: after.status === before ? "could not apply that recipe" : after.status };
 }
 
 /** Label for `applyOrOpen`, so the button never says "Apply" for a kind that
@@ -118,6 +145,12 @@ export function renameRecipe(ref: RecipeRef, name: string): ActionResult {
     return r.ok ? { ok: true, message: `renamed to "${r.name}"` } : r;
   }
   if (ref.kind === "quickPlot") {
+    // `renameQuickPlotTemplate` silently no-ops for an unknown id, so without
+    // this check a rename racing a delete reports success while nothing
+    // happened — the same false success the plot branch below already guards.
+    if (!useApp.getState().quickPlotTemplates.some((t) => t.id === ref.id)) {
+      return { ok: false, reason: "that template no longer exists" };
+    }
     useApp.getState().renameQuickPlotTemplate(ref.id, wanted);
     return { ok: true, message: "renamed" };
   }
@@ -134,19 +167,6 @@ export function duplicateRecipe(ref: RecipeRef): ActionResult {
   }
   const id = plotOps.duplicateRecipe(ref.scope, ref.id);
   return id ? { ok: true, message: "duplicated" } : { ok: false, reason: "that recipe no longer exists" };
-}
-
-/** Will Ctrl+Z bring this back?
- *
- *  Only project-scope plot recipes and quick-plot templates are undo-tracked.
- *  The global plot store carries no history by design
- *  (store/globalPlotRecipes.ts's header) and the four name-keyed systems write
- *  straight to localStorage. Exported so the confirm dialog and the result
- *  message answer from ONE place — a dialog that says "you can undo this" over
- *  a delete that cannot be undone is worse than no dialog. */
-export function deleteIsUndoable(ref: RecipeRef): boolean {
-  if (ref.kind === "quickPlot") return true;
-  return ref.kind === "plot" && ref.scope === "project";
 }
 
 export function deleteRecipe(ref: RecipeRef): ActionResult {
