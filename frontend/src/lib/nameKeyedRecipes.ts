@@ -50,8 +50,10 @@ import {
 } from "./template";
 
 /** The subset of `RecipeKind` this module owns. The other two (plot,
- *  quickPlot) are store-backed and their operations live in the store — see
- *  `components/workshops/recipelibrary/recipeActions.ts`, which routes between the two worlds. */
+ *  quickPlot) are store-backed, and the dispatcher that routes between the
+ *  two worlds is `components/workshops/recipelibrary/recipeActions.ts` — a
+ *  component module, because the plot half of those operations lives in one
+ *  too. */
 export type NameKeyedKind = Extract<RecipeKind, "analysis" | "peak" | "graph" | "fitModel">;
 
 export const NAME_KEYED_KINDS: readonly NameKeyedKind[] = ["analysis", "peak", "graph", "fitModel"];

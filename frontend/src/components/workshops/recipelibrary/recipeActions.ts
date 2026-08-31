@@ -1,14 +1,17 @@
 // P3.5 slice 3 — ONE capability-gated entry point per Library row action.
 //
 // WHY THIS LIVES IN components/. The plot half of these operations is
-// `../recipemanager/recipeManagerActions.ts`, which reaches into two stores;
-// the name-keyed half is `lib/nameKeyedRecipes.ts`, a pure library. A
-// dispatcher over both cannot live in `store/` — a store module importing a
-// component inverts the layering — and it cannot live in `lib/`, which must
-// not import `store/`. A component module may import both, so this is the one
-// layer where the two halves legitimately meet. (An earlier attempt booked
-// this as blocked on relocating recipeManagerActions into the store; that was
-// wrong. Only a store-side dispatcher needs the move.)
+// `../recipemanager/recipeManagerActions.ts` — a COMPONENT module. The one
+// rule actually enforced here (architecture.test.ts's "lib/ layering guard")
+// bans new `lib/` -> `components/` imports, so a dispatcher that needs that
+// module cannot live in `lib/`. It COULD live in `store/` — store modules do
+// import components today — but a component importing both halves adds no
+// cross-layer edge at all, which makes this the cheapest honest home.
+//
+// Do NOT read a general "lib must not import store" rule into that: 25
+// non-test lib modules already import store, and no test forbids it. (#277
+// booked this dispatcher as blocked on relocating recipeManagerActions into
+// the store; that was wrong — only a store-side dispatcher would need it.)
 //
 // EVERY function here refuses rather than throws: a stale ref, a kind without
 // a serializer, or a malformed import file are ordinary outcomes, not bugs.
@@ -112,12 +115,17 @@ export async function applyOrOpen(ref: RecipeRef): Promise<ActionResult> {
   // and returns false WITHOUT writing `status`, so reading it afterwards
   // surfaced whatever unrelated message happened to be sitting there — a
   // stale line from another action, presented as this one's reason.
-  const before = useApp.getState().status;
+  // Snapshot the pending application by IDENTITY, not truthiness: one may
+  // already be sitting there un-confirmed from an earlier apply, and testing
+  // `after.pendingRecipeApplication` alone reported a fresh REFUSAL as
+  // "staged", suppressing its real reason and pointing the user at the wrong
+  // recipe to confirm.
+  const pendingBefore = useApp.getState().pendingRecipeApplication;
   const applied = await plotOps.applyRecipeToDataset(recipe, datasetId);
   if (applied) return { ok: true, message: "applied" };
 
   const after = useApp.getState();
-  if (after.pendingRecipeApplication) {
+  if (after.pendingRecipeApplication && after.pendingRecipeApplication !== pendingBefore) {
     // Staged, not failed: some fields did not match, so the store is holding a
     // resolution for the user to confirm in the Plot Recipe manager.
     return {
@@ -126,7 +134,12 @@ export async function applyOrOpen(ref: RecipeRef): Promise<ActionResult> {
       reason: "some fields did not match — confirm in Manage Plot Recipes…",
     };
   }
-  return { ok: false, reason: after.status === before ? "could not apply that recipe" : after.status };
+  // Not staged, so this call wrote the reason itself: every other false-return
+  // path in `resolveApplyOrStage`/`applyResolvedRecipe` sets `status` before
+  // returning. Comparing against a pre-await snapshot was wrong in the other
+  // direction — a repeat click producing the SAME message read as "unchanged"
+  // and got replaced by a vaguer one.
+  return { ok: false, reason: after.status || "could not apply that recipe" };
 }
 
 /** Label for `applyOrOpen`, so the button never says "Apply" for a kind that

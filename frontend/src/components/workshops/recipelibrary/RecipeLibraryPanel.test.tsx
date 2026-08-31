@@ -285,6 +285,48 @@ describe("row actions (P3.5 slice 3)", () => {
     expect(useApp.getState().editableFigures).toHaveLength(0);
   });
 
+  it("surfaces a failed apply instead of leaving an unhandled rejection", async () => {
+    // The plot path lazy-loads its matcher chunk; a failed fetch rejects the
+    // promise. Without a catch the click does nothing visible and the
+    // rejection escapes — the user is left thinking the button is broken.
+    useApp.setState({
+      plotRecipes: [plot],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => Promise.reject(new Error("chunk 404")),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("chunk 404"));
+  });
+
+  it("serializes actions across the whole list while one apply is in flight", async () => {
+    // `busy` is panel-wide, not per-row: an apply is async and reports through
+    // ONE shared status line, so a second apply started on another row would
+    // race both that line and the store state the first is still reading.
+    let release!: (v: boolean) => void;
+    useApp.setState({
+      plotRecipes: [plot, { ...plot, id: "plot-2", name: "Second" }],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => new Promise<boolean>((r) => { release = r; }),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: XRD publication" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
+    );
+    // Every other row's actions are held too, not just the clicked row's.
+    expect(screen.getByRole("button", { name: "Delete Second" })).toBeDisabled();
+
+    release(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).not.toBeDisabled(),
+    );
+  });
+
   it("opens the owning workshop for a kind it cannot apply here", async () => {
     saveTemplate({
       version: 1, name: "Loop fit",

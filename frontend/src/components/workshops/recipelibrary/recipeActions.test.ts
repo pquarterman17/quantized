@@ -197,6 +197,34 @@ describe("name-keyed operations route through the safe layer", () => {
   });
 });
 
+describe("an imperfect match is PENDING, not refused", () => {
+  const plotRecipe = (id: string) =>
+    ({ id, name: id, schemaVersion: 1, signature: [], mapping: {}, visual: {} }) as never;
+
+  it("does not report a fresh refusal as staged just because something is pending", async () => {
+    // Detecting staging by TRUTHINESS of `pendingRecipeApplication` meant a
+    // pending application left over from an earlier apply swallowed the next
+    // refusal's real reason and pointed the user at the wrong recipe to
+    // confirm. Identity, not truthiness.
+    useApp.setState({
+      activeId: "d1",
+      plotRecipes: [plotRecipe("p1")],
+      pendingRecipeApplication: { stale: true } as never,
+      status: "",
+    });
+
+    const r = await applyOrOpen(ref("plot", "p1", "project"));
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.pending, "a STALE pending must not be read as this call's").toBeFalsy();
+      expect(r.reason).not.toBe("");
+    }
+    // The leftover is untouched — this call neither confirmed nor cleared it.
+    expect(useApp.getState().pendingRecipeApplication).toEqual({ stale: true });
+  });
+});
+
 describe("delete tells the truth about whether undo will help", () => {
   // This flag drives the confirm dialog's wording. An always-true bug promises
   // "You can undo this." before an irreversible delete — the exact scenario

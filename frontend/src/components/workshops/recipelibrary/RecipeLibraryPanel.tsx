@@ -128,9 +128,10 @@ function RecipeRow({
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitName();
                 if (e.key === "Escape") {
-                  // Same blur-vs-Escape ordering the tag editor uses: Escape
-                  // fires before blur, so it must suppress the blur commit or
-                  // cancelling would save.
+                  // Removing a focused element fires no blur, so this flag is
+                  // not consumed here — it is cleared when an editor is next
+                  // OPENED (see `openNameEditor`). Setting it still matters for
+                  // the case where the element is NOT removed.
                   skipBlurCommit.current = true;
                   setEditingName(false);
                   setNameText(row.name);

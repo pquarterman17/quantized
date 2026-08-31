@@ -966,10 +966,12 @@ body {
 .qz-recipe-favorite { padding: 1px; font-size: 18px; color: var(--accent); }
 .qz-recipe-library-main { min-width: 0; flex: 1; }
 .qz-recipe-library-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
-/* Targets the NAME element by class, not by position: the name is a <span>
-   for kinds that cannot be renamed and a <button> for those that can, so a
-   :first-child rule would truncate the first BADGE instead once a rename
-   affordance appears. */
+/* Targets the NAME element by class, not by position. The name is a <span>
+   for kinds that cannot be renamed and a <button> for those that can, and the
+   old `.qz-recipe-library-title > span:first-child` rule matched NOTHING once
+   a button led the row — so the name silently lost its ellipsis and overflowed
+   instead of truncating. (An earlier note here claimed it would truncate the
+   first badge; that would need :first-of-type.) */
 .qz-recipe-library-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; }
 .qz-recipe-library-name:hover { color: var(--accent); }
 .qz-recipe-name-input { flex: 1; min-width: 0; }

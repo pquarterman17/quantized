@@ -72,12 +72,18 @@ export default function ConfirmDialog() {
     if (title === null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" && e.key !== "Escape") return;
+      e.stopPropagation(); // this dialog owns both keys while it is open
       if (e.repeat) {
-        e.stopPropagation();
         e.preventDefault();
         return;
       }
-      e.stopPropagation();
+      // Enter must NOT mean "confirm" while a button has focus, or it
+      // overrides the button the user is actually on. Focus now lands on
+      // Cancel, so treating Enter as confirm here would turn the safest
+      // keyboard gesture in the dialog into the destructive one — the exact
+      // opposite of what moving focus there was for. Let the browser activate
+      // whatever is focused instead. Escape always cancels.
+      if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button")) return;
       e.preventDefault();
       resolve?.(e.key === "Enter");
       close();

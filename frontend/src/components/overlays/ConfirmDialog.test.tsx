@@ -90,6 +90,22 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     expect(await answer).toBe(true);
   });
 
+  it("Enter on the focused Cancel button CANCELS — it does not confirm", async () => {
+    // Moving focus to Cancel made Enter-on-Cancel the natural keyboard
+    // gesture. A window-level handler that treats Enter as "confirm"
+    // regardless of focus therefore turns the safest control in the dialog
+    // into the destructive one — strictly worse than not moving focus at all.
+    const answer = open("Delete it?", "This cannot be undone.", "Delete", true);
+    render(<ConfirmDialog />);
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    act(() => cancel.focus());
+
+    fireEvent.keyDown(cancel, { key: "Enter", bubbles: true });
+    // The native activation of the focused button is what should decide.
+    fireEvent.click(cancel);
+    expect(await answer).toBe(false);
+  });
+
   it("announces itself as a dialog and moves focus to the SAFE button", async () => {
     // Without a role the backdrop is just a div, and focus stays on the button
     // behind it — a screen-reader user is never taken to the question.
