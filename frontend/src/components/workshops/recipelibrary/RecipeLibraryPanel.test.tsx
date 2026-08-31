@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
-import { metaFor, setFavorite } from "../../../lib/recipeIndex";
+import { makeStep } from "../../../lib/pipeline";
+import { metaFor, recordUse, setFavorite } from "../../../lib/recipeIndex";
+import { supportsOperation } from "../../../lib/recipeLibrary";
+import { loadTemplates, saveTemplate } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -121,16 +124,28 @@ describe("pruning the sidecar index (P3.5)", () => {
     useRecipeManager.setState({ open: true, library: true });
   });
 
-  it("drops metadata for a recipe that no longer exists", () => {
+  it("drops the recency of a recipe that no longer exists", () => {
     // Without this the index only ever grows: every recipe a user ever
-    // favorited keeps a row after the recipe itself is gone.
+    // applied keeps a row after the recipe itself is gone.
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
+    useApp.setState({ plotRecipes: [plot] });
+
+    render(<RecipeLibraryPanel />);
+
+    expect(metaFor(orphan).useCount).toBe(0);
+    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" })).toBeDefined();
+  });
+
+  it("KEEPS an orphan's favorite — deleting a plot recipe is undoable", () => {
+    // The Library prunes whenever the live set changes, and deleting a recipe
+    // changes it. Dropping the star here would mean an undo restores the
+    // recipe without it.
     setFavorite(orphan, true);
     useApp.setState({ plotRecipes: [plot] });
 
     render(<RecipeLibraryPanel />);
 
-    expect(metaFor(orphan).favorite).toBe(false);
-    expect(metaFor({ kind: "plot", scope: "project", id: "plot-1" })).toBeDefined();
+    expect(metaFor(orphan).favorite).toBe(true);
   });
 
   it("keeps metadata for recipes that ARE live", () => {
@@ -148,12 +163,12 @@ describe("pruning the sidecar index (P3.5)", () => {
     // against a failed read deletes every favorite the user has. Here the
     // project's own recipe lists are flagged incomplete, which is exactly the
     // state a corrupt .dwk field produces.
-    setFavorite(orphan, true);
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
 
     render(<RecipeLibraryPanel />);
 
-    expect(metaFor(orphan).favorite, "an incomplete read must never prune").toBe(true);
+    expect(metaFor(orphan).useCount, "an incomplete read must never prune").toBe(1);
   });
 
   it("prunes as soon as completeness flips true, without the recipe set changing", () => {
@@ -162,14 +177,14 @@ describe("pruning the sidecar index (P3.5)", () => {
     // this flag with the live recipe set unchanged, so an effect keyed only on
     // the signature would sit on a stale refusal until something else moved.
     // `exhaustive-deps` is a WARNING in this repo, so lint does not hold it.
-    setFavorite(orphan, true);
+    recordUse(orphan, "2026-08-30T10:00:00.000Z");
     useApp.setState({ plotRecipes: [plot], recipeSourcesComplete: false });
     const view = render(<RecipeLibraryPanel />);
-    expect(metaFor(orphan).favorite).toBe(true); // refused while incomplete
+    expect(metaFor(orphan).useCount).toBe(1); // refused while incomplete
 
     useApp.setState({ recipeSourcesComplete: true });
     view.rerender(<RecipeLibraryPanel />);
-    expect(metaFor(orphan).favorite).toBe(false); // pruned on the flip
+    expect(metaFor(orphan).useCount).toBe(0); // pruned on the flip
   });
 
   it("does not re-prune on a favorite toggle (no re-read storm while browsing)", () => {
@@ -214,5 +229,114 @@ describe("pruning the sidecar index (P3.5)", () => {
     // collection object. `<= 3` — the first bound written here — passed
     // against the bug, which is exactly how a loose bound hides a regression.
     expect(indexReads, `index re-read ${indexReads}x for one favorite toggle`).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("row actions (P3.5 slice 3)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useApp.setState({
+      datasets: [], activeId: null, plotRecipes: [], quickPlotTemplates: [],
+      recipeSourcesComplete: true, pipelineOpen: false, status: "",
+    });
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
+    useRecipeManager.setState({ open: true, library: true });
+  });
+
+  it("offers only the operations a kind can honour", () => {
+    // Unsupported actions are ABSENT, not disabled: a greyed-out Duplicate
+    // invites the user to hunt for the state that enables it, and there is
+    // none. Analysis templates can be renamed/duplicated/exported since P3.5;
+    // they can never be copied to project scope, having no project-file
+    // representation at all.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    expect(screen.getByRole("button", { name: "Open in Pipeline" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export…" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy to/ })).not.toBeInTheDocument();
+  });
+
+  it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Open in/ })).not.toBeInTheDocument();
+  });
+
+  it("reports a refusal on the status line instead of doing nothing", async () => {
+    // With no active dataset an apply has no target. The user must be told
+    // why, or the button looks broken.
+    useApp.setState({ plotRecipes: [plot], activeId: null });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() =>
+      expect(screen.getByText("select a dataset first")).toBeInTheDocument(),
+    );
+    expect(useApp.getState().editableFigures ?? []).toHaveLength(0);
+  });
+
+  it("opens the owning workshop for a kind it cannot apply here", async () => {
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Open in Pipeline" }));
+    await waitFor(() => expect(useApp.getState().pipelineOpen).toBe(true));
+  });
+
+  it("renames in place and carries the favorite across", async () => {
+    saveTemplate({
+      version: 1, name: "Old name",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    setFavorite({ kind: "analysis", scope: "global", id: "Old name" }, true);
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Old name" }));
+    const input = screen.getByRole("textbox", { name: "Rename Old name" });
+    fireEvent.change(input, { target: { value: "New name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("New name")).toBeInTheDocument());
+    expect(loadTemplates().map((t) => t.name)).toEqual(["New name"]);
+    expect(metaFor({ kind: "analysis", scope: "global", id: "New name" }).favorite).toBe(true);
+  });
+
+  it("Escape cancels a rename without saving it", () => {
+    // Escape fires before blur, so it must suppress the blur commit — the same
+    // ordering the tag editor already handles.
+    saveTemplate({
+      version: 1, name: "Keep me",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Keep me" }));
+    const input = screen.getByRole("textbox", { name: "Rename Keep me" });
+    fireEvent.change(input, { target: { value: "Discarded" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    fireEvent.blur(input);
+
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Keep me"]);
+  });
+
+  it("offers no rename affordance for a kind that cannot be renamed", () => {
+    // There is none today — every kind supports rename since P3.5 — so this
+    // asserts the MECHANISM by driving it from the capability table directly,
+    // rather than pretending a kind is unsupported.
+    expect(supportsOperation("plot", "rename")).toBe(true);
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByRole("button", { name: "Rename XRD publication" })).toBeInTheDocument();
   });
 });

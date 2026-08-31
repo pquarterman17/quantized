@@ -207,13 +207,42 @@ describe("rename carries metadata across a name-keyed identity change", () => {
 });
 
 describe("pruning refuses to run on an incomplete read", () => {
-  it("drops metadata for recipes that are really gone", () => {
-    setFavorite(ref("live"), true);
-    setFavorite(ref("dead"), true);
+  it("drops the recency of recipes that are really gone", () => {
+    recordUse(ref("live"), "2026-08-30T10:00:00.000Z");
+    recordUse(ref("dead"), "2026-08-30T10:00:00.000Z");
     const dropped = pruneEntries(new Set([refKey(ref("live"))]), true);
     expect(dropped).toBe(1);
-    expect(metaFor(ref("live")).favorite).toBe(true);
-    expect(metaFor(ref("dead")).favorite).toBe(false);
+    expect(metaFor(ref("live")).useCount).toBe(1);
+    expect(metaFor(ref("dead")).useCount).toBe(0);
+  });
+
+  it("KEEPS a favorite or tags whose recipe is gone, and says so in the count", () => {
+    // Same rule `save` applies under quota pressure: keep what the user
+    // chose, shed what the app derived. It matters most here because
+    // deleting a plot or quick-plot recipe is UNDOABLE — see the regression
+    // below, which is the concrete way the old behaviour lost data.
+    setFavorite(ref("starred"), true);
+    setTags(ref("tagged"), ["keep"]);
+    recordUse(ref("starred"), "2026-08-30T10:00:00.000Z");
+
+    const dropped = pruneEntries(new Set<string>(), true);
+
+    expect(metaFor(ref("starred")).favorite).toBe(true);
+    expect(metaFor(ref("tagged")).tags).toEqual(["keep"]);
+    // Only the derived half went, so nothing the user chose was forgotten.
+    expect(metaFor(ref("starred")).useCount).toBe(0);
+    expect(dropped, "an entry stripped of recency was not FORGOTTEN").toBe(0);
+  });
+
+  it("survives delete-then-undo of a favorited recipe (the regression)", () => {
+    // The Library prunes whenever the live recipe set changes, and deleting a
+    // plot recipe changes it — so with the old behaviour the star was gone
+    // before the user could press Ctrl+Z, and the undo brought the recipe
+    // back stripped of it.
+    setFavorite(ref("beloved"), true);
+    pruneEntries(new Set<string>(), true); // the delete's prune
+    pruneEntries(new Set([refKey(ref("beloved"))]), true); // the undo restores it
+    expect(metaFor(ref("beloved")).favorite).toBe(true);
   });
 
   it("does nothing at all when the caller cannot vouch for the list", () => {

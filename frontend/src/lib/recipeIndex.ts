@@ -209,24 +209,50 @@ export function moveEntry(from: RecipeRef, to: RecipeRef): void {
   save(map);
 }
 
-/** Drop metadata for recipes that no longer exist.
+/** Drop the DERIVED metadata of recipes that no longer exist.
  *
  *  `complete` is not a courtesy flag. Every source reader returns an empty
  *  list both for "this system is empty" and for "the read failed", so pruning
  *  against a list built from a failed read would delete every favorite the
  *  user has. Callers pass false whenever ANY source could not be read, and
  *  this then does nothing at all — an index that is briefly too big is a
- *  non-event next to silently wiping someone's favorites. */
+ *  non-event next to silently wiping someone's favorites.
+ *
+ *  EXPLICIT CHOICES SURVIVE A PRUNE. An entry carrying a favorite or tags is
+ *  kept even when its recipe is gone; only pure recency (`useCount`/
+ *  `lastUsedAt`) is dropped. This is the same rule `save` above already
+ *  applies under quota pressure — keep what the user chose, shed what the app
+ *  derived — and pruning is where it matters most, because deleting a recipe
+ *  is UNDOABLE for the plot and quick-plot kinds. Without this, deleting a
+ *  favorited plot recipe from the Library prunes its star, and the undo then
+ *  brings the recipe back stripped of it: exactly the "silent betrayal" this
+ *  module's header warns about, arriving through the one path a user is most
+ *  likely to reverse.
+ *
+ *  A deliberate delete is different and does drop everything — see
+ *  `dropEntry`, which `lib/nameKeyedRecipes.deleteNameKeyed` calls for the
+ *  kinds whose deletion is NOT undoable.
+ *
+ *  Returns how many entries this actually removed. Entries merely stripped of
+ *  their recency are not counted: nothing was forgotten that the user chose. */
 export function pruneEntries(liveKeys: ReadonlySet<string>, complete: boolean): number {
   if (!complete) return 0;
   const map = loadIndex();
   let dropped = 0;
+  let changed = false;
   for (const key of Object.keys(map)) {
-    if (!liveKeys.has(key)) {
-      delete map[key];
-      dropped += 1;
+    if (liveKeys.has(key)) continue;
+    const entry = map[key];
+    if (entry.favorite || entry.tags.length > 0) {
+      if (entry.useCount === 0 && entry.lastUsedAt === undefined) continue; // already bare
+      map[key] = { ...entry, useCount: 0, lastUsedAt: undefined };
+      changed = true;
+      continue;
     }
+    delete map[key];
+    dropped += 1;
+    changed = true;
   }
-  if (dropped > 0) save(map);
+  if (changed) save(map);
   return dropped;
 }

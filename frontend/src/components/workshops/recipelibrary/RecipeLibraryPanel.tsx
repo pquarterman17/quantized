@@ -6,12 +6,20 @@
 import { useEffect, useRef, useState } from "react";
 
 import { pruneEntries, setFavorite, setTags } from "../../../lib/recipeIndex";
-import { RECIPE_KIND_LABEL, RECIPE_KINDS, type RecipeDescriptor, type RecipeKind } from "../../../lib/recipeLibrary";
+import {
+  RECIPE_KIND_LABEL,
+  RECIPE_KINDS,
+  supportsOperation,
+  type RecipeDescriptor,
+  type RecipeKind,
+} from "../../../lib/recipeLibrary";
 import { collectRecipes, liveKeys } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
+import RecipeRowActions from "./RecipeRowActions";
+import { renameRecipe, type ActionResult } from "./recipeActions";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
 
@@ -25,15 +33,38 @@ function sortRows(rows: readonly RecipeDescriptor[]): RecipeDescriptor[] {
   });
 }
 
-function RecipeRow({ row, refresh }: { row: RecipeDescriptor; refresh: () => void }) {
+function RecipeRow({
+  row,
+  refresh,
+  onResult,
+}: {
+  row: RecipeDescriptor;
+  /** Re-render the panel. ONE mechanism serves both a sidecar change and a
+   *  change to a recipe system itself, because `collectRecipes` is called on
+   *  every render and re-reads every source — so a re-render IS a re-read.
+   *  (If that is ever memoized, this needs to split in two.) */
+  refresh: () => void;
+  onResult: (result: ActionResult) => void;
+}) {
   const [editingTags, setEditingTags] = useState(false);
   const [tagText, setTagText] = useState(row.tags.join(", "));
+  const [editingName, setEditingName] = useState(false);
+  const [nameText, setNameText] = useState(row.name);
   const skipBlurCommit = useRef(false);
 
   const commitTags = (): void => {
     setTags(row.ref, tagText.split(","));
     setEditingTags(false);
     refresh();
+  };
+
+  const commitName = (): void => {
+    setEditingName(false);
+    if (nameText.trim() === row.name) return; // nothing to do, and no toast for it
+    const result = renameRecipe(row.ref, nameText);
+    onResult(result);
+    if (result.ok) refresh();
+    else setNameText(row.name); // a refusal leaves the row showing the truth
   };
 
   return (
@@ -49,7 +80,49 @@ function RecipeRow({ row, refresh }: { row: RecipeDescriptor; refresh: () => voi
       </button>
       <div className="qz-recipe-library-main">
         <div className="qz-recipe-library-title">
-          <span title={row.name}>{row.name}</span>
+          {editingName ? (
+            <input
+              autoFocus
+              className="qz-recipe-name-input"
+              aria-label={`Rename ${row.name}`}
+              value={nameText}
+              onChange={(e) => setNameText(e.target.value)}
+              onBlur={() => {
+                if (skipBlurCommit.current) {
+                  skipBlurCommit.current = false;
+                  return;
+                }
+                commitName();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") {
+                  // Same blur-vs-Escape ordering the tag editor uses: Escape
+                  // fires before blur, so it must suppress the blur commit or
+                  // cancelling would save.
+                  skipBlurCommit.current = true;
+                  setEditingName(false);
+                  setNameText(row.name);
+                }
+                e.stopPropagation();
+              }}
+            />
+          ) : supportsOperation(row.kind, "rename") ? (
+            <button
+              className="qz-recipe-library-name"
+              // The visible text is the recipe name, which alone says nothing
+              // about what the button DOES. The label keeps the visible text
+              // as a prefix so voice control still matches what is on screen
+              // (WCAG 2.5.3, label in name).
+              aria-label={`Rename ${row.name}`}
+              title={`Rename ${row.name}`}
+              onClick={() => { setNameText(row.name); setEditingName(true); }}
+            >
+              {row.name}
+            </button>
+          ) : (
+            <span className="qz-recipe-library-name" title={row.name}>{row.name}</span>
+          )}
           <span className="qz-recipe-badge">{RECIPE_KIND_LABEL[row.kind]}</span>
           <span className="qz-recipe-badge">{row.ref.scope === "project" ? "This project" : "Global"}</span>
         </div>
@@ -89,6 +162,7 @@ function RecipeRow({ row, refresh }: { row: RecipeDescriptor; refresh: () => voi
           </button>
         )}
       </div>
+      <RecipeRowActions row={row} onChanged={refresh} onResult={onResult} />
     </li>
   );
 }
@@ -110,6 +184,10 @@ export default function RecipeLibraryPanel() {
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [, setRevision] = useState(0);
+  // One shared line for every action outcome, success or refusal. A refusal
+  // here is ordinary ("select a dataset first", "that recipe no longer
+  // exists"), not an error worth a modal.
+  const [result, setResult] = useState<ActionResult | null>(null);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
 
@@ -171,6 +249,15 @@ export default function RecipeLibraryPanel() {
         <Button size="sm" onClick={() => openPlotManager()}>Manage Plot Recipes…</Button>
       </div>
 
+      {result && (
+        <div
+          className={result.ok ? "qz-recipe-library-result" : "qz-recipe-library-result qz-is-refused"}
+          role="status"
+        >
+          {result.ok ? result.message : result.reason}
+        </div>
+      )}
+
       {!collection.complete && (
         <div className="qz-recipe-library-warning" role="status">
           Some recipe sources could not be read completely. Available recipes are shown; cleanup is paused.
@@ -186,7 +273,14 @@ export default function RecipeLibraryPanel() {
         <div className="qz-recipe-library-empty">No recipes match these filters.</div>
       ) : (
         <ul className="qz-recipe-library-list">
-          {rows.map((row) => <RecipeRow key={`${row.ref.kind}:${row.ref.scope}:${row.ref.id}`} row={row} refresh={() => setRevision((n) => n + 1)} />)}
+          {rows.map((row) => (
+            <RecipeRow
+              key={`${row.ref.kind}:${row.ref.scope}:${row.ref.id}`}
+              row={row}
+              refresh={() => setRevision((n) => n + 1)}
+              onResult={setResult}
+            />
+          ))}
         </ul>
       )}
     </ToolWindow>
