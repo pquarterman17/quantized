@@ -39,8 +39,14 @@ export default function RecipeRowActions({
   /** PANEL-level, not row-level. An apply is async and reports its outcome
    *  through one shared status line, so a second apply started on another row
    *  meanwhile would both race for that line and read store state the first
-   *  one is still mutating. One in-flight action at a time across the whole
-   *  list is the honest scope for a single shared result. */
+   *  one is still mutating.
+   *
+   *  Scope, precisely: this gates the ACTION BUTTONS on every row. The inline
+   *  favorite, tag and rename controls are not gated — they are synchronous
+   *  and the first two touch only the sidecar, so calling this "one in-flight
+   *  action at a time across the whole list" would be wider than it is. An
+   *  inline rename during an in-flight apply can still write the shared result
+   *  line; that is a cosmetic race, not a data one. */
   busy: boolean;
   setBusy: (busy: boolean) => void;
 }) {

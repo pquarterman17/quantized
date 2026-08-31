@@ -88,8 +88,15 @@ function RecipeRow({
 
   const commitName = (): void => {
     setEditingName(false);
-    // Without this the input unmounts and focus falls to <body>, so a keyboard
-    // user renaming three recipes tabs in from the top three times.
+    // Return focus to the name button rather than dropping it to <body>.
+    //
+    // NARROW, and knowingly so: this holds for a REFUSED rename, for Escape,
+    // and for the two stable-id kinds. It does NOT hold for a successful
+    // rename of a name-keyed kind, because the row's React key contains the id
+    // and for those kinds the id IS the name — the row remounts and this ref
+    // is nulled before the microtask runs. Fixing that needs a row identity
+    // that survives a rename, which is a change to how the list is keyed;
+    // booked rather than faked with a document-wide query for the new name.
     queueMicrotask(() => nameButtonRef.current?.focus());
     if (nameText.trim() === row.name) return; // nothing to do, and no toast for it
     const result = renameRecipe(row.ref, nameText);
