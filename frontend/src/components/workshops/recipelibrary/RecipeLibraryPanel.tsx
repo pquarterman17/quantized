@@ -3,7 +3,7 @@
 // sidecar index, and advanced Plot Recipe operations stay in their existing
 // manager until the operation layer reaches parity across all six kinds.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { pruneEntries, setFavorite, setTags } from "../../../lib/recipeIndex";
 import {
@@ -12,6 +12,7 @@ import {
   supportsOperation,
   type RecipeDescriptor,
   type RecipeKind,
+  type RecipeRef,
 } from "../../../lib/recipeLibrary";
 import { collectRecipes, liveKeys } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
@@ -42,12 +43,22 @@ function sortRows(rows: readonly RecipeDescriptor[]): RecipeDescriptor[] {
   });
 }
 
+/** The row's identity in the list. Also its React key, so a rename that
+ *  changes the id necessarily REMOUNTS the row -- which is why focus
+ *  restoration cannot live inside the row for the name-keyed kinds. */
+export function rowKey(ref: RecipeRef): string {
+  return `${ref.kind}:${ref.scope}:${ref.id}`;
+}
+
 function RecipeRow({
   row,
   refresh,
   onResult,
   busy,
   setBusy,
+  focusName,
+  onFocusTaken,
+  onRenamedTo,
 }: {
   row: RecipeDescriptor;
   /** Re-render the panel. ONE mechanism serves both a sidecar change and a
@@ -58,6 +69,12 @@ function RecipeRow({
   onResult: (result: ActionResult) => void;
   busy: boolean;
   setBusy: (busy: boolean) => void;
+  /** This row should take keyboard focus on its name control -- set by the
+   *  panel after a rename, addressed by the ref the rename RETURNED. */
+  focusName: boolean;
+  onFocusTaken: () => void;
+  /** Tell the panel which row key should hold focus after a rename. */
+  onRenamedTo: (key: string) => void;
 }) {
   const [editingTags, setEditingTags] = useState(false);
   const [tagText, setTagText] = useState(row.tags.join(", "));
@@ -86,23 +103,37 @@ function RecipeRow({
     refresh();
   };
 
+  // Focus handed over by the panel. A rename of a name-keyed kind changes the
+  // row's id -- which is its React key -- so the row that committed the rename
+  // UNMOUNTS and a different one takes its place. A ref captured before the
+  // rename is null by the time any microtask runs, which is why this is a
+  // mount-time claim by the NEW row rather than a restore by the old one.
+  useEffect(() => {
+    if (!focusName) return;
+    nameButtonRef.current?.focus();
+    onFocusTaken();
+  }, [focusName, onFocusTaken]);
+
   const commitName = (): void => {
     setEditingName(false);
-    // Return focus to the name button rather than dropping it to <body>.
-    //
-    // NARROW, and knowingly so: this holds for a REFUSED rename, for Escape,
-    // and for the two stable-id kinds. It does NOT hold for a successful
-    // rename of a name-keyed kind, because the row's React key contains the id
-    // and for those kinds the id IS the name — the row remounts and this ref
-    // is nulled before the microtask runs. Fixing that needs a row identity
-    // that survives a rename, which is a change to how the list is keyed;
-    // booked rather than faked with a document-wide query for the new name.
-    queueMicrotask(() => nameButtonRef.current?.focus());
-    if (nameText.trim() === row.name) return; // nothing to do, and no toast for it
+    if (nameText.trim() === row.name) {
+      // Nothing to do, and no toast for it -- but the input is going away, so
+      // focus still has to land somewhere other than <body>. This row is not
+      // remounting, so its own ref is the right target.
+      queueMicrotask(() => nameButtonRef.current?.focus());
+      return;
+    }
     const result = renameRecipe(row.ref, nameText);
     onResult(result);
-    if (result.ok) refresh();
-    else setNameText(row.name); // a refusal leaves the row showing the truth
+    if (result.ok) {
+      // Address the row by where it ENDED UP. For the stable-id kinds that is
+      // this same row; for the name-keyed kinds it is the one about to mount.
+      if (result.ref) onRenamedTo(rowKey(result.ref));
+      refresh();
+    } else {
+      setNameText(row.name); // a refusal leaves the row showing the truth
+      queueMicrotask(() => nameButtonRef.current?.focus());
+    }
   };
 
   return (
@@ -239,6 +270,11 @@ export default function RecipeLibraryPanel() {
   const [result, setResult] = useState<ActionResult | null>(null);
   // One in-flight action across the whole list — see RecipeRowActions' prop doc.
   const [busy, setBusy] = useState(false);
+  // Which row should take focus on its next mount. Lives HERE, not in the row,
+  // because a rename can destroy the row that asked for it.
+  const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
+  // Stable identity so the row's focus effect does not re-run every render.
+  const clearFocusRow = useCallback(() => setFocusRowKey(null), []);
 
   useEffect(() => hydrateGlobal(), [hydrateGlobal]);
 
@@ -339,12 +375,15 @@ export default function RecipeLibraryPanel() {
         <ul className="qz-recipe-library-list">
           {rows.map((row) => (
             <RecipeRow
-              key={`${row.ref.kind}:${row.ref.scope}:${row.ref.id}`}
+              key={rowKey(row.ref)}
               row={row}
               refresh={() => setRevision((n) => n + 1)}
               onResult={setResult}
               busy={busy}
               setBusy={setBusy}
+              focusName={rowKey(row.ref) === focusRowKey}
+              onFocusTaken={clearFocusRow}
+              onRenamedTo={setFocusRowKey}
             />
           ))}
         </ul>

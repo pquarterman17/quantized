@@ -385,6 +385,82 @@ describe("row actions (P3.5 slice 3)", () => {
     expect(metaFor({ kind: "analysis", scope: "global", id: "New name" }).favorite).toBe(true);
   });
 
+  it("puts focus on the RENAMED row, whose id changed under it", async () => {
+    // The four name-keyed kinds use the NAME as the id, and the id is the
+    // row's React key — so committing a rename unmounts the row that owns the
+    // focus target. Restoring focus from inside that row is impossible: its
+    // ref is null before any microtask runs, and focus fell to <body>, which
+    // drops a keyboard user out of the list entirely (WCAG 2.4.3).
+    saveTemplate({
+      version: 1, name: "Old name",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Old name" }));
+    const input = screen.getByRole("textbox", { name: "Rename Old name" });
+    fireEvent.change(input, { target: { value: "New name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename New name" })),
+    );
+    expect(document.body).not.toBe(document.activeElement);
+  });
+
+  it("puts focus back on the name button when a rename is REFUSED", async () => {
+    // The other half: nothing moved, so the row is the same one — but the
+    // input still unmounts, and an empty name is the easiest way for a user to
+    // land here by accident.
+    saveTemplate({
+      version: 1, name: "Keep me",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Keep me" }));
+    const input = screen.getByRole("textbox", { name: "Rename Keep me" });
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename Keep me" })),
+    );
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Keep me"]);
+  });
+
+  it("does not re-steal focus when the renamed row later remounts", async () => {
+    // The focus request is one-shot. Leaving it set means any later remount of
+    // that row — a filter toggle, a re-sort — silently yanks focus out of
+    // whatever the user moved to, which is worse than the bug it fixes because
+    // it happens while they are somewhere else.
+    saveTemplate({
+      version: 1, name: "Old name",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename Old name" }));
+    const input = screen.getByRole("textbox", { name: "Rename Old name" });
+    fireEvent.change(input, { target: { value: "New name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename New name" })),
+    );
+
+    // Unmount the row (it is not a favorite), then bring it back.
+    const favoritesOnly = screen.getByRole("checkbox", { name: "Favorites only" });
+    fireEvent.click(favoritesOnly);
+    expect(screen.queryByRole("button", { name: "Rename New name" })).not.toBeInTheDocument();
+    favoritesOnly.focus();
+    fireEvent.click(favoritesOnly);
+
+    await screen.findByRole("button", { name: "Rename New name" });
+    expect(document.activeElement, "focus was yanked back to the row").toBe(favoritesOnly);
+  });
+
   it("Escape cancels a rename without saving it", () => {
     // NOTE on the trailing `fireEvent.blur`: a real browser fires NO blur when
     // a focused element is removed, so this sequence is synthetic. It pins the
