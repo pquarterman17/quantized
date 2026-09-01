@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
 
@@ -121,5 +121,62 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(await answer).toBe(false);
+  });
+
+  it("gives focus BACK to whatever opened it when it closes", async () => {
+    // Moving focus into the dialog without ever restoring it left every caller
+    // dropping focus to <body> on close: cancel a delete and you are dumped
+    // out of the list you were working in. The move-in and the give-back are
+    // one feature; shipping only the first half was the regression.
+    render(
+      <>
+        <button type="button">Open it</button>
+        <ConfirmDialog />
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "Open it" });
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
+    await screen.findByRole("dialog");
+    expect(document.activeElement).not.toBe(trigger); // the dialog took it
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await answer).toBe(false);
+    expect(document.activeElement, "focus was dropped to <body> on close").toBe(trigger);
+  });
+
+  it("does not reach for a trigger the confirmed action removed", async () => {
+    // Confirming a destructive action usually destroys the very control that
+    // opened the dialog, so the restore runs against a detached node.
+    //
+    // I previously wrote this off as unfalsifiable, on the grounds that
+    // focusing a detached node is a silent no-op. That confused the EFFECT
+    // with the CALL: the effect is unobservable, the call is not. Spying on
+    // the detached node separates `if (isConnected) focus()` from a bare
+    // `focus()` cleanly, so the guard is testable after all and no longer has
+    // to be taken on trust.
+    const { rerender } = render(
+      <>
+        <button type="button">Open it</button>
+        <ConfirmDialog />
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "Open it" });
+    trigger.focus();
+    const focusSpy = vi.spyOn(trigger, "focus");
+
+    const answer = askConfirm("Delete it?", "", "Delete", true);
+    await screen.findByRole("dialog");
+
+    rerender(<><ConfirmDialog /></>); // the trigger goes away, as a real delete would
+    expect(trigger.isConnected).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await answer).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(focusSpy, "restore chased a detached node").not.toHaveBeenCalled();
+    focusSpy.mockRestore();
   });
 });

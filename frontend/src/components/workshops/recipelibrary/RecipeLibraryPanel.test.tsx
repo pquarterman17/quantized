@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { makeStep } from "../../../lib/pipeline";
@@ -9,6 +9,7 @@ import { loadTemplates, saveTemplate } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
+import ConfirmDialog from "../../overlays/ConfirmDialog";
 import RecipeLibraryPanel from "./RecipeLibraryPanel";
 
 const plot = {
@@ -257,9 +258,12 @@ describe("row actions (P3.5 slice 3)", () => {
     render(<RecipeLibraryPanel />);
 
     expect(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate Loop fit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Loop fit" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Copy to/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Loop fit" }));
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Export…" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Copy to/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveClass("danger");
   });
 
   it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
@@ -346,8 +350,12 @@ describe("row actions (P3.5 slice 3)", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
     );
-    // Every other row's actions are held too, not just the clicked row's.
-    expect(screen.getByRole("button", { name: "Delete Second" })).toBeDisabled();
+    // Every other row's actions and inline metadata controls are held too,
+    // not just the clicked row's primary button.
+    expect(screen.getByRole("button", { name: "More actions for Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rename Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit tags for Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add Second to favorites" })).toBeDisabled();
 
     release(true);
     await waitFor(() =>
@@ -459,6 +467,188 @@ describe("row actions (P3.5 slice 3)", () => {
 
     await screen.findByRole("button", { name: "Rename New name" });
     expect(document.activeElement, "focus was yanked back to the row").toBe(favoritesOnly);
+  });
+
+  it("choosing Rename from the overflow menu leaves focus IN the editor", async () => {
+    // ContextMenu calls onClose BEFORE the item's run(), so a menu that
+    // unconditionally refocuses its trigger queues that focus FIRST and lands
+    // it LAST — after the editor's autoFocus. The editor opened and the caret
+    // sat on the ⋯ button, so a keyboard user's keystrokes went nowhere.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Loop fit" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+
+    const input = await screen.findByRole("textbox", { name: "Rename Loop fit" });
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("returns focus to the ⋯ trigger for an item that claims no focus of its own", async () => {
+    // The other half of the same guard. Duplicate leaves nothing focused once
+    // the menu unmounts, so focus WOULD fall to <body> and strand a keyboard
+    // user outside the list; the trigger is the stable landing point. Pinning
+    // only the Rename case would let the whole restore be deleted.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(loadTemplates()).toHaveLength(2);
+  });
+
+  it("does not freeze an OPEN editor when an apply starts on another row", async () => {
+    // `busy` gates opening an editor, not one already open. Disabling a live
+    // <input> stranded the user's half-typed text for the duration of an
+    // unrelated apply — and a real browser blurs a disabled element, dropping
+    // focus to <body>. (jsdom keeps activeElement on a disabled input, so only
+    // the freeze is assertable here.)
+    let release!: (v: boolean) => void;
+    useApp.setState({
+      plotRecipes: [plot, { ...plot, id: "plot-2", name: "Second" }],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => new Promise<boolean>((r) => { release = r; }),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename XRD publication" }));
+    const input = screen.getByRole("textbox", { name: "Rename XRD publication" });
+    fireEvent.change(input, { target: { value: "Half typed name" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: Second" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
+    );
+
+    const live = screen.getByRole("textbox", { name: "Rename XRD publication" });
+    expect(live, "the open editor was disabled mid-edit").not.toBeDisabled();
+    expect((live as HTMLInputElement).value).toBe("Half typed name");
+
+    release(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).not.toBeDisabled(),
+    );
+  });
+
+  it("deletes through the overflow menu once the confirm is accepted", async () => {
+    // Delete moved off the row and behind the ⋯ menu, onto a path nothing
+    // exercised end to end — not here and not before this change. The wording
+    // matters as much as the deletion: this dialog is the only gate, so it has
+    // to name the kind and scope (a peak recipe and a graph template can both
+    // be called "Standard") and say whether undo will help.
+    saveTemplate({
+      version: 1, name: "Doomed",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<><RecipeLibraryPanel /><ConfirmDialog /></>);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Doomed" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName('Delete analysis template "Doomed" (global)?');
+    expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(loadTemplates()).toHaveLength(0));
+  });
+
+  it("a CANCELLED delete puts focus back on the row's ⋯ trigger", async () => {
+    // ConfirmDialog restores focus to whatever was focused when it opened, and
+    // the clicked menu item is already detached by then — so the row has to
+    // claim focus before opening the dialog. Otherwise backing out of a delete
+    // drops the user on <body>, out of the list entirely.
+    saveTemplate({
+      version: 1, name: "Safe",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<><RecipeLibraryPanel /><ConfirmDialog /></>);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Safe" });
+    const focusSpy = vi.spyOn(trigger, "focus");
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await screen.findByRole("dialog");
+    // The pre-dialog focus is a focus() like any other on this row, and the
+    // menu can close on scroll — so it carries preventScroll too.
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Safe"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "More actions for Safe" }),
+    );
+  });
+
+  it("a scroll that closes the menu does not drag the viewport back to the row", async () => {
+    // ContextMenu closes on scroll and resize as well as on item-run, so the
+    // trigger refocus fires on a plain scroll too. A bare focus() scrolls that
+    // button into view — fighting the very scroll that closed the menu. Only
+    // the call contract is assertable here: jsdom does not scroll, so a test
+    // that merely watched the viewport would pass either way.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    const focusSpy = vi.spyOn(trigger, "focus");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+
+    fireEvent.scroll(window);
+
+    // Wait on STATE (the menu is gone), not on the spy — the weak-wait ratchet
+    // in architecture.test.ts bans the latter, and the microtask that refocuses
+    // has necessarily run by the time the unmount is observable.
+    await waitFor(() =>
+      expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument(),
+    );
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
+  });
+
+  it("Escape out of the menu leaves focus on the trigger, not on <body>", async () => {
+    // Claimed in review and never pinned: ContextMenu restores the pre-open
+    // focus itself on Escape, so the trigger guard sees a non-<body> target
+    // and no-ops. Both paths converge on the same element — this pins the
+    // user-visible outcome rather than which of the two got there first.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("Escape cancels a rename without saving it", () => {

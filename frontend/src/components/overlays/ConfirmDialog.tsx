@@ -98,11 +98,26 @@ export default function ConfirmDialog() {
   // reader is never taken to the question at all.
   useEffect(() => {
     if (title === null) return;
+    // Remember where focus came from BEFORE taking it, so closing can give it
+    // back. Moving focus in without ever restoring it (as this did when the
+    // move was added) leaves every caller dropping focus to <body> on close --
+    // cancel a delete and you are dumped out of the list you were working in.
+    const cameFrom = document.activeElement as HTMLElement | null;
     // Cancel is the FIRST button in the row, so this is the safe default: a
     // stray Space/Enter on it dismisses rather than destroys. Queried through
     // the container because the shared `Button` primitive does not forward a
     // ref, and widening that primitive for one caller is not worth it.
     dialogRef.current?.querySelector("button")?.focus();
+    return () => {
+      // The case worth rescuing is a CANCEL, where the trigger is still on
+      // screen. A confirmed destructive action usually removes its own
+      // trigger, and `isConnected` keeps the restore from reaching for it --
+      // pinned by "does not reach for a trigger the confirmed action removed",
+      // which spies on the detached node. (Focusing it would be a silent
+      // no-op, so the EFFECT is unobservable; the CALL is not, which is what
+      // makes the guard testable rather than a matter of trust.)
+      if (cameFrom?.isConnected) cameFrom.focus();
+    };
   }, [title]);
 
   if (title === null) return null;

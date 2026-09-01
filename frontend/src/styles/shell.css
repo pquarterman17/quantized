@@ -981,17 +981,11 @@ body {
 .qz-recipe-tags { margin-top: 5px; padding: 0; font-size: 11px; text-align: left; }
 .qz-recipe-tags:hover { color: var(--accent); }
 .qz-recipe-tag-input { width: min(100%, 360px); margin-top: 5px; }
-/* No wrap and no width cap. With a 46% cap in a 620px window the five-button
-   plot row wrapped on EVERY row, not just long ones — rows became 2-3 button
-   lines tall, and with flex-wrap the danger button landed next to a different
-   neighbour depending on the row's kind, so muscle memory misclicked onto
-   Delete. Fixed single line, Delete always last.
-   TRADEOFF, stated rather than hidden: everything else in the row is
-   `flex: none`, so on a five-button plot row the NAME is the only thing that
-   can shrink and it takes the whole squeeze. The floor below keeps it legible;
-   the real fix is an overflow menu for the secondary actions, which is its own
-   change (a popup brings focus management and a new a11y surface). */
+/* Keep only the primary action and a stable overflow trigger in-row. Secondary
+   actions use the shared, viewport-clamped ContextMenu; long names no longer
+   pay for every capability a recipe kind supports. */
 .qz-recipe-row-actions { display: flex; flex: none; flex-wrap: nowrap; gap: 4px; align-items: flex-start; }
+.qz-recipe-favorite:disabled, .qz-recipe-tags:disabled, .qz-recipe-library-name:disabled { opacity: 0.5; }
 .qz-recipe-library-result { margin-bottom: 8px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-dim); font-size: var(--type-label, 11px); }
 .qz-recipe-library-result.qz-is-refused { border-color: var(--warn); }
 /* Staged, not failed: an imperfect plot-recipe match is waiting for a
