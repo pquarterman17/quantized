@@ -1,6 +1,17 @@
 # Release-candidate notes draft — v0.23.0-rc1 (proposed)
 
-**Status:** FINAL for v0.23.0-rc1; extended 2026-08-23 with the
+**Status:** **RESOLVED 2026-09-01: released as stable `v0.24.0`** at squash
+`18a50edf` (#285, the 8-file bump on top of `f57dcb5` + #284). A **minor**
+bump, not the planned `v0.23.2` — the delta since rc2 had grown the whole
+P3.5 Recipe Library, so the "fixes only, hence a patch" rationale no longer
+held. `v0.23.2-rc1`/`-rc2` were never promoted and remain published
+prereleases; no plain `v0.23.2` will exist. The tag was pushed from a
+developer machine (not `cut-tag.yml`), so the push event fired `release.yml`
+and `pypi.yml` automatically — no manual dispatches. The owner explicitly
+chose stable without the R2 acceptance pass (2026-09-01 session decision,
+weighing that v0.23.1 still served the #253–#259 data-loss defects); R2
+remains open in `POST_SPRINT_INDEPENDENT_REVIEW.md` against the shipped
+build. Historical status trail: FINAL for v0.23.0-rc1; extended 2026-08-23 with the
 "Changes since rc1 → v0.23.0-rc2" section, and again 2026-08-27 with
 "Changes since rc2 → rc3 → rc4" at the end. **Superseded 2026-08-28: `v0.23.0`
 and `v0.23.1` were promoted to stable from rc4 and published as
