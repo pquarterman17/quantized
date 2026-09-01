@@ -153,10 +153,25 @@ export default function RecipeRowActions({
           items={secondary}
           onClose={() => {
             setMenu(null);
-            // ContextMenu restores focus itself on Escape. Selection and
-            // click-away also need a stable landing point; a selected Rename
-            // subsequently transfers focus into the editor via autoFocus.
-            queueMicrotask(() => menuButtonRef.current?.focus());
+            // Land focus on the trigger ONLY if nothing else claimed it.
+            //
+            // ContextMenu calls onClose BEFORE the item's run(), so an
+            // unconditional focus here runs after the item has already moved
+            // focus and takes it back: picking Rename opened the editor and
+            // then parked the caret on this button, so the user's keystrokes
+            // went nowhere. (The comment this replaces asserted autoFocus won
+            // that race. It does not -- the microtask is queued first and
+            // resolves last.)
+            //
+            // The guard covers every item without per-item flags: Rename hands
+            // focus to the name editor and Delete to the confirm dialog, so
+            // activeElement is not <body> and this no-ops; Duplicate, Export
+            // and Copy leave nothing focused once the menu unmounts, so it
+            // fires. Escape is already handled inside ContextMenu, which
+            // restores the pre-open focus itself -- also not <body>.
+            queueMicrotask(() => {
+              if (document.activeElement === document.body) menuButtonRef.current?.focus();
+            });
           }}
         />
       )}

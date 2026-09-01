@@ -468,6 +468,79 @@ describe("row actions (P3.5 slice 3)", () => {
     expect(document.activeElement, "focus was yanked back to the row").toBe(favoritesOnly);
   });
 
+  it("choosing Rename from the overflow menu leaves focus IN the editor", async () => {
+    // ContextMenu calls onClose BEFORE the item's run(), so a menu that
+    // unconditionally refocuses its trigger queues that focus FIRST and lands
+    // it LAST — after the editor's autoFocus. The editor opened and the caret
+    // sat on the ⋯ button, so a keyboard user's keystrokes went nowhere.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Loop fit" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+
+    const input = await screen.findByRole("textbox", { name: "Rename Loop fit" });
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("returns focus to the ⋯ trigger for an item that claims no focus of its own", async () => {
+    // The other half of the same guard. Duplicate leaves nothing focused once
+    // the menu unmounts, so focus WOULD fall to <body> and strand a keyboard
+    // user outside the list; the trigger is the stable landing point. Pinning
+    // only the Rename case would let the whole restore be deleted.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(loadTemplates()).toHaveLength(2);
+  });
+
+  it("does not freeze an OPEN editor when an apply starts on another row", async () => {
+    // `busy` gates opening an editor, not one already open. Disabling a live
+    // <input> stranded the user's half-typed text for the duration of an
+    // unrelated apply — and a real browser blurs a disabled element, dropping
+    // focus to <body>. (jsdom keeps activeElement on a disabled input, so only
+    // the freeze is assertable here.)
+    let release!: (v: boolean) => void;
+    useApp.setState({
+      plotRecipes: [plot, { ...plot, id: "plot-2", name: "Second" }],
+      activeId: "d1",
+      datasets: [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
+      applyPlotRecipeObject: () => new Promise<boolean>((r) => { release = r; }),
+    });
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename XRD publication" }));
+    const input = screen.getByRole("textbox", { name: "Rename XRD publication" });
+    fireEvent.change(input, { target: { value: "Half typed name" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply: Second" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
+    );
+
+    const live = screen.getByRole("textbox", { name: "Rename XRD publication" });
+    expect(live, "the open editor was disabled mid-edit").not.toBeDisabled();
+    expect((live as HTMLInputElement).value).toBe("Half typed name");
+
+    release(true);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Apply: Second" })).not.toBeDisabled(),
+    );
+  });
+
   it("Escape cancels a rename without saving it", () => {
     // NOTE on the trailing `fireEvent.blur`: a real browser fires NO blur when
     // a focused element is removed, so this sequence is synthetic. It pins the

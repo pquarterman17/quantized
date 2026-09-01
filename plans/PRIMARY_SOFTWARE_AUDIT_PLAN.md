@@ -1517,8 +1517,10 @@ Original acceptance criteria (unchanged):
 - [ ] Revisit organization after usage; do not freeze it prematurely.
 
 **Status update — 2026-08-31 (ChatGPT / Sol):** core P3.5 browsing, usage
-tracking, cleanup, and row operations shipped through PRs #273, #277, #278,
-and #282. The remaining work is details/preview/version plus library-level
+tracking, cleanup, and row operations shipped through PRs #271 (common
+contract + sidecar index), #272 (source-aware completeness), #273 (the
+browse-first library), #276 (workspace recipe-source fidelity, which is what
+makes the incomplete-source safeguard above real), #277, #278, and #282. The remaining work is details/preview/version plus library-level
 import and round-trip parity; the prior single unchecked line obscured that
 split. New eager UI work must respect the bundle ratchet (the 2026-08-31
 verification had about 4.0 kB of headroom).
