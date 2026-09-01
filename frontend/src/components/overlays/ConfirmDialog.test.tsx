@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
 
@@ -147,25 +147,36 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     expect(document.activeElement, "focus was dropped to <body> on close").toBe(trigger);
   });
 
-  it("still closes cleanly when the confirmed action removed its own trigger", async () => {
+  it("does not reach for a trigger the confirmed action removed", async () => {
     // Confirming a destructive action usually destroys the very control that
-    // opened the dialog, so the restore runs against a detached node. This
-    // pins that the dialog still resolves and unmounts in that case — it does
-    // NOT pin the `isConnected` guard, which is unfalsifiable here because
-    // focusing a detached node is already a silent no-op.
+    // opened the dialog, so the restore runs against a detached node.
+    //
+    // I previously wrote this off as unfalsifiable, on the grounds that
+    // focusing a detached node is a silent no-op. That confused the EFFECT
+    // with the CALL: the effect is unobservable, the call is not. Spying on
+    // the detached node separates `if (isConnected) focus()` from a bare
+    // `focus()` cleanly, so the guard is testable after all and no longer has
+    // to be taken on trust.
     const { rerender } = render(
       <>
         <button type="button">Open it</button>
         <ConfirmDialog />
       </>,
     );
-    screen.getByRole("button", { name: "Open it" }).focus();
+    const trigger = screen.getByRole("button", { name: "Open it" });
+    trigger.focus();
+    const focusSpy = vi.spyOn(trigger, "focus");
+
     const answer = askConfirm("Delete it?", "", "Delete", true);
     await screen.findByRole("dialog");
 
     rerender(<><ConfirmDialog /></>); // the trigger goes away, as a real delete would
+    expect(trigger.isConnected).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
     expect(await answer).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(focusSpy, "restore chased a detached node").not.toHaveBeenCalled();
+    focusSpy.mockRestore();
   });
 });

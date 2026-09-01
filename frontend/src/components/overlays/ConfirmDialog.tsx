@@ -111,10 +111,11 @@ export default function ConfirmDialog() {
     return () => {
       // The case worth rescuing is a CANCEL, where the trigger is still on
       // screen. A confirmed destructive action usually removes its own
-      // trigger; `isConnected` is deliberate belt-and-braces there rather than
-      // load-bearing, since focusing a detached node is already a no-op — no
-      // test can tell the two apart, so do not read this line as verified
-      // behaviour. It is here so the intent does not rest on that no-op.
+      // trigger, and `isConnected` keeps the restore from reaching for it --
+      // pinned by "does not reach for a trigger the confirmed action removed",
+      // which spies on the detached node. (Focusing it would be a silent
+      // no-op, so the EFFECT is unobservable; the CALL is not, which is what
+      // makes the guard testable rather than a matter of trust.)
       if (cameFrom?.isConnected) cameFrom.focus();
     };
   }, [title]);

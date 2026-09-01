@@ -578,9 +578,15 @@ describe("row actions (P3.5 slice 3)", () => {
     });
     render(<><RecipeLibraryPanel /><ConfirmDialog /></>);
 
-    fireEvent.click(screen.getByRole("button", { name: "More actions for Safe" }));
+    const trigger = screen.getByRole("button", { name: "More actions for Safe" });
+    const focusSpy = vi.spyOn(trigger, "focus");
+    fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     await screen.findByRole("dialog");
+    // The pre-dialog focus is a focus() like any other on this row, and the
+    // menu can close on scroll — so it carries preventScroll too.
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -618,6 +624,31 @@ describe("row actions (P3.5 slice 3)", () => {
     );
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     focusSpy.mockRestore();
+  });
+
+  it("Escape out of the menu leaves focus on the trigger, not on <body>", async () => {
+    // Claimed in review and never pinned: ContextMenu restores the pre-open
+    // focus itself on Escape, so the trigger guard sees a non-<body> target
+    // and no-ops. Both paths converge on the same element — this pins the
+    // user-visible outcome rather than which of the two got there first.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("Escape cancels a rename without saving it", () => {
